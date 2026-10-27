@@ -9,8 +9,8 @@ challenger's key record fetched from the store, then
   this tree): the session trusted on the stand-in root (`remote.trusted_session`, every head of the ledger), the round
   coins (`core_check.rounds` over the recomputed round roots, its session run from a commit the host's pins log
   ``--pins`` records on the auditor's first-parent list of main ``--main``), the salt coin after the stand-in root and
-  the draw coin
-  after the recomputed manifest root (`challenger.live_reason`, each the root the challenger's signed log shows), the
+  the draw coin after the recomputed manifest root in the window's own draw session, trusted on that root and opened
+  withheld (`challenger.withheld_on`) (`challenger.live_reason`, each the root the challenger's signed log shows), the
   commitment the manifest's, a live epoch's;
 * ``check-end.json``: the GPU run's own `dither_so.check_end` of the window (its stop record's ``end``), which needs the
   serving process's device state and so runs there, copied with its verdict.
@@ -57,16 +57,22 @@ def _git(d: Path) -> str:
     return _run(["git", "-C", str(d), "rev-parse", "HEAD"]).decode().strip()
 
 
-def fetch(a, out: Path) -> dict:
-    """The session (``fetch SID``) and every ledger head (``ledger``) from the gate, the run's record and the key record
-    from the store; their paths."""
-    ssh = ["ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", a.ssh_key, a.gate]
-    tgz = out / f"session-{a.session}.tgz"
-    tgz.write_bytes(_run([*ssh, f"fetch {a.session}"]))
-    sdir = out / "session"
+def _session(ssh: list[str], sid: str, out: Path, name: str) -> tuple[Path, Path]:
+    """Session `sid` fetched from the gate (``fetch SID``) into `out`/`name`; its out/ and its tarball."""
+    tgz = out / f"{name}-{sid}.tgz"
+    tgz.write_bytes(_run([*ssh, f"fetch {sid}"]))
+    sdir = out / name
     sdir.mkdir()
     with tarfile.open(tgz) as t:
         t.extractall(sdir, filter="data")
+    return next(p for p in sdir.rglob("out") if p.is_dir()), tgz
+
+
+def fetch(a, out: Path) -> dict:
+    """The session and the window's draw session (``fetch SID``, the draw's the manifest's ``coins.draw_session``) and
+    every ledger head (``ledger``) from the gate, the run's record and the key record from the store; their paths."""
+    ssh = ["ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", a.ssh_key, a.gate]
+    session, tgz = _session(ssh, a.session, out, "session")
     ledger = out / "ledger.jsonl"
     ledger.write_bytes(_run([*ssh, "ledger"]))
     art = a.run_record or json.loads(_run([RESEARCH, "data", "show", a.run, "--json"]))["outputs"]["run_record"]
@@ -75,10 +81,12 @@ def fetch(a, out: Path) -> dict:
           "--path", "out/commit.txt"])
     kdir = out / "key"
     _run([RESEARCH, "data", "fetch", a.key_record, "--to", str(kdir)])
-    session = next(p for p in sdir.rglob("out") if p.is_dir())
     manifest = rdir / "out" / f"manifest-{a.session}.json"
-    return {"session": session, "ledger": ledger, "manifest": manifest, "stop": rdir / "out" / "stop.json",
-            "commit": rdir / "out" / "commit.txt", "key": next(kdir.rglob("*.json")), "tgz": tgz, "run_record": art}
+    dsid = json.loads(manifest.read_text())["coins"].get("draw_session")
+    draw, draw_tgz = _session(ssh, dsid, out, "draw-session") if dsid else (None, None)
+    return {"session": session, "draw": draw, "ledger": ledger, "manifest": manifest, "stop": rdir / "out" / "stop.json",
+            "commit": rdir / "out" / "commit.txt", "key": next(kdir.rglob("*.json")), "tgz": tgz, "draw_tgz": draw_tgz,
+            "run_record": art}
 
 
 def newest_pins(out: Path) -> tuple[Path, str]:
@@ -108,7 +116,7 @@ def manifest_check(a, p: dict, out: Path) -> dict:
     root = CO.stand_in_root(a.session)
     pins = [x for x in p["pins"].read_text().split("\n") if x]
     got = MF.check(p["manifest"], p["session"], [str(p["ledger"])], pins, CO.R.main_lines(p["main"]),
-                   CO.key_record(p["key"]), a.period, root)
+                   CO.key_record(p["key"]), a.period, root, p["draw"])
     _dump(out / "manifest-check.json", got)
     m = json.loads(p["manifest"].read_text())
     e = MF.expect(m)
@@ -147,6 +155,11 @@ def core_check(a) -> int:
                        re_["rounds"], [r["opening"] for r in m["rounds"]], CC.lms_verify)
     salt = Ch.LiveOpening.from_json(m["salt_coin"])
     draw = Ch.LiveOpening.from_json(m["draw_coin"])
+    try:
+        dcom, dreceived = (None, {}) if a.draw_dir is None else R.trusted_session(
+            a.draw_dir, heads, {"root": mroot.hex()}, key, CC.lms_verify)
+    except Ch.CoinError as e:
+        dcom, dreceived, doc["draw_session"] = None, {}, f"refused: {e}"
     checks = {
         "trusted_session": True,
         "commitment_is_the_manifests": Ch.LiveCommitment.from_json(m["commitment"]) == commitment,
@@ -154,8 +167,9 @@ def core_check(a) -> int:
         "rounds": rounds is None,
         "salt_after_window_root": received.get(Wd.SALT) == (root,)
         and Ch.live_reason(commitment, salt, Wd.SALT, 0, root) is None,
-        "draw_after_manifest_root": received.get(Wd.DRAW) == (mroot,)
-        and Ch.live_reason(commitment, draw, Wd.DRAW, 0, mroot) is None,
+        "draw_after_manifest_root": dcom is not None and dreceived.get(Wd.DRAW) == (mroot,)
+        and Ch.live_reason(dcom, draw, Wd.DRAW, 0, mroot) is None,
+        "draw_withheld": dcom is not None and Ch.withheld_on(ledger, mroot.hex()),
         "period": audited.period == a.period,
         "end_complete": bool(entries.get("end", {}).get("body", {}).get("complete")),
     }
@@ -188,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     for k in ("session", "session-dir", "ledger", "manifest", "key", "period", "recomputed", "core-from", "pins",
               "main"):
         co.add_argument(f"--{k}", required=True)
+    co.add_argument("--draw-dir", help="the window's draw session as the gate publishes it (its out/)")
     a = ap.parse_args(argv)
     if a.cmd == "core":
         return core_check(a)
@@ -200,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
     cp = subprocess.run([sys.executable, __file__, "core", "--session", a.session, "--session-dir", str(p["session"]),
                          "--ledger", str(p["ledger"]), "--manifest", str(p["manifest"]), "--key", str(p["key"]),
                          "--period", a.period, "--recomputed", str(out / "recomputed.json"), "--core-from", a.core_from,
-                         "--pins", str(p["pins"]), "--main", str(p["main"])],
+                         "--pins", str(p["pins"]), "--main", str(p["main"]),
+                         *(["--draw-dir", str(p["draw"])] if p["draw"] else [])],
                         check=False, env=env, cwd="/", stdout=subprocess.PIPE, text=True)
     (out / "core-check.json").write_text(cp.stdout)
     core = json.loads(cp.stdout)
@@ -210,7 +226,8 @@ def main(argv: list[str] | None = None) -> int:
     doc = {"session": a.session, "run": a.run, "arm": a.arm, "run_record": p["run_record"],
            "run_commit": p["commit"].read_text().strip(), "audit_commit": _git(ROOT), "core_commit": _git(Path(a.core_from)),
            "period": a.period, "key_record": a.key_record, "pins_record": pins_record,
-           "inputs_sha512": {k: _sha(p[k]) for k in ("tgz", "ledger", "manifest", "stop", "key", "pins", "main")},
+           "inputs_sha512": {k: _sha(p[k]) for k in ("tgz", "draw_tgz", "ledger", "manifest", "stop", "key", "pins", "main")
+                             if p[k] is not None},
            "manifest_check": {"ok": mc["ok"], "coins": mc.get("coins"), "recomputed": mc.get("recomputed")},
            "core_check": {"verdict": core.get("verdict"), "checks": core.get("checks"), "ledger": core.get("ledger"),
                           "verity_from": core.get("verity_from")},

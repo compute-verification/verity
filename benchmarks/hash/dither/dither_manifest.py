@@ -101,14 +101,14 @@ def expect(m: dict) -> dict:
 
 
 def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str], key=None,
-          period: str | None = None, root: bytes | None = None) -> dict:
-    """`coins.check` of the window's coins against the challenger's run, over the round roots and manifest root `expect`
-    recomputes, with the host's pins log `pins` (its lines) and the verifier's first-parent history of main `main`;
-    ``ok`` only when it passes and the recomputed roots are the manifest's."""
+          period: str | None = None, root: bytes | None = None, draw_out: str | Path | None = None) -> dict:
+    """`coins.check` of the window's coins against the challenger's run and its draw session's `draw_out`, over the round
+    roots and manifest root `expect` recomputes, with the host's pins log `pins` (its lines) and the verifier's
+    first-parent history of main `main`; ``ok`` only when it passes and the recomputed roots are the manifest's."""
     m = json.loads(Path(manifest).read_text())
     e = expect(m)
     got = CO.check(challenger_out, m["coins"], heads, pins, main, e["rounds"], e["salts"], e["draw_after"], key, period,
-                   root)
+                   root, draw_out)
     got["recomputed"] = {"rounds": len(e["rounds"]), "differ_from_listed": e["differ"][:8],
                          "manifest_root_listed": e["manifest_root_listed"], "steps": m["steps"], "salts": len(e["salts"])}
     got["ok"] = bool(got["ok"] and not e["differ"] and e["manifest_root_listed"])
@@ -129,11 +129,12 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--key-record", help="the challenger's key record from its deployment (challenger-key/v1)")
     c.add_argument("--period", help="the window's period, as the verifier knows it")
     c.add_argument("--root", help="the window's root as the verifier recomputes it (128 hex digits)")
+    c.add_argument("--draw-out", help="the window's draw session as infra's gate publishes it, or its out/")
     a = ap.parse_args(argv)
     key = CO.key_record(a.key_record) if a.key_record else None
     pins = [x for x in a.pins.read_text().split("\n") if x]
     got = check(a.manifest, a.challenger_out, a.ledger, pins, CO.R.main_lines(a.main), key, a.period,
-                bytes.fromhex(a.root) if a.root else None)
+                bytes.fromhex(a.root) if a.root else None, a.draw_out)
     print(json.dumps(got, indent=1))
     return 0 if got["ok"] else 1
 

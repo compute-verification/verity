@@ -10,7 +10,8 @@ coin source (`coins.open_coins` over `remote.RemoteChallenger`): it refuses anot
 the gate's open answered, opens the salt coin after the session's stand-in root (the challenger opens it after no
 other), then round s's coin after step s's stand-in root, sha512(s || coin s-1), so no step's root exists before the
 previous step's coin, and times each round from the root's send to its opening checked against the commitment
-(`live_reason`, inside `RemoteChallenger.open`); then the draw coin, and the close.  Rounds go back to back unless
+(`live_reason`, inside `RemoteChallenger.open`); then the close (no draw: a window's draw coin is a draw session of its
+own, `coins.Coins.draw`, which this measurement doesn't open).  Rounds go back to back unless
 --pace-us holds each step, up to the layout's ROUNDS or --max-s seconds, whichever comes first, so one session gives as
 many rounds as its timeout allows and still closes; a session that fails is written up to its failure (``ended``).
 
@@ -70,17 +71,12 @@ def step_root(s: int, prev: bytes) -> bytes:
     return hashlib.sha512(b"percall-rtt/step" + s.to_bytes(8, "big") + prev).digest()
 
 
-def draw_root(chain: list[bytes]) -> bytes:
-    """The root the draw coin opens after: over the round roots in order."""
-    return hashlib.sha512(b"percall-rtt/receipts" + hashlib.sha512(b"".join(chain)).digest()).digest()
-
-
 def run(a: argparse.Namespace) -> int:
     cs = CO.open_coins(a.challenger, EPOCH, a.rounds)
     stand_in = CO.stand_in_root(a.challenger.id)
     ns: list[int] = []
     chain: list[bytes] = []
-    salt = draw = None
+    salt = None
     ended, stop = None, (time.monotonic() + a.max_s) if a.max_s else None
     try:
         salt = cs.salt(stand_in)
@@ -97,7 +93,6 @@ def run(a: argparse.Namespace) -> int:
                 print(f"percall_rtt: {len(ns)} rounds, the last {PROGRESS}: {quantiles(ns[-PROGRESS:])}", flush=True)
             if pace:
                 time.sleep(pace)
-        draw = cs.draw(draw_root(chain))
         cs.close()
     except CO.Ch.CoinError as e:
         ended = str(e)
@@ -121,13 +116,12 @@ def run(a: argparse.Namespace) -> int:
         "client_check": quantiles(check_ns), "record_reason": cs.rounds.reason() if ns else None,
         "opening_bytes": len(json.dumps(cs.rounds.openings[0].to_json())) if ns else None,
         "root": stand_in.hex(), "root_is": CO.STAND_IN, "salt_after": salt.after.hex() if salt else None,
-        "draw_after": draw.after.hex() if draw else None, "roots_sha512": hashlib.sha512(b"".join(chain)).hexdigest(),
+        "roots_sha512": hashlib.sha512(b"".join(chain)).hexdigest(),
         "samples_ns": ns,
     }
     received = {"session": a.challenger.id, "commitment": commitment.to_json(), "window": {"root": stand_in.hex()},
                 "salt_coin": salt.to_json() if salt else None,
-                "rounds": [{"opening": o.to_json()} for o in cs.rounds.openings],
-                "draw_coin": draw.to_json() if draw else None}
+                "rounds": [{"opening": o.to_json()} for o in cs.rounds.openings]}
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc) + "\n")
@@ -141,7 +135,7 @@ def run(a: argparse.Namespace) -> int:
 def coins_check(a: argparse.Namespace, stand_in: bytes) -> dict:
     """served_h1's `coins.check` of the openings the client received (`COINS` beside ``--client``, or ``--coins``)
     against the published session and the gate's ledger, on the session's stand-in root: round s's root recomputed from
-    them (`step_root` over the salt's coin, then round s - 1's) and the draw's root over those (`draw_root`)."""
+    them (`step_root` over the salt's coin, then round s - 1's); the client opened no draw."""
     path = Path(a.coins) if a.coins else Path(a.client).with_name(COINS)
     try:
         received = json.loads(path.read_text())
@@ -152,7 +146,7 @@ def coins_check(a: argparse.Namespace, stand_in: bytes) -> dict:
             prev = CO.Ch.LiveOpening.from_json(r["opening"]).coin
     except (OSError, ValueError, KeyError, TypeError, CO.Ch.CoinError) as e:
         return {"ok": False, "reason": f"the client's openings ({path}) are unreadable: {type(e).__name__}: {e}"}
-    got = CO.check(a.challenger_out, received, a.ledger, chain, None, draw_root(chain) if received.get("draw_coin") else None,
+    got = CO.check(a.challenger_out, received, a.ledger, chain, None, None,
                    key=CO.key_record(a.key_record) if a.key_record else None, period=a.period, root=stand_in)
     return {k: got[k] for k in ("ok", "coins", "reason", "reasons", "ledger", "rounds", "draws") if k in got}
 
@@ -184,8 +178,6 @@ def check(a: argparse.Namespace) -> int:
                         else "the challenger's round roots are not the client's")
     reasons["salt"] = (None if roots[CO.Wd.SALT] == (root,) and client.get("salt_after") == root.hex()
                        else "the salt coin didn't open after the session's stand-in root, here and at the challenger")
-    reasons["draw"] = (None if roots[CO.Wd.DRAW] == ((bytes.fromhex(client["draw_after"]),) if client["draw_after"] else ())
-                       else "the draw root differs")
     coins = coins_check(a, root)
     reasons["coins"] = None if coins.get("ok") else "coins.check refused the client's openings: " + (
         coins.get("reason") or ", ".join(k for k, v in (coins.get("reasons") or {}).items() if v))
