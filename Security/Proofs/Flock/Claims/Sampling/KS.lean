@@ -760,7 +760,7 @@ theorem rpow_k_le_slack (D : Deploy Coin Col T) (x : Msg) {N m : ℕ} (hN : N �
   exact card_rpow_le_slack hN hm
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem nRU_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
+theorem nReplayBlocks_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
     (hPt : D.partition s = some Pt) : nReplayBlocks D x = Pt.replayBlocks.length := by
   simp only [nReplayBlocks, hs, Deploy.part, hPt, Option.getD_some]
 
@@ -958,7 +958,7 @@ theorem Pr_fails_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
       subst hPt'
       exact h
     rw [hF]
-    refine (outer_bad_le H D decode hδ x (run H P D.V x ω) s Pt (nPU_eq hs hPt) (nRU_eq hs hPt)
+    refine (outer_bad_le H D decode hδ x (run H P D.V x ω) s Pt (nPU_eq hs hPt) (nReplayBlocks_eq hs hPt)
       (fun r => κF D x + Real.sqrt (γF D x * β ω r)) (fun r => add_nonneg (κF_nonneg D x hε) (Real.sqrt_nonneg _))
       (hdraw x s Pt hs hPt hin) (hκs ω)).trans (le_of_eq ?_)
     rw [Ex_add, Ex_const]

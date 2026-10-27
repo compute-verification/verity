@@ -66,15 +66,15 @@ theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array
   replace hp : ∀ r ∈ popReplayBlocks pop, r.proofBlocks.size = 1 := hp
   have hlen : (popReplayBlocks pop).length = (popUnits S).length := by
     rw [← List.length_map (f := fun r : Slots.ReplayBlock => r.unit), hu, List.length_map]
-  have hrus := replayBlocks_toList pop ic
+  have hblocks := replayBlocks_toList pop ic
   constructor
   · refine Finset.eq_empty_of_forall_notMem fun j hj => ?_
     have hjl : j < (popReplayBlocks ic).length := Finset.mem_range.1 (window_subset _ _ _ hj)
     refine h _ ((mem_window hjl).1 hj) 0 ((mem_checked _ _ _ _).2 ?_)
     have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.Layout).replayBlocks.size := by
-      rw [← Array.length_toList, hrus, List.length_append]; omega
+      rw [← Array.length_toList, hblocks, List.length_append]; omega
     have hr : ({ classes := #[pop, ic] } : Slots.Layout).replayBlocks[(popUnits S).length + j] = (popReplayBlocks ic)[j] := by
-      rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_right (by omega)]
+      rw [← Array.getElem_toList, List.getElem_of_eq hblocks, List.getElem_append_right (by omega)]
       congr 1; omega
     refine ⟨hv, ?_, ?_⟩
     · rw [hr, (hic _ (List.getElem_mem _)).1]; rfl
@@ -84,9 +84,9 @@ theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array
     rw [mem_window hvl, zero_add] at hv
     refine h v hv 0 ((mem_checked _ _ _ _).2 ?_)
     have hvr : v < ({ classes := #[pop, ic] } : Slots.Layout).replayBlocks.size := by
-      rw [← Array.length_toList, hrus, List.length_append]; omega
+      rw [← Array.length_toList, hblocks, List.length_append]; omega
     have hr : ({ classes := #[pop, ic] } : Slots.Layout).replayBlocks[v] = (popReplayBlocks pop)[v] := by
-      rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_left]
+      rw [← Array.getElem_toList, List.getElem_of_eq hblocks, List.getElem_append_left]
     have hunit : (popReplayBlocks pop)[v].unit = some ((popUnits S).getD v 0) := by
       have := List.getElem_of_eq hu (by rw [List.length_map]; omega : v < ((popReplayBlocks pop).map (·.unit)).length)
       rw [List.getElem_map, List.getElem_map] at this
