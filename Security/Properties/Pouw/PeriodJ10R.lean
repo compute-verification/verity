@@ -36,8 +36,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
 * `TileDrawIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
   the window's draw coin, `k s_T` of them; the service's soundness against `Credit.window`.
 * `RegisteredBeforeDraw`: each window's registration fixed before its draw coin, `Properties.Pouw.Period`'s form at
-  `Registered`. It keeps the window's round coins, so it doesn't order the anchors before the salt (RT-LEAN's L22,
-  in its docstring).
+  `Registered`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
 * `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
   `Credit.window` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
   tile coordinates, its call's roots) and the noise and fold keys J10-R derives there; the unit's relation, its one
@@ -130,11 +129,12 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
 
 /-- **The tile coordinate at a uniform permutation is the stratum's draw**: it misses a set `B` of the sampling
 block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
-`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Proved: `SecurityProofs.tileStratumEscape`
-(`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the law's side is `Law.stratified_proj_escape`: `Law.stratified σ k hk`'s
-coordinate `s` misses `B` with the same factor, `prCoin (fun ω => Disjoint (ω s).1 B) =
-C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and `SecurityProofs.tileStratumEscape_eq_proj`
-equates the two, so the period's tile coin is the block's draw at the tile stratum. -/
+`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Proved:
+`SecurityProofs.tileStratumEscape` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the law's side is
+`Law.stratified_proj_escape`: `Law.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
+`prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
+`SecurityProofs.tileStratumEscape_eq_proj` equates the two, so the period's tile coin is the block's draw at the tile
+stratum. -/
 def TileStratumEscape : Prop :=
   ∀ {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (B : Finset (Fin nB)),
@@ -271,11 +271,11 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
 
 /-- **Each window's registration is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
 `Credit.window`'s registered inputs (`Registered`). It keeps window `w`'s round coins, the salt among them, so it carries
-the registration before the draw coin and not the order binding needs: RT-LEAN's L22 has H1's anchors (`x`, `sx`, the
-weight rows, `sw`; J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before
-the window's salt coin, released against their root. The check holds a live window to that order since #4573: its salt
-opens on `anchoredEpochRoot W X k`, `X` the root of the activations the window committed (`windowAnchors`), and #4594
-commits the H1 tiles' A and B rows there, though not yet the served `x` and `sx`. No premise states the order yet (each
+the registration before the draw coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
+J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before the window's salt
+coin, which is released against their root. The check holds a live window to that order: its salt opens on
+`anchoredEpochRoot W X k`, `X` the root of the activations the window committed (`windowAnchors`), and the loop commits
+the H1 tiles' A and B rows there, though not yet the served `x` and `sx`. No premise states the order yet (each
 anchor's root invariant under `spliceAt w 0`, the salt's coordinate). -/
 def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditWindows (Paths C m × B) n) : Prop :=
   ∀ (x z : Paths (Paths C m × B) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w

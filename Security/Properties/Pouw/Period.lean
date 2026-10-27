@@ -101,16 +101,16 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
   tiles' registered roots are tags (below), so the registration commits no row (`anchors []`, `wires []`), and an
   opening the service gives is bound to nothing fixed before the draw. Discharge path: CMP-91, ALLP-WIRE's anchors
   committed before the draw coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
-* `SaltIsLiveCoin`: each window's salt is its round's live coin. The check reads it since CMP-90 (#4405): a live
-  window (`coins` live in its check item) carries its salt in its service answer, and `PouwCheck.windowSaltReason`
+* `SaltIsLiveCoin`: each window's salt is its round's live coin. The check reads it: a live window (`coins` live in its
+  check item) carries its salt in its service answer, and `PouwCheck.windowSaltReason`
   (`Properties.Pouw.Check.SaltKept`) accepts it only as the round-0 salt of a salt-only live session's coin, opened on
   the salt epoch's root `anchoredEpochRoot W X k` of the registration's weights' root `W` and the root `X` of the
-  activations its window committed before the salt (`windowAnchors`, #4573). The loop runs such a window only with
-  `--pouw-live` (#4594: the H1 tiles' A and B rows committed as `X`'s entries, then the salt), and takes its salt from a
+  activations its window committed before the salt (`windowAnchors`). The loop runs such a window only with
+  `--pouw-live` (the H1 tiles' A and B rows committed as `X`'s entries, then the salt), and takes its salt from a
   development gate on its own machine, which the prover controls. By default it is given its salt before it serves and
   its check item names no coin mode, so its windows are seeded and `Scope`'s `Declared.Live` and `LayerCommitted` fail
-  of the circuit it runs. What remains: the salt from the auditor's challenger, on a `trusted-host` machine, and
-  CMP-91's tie of the proved tiles to that salt (their salt port is still a value the prover records).
+  of the circuit it runs. What remains: the salt from the auditor's challenger, on a `trusted-host` machine, and a tie
+  of the proved tiles to that salt (their salt port is still a value the prover records).
 * `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
   reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
   and `StagedPins` is what links it to the flat tile's rightness, which the lucks are claims of (`flatAtCoin`). No Lean
@@ -311,13 +311,12 @@ def CheckedCreditPeriod : Prop :=
 /-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
 salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
 every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
-round's values are committed. The check holds a live window to it since CMP-90 (#4405): `PouwCheck.windowSaltReason`
-accepts a live window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the
-window's committed activations since #4573 (`anchoredEpochRoot W X k`). The deployed loop doesn't meet it: its windows
-are seeded unless it runs with `--pouw-live` (#4594), whose salt comes from a development gate on the prover's own
-machine, and the proved tiles' salt port is still a value the prover records (CMP-91). A named assumption in the lock
-(ASK-133, option A, decided by the lane): a deployment gap until the auditor's challenger issues the salt and CMP-91
-ties the tiles to it. -/
+round's values are committed. The check holds a live window to it: `PouwCheck.windowSaltReason` accepts a live window's
+salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the window's committed
+activations (`anchoredEpochRoot W X k`). The deployed loop doesn't meet it: its windows are seeded unless it runs with
+`--pouw-live`, whose salt comes from a development gate on the prover's own machine, and the proved tiles' salt port is
+still a value the prover records. A named assumption in the lock: a deployment gap until the auditor's challenger
+issues the salt and the proved tiles are tied to it. -/
 def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C m × B) n → Fin n → ByteArray)
     (enc : C → ByteArray) : Prop :=
   ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)
