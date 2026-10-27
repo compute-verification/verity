@@ -78,7 +78,7 @@ theorem creditLiveBy_all {B : Type} {N n : ℕ} (x : Paths (WCoin N B) n) :
     creditLiveBy Honest.scheme (circuit N) (period (WCoin N B) N n) (fun _ _ => True) x = (N : ℝ) * n := by
   unfold creditLiveBy
   calc _ = ∑ _w : Fin n, (N : ℝ) := Finset.sum_congr rfl fun w _ => by
-          rw [if_pos fun _ _ => trivial, liveAt_period n x w]
+          rw [if_pos (show UpToBy (fun _ _ => True) x w from fun _ _ => trivial), liveAt_period n x w]
           simp only [liveWords_true]
           exact sum_tileWords _
     _ = N * n := by simp [mul_comm]
