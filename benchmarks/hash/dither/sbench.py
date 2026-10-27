@@ -30,7 +30,7 @@ Arms:
                  call's M, not once at the traced M; the same values, so its tokens must equal stock's (gated), and its
                  stats are the op's calls by M
     exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
-                 as served_h1 runs it (eager, batch-invariant)
+                 as SERVE-H1 runs it (eager, batch-invariant)
     exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, torch._int_mm) compiled with
                  CUDA graphs, attention vLLM's: today's served y in a compiled engine (built here, outside `build_engine`,
                  which runs int8_exact eagerly only; both ops are custom ops, opaque to Inductor)
@@ -187,7 +187,7 @@ prefill row runs --serial: each arm's engine alone, built, gated, timed and stop
 
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
 (DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
-"commitment": HEX, "rounds": R}}``, each its own from the challenger gate, `coins.py open` (R its --rounds, the layout a
+"commitment": HEX, "rounds": R}}``, each its own from the challenger's gate, `coins.py open` (R its --rounds, the layout a
 dither_so window takes), else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
 $POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a window, opened at the window's build (its
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say

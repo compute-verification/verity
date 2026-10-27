@@ -13,7 +13,7 @@
 # memory), or unbound with DITHER_NUMA=0 or without numactl or a node; numa.json, the `numa:` line and summary.json's "numa"
 # say which.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
+#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 # the run's scratch, under SBENCH_SCRATCH_ROOT (/workspace/pouw, else, where that can't be made, as on the CPU nodes,
@@ -179,7 +179,7 @@ if [ -n "${BW_LIB:-}" ]; then
 fi
 # coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
 # {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session
-# from the challenger gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
+# from the challenger's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
 # this node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when
 # not 16384), waited for with ss -ltn
 # before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process

@@ -60,8 +60,8 @@ from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 settings = of(__file__)
-#: the frozen shape's linears (n, k), the H200 demo's MQA decoder (width 16384, 256 query heads of 64, 1 KV head,
-#: MLP 65536, 256 tokens)
+#: the frozen shape's linears (n, k), the H200 demo's MQA decoder (benchmarks/torch_gpu/j10r_sm90/shape.py's LINEARS:
+#: width 16384, 256 query heads of 64, 1 KV head, MLP 65536, 256 tokens)
 LINEARS = {"q": (16384, 16384), "kv": (128, 16384), "o": (16384, 16384), "up": (65536, 16384), "down": (16384, 65536),
            "head": (256, 16384)}
 LAYER = ("q", "kv", "o", "up", "down")

@@ -29,7 +29,7 @@
 #            (the same calls against plain INT8); j10r90.sh builds the sm_90a arms
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
-#            backend and PouwH1LaneZy_v1's gated lane rows)
+#            backend and SERVE-REG's gated lane rows)
 #   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
 #            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
 #            commit.py and the base's every word, then each set's h1c_build timed)
@@ -191,7 +191,7 @@ for b in ${BENCH//,/ }; do
       fi ;;
     partials)
       # every h1u*.so shipped: test_partials.py and test_lane_refs.py with PARTIALS_LIB, their gpu tests (kh_seeds_at and
-      # kh_lanes, against the cpu's and PouwH1LaneZy_v1's lane rows) on each
+      # kh_lanes, against the cpu's and SERVE-REG's lane rows) on each
       for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
         [ -f "$f" ] || continue
         v=$(basename "$f" .so); NEED+=("$v")

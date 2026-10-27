@@ -26,7 +26,7 @@ stream at the forward's last call, and under piecewise graphs at every qkv call 
 forks, and a piece ends at an attention).  Between steps dither_one's Window builds the admit and z tables, the step
 trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
-is committed as per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
+is committed as the per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as
 `scaled_mm_zy`'s) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
@@ -47,8 +47,8 @@ Under "zy" the serving stream copies each call's served y, the bytes the next la
 roots are the y-step leaves, and a y table over the zy records' y halves, and a call whose two roots differ refuses its
 step. The
 receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts;
-the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after
-the coin the step's noise read (the statement's order needs the units after their round's coin, beside the next step).
+the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after the coin the
+step's noise read (the statement's order needs the units after their round's coin, beside the next step: dither_so).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -66,7 +66,7 @@ fault must be refused on the receipts at exactly the flipped words, z and y unto
 served y[0, 0] flipped in place) must be refused at run time on every call's y root, every other commitment kept; and
 "fault_rr" (the round recorded without the receipt roots) must be refused on the receipt-step leaf and the round alone.
 With DITHER_LANE_REFS the gate's check also holds the step's drawn leaves' lane partials (served_h1/partials.py, on the
-cpu and the served h1u build's kh_lanes) to each other and to the receipts, and to PouwH1LaneZy_v1's gated lane
+cpu and the served h1u build's kh_lanes) to each other and to the receipts, and to SERVE-REG's gated lane
 (`lane_refs.served`): in the gate (=1), or after serving from the records it saves (=PATH, `lane_refs.py PATH`).
 """
 from __future__ import annotations
@@ -109,7 +109,7 @@ UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
 # z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" the per-unit
 # leaf: one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
 # (bf16), past m z 0 and y dq(0, +0, s_w) (h1zy's empty slot), which the epilogue writes as one record a unit and the
-# window commits between steps (ZY_KIND, provisional until the fields are named); "none" no z stored
+# window commits between steps (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
 # and no z table, y only: the leaves'
 # cost floor, never credited
 ZMODES = {"none": 0, "row": 1, "zy": 2}
@@ -131,7 +131,7 @@ ZDEAD_ENV = "DITHER_ZDEAD"
 # units' y tables are built, and their roots compared, only at a captured step, whose check reads them and whose
 # verdict wants both compares to refuse the same calls
 YCMP_ENV = "DITHER_YCMP"
-# the gate step's option A partials against PouwH1LaneZy_v1's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
+# the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
 # "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
@@ -452,8 +452,8 @@ class Side:
                                         out=win.pre["mid"].leaves_addr(2) + 64 * w, **(dead[w]["zy"] if dead else {}))
                                     for w in range(win.L)])
             win.pre["z"] = self.zyset
-            # the served y committed under the round (its roots the y-step leaves) and the units' y (the
-            # records' y halves, read in place), compared by root between steps
+            # the served y committed under the round (its roots the y-step leaves) and the units' y (the records' y
+            # halves, read in place), compared by root between steps
             yi = win.round_kinds.index("y-step")
             yb, ub = [y_bytes(u) for u in self.unit_of], [zy_bytes(u) for u in self.unit_of]
             cnt = [zy_count(win, w, self.unit_of[w]) for w in range(win.L)]

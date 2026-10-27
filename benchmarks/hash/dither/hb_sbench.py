@@ -4,14 +4,14 @@
                    It runs on sm_90a only (it refuses int8 on sm_100a and sm_120). It applies the weight scale before the
                    activation scale, the reverse of Triton and of the int8-exact path,
                    so Dither's served row pairs with `stock` (Triton) and this arm is reported beside it.
-    dither-hb      dither-side with the hb two-launch unit (hb_side.py, h1u.cu's kh_unit_ws from the .so HB_H1U names)
+    dither-hb      dither-side with h1u.cu's two-launch unit (hb_side.py, h1u.cu's kh_unit_ws from the .so HB_H1U names)
                    in place of h1r's version 2 on the side stream; gated like every dither arm (its tokens against exact's,
                    `dither_fused.check` on its receipts, the no-write control refused).
-    dither-1s-hb   dither-1s (one stream: the served y from the receipted MMAs) with the hb one-stream unit (hb_one.py,
+    dither-1s-hb   dither-1s (one stream: the served y from the receipted MMAs) with h1u.cu's one-stream unit (hb_one.py,
                    h1u.cu's kh_one from the .so HB_H1U names) in place of h1o_units; gated as dither-1s is
                    (`dither_one.check` with h1o.so's references on its gate, control, fault and fault_wb steps), its
                    tokens reported against exact's, not gated (it serves the dithered product).
-    dither-1s-hbp  dither-1s-hb peeled (H1V3's peel): hb_one's kh_one_peel (from the .so HB_H1U_PEEL names, else
+    dither-1s-hbp  dither-1s-hb peeled (the peel): hb_one's kh_one_peel (from the .so HB_H1U_PEEL names, else
                    HB_H1U's), whose z is today's A B^T from the same stream, so y is today's; gated by hb_peel.py
                    (`dither_one.check` with z held to A B^T, y equal to today's on every call) on the same four captures
                    and a fifth, the flipped xa (hb_peel.install), and its tokens must equal exact's: the gate's, and every decode rep's (else exit 4 after the reps).

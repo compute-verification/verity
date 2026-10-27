@@ -14,7 +14,7 @@ after it, beside a later step's forward; their receipts go under a later round. 
     between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (h1agate.py's
                      `batch`: a per-step A commitment, a scheme change not ruled in, so a separate arm); the step's
                      A slots, scales, A roots, live rows and step into ring slot s mod D; the admit tables (under -pt on
-                     their own stream), the z/y leaf tables and the served y's tables (the run-time compare);
+                     their own stream), the z/y leaf tables and the served y's tables (their run-time compare);
                      round s over a-step, admit-step, z-step, y-step and receipt-step, whose leaf is the receipt-table
                      roots of step s - D + 1 (each table's domain names its own step; zeros before the window's first
                      D - 1 steps); round s's root sent (`coins.RoundPipe`), after which alone the challenger opens coin s.
@@ -41,7 +41,7 @@ fault, fault_y and fault_rr (here: round s + D - 1 recorded without step s's rec
 itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 1, a coin the prover held before round
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  $DITHER_SO_UNITS=j10r
-(`UNITS_ENV`; credit's J10-R form, at $DITHER_SO_J10R_M=slot on a slot T with every row tile computed:
+(`UNITS_ENV`; the verifier's form, at $DITHER_SO_J10R_M=slot on a slot T with every row tile computed:
 `forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the window's end on j10r_so's
 references in h1r v1's place, and the gate step's units held to J10R's Definition.
 
@@ -443,7 +443,7 @@ class SoWindow(DO.Window):
 
     def prepare(self) -> None:
         """In process, the next window's challenger made now, outside a timed generate (its commitment over 16384 rounds
-        takes 1.7 s), as the challenger gate makes an off-node session's before its window."""
+        takes 1.7 s), as the challenger's gate makes an off-node session's before its window."""
         if not self.open and self.prepared is None and CO.session() is None:
             self.prepared = CO.open_coins(None, 1, rounds_of())
 
@@ -1117,8 +1117,8 @@ class SoWindow(DO.Window):
         doc["salt"] = "round (the step's own coin)"
         doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
                      "receipts_round_lag": self.depth - 1, "a_tables": "once a step (not ruled in)" if self.a_once
-                     else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: ruled in, core's form "
-                           "pending)" if self.a_step else "per call, in the forward"),
+                     else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: ruled in, core's form pending)"
+                           if self.a_step else "per call, in the forward"),
                      "coins": self.coins.label, "coins_record": self.coins.record(),
                      "coin_rtt_ms": {"n": len(rtt), "p50": _q(rtt, 0.5), "p90": _q(rtt, 0.9), "max": _q(rtt, 1.0)},
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},

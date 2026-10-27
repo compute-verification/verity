@@ -8,7 +8,7 @@ tree, this source's own unless DITHER_H1V3_TREE names another, run through `h1v3
   (H1V3 peeled, 4733b9ab0c on: its z is A B^T, and the twin's peel of its own z is held to it);
 * the peel on the twin's z: z - b B^T - A c^T - b c^T + 256 xw (B + c)^T and the kernel's form
   z + 256 xw B^T - X c^T - b B^T are A B^T on every cell, xw = [A = 127 and b = 1] where the s8 X wraps (the cells the
-  first formula as written misses are counted), and the peeled kernel's operands (`is80` of X's byte and b for xw, b and
+  peel as first written misses are counted), and the peeled kernel's operands (`is80` of X's byte and b for xw, b and
   c times 0xFF for -b and -c, emulated) are those values on every byte and bit.
 
     python wrapcheck.py    # one JSON line; exit 1 on any difference

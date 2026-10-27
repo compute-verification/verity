@@ -219,7 +219,7 @@ __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F
   h1s_unit<OutEpiT<PL, BD>>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
-// J10 banded (measured only; labelled noise=j10-banded, kernels' reading of SharedNoise.lean, j10b_ref.py): band (ri, b)
+// J10 banded (measured only; labelled noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): band (ri, b)
 // of g column tiles reads one set of row streams, its leader unit ri ncb + b g's h1tile rows (seed_j's blocks l RB + c),
 // written here once a step into bws before the call's units, which hash only their own columns.  One warp a (live row
 // block ri, band b, J consecutive chunks), lane l row l; every lane derives the leader's seed_j (`unit_seed`, the
@@ -395,7 +395,7 @@ H1O_UNITS_EXPORT(h1o_unitsb2p_launch, unitsb, true, 2)
 H1O_UNITS_EXPORT(h1o_unitss2_launch, unitss, false, 2)
 H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
 
-// J10 banded, peeled (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean): bws holds
+// J10 banded, peeled (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): bws holds
 // h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2) and 3 block with the rows read in the
 // segment loop (NoEpi::BAND 1), 1 split and 2 split2 (staged), 4 block2 and 5 block staged (BAND 2); mode 0 the band-rows
 // pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone, 3 mode 0 with the units launched as

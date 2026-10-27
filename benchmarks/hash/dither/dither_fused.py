@@ -18,9 +18,9 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              step s + 1's launches read
 
 The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session the challenger
-gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at the window's
-build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
+``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session the
+challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at
+the window's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
 HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source: the salt, the seeds
 and what they read are the same either way.
 
@@ -28,7 +28,7 @@ With ``rc="side"`` (`patch`) no `h1f` launch computes receipts: after step s's c
 2) and receipt trees go on a second stream and run beside the engine's step s + 1, whose main stream first waits for step
 s - 1's (they read the slots step s + 1 overwrites).  What is committed, before which coin, and every receipt are the same.
 
-Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (served_h1 admits
+Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
 from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
 the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this harness's rendering of the
 credit's form (a z table in the row-table format, a root per step before the coin); the credit fixes the kind, fields

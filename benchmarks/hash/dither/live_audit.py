@@ -1,5 +1,5 @@
-"""A live dither-a-so window's audit, run as an Attempt (`research run`) from the VM that holds the gate's SSH key:
-the session and the auditor's ledger fetched from the gate, the GPU run's manifest and stop record and the
+"""A live dither-a-so window's audit, run as an Attempt (`research run`) from the VM that holds the gate key:
+the session and the auditor's ledger fetched from the challenger's gate, the GPU run's manifest and stop record and the
 challenger's key record fetched from the store, then
 
 * ``manifest-check.json``: `dither_manifest.check` at this tree (every round root and the manifest root recomputed from
@@ -176,8 +176,8 @@ def main(argv: list[str] | None = None) -> int:
     au.add_argument("--run", required=True, help="the GPU run whose window the session served")
     au.add_argument("--run-record", help="its run record's art: (default: the store's attempt for --run)")
     au.add_argument("--arm", required=True, help="the arm whose window the session served")
-    au.add_argument("--gate", required=True, help="the gate host, USER@HOST")
-    au.add_argument("--ssh-key", required=True, help="the SSH key for the gate host")
+    au.add_argument("--gate", required=True, help="the challenger's gate, USER@HOST")
+    au.add_argument("--ssh-key", required=True, help="the SSH key the gate accepts")
     au.add_argument("--key-record", required=True, help="the challenger's key record's art: (challenger-key current)")
     au.add_argument("--period", required=True)
     au.add_argument("--core-from", required=True, help="a checkout of main whose verity runs core's check")

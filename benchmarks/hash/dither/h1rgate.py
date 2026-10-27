@@ -1,13 +1,13 @@
-"""`h1r.cu` gated on a full served step, then timed (the fused receipt kernel, at T = 64 and 256), every
+"""`h1r.cu` gated on a full served step, then timed (J12: the fused receipt kernel; item 6: at T = 64 and 256), every
 kernel version (`--versions`) gated in the same run before any is timed.
 
 One step of Llama-3.1-8B's 128 served linears (layer by layer qkv, o, gate_up, down, B the int8 pin's weights as vLLM merges
 them) at T slots, each call's first M_c slot rows random s8 and admitted, the rest zero (`served_h1`'s slot table), its units
-at served_h1's static positions (step s, `serve.static_layout`), a random salt and random roots.  Calls alternate M_c between
+at SERVE-H1's static positions (step s, `serve.static_layout`), a random salt and random roots.  Calls alternate M_c between
 two counts, so some calls have a dead row tile.
 
-    gate     per version, h1r into an output poisoned with 0xA5, against `served_h1/receipts.gated_receipts` (the torch
-             path, its noise through served_h1's `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
+    gate     per version, h1r into an output poisoned with 0xA5, against `served_h1/receipts.gated_receipts` (served_h1's
+             torch path, its noise through served_h1's `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
              (`receipts.gated_reference`) on chosen units (K = 4096 and 14336, first and last, a dead one); a no-write control
              (nowrite: the poison must survive and be refused); the launch captured as a CUDA graph and replayed into a fresh
              poison, then under a second salt written into the same device buffer (as a served step does), each against
@@ -45,7 +45,7 @@ POISON = np.uint32(0xA5A5A5A5).view(np.int32)
 
 
 def weights(dev) -> list[torch.Tensor]:
-    """The 128 served linears' int8 weights [N, K] in served_h1's order, merged as vLLM merges them."""
+    """The 128 served linears' int8 weights [N, K] in SERVE-H1's order, merged as vLLM merges them."""
     from safetensors import safe_open
     idx = json.loads((Path(PIN) / "model.safetensors.index.json").read_text())["weight_map"]
     handles: dict = {}

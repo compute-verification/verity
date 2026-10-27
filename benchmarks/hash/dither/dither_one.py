@@ -18,8 +18,8 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 admit and z tables, the a-step,
 admit-step and z-step trees, the round over them, and the receipt trees (with `Window.tree_streams` set, the receipt
 trees and the admit tables on streams of their own beside the rest), then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set
-the salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
+(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set the
+salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
 the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor host's round
@@ -653,7 +653,7 @@ def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, root
     """H1V3's Definition on the CPU for one 32 x 32 unit (`h1tile.noise`, `segment.call_words` and the CP-W fold, as
     `h1tile.reference`): z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T per cell (s32), wb⁺ = [B + c + U > 127] and
     wb⁻ = [B + c + U < -128] on the integers, the receipt, and the products to hold z to: X (B + c)^T with X the int8
-    A + b (z must equal it), (A + b)(B + c)^T and today's A B^T.  And the peel of b and c as first written,
+    A + b (z must equal it), (A + b)(B + c)^T and today's A B^T.  And the peel of b and c, as written,
     z - b B^T - A c^T - b c^T, and with the term the s8 X's wrap needs, + 256 xw (B + c)^T, xw = [A = 127 and b = 1]
     (X = -128 there): A B^T, as a peeled kernel's z must be; and the peeled kernel's own form of it (H1V3's PouwPeelSeg),
     z + 256 xw B^T - X c^T - b B^T."""
@@ -786,7 +786,7 @@ def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:
 
 
 def h1v3_itself(units: list[dict]) -> dict:
-    """`h1v3_ref.py` under H1V3's tree: z and receipt of each unit by H1V3's own `h1tile.reference(stream=True)`. The tree is
+    """`h1v3_ref.py` under H1V3's tree: z and receipt of each unit by its own `h1tile.reference(stream=True)`. The tree is
     this source's own (PouwH1Tile_v4, ungated: v3's z, receipts and wrap bits with the peel) unless DITHER_H1V3_TREE
     names another (a launcher's H1V3_SHA)."""
     import json

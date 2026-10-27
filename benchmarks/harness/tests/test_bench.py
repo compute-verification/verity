@@ -248,9 +248,9 @@ def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes(
 
 @pytest.mark.parametrize("node, gpu", [("vy-dc-h200", "h200"), ("vy-dc-b200", "b200")])
 def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx(node, gpu):
-    """BENCH-26: the Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
+    """The Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
     settings) on another GPU, the B200's on FlashAttention 2 as its Build's row declares, and `--direct` takes the DC VM's
-    one GPU through its slot and gpu-lease, the wait for kernels' leases inside the spec's max_minutes."""
+    one GPU through its slot and gpu-lease, the wait for other leases on the node inside the spec's max_minutes."""
 
     from research.pods.nebius.slot_only import through_slot
 
