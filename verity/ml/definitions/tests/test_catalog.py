@@ -1,7 +1,7 @@
 """`catalog.load()` registers exactly `COUNT` Definitions and primitives: a module that stops importing or registering, or
 one that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
-Each scope registers them in the order `ORDER` pins, so a module that registers on import, a subpackage's among them, can't
-move a digest while the count holds.  Change `ORDER` in the change that adds, removes or reorders a Definition.
+Each scope of `load` registers the Definitions of the walk it replaced (`REPLACED`), in the same order, whatever the registry
+holds: a module only `load`'s walk reaches, a registry subpackage's, can't register on import or move one unnoticed.
 
 The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
 registers) is not in it."""
@@ -33,15 +33,6 @@ COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
-#: by scope of `catalog.load`, the SHA-512 of its Definitions' ids (`REGISTRY.defs`' keys) newline-joined in registration order:
-#: the default, and ops with the registry (replay's and the red-team demo's)
-ORDER = {
-    "registry":
-        "270213f4ab439d78deadf44941a1e1ced8b16401062ccddc58352a2311dfc56c2e8ff32e81c26628054bbce4a61f775cec8fa125876bc8724e9f00b32f29d73a",
-    ("ops", "registry"):
-        "33cc950b3fa175a02ce72288d12e66e1afae0b06125e272b16d571b903697ef7c60b640e593dca7183981df4622b5ab9787bc5d7da89ac207199684db0fbbd9d",
-}
-
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
@@ -49,20 +40,41 @@ def test_the_catalog_loads_every_definition_and_no_other():
     assert len(registry.defs) == COUNT, f"catalog.load() registers {len(registry.defs)} Definitions, not {COUNT}"
 
 
-def test_each_scope_registers_its_definitions_in_the_pinned_order():
-    """Each scope of `ORDER` registers its Definitions in the order its digest pins: each in a process of its own, since the
-    test modules beside this one import registry modules as they are collected, which reorders this process's registry."""
-    for scope, want in ORDER.items():
-        code = ("import hashlib\n"
-                "from verity.ml.definitions.registry import catalog\n"
-                f"registry, errors = catalog.load({scope!r})\n"
-                "assert not errors, errors\n"
-                "print(len(registry.defs), hashlib.sha512('\\n'.join(registry.defs).encode()).hexdigest())\n")
-        p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-        assert p.returncode == 0, p.stderr[-2000:]
-        n, got = p.stdout.split()
-        assert got == want, (f"catalog.load({scope!r}) registers its {n} Definitions in another order or set: their ids hash to "
-                             f"{got}.  If the change adds, removes or reorders a Definition, set ORDER[{scope!r}] to that digest")
+#: by scope of `catalog.load`, the walk it replaced: the registry's own modules alone, none of a subpackage's, and replay's and
+#: the red-team demo's every module of ops and of the registry
+REPLACED = {
+    "registry": ("import importlib, pkgutil\n"
+                 "import verity.ml.definitions.registry as package\n"
+                 "for m in sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name):\n"
+                 "    if m.name not in ('quarantine', 'catalog'):\n"
+                 "        importlib.import_module(package.__name__ + '.' + m.name)\n"),
+    ("ops", "registry"): ("import importlib, pkgutil\n"
+                          "for name in ('verity.ml.circuits.ops', 'verity.ml.definitions.registry'):\n"
+                          "    package = importlib.import_module(name)\n"
+                          "    for m in pkgutil.walk_packages(package.__path__, name + '.'):\n"
+                          "        importlib.import_module(m.name)\n"),
+}
+
+
+def _registered(code: str) -> list[str]:
+    """The ids `REGISTRY` holds, in registration order, once ``code`` has run in a process of its own: the test modules beside
+    this one import registry modules as they are collected, which reorders this process's registry."""
+    p = subprocess.run([sys.executable, "-c", code + "from verity.ml.circuits.defs import REGISTRY\nprint('\\n'.join(REGISTRY.defs))\n"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-2000:]
+    return p.stdout.split()
+
+
+def test_each_scope_registers_what_the_walk_it_replaced_did_in_its_order():
+    """Each scope of `catalog.load` registers the Definitions the walk it replaced (`REPLACED`) registered, in the same order:
+    the registry scope's walk reaches its subpackages' modules, which the old one never imported, so one that registers on import
+    fails here.  Nothing to update when a Definition is added: both walks register it."""
+    for scope, walk in REPLACED.items():
+        got = _registered(f"from verity.ml.definitions.registry import catalog\nassert not catalog.load({scope!r})[1]\n")
+        want = _registered(walk)
+        at = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+        assert got == want, (f"catalog.load({scope!r}) registers {len(got)} Definitions, the walk it replaced {len(want)}, first apart "
+                             f"at {at}: {got[at:at + 3]} against {want[at:at + 3]} (a module only load's walk imports registers on import)")
 
 
 def test_the_ops_scope_imports_every_module_of_ops():
