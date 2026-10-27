@@ -6279,9 +6279,8 @@
    ]
   },
   "Definitions.Pous.Assumptions.P2": {
-   "digest": "924d4884f2de3b6f0b60772c529b1d861b9761e0a9ff24f6ad4e8ff54db43f7d",
+   "digest": "b768407b053bb76b905487cf76c06cc71831ee9399ad5c1507fa01b96b63f16f",
    "definitions": {
-    "Pous.P2.Assumptions.CoinCommitHides": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb",
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
     "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a",
     "Pous.P2.Assumptions.P2RingRoundSecureWide": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
@@ -11623,7 +11622,7 @@
    ]
   },
   "Properties.Pous.EndToEnd": {
-   "digest": "54ffaf2a4a12e232832d5b8118490cd47e6a3ab65c19881227850a9552715bd2",
+   "digest": "797d5a9da5eab34940e17f9d64a574f26dd6bfd3d30a9b244b84ad6565a5b17e",
    "definitions": {
     "Pous.EndToEnd.Accepted": "2e4b9d66656d37af29ef1ab265dc6df753e5bf2485cd55f953c568f3e18e6ddb",
     "Pous.EndToEnd.AnsweredOnTime": "c2870b618539d7df4b0ed74c56d7a427ea19457463d0c6ec11753c881fc1bdf8",
@@ -11653,7 +11652,6 @@
     "Pous.EndToEnd.bytesOf": "1bf6f26565e95dea60346de6431520966589eacd73df0320410d7d747c226223",
     "Pous.EndToEnd.coinKey": "9540c153e5c2897fb03cd7c41aa0ceedb261028f72ee3732fda73917fd95c6d0",
     "Pous.EndToEnd.coinView": "84f8a78ecaac791c71b62f5bb089305d4dc092b21b7dfcf6febc9fd7c1ce3700",
-    "Pous.EndToEnd.commitmentOf": "02ca7be6f758ad1d1b799a8f0a6826b1c117d98b3cf376b7b7719997f24815b4",
     "Pous.EndToEnd.flat": "36aaa534d20cdef95ad1ab95df0150cd6906aa5604a5f8e6536deff630573404",
     "Pous.EndToEnd.leafInput": "906fa4b0121a2eff546a362ebd7a4ffe8c753775559f66bb16661d85cfeec5aa",
     "Pous.EndToEnd.q": "62f6160eff44113e913056c82541f99919de20f246e8c2f03498b1888538f445",
@@ -11832,11 +11830,11 @@
    "guarantees": ["Pous.Period.SecurityProofs.periodHeldAt", "Pous.Period.SecurityProofs.periodHeldDemo"]
   },
   "Properties.Pous.PeriodDeployed": {
-   "digest": "ef31827169088575c5e79daf0d8438d1bc7371d177191db2afa923dbd0d0e524",
+   "digest": "eec469224bb519debf71cf3ee99d30274e23939955598b9632e9c89530637a3a",
    "definitions": {
     "Pous.Period.DEADLINE_ROUNDS": "db41832c059e907d102b2e46526017111601e06fc7de7475887d195584a40079",
     "Pous.Period.HONEST_S": "22dc505be2778bbb4336673b9bf0b2d0da423653cde0cb6c5e3436d7f6c5b4c7",
-    "Pous.Period.PeriodHeldDeployed": "7f55d86d3ddcfd341a23a26880742279d54e9ad3b9815a1dde7ee08e463b29df",
+    "Pous.Period.PeriodHeldDeployed": "211570f0c4778e17a30173f9ded72916d79048493bd0428e03c5ab8f8a816610",
     "Pous.Period.PeriodHeldHonest": "88b045e1c8768a7b67363bb2915c800054f607d5ec71bfc368786085fdc06373",
     "Pous.Period.PeriodHeldNontrivial": "861bebf2ac45801c6ffabb248ae5c605a33cd539a601371208a29602a521fdff",
     "Pous.Period.RING_D": "101d503b569916472765f890caadf78747a89f262aad45f7128cb77d91ff36bf",
