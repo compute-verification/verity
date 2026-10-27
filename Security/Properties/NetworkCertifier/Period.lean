@@ -149,7 +149,7 @@ def PeriodWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :=
       | .clock ss => PeriodWindowAccepted p ss ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (p.first + i) reg x
       | .rows s sd _ => PeriodRowsWindowAccepted p s sd (p.first + i) reg x
 
-/-- **ONE-13: an accepted period accepted every link-window of it**: if the network certifier's period check accepts,
+/-- **An accepted period accepted every link-window of it**: if the network certifier's period check accepts,
 every one of the period's link-windows passed its form's check: in the clock form proved, certified on both ends and
 its clock synced; in the rows form proved, its three records certified and its rows registered. -/
 def PeriodAcceptMeans : Prop :=
