@@ -774,8 +774,9 @@ def _line(lines: Sequence[str], head: str) -> list[tuple[str, dict[str, Any]]]:
 
 
 def proved_section(proved: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
-    """DRAWPROVE's run as a section, one row per drawn proof block and one for the bundle's verdict, and whether every
-    drawn proof block was proved and accepted (module docstring); refuses a VERDICT for a block the coin didn't draw."""
+    """The drawn units' prove run as a section, one row per drawn proof block and one for the bundle's verdict, and
+    whether every drawn proof block was proved and accepted (module docstring); refuses a
+    VERDICT for a block the coin didn't draw."""
     run, drawn, lines = proved.get("run"), proved.get("drawn"), proved.get("lines")
     if not RUN_ID.search(str(run or "")) or not isinstance(lines, list) or not isinstance(drawn, list) or not drawn:
         raise ValueError("measurements: proved needs its run id, the coin's drawn indices and the run's output lines")
