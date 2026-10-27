@@ -271,6 +271,49 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
   | .round _ _, some 2 => S.coins a
   | _, _ => (S, a)
 
+/-! ### A session on the window's withheld challenger
+
+Its `Hello` names the window's challenger (`Zk.challengerSlotOf`) and commits nothing, so the auditor answers it `Ok`, and
+each `Commit` and `Round` is answered with the challenger's release after that request's commitment, which the server asks
+for once (live PROTOCOL.md §9). The loop holds the same schedule (`State.request`, `reqAt`) and passes the coins on only
+when they are exactly the schedule's count there; that they are the challenger's releases, each once, is the audit's check
+of the record against the challenger's log. The loop names the session by a handle it draws from the operating system,
+the 4 words the prover receives for `Hello`'s answer, which its tables' level 0 is drawn for (`Level0.nameOf`). -/
+
+/-- What the loop holds of a challenger session's `Hello`: its link points; no tree and no nonce. -/
+def challengerHello (spec : SessionSpec) : Coins.Hello :=
+  { spec := ⟨#[], 0, 0⟩, links := spec.points * spec.mPts, nonce := [] }
+
+/-- The challenger's coins `a` the auditor answered to the schedule's next opening (`reqAt`), passed on as they are once
+they are a `Resp::Coins` of exactly the schedule's count there; the session with the round counted. -/
+def State.coinsChallenger (S : State) (a : ByteArray) : State × ByteArray :=
+  match S.stop, S.session with
+  | some why, _ => (S, refused why)
+  | none, none => S.refuse s!"{Coins.STOP}coins before the step-0 coin commitment"
+  | none, some C =>
+    let (stream, n) := reqAt S.plan C.hello.links C.opened.length
+    if a.size == 5 + 16 * n && a.data.toList.take 5 == Coins.frame n [] then
+      ({ S with session := some { C with opened := C.opened ++ [0] } }, a)
+    else S.refuse s!"{Coins.STOP}the challenger's coins for {stream}: {(a.size - 5) / 16} words, where the schedule's are {n}"
+
+/-- **What the prover receives** on the window's challenger for the auditor's answer `a` to a request of kind `k`
+(`State.answer` there): `Hello`'s answer must be `Ok`, and the prover receives the loop's handle `handle` (64 bytes, as
+`Resp::Coins`' 4 words); a `Commit`'s or `Round`'s coins as `State.coinsChallenger` passes them; anything else as
+`State.answer` has it. -/
+def State.answerChallenger (S : State) (k : Kind) (a handle : ByteArray) : State × ByteArray :=
+  match k, byte? a 0 with
+  | .hello, _ => match S.stop, S.hello with
+    | some why, _ => (S, refused why)
+    | none, none => S.refuse s!"{Coins.STOP}Hello's answer before the Hello"
+    | none, some h =>
+      if a.data.toList != [1] then S.refuse s!"{Coins.STOP}Hello's answer on the window's challenger is not Ok: nothing is committed at Hello"
+      else if handle.size != 64 then S.refuse s!"{Coins.STOP}the session's handle is not 64 bytes"
+      else ({ S with session := some { hello := h, key := .empty, root := handle.data.toList, opened := [] } },
+            ⟨(Coins.frame 4 handle.data.toList).toArray⟩)
+  | .commit, some 2 => S.coinsChallenger a
+  | .round _ _, some 2 => S.coinsChallenger a
+  | _, _ => S.answer k a
+
 /-- **The sizes the loop's frames read**, at the setup `spec`, `sts`: at each rep stream `k`, its table's link points the
 session's, nonzero and within `Frames.COIN_MAX` words at the session's points; its domain, and its table's regions at
 `COIN_MAX` link points, within a `u64`'s count; and `Drive.start`'s layout plus `Zk.K_PAD`, its pad row, within a
@@ -477,6 +520,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
     (ended : IO.Ref String) : IO Unit := do
   let mut st : State := {}
   let mut next := first
+  let challenger := S.challenger.isSome
   repeat
     let mut f := ByteArray.empty
     if let some g := next then
@@ -545,11 +589,16 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
         sendFrame p out
       | .ok (st', h) =>
         st := st'
-        if let .ok (spec, sts) := set then reg.modify (·.begin sid spec sts)
+        if let .ok (spec, sts) := set then
+          reg.modify (·.begin sid spec sts)
+          if challenger then st := { st with hello := some (challengerHello spec) }
         sendFrame a h
         let some r ← recvFrame a | break
-        let (st', out) := st.answer .hello r
-        if st.session.isNone && st'.session.isSome then l0s.modify (·.name (Level0.nameOf r) sid st.tables.size)
+        let (st', out) ← if challenger then
+            pure (st.answerChallenger .hello r (← IO.getRandomBytes 64))
+          else pure (st.answer .hello r)
+        if st.session.isNone && st'.session.isSome then
+          l0s.modify (·.name (Level0.nameOf (if challenger then out else r)) sid st.tables.size)
         st := st'
         sendFrame p out
     | .ok k =>
@@ -596,7 +645,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
           continue
       sendFrame a g
       let some r ← recvFrame a | ended.set "the auditor ended the session"; break
-      let (st', out) := st.answer k r
+      let (st', out) := if challenger then st.answerChallenger k r .empty else st.answer k r
       st := st'
       if let (some (i, j), .round _ n, some 2, none) := (rep, k, byte? r 0, st.stop) then
         match ← Frames.coins reg sid i j (Frames.feedOf n r.data.toList) with

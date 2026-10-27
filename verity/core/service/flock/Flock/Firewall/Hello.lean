@@ -79,16 +79,18 @@ def lawOf (args : List String) :
     pure (work, ← nat "--stratified", ← closure)
 
 /-- A firewalled statement's `Hello` inputs, read once: `flock-verify verify --zk`'s statement of its files
-(`Witness.Inputs`) and the draw law's inputs (`lawOf`). -/
+(`Witness.Inputs`), the draw law's inputs (`lawOf`) and, for a session on the window's withheld challenger, its slot
+(`--challenger-slot`). -/
 structure Setup where
   I : Witness.Inputs
   work : Option (Nat × Array (String × Nat × Nat))
   stratified : Option Nat
   closure : Option (Std.HashMap Nat (Array Nat))
+  challenger : Option Nat := none
 
 /-- The statement flags a `Setup` reads. -/
 def FLAGS : String :=
-  "[--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F] [--program F] [--stratified K] [--work K --work-table F] [--closure F]"
+  "[--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F] [--program F] [--stratified K] [--work K --work-table F] [--closure F] [--challenger-slot I]"
 
 /-- The `Setup` the statement flags `args` name, or why they name none (`usage`, the usage line). -/
 def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup) := do
@@ -104,10 +106,16 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   let (work, stratified, closure) ← match ← lawOf args with
     | .ok l => pure l
     | .error e => return .error s!"hello: {e}"
+  let challenger ← match Witness.argOf args "--challenger-slot" with
+    | none => pure none
+    | some i => match i.toNat? with
+      | some i => pure (some i)
+      | none => return .error "hello: --challenger-slot I: I is the session's index in the window"
   let circuitFile ← IO.FS.readBinFile cf
   let publicFile ← IO.FS.readBinFile pf
   let tables ← Witness.readTables args
-  return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure }
+  return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure,
+               challenger }
 
 /-- The session's spec and its tables' statements at the verifier's draw `draw` (`Stmt.setupTables`, `setup_eq`; the public
 file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseFast`). -/
@@ -119,6 +127,21 @@ theorem Setup.setup_eq (S : Setup) (draw : Option Json) :
     S.setup draw = Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count
       S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure := by
   rw [Setup.setup, Stmt.setupTables_eq, HmOut.parse_eq_fast]
+
+/-- The session's spec and its tables' statements at `draw` as session `slot` on the window's withheld challenger
+(`flock-verify verify --zk --challenger-slot`): `setup`'s, under `Zk.tagsChallenger` on `os` coins, its `Hello` the
+challenger's (`Zk.onChallenger`). -/
+def Setup.setupChallenger (S : Setup) (slot : Nat) (draw : Option Json) : V (SessionSpec × Array Stmt) := do
+  let tags := Zk.tagsChallenger S.I.tags (Zk.maskLogOf S.I.circuitFile) S.I.count
+  let (spec, sts) ← Stmt.setupTablesOf (HmOut.parseFast tags S.I.circuitFile S.I.tables) tags S.I.circuitFile
+    S.I.publicFile .os S.I.count S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure
+  return (← Zk.onChallenger spec slot, sts)
+
+/-- The session's setup at `draw`: `setupChallenger`'s on the window's challenger, else `setup`'s. -/
+def Setup.setupOf (S : Setup) (draw : Option Json) : V (SessionSpec × Array Stmt) :=
+  match S.challenger with
+  | some i => S.setupChallenger i draw
+  | none => S.setup draw
 
 /-- The session's spec at `draw`. -/
 def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec := (S.setup draw).map (·.1)
@@ -138,13 +161,13 @@ def textAt (spec : V SessionSpec) (nonce : ByteArray) : Except String String :=
 /-- The statements set up so far, by `drawKey`: one process sets each draw's statement up once. -/
 abbrev Specs := IO.Ref (Array (String × V (SessionSpec × Array Stmt)))
 
-/-- The spec and statements at `draw` (`Setup.setup`), set up on first use. -/
+/-- The spec and statements at `draw` (`Setup.setupOf`), set up on first use. -/
 def Setup.setupAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V (SessionSpec × Array Stmt)) := do
   let key := drawKey draw
   match (← specs.get).find? (·.1 == key) with
   | some (_, s) => pure s
   | none =>
-    let s := S.setup draw
+    let s := S.setupOf draw
     specs.modify (·.push (key, s))
     pure s
 

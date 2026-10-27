@@ -1229,10 +1229,14 @@ fn lean_public(inst: &Instances, what: &str, tables: usize) -> Result<std::path:
 }
 
 /// The statement flags the Lean session loop sets a firewalled session's `Hello` up on (`Flock.Firewall.Hello.Setup`): the statement, the
-/// circuit, the public file `public`, the lookup tables and `tables`, then `FC_FIREWALL_HELLO_ARGS`' flags.
+/// circuit, the public file `public`, the lookup tables and `tables`, the session's slot on the window's challenger
+/// ([`challenger_slot`]), then `FC_FIREWALL_HELLO_ARGS`' flags.
 fn lean_statement_args(st: &Stmt, public: &std::path::Path, tables: usize) -> Vec<String> {
     let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
         "--public".into(), public.display().to_string(), "--tables".into(), arg("--tables", "tables"), "--session-tables".into(), tables.to_string()];
+    if let Some(slot) = challenger_slot() {
+        args.extend(["--challenger-slot".into(), slot.to_string()]);
+    }
     args.extend(std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default().split_whitespace().map(String::from));
     args
 }
@@ -3601,11 +3605,15 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         match call(&t, Req::Hello(hello.clone()))? {
             // M0's seed commitment (4 words), or the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them)
             Resp::Coins(c) if !challenger_mode() && c.len() == if is_zk(st) { 20 } else { 4 } && (is_zk(st) || seed_coins()) => commit = c,
+            // FC_COINS=challenger under the firewall: nothing committed, and the Lean session loop names the session by a
+            // handle of its own (4 words), which its level 0 is drawn for (`firewall::level0_session`)
+            Resp::Coins(c) if challenger_mode() && plan.lean_session && c.len() == 4 => commit = c,
             // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws; FC_COINS=challenger: the window's
             // challenger's, released at its close
-            Resp::Ok if challenger_mode() || (!is_zk(st) && !seed_coins()) => {}
+            Resp::Ok if (challenger_mode() && !plan.lean_session) || (!is_zk(st) && !seed_coins()) => {}
             r => return Err(format!("hello: step 0 expects the verifier's {}, got {r:?}",
-                                    if challenger_mode() { "Ok (FC_COINS=challenger)" }
+                                    if challenger_mode() && plan.lean_session { "session handle (FC_COINS=challenger, the Lean session loop's)" }
+                                    else if challenger_mode() { "Ok (FC_COINS=challenger)" }
                                     else if is_zk(st) || seed_coins() { "seed commitment" } else { "Ok (FC_COINS=os)" })),
         }
         // several tables: every table after the first commits its level-0 root (and draws its level-0 hiding) before any stream
