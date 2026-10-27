@@ -11,6 +11,10 @@ nontrivial lemmas say that each bound fails at the verifier that accepts everyth
 one slot carries any payload, so the sequences counted are infinitely many (`accSeqsAt_acceptAll_not_le`), against
 the bound's value at `fxRate`'s parameters.
 
+The count under a sampled audit (`EncardAccSeqsSampledLe`) takes that the layout fits the circuit. Its honest lemma
+concludes that at the negation `notStmt`, with the faulty-bits premise and the acceptance of the step `obs1`; its
+nontrivial lemma is the same count at `acceptAll`, against the bound's value at the negation's one faulty set.
+
 The two counts through the wire (`EncardDecodableLeConstantRate` and its per-window form) take the run's acceptance,
 which their honest lemma concludes for the honest certifier `fxHonestI` at `fxRate`, with W2 and J, its two named
 assumptions, holding there too. At the verifier that accepts everything a sender whose secret is its frame's length
@@ -64,6 +68,22 @@ parameters over its one window. -/
 theorem EncardAccSeqsLeConstantRatePerWindow_nontrivial :
     ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) (1 * 1) 1).encard ≤
       ((Fintype.card Unit * (syncOne.size * 1 ^ 1) ^ 1 : ℕ) : ℕ∞) :=
+  accSeqsAt_acceptAll_not_le _
+
+/-! ## Under a sampled audit -/
+
+/-- **The negation's audit meets the sampled count's premises and accepts its honest step**: `notLay` fits `notProg`
+over one step, the one possible faulty set at `δ = 0` commits no bits, and the step `obs1` is accepted. -/
+theorem EncardAccSeqsSampledLe_honest :
+    notLay.Fits notProg 1 ∧ (∀ F ∈ faultySets notStmt.design notPart 0, faultyBits notProg notPart F ≤ 0) ∧
+      [obs1] ∈ AccSeqsSampled notProg notPart notStmt.design notLay 1 {fun _ => false} 0 (fun _ _ => [false]) 1 :=
+  ⟨notLay_fits, fun F hF => by simp [notFaulty_empty hF, faultyBits], obs1_acc⟩
+
+/-- **`EncardAccSeqsSampledLe`'s bound fails at the verifier that accepts everything**, at the negation's parameters:
+`c = β = 0`, its one possible faulty set, `D = 1`. -/
+theorem EncardAccSeqsSampledLe_nontrivial :
+    ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) 1 1).encard ≤
+      ((2 ^ 0 * (faultySets notStmt.design notPart 0).card * 2 ^ 0 * 1 ^ 1 : ℕ) : ℕ∞) :=
   accSeqsAt_acceptAll_not_le _
 
 /-! ## Through the wire -/

@@ -16,7 +16,8 @@ witnesses):
 * `notStmt`: one input gate and its negation, drawn `all`, its one proof unit `{0, 1}` (`notPart`), at a layout whose
   ingress is the input and whose egress slot's presence gate is the negation (`notLay`). With nothing held and the
   input `false`, the circuit computes `true` there, so the step `obs0`, which carries no frame, is accepted under no
-  possible faulty set (`obs0_notAcc`): the one unit is drawn `all`, so the only one is empty.
+  possible faulty set (`obs0_notAcc`): the one unit is drawn `all`, so the only one is empty (`notFaulty_empty`). The
+  step `obs1`, which carries the empty frame, is accepted with it (`obs1_acc`).
 * `leakD`: `sksD` at `notStmt`, a verifier that accepts everything, where no opening passes, so no witness is in
   `RLeak` (`leakD_noRLeak`). `tapD`: `leakD` with every opening passing (`accCm`), where the network certifier's
   openings `tapOps` register `obs0` (`tapOps_opens`), so no witness is in `RLeakTap` (`tapD_noRLeakTap`) and the
@@ -102,6 +103,23 @@ theorem obs0_covered : Covered 1 [obs0] := by
   obtain rfl : t = 0 := by omega
   rfl
 
+/-- At any `δ`, the only possible faulty set of `notStmt` is empty: its one unit is drawn `all`. -/
+theorem notFaulty_empty {δ : ℝ} {F : Finset ℕ} (hF : F ∈ faultySets notStmt.design notPart δ) : F = ∅ := by
+  classical
+  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+  obtain ⟨hsub, -, hdis⟩ := hF
+  refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
+  have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
+  obtain rfl : v = 0 := by omega
+  exact Finset.disjoint_left.1 hdis hv (by decide)
+
+theorem empty_mem_notFaulty : (∅ : Finset ℕ) ∈ faultySets notStmt.design notPart 0 := by
+  classical
+  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  refine ⟨Finset.empty_subset _, ?_, Finset.disjoint_empty_left _⟩
+  show (0 : ℝ) < classesPa notStmt.design.rules notPart.classes 0 ∅
+  simp [notStmt, notPart, classesPa, Rule.Pa, OneStage.Pa, window]
+
 /-- **`obs0` is accepted under no possible faulty set**, whatever the inputs `As` admits, at one step at `δ = 0`: the
 only possible faulty set is empty, since the one unit is drawn `all`, so no gate is held, and the circuit, the negation
 of the ingress `false`, holds a frame where `obs0` has none. -/
@@ -109,15 +127,7 @@ theorem obs0_notAcc (As : Set (ℕ → Bool)) :
     [obs0] ∉ AccSeqsSampled notProg notPart notStmt.design notLay 1 As 0 (fun _ _ => [false]) 1 := by
   intro h
   obtain ⟨-, -, F, hF, a, -, free, hfree, hacc⟩ := h
-  have hF0 : F = ∅ := by
-    classical
-    simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
-    obtain ⟨hsub, -, hdis⟩ := hF
-    refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
-    have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
-    obtain rfl : v = 0 := by omega
-    exact Finset.disjoint_left.1 hdis hv (by decide)
-  subst hF0
+  obtain rfl := notFaulty_empty hF
   have hnone : free = fun _ => none := funext fun g => by
     cases hg : free g with
     | none => rfl
@@ -136,6 +146,27 @@ theorem obs0_notAcc (As : Set (ℕ → Bool)) :
       else none := rfl
   rw [hrow, notProg_val _ hin] at h1
   simp at h1
+
+/-- One step: an empty frame on the link, every status complete, what the negation of the ingress `false` holds. -/
+def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
+
+/-- **`obs1` is accepted with the empty faulty set**, its other inputs `false`, at one step at `δ = 0`. -/
+theorem obs1_acc :
+    [obs1] ∈ AccSeqsSampled notProg notPart notStmt.design notLay 1 {fun _ => false} 0 (fun _ _ => [false]) 1 := by
+  refine ⟨rfl, by simp [obs1], ∅, empty_mem_notFaulty, fun _ => false, rfl, fun _ => none,
+    fun _ _ h => by simp at h, fun t ht => ?_⟩
+  obtain rfl : t = 0 := by omega
+  refine ⟨Nat.one_pos, ?_, fun _ => rfl⟩
+  funext ℓ σ
+  have hin : notLay.inputOf 1 [[false]] (fun _ => false) 0 = false := rfl
+  have hrow : rowOf (valOver notProg (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none))
+      (notLay.egress 0 ℓ) σ = if valOver notProg (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none) 1 then
+        some (([] : List ℕ).map (valOver notProg (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none)))
+      else none := rfl
+  show some [] = rowOf (valOver notProg (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none))
+    (notLay.egress 0 ℓ) σ
+  rw [hrow, notProg_val _ hin]
+  rfl
 
 /-! ## The accepting verifiers at the negation -/
 
