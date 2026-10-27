@@ -341,7 +341,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, fills: An
         except Ch.CoinError as e:
             return None, ("circuit", f"filler window {i} of period {nm} doesn't count toward it, so the fill earns "
                                      f"nothing: {e}")
-        why = Cr._pin_hygiene(nm, i, main, audited.pinned, period_pin, floor, "filler window")
+        why = Cr._pin_hygiene(nm, i, main, audited.pinned, period_pin, floor)
         if why is not None:
             return None, why
         proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None

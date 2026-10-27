@@ -1,5 +1,6 @@
 import CoreProtocol.Cli
 import PouwCheck.Credit
+import PouwCheck.Fill
 
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
@@ -23,19 +24,23 @@ SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"pins": pins, "windows": [window, …]}`: the challenger host's published pins log, and each
 window's evidence in the close's order, `Credit.PERIOD_KEYS` (its identity, session, salt, manifest, served rows, Commit
-record, round log, draw, descriptor, registered entries, each drawn unit's proof outcome and its live evidence).
+record, round log, draw, descriptor, registered entries, each drawn unit's proof outcome and its live evidence). Or
+`{"fills": [filler window, …], "pins": pins, "windows": [window, …]}`, with each filler window of the period's fill
+period too, in its close's order (`Fill.FILL_KEYS`).
 
-**The check** first refuses, by name (`form: why`, `form`), every window in a form the period's proved guarantee
+**The check** first refuses, by name (`form: why`, `form`), every window, served or filler, in a form the period's proved guarantee
 (`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
 window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
-`Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`. It
-never leaves a period undecided.
+`Credit.periodCredit` on them, and with filler windows `Fill.periodFill` on those, all or nothing: it accepts with the
+period's credit, or rejects with the first refusal, `code: why`. It never leaves a period undecided.
 
 **Public**, on acceptance: `Credit.PeriodCredit.toJson`, each window's credited calls, its credited served work, the K
-the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it.
+the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it; with filler windows, and `fill`
+(`Fill.FillCredit.toJson`: each filler window's work, the fill period's K, the δ and each filler window's ε). The served
+credit is the same with or without them.
 
-**Profile**: the period's name and its number of windows.
+**Profile**: the period's name and its number of windows, and its number of filler windows when it has them.
 
 What it doesn't check: each drawn unit's statement and each round's live statement, whose proof outcomes the evidence
 carries as the verifier of record's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
@@ -51,6 +56,8 @@ def protocolId : String := "verity/pouw/period/v1"
 def commitmentTag : String := "verity/pouw/period/ledger/v1"
 def paramsKeys : List String := ["key", "main", "name"]
 def evidenceKeys : List String := ["pins", "windows"]
+/-- The evidence of a period that presents its filler windows too (`Fill`). -/
+def fillEvidenceKeys : List String := ["fills", "pins", "windows"]
 
 structure Params where
   key : Json
@@ -64,10 +71,22 @@ structure Commitment where
 structure Evidence where
   pins : Json
   windows : Json
+  fills : Option Json := none
 
 structure Profile where
   period : String
   windows : Nat
+  fills : Option Nat := none
+
+/-- A credited period's public output: its served credit and, when it presents filler windows, its fill. -/
+structure Credited where
+  served : Credit.PeriodCredit
+  fill : Option Fill.FillCredit := none
+
+def Credited.toJson (c : Credited) : Json :=
+  match c.fill with
+  | none => c.served.toJson
+  | some f => c.served.toJson.setObjVal! "fill" f.toJson
 
 def paramsOf (j : Json) : V Params := do
   unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
@@ -84,8 +103,10 @@ def Commitment.digest (c : Commitment) : ByteArray :=
 
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
-  unless keys j == some evidenceKeys do throw s!"keys are not {", ".intercalate evidenceKeys}"
-  pure { pins := get j "pins", windows := get j "windows" }
+  unless keys j == some evidenceKeys || keys j == some fillEvidenceKeys do
+    throw s!"keys are not {", ".intercalate evidenceKeys}"
+  pure { pins := get j "pins", windows := get j "windows",
+         fills := if keys j == some fillEvidenceKeys then some (get j "fills") else none }
 
 /-- The guarantee a credited period is proved under. -/
 def GUARANTEE : String := "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod"
@@ -158,30 +179,41 @@ def form (nm : String) (windows : Json) : Option String := Id.run do
     if let some why := windowForm nm i w then return some why
   return none
 
-def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Credit.PeriodCredit Profile :=
-  match form p.name e.windows with
-  | some why => .reject s!"form: {why}"
-  | none =>
+/-- The first window in a form the period's guarantee doesn't cover (`form`), served then filler, else the period's
+credit (`Credit.periodCredit`) and, with filler windows, its fill (`Fill.periodFill`), or the first refusal. -/
+def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Credited Profile :=
+  match form p.name e.windows, e.fills.bind (form (Fill.periodName p.name)) with
+  | some why, _ => .reject s!"form: {why}"
+  | none, some why => .reject s!"form: filler {why}"
+  | none, none =>
     match Credit.periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
-    | .ok pc => .accept pc { period := p.name, windows := pc.windows.length }
     | .error (code, why) => .reject s!"{code}: {why}"
+    | .ok pc =>
+      let profile : Profile := { period := p.name, windows := pc.windows.length }
+      match e.fills with
+      | none => .accept { served := pc } profile
+      | some fills =>
+        match Fill.periodFill p.key c.ledger e.pins p.main p.name fills with
+        | .error (code, why) => .reject s!"{code}: {why}"
+        | .ok f => .accept { served := pc, fill := some f } { profile with fills := some f.work.length }
 
 def profileJson (pr : Profile) : Json :=
-  Json.mkObj [("period", .str pr.period), ("windows", toJson pr.windows)]
+  Json.mkObj ([("period", .str pr.period), ("windows", toJson pr.windows)] ++
+    (pr.fills.map fun n => [("fills", toJson n)]).getD [])
 
 def protocol : Core.Protocol where
   id := protocolId
   Params := Params
   Commitment := Commitment
   Evidence := Evidence
-  Public := Credit.PeriodCredit
+  Public := Credited
   Profile := Profile
   params := paramsOf
   commitment := commitmentOf
   evidence := evidenceOf
   digest := Commitment.digest
   check := check
-  publicJson := Credit.PeriodCredit.toJson
+  publicJson := Credited.toJson
   profileJson := profileJson
 
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
