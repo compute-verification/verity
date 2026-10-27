@@ -1,4 +1,5 @@
 import Properties.Pous.PeriodDeployed
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # PoUS pooled over a monitoring period's windows: how many can be accepted short

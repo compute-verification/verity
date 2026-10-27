@@ -2,6 +2,7 @@ import Properties.Pous.Pooled
 import Proofs.Pous.PeriodDeployed
 import Proofs.Flock.Soundness.Audit.Periods
 import Proofs.Flock.Claims.Sampling.Draws
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # PoUS pooled over `U` windows: how many windows can be accepted short
