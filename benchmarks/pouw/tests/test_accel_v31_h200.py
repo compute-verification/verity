@@ -55,3 +55,30 @@ def test_a_missing_call_or_another_m_gives_no_step(tmp_path, capsys, monkeypatch
     monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
     assert h200_step.main() == 1
     assert "summary: no complete step" in capsys.readouterr().out
+
+
+def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, capsys):
+    """h200_pipes.py: a pipe's busy time is its share of peak over the kernel's elapsed cycles (active / elapsed scales
+    it) times the kernel's duration, the larger of its issue and cycles-active shares; the operands' generation is left
+    out; and the duty is the busy time a call over fill-bench's overlapped call, so overlapping kernels add."""
+    import h200_pipes
+
+    cols = ["ID", "Kernel Name", "gpu__time_duration.sum", "sm__cycles_active.avg", "sm__cycles_elapsed.avg",
+            "sm__pipe_tensor_op_gmma_cycles_active.avg.pct_of_peak_sustained_active",
+            "sm__inst_executed_pipe_alu.avg.pct_of_peak_sustained_active",
+            "sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active",
+            "sm__inst_executed_pipe_lsu.avg.pct_of_peak_sustained_active"]
+    rows = [["", "", "msecond", "cycle", "cycle", "%", "%", "%", "%"],
+            ["0", "gen_kernel(signed char*, int, unsigned int, bool)", "1", "100", "100", "0", "50", "50", "10"],
+            ["1", "gemm_kernel<true, 2>(GArgs)", "2", "1,000", "1,000", "80", "5", "4", "2"],
+            ["2", "leaf_persist<V31Row>(Persist, int)", "1", "50", "100", "0", "90", "80", "20"],
+            ["3", "fill_a_kernel(...)", "0.5", "100", "100", "0", "40", "40", "30"]]
+    (tmp_path / "ncu-row16384-L4096-8B-o.raw.csv").write_text(
+        "\n".join(",".join(f'"{c}"' for c in r) for r in [cols] + rows) + "\n")
+    (tmp_path / "ncu-row16384-L4096-8B-o.log").write_text("8B-o: 1 calls, L 4096 row 16384, grid 132, gemm_bn 256\n")
+    (tmp_path / "fill-bench-row16384-L4096.jsonl").write_text(
+        json.dumps({"fill": True, "shape": "8B-o", "arms": {"ovl": {"ms": 2.5}, "lt": {"ms": 2.0}}}) + "\n")
+    assert h200_pipes.main(["h200_pipes.py", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert ("| 8B-o | 4096 | row16384 | 2.500 | 2.000 | 1.250 | 64.0% | 30.0% | 0.0% | 11.6% | 36.0% | 2.000 | 1.000 | "
+            "0.500 | 1.40 | - |") in out
