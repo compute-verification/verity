@@ -16,15 +16,15 @@ round with no SHA-512 call; it computes nothing, so its record holds no call and
 the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
 
 * **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `KSLin2On` at accept-all is false at every
-  brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers map to a hand-built false
-  row (`DeployedParses`: a row of the inner statement's first table with a zero A side, the lowering of a gate `w ⊕ w`,
-  whose bit block `0` fixes to `1`) and to `PlainIn`'s checks, with a coin-server record at whose transcript its V\* parts
-  are in scope (`PartsInScope`). Its density, its inner statement's lack of a witness and its plain scope are proved
-  here. The silent prover is accepted on every run and
-  nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each at a
-  large enough `M` and `R`; and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`
-  (`κ_lt_half_of_lamLin2`). The general form is
-  `not_ksLin2On_acceptAll`, at any compiled record and statement with no witness and `κ < 1/2`.
+  brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled
+  statement with a V\* session whose inner statement passes `PlainIn`'s checks (`DeployedParses`), with a coin-server
+  record at whose transcript its V\* parts are in scope (`PartsInScope`). The inner statement need not be false. The
+  silent prover is accepted on every run; the accepting record stages no V\* statement, so each session's statement is
+  empty, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), and `E*` extracts nothing
+  (`E_none_of_vstar_nil`). So `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each at
+  a large enough `M` and `R`; and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`
+  (`κ_lt_half_of_lamLin2`). The general form is `not_ksLin2On_acceptAll`, at any compiled record and statement with a
+  V\* session, an outer parser that refuses the empty statement, and `κ < 1/2`.
 * **Why the statement is a named assumption** (`recursiveKSAtAll_of_readX_none`): the bound's right-hand side is at
   least `κ`, whatever the verifier (`ksLin2On_of_one_le_κ`). At a statement whose bytes don't read
   (`RecDeploy.readX x = none`), `κ` is the inner Flock's at the empty inner statement, which sets up no table, so
@@ -94,16 +94,75 @@ theorem ksLin2On_of_one_le_κ [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecA
       (by positivity : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1)))
   linarith
 
-/-- At a statement with no witness, every extractor fails on every run of a verifier that accepts at its first round. -/
+/-- An extractor that returns nothing on every run fails on every run of a verifier that accepts at its first
+round. -/
 theorem prBad_acc {W Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (R : Rel W)
     (E : Extractor Coin W V) (x : Msg) (P : Prover Ω) (hv : ∀ as cs, V.next x as cs = .ret .acc) (hk : 0 < V.k x)
-    (hR : ∀ w, ¬ R x w) : PrBad H V R E x P = 1 := by
+    (hE : ∀ ω r₀ c, (E.eval H P x ω r₀ c).1 = none) : PrBad H V R E x P = 1 := by
   unfold PrBad
   refine (Pr_congr (q := fun _ => True) fun s => iff_true_intro ⟨run_acc H P V x hv hk s.1 s.2.1, ?_⟩).trans
     (Pr_const_of trivial)
-  cases (E.eval H P x s.1 s.2.1 s.2.2).1 with
-  | none => exact id
-  | some w => exact hR w
+  rw [hE]
+  exact id
+
+theorem eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+    ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
+  (Claims.RP.eval_bind H run p f).1
+
+/-- Waits whose assemble step never assembles return nothing, however their reruns are served. -/
+theorem eval_serve_firstWait_none {R₁ R₂ W' Op : Type} (q : R₁ → RP R₂ Seen) (k : ℕ) (opens : Seen → List Op)
+    (assemble : List Op → Option W') (check : W' → Bool) (h : ∀ os, assemble os = none) (H : Msg → Msg)
+    (run : R₂ → Trace) : ∀ rss : List (List R₁),
+    ((serve q (firstWait k opens assemble check rss)).eval H run).1 = none
+  | [] => rfl
+  | rs :: rss => by
+    have e : firstWait k opens assemble check (rs :: rss) =
+        (waitAcc k rs []).bind fun _ => firstWait k opens assemble check rss := by
+      simp only [firstWait, h]
+    rw [e, Witness.Recursion.serve_bind, eval_bind_fst]
+    exact eval_serve_firstWait_none q k opens assemble check h H run rss
+
+/-- `collect` gives up where its first program does. -/
+theorem eval_collect_none {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R (Option α))
+    (ps : List (RP R (Option α))) (hp : (p.eval H run).1 = none) : ((collect (p :: ps)).eval H run).1 = none := by
+  rw [collect, eval_bind_fst, hp]
+  rfl
+
+/-- **`E_O` extracts nothing where the record stages no V\* statement**: each session's statement is then empty,
+which the outer Flock's parser refuses, so its first session's waits assemble nothing. -/
+theorem EO_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
+    (hs : ∀ ps, A.vstar x ps = []) (hS : 0 < A.nS x) (hP : DO.parse [] = none)
+    (run : (Fin (A.V.k x) → Coin) → Trace) (d : Fin (A.V.k x) → Coin) (c : (EO A I DO decO).C x) :
+    (((EO A I DO decO).ext x d c).eval H run).1 = none := by
+  have hA : ∀ (xs : List Msg) (s : ℕ) os, xs = [] →
+      Flock.assemble DO.parse DO.table decO DO.read (xs.getD s []) os = none := by
+    intro xs s os h
+    subst h
+    simp only [List.getD_nil, Flock.assemble, hP]
+  have hl : List.finRange (A.nS x) ≠ [] := by
+    intro h
+    have := congrArg List.length h
+    simp only [List.length_finRange, List.length_nil] at this
+    omega
+  simp only [EO, RP.eval]
+  split
+  · obtain ⟨a, l, hal⟩ := List.exists_cons_of_ne_nil hl
+    rw [hal, List.map_cons]
+    apply eval_collect_none
+    exact eval_serve_firstWait_none _ _ _ _ _ (fun os => hA _ _ os (hs _)) H run _
+  · rfl
+
+/-- **`E*` extracts nothing where the record stages no V\* statement**: `E_O` gives up on the judged draw, so the
+inner view there is rejected (`dec`) and the inner `E^rep` stops. -/
+theorem E_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
+    (hs : ∀ ps, A.vstar x ps = []) (hS : 0 < A.nS x) (hP : DO.parse [] = none) {Ω : Type} (P : Prover Ω) (ω : Ω)
+    (r₀ : Fin (A.V.k x) → Coin) (c : (E H A I DO decO).C x) :
+    ((E H A I DO decO).eval H P x ω r₀ c).1 = none := by
+  have hO := EO_none_of_vstar_nil H A I DO decO x hs hS hP (run H P A.V x ω)
+  unfold Extractor.eval
+  simp only [E, served, erep, serve, outerStage, eval_bind_fst, hO, dec, RP.eval, reduceCtorEq, ↓reduceIte]
 
 /-- A verifier that accepts at its first round calls `H` nowhere, so `B` finds nothing. -/
 theorem prB_acc {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
@@ -131,14 +190,14 @@ theorem prFCI_noCalls (H : Msg → Msg) (D : Deploy Coin)
   · rfl
 
 /-- **`KSLin2On` fails at the verifier that accepts everything** at any statement of `G` where the compiled verifier
-takes a round, no witness is in the relation and `κ < 1/2`: the silent prover is accepted on every run and no
-extractor finds a witness, so `Pr[accept ∧ ¬extract] = 1`. The accepting verifier and its record call `H` nowhere, so
+takes a round, the statement has a V\* session, the outer Flock's parser refuses the empty statement and `κ < 1/2`:
+the silent prover is accepted on every run, and the record stages no V\* statement, so `E*` extracts nothing
+(`E_none_of_vstar_nil`) and `Pr[accept ∧ ¬extract] = 1`. The accepting verifier and its record call `H` nowhere, so
 every finder term is `0`, and at `M = ⌈4·(4W + β₂)⌉` and `R = 16·(k_I + 1)` each of the two tails is below `1/4`. -/
 theorem not_ksLin2On_acceptAll [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (decI : List (ℕ × Col) → List T)
     (hdI : decOK Bd.deploy decI) (decO : List (ℕ × Col') → List T') (hdO : decOK DO decO) (x : Msg) (hx : G x)
-    (hk : 0 < (D.record Bd.IVStar).V.k x)
-    (hR : ∀ w, ¬ Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x w)
+    (hk : 0 < (D.record Bd.IVStar).V.k x) (hS : 0 < (D.record Bd.IVStar).nS x) (hP : DO.parse [] = none)
     (hκ : κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x < 1 / 2) :
     ¬ KSLin2On H D.acceptAll Bd DO Cp G := by
   intro h
@@ -147,7 +206,7 @@ theorem not_ksLin2On_acceptAll [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Rec
   have hs : ∀ y ps, (D.acceptAll.record Bd.IVStar).vstar y ps = [] := fun _ _ => rfl
   have hv : ∀ as cs, (D.acceptAll.record Bd.IVStar).V.next x as cs = .ret .acc := fun _ _ => rfl
   have hk' : 0 < (D.acceptAll.record Bd.IVStar).V.k x := hk
-  have hR' : ∀ w, ¬ Recursion.R (D.acceptAll.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x w := hR
+  have hS' : 0 < (D.acceptAll.record Bd.IVStar).nS x := hS
   have hκ' : κ (D.acceptAll.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x < 1 / 2 := hκ
   have h1 := h decI hdI decO hdO x hx Unit Witness.silentP
     ⌈4 * (4 * (Cp.width (xI (D.acceptAll.record Bd.IVStar) x) : ℝ) +
@@ -156,7 +215,8 @@ theorem not_ksLin2On_acceptAll [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Rec
   have hBad : PrBad H (D.acceptAll.record Bd.IVStar).V
       (Recursion.R (D.acceptAll.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
       (E H (D.acceptAll.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x Witness.silentP = 1 :=
-    prBad_acc H _ _ _ x _ hv hk' hR'
+    prBad_acc H _ _ _ x _ hv hk'
+      (E_none_of_vstar_nil H _ _ DO decO x (hs x) hS' hP Witness.silentP)
   have hB : PrB H (D.acceptAll.record Bd.IVStar).V Witness.silentP x = 0 := prB_acc H _ _ x hv
   rw [hBad, hB, Witness.Recursion.prBinnerV_noCalls H (D.acceptAll.record Bd.IVStar) hc hs,
     prFCI_noCalls H (D.acceptAll.record Bd.IVStar) hc,
@@ -273,17 +333,25 @@ theorem recBound_k_pos (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
   have := V_k_pos_flock false (xIOf x)
   omega
 
-/-- **`KSLin2` at the verifier that accepts everything fails** at any statement of `G` with no witness in the
-relation where `κ < 1/2`, at the deployed decoders (`FlockDeploy.listWithin_plainTrim`,
-`Claims.GS.listWithin_zkDecodeRD`). -/
+/-- **The outer Flock's parser refuses the empty statement** (`insO_nil`). -/
+theorem zkRec_parse_nil (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    (deployZkRec rel).parse [] = none := by
+  have h : readOfO [] = none := by
+    unfold readOfO
+    rw [insO_nil]
+    rfl
+  show (_root_.Flock.Readable.parseBytes readOfO []).map (_root_.Flock.Readable.toReadable rel) = none
+  unfold _root_.Flock.Readable.parseBytes
+  rw [h]
+  rfl
+
+/-- **`KSLin2` at the verifier that accepts everything fails** at any statement of `G` with a V\* session where
+`κ < 1/2`, at the deployed decoders (`FlockDeploy.listWithin_plainTrim`, `Claims.GS.listWithin_zkDecodeRD`). -/
 theorem not_ksLin2On_acceptAll (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (Cp : Claims.Recursion.Caps FlockDeploy.Coin) (G : Msg → Prop) (x : Msg) (hx : G x)
-    (hR : ∀ v, ¬ Claims.Recursion.R ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
-      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy Claims.GS.plainDecodeRD)
-      x v)
+    (Cp : Claims.Recursion.Caps FlockDeploy.Coin) (G : Msg → Prop) (x : Msg) (hx : G x) (hS : 0 < nS x)
     (hκ : Claims.Recursion.κ ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
       (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy Claims.GS.plainDecodeRD)
       x < 1 / 2) :
@@ -291,7 +359,7 @@ theorem not_ksLin2On_acceptAll (rel relO : _root_.Flock.Readable.Parsed → _roo
       (bdDeployed rel nextE colsE wE join rowIn final w) (deployZkRec relO) Cp G :=
   Claims.Recursion.not_ksLin2On_acceptAll _ _ _ _ _ _ Claims.GS.plainDecodeRD (FlockDeploy.listWithin_plainTrim rel)
     Claims.GS.zkDecodeRD (Claims.GS.listWithin_zkDecodeRD id fun _ _ => rfl) x hx
-    (recBound_k_pos rel b L nextE colsE wE join rowIn final w x) hR hκ
+    (recBound_k_pos rel b L nextE colsE wE join rowIn final w x) hS (zkRec_parse_nil relO) hκ
 
 end RecDeploy
 
@@ -333,23 +401,9 @@ theorem recursiveKSAtAll_of_readX_none (hJ : ∀ x, RecDeploy.readX x = none) (r
   intro decI hdI decO hdO x _
   exact h decI hdI decO hdO x (hJ x)
 
-/-- **The compiled relation at a statement is the inner Flock's at its inner statement**: a witness of `x` in the
-compiled record's relation is one of `xIOf x` in Flock's. -/
-theorem flockR_of_R (b : RecDeploy.Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin)
-    (F : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
-    (dec : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) {x : Msg} {v : Claims.Flock.Wit}
-    (h : Claims.Recursion.R ((RecDeploy.recBoundAt _root_.Flock.Readable.relation b L).record IV)
-      (Claims.Recursion.Inner.ofFlock F dec) x v) :
-    Claims.Flock.R F.parse (RecDeploy.xIOf x) v := by
-  obtain ⟨s, hs, -, hR⟩ := h
-  have hs' : RecDeploy.parse x = some s := hs
-  have hx : RecDeploy.xIOf x = s.inner := by simp [RecDeploy.xIOf, hs']
-  rw [hx]
-  exact hR
-
 /-- **The fixture's statement is dense**: its compiled form, by `DeployedParses`, has no holo inner circuit and no
 RecSparse phase. -/
-theorem denseAt_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i₀) : RecDeploy.DenseAt x := by
+theorem denseAt_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) : RecDeploy.DenseAt x := by
   intro s hs
   have h1 := h.1
   rw [hs] at h1
@@ -357,95 +411,9 @@ theorem denseAt_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x
   show s.form.holo = false ∧ s.form.sparse = none
   exact ⟨congrArg Prod.fst h2, congrArg Prod.snd h2⟩
 
-/-- A row whose coefficients are all zero sums to `0`. -/
-theorem xsum_of_zero {A z : ℕ → Bool} {n : ℕ} (h : ∀ r < n, A r = false) : _root_.Flock.Readable.xsum A z n = false := by
-  induction n with
-  | zero => rfl
-  | succ n ih =>
-    rw [_root_.Flock.Readable.xsum_succ, ih (fun r hr => h r (by omega)), h n (by omega)]
-    rfl
-
-/-- **The fixture's inner statement has no witness**: in block `0`, row `i₀` of the first table has a zero A side, so
-the system forces its bit to `0` (`Sys.Holds`'s rows), while the table's fixed bit at `i₀` sets it to `1`. -/
-theorem notR_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i₀) (v : Claims.Flock.Wit) :
-    ¬ Claims.Flock.R
-      (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
-        (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
-        RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
-        RecDeploy.DeployedR.wR).deploy.parse (RecDeploy.xIOf x) v := by
-  intro hR
-  obtain ⟨s, hs, hrel⟩ := hR
-  have hs' : (_root_.Flock.Readable.parseBytes (FlockDeploy.readOf false) (RecDeploy.xIOf x)).map
-      (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation) = some s := hs
-  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs'
-  have h2 := h.2.1
-  rw [hp] at h2
-  have h3 : RecDeploy.rowView i₀ p = some RecDeploy.rowView₀ := h2
-  unfold RecDeploy.rowView at h3
-  cases hst : p.sts[0]? with
-  | none => rw [hst] at h3; simp at h3
-  | some st =>
-    rw [hst] at h3
-    have h4 := Option.some.inj h3
-    simp only [RecDeploy.rowView₀, Prod.mk.injEq] at h4
-    obtain ⟨hOk, hi, hrow, hfix⟩ := h4
-    have hOk' : (_root_.Flock.Readable.Tab.ofStmt st).Ok := of_decide_eq_true hOk
-    have hi' : i₀ < 2 ^ st.c.kLog := of_decide_eq_true hi
-    have hJ : 0 < p.sts.size := by
-      first
-        | exact (Array.getElem?_eq_some_iff.1 hst).1
-        | exact Array.size_pos_of_mem (Array.mem_of_getElem? hst)
-        | (apply Nat.pos_of_ne_zero; intro h0; simp [h0] at hst)
-    have hts0 : (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).getD 0 default =
-        _root_.Flock.Readable.Tab.ofStmt st := by
-      rw [List.getD_eq_getElem?_getD, List.getElem?_map, Array.getElem?_toList, hst]
-      rfl
-    have hm : (p.sts[0]?.map (·.m)).getD 0 = st.m := by rw [hst]; rfl
-    have hk : (p.sts[0]?.map (·.c.kLog)).getD 0 = st.c.kLog := by rw [hst]; rfl
-    have hiff := _root_.Flock.Readable.Sys.relS_iff (_root_.Flock.Readable.sysOf_wf _ _ _)
-      (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p) v rfl rfl rfl rfl rfl
-    have H := (hiff.1 hrel) 0 (Nat.two_pow_pos _)
-    rw [hm, hk] at H
-    have hlen : 0 < (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).length := by simpa using hJ
-    have hrow0 := H.1 0 hlen i₀ hi'
-    have hx : _root_.Flock.Readable.xsum
-        ((_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).A 0 i₀)
-        ((_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).bit v 0 0)
-        (_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).N = false := by
-      apply xsum_of_zero
-      intro r hr
-      show ((p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).getD 0 default).a i₀ r = false
-      rw [hts0]
-      have := List.all_eq_true.1 hrow r (List.mem_range.2 hr)
-      simpa using this
-    rw [hx, Bool.false_and] at hrow0
-    cases hf : (_root_.Flock.Readable.Tab.ofStmt st).fixed.find? (fun f => f.1 == i₀) with
-    | none => rw [hf] at hfix; simp at hfix
-    | some f =>
-      rw [hf] at hfix
-      have hf2 : f.2 0 = true := Option.some.inj hfix
-      have hf1 : f.1 = i₀ := beq_iff_eq.1 (List.find?_some hf)
-      have hfx : _root_.Flock.Readable.fixedOf st.m st.c.kLog (_root_.Flock.Readable.Tab.ofStmt st) =
-          (_root_.Flock.Readable.Tab.ofStmt st).fixed :=
-        if_pos (show (_root_.Flock.Readable.Tab.ofStmt st).m = st.m ∧ (_root_.Flock.Readable.Tab.ofStmt st).kLog = st.c.kLog ∧
-          (_root_.Flock.Readable.Tab.ofStmt st).Ok from ⟨rfl, rfl, hOk'⟩)
-      have hmem : ((0 : ℕ), f.1, f.2) ∈
-          (_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).slots := by
-        show ((0 : ℕ), f.1, f.2) ∈ (List.range (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).length).flatMap
-          fun c => (_root_.Flock.Readable.fixedOf st.m st.c.kLog
-            ((p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).getD c default)).map fun f => (c, f.1, f.2)
-        refine List.mem_flatMap.2 ⟨0, List.mem_range.2 hlen, ?_⟩
-        dsimp only
-        rw [hts0, hfx]
-        exact List.mem_map_of_mem (f := fun f : ℕ × (ℕ → Bool) => ((0 : ℕ), f.1, f.2)) (List.mem_of_find?_eq_some hf)
-      have h5 := H.2.2 _ hmem
-      dsimp only at h5
-      rw [hf1, hf2] at h5
-      exact absurd (hrow0.trans h5) (by decide)
-
 /-- **The fixture's inner statement is in the plain scope**: Flock's setup of it passes `PlainIn`'s checks
-(`plainView`). -/
-theorem plainIn_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i₀) :
+(`setupView`). -/
+theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
     ∃ s spec sts, FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts := by
   have h3 := h.2.2
   cases hs : FlockDeploy.setupOf false (RecDeploy.xIOf x) with
@@ -453,8 +421,8 @@ theorem plainIn_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x
   | some t =>
     obtain ⟨s, spec, sts⟩ := t
     rw [hs] at h3
-    have hv : RecDeploy.plainView (s, spec, sts) = true := Option.some.inj h3
-    simp only [RecDeploy.plainView, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, and_assoc] at hv
+    have hv : RecDeploy.setupView (s, spec, sts) = true := Option.some.inj h3
+    simp only [RecDeploy.setupView, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, and_assoc] at hv
     obtain ⟨h1, h2, hp, ht⟩ := hv
     refine ⟨s, spec, sts, ⟨hs, h1, h2, hp, fun st hst => ?_⟩⟩
     obtain ⟨a, b, c, d, e⟩ := ht st hst
@@ -462,12 +430,13 @@ theorem plainIn_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x
 
 /-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKS`'s conclusion, `KSLin2On` at the deployed values, is
 false at the verifier that accepts everything (`RecAt.acceptAll`), at every brings, from the named assumption
-`RecDeploy.KSFixture`: some bytes the deployed readers map to the hand-built fixture (`DeployedParses`), with a
-coin-server record at whose transcript its V\* parts are in scope (`PartsInScope`). Everything else is proved here: the
-statement is dense (`denseAt_of_parses`), its inner statement has no witness (`notR_of_parses`: a row with a zero A side
-whose bit block `0` fixes to `1`) and is in the plain scope (`plainIn_of_parses`); the silent prover is accepted on every run
-and nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each; and
-`λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. -/
+`RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled statement with a V\* session whose
+inner statement is in the plain scope (`DeployedParses`), with a coin-server record at whose transcript its V\* parts
+are in scope (`PartsInScope`). Everything else is proved here: the statement is dense (`denseAt_of_parses`) and in the
+plain scope (`plainIn_of_parses`); the silent prover is accepted on every run, and the accepting record stages no V\*
+statement, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), so `E*` extracts nothing and
+`Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each; and `λ₂ ≥ 100` there
+(`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. -/
 theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
     ∃ (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
       (recRest : Msg → List (Msg × Out) → List UInt8), ∀ b : RecDeploy.Brings,
@@ -480,7 +449,7 @@ theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
           RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
           RecDeploy.DeployedR.wR)
         (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt := by
-  obtain ⟨x, i₀, aux, nOf, hd, recRest, hP, hO, hn, hS⟩ := h
+  obtain ⟨x, aux, nOf, hd, recRest, hP, hO, hn, hS⟩ := h
   obtain ⟨s, spec, sts, hin⟩ := plainIn_of_parses hP
   refine ⟨aux, nOf, hd, recRest, fun b => ?_⟩
   have hO' : ∀ j < RecDeploy.nS x, ∃ i spec' sts', RecDeploy.PartIn
@@ -492,7 +461,7 @@ theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
     (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols RecDeploy.DeployedR.wER
     FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wR FlockDeploy.KS.CpDep
-    RecDeploy.DenseAt x (denseAt_of_parses hP) (fun v hv => notR_of_parses hP v (flockR_of_R _ _ _ _ _ hv))
+    RecDeploy.DenseAt x (denseAt_of_parses hP) hP.2.1
     (Claims.Recursion.κ_lt_half_of_lamLin2
       (RecDeploy.lamLin2_deployed_ge_dep _root_.Flock.Readable.relation
         { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }

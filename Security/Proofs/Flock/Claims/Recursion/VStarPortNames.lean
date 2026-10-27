@@ -454,12 +454,18 @@ theorem innerPorts_named {x : Msg} {s j : ℕ} {nm : String} {pt : _root_.VStar.
   unfold partsVStar at hpv
   have hall := List.all_eq_true.1 hpv s (List.mem_range.2 hlt)
   obtain ⟨u, hu⟩ : ∃ u, (_root_.VStar.Stmt.inner j nm pt).unit = .ok u := by
-    cases hb : ownBindings r.w.bindings <;> cases hq : r.w.parts[s]? <;> simp [hst, hb, hq] at hall
-    unfold partVStar at hall
-    split at hall
-    · simp only [Bool.and_eq_true] at hall
-      exact checkParsed_unit hall.1.1.1.2
-    · cases hall
+    cases hq : r.w.parts[s]? with
+    | none => simp [hst, hq] at hall
+    | some p =>
+      cases hb : ownBindings p.bindings with
+      | none => simp [hst, hq, hb] at hall
+      | some f =>
+        simp [hst, hq, hb] at hall
+        unfold partVStar at hall
+        split at hall
+        · simp only [Bool.and_eq_true] at hall
+          exact checkParsed_unit hall.1.1.1.2
+        · cases hall
   have hsz : ∀ q ∈ pt.S.ports, 1 ≤ q.2 := innerUnit_sizes (show _root_.VStar.innerUnit pt.S nm = .ok u from hu)
   obtain ⟨sp, ps, hsp, hps, hpt⟩ := inner_mem hvs hst
   obtain ⟨sch, hsch, hnames⟩ := specOf_names hsp
