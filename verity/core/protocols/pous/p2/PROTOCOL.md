@@ -226,7 +226,7 @@ Fields at their frame offsets (body offset + 10):
 
 ### Setup commitment, salt and verification root
 
-The setup manifest is canonical UTF-8 JSON using `verity.ml.commitments.identity.canonical_json_bytes`: sorted object keys, no insignificant whitespace, direct Unicode, no floats. It contains exactly `scheme`, `w`, `c0`, `profile`, `blocks_per_segment` and `segments`; `scheme` is exactly the JSON string `"p2"`, `profile` is the case-sensitive profile string, and the other four values are JSON integers. The W commitment is `verity.ml.commitments.identity.tagged_sha512` under the tag `verity-pous/w-commitment/v2`:
+The setup manifest is canonical JSON using `verity.ml.commitments.identity.canonical_json_bytes`: sorted object keys, no insignificant whitespace, every string ASCII without DEL (any other refused), no floats. It contains exactly `scheme`, `w`, `c0`, `profile`, `blocks_per_segment` and `segments`; `scheme` is exactly the JSON string `"p2"`, `profile` is the case-sensitive profile string, and the other four values are JSON integers. The W commitment is `verity.ml.commitments.identity.tagged_sha512` under the tag `verity-pous/w-commitment/v2`:
 
 ```text
 manifest = canonical_json_bytes(params.manifest())
