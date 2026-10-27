@@ -26,8 +26,8 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **Hypothesis: some algebra part reads `acc1`**: at every dense shape the reader reads, some `.inner` statement's
-part has an `acc1` port. Owner: STEPSW. -/
+/-- **Some algebra part reads `acc1`**: at every dense shape the reader reads, some `.inner` statement's part has an
+`acc1` port (proved from V*'s algebra and parts: `ResAccEnd.accEndHeldW`). -/
 def AccEndHeldW : Prop :=
   ∀ (x : Msg) (r : XR), readX x = some r → r.shape.holo = false → r.shape.sparse = none →
     ∀ (ss : Array VStar.Stmt), _root_.Flock.RecVStar.statements r.shape = .ok ss →
