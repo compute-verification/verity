@@ -32,10 +32,13 @@ open scoped ENNReal
 /-- `H512` and the sampling claims' SHA-512 agree on collisions. -/
 theorem H512_eq_iff (u v : List UInt8) :
     H512 u = H512 v ↔ Claims.Sampling.sha512Msg u = Claims.Sampling.sha512Msg v := by
-  unfold Claims.Sampling.sha512Msg Claims.Sampling.bytes
+  have e : ∀ m, Claims.Sampling.sha512Msg m = bs (H512 m).1 := fun m => by
+    unfold Claims.Sampling.sha512Msg Claims.Sampling.bytes
+    rw [H512_val]
+  rw [e u, e v]
   constructor
   · intro h
-    exact congrArg (fun d : Dig => bs d.1) h
+    rw [h]
   · intro h
     exact Subtype.ext (bs_inj h)
 
