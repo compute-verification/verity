@@ -33,7 +33,7 @@
 # row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S
 # implied: dither.Shape(o=True); its params named served-*); with gemm=1 (a -DV31_WG build) its D comes from wg_proto.cuh's
 # GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup, and the bench adds wgmma.linear's arm (wgl).
-# FILL_GATE_KNOBS=1 runs the gates under the first variant's knobs (else v31.cu's defaults). FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
+# FILL_GATE_KNOBS=1 runs the gates (and FILL_DITHER's recheck) under the first variant's knobs (else v31.cu's defaults). FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
 # circuit/dither.py). FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls
 # after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
 # timeline`'s .timeline.md. FILL_PROF=1, after the bench, runs Nsight Compute's pipe utilization on `v31 fill-once`
@@ -152,7 +152,7 @@ if [ "$MODE" = fill ]; then
         > "$O/fill-gates-ltw$x.log" 2> "$O/fill-gates-ltw$x.err"
       echo "fill gate ltw$x rc $?" >> "$O/rc.txt"
       if [ "${FILL_DITHER:-0}" = 1 ]; then
-        V31_LTW=$x $PY $D/fill_dither.py --lib "$W/libv31.so" --out "$O/fill-dither-ltw$x" > "$O/fill-dither-ltw$x.log" \
+        env "${gk[@]}" V31_LTW=$x $PY $D/fill_dither.py --lib "$W/libv31.so" --out "$O/fill-dither-ltw$x" > "$O/fill-dither-ltw$x.log" \
           2> "$O/fill-dither-ltw$x.err"
         echo "fill dither ltw$x rc $?" >> "$O/rc.txt"
       fi
