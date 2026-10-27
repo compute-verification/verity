@@ -4,8 +4,8 @@ import Proofs.Pouw.ServedWork.Honest
 /-!
 # `ServedFreed` is honest and nontrivial
 
-The twins of `Properties.Pouw.Served.ServedFreed` (LEAN-66), over `Proofs.Pouw.ServedWork.Honest`'s flat machine and
-honest inventory at the honest J10-R period, conditional as `served_honest` is on `Credit.window`'s verdict on the
+The twins of `Properties.Pouw.Served.ServedFreed`, over `Proofs.Pouw.ServedWork.Honest`'s flat machine and honest
+inventory at the honest J10-R period, conditional as `served_honest` is on `Credit.window`'s verdict on the
 windows' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `pd c H`: the registered devices' period on the flat machine: `H` seconds of its one resource, all of it the honest

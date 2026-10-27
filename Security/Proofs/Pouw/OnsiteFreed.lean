@@ -14,8 +14,8 @@ import Proofs.Pouw.DitherWitness
 * `outsourcePeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
   `OutsourceWithinEgressPeriod` asks no more of the model. Each program is replaced by its exchange-free one; the state
   path, and so the transcript, is unchanged, and the answers' exchanged bits are nonnegative (G2).
-* `OnsiteFreed_honest`, `OnsiteFreed_nontrivial` (LEAN-66): at `Proofs.Pouw.DitherWitness`'s machine `tw`, round
-  `twRound` and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`), with the work check the witness's sampling blocks'
+* `OnsiteFreed_honest`, `OnsiteFreed_nontrivial`: at `Definitions.Pouw.Witness`'s machine `tw`, round `twRound`
+  and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`), with the work check the witness's sampling blocks'
   checks (`twWork`). Every premise holds there: the remote floor at `F = (1 − ε_W) C`, `ε_W = 1/7 + ln 2 / 2`
   `WorkSound`'s error at the witness, from `WorkSound`'s conclusion there (`witness_freed`) at the prover with every
   answer at no use (`fitAnswers`, which passes `WorkSound`'s devices' reading) by filling each resource the prover
@@ -143,7 +143,7 @@ theorem withPrograms_timedUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G
   rw [withPrograms_commitIn A (fc := A.commit) (fw := A.work) (fa := fa) (fun _ _ => rfl) (fun _ _ => rfl),
     withPrograms_workIn A (fc := A.commit) (fw := A.work) (fa := fa) (fun _ _ => rfl) (fun _ _ => rfl)]
 
-/-- **The per-program price of an exchanged bit implies its period form** (RT-POOL RP21): each sampling block's
+/-- **The per-program price of an exchanged bit implies its period form**: each sampling block's
 commit phase, work and answer replaced by its exchange-free one, the prover sends the same transcript, and its timed
 work costs at most `β` a bit its commit phases and work exchanged more, which is at most `β` a bit its programs
 exchanged (an answer's bits are a count, G2). So `OutsourceWithinEgressPeriod` asks no more of the model than
@@ -183,7 +183,7 @@ end PerProgram
 
 namespace OnsiteFreedWitness
 
-open Pouw.SecurityProofs.DitherWitness
+open Pouw.Witness Pouw.SecurityProofs.DitherWitness
 
 /-- The work check at the witness: every sampling block's check on the transcript at its committed instance. It reads
 no device. -/
@@ -391,9 +391,9 @@ end OnsiteFreedWitness
 
 section Witnesses
 
-open Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.OnsiteFreedWitness
+open Pouw.Witness Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.OnsiteFreedWitness
 
-/-- **`OnsiteFreed`'s honest witness** (LEAN-66, CMP-145): at `Proofs.Pouw.DitherWitness`'s machine, round and period,
+/-- **`OnsiteFreed`'s honest witness**: at `Definitions.Pouw.Witness`'s machine, round and period,
 every premise of `OnsiteFreed` holds: the dual price, `C = 14 > 0`, `β = 0`, G1, G2, P1 and P2, the remote floor at
 `F = (1 − ε_W) C` and `κ = 1/2` (from `WorkSound` there), the period form of the outsourcing premise (from the
 per-program one) and the certifier's count at `K = 0` and `δ = 0`. The bound says something (`ε = ε_W < 1`,
@@ -415,10 +415,10 @@ theorem OnsiteFreed_honest :
   show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0
   simp
 
-/-- **`OnsiteFreed` is false without the remote floor** (LEAN-66, CMP-145): at the honest witness's instance with a
-work check that accepts everything (`ε = ε_W`, `C = 14`, `β = K = δ = 0`, `κ = 1/2`), every other premise of
-`OnsiteFreed` holds, in its order: the dual price, `C > 0`, `β = 0`, G1, G2, P1 and P2, the period form of the
-outsourcing premise and the certifier's count. `RemoteWorkFloor` fails: the quiet prover exchanges nothing, the work
+/-- **`OnsiteFreed` is false without the remote floor**: at the honest witness's instance with a work check that
+accepts everything (`ε = ε_W`, `C = 14`, `β = K = δ = 0`, `κ = 1/2`), every other premise of `OnsiteFreed` holds, in
+its order: the dual price, `C > 0`, `β = 0`, G1, G2, P1 and P2, the period form of the outsourcing premise and the
+certifier's count. `RemoteWorkFloor` fails: the quiet prover exchanges nothing, the work
 check accepts it on every oracle and coins, and its timed work costs `0 < F`, so that event has probability
 `1 > κ`. The conclusion fails with it: the quiet prover leaves the period to other work worth 46, against at most
 `32 + ε C < 46` for any honest strategy, so its event has probability `1 > κ + δ`. -/

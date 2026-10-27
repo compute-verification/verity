@@ -10,11 +10,11 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 
 * `SAKMatmul`: symmetric algorithmic knowledge for exact matrix products (R-ACCEL-6), on the round's words, for
   programs that exchange no bits with outside machines;
-* `ShaSpeed`: SHA-512's implementation speed (R-ACCEL-7), on the round's commitment, in sampling form, per prover
+* `SAKSha`: SHA-512's implementation speed (R-ACCEL-7), on the round's commitment, in sampling form, per prover
   (RT-LEAN-2 L37);
 * `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work (RT-PROTO-2 P2, P18; RT-LEAN-2 L32),
   the one premise that prices outside machines;
-* `ServiceSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
+* `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
   (C-Flock sound and zero knowledge, live coins from the auditor's challenger);
 * `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
 
@@ -25,7 +25,7 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 * `CoinsConfidential`: a replica's coins reach no machine outside it before it has them, so the strategy run on it
   reads none of them (for the MVP, by one device that produces a server's coins and runs its certifier; RP4).
 
-Only `SAKMatmul`, `ShaSpeed`, `OutsourceWithinEgress` and `ExtractAdv` say anything about which algorithms a prover
+Only `SAKMatmul`, `SAKSha`, `OutsourceWithinEgress` and `ExtractAdv` say anything about which algorithms a prover
 runs.
 
 **Advice.** A round's programs read advice fixed before the round's coins, of at most `B` bits (an injection into
@@ -40,7 +40,7 @@ namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither
 
-/-- `pouw-sak-matmul` (proposed; R-ACCEL-6, Daniel 25 Oct). **Symmetric algorithmic knowledge for exact matrix
+/-- `pouw-sak-matmul` (proposed). **Symmetric algorithmic knowledge for exact matrix
 products, SAK(matmul)**, on a round's words: in the model at its device premises, on every registrable instance
 `a ∈ Reg`, every words program that exchanges no bits with outside machines, on any advice `s` of at most `B` bits
 fixed before the round's coins, has moment at most 1 at the prices `μ` and rate `η a` against the public best's
@@ -77,14 +77,15 @@ structured), so the premise needs `η · pub ≤ π s (1 − p)`, `π` the sampl
 (RT-PROTO-2 P15, P20) and `s` its checked cells. That is necessary only against small skipped fractions: for `s ≥ 2`,
 skipping the whole sampling block binds first. The sufficient condition is `η · pub ≤ π` (`Pouw.SakLb.rate_bern`),
 sharp at `−log(1 − π (1 − p^s))` (`rate_bern_sharp`, at `p = 0`: past `−log(1 − π)` a program that skips the block
-wins). -/
+wins). On the served block, selected or not (`ditherSelected`), the premise follows from `Pouw.SakLb.SAKResidual` at
+that rate (`Pouw.SakLb.sakMatmul_of_residual_bern`). -/
 def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Inst) (pub η : P.Inst → ℝ)
     (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →
     ∀ (s : St) (Mw : G.Mc.Alg (St × P.Draw) P.Tr), (∀ i, G.ext Mw i = 0) →
       ∃ Deg : P.Draw → Prop, prob Deg ≤ κdeg B ∧ wordsMoment G P μ (pub a) (η a) a s Mw Deg ≤ 1
 
-/-- `pouw-sha512-speed` (proposed; R-ACCEL-7, Daniel 25 Oct: "sure"). **Nobody computes SHA-512 meaningfully faster
+/-- `pouw-sha512-speed` (proposed). **Nobody computes SHA-512 meaningfully faster
 than the best public implementation**, on a round's commitment, in sampling form and per prover (RT-LEAN-2 L37): in
 the model at its device premises (with (G3): an oracle call is a step priced at the public implementation's use), for
 every prover `A`, every advice of at most `B` bits on which each sampling block's programs read nothing of that
@@ -109,7 +110,7 @@ so the honest prover meets it with shortfall 0. MODEL-SPEC's θ floors (RT-MODEL
 are what keep the model from hashing faster than the card. The premise is meant for models whose programs reach the
 oracle only through their calls (`Accel.OracleCalls` at the round's table, RT-LEAN-2 L28): where a program reads the
 table as data it is false, and the headline says nothing. -/
-def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (μ : G.Res → ℝ) (pub η : Fin k → ℝ)
+def SAKSha (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (μ : G.Res → ℝ) (pub η : Fin k → ℝ)
     (κdeg : ℕ → ℝ) (κsha : Prover G P k → ℝ) : Prop :=
   G.G1 → G.G2 → G.G3 → G.P1 → G.P2 → ∀ (A : Prover G P k) (B : ℕ) (Adv : Type),
     (∃ e : Adv → Fin (2 ^ B), Function.Injective e) →
@@ -131,7 +132,7 @@ other than the challenger's signed coin stream, RT-POOL RP27).
 A node that forwards a call's `b` (`m K` bits) and gets back only the root has the outside machine do the call's
 `m K N` MACs, so `β = n_max · H/macs` with `n_max = N` for a static call and `d_v` for PV, `H = H_mm + H_sha + H_o`
 (the outside machine returns the root, so it saves the round's hashing too: RT-PROTO-2 P18's addition). `SAKMatmul` and
-`ShaSpeed` are stated over programs that exchange nothing, and this premise carries their bound to every program at
+`SAKSha` are stated over programs that exchange nothing, and this premise carries their bound to every program at
 `β` a bit (WORKSOUND-INST-2's form, on every program type). It is per program: an answer that sends a later block's
 coins out is a different program from that block's work, which is in `WorkSound`'s Open (RT-POOL RP21). -/
 def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
@@ -145,7 +146,7 @@ one of its registrable ones and its check passes (`Prover.Accepted`). The checks
 proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each block's commitments
 (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code (RT-LEAN-2 L29). It assumes nothing of the prover's algorithms. -/
-def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
+def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted Reg ox.1 ox.2) ≤ κS
@@ -153,8 +154,9 @@ def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.I
 /-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted
 period exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the
 prover doesn't control, and signs the bits that cross them in either direction (its readings `dev`); the period's
-verdict reads its signed count and refuses a period past `K`. The challenger's signed coin stream isn't counted
-(RT-PROTO-2 P18). Open (RT-PROTO P2, O-IO): the per-period form from the certifier's counts with `n_max · E_out`. -/
+verdict reads its signed count and refuses a period past `K`. The challenger's coin stream isn't counted, and nothing
+else is left out (`CertifierSeesImports`, RT-PROTO-2 P18, RT-POOL RP5). Open (RT-PROTO P2, O-IO): the per-period form
+from the certifier's counts with `n_max · E_out`. -/
 def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
@@ -180,19 +182,18 @@ def OwnDither (P : RoundProto) (k N : ℕ) {Ω : Type} [Fintype Ω] (coin : Ω �
 
 /-- `pouw-coins-confidential` (proposed; the network certifiers on `trusted-host`, RT-POOL RP4, CMP-152). **A
 replica's coins reach no machine outside it before it has them**: a sampling block's dither and check coin are
-readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device (Daniel's
-RP4 ruling, 26 Oct): the device that runs a server's network certifier also produces that server's live coins, so the
-challenger issues them inside the boundary the certifier counts, and trust in that device and its host provider is
-`trusted-host`.
+readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device: the device
+that runs a server's network certifier also produces that server's live coins, so the challenger issues them inside
+the boundary the certifier counts, and trust in that device and its host provider is `trusted-host`.
 
 So the strategy a fleet runs on replica `u` (its prover `A u ω` at the challenger's randomness `ω`) may read every
 other replica's coins, past and future (a coalition at its worst), but none of its own: those reach `u` only through
 its own programs, in the challenger's order, as `Prover` has them. A machine outside the boundary that read a coin
 early could serve the block's words, work no extraction sees.
 
-Placement discharges it (Daniel, 26 Oct, 4:41 PM PDT): for now private messages travel only on private links, a named
-placement premise (proposed `WitnessPathPrivate`), and a replica's coins reach it only on its certifier device's coin
-link. The rigorous version, over a secure transport, is the secure-transport workstream's (due Wed 28 Oct 18:00Z). -/
+Placement discharges it: for now private messages travel only on private links, a named placement premise (proposed
+`WitnessPathPrivate`), and a replica's coins reach it only on its certifier device's coin link. The rigorous version,
+over a secure transport, is the secure-transport workstream's. -/
 def CoinsConfidential {G : Accel} {P : RoundProto} {k N : ℕ} {Ω : Type} (coin : Ω → Fin N → Fin k → P.Draw × P.Chk)
     (A : Fin N → Ω → Prover G P k) : Prop :=
   ∀ u ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A u ω = A u ω'

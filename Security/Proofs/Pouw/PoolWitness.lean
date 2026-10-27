@@ -3,8 +3,8 @@ import Proofs.Pouw.DitherWitness
 /-!
 # `WorkSound`, `WorkMoment` and `FleetSound` say something (LEAN-66; CMP-152, CMP-154)
 
-Each guarantee's honest and nontrivial witnesses, at `Proofs.Pouw.DitherWitness`'s machine `tw`, round `twRound` and
-period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2` sampling blocks:
+Each guarantee's honest and nontrivial witnesses, at `Definitions.Pouw.Witness`'s machine `tw`, protocol `twRound`
+and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2` sampling blocks:
 
 * `WorkSound_honest`: every premise of `WorkSound` holds there, `AnswersFit` among them, and the verdict accepts the
   honest prover on every oracle and coins, within the cap with its answers' calls. `WorkSound_nontrivial`: the
@@ -30,7 +30,7 @@ period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2` sa
 
 namespace Pouw.SecurityProofs.DitherWitness
 
-open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
+open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Witness Finset
 
 section Idle
 
@@ -130,9 +130,9 @@ end Pouw.SecurityProofs.DitherWitness
 
 namespace Pouw.SecurityProofs.Dither
 
-open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.SecurityProofs.DitherWitness Finset
+open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Witness Pouw.SecurityProofs.DitherWitness Finset
 
-/-- **`WorkMoment`'s honest witness** (LEAN-66): at `Proofs.Pouw.DitherWitness`'s machine, round and period, every
+/-- **`WorkMoment`'s honest witness** (LEAN-66): at `Definitions.Pouw.Witness`'s machine, protocol and period, every
 premise of `WorkMoment` that is no named assumption holds (the dual price, the cost split, the cap on calls, G1–G3, P1
 and P2), the named assumptions hold too, and the verdict accepts the honest prover on every oracle and coins. -/
 theorem WorkMoment_honest :
@@ -142,9 +142,9 @@ theorem WorkMoment_honest :
       tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
       (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
         (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
-      ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
+      SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
         (fun _ => 0) (fun _ => 0) ∧
-      OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
+      OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
       ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
       ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
       ∀ o x, honest.Passes twVerdict twDev o x := by
@@ -167,7 +167,7 @@ theorem WorkMoment_nontrivial :
   have hpos : 0 < twη * D ox := mul_pos (by norm_num [twη]) (by linarith)
   linarith [Real.one_lt_exp_iff.2 hpos]
 
-/-- **`WorkSound`'s honest witness** (LEAN-66, CMP-154): at `Proofs.Pouw.DitherWitness`'s machine, protocol and period,
+/-- **`WorkSound`'s honest witness** (LEAN-66, CMP-154): at `Definitions.Pouw.Witness`'s machine, protocol and period,
 every premise of `WorkSound` that is no named assumption holds (the dual price, the costs and their split, the rate
 and confidence, the cap on calls, G1–G3, P1 and P2), the named assumptions hold too, `AnswersFit` among them, and the
 verdict accepts the honest prover on every oracle and coins, with its sampling blocks' timed use the period's honest
@@ -181,9 +181,9 @@ theorem WorkSound_honest :
       tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
       (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
         (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
-      ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
+      SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
         (fun _ => 0) (fun _ => 0) ∧
-      OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
+      OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
       ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
       ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
       ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧

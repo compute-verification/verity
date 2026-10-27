@@ -4,8 +4,8 @@ import Properties.Pouw.PeriodJ10R
 /-!
 # The served PoUW protocol's work: priced work on the prover's machines from an accepted period
 
-`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` says what an accepted period of served H1 (`PouwCheck.Period`,
-the verdict `PouwCheck.Credit.window` on each window, J10-R's noise) fixes: except with probability
+`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` says what an accepted period of the served protocol
+(`PouwCheck.Period`, the verdict `PouwCheck.Credit.window` on each window, J10-R's noise) fixes: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, its fixed words are at least `(1 − ε(j))₊` of the live words of its windows before the first
 refusal. `ServedWork` turns those words into work: the prover's machines, wherever they ran, spent at least `p` a
 credited word of that, less the luck allowance, except with that probability plus `n·κ_deg(B)`.
@@ -24,9 +24,9 @@ it (`G.ext = 0`), which is what "the inventory" means. The claim is about the wo
   words the inventory's programs get right, window by window (`rightWords` at the window's instance and salt).
 * `ServedWork`: the guarantee.
 
-**The type bridge.** H1's words are abstract in the play (`Anatomy.fixed`, which `UnitFixed` bounds below by the good
-units' words). `SakLb.SAKResidual` speaks of a program's output and the fraction of its words that are right. The bridge
-is `FixedAreRight`, at the tiles' credited words (`tileWords`, `UnitFixed`'s weights), and `SAKServed` is
+**The type bridge.** The served words are abstract in the play (`Anatomy.fixed`, which `UnitFixed` bounds below by the
+good units' words). `SakLb.SAKResidual` speaks of a program's output and the fraction of its words that are right. The
+bridge is `FixedAreRight`, at the tiles' credited words (`tileWords`, `UnitFixed`'s weights), and `SAKServed` is
 `SAKResidual`'s claim at the served types (a window's tiles, its salt as the dither, `p` a credited word): the right
 share by tiles is at most the right share by words.
 
@@ -36,13 +36,13 @@ through it. `κ_deg(B)` is `SAKServed`'s degenerate salts at `B` bits of advice,
 advice and program are fixed before its salt (`FixedBeforeSalt`), so its salt is uniform given them and falls in their
 degenerate set with probability at most `κ_deg(B)` (the union over `n` windows).
 
-**What is left out.** The commitment's hashing is not credited, so SHA-512's premise (the SHA analogue of SAK, `SAKSha`;
-`Pouw.Assumptions.ShaSpeed` in Lean) doesn't enter. The proof system's soundness (`ProofSystemSound` in prose) enters as
+**What is left out.** The commitment's hashing is not credited, so SHA-512's premise (the SHA analogue of SAK,
+`Pouw.Assumptions.SAKSha`) doesn't enter. The proof system's soundness (`Pouw.Assumptions.ProofSystemSound`) enters as
 the words guarantee's `TileServiceSound`.
 
-**Non-vacuity rests on the fixed model.** RM1 (note:compute-research/20261027T0035Z-draft-rt-model-min): 𝓜 as written
-makes `SAKMatmul` and `SAKResidual` false (free register reductions, the four Russians), and `SAKServed` with them, so
-`ServedWork` says something only on the model MODEL-MIN fixes (CMP-165).
+**Non-vacuity rests on the fixed model.** 𝓜 as written makes `SAKMatmul` and `SAKResidual` false (free register
+reductions, the four Russians), and `SAKServed` with them, so `ServedWork` says something only on a model that charges
+those reductions.
 
 The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its honest and nontrivial lemmas.
 -/
@@ -70,7 +70,7 @@ values (the adaptive model), as `UnitFixed` is. -/
 def FixedAreRight {Ω K T L U : Type} {n : ℕ} (Pl : Play Ω n K T L U) (right : Paths Ω n → Fin n → ℝ) : Prop :=
   ∀ x, Pl.accepts x → n * (Pl.run x).fixed ≤ ∑ w, right x w
 
-/-- **The served PoUW protocol's work** (H1, J10-R, `Credit.window`'s verdict), in the remote form. Under
+/-- **The served PoUW protocol's work** (the J10-R period, `Credit.window`'s verdict), in the remote form. Under
 `H1J10RCheckedCreditPeriod`'s premises and setting, let the prover's whole inventory be one machine `G` of 𝓜 at its
 device premises, whose window-`w` program `work x w` exchanges no bits outside it and reads the window's salt coin
 (`saltCoin`) and advice `state x w` of at most `B` bits, on the registrable instance `inst x w`, all three fixed before
@@ -78,7 +78,7 @@ the salt (`FixedBeforeSalt`). With SAK at the served words (`SAKServed`: `p ≥ 
 salts `κ_deg`) and the play's fixed words the inventory's right words (`FixedAreRight`), then except with probability
 `δ_s + n·(δ_bind + δ_ks) + n·κ_deg(B)`, an accepted period's priced work on the inventory is at least `p` times
 `(1 − ε(j))₊` of its accepted prefix's live words, less the windows' luck allowances:
-`Σ_w cost_μ(work_w) ≥ p · creditPrefix − Σ_w lam(inst_w)`. Non-vacuous only on the model MODEL-MIN fixes (module doc). -/
+`Σ_w cost_μ(work_w) ≥ p · creditPrefix − Σ_w lam(inst_w)`. Non-vacuous only on the fixed model (module doc). -/
 def ServedWork : Prop :=
   ∀ {ι K T L U C Ξ V I W St : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty C] [Nonempty Ξ] [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
