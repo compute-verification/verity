@@ -43,7 +43,7 @@ from e2e_h200.plan import Map  # noqa: E402
 from e2e_h200.shape import SHAPES  # noqa: E402
 from e2e_h200.units import Replayer  # noqa: E402
 from e2e_h200.weights import Weights  # noqa: E402
-from verity_torch_loop import weights as SW  # noqa: E402
+from e2e_h200 import served_weights as SW  # noqa: E402
 
 ROOTS = "verity/e2e-h200/m3-roots/v1"
 DRAWN = "verity/e2e-h200/m3-drawn/v1"

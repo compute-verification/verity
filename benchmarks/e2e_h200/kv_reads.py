@@ -46,7 +46,7 @@ from e2e_h200.shape import SHAPES
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
 from verity_e2e_demo import replay_bundle as RB
-from verity_torch_loop import weights as SW
+from e2e_h200 import served_weights as SW
 
 FORMAT = "verity/e2e-h200/kv-reads/v1"
 #: m3draw's salt keys (``m3draw.salt_from``)

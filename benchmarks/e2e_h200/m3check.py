@@ -34,7 +34,7 @@ from e2e_h200.commit import Committer, fixture_secrets  # noqa: E402
 from e2e_h200.plan import Map  # noqa: E402
 from e2e_h200.shape import SHAPES  # noqa: E402
 from e2e_h200.weights import Weights  # noqa: E402
-from verity_torch_loop import weights as SW  # noqa: E402
+from e2e_h200 import served_weights as SW  # noqa: E402
 
 
 def arr(pay: bytes, d: dict) -> np.ndarray:

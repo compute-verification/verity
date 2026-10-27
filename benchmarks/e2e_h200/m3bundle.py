@@ -253,7 +253,7 @@ def replay_phase(a: argparse.Namespace) -> int:
     from e2e_h200.driver import Params
     from e2e_h200.weights import Weights
     import run as RUN
-    from verity_torch_loop import weights as SW
+    from e2e_h200 import served_weights as SW
     reg, draw = json.loads(Path(a.registration).read_text()), json.loads(Path(a.draw).read_text())
     shape = SHAPES[a.shape]
     seed = {"test": SW.TEST_SEED, "demo": SW.DEMO_SEED}.get(a.seed, a.seed.encode())
