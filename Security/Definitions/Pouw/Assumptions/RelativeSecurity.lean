@@ -1,20 +1,23 @@
 import Definitions.Claims
 import Definitions.Pouw.RelativeSecurity
+import Definitions.Pouw.RelativeSecurityFork
 import Definitions.Pouw.RelativeSecurityJ10R
 
 /-!
 # Relative security's named premises for the staged window (trusted)
 
-The premises of the floors of record, `Definitions.Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSided` and
-`OverlapFloorKOneSided`, each about the analysis's map `run` from an adversary and its own coins to its window run
-(`RunMap` on the staged design, `ORunMap` for stages that overlap). `StagedFloorKOneSided`'s three together are
-`RoundsHypKStP` (`Proofs.Pouw.RelativeSecurity`) at `φ = toF2` and plane 0, split so that each is judged on its own:
-what the service and its proof layer give (`ServiceSoundStaged`), what an adversary's run is (`KScopeOneSided`:
-one-sided operands of any form, charge-pure), and what the machine charges for it (`ChargeVF3j16`).
-`OverlapFloorKOneSided`'s three are the same split of `RoundsHypKOvP` (`ServiceSoundOverlap`, `KScopeOverlapOneSided`,
-`ChargeVF3j16Overlap`). `KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sibling
-floors `StagedFloorK` and `OverlapFloorK`, proved on their own scope, take for the luck ¾ (`RoundsHypKSt`,
-`RoundsHypKOv`). The ledger ids are the premise ledger's.
+The premises of the floors of record, `Definitions.Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver` and
+`OverlapFloorKOneSidedPerProver`, each about the analysis's map `run` from an adversary and its own coins to its window
+run (`RunMap` on the staged design, `ORunMap` for stages that overlap). `StagedFloorKOneSidedPerProver`'s three
+together are `RoundsHypKStP` (`Proofs.Pouw.RelativeSecurity`) at `φ = toF2` and plane 0, with each break bounded
+through the adversary's finders, split so that each is judged on its own: what the service and its proof layer give
+(`ServiceSoundStagedPerProver`), what an adversary's run is (`KScopeOneSided`: one-sided operands of any form,
+charge-pure), and what the machine charges for it (`ChargeVF3j16`). `OverlapFloorKOneSidedPerProver`'s three are the
+same split of `RoundsHypKOvP` (`ServiceSoundOverlapPerProver`, `KScopeOverlapOneSided`, `ChargeVF3j16Overlap`).
+`KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sibling floors `StagedFloorKPerProver`
+and `OverlapFloorKPerProver`, proved on their own scope, take for the luck ¾ (`RoundsHypKSt`, `RoundsHypKOv`). Every
+floor per prover also takes `VerifierHashes`: the service's SHA-512 inputs, which its fork finders read, are its
+verifier's. The ledger ids are the premise ledger's.
 
 These are K's two proved scopes, and the floors' constant is `c = 1` in them. The one-sided scope is a sibling of the
 ledger's K1, not a narrowing of it. **K1 is not claimed outside the two proved scopes.** There the ledger's K1 at
@@ -24,24 +27,24 @@ priced floor holds on paper only (`c ≥ 1 − δ` given CoincCharged_θ, `¼` w
 and no premise or guarantee here states it. **The verifier can't observe which case applies**: no check of the
 service refuses a run outside a scope, so no premise here is a check's outcome.
 
-**The service premises per prover.** `ServiceSoundStaged` and `ServiceSoundOverlap` bound every adversary's binding
-break by one `δb`, which is false below 1 at SHA-512: a machine that hard-codes a collision opens a committed leaf two
-ways (note:proofs/20261018T1604Z-report-redteam-2474, side finding). `ServiceSoundStagedPerProver` and
-`ServiceSoundOverlapPerProver` restate them in the form C-Flock's link bound has (`LinkCRZC`, `linkBoundZC`): each
-round's break is at most a constant plus a weight times the probability that the analysis's finder for that adversary
-(`Finders`) finds a collision, and `ecr/sha-512` (`Claims.ExpectedCR`) enters only the floors' bound, at that
-adversary's finders, `⊤` where they fail it, capped at 1 a value of its coins (`Claims.ecrBound`, `finderTerm`,
+**The service premises per prover.** A premise that bounds every adversary's binding break by one `δb` is false below
+1 at SHA-512: a machine that hard-codes a collision opens a committed leaf two ways
+(note:proofs/20261018T1604Z-report-redteam-2474, side finding). Those constant forms (`ServiceSoundStaged`,
+`ServiceSoundOverlap` and their J10-R mirrors) are retired, with the floors that rested on them (CMP-33).
+`ServiceSoundStagedPerProver` and `ServiceSoundOverlapPerProver` are in the form C-Flock's link bound has (`LinkCRZC`,
+`linkBoundZC`): each round's break is at most a constant plus a weight times the probability that a finder for that
+adversary (`Finders`) finds a collision, and `ecr/sha-512` (`Claims.ExpectedCR`) enters only outside the floors, at
+that adversary's finders, `⊤` where they fail it, capped at 1 a value of its coins (`Claims.ecrBound`, `finderTerm`,
 `breakBound`, all in `Definitions`, so other areas read the same break term). The bound reads each finder at a budget
 of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated constants per path, never at the
-finder's declared cost, so no choice of finder lowers it. The constant forms stay, superseded,
-because the floors of `Definitions.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover beside
-them are proved from these (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
+finder's declared cost, so no choice of finder lowers it. The floors read these premises at the fork finders
+(`forkFinders`) built from the adversary (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
 
 **At call scope under J10-R** (RT-ALGO-17, card bbf40543). J10-R draws H1's noise once a call, so a call's rows and
 columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product
 (`Definitions.Pouw.RelativeSecurityJ10R`). Each premise above has a mirror on that call design, where a stage is a
-call and its run one straight-line program over the call's bits: `ServiceSoundStagedJ10R` and its per-prover form,
-`KScopeOneSidedJ10R` and `ChargeVF3j16J10R`; overlapped, `ServiceSoundOverlapJ10R`, its per-prover form,
+call and its run one straight-line program over the call's bits: `ServiceSoundStagedJ10RPerProver`,
+`KScopeOneSidedJ10R` and `ChargeVF3j16J10R`; overlapped, `ServiceSoundOverlapJ10RPerProver`,
 `KScopeOverlapOneSidedJ10R` and `ChargeVF3j16OverlapJ10R`. They say what the per-unit forms say, read at the call: no
 premise here is weakened for it. The charge counts every product of the call's program, so a cheaper algorithm for the
 call's product, one whose products each serve several rows or columns, is charged fewer products and is outside the
@@ -56,32 +59,14 @@ section Staged
 
 variable {R St n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
 
-/-- `pouw-rs-staged-service` (proposed). **The staged service is sound up to its proof layer.** The service's seed is
-the window's live coins (`e`): `R` rounds, each `St` stage draws of the design's bits and one check of a stage and a
-cell-block (S4, round protocol with C1 per stage and C4 per draw; S5, live coins on `trusted-host`). For every
-adversary in `Mc` that commits first and every value `r` of its own coins, its run's play fixes each stage's error
-table at the stage's operand commitment, before its draw (the play's form, `StagedPlay`); every run the verifier
-accepts is accepted by the play's game or breaks binding or zero knowledge in some round (N1, X-RO commitments; F1 and
-F2, C-Flock's binding and zero knowledge), at most `δb` and `δz` a round.
-
-**Superseded by `ServiceSoundStagedPerProver`** (note:proofs/20261018T1604Z-report-redteam-2474, side finding; CMP-33).
-`M` ranges over all of `Mc` with no cost bound, and one `δb` bounds them all, so the premise is false for every
-`δb < 1` at SHA-512: a machine that hard-codes a collision opens a committed leaf two ways, and the third conjunct puts
-its accepted runs in `Bind`. It stays only because `StagedFloorK` and `StagedFloorKOneSided` are proved from it. -/
-def ServiceSoundStaged (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
-    (e : S.Seed ≃ Paths (DStage St n L np B n') R) (δb δz : ℝ) : Prop :=
-  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
-    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
-      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb) ∧ (∀ w, prob ((run Ω' M r).ZK w) ≤ δz) ∧
-      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
-        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
-
-/-- `pouw-rs-staged-service` (proposed; restates `ServiceSoundStaged` per prover). **The staged service is sound up to
-its proof layer, each break bounded through the adversary's own collision finders.** The seed, the round protocol and
-the play's form are `ServiceSoundStaged`'s (S4, round protocol with C1 per stage and C4 per draw; S5, live coins on
-`trusted-host`; `StagedPlay`). For every adversary in `Mc` that commits first and every value `r` of its own
-coins, every run the verifier accepts is accepted by the play's game or breaks binding or zero knowledge in some round
-(N1, X-RO commitments; F1 and F2, C-Flock's binding and zero knowledge), and round `w`'s binding break has probability
+/-- `pouw-rs-staged-service` (proposed, per prover). **The staged service is sound up to its proof layer, each break
+bounded through the adversary's own collision finders.** The service's seed is the window's live coins (`e`): `R`
+rounds, each `St` stage draws of the design's bits and one check of a stage and a cell-block (S4, round protocol with
+C1 per stage and C4 per draw; S5, live coins on `trusted-host`). For every adversary in `Mc` that commits first and
+every value `r` of its own coins, its run's play fixes each stage's error table at the stage's operand commitment,
+before its draw (the play's form, `StagedPlay`); every run the verifier accepts is accepted by the play's game or
+breaks binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2, C-Flock's binding and zero
+knowledge), and round `w`'s binding break has probability
 at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]`, its zero-knowledge break `δz + βz · Pr[fz Ω' M r w …]`:
 the linear term of `Claims.KSLin` for extraction-based finders, a constant that reads no prover (C-Flock's link has
 `1/(eM) + k/(eR_w)` there, at weight `Q_s/(1 − ρ)`, `zk_linkSoundC`) plus the prover's own finder at its weight.
@@ -130,7 +115,7 @@ conjunct its rounds' break bounds sum to about 1, and with `R (δb + δz)` small
 the collision. Finders that rerun it are cheap and fail `ecr/sha-512`; finders that meet `ecr/sha-512` make about
 `2^256/βb` calls in expectation, past any budget at a feasible time. Either way the floors give it 1. Every other
 adversary keeps `R (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256` on top of the constants, where
-`ServiceSoundStaged` held for none of them below `δb` near 1.
+one `δb` for every adversary held for none of them below 1.
 
 `δz` is per prover too, because the zero-knowledge break can be hard-coded as well: where `ZK` reads an accepted proof
 whose opening fails its relation, it is C-Flock's soundness, and C-Flock's knowledge bound has a collision term of the
@@ -156,7 +141,7 @@ bits (E3, straight-line; integer MMAs with s32 wrap and unscaled reads, so ring 
   the check reads the prefix word);
 - certified words of distinct rows of a stage share no product (row-pure).
 
-On this scope `c = 1` is proved at the luck ¾, the sibling floor `StagedFloorK`'s. K1 is not claimed outside
+On this scope `c = 1` is proved at the luck ¾, the sibling floor `StagedFloorKPerProver`'s. K1 is not claimed outside
 the two proved scopes, this one and `KScopeOneSided`'s (one-sided operands of any form, charge-pure, at the parity luck
 0.854: the floor of record's), and the verifier can't observe which case applies: no check of the service refuses a
 run outside a scope (the ledger's "priced, not prevented"). -/
@@ -185,7 +170,7 @@ program over `Ar` on the stage's bits (E3, straight-line; ring operations only, 
   reads none of that block's coins. A product two-sided at the frames of two columns of a row, which row purity
   allows, is outside it.
 
-On this scope `c = 1` is proved at the parity luck 0.854, the floor of record `StagedFloorKOneSided`'s. It is a
+On this scope `c = 1` is proved at the parity luck 0.854, the floor of record `StagedFloorKOneSidedPerProver`'s. It is a
 sibling of the ledger's K1, not a narrowing (RS-E-REF r8 VIII.3 item 6): its coin side may be non-affine, which no
 `GProd` is, and charging purity neither implies nor follows from row purity. K1 is not claimed outside the two proved
 scopes, this one and `KScopeAffine`'s (affine operands, mixed included, row-pure, at ¾), and the verifier can't
@@ -222,41 +207,24 @@ section Overlap
 
 variable {R St L np : ℕ} {n B n' : Fin St → ℕ} {Ar : Type} [CommRing Ar]
 
-/-- `pouw-rs-overlap-service` (proposed). **The overlapped service is sound up to its proof layer.** The service's
-seed is the window's live coins (`e`): `R` rounds, each one draw a stage of the stage's design bits, the draws
-overlapping at any depth, and one check of a cell-block drawn uniformly among every stage's (S4, round protocol with
-C1 (i)–(ii) and C4 per draw; S5, live coins on `trusted-host`). For every adversary in `Mc` that commits first
-and every value `r` of its own coins, its run's play fixes each round's error tables, every stage's, before the
-round's first draw (the play's form, `OvPlay`; this is E3, the round's run straight-line over every draw's bits,
-which K∥ reads in place of C1 (iii) and (iv), and which the service doesn't check); every run the verifier accepts is
-accepted by the play's game or breaks binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2,
-C-Flock's binding and zero knowledge), at most `δb` and `δz` a round.
+/-- `pouw-rs-overlap-service` (proposed, per prover). **The overlapped service is sound up to its proof layer, each
+break bounded through the adversary's own collision finders.** The service's seed is the window's live coins (`e`):
+`R` rounds, each one draw a stage of the stage's design bits, the draws overlapping at any depth, and one check of a
+cell-block drawn uniformly among every stage's (S4, round protocol with C1 (i)–(ii) and C4 per draw; S5, live coins
+on `trusted-host`). For every adversary in `Mc` that commits first and every value `r` of its own coins, its run's
+play fixes each round's error tables, every stage's, before the round's first draw (the play's form, `OvPlay`; this
+is E3, the round's run straight-line over every draw's bits, which K∥ reads in place of C1 (iii) and (iv), and which
+the service doesn't check); every run the verifier accepts is accepted by the play's game or breaks binding or zero
+knowledge in some round (N1, X-RO commitments; F1 and F2, C-Flock's binding and zero knowledge), round `w`'s binding
+break at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break
+`δz + βz · Pr[fz Ω' M r w …]`.
 
 The uniform draw is a deployment requirement. `e` is a bijection onto `OSpot`'s paths, so the check's cell-block is
 uniform on `OCells`, all `Σ_t n_t n'_t B_t` of them at once. A challenger that draws a stage first and then a
 cell-block in it weights a small stage's cell-blocks above a large one's, and is outside this premise unless every
 stage has one size.
 
-**Superseded by `ServiceSoundOverlapPerProver`** (note:proofs/20261018T1604Z-report-redteam-2474, side finding;
-CMP-33), for `ServiceSoundStaged`'s reason: one `δb` for every adversary is false below 1 at SHA-512, since a machine
-that hard-codes a collision opens a committed leaf two ways. It stays only because `OverlapFloorK` and
-`OverlapFloorKOneSided` are proved from it. -/
-def ServiceSoundOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
-    (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (δb δz : ℝ) : Prop :=
-  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
-    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
-      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb) ∧ (∀ w, prob ((run Ω' M r).ZK w) ≤ δz) ∧
-      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
-        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
-
-/-- `pouw-rs-overlap-service` (proposed; restates `ServiceSoundOverlap` per prover). **The overlapped service is sound
-up to its proof layer, each break bounded through the adversary's own collision finders.** The seed, the round
-protocol, the uniform draw and the play's form are `ServiceSoundOverlap`'s (S4, round protocol with C1 (i)–(ii) and C4
-per draw; S5, live coins on `trusted-host`; `OvPlay`, which is E3). For every adversary in `Mc` that commits
-first and every value `r` of its own coins, every run the verifier accepts is accepted by the play's game or breaks
-binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2, C-Flock's binding and zero knowledge), round
-`w`'s binding break at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break
-`δz + βz · Pr[fz Ω' M r w …]`. Everything `ServiceSoundStagedPerProver` says of its form holds here:
+Everything `ServiceSoundStagedPerProver` says of its form holds here:
 - it assumes nothing of SHA-512;
 - `Bind w` and `ZK w` are the run map's, and `fb`, `fz` the analysis's reductions built from `M` at `r`;
 - a square-root term folds in by AM–GM;
@@ -290,7 +258,7 @@ straight-line program over `Ar` on every draw's bits (E3), and:
   across draws; a word is certified at `W` where its error vanishes on its own draw's bits with at most two ones, the
   other draws' at `W`).
 
-On this scope `c = 1` is proved at the luck ¾ per draw, the sibling floor `OverlapFloorK`'s. K1 is not claimed
+On this scope `c = 1` is proved at the luck ¾ per draw, the sibling floor `OverlapFloorKPerProver`'s. K1 is not claimed
 outside the two proved scopes across draws, this one and `KScopeOverlapOneSided`'s (one-sided operands of any form
 per draw, charge-pure across draws, at the parity luck 0.854: the floor of record's), and the verifier can't observe
 which case applies: no check of the service refuses a run outside a scope. -/
@@ -322,7 +290,7 @@ straight-line program over `Ar` on every draw's bits (E3), and:
   cell-blocks, of any stages, whose words read it with odd coefficients (`SlpG.ChargePureAt`, charging purity across
   draws, in place of row purity).
 
-On this scope `c = 1` is proved at the parity luck 0.854 per draw, the floor of record `OverlapFloorKOneSided`'s.
+On this scope `c = 1` is proved at the parity luck 0.854 per draw, the floor of record `OverlapFloorKOneSidedPerProver`'s.
 Like `KScopeOneSided` it is a sibling of the ledger's K1, not a narrowing. K1 is not claimed outside the two proved
 scopes across draws, this one and `KScopeOverlapAffine`'s (operands affine per draw, row-pure across draws, at ¾),
 and the verifier can't observe which case applies: no check of the service refuses a run outside a scope. -/
@@ -354,27 +322,13 @@ section J10R
 
 variable {R St n L B n' : ℕ} {Ar : Type} [CommRing Ar]
 
-/-- `pouw-rs-staged-service` (proposed) at call scope under J10-R: `ServiceSoundStaged` on the call design. The
-service's seed is the window's live coins (`e`): `R` rounds, each `St` call draws of the call's bits (`JStage`: every
-row's dither bits, every column's coin bits and `U`'s bytes, drawn once a call) and one check of a call and a
-cell-block. For every adversary in `Mc` that commits first and every value `r` of its own coins, its run's play fixes
-each call's error table at the call's operand commitment, before its draw; every run the verifier accepts is accepted
-by the play's game or breaks binding or zero knowledge in some round, at most `δb` and `δz` a round.
-
-**Superseded by `ServiceSoundStagedJ10RPerProver`**, for `ServiceSoundStaged`'s reason: one `δb` for every adversary is
-false below 1 at SHA-512 (note:proofs/20261018T1604Z-report-redteam-2474). It mirrors the premise today's floor of
-record is proved from, so that the call-scope floor `StagedFloorKOneSidedJ10R` is that floor read at the call. -/
-def ServiceSoundStagedJ10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
-    (e : S.Seed ≃ Paths (JStage St n L B n') R) (δb δz : ℝ) : Prop :=
-  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
-    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
-      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb) ∧ (∀ w, prob ((run Ω' M r).ZK w) ≤ δz) ∧
-      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
-        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
-
-/-- `pouw-rs-staged-service` (proposed; per prover) at call scope under J10-R: `ServiceSoundStagedPerProver` on the
-call design. The seed, the round protocol and the play's form are `ServiceSoundStagedJ10R`'s; round `w`'s binding
-break is at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break
+/-- `pouw-rs-staged-service` (proposed, per prover) at call scope under J10-R: `ServiceSoundStagedPerProver` on the
+call design. The service's seed is the window's live coins (`e`): `R` rounds, each `St` call draws of the call's bits
+(`JStage`: every row's dither bits, every column's coin bits and `U`'s bytes, drawn once a call) and one check of a
+call and a cell-block. For every adversary in `Mc` that commits first and every value `r` of its own coins, its run's
+play fixes each call's error table at the call's operand commitment, before its draw; every run the verifier accepts
+is accepted by the play's game or breaks binding or zero knowledge in some round; round `w`'s binding break is at
+most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break
 `δz + βz · Pr[fz Ω' M r w …]`. Everything `ServiceSoundStagedPerProver` says of its form, finders and budgets holds
 here unchanged: it assumes nothing of SHA-512, and `ecr/sha-512` enters only the floors' bound (`breakBound`). -/
 def ServiceSoundStagedJ10RPerProver (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
@@ -431,25 +385,12 @@ section J10ROverlap
 
 variable {R St L : ℕ} {n B n' : Fin St → ℕ} {Ar : Type} [CommRing Ar]
 
-/-- `pouw-rs-overlap-service` (proposed) at call scope under J10-R: `ServiceSoundOverlap` on the call design. `R`
-rounds, each one draw a call of the call's bits, the draws overlapping at any depth, and one check of a cell-block
-drawn uniformly among every call's (the uniform draw is `ServiceSoundOverlap`'s deployment requirement); the play fixes
-each round's error tables, every call's, before the round's first draw (E3); every accepted run is accepted by the
-play's game or breaks binding or zero knowledge in some round, at most `δb` and `δz` a round.
-
-**Superseded by `ServiceSoundOverlapJ10RPerProver`**, for `ServiceSoundOverlap`'s reason. It mirrors the premise
-today's overlapped floor of record is proved from. -/
-def ServiceSoundOverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
-    (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (δb δz : ℝ) : Prop :=
-  ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
-    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
-      (∀ w, prob ((run Ω' M r).Bind w) ≤ δb) ∧ (∀ w, prob ((run Ω' M r).ZK w) ≤ δz) ∧
-      ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
-        (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
-
-/-- `pouw-rs-overlap-service` (proposed; per prover) at call scope under J10-R: `ServiceSoundOverlapPerProver` on the
-call design, with `ServiceSoundOverlapJ10R`'s seed, round protocol, uniform draw and play, and each round's breaks
-bounded through the adversary's own collision finders as `ServiceSoundOverlapPerProver` states. -/
+/-- `pouw-rs-overlap-service` (proposed, per prover) at call scope under J10-R: `ServiceSoundOverlapPerProver` on the
+call design. `R` rounds, each one draw a call of the call's bits, the draws overlapping at any depth, and one check of
+a cell-block drawn uniformly among every call's (the uniform draw is a deployment requirement, as
+`ServiceSoundOverlapPerProver`'s); the play fixes each round's error tables, every call's, before the round's first
+draw (E3); every accepted run is accepted by the play's game or breaks binding or zero knowledge in some round, each
+round's breaks bounded through the adversary's own collision finders as `ServiceSoundOverlapPerProver` states. -/
 def ServiceSoundOverlapJ10RPerProver (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
@@ -495,5 +436,30 @@ def ChargeVF3j16OverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R 
         Mc.charge M (e.symm x, r)
 
 end J10ROverlap
+
+section Hashes
+
+/-- `pouw-rs-verifier-hashes` (proposed). **The service's SHA-512 inputs are its verifier's.** `V` is the service's
+verifier with its SHA-512 taken as a parameter: `V h c σ a` is the verdict on commitment `c`, seed `σ` and answer `a`
+when every SHA-512 call the check makes, its own and those inside the proofs it verifies, returns `h` of its input.
+The service's verifier is `V` at `sha`, and `V` reads `h` only at the strings `S.hashes c σ a` lists: every `h` that
+agrees with `sha` there gives the same verdict. So every string the verifier hashes on `(c, σ, a)` is in
+`S.hashes c σ a`, the strings the fork finder (`forkFinder`) searches for a collision. A string listed that the
+verifier doesn't hash does no harm: any collision the finder outputs is a collision of `sha`, at a cost that counts
+every string listed.
+
+It ties the model to the code, so it says something only with `V` the deployed check: the compiled verifier of record
+(`PouwCheck.protocol.check`, over `PouwCommit`'s trees and C-Flock's verifier) with its SHA-512 calls read through `h`.
+At a `V` that ignores its `h` it holds of any service. It isn't proved against the code: the check calls
+`Flock.Sha512.hash` directly rather than through a parameter (`PouwCheck`'s `Pass`, `Inputs` and `Credit`,
+`PouwCommit`'s frames and coins, C-Flock's `FV3` roots), so the code has no `V` to state it of, and no map yet takes
+the check's inputs (`Registration`, `Evidence`) to a `Service`. Both are the gap, named here so that every floor that
+reads the fork finders shows it (CMP-33). -/
+def VerifierHashes (S : HashedService) (sha : Claims.Msg → Claims.Msg)
+    (V : (Claims.Msg → Claims.Msg) → S.Com → S.Seed → S.Ans → Bool) : Prop :=
+  (∀ c σ a, S.verify c σ a = V sha c σ a) ∧
+  ∀ (h : Claims.Msg → Claims.Msg) c σ a, (∀ u ∈ S.hashes c σ a, h u = sha u) → V h c σ a = V sha c σ a
+
+end Hashes
 
 end Pouw.Assumptions

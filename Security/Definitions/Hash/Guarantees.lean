@@ -19,7 +19,7 @@ SHA-512 is the served hash (Daniel's ruling on the hash card, 18 Oct: BLAKE3 not
 any of them is per prover: the collision comes from that prover's (extracted) openings, so it is a bound on that
 prover's link finders under `ecr/sha-512` (`FlockSoundness.Assumptions.SHA512CRExpected`), never one `δ_bind` for every
 prover, which is false at SHA-512 (a prover that hard-codes one collision opens one leaf two ways). In particular
-none of them discharges a constant over all provers such as `Pouw.Assumptions.ServiceSoundStaged`'s `δb`.
+none of them discharges a constant over all provers, such as the retired `ServiceSoundStaged`'s `δb` (CMP-33).
 -/
 
 namespace Hash.Guarantees

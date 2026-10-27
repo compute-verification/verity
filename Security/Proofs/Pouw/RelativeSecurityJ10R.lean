@@ -411,39 +411,9 @@ namespace Pouw.SecurityProofs.RelativeSecurity
 
 open Pouw.RelativeSecurity Pouw.Assumptions
 
-theorem StagedFloorKOneSidedJ10R : Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10R := by
-  intro Mc S R St n L B n' e run δb δz κ Vmax hSt hκ hC hδb hδz hS hK hP
-  have hKSt : RoundsHypJStP Mc S R St Vmax δb δz κ n L B n' toF2 := ⟨e, fun Ω' _ M hcom r => by
-    obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
-    exact ⟨(run Ω' M r).play, (run Ω' M r).Bind, (run Ω' M r).ZK, (run Ω' M r).V, hB, hZ, hacc,
-      fun x => (hP Ω' M hcom r x).1, fun x =>
-        ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).aq x, (run Ω' M r).wq x, (run Ω' M r).word x,
-          (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩⟩⟩
-  have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
-    rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
-  have h := serviceFloor_of_rounds (roundsHyp_of_stagedPJ hKSt hSt hκ.le) (by norm_num) hF₀ hδb hδz
-    (274 * Real.log 2)
-  rw [mul_zero, sub_zero] at h
-  exact ModelB.ServiceFloor.mono h (by linarith [ModelB.exp_parity_274])
-
-theorem OverlapFloorKOneSidedJ10R : Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10R := by
-  intro Mc S R St L n B n' e run δb δz κ Vmax hκ hC hδb hδz hS hK hP
-  have hKOv : RoundsHypJOvP Mc S R St Vmax δb δz κ n L B n' toF2 := ⟨e, fun Ω' _ M hcom r => by
-    obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
-    exact ⟨(run Ω' M r).play, (run Ω' M r).Bind, (run Ω' M r).ZK, (run Ω' M r).V, hB, hZ, hacc,
-      fun x => (hP Ω' M hcom r x).1, fun x =>
-        ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).aq x, (run Ω' M r).wq x, (run Ω' M r).word x,
-          (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩⟩⟩
-  have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
-    rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
-  have h := serviceFloor_of_rounds (roundsHyp_of_overlapPJ hKOv hκ.le) (by norm_num) hF₀ hδb hδz
-    (274 * Real.log 2)
-  rw [mul_zero, sub_zero, card_oCells] at h
-  exact ModelB.ServiceFloor.mono h (by linarith [ModelB.exp_parity_274])
-
 theorem StagedFloorKOneSidedJ10RPerProver :
     Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver := by
-  intro Mc S R St n L B n' e run sha kz δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ hS hK hP
+  intro Mc S R St n L B n' e run sha kz _ δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ _ hS hK hP
   have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
     rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
   have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
@@ -459,7 +429,7 @@ theorem StagedFloorKOneSidedJ10RPerProver :
 
 theorem OverlapFloorKOneSidedJ10RPerProver :
     Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver := by
-  intro Mc S R St L n B n' e run sha kz δb βb δz βz κ Vmax hκ hC _ _ _ _ hS hK hP
+  intro Mc S R St L n B n' e run sha kz _ δb βb δz βz κ Vmax hκ hC _ _ _ _ _ hS hK hP
   have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
     rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
   have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha

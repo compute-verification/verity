@@ -278,7 +278,7 @@ then the draw coin, doesn't model.
 It is stated for models whose registration is an oracle program's output with its queries counted
 (`ProverModel.RegQueries`, its antecedent); the sessions' calls are counted in `q` too (`Prover.Bounded`), which can only
 shrink the provers it quantifies over. It is the shape of relative security's
-premises, an adversary that commits first with random-oracle commitments (`Assumptions.ServiceSoundStaged`,
+premises, an adversary that commits first with random-oracle commitments (`Assumptions.ServiceSoundStagedPerProver`,
 `Extraction`), and it is carded on the random-oracle card with the seeded windows' premise
 (`Accounting.Assumptions.Compose.SeedExtractedAt`), so that Daniel rules on the random oracle once. -/
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
