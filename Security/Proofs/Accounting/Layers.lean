@@ -94,7 +94,7 @@ open Accounting.PouwWork
 /-- **Compute attribution at a help bound** (physical component 6 for PoUW, at a block's grade):
 `Accounting.Guarantees.PouwLocalOff` with A5 at `H` in place of `0`. The verifier accepts while the node's own credits
 outside `m`, plus `ρ · H`, fall short of `Wb · Nmin` with probability at most `δdet + δluck + δskip`. With `H` eight
-times the node's ingress bytes in the window (NET-16) and `ρ` an eighth of the work one output byte stands for, `ρ · H`
+times the node's ingress bytes in the window and `ρ` an eighth of the work one output byte stands for, `ρ · H`
 is the leakage: ingress bytes times work per output byte. -/
 theorem pouw_local_help {Ω : Type} [Fintype Ω] {L : Type*} (S : Ω → Actual.Run L) (P : Verdict Ω L) (X : Finset L)
     (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N)) (Wb Nmin ρ H : ℕ) (δdet δluck δskip : ℝ)

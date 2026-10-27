@@ -25,7 +25,7 @@ from e2e_h200.slots import Request, SlotKV, SlotShape
 from e2e_h200.store import GeneratorStore
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
-from verity_torch_loop import weights as SW
+from e2e_h200 import served_weights as SW
 
 #: art:8ce57586b2176a6364260a10963c9703b5b8919b26bd965a4f907667846323e9's writers, `window.writers_digest`
 FROZEN_WRITERS = ("5f20869283c3b4c078193c42259d1f2aada1a82138e203a438216d4449c1fc6f"

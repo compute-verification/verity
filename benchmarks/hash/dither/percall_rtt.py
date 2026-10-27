@@ -1,5 +1,5 @@
-"""ASK-64's per-step round, measured from the serving node against the proof service's challenger off the node: one live
-round a step (PERIOD-PATH ask 11).
+"""The per-step challenger round, measured from the serving node against the proof service's challenger off the node:
+one live round a step.
 
 The challenger is one session on its auditor host from infra's gate (`served_h1/coins.py open`: reserved in the lane's
 open development period and opened on the session's stand-in root, `coins.stand_in_root`, never a window's), its layout

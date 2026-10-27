@@ -40,7 +40,7 @@ chord_kappa = { value = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS kappa (t
 
 # The remote envelopes plus a wipe every 24 h at Daniel's operating point (5 GB per server, of its whole memory M_s), a
 # certifier on each host and side channels. Wipe: wipe_s, per, k_wipe, game_delta_coin, prf_advantage; certifier:
-# intake, timing, side.
+# declared (off: the ingress is intake x alpha Phi; regime.onsite-w63 sets a cadence), intake, timing, side.
 [regime.onsite]
 kind = "onsite"
 base = "remote"
@@ -49,10 +49,31 @@ per = "server"
 k_wipe = { value = 4e10, unit = "bit/server", low = 2e10, high = 9.32e11, source = "ruling: Daniel 26 Oct 12:16 PM PDT, the wipe leaves at most 5 GB of the server's assumed memory capacity M_s, every tier included (the operating point; the per-server statement is memory-accounting's, Wed 28 Oct 06:00Z); low: half; high: the per-device measurement's 116.5 GB a server (8 x 10 GB of HBM and 36.5 GB of host, DPU, BMC and flash unwiped: regime.onsite-per-device)", status = "ruled" }
 game_delta_coin = { value = 2.938735877055719e-39, source = "the streamed wipe's retention game (#4707): accepted with probability at most 2^-128 + Adv_PRF; the coins' 2^-128", status = "derived" }
 prf_advantage = { value = 2.938735877055719e-39, source = "Adv_PRF of the streamed wipe's label function, taken at the PoUS statements' epsilon_crypto = 2^-128 (Security/Definitions/Pous/Guarantees.lean)", status = "assumed" }
-intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "benchmarks/nci/tiers.py DEFAULTS intake_x: the declared novel intake at alpha Phi once NET-35's count check is in the ZK flow; high: line rate until then", status = "assumed" }
+declared = false
+intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "draft:NET-92 (Daniel 26 Oct 6:55 PM PDT): a server's ingress carries only its inference blocks' declared inputs, at most alpha Phi at full use (benchmarks/nci/tiers.py DEFAULTS intake_x); high: line rate, the upper end until NET-92's PR 5 states the per-server bits in Lean", status = "derived" }
 timing = { value = 860, unit = "bit/s/host", low = 61.3, high = 1e4, source = "benchmarks/nci/tiers.py DEFAULTS tau: the network appendix's program format; low: the llama8b-node1 calibration's requests (51.3) and coin (10) links", status = "derived" }
 side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "ruling: Daniel 25 Oct, 1 kb/s per server (benchmarks/datacenter account.py DEDICATED_RACKS sigma); range: the plausible covert channels", status = "ruled" }
 form = "certified"
+
+# The onsite envelopes with each server's ingress at its inference blocks' declared inputs (NET-92) at the warden form's
+# W63 parameters, per link-window as the bound is stated, in its honest-delta form, with no faulty ingress unit
+# (note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee): a toy cadence (4 lanes, at most two
+# requests a lane a 3.2 s link-window), so its ingress, 0.028 alpha Phi on an H200 server at v4-pro-session, feeds the
+# serving rho credits only if outputs outnumber prompts more than 20:1. A deployment's own cadence replaces it once it
+# feeds that serving. declared_x: a multiple of the declared bound, at most line rate.
+[regime.onsite-w63]
+base = "onsite"
+declared = true
+cell_bytes = { value = 512, unit = "byte", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class B (WardenParams cell_bytes)", status = "declared" }
+cell_rate = { value = 4, unit = "cell/lane/bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class r (WardenParams slots)", status = "declared" }
+lanes = { value = 4, unit = "lane/server", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class lanes", status = "declared" }
+cells = { value = 47, unit = "cell/request", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class C (WardenParams ingress_cells)", status = "declared" }
+id_bits = { value = 17, unit = "bit", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class IDB", status = "declared" }
+hold = { value = 21, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class D (WardenParams delay), a lane held at least D + 1 buckets a request", status = "declared" }
+outputs = { value = 64, unit = "id/request", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class KO", status = "declared" }
+bucket_s = { value = 0.1, unit = "s", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams bucket_ms", status = "declared" }
+window_buckets = { value = 32, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams window, a link-window's buckets, the length PR 5's windowBits is stated per", status = "declared" }
+declared_x = { value = 1, unit = "x declared", low = 1, high = 1e8, source = "ruling: Daniel 26 Oct 6:55 PM PDT (NET-92), a server's ingress carries only its inference blocks' declared inputs (draft:NET-92, note:network-accounting/20261027T0220Z-finding-net92-plan); high: line rate, the upper end until NET-92's PR 5 states the per-server bits in Lean (the ingress is at most the location's links, 5.3e7 x the declared bound on a server and 2.7e7 x on a GB200 tray)", status = "ruled" }
 
 # Today's wipe: about 12 GB a server, every tier but the boot disk, which it doesn't reach. memory-accounting's Tuesday
 # measurement decides whether the 5 GB of regime.onsite is reached.

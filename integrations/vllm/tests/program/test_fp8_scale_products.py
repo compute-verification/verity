@@ -1,4 +1,4 @@
-"""`kernels.fp8_twins.scale_products`: the scale products a host committer commits for `ScaledMmFp8BlockSharedScale_v1` are the IR's
+"""`kernels.fp8_twins.scale_products`: the scale products a host committer commits for `ScaledMmFp8BlockSharedScale_v1` are the circuit's
 `F32Mul_v1(x_s[kb], w_s[nb][kb])` word for word -- the reference `evaluate` on every ordered pair of edge words where a host multiply can
 differ from it (two NaNs of different payloads and signs, in both orders; NaN against finite, zero and infinity; signed zeros,
 subnormals, +-max, +-inf; products that overflow, or underflow to a subnormal or to zero) -- and, fed to
