@@ -12,10 +12,11 @@ from verity.ml.commitments.frame_v3 import NAME_SHA512 as FRAME_SHA512
 from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
 from verity.ml.commitments.frame_v3 import vectors_sha512 as FV
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
-from verity.ml.commitments.indexed import ExplicitIndexedDomain, RangeIndexedDomain
+from verity.ml.commitments.indexed import ExplicitIndexedDomain, RangeIndexedDomain, RangeU64Domain
 from verity.ml.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, _hash, _uint, validate_commitment, verify_opening
+from verity.ml.commitments.merkle import (RANGE_U64_MESSAGE_BYTES, Commitment, CommitmentDomain, MerkleTree, Opening, _hash, _uint,
+                                          range_u64_domain_message, validate_commitment, verify_opening)
 from verity.ml.commitments.multiproof import multiproof, verify_multiproof
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
 from verity.ml.commitments.scheme import CommitmentScheme
@@ -102,6 +103,109 @@ def test_frame_binding64_vectors_spell_out_the_domain(case: dict) -> None:
     message = b"veritor/protocol/merkle/frame/v3\0" + (6).to_bytes(4, "big") + b"domain" + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
     assert _b(case["domain_message"]) == message
     assert hashlib.sha512(message).hexdigest() == doc["domain_id"] == _domain(doc).domain_id.hex()
+
+
+# --- range-u64 ---------------------------------------------------------------------------------------------------
+
+_FRAME = b"veritor/protocol/merkle/frame/v3\0"
+#: every count 0..512, and 2^k - 1, 2^k and 2^k + 1 up to the largest, 2^64 - 1
+_U64_COUNTS = sorted({*range(513), *(2**k + e for k in range(64) for e in (-1, 0, 1)), 2**64 - 1})
+
+
+def _range_u64(doc: dict) -> CommitmentDomain:
+    return CommitmentDomain(_b(doc["binding"]), doc["owner"], RangeU64Domain(doc["start"], doc["count"]), hash=doc["hash"])
+
+
+def _range_u64_message(binding: bytes, owner: int, start: int, count: int) -> bytes:
+    """PROTOCOL.md §6's range-u64 layout, byte by byte."""
+    words = ((owner + 2).to_bytes(8, "big"), start.to_bytes(8, "big"), count.to_bytes(8, "big"))
+    return (_FRAME + (16).to_bytes(4, "big") + b"domain/range-u64" + (64).to_bytes(8, "big") + binding
+            + b"".join((8).to_bytes(8, "big") + w for w in words))
+
+
+def test_range_u64_vectors_pin_the_counts_and_share_their_first_block() -> None:
+    cases = F["range_u64_domains"]
+    assert [c["domain"]["count"] for c in cases] == [0, 1, 255, 256, 2**32, 2**64 - 1]
+    assert len({_b(c["message"])[:128] for c in cases}) == 1
+
+
+@pytest.mark.parametrize("case", F["range_u64_domains"], ids=lambda c: f"count{c['domain']['count']}")
+def test_range_u64_vectors_spell_out_the_domain(case: dict) -> None:
+    doc = case["domain"]
+    binding, message, d = _b(doc["binding"]), _b(case["message"]), _range_u64(doc)
+    assert binding == identity_digest_sha512(case["binding_identity"]["tag"], case["binding_identity"]["doc"]) and len(binding) == 64
+    assert message == _range_u64_message(binding, doc["owner"], doc["start"], doc["count"])
+    assert message == range_u64_domain_message(binding, doc["owner"], doc["start"], doc["count"])
+    assert len(message) == RANGE_U64_MESSAGE_BYTES == 173 and message[165:] == doc["count"].to_bytes(8, "big")
+    assert hashlib.sha512(message).hexdigest() == doc["domain_id"] == d.domain_id.hex()
+    if doc["count"] == 0:
+        empty = _FRAME + (5).to_bytes(4, "big") + b"empty" + (64).to_bytes(8, "big") + d.domain_id
+        assert d.empty_root().hex() == case["empty_root"] == hashlib.sha512(empty).hexdigest()
+
+
+def test_range_u64_message_is_173_bytes_at_every_count() -> None:
+    binding = identity_digest_sha512("verity/test/range-u64", {})
+    for count in _U64_COUNTS:
+        for start in {0, 2**64 - 1 - count}:
+            for owner in (-2, 4):
+                message = range_u64_domain_message(binding, owner, start, count)
+                assert len(message) == 173 and message[165:] == count.to_bytes(8, "big")
+                assert message == _range_u64_message(binding, owner, start, count)
+
+
+@pytest.mark.parametrize("case", F["range_u64_domains"], ids=lambda c: f"count{c['domain']['count']}")
+def test_range_u64_id_differs_from_the_json_range_domains(case: dict) -> None:
+    doc = case["domain"]
+    start, count = doc["start"], doc["count"]
+    u64 = _range_u64(doc)
+    json_domain = CommitmentDomain(u64.binding, u64.owner, RangeIndexedDomain(start, start + count), hash="sha512")
+    assert json_domain.count == u64.count
+    for p in {start, start + count - 1} if count else ():
+        assert json_domain.positions.rank(p) == u64.positions.rank(p)
+    assert u64.domain_id != json_domain.domain_id
+
+
+@pytest.mark.parametrize("case", F["range_u64_trees"], ids=lambda c: f"start{c['domain']['start']}-n{c['domain']['count']}")
+def test_range_u64_tree_round_trips_through_verify_opening(case: dict) -> None:
+    doc, positions, values = case["domain"], case["positions"], [_b(v) for v in case["values"]]
+    d = _range_u64(doc)
+    assert d.domain_id.hex() == doc["domain_id"] and positions == list(d.positions)
+    leaves = [d.leaf(r, p, "u16", v) for r, (p, v) in enumerate(zip(positions, values, strict=True))]
+    assert [x.hex() for x in leaves] == case["leaves"]
+    assert leaves == [hashlib.sha512(d.leaf_prefix(r, p, "u16", 2) + v).digest() for r, (p, v) in enumerate(zip(positions, values, strict=True))]
+    assert [d.pad(r).hex() for r in range(len(positions), 8)] == case["pads"]
+    assert d.node(0, 0, leaves[0], leaves[1]) == _hash(b"node", d.domain_id, _uint(0), _uint(0), leaves[0], leaves[1], hash="sha512")
+    tree = MerkleTree(d, dict(zip(positions, values, strict=True)), lambda _p: "u16")
+    assert tree.commitment == Commitment(_b(case["root"]), doc["count"])
+    json_domain = CommitmentDomain(d.binding, d.owner, RangeIndexedDomain(positions[0], positions[-1] + 1), hash="sha512")
+    limits = VerificationLimits()
+    for r, p in enumerate(positions):
+        op = tree.open(p)
+        assert [x.hex() for x in op.path] == case["paths"][r]
+        assert verify_opening(d, tree.commitment, op, "u16", limits)
+        assert not verify_opening(d, tree.commitment, Opening(p, bytes([op.value[0] ^ 1]) + op.value[1:], op.path), "u16", limits)
+        assert not verify_opening(json_domain, tree.commitment, op, "u16", limits)
+    for outside in (positions[0] - 1, positions[-1] + 1):
+        assert not verify_opening(d, tree.commitment, Opening(outside, values[0], tree.open(positions[0]).path), "u16", limits)
+
+
+def test_range_u64_refuses_other_hashes_short_bindings_and_counts_past_2_64() -> None:
+    b64 = identity_digest_sha512("verity/test/range-u64", {})
+    positions = RangeU64Domain(0, 4)
+    for h in ("sha256", "blake3", "blake3-s256"):
+        with pytest.raises(ProtocolError, match="SHA-512 only"):
+            CommitmentDomain(b64, 0, positions, hash=h)
+    with pytest.raises(ValueError):
+        CommitmentDomain(b64, 0, positions, hash="sha384")
+    for width in (0, 32, 63, 65, 128):
+        with pytest.raises(ProtocolError, match="binding"):
+            CommitmentDomain(bytes(width), 0, positions, hash="sha512")
+    for start, count in ((0, 2**64), (1, 2**64 - 1), (2**64 - 1, 1), (-1, 1), (0, -1)):
+        with pytest.raises(ProtocolError, match=r"2\^64"):
+            range_u64_domain_message(b64, 0, start, count)
+    for owner in (-3, 2**64 - 2):
+        with pytest.raises(ProtocolError, match="owner"):
+            range_u64_domain_message(b64, owner, 0, 1)
 
 
 def test_every_frame_binds_a_64_byte_identity_apart_from_its_halves() -> None:
