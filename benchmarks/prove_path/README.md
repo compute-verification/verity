@@ -156,8 +156,9 @@ vacuous until NET-68's whole-window circuit lands. That is a layout and compiler
 network-accounting, with vllm's compiler part as VLLM-103 under it.
 - The window's circuit becomes the whole window under a step-indexed scan router. `Fits` is structural, and arrival
   steps and prompt lengths stay private (#4087 landed; #4102, #4108 and #4175 are open).
-- The start cadence is fixed slots a network timestep (ASK-122, Daniel, 26 Oct): a timestep of 8 buckets (0.8 s)
-  with 4 Program slots, nothing of the admissions public (`ingress_scan.Class`), and the first token at D = 2.1 s. A
+- The start cadence is fixed slots a network timestep (ASK-122, Daniel, 26 Oct): a timestep of 16 buckets (1.6 s)
+  with 4 Program slots, 8 a link-window, nothing of the admissions public (`ingress_scan.Class`), and the first token
+  at D = 2.7 s (vllm's pick, 26 Oct). A
   first token within 1 s is out under every option.
 
 Until then, vllm's #4061 has `records_audit` label the bound vacuous whenever #`freeInputs` exceeds the declared charge.

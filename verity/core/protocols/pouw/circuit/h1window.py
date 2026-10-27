@@ -66,7 +66,10 @@ derives the window's units from its own copy of the Program under the `Q_templat
   of its zy unit), so the window binds nothing more. Each runs under a one-call Program of its wrapper
   (`PouwH1WindowLane`, `PouwH1WindowCombine`; `leaf_program`), one unit, the same all period. Its reads are its leaf-local
   rows past the leaf's `place` in each value (`leaf_reads`, `leaf_reads_file`): the tile's own rows, its call's z table
-  and receipts, and the leaf's partials, produced after the draw.
+  and receipts, and the leaf's partials, produced after the draw. A J10-R window's leaf (over `PouwH1Tile_v5`) is
+  `h1zy`'s v2 statements, at a chunked K each lane's `h1zy.lane_chunk`s (`leaf_unit`'s ``ch``), and the combine that
+  folds their oks; its chunks read the A and B tables' chunk rows, and its carries and ok rows are produced after the
+  draw like the partials (`leaf_lanes`' J10-R leaf). v1's leaf is staged at whole rows only.
 """
 from __future__ import annotations
 
@@ -642,8 +645,9 @@ def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[
 
 #: a ``--registered`` port's key that its statement reads every bit of its row (Flock's `KnownRead.READ_KEY`)
 READ_IN_FULL = "read_in_full"
-#: the values a drawn leaf's statements read in full: an A row, a B row and a partials row each read by several of them
-FULL = (LL.A, LL.B, LL.PARTIALS)
+#: the values a drawn leaf's statements read in full: an A row, a B row and a partials row each read by several of them,
+#: and a J10-R leaf's ok rows (and its carries, `leaf_lanes.read_in_full`)
+FULL = LL.FULL
 
 
 def _leaf_ports(S: Any) -> Any:
@@ -675,42 +679,58 @@ def _tile_of(program: Program, k: int) -> Any:
     return unit.bindings["TILE"]
 
 
-def leaf_unit(program: Program, k: int, kind: str) -> Any:
-    """The Definition a drawn leaf's statement ``kind`` (`leaf_lanes.LANE` or ``COMBINE``) proves at K, derived from the
-    window's own template at K (`template`: its unit `h1zy.PouwH1TileZy` over the H1 tile): `h1zy.lane` or `h1zy.combine`
-    over that tile. Refused (ValueError): a K the window has no template at, a unit other than the zy unit, a chunked K
-    (its lanes are the chunk lanes, over chunk rows), and a leaf
+def leaf_unit(program: Program, k: int, kind: str, ch: int | None = None) -> Any:
+    """The Definition a drawn leaf's statement ``kind`` (`leaf_lanes.LANE`, ``CHUNK`` with its chunk ``ch``, or
+    ``COMBINE``) proves at K, derived from the window's own template at K (`template`: its unit `h1zy.PouwH1TileZy` over
+    the H1 tile): `h1zy.lane`, `h1zy.lane_chunk` at `weights.chunks`(K) or `h1zy.combine` over that tile. Refused
+    (ValueError): a K the window has no template at, a unit other than the zy unit, a statement the leaf hasn't (a whole
+    lane at a chunked K, whose lanes are the chunk lanes over chunk rows, or a chunk at a whole one), a chunked K but over
+    J10-R's `PouwH1Tile_v5` (`h1zy.J10R_LANE_TILES`, the one tile whose lanes are staged in chunks), and a leaf
     `h1zy.lane` or `h1zy.combine` doesn't stage (an R not a multiple of 16, a combine below `h1zy.LEAST_K`)."""
-    if kind not in (LL.LANE, LL.COMBINE):
-        raise ValueError(f"a drawn leaf's statement is a {LL.LANE} or its {LL.COMBINE}, not {kind!r}")
+    if kind not in (LL.LANE, LL.CHUNK, LL.COMBINE):
+        raise ValueError(f"a drawn leaf's statement is a {LL.LANE}, a {LL.CHUNK} or its {LL.COMBINE}, not {kind!r}")
     tile = _tile_of(program, k)
-    _whole_rows(k)
-    return Z.lane(tile) if kind == LL.LANE else Z.combine(tile)
+    n = W.chunks(int(k))
+    if tile.defn.id not in Z.J10R_LANE_TILES:
+        _whole_rows(k)
+    if kind == LL.COMBINE:
+        return Z.combine(tile)
+    if n == 1 and kind == LL.LANE and ch is None:
+        return Z.lane(tile)
+    if n > 1 and kind == LL.CHUNK and ch is not None and 0 <= int(ch) < n:
+        return Z.lane_chunk(tile, n, int(ch))
+    raise ValueError(f"K = {k}'s lanes are {'whole' if n == 1 else f'{n} chunk lanes each (weights.chunks)'}: a drawn "
+                     f"leaf's statement there is {'a lane' if n == 1 else f'a chunk of 0 .. {n - 1}'}, not {(kind, ch)!r}"
+                     + ("" if n == 1 else ", the chunk lanes"))
 
 
 def _whole_rows(k: int) -> None:
     if W.chunks(int(k)) > 1:
         raise ValueError(f"K = {k}'s rows are {W.chunks(int(k))} chunk leaves each (weights.chunks): a drawn leaf's lanes "
-                         "there are the chunk lanes, which read chunk rows, not h1zy.lane's whole rows")
+                         "there are the chunk lanes, which read chunk rows, not h1zy.lane's whole rows; they are staged "
+                         "over J10-R's PouwH1Tile_v5 only")
 
 
-def leaf_template(program: Program, k: int, kind: str) -> Any:
-    """K's wrapper of `leaf_unit`: `PouwH1WindowLane` or `PouwH1WindowCombine` bound to it and K."""
-    return bind(PouwH1WindowLane if kind == LL.LANE else PouwH1WindowCombine, UNIT=leaf_unit(program, k, kind), K=int(k))
+def leaf_template(program: Program, k: int, kind: str, ch: int | None = None) -> Any:
+    """K's wrapper of `leaf_unit`: `PouwH1WindowLane` (a lane or a lane chunk) or `PouwH1WindowCombine` bound to it and
+    K."""
+    return bind(PouwH1WindowCombine if kind == LL.COMBINE else PouwH1WindowLane, UNIT=leaf_unit(program, k, kind, ch),
+                K=int(k))
 
 
-#: each window Program's leaf Programs by (K, kind), so a period derives each once
-_LEAVES: "weakref.WeakKeyDictionary[Program, dict[tuple[int, str], tuple[Program, dict[str, Any]]]]" = weakref.WeakKeyDictionary()
+#: each window Program's leaf Programs by (K, kind, chunk), so a period derives each once
+_LEAVES: "weakref.WeakKeyDictionary[Program, dict[tuple, tuple[Program, dict[str, Any]]]]" = weakref.WeakKeyDictionary()
 
 
-def leaf_program(program: Program, k: int, kind: str) -> tuple[Program, dict[str, Any]]:
-    """The Program and partition query every drawn leaf's statement ``kind`` at K runs under: the one-call Program of
-    `leaf_template` and the instance query of its unit, a population of one unit, so the statement's draw is its whole
-    population. Both are functions of the window's descriptor alone, so a period has one of each a K and kind."""
+def leaf_program(program: Program, k: int, kind: str, ch: int | None = None) -> tuple[Program, dict[str, Any]]:
+    """The Program and partition query every drawn leaf's statement ``kind`` (a chunk's ``ch``) at K runs under: the
+    one-call Program of `leaf_template` and the instance query of its unit, a population of one unit, so the statement's
+    draw is its whole population. Both are functions of the window's descriptor alone, so a period has one of each a K,
+    kind and chunk."""
     memo = _LEAVES.setdefault(program, {})
-    key = (int(k), kind)
+    key = (int(k), kind, None if ch is None else int(ch))
     if key not in memo:
-        t = leaf_template(program, k, kind)
+        t = leaf_template(program, k, kind, ch)
         memo[key] = (Program(t), P.template_instances_query([t.bindings["UNIT"]]))
     return memo[key]
 
@@ -722,66 +742,97 @@ def place(program: Program, u: int, steps: int) -> dict[str, tuple[str, int]]:
     its K: ``a`` its step's A table of K (`table`) from row M j + R ti, ``b`` the weights' ``b/<K>`` from row b0 + C tj (b0
     the linear's first, `_b0`), ``zy`` and ``receipt`` the call's z table and receipts at row t, and ``partials`` the drawn
     leaf's own (`leaf_lanes.PARTIALS`, `one_stage.produced`) from row 0. The rows are the tile's own (`table_reads`). At a
-    chunked K (`weights.chunks` n > 1) ``a`` and ``b`` are leaf indices, n times the first row (the chunk lanes' base)."""
+    chunked K (`weights.chunks` n > 1) ``a`` and ``b`` are leaf indices, n times the first row (the chunk lanes' base).
+    A J10-R window's leaf's other after-draw values, its carries and ok rows (`leaf_lanes.produced_values`), are its own
+    from row 0 too."""
     S = program.fn.S()
     c, t = call_of(program, u)
     lin = S.CALLS[c][0]
     r, cc = _rc(S)
     ti, tj = divmod(t, {name: n for name, _k, n in S.LINEARS}[lin] // cc)
     n = W.chunks(_k(S)[lin])
+    produced = LL.produced_values(r, cc, _k(S)[lin], j10r=True) if is_j10r(program) else {LL.PARTIALS: None}
     return {LL.A: (table(program, "a", c, steps), n * (step_of(program, c, steps)[2] + r * ti)),
             LL.B: (f"{S.PREFIX}b/{_k(S)[lin]}", n * (_b0(S)[lin] + cc * tj)),
             LL.ZY: (table(program, "zy", c), t), LL.RECEIPT: (table(program, RECEIPTS, c), t),
-            LL.PARTIALS: (LL.PARTIALS, 0)}
+            **{v: (v, 0) for v in produced}}
 
 
-def leaf_reads(program: Program, u: int, kind: str, ln: int | None = None, *, steps: int) -> dict[str, tuple[str, int]]:
-    """Each registered port of unit ``u``'s statement ``kind`` (lane ``ln``, or the combine) with the table and the row the
-    verifier reads it at: `leaf_lanes.reads`' row of its value past the value's `place`. Refused at a chunked K, whose
-    lanes read chunk rows."""
+def _leaf_k(program: Program, u: int) -> int | None:
+    """Unit ``u``'s K as `leaf_lanes`' ``j10r`` takes it: the K of its call under J10-R, None for v1's leaf (refused at a
+    chunked K, whose lanes are staged over J10-R only)."""
     S = program.fn.S()
-    _whole_rows(_k(S)[S.CALLS[call_of(program, u)[0]][0]])
+    k = _k(S)[S.CALLS[call_of(program, u)[0]][0]]
+    if is_j10r(program):
+        return k
+    _whole_rows(k)
+    return None
+
+
+def leaf_reads(program: Program, u: int, kind: str, ln: int | None = None, ch: int | None = None, *,
+               steps: int) -> dict[str, tuple[str, int]]:
+    """Each registered port of unit ``u``'s statement ``kind`` (lane ``ln``, a J10-R lane's chunk ``ch``, or the
+    combine) with the table and the row the verifier reads it at: `leaf_lanes.reads`' row of its value past the value's
+    `place`. Refused at a chunked K but under J10-R, whose chunk lanes read chunk rows."""
+    j10r = _leaf_k(program, u)
     at = place(program, u, steps)
-    return {port: (at[v][0], at[v][1] + row) for port, (v, row) in LL.reads(*_rc(program.fn.S()), kind, ln).items()}
+    return {port: (at[v][0], at[v][1] + row)
+            for port, (v, row) in LL.reads(*_rc(program.fn.S()), kind, ln, ch, j10r=j10r).items()}
 
 
-def leaf_known_rows(program: Program, kind: str, ln: int | None = None, *, salt: bytes, position: int,
-                    roots: Sequence[bytes], admit: Sequence[int] | None = None) -> dict[str, tuple[str, list[int]]]:
+def leaf_known_rows(program: Program, kind: str, ln: int | None = None, ch: int | None = None, *, salt: bytes,
+                    position: int, roots: Sequence[bytes], admit: Sequence[int] | None = None,
+                    u: int | None = None) -> dict[str, tuple[str, list[int]]]:
     """`leaf_lanes.known_rows` of a drawn leaf of the window: lane ``ln``'s ``pub`` of its unit's ``salt``, ``position`` and
     ``roots`` (the tile statement's, `PUBLIC`), its ``admit`` row every one of the leaf's R rows unless ``admit`` is given
-    (the tile unit masks no row), and every statement's ``o0``."""
+    (the tile unit masks no row), and every statement's ``o0``. A J10-R window's (unit ``u``'s, which it needs): its pub
+    row with the unit's ``call`` and ``blocks`` (`j10r_inputs`), and only the combine's ``o0``."""
     r, c = _rc(program.fn.S())
-    return LL.known_rows(r, c, kind, ln, admit=[1] * r if admit is None else admit, salt=salt, position=position,
-                         roots=roots)
+    j10r: dict[str, Any] = {}
+    if is_j10r(program):
+        if u is None:
+            raise ValueError("a J10-R leaf's known rows are its unit u's: its pub row holds u's call and blocks")
+        calls, blocks = j10r_inputs(program)
+        j10r = {"j10r": _leaf_k(program, u), "call": calls[u], "blocks": blocks[u]}
+    return LL.known_rows(r, c, kind, ln, ch, admit=[1] * r if admit is None else admit, salt=salt, position=position,
+                         roots=roots, **j10r)
 
 
 def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: dict[str, str],
                     partials: dict[str, Any], known_ports: dict[str, Any], prog: str | None = None,
-                    window: str | None = None, *, steps: int) -> dict[str, Any]:
-    """The verifier's ``--registered`` file of unit ``u``'s statement ``kind`` (lane ``ln``, or the combine), in
-    `leaf_lanes.registered_file`'s form: each of its `leaf_reads` at its table's row under ``roots`` ``{value: root}``
-    (the call's tables' roots as the round log names them, the weights' and the produced record's ``partials``), each
-    table's entry the verifier's own (`_shapes`: a ``row/v2`` value of 16-bit leaves under `registered.domain` of its name,
-    rows and width, binding ``window``, the served window's open root, except the weights' ``b/<K>``), and ``partials``'
-    entry ``partials`` (`produced.entry` under the window's registration). A read of an A row, a B row or a partials row
-    is marked `READ_IN_FULL`. Then ``known_ports`` (`produced.known_port` of `leaf_known_rows`), and ``complete``."""
+                    window: str | None = None, *, steps: int, ch: int | None = None,
+                    produced: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The verifier's ``--registered`` file of unit ``u``'s statement ``kind`` (lane ``ln``, a J10-R lane's chunk ``ch``,
+    or the combine), in `leaf_lanes.registered_file`'s form: each of its `leaf_reads` at its table's row under ``roots``
+    ``{value: root}`` (the call's tables' roots as the round log names them, the weights' and the produced record's
+    ``partials``), each table's entry the verifier's own (`_shapes`: a ``row/v2`` value of 16-bit leaves under
+    `registered.domain` of its name, rows and width, binding ``window``, the served window's open root, except the
+    weights' ``b/<K>``), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
+    ``produced`` (each `produced.entry` under the window's registration). A read of an A row, a B row, a partials row,
+    a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
+    (`produced.known_port` of `leaf_known_rows`), and ``complete``."""
     S = program.fn.S()
     c = call_of(program, u)[0]
     shape, b = _shapes(program, c, steps), f"{S.PREFIX}b/{_k(S)[S.CALLS[c][0]]}"
     prog = prog or P.program_digest(program)
-    logical = LL.reads(*_rc(S), kind, ln)
+    j10r = _leaf_k(program, u)
+    logical = LL.reads(*_rc(S), kind, ln, ch, j10r=j10r)
+    after = {LL.PARTIALS: partials, **(produced or {})}
+    mine = LL.produced_values(*_rc(S), _k(S)[S.CALLS[c][0]], j10r=j10r is not None)
     out = {}
-    for port, (value, row) in leaf_reads(program, u, kind, ln, steps=steps).items():
+    for port, (value, row) in leaf_reads(program, u, kind, ln, ch, steps=steps).items():
         if value not in roots:
             raise ValueError(f"port {port!r} reads {value!r}, whose root the verifier does not hold")
-        if value == LL.PARTIALS:
-            e = partials
+        if value in mine:
+            if value not in after:
+                raise ValueError(f"port {port!r} reads {value!r}, whose entry the verifier does not hold")
+            e = after[value]
         else:
             leaves, words = shape[value]
             e = {"leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
                  "domain": G.domain(prog, value, words, leaves, window=None if value == b else window).domain_id.hex()}
         out[port] = PR.port(value, e, roots[value], [row], G.SCHEMA_V2)
-        if logical[port][0] in FULL:
+        if LL.read_in_full(logical[port][0]) and port != LL.OK:
             out[port][READ_IN_FULL] = True
     if both := sorted(set(out) & set(known_ports)):
         raise ValueError(f"ports {both} are both reads and known")

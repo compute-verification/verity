@@ -4,8 +4,9 @@ harness), carries three warden-form id requests on two lanes, the third queued u
 of id events. The reference's scan of its ingress rows from the empty state, the Programs' rows its responses, holds
 each request's prompt ids at their positions, its head's fields, its admission bucket and its anchor until the anchor
 (two requests anchored at one boundary in their own slots) and its outputs from then until its last egress bucket,
-gives each slot's occupancy word its prompt's length in the state its Program reads and 0 in every other (the token-id
-row, `token_row`, its prompt in order), and reuses a slot only past it; egress bucket t computes the
+gives each slot's occupancy word 1 in the state its Program reads and 0 in every other (the token-id row, `token_row`:
+the occupancy word, the prompt's length and its prompt in order, each where `slot_row` puts it in the state row), and
+reuses a slot only past it; egress bucket t computes the
 warden's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged one) from a
 view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random flips (S_t
 and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
@@ -103,7 +104,7 @@ def test_the_scan_holds_each_request_through_its_egress_and_reuses_a_slot_only_p
         assert (slot.done, slot.left, slot.fields, slot.admitted, slot.anchor) == (1, 0, len(prompt), s0, anchor)
         assert (slot.max_tokens, slot.seed, slot.temperature, slot.top_p) == (4 + q, 11 * (q - 1), 700000, 950000)
         assert [slot.ids[IS.position(CLS, p)] for p in range(len(prompt))] == prompt
-        assert slot.occ == len(prompt) and (len(prompt), tuple(prompt)) in IS.token_row(CLS, before)
+        assert slot.occ == 1 and (1, len(prompt), tuple(prompt)) in IS.token_row(CLS, before)
         assert (slot.n, slot.out) == (0, [0] * CLS.KO)
         # S_t is run.states[t + 1]: the request's slot is live in S_{s0} … S_{last}, its outputs from S_{anchor} on
         for t in range(s0, _last(s0, len(out)) + 1):
@@ -114,11 +115,26 @@ def test_the_scan_holds_each_request_through_its_egress_and_reuses_a_slot_only_p
     # a slot is occupied in the state its Program reads, S_{A−1}, and in no other: once a request
     occupied = [(t, s.q) for t, st in enumerate(run.states) for s in st.slots if s.occ]
     assert occupied == [(4, 1), (4, 2), (10, 3)]
-    assert all(IS.token_row(CLS, st)[j] == (0, ()) for t, st in enumerate(run.states) for j, s in enumerate(st.slots)
+    assert all(IS.token_row(CLS, st)[j] == (0, 0, ()) for t, st in enumerate(run.states) for j, s in enumerate(st.slots)
                if (t, s.q) not in occupied or not s.live)
     # request 1's slot is live in S_6, its last egress bucket, and request 3 takes it at 7, the lowest free one
     assert run.states[7].slots[0].q == 1 and run.states[8].slots[0].q == 3
     assert run.states[8].slots[0].n == 0 and [s.q for s in run.states[PARAMS.delay + 3].slots] == [3, 2]
+
+
+def test_a_reader_of_the_state_row_finds_each_slot_s_token_row_at_slot_row_s_bits(run):
+    NP = CLS.C * CLS.K - CLS.K + CLS.K0
+    assert NP >= max(map(len, PROMPTS))
+    seen = 0
+    for st in run.states:
+        bits = IS.encode(CLS, st)
+        for j, (occ, lp, ids) in enumerate(IS.token_row(CLS, st)):
+            got = [sum(bits[o + i] << i for i in range(w)) for o, w in IS.slot_row(CLS, j, NP)]
+            assert got[0] == occ
+            if occ:
+                assert (got[1], got[2:2 + lp]) == (lp, list(ids))
+                seen += 1
+    assert seen == len(PROMPTS)
 
 
 def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_bucket_wrote(run):
@@ -142,9 +158,9 @@ def test_scan_traffic_ticks_the_warden_s_rows(run):
 
 
 def test_the_state_is_the_layout_neg_sized():
-    w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=8, WITHIN=12)
-    assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 21, 64, 4, 149_648)
-    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 21))
+    w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12)
+    assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 27, 64, 4, 149_648)
+    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 27))
     lay = IS.layout(w63)
     at = 0
     for name, (o, w) in lay.items():
@@ -154,17 +170,24 @@ def test_the_state_is_the_layout_neg_sized():
     assert lay["3.ids"] == (149_644 - 47 * 45 * 17, 47 * 45 * 17) and lay["3.out"][1] == 64 * 17
     assert lay["3.occ"][1] == 32 and lay["3.n"][0] == lay["3.occ"][0] + 32
     assert [IS.position(w63, p) for p in (0, 11, 12, 56, 57)] == [0, 11, 45, 89, 90]
-    assert [w63.anchor(t, t % 8) for t in (0, 4, 5, 12, 13)] == [16, 16, 24, 24, 32]
-    for bad in ({"B": 256}, {"C": 1 << 16}, {"IDB": 33}, {"EVERY": 0}, {"D": 18}, {"KO": 1 << 16}):
+    row = IS.slot_row(w63, 3, 1024)
+    assert len(row) == 1026 and row[:2] == [lay["3.occ"], lay["3.fields"]]
+    assert row[2 + 11] == (lay["3.ids"][0] + 11 * 17, 17) and row[2 + 12] == (lay["3.ids"][0] + 45 * 17, 17)
+    assert IS.slot_row(w63, 0, 2082)[-1] == (lay["0.ids"][0] + (47 * 45 - 1) * 17, 17)
+    for j, NP in ((4, 1024), (0, 0), (0, 2083)):
+        with pytest.raises(ValueError):
+            IS.slot_row(w63, j, NP)
+    assert [w63.anchor(t, t % 16) for t in (0, 4, 5, 20, 21)] == [16, 16, 32, 32, 48]
+    for bad in ({"B": 256}, {"C": 1 << 16}, {"IDB": 33}, {"EVERY": 0}, {"D": 26}, {"KO": 1 << 16}):
         with pytest.raises(ValueError):
             IS.Class(**{"B": 512, "r": 4, "lanes": 4, "C": 47, **bad})
-    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=21, ingress_cells=47, ingress_buckets=12,
-                          egress_cells=65, window=32, every=8)
+    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
+                          egress_cells=65, window=32, every=16)
     w63.serves(served)
-    assert (served.program_slots, served.window_programs) == (w63.SLOTS, 16)
-    for bad, fix in (({"delay": 22}, "= D = 21"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
+    assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
+    for bad, fix in (({"delay": 28}, "= D = 27"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
                      ({"ingress_cells": 48}, "<= C = 47"), ({"lanes": 5}, "= lanes = 4"),
-                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 16}, "= EVERY = 8")):
+                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16")):
         with pytest.raises(ValueError, match=re.escape(fix)):
             w63.serves(replace(served, **bad))
 

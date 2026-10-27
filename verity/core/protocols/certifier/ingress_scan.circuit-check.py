@@ -11,7 +11,7 @@ def _network_ingress_scan_roots() -> list[Any]:
     the warden's delay 5 and 8 outputs a request, which reaches a first and a continuation frame in one block, a new
     and a continuing block, the anchor's wrap, two requests anchored at one boundary, each slot's occupancy word, the
     outputs written at the anchor and a slot held through its egress. The w63 class (B 512, r 4, lanes 4, C 47,
-    EVERY 8, WITHIN 12, D 21, KO 64) is about 1.2M ANDs, 100 s to trace, so it is checked by name, not in every
+    EVERY 16, WITHIN 12, D 27, KO 64) is about 1.2M ANDs, 100 s to trace, so it is checked by name, not in every
     run."""
     from verity.ml.circuits.defs import bind
     from verity.core.protocols.certifier.ingress_scan import IngressScanBucket, IngressScanFirst

@@ -269,7 +269,8 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
     prompt as it is, with exactly 24 tokens and greedy; on the warden at the scan's schedule, the stand-in, given exactly
     what the warden sent the server (its release headers on), serves every request and answers the bytes the warden
-    certified, every connection ends within one link-window, and the check accepts the run."""
+    certified, every connection ends within the two link-windows 24 tokens take at D = 27, and the check accepts the
+    run."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
@@ -289,8 +290,10 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     requests = [ws.id_request(**x["ids"], frame_bytes=params.cell_bytes, offset=0) for x in traffic]
     responses, servers, out = [D.answer(p) for p in prompts], [], tmp_path / "run"
     out.mkdir()
-    assert ws.group_windows(params, 24) == 1
-    warden = _run(out, tmp_path / "key", requests, responses, params=params, id_payload=params.payload, servers=servers)
+    G = ws.group_windows(params, 24)
+    assert G == 2
+    warden = _run(out, tmp_path / "key", requests, responses, windows=G, params=params, id_payload=params.payload,
+                  servers=servers)
     assert len(warden.log) == 4 and all(c["failed"] is None and not c["cut"] for c in warden.log)
     for j, (server, response) in enumerate(zip(servers, responses)):
         sent = b"".join(data for _, data in server.writes)
@@ -299,7 +302,7 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
         assert D.answer(fields["prompt"]) == response
     result = ws.check(out)
     assert result["accepted"], result["problems"]
-    assert (result["summary"]["ended"], result["summary"]["windows"]) == (4, 1)
+    assert (result["summary"]["ended"], result["summary"]["windows"]) == (4, G)
 
 
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
