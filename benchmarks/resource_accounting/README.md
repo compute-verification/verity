@@ -15,8 +15,8 @@ certifies beside what it did.
 - `certified.py`: the certified columns, pure: γ from the pinned price twins (`benchmarks/pouw/harness/price_twins.py`,
   the larger of the two prices, at each Llama linear's (n, k) and the cube, #1809), W_cert = (1 − γ)(1 − εs)·ΣWref
   over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
-  form (worst case over each audit's own coins; a per-run compute residual holds only conditional on `BudgetAbort` for
-  the deployed cost model, so none is shown). S_cert is the PoUS arm's storage profile when it is certified (`storage`).
+  form (worst case over each audit's own coins; a per-run compute residual rests on `TTPerCoin`, an open conjecture, so
+  none is shown). S_cert is the PoUS arm's storage profile when it is certified (`storage`).
   Q_cert is `bandwidth.audit.bound` at the red team's grant (#1805 at 5761861fd: T = 1.2 ms, s = 1,849, no RTT), per
   window the verifier accepted within T, with S_chip as the bandwidth harness counts it (`summarize.s_chip_bytes`: the
   caches beside L2 and the SMs' registers and memory) and the side link at PCIe Gen5 x16; `window_params` also reports a

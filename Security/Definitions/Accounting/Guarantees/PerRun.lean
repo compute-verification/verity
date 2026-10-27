@@ -15,12 +15,12 @@ forms: the probability that every audit accepts and the realized charge *on that
 other accounts' realized use beyond a residual, is at most the summed error (`JointPerRun`, `CovertResidualPerRun`),
 from each audit's per-run guarantee (`Accounting.Run.ComputeSoundPerRun` and the two beside it).
 
-The compute audit's per-run guarantee comes from PoUW by truncation (`PouwEndToEndPerRun`, `ComputeOfPouwPerRun`),
-under one more hypothesis on PoUW's cost model, that it truncates (`Accounting.BudgetAbort`); without it the per-run
-form does not follow from `Pouw.Assumptions.TT` (`Accounting.PerRunNecessity.tt_not_perRun`). From TT per coin (`Pouw.Assumptions.TTPerCoin`) it
-follows with no truncation (`PouwEndToEndPerRunPerCoin`, `ComputeOfPouwPerRunPerCoin`): the finder's collision is
-charged at the birthday bound `q(q − 1)/(2|R|)` over the uniform oracle, and nothing is assumed of the cost model. The bandwidth audit's guarantee, `Bandwidth.Guarantees.AuditRO`, is
-already per-run: its event reads the ingress of the run itself. PoUS's `EndToEndRing` bounds a server's state by its
+The compute audit's per-run guarantee comes from PoUW's TT per coin (`Pouw.Assumptions.TTPerCoin`), whose event is
+at the adversary's own cost on the run's coin (`PouwEndToEndPerRunPerCoin`, `ComputeOfPouwPerRunPerCoin`). The
+finder's collision is charged at the birthday bound `q(q − 1)/(2|R|)` over the uniform oracle, below `2^-385` at
+SHA-512's range and `q ≤ 2^64` (`Pouw.Proofs.birthday_le`), and nothing is assumed of the cost model. TT's budget form
+does not give it (`Accounting.PerRunNecessity.tt_not_perRun`). The bandwidth audit's guarantee,
+`Bandwidth.Guarantees.AuditRO`, is already per-run: its event reads the ingress of the run itself. PoUS's `EndToEndRing` bounds a server's state by its
 type, not a charge that varies with the coins, so its per-run form is a matter of how a run's device memory maps to a
 server's state, in the capacity embedding.
 
@@ -52,45 +52,7 @@ namespace Accounting.Guarantees
 
 open Accounting Pouw
 
-/-- **PoUW's end-to-end guarantee, per run.** Under EndToEnd's hypotheses (TT among them), and when the cost model
-truncates (`BudgetAbort`), for every in-domain workload, oracle bound `q ≤ 2^64` and adversary that makes at most `q`
-oracle calls (with no bound on its cost), the audit with `t` work-weighted samples accepts while the adversary's online
-cost on that run is below `(1 − γ)(1 − ε_s)·W` with probability at most `(1 − ε_s)^t + ε(q, N)`, with
-`γ = 1 − (1 − γ₀)/Ω_max`. -/
-def PouwEndToEndPerRun : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < Ωmax →
-    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
-      (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM →
-    ∀ U : Workload, U.InDomain D → ∀ q : ℕ, q ≤ 2 ^ 64 →
-    ∀ A : Adversary CM, CallsWithin A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-          AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          onlineCost A U x.1 x.2.1 < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
-        ≤ (1 - εs) ^ t + ε q U.layout.N
-
-/-- **PoUW's per-run guarantee is the compute audit's per-run guarantee.** Under `PouwEndToEndPerRun`'s hypotheses, for
-any run on any device whose compute audit realizes PoUW's game at price `p`, with at least one draw of the game's coins
-and the device's oracle queries over the compute window at most `2^64`, the compute audit has its per-run guarantee at
-certificate `(1 − γ)(1 − εs)·W` and error `(1 − εs)^t + ε(q, N)`, where `q` is the device's oracle rate times the compute
-window's length. -/
-def ComputeOfPouwPerRun : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < Ωmax →
-    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
-      (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM →
-    ∀ U : Workload, U.InDomain D → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 → Nonempty (PouwCoins P U t) →
-    ∀ (ι α ΩQ ΩS : Type) [Fintype α] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
-      (r : Run d α (PouwCoins P U t) ΩQ ΩS) (p : Price),
-      d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → RealizesPouw CM P U r p →
-      r.ComputeSoundPerRun p ((1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
-        ((1 - εs) ^ t + ε (d.rate .oracle * (r.win .compute).len) U.layout.N)
-
-/-- **PoUW's end-to-end guarantee, per run, from TT per coin** (F3). Under `TTPerCoin` at `γ₀` and the `Ω_max` bound,
+/-- **PoUW's end-to-end guarantee, per run** (F3). Under `TTPerCoin` at `γ₀` and the `Ω_max` bound,
 with no budget, no oracle cap and no truncation (`BudgetAbort`), for every in-domain workload and every adversary, the
 audit with `t` work-weighted samples accepts while the adversary's online cost on that run is below
 `(1 − γ)(1 − ε_s)·W` with probability at most `(1 − ε_s)^t + ε(q_A, N) + q_A(q_A − 1)/(2|R|)`, with
@@ -110,7 +72,7 @@ def PouwEndToEndPerRunPerCoin : Prop :=
         ≤ (1 - εs) ^ t + ε (A.queries U) U.layout.N +
           (A.queries U : ℝ) * (A.queries U - 1) / (2 * Fintype.card R)
 
-/-- **PoUW's per-run guarantee from TT per coin is the compute audit's per-run guarantee.** Under
+/-- **PoUW's per-run guarantee is the compute audit's per-run guarantee.** Under
 `PouwEndToEndPerRunPerCoin`'s hypotheses, and an error `ε(q, N)` that does not decrease in `q`, for any run on any
 device whose compute audit realizes PoUW's game at price `p`, with at least one draw of the game's coins, the compute
 audit has its per-run guarantee at certificate `(1 − γ)(1 − εs)·W` and error `(1 − εs)^t + ε(q, N) + q(q − 1)/(2|R|)`,

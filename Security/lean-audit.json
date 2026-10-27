@@ -3268,11 +3268,8 @@
    "assumptions": [],
    "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27"
   },
-  "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.ComputeOfPouwPerRun : Accounting.Guarantees.ComputeOfPouwPerRun"],
-   "assumptions": [],
-   "type_hash": "c0bae848d5eca780c94a102c38a296194575afc01d1470ad366d262ecc166b42"
+  "Accounting.SecurityProofs.ComputeOfPouwPerRunPerCoin": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.CovertResidual": {
    "owner": "@memory-accounting",
@@ -3802,11 +3799,8 @@
    "assumptions": [],
    "type_hash": "6cedd6501a14fec827a8babde06c27e2cd58a9806a0ee2db78ccfd26db65d101"
   },
-  "Accounting.SecurityProofs.PouwEndToEndPerRun": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.PouwEndToEndPerRun : Accounting.Guarantees.PouwEndToEndPerRun"],
-   "assumptions": [],
-   "type_hash": "31c0943a819102e21c0f851f870d2ab5a9e93937491c328813e69182e5fccce1"
+  "Accounting.SecurityProofs.PouwEndToEndPerRunPerCoin": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.PouwLocalOff": {
    "owner": "@compute-accounting",
@@ -11739,8 +11733,8 @@
    "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
    "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
-   "Accounting.SecurityProofs.PouwEndToEndPerRun": "frozen (conjecture,no-function,hash): It is Pouw.SecurityProofs.EndToEnd per run, a consequence of the named open conjecture TT when the cost model truncates (Accounting.BudgetAbort, Security/Definitions/Accounting/PerRun.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal, not over a Lean function.",
-   "Accounting.SecurityProofs.ComputeOfPouwPerRun": "frozen (conjecture,no-function,hash): It carries PouwEndToEndPerRun, a consequence of the named open conjecture TT over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (Security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
+   "Accounting.SecurityProofs.PouwEndToEndPerRunPerCoin": "frozen (conjecture,no-function,hash): It is Pouw.SecurityProofs.EndToEndPerCoin per run, a consequence of the named open conjecture TTPerCoin (TT per coin: every adversary, at its own cost and query count, its finder's collision outside the event) with the finder's collision charged at the proved birthday bound q(q-1)/(2|R|) (Pouw.Proofs.pr_finder_collides_le), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Accounting.SecurityProofs.ComputeOfPouwPerRunPerCoin": "frozen (conjecture,no-function,hash): It carries PouwEndToEndPerRunPerCoin, a consequence of the named open conjecture TTPerCoin over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (Security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
    "Accounting.SecurityProofs.JointPerRun": "frozen (no-function): Like Joint, it composes the three audits' per-run guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CovertResidualPerRun": "frozen (no-function): Like JointPerRun, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.PearlCEndToEndPerRun": "frozen (no-function,hash): It is Pearl-C's γ-gap property Gγ, a hypothesis (at W1 with fetches priced, compute-accounting's gγ_w1Priced gives it from W1's), audited by work-weighted tickets and made per run by truncation when the cost model truncates (Accounting.BudgetAbortPearlC, Security/Definitions/Accounting/PerRun.lean), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function.",

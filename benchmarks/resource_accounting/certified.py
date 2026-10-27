@@ -28,8 +28,8 @@
   BW the native read rate; capacity M − S_cert, M the device's memory.  It splits into honest overhead, native less the
   honest reference (F·T − ΣW_ref: what the protocol's own time costs; M − |C|, the memory the store leaves), and soundness
   slack, the reference less what is certified (ΣW_ref − W_cert; |C| − S_cert).  It is the weak form (`RESIDUAL`):
-  ``CovertResidual`` is worst case over each audit's own coins, not a per-run bound.  A per-run compute residual holds only
-  conditional on ``BudgetAbort`` for the deployed cost model (`PER_RUN`), so none is shown.  First fetches are charged to
+  ``CovertResidual`` is worst case over each audit's own coins, not a per-run bound.  A per-run compute residual rests on
+  ``TTPerCoin``, an open conjecture (`PER_RUN`), so none is shown.  First fetches are charged to
   the bandwidth account, not compute (`FIRST_FETCH`).
 """
 
@@ -58,9 +58,8 @@ Q_GRANT = "red-team grant at 5761861fd"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 GRANTED_T_NS = 1_200_000
 RESIDUAL = "residual, worst case over the audit's coins (CovertResidual's weak form)"
-PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model (Daniel's "
-           "decision 9; #1821's CovertResidualPerRun, and #1827: BudgetAbort holds for constant-cost models and W1's "
-           "operand refund breaks it), so none is shown")
+PER_RUN = ("a per-run compute residual rests on TTPerCoin, an open conjecture, and adds the birthday term "
+           "q(q-1)/(2|R|) to PoUW's error (Accounting.Guarantees.ComputeOfPouwPerRunPerCoin), so none is shown")
 FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute (Daniel's ruling); a priced-sum column, "
                "compute + p·reads at p the device's DRAM rate in MAC units, waits for compute-accounting's priced lemma "
                "(w1Priced)")

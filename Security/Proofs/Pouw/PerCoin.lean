@@ -10,6 +10,7 @@ import Proofs.Pouw.Theorem1
   on every coin, with the error `ε(q_A, N)` plus the probability that `H` collides on the finder's log.
 * `ttPerCoin_outputPriced` (honest): it holds with error 0 in the witness model `outputPriced`.
 * `ttPerCoin_false_of_const` (nontrivial): it fails below error 1 wherever a free constant transcript is correct.
+* `perCoin_hypotheses_consistent`: the per-coin guarantees' hypotheses hold together at the explicit schedule.
 * `gammaFromTTPerCoin`, `endToEndPerCoin`: `G_γ` and resource exhaustion from it, each at the adversary's own cost
   and query count, with the finder's collision outside the event.
 -/
@@ -104,6 +105,20 @@ theorem ttPerCoin_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintyp
       rw [finderQueries_length]; exact hcalls x.1 x.2
     rw [List.eq_nil_of_length_eq_zero h0] at hy
     simp at hy
+
+/-- **The per-coin guarantees' hypotheses hold together at the explicit schedule**: at `W_ref = m1Wref` and
+`Ω_max = Ω_M1`, the output-priced model satisfies `TTPerCoin` at 0.5% with error 0 for `D1.m1`, and that error does
+not decrease in `q`, so `EndToEndPerCoin`, the deadline's and the per-run per-coin guarantees are not vacuous there. -/
+theorem perCoin_hypotheses_consistent :
+    0 < D1.m1Omega ∧
+      (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
+        (D1.m1Wref U.layout u : ℝ) ≤ D1.m1Omega * ((U.layout.shape u).Wmm : ℝ)) ∧
+      Assumptions.TTPerCoin (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 D1.m1Wref).toProtocol D1.m1Domain Params.γ0
+        (fun _ _ => 0) ∧
+      ∀ N : ℕ, Monotone fun q : ℕ => (0 : ℝ) := by
+  obtain ⟨hW, -, -⟩ := milestoneWref
+  exact ⟨by unfold D1.m1Omega; norm_num, fun U hU u hu => (hW U hU u hu).2, ttPerCoin_outputPriced _ _,
+    fun _ => monotone_const⟩
 
 /-- **(a) per coin**: `G_γ` from `TTPerCoin`, pointwise by `wins_imp_tt` at `T` the adversary's own cost. -/
 theorem gammaFromTTPerCoin : Pouw.Guarantees.GammaFromTTPerCoin := by

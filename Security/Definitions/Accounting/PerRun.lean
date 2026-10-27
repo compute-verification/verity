@@ -13,10 +13,12 @@ guarantee bounds the probability that the audit accepts *and the account's reali
 certificate (`Run.ComputeSoundPerRun`, `Run.BandwidthSoundPerRun`, `Run.CapacitySoundPerRun`), at every value of the
 other audits' coins. It implies the sure-bound form.
 
-PoUW's guarantee becomes per-run by truncation: the adversary that runs `A` but stops before its cost would exceed a
-budget `b` costs at most `b` on every coin, and commits `A`'s transcript wherever `A` costs at most `b`. PoUW's cost
-model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`), not a theorem: a model
-whose cost reads what its programs cannot see (the oracle at points they never query, say) has no aborting program.
+PoUW's guarantee is per-run from TT per coin (`Pouw.Assumptions.TTPerCoin`), at the adversary's own cost on the
+run's coin (`Accounting.Guarantees.PouwEndToEndPerRunPerCoin`). TT's budget form gives it only by truncation: the
+adversary that runs `A` but stops before its cost would exceed a budget `b` costs at most `b` on every coin, and commits
+`A`'s transcript wherever `A` costs at most `b`. Whether that adversary exists is a property of the cost model
+(`BudgetAbort`), not a theorem: a model whose cost reads what its programs cannot see (the oracle at points they never
+query, say) has no aborting program. No guarantee reads `BudgetAbort` or `CallsWithin` now.
 
 **Pricing.** The machine prices a PoUW run in two parts (Daniel's decision 9, 11 Oct): its arithmetic, at W1's
 instruction prices with no fetch charge and no refund, is charged to the compute account, and every first fetch of a

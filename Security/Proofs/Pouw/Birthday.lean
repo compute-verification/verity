@@ -15,6 +15,7 @@ collision on its own log (two distinct points it queried with the same answer) w
   at the points already seen.
 * `pr_collides_le`: the bound for one program, and `pr_finder_collides_le` for the finder `B^A` of an adversary, at
   its query count `A.queries U`.
+* `birthday_le`: at SHA-512's `|R| = 2^512` and `q ≤ 2^64` queries the bound is below `2^-385`.
 -/
 
 namespace Pouw
@@ -323,6 +324,20 @@ theorem pr_finder_collides_le {S : Type} [Fintype S] {CM : CostModel Q R S} (hQ 
       (A.pre.eval x.1) x.2) (Finset.mem_univ (H, s))
   simp only [Equiv.prodComm_apply, Prod.swap_prod_mk, hfq]
   exact pr_collides_le t _ hcalls
+
+/-- **The bound at SHA-512's range**: `q ≤ 2^64` queries against `|R| ≥ 2^512` collide with probability below
+`2^-385`. -/
+theorem birthday_le {q n : ℕ} (hq : q ≤ 2 ^ 64) (hn : 2 ^ 512 ≤ n) :
+    (q : ℝ) * (q - 1) / (2 * n) ≤ 1 / 2 ^ 385 := by
+  have hq' : (q : ℝ) ≤ 2 ^ 64 := by exact_mod_cast hq
+  have hn' : (2 : ℝ) ^ 512 ≤ n := by exact_mod_cast hn
+  have h0 : (0 : ℝ) ≤ q := Nat.cast_nonneg q
+  have h1 : (q : ℝ) * (q - 1) ≤ 2 ^ 64 * 2 ^ 64 := by nlinarith [mul_le_mul hq' hq' h0 (by positivity)]
+  have hpos : (0 : ℝ) < 2 * n := by linarith [hn', (by positivity : (0 : ℝ) < 2 ^ 512)]
+  rw [div_le_div_iff₀ hpos (by positivity)]
+  calc (q : ℝ) * (q - 1) * 2 ^ 385 ≤ 2 ^ 64 * 2 ^ 64 * 2 ^ 385 := mul_le_mul_of_nonneg_right h1 (by positivity)
+    _ = 1 * (2 * 2 ^ 512) := by norm_num
+    _ ≤ 1 * (2 * n) := by linarith
 
 end Proofs
 

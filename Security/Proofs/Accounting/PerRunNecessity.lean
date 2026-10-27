@@ -1,15 +1,17 @@
 import Proofs.Accounting.PerRunPouw
+import Proofs.Pouw.Game
 
 /-!
-# PoUW's per-run guarantee needs the cost model to truncate
+# TT's budget form does not give PoUW's per-run guarantee
 
-`Pouw.Assumptions.TT` and EndToEnd's other hypotheses do not give `Accounting.Guarantees.PouwEndToEndPerRun`'s
-conclusion without `Accounting.BudgetAbort`. In this cost model a workload of one 1×1×1 unit has one program, which
-commits a correct unit on every salt, costs nothing on salt `true` and the unit's full work on salt `false`. TT holds
+`Pouw.Assumptions.TT` and EndToEnd's other hypotheses do not give a per-run conclusion, which is why
+`Accounting.Guarantees.PouwEndToEndPerRunPerCoin` rests on `Pouw.Assumptions.TTPerCoin`. In this cost model a workload
+of one 1×1×1 unit has one program, which commits a correct unit on every salt, costs nothing on salt `true` and the
+unit's full work on salt `false`. TT holds
 with error 0, since every adversary within budget `T` has `T` at least the whole workload's work, but the audit accepts
 on every coin, so the probability of acceptance with realized cost below `(1 − γ)(1 − ε_s)·W` is `1/2`, above
 `(1 − ε_s)^t + ε = 1/4` at `ε_s = 1/2` and `t = 2` (`tt_not_perRun`). The cost reads the salt, which the program
-cannot branch on, so the class has no aborted program and `BudgetAbort` fails (`not_budgetAbort`).
+cannot branch on, so the class has no aborted program.
 -/
 
 namespace Accounting.PerRunNecessity
@@ -120,13 +122,5 @@ theorem tt_not_perRun :
         onlineCost A U x.1 x.2.1 < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout) =
       fun x => x.2.1 = true from funext fun x => propext (hev x), pr_mid_true]
   norm_num
-
-/-- `CM` does not truncate: by `PouwEndToEndPerRun`, a truncating cost model would bound the probability in
-`tt_not_perRun` by `1/4`. -/
-theorem not_budgetAbort : ¬ BudgetAbort CM := by
-  intro h
-  obtain ⟨hTT, hW, hU, hA, hlt⟩ := tt_not_perRun
-  exact absurd (SecurityProofs.PouwEndToEndPerRun Unit Unit Bool CM P D 0 1 (fun _ _ => 0) one_pos one_pos hW hTT h
-    U hU 0 (by norm_num) A hA 2 (1 / 2) (by norm_num)) (not_le.2 hlt)
 
 end Accounting.PerRunNecessity
