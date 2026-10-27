@@ -538,8 +538,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
     instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
     (`challenger_party.Party.of`; on this node by default, a process whose key and session log are beside the periods)
-    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean answers (the
-    verifier of record) and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
+    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
+    answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
     whether `trusted-host`'s premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted
     answer's profile (`placement`)."""

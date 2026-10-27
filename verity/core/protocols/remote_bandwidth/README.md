@@ -15,11 +15,11 @@ Where the two differ, the Python is what is wrong. The properties of the Lean's 
 `Security/Properties/RemoteAudit.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
-is the verifier of record: it decides each registration, event and window, an accepted session's record is the one
+is the verifier: it decides each registration, event and window, an accepted session's record is the one
 it returns, and the ledger reads that record. `audit.Session` keeps the books beside it as the reference, and a
 registration, event, window verdict or record field on which they differ refuses the session at that window as
 `disagreement`. The books check no openings: a window's verdict is the Lean's, and the Python check of its openings
-runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean is the verifier of record on these
+runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean is the verifier on these
 grounds:
 
 - the gap list is empty. A registration that binds PoUW's tiles is refused by both registries. A paced window's
