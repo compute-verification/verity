@@ -6,7 +6,7 @@
 # cuBLASLt, the receipt kinds re-derived by egemm_ref.py), `egemm bench` (hot items interleaved rep by rep, each with its
 # SM clock) and `egemm il` (each arm against plain) at the shapes in TSHPS, and ncu's instruction and pipe sections on
 # NCU_ARMS at the first shape. Clocks are read, never set. Run from a checkout at a pushed commit:
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/edited_gemm/egemm_fill_probe.sh
 set -uo pipefail
 export O=${OUT:?}

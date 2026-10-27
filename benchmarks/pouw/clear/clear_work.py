@@ -1,6 +1,6 @@
 """Pearl-C's work law and its clear audit: what the verifier credits, draws and checks, all recomputed by the verifier
 (statement review item 5; red team F1, F2 and F5–F8).  It is a reference tool, not a verifier: PoUW's served path is the
-served-ZK window, and its verifier of record is the Lean (`verity/core/protocols/pouw/lean/check`).  It runs the records
+served-ZK window, and its verifier is the Lean (`verity/core/protocols/pouw/lean/check`).  It runs the records
 core keeps (`verity.core.protocols.pouw.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
 Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory is not a package: callers put it on
 ``sys.path``.
