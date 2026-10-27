@@ -176,7 +176,6 @@ from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw, partition, registration
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, closure_of, draw_first
 from verity.core.protocols.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.plan import VerificationPlan
 from verity.core.protocols.sampled_proofs.optimize import Candidate, CostModel, Objective, frontier, for_budget
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts
 from verity.core.protocols.sampled_proofs.costfit import fit
@@ -230,8 +229,6 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
-- `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
-  `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per proof block, commitment, serve-time
   `Commitment`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
