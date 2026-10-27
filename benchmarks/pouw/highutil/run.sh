@@ -120,8 +120,6 @@ $LEASE bash -c '
     fi
   fi
   if [ "$NCU" = 1 ]; then
-    # the GEMM MACs over the profiled steps: 2 in the plain warm-up block, 2 in the period
-    macs=$($PY -c "import json, sys; p = json.load(open(sys.argv[1])); print(4 * sum(p[\"m\"] * n * k for _, n, k in p[\"layers\"]))" "$W/cfg/prep.json")
     for arm in plain proto; do
       ncu --clock-control none --csv --page raw --print-units base --log-file "$O/ncu-$arm.csv" -c 600 \
         --metrics gpu__time_duration.sum,sm__ops_path_tensor_op_imma_src_int8.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__cycles_elapsed.avg.per_second \
@@ -129,7 +127,7 @@ $LEASE bash -c '
         $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins local --main "$MAIN" --blocks 1 --steps 2 --q 16 --periods 1 \
         --negative "" --arms $arm >> "$O/ncu.log" 2>&1
       echo "ncu $arm rc $?" >> "$O/rc.txt"
-      $PY $D/pipes.py "$O/ncu-$arm.csv" --macs "$macs" $CARD_ARGS > "$O/pipes-$arm.json" 2>> "$O/ncu.log"
+      $PY $D/pipes.py "$O/ncu-$arm.csv" $CARD_ARGS > "$O/pipes-$arm.json" 2>> "$O/ncu.log"
       echo "pipes $arm rc $?" >> "$O/rc.txt"
     done
   fi

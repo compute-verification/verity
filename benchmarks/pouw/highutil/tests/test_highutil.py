@@ -77,17 +77,17 @@ def test_the_and_credit_per_mac_is_main_s_s8_accumulator_lowering_on_both_cards_
 
 def test_ncu_s_raw_csv_reads_as_each_kernel_s_tensor_pipe_share_and_macs():
     head = ["ID", "Process ID", "Kernel Name", *pipes.METRICS]
-    units = ["", "", "", "nsecond", "", "%", "hz"]
+    units = ["", "", "", "ns", "", "%", "hz"]
     launches = [["0", "7", "Kernel2", "2,000,000", "4000", "90", "2000000000"],
                 ["1", "7", "noise_kernel", "500,000", "0", "0", "2000000000"],
                 ["2", "7", "Kernel2", "2,000,000", "4000", "80", "1000000000"]]
     text = "==PROF== Connected to process 7\n" + "\n".join(",".join(f'"{x}"' for x in r) for r in [head, units, *launches])
     card = {"clock": {"sm": {"value": 2000}}, "rate": {"tensor": {"value": 1}}, "sm": {"count": {"value": 1}}}
-    r = pipes.pipes(text, macs=4000, card=card)
+    r = pipes.pipes(text, card=card)
     gemm, noise = r["kernels"]
     assert (gemm["name"], gemm["launches"], noise["name"]) == ("Kernel2", 2, "noise_kernel")
     assert math.isclose(gemm["s"], 4e-3) and math.isclose(gemm["tensor_active"], 0.85) and math.isclose(gemm["mhz"], 1500)
-    assert r["macs_per_op"] == 0.5 and noise["tensor_active"] == 0 and math.isclose(r["tensor_active"], 0.85 * 4 / 4.5)
+    assert r["macs"] == 4000 and noise["tensor_active"] == 0 and math.isclose(r["tensor_active"], 0.85 * 4 / 4.5)
     assert math.isclose(gemm["share_of_theta"], 4000 / (4e-3 * 1500e6))
 
 
