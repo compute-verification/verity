@@ -265,7 +265,7 @@ import Proofs.Flock.Claims.Recursion.VStarPorts
 import Proofs.Flock.Claims.Recursion.VStarPin
 import Proofs.Flock.Claims.Recursion.VStarHonest
 import Proofs.Flock.Claims.Recursion.VStarCap0
-import Proofs.Flock.Claims.Recursion.VStarCapLR
+import Proofs.Flock.Claims.Recursion.VStarCapL
 import Proofs.Flock.Claims.Recursion.HhHeld
 import Proofs.Flock.Claims.Recursion.VStarPortsM
 import Proofs.Flock.Claims.Recursion.VStarFitHeld

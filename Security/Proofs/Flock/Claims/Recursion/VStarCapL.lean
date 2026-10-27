@@ -171,7 +171,7 @@ theorem roundRows_getElem? (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ :
     (hist : List (Msg × Msg)) {i m : ℕ} (hH : i ≤ hist.length) :
     (roundRows (I.fit x) w ρ hist i)[m]? = (slotsAt x i)[m]?.map fun sl =>
       (⟨fitSlot x sl ((I.rows w ρ.1 (hist.take i)).getD m #[]), saltBytes (ρ.2 i m)⟩ : _root_.VStar.In.Row) := by
-  simp [roundRows, InnerRec.fit, List.getElem?_mapIdx, Nat.min_eq_left hH]
+  simp [roundRows, InnerRec.fit, List.getElem?_mapIdx, Nat.min_eq_left hH, Function.comp_def]
 
 theorem fitSlot_cap {x : Msg} {r : XR} {p : ℕ} {c : Circuit} {p0 p1 : _root_.Flock.Port} (hr : readX x = some r)
     (hc : r.w.parts[p]?.bind partCircuit = some c) (hp : c.ports = #[p0, p1]) (h0 : p0.name = "top")
@@ -214,14 +214,15 @@ theorem roundRows_cap_take {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
   apply List.ext_getElem?
   intro t
   rw [List.getElem?_take, List.getElem?_drop, toList_getD]
-  split
-  · rename_i ht
+  by_cases ht : t < ((rs.getD (j % rs.size) default).2.1).getD e 0
+  · simp only [ht, ↓reduceIte]
     rw [roundRows_cap hr hrs hH he ht hc hp h0 hw, List.getElem?_map, List.getElem?_range ht, Option.map_some]
-  · rename_i ht
-    rw [List.getElem?_eq_none (by simpa using ht)]
+  · simp only [ht, ↓reduceIte]
+    rw [List.getElem?_map, List.getElem?_eq_none (by simpa using ht), Option.map_none]
 
 /-! ## The cap's port `top` -/
 
+set_option maxHeartbeats 1000000 in
 /-- **Level `topsBefore k + e + 1`'s cap reads, at instance `j / R · n + t`, stream round `j`'s top-`e` row `t`**, at
 the fitted port inputs: at stream round `j < 2R` (round `k = j % R` of rep `j / R`) whose `e`-th top has `n` nodes,
 where the cap at part `capsFrom + topsBefore k + e` is V\*'s parsed `.cap l N` with `N = 2n`, the history holds both
@@ -299,7 +300,7 @@ theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
         ((List.range (((rs.getD (j % rs.size) default).2.1).getD e 0)).map fun t =>
           (capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum (1 * rs.size + j % rs.size) t).salt)).toArray :=
     ⟨_, hT, by apply Array.toList_inj.1; simp [List.flatMap_map, topRows_fit, flatMap_single, capRow],
-      by apply Array.toList_inj.1; simp [capRow]⟩
+      by apply Array.toList_inj.1; simp [capRow, Function.comp_def]⟩
   subst hTr
   subst hTs
   have hpin := capIn_ok (N := N) hT' (by
@@ -314,13 +315,19 @@ theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
   have hH' : j + 1 ≤ hist.length := by omega
   rw [roundRows_cap hr hrs hH' he ht hc hp h0 hw]
   have hj' : j / rs.size * rs.size + j % rs.size = j := Nat.div_add_mod' j rs.size
-  rcases (show j / rs.size = 0 ∨ j / rs.size = 1 by omega) with h | h
+  have h01 : j / rs.size = 0 ∨ j / rs.size = 1 := by
+    obtain ⟨q, hq⟩ : ∃ q, q = j / rs.size := ⟨_, rfl⟩
+    rw [← hq] at hjR ⊢
+    omega
+  rcases h01 with h | h
   · rw [h] at hj'
     have hcr : capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum j t =
         capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum (0 * rs.size + j % rs.size) t := by
       rw [hj']
-    rw [h, Nat.zero_mul, Nat.zero_add, hcr]
-    rw [portRow_fitPin, pair_append, portRow_ownRows (by simp <;> omega) (by simp <;> omega), Option.map_some, hpw]
+    have hi : j / rs.size * ((rs.getD (j % rs.size) default).2.1).getD e 0 + t = t := by
+      rw [h, Nat.zero_mul, Nat.zero_add]
+    rw [hi, hcr]
+    rw [portRow_fitPin, pair_append, portRow_ownRows (by simp at ht ⊢; omega) (by simp at ht ⊢; omega), Option.map_some, hpw]
     simp only [List.getElem_toArray]
     rw [List.getElem_append_left (by simpa using ht), List.getElem_append_left (by simpa using ht)]
     simp only [List.getElem_map, List.getElem_range, capRow]
@@ -329,8 +336,11 @@ theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     have hcr : capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum j t =
         capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum (1 * rs.size + j % rs.size) t := by
       rw [hj']
-    rw [h, Nat.one_mul, hcr]
-    rw [portRow_fitPin, pair_append, portRow_ownRows (by simp <;> omega) (by simp <;> omega), Option.map_some, hpw]
+    have hi : j / rs.size * ((rs.getD (j % rs.size) default).2.1).getD e 0 + t =
+        ((rs.getD (j % rs.size) default).2.1).getD e 0 + t := by
+      rw [h, Nat.one_mul]
+    rw [hi, hcr]
+    rw [portRow_fitPin, pair_append, portRow_ownRows (by simp at ht ⊢; omega) (by simp at ht ⊢; omega), Option.map_some, hpw]
     simp only [List.getElem_toArray]
     rw [List.getElem_append_right (by simp), List.getElem_append_right (by simp)]
     simp only [List.getElem_map, List.getElem_range, List.length_map, List.length_range, Nat.add_sub_cancel_left,

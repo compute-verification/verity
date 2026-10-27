@@ -30,7 +30,6 @@ namespace RecDeploy.VStarBuild
 
 open _root_.Flock
 open Claims (Msg)
-open RecDeploy.VStarCapLR
 
 /-! ## Lists -/
 
