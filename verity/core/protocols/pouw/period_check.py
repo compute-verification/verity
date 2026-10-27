@@ -3,21 +3,22 @@ PoUW's verifier of record for a period and onsite's work component) is held to b
 
 Its parameters are the verifier's own, ``{key, main, name}``: the challenger key it pins, its copy of main's
 first-parent history and the period it credits; optionally ``capacity``, the period's monitored capacity in MACs, and
-with it ``floor``, a fraction ``n/d`` in [0, 1], the least certified share of that capacity the verifier accepts
-(IDLE-COVERED, CMP-67). Its commitment is the auditor's ledger (the lines the challenger signed), its digest
-SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log and each
+with it ``floor``, a fraction ``n/d`` in [0, 1], the least share of that capacity the period's served work must be for
+the verifier to accept it (IDLE-COVERED, CMP-67). Its commitment is the auditor's ledger (the lines the challenger
+signed), its digest SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log and each
 window's evidence in the close's order (`credit.PROVED_KEYS`), or ``{fills, pins, windows}`` with the filler windows of
 the period's fill period too (`fill`, `fill.FILL_KEYS`). The check first refuses, by name (``form``), every served window
 in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not an H1 window, a
 template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than ``PouwH1Tile_v5`` (v6),
 or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the period's credit
 (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``, or rejects with the first refusal,
-``code: why``. With filler windows it is `fill.period_fill` too, also all or nothing: the credit gains ``fill``
-(``{work, k, delta, eps}``) and the profile ``fills``, and a refused fill rejects the period. The served credit is the
-same with or without them. With a capacity C the credit gains ``covered`` (``{capacity, certified, share}``): W_cert, the
-served work and the fill's work together, and W_cert/C; with a floor, a period whose W_cert/C is below it is refused
-(``idle``). Each drawn unit's and each round's proof outcome is the verifier of record's verdict, which the evidence
-carries."""
+``code: why``. With filler windows it is `fill.period_fill` too, also all or nothing, and reported, never decided on:
+the credit gains ``fill``, ``{work, k, delta, eps}`` with the profile ``fills``, or ``{refused: "code: why"}``, and the
+verdict and the served credit are the same with or without them, since no guarantee covers the fill yet (the verifier
+gains no form ahead of its proof). With a capacity C the credit gains ``covered`` (``{capacity, certified, share}``):
+W_cert, the served work and a credited fill's work together, and W_cert/C; with a floor n/d, a period whose served work
+alone is below n/d of C is refused (``idle``), the work `GUARANTEE` covers. Each drawn unit's and each round's proof
+outcome is the verifier of record's verdict, which the evidence carries."""
 from __future__ import annotations
 
 import hashlib
@@ -54,9 +55,15 @@ def params(j: Any) -> dict:
     return j
 
 
-def idle(certified: int, capacity: int, floor: str) -> str:
-    return (f"the period certified {certified} of its capacity's {capacity} MACs, a share below the verifier's floor "
-            f"{floor}: every monitored GPU-hour not served is certified filler or the period is uncovered (IDLE-COVERED)")
+def idle(served: int, capacity: int, floor: str) -> str:
+    return (f"the period served {served} of its capacity's {capacity} MACs, a share below the verifier's floor {floor}: "
+            "the floor reads served work alone until a guarantee covers the fill (IDLE-COVERED)")
+
+
+def idle_refused(served: int, capacity: int, floor: str) -> bool:
+    """Whether served work `served` is below the floor ``n/d`` of `capacity`: the one decision the floor makes."""
+    n, d = map(int, floor.split("/"))
+    return served * d < n * capacity
 
 
 def commitment(b: bytes) -> dict:
@@ -151,8 +158,8 @@ def form(nm: str, windows: Any) -> str | None:
 
 def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
     """`PouwCheck.Period.check`: the first served window in a form the period's guarantee doesn't cover (``form``),
-    else the period's credit and profile, or the first refusal; under a floor, a period whose certified share of its
-    capacity is below it (``idle``)."""
+    else the period's credit and profile, or the first refusal; under a floor, a period whose served work is below it
+    (``idle``). The fill is reported and read by no decision."""
     if (why := form(p["name"], e["windows"])) is not None:
         return "reject", f"form: {why}", None
     got, refused = Cr._period_outcomes(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["windows"],
@@ -160,21 +167,20 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] |
     if refused is not None:
         return "reject", f"{refused[0]}: {refused[1]}", None
     profile = {"period": p["name"], "windows": len(got["windows"])}
-    certified = sum(got["work"])
+    served = certified = sum(got["work"])
     if "fills" in e:
         fill, refused = F.period_fill(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["fills"],
                                       CC.lms_verify)
         if refused is not None:
-            return "reject", f"{refused[0]}: {refused[1]}", None
-        got, profile = {**got, "fill": fill}, {**profile, "fills": len(fill["work"])}
-        certified += sum(fill["work"])
+            got = {**got, "fill": {"refused": f"{refused[0]}: {refused[1]}"}}
+        else:
+            got, profile = {**got, "fill": fill}, {**profile, "fills": len(fill["work"])}
+            certified += sum(fill["work"])
     if "capacity" in p:
         cap = p["capacity"]
         got = {**got, "covered": {"capacity": cap, "certified": certified, "share": str(Fraction(certified, cap))}}
-        if "floor" in p:
-            n, d = map(int, p["floor"].split("/"))
-            if certified * d < n * cap:
-                return "reject", f"idle: {idle(certified, cap, p['floor'])}", None
+        if "floor" in p and idle_refused(served, cap, p["floor"]):
+            return "reject", f"idle: {idle(served, cap, p['floor'])}", None
     return "accept", None, (got, profile)
 
 
@@ -215,4 +221,4 @@ def case(j: Any) -> dict:
 
 
 __all__ = ["COMMITMENT_TAG", "COVERED_KEYS", "COVERED_TILE", "EVIDENCE_KEYS", "FLOOR_KEYS", "GUARANTEE", "ID",
-           "PARAMS_KEYS", "answer", "case", "check", "commitment", "digest", "evidence", "form", "idle", "params"]
+           "PARAMS_KEYS", "answer", "case", "check", "commitment", "digest", "evidence", "form", "idle", "idle_refused", "params"]

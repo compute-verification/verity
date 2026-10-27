@@ -16,8 +16,8 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
 the challenger key the verifier pins (`SampledProofs.Challenger.ChallengerKey`), its own copy of main's first-parent
 history (newest first) and the name of the period it credits, a string; optionally the period's monitored capacity C
-in MACs, a positive integer, and with it the floor, the least certified share of C the verifier accepts, a fraction in
-[0, 1] (IDLE-COVERED, CMP-67). The floor is the verifier's input, never the protocol's.
+in MACs, a positive integer, and with it the floor, the least share of C the period's served work must be for the
+verifier to accept it, a fraction in [0, 1] (IDLE-COVERED, CMP-67). The floor is the verifier's input, never the protocol's.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
 period's open commits the period's circuit, its draw K, its table rows T, its weights' root and model and its fixed
@@ -34,18 +34,20 @@ period too, in its close's order (`Fill.FILL_KEYS`).
 (`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
 window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
-`Credit.periodCredit` on them, and with filler windows `Fill.periodFill` on those, all or nothing: it accepts with the
-period's credit, or rejects with the first refusal, `code: why`. With a capacity C and a floor n/d, it then rejects a
-period whose certified work W_cert (the served work and the fill's together) is below n/d of C (`idle: why`). It never
+`Credit.periodCredit` on them, all or nothing: it accepts with the period's credit, or rejects with the first refusal,
+`code: why`. With filler windows it is `Fill.periodFill` on those too, also all or nothing, and reported, never decided
+on: no guarantee covers the fill yet, and the verifier gains no form ahead of its proof. With a capacity C and a floor
+n/d, it then rejects a period whose served work alone is below n/d of C (`idle: why`, `idleRefused`). It never
 leaves a period undecided.
 
 **Public**, on acceptance: `Credit.PeriodCredit.toJson`, each window's credited calls, its credited served work, the K
 the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it; with filler windows, and `fill`
-(`Fill.FillCredit.toJson`: each filler window's work, the fill period's K, the δ and each filler window's ε); with a
-capacity, and `covered` (`{capacity, certified, share}`: C, W_cert and W_cert/C). The served credit is the same with or
-without them, and a guarantee over a period reads it (`Credited.served`).
+(`Fill.FillCredit.toJson`: each filler window's work, the fill period's K, the δ and each filler window's ε, or
+`{"refused": "code: why"}`); with a capacity, and `covered` (`{capacity, certified, share}`: C, W_cert, the served work
+and a credited fill's together, and W_cert/C). The verdict and the served credit are the same with or without filler
+windows, and a guarantee over a period reads the served credit (`Credited.served`).
 
-**Profile**: the period's name and its number of windows, and its number of filler windows when it has them.
+**Profile**: the period's name and its number of windows, and its number of filler windows when its fill is credited.
 
 What it doesn't check: each drawn unit's statement and each round's live statement, whose proof outcomes the evidence
 carries as the verifier of record's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
@@ -89,17 +91,19 @@ structure Profile where
   windows : Nat
   fills : Option Nat := none
 
-/-- A credited period's public output: its served credit and, when it presents filler windows, its fill; with a
-capacity, its coverage (the capacity and the certified work, served and fill together). -/
+/-- A credited period's public output: its served credit and, when it presents filler windows, its fill (credited, or
+the refusal `code: why`); with a capacity, its coverage (the capacity and the certified work, served and a credited
+fill's together). -/
 structure Credited where
   served : Credit.PeriodCredit
-  fill : Option Fill.FillCredit := none
+  fill : Option (Except String Fill.FillCredit) := none
   covered : Option (Nat × Nat) := none
 
 def Credited.toJson (c : Credited) : Json :=
   let j := match c.fill with
     | none => c.served.toJson
-    | some f => c.served.toJson.setObjVal! "fill" f.toJson
+    | some (.ok f) => c.served.toJson.setObjVal! "fill" f.toJson
+    | some (.error why) => c.served.toJson.setObjVal! "fill" (Json.mkObj [("refused", .str why)])
   match c.covered with
   | none => j
   | some (cap, cert) => j.setObjVal! "covered" (Json.mkObj [("capacity", Lean.toJson cap), ("certified", Lean.toJson cert),
@@ -215,13 +219,20 @@ def form (nm : String) (windows : Json) : Option String := Id.run do
     if let some why := windowForm nm i w then return some why
   return none
 
-def idle (certified capacity : Nat) (floor : String) : String :=
-  s!"the period certified {certified} of its capacity's {capacity} MACs, a share below the verifier's floor " ++
-  s!"{floor}: every monitored GPU-hour not served is certified filler or the period is uncovered (IDLE-COVERED)"
+def idle (served capacity : Nat) (floor : String) : String :=
+  s!"the period served {served} of its capacity's {capacity} MACs, a share below the verifier's floor {floor}: " ++
+  "the floor reads served work alone until a guarantee covers the fill (IDLE-COVERED)"
+
+/-- Whether served work `served` is below the floor n/d of `capacity`: the one decision the floor makes. -/
+def idleRefused (served capacity n d : Nat) : Bool := served * d < n * capacity
+
+#guard idleRefused 0 10 1 2
+#guard !idleRefused 5 10 1 2
 
 /-- The first served window in a form the period's guarantee doesn't cover (`form`), else the period's credit
-(`Credit.periodCredit`) and, with filler windows, its fill (`Fill.periodFill`), or the first refusal; with a capacity,
-its coverage, and under a floor a period whose certified share of its capacity is below it is refused (`idle`). -/
+(`Credit.periodCredit`) and, with filler windows, its fill (`Fill.periodFill`, reported and read by no decision), or the
+first refusal; with a capacity, its coverage, and under a floor a period whose served work is below it is refused
+(`idle`). -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Credited Profile :=
   match form p.name e.windows with
   | some why => .reject s!"form: {why}"
@@ -229,21 +240,21 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Credited P
     match Credit.periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
     | .error (code, why) => .reject s!"{code}: {why}"
     | .ok pc =>
-      let profile : Profile := { period := p.name, windows := pc.windows.length }
-      let fill : Except (String × String) (Option Fill.FillCredit) := match e.fills with
-        | none => .ok none
-        | some fills => some <$> Fill.periodFill p.key c.ledger e.pins p.main p.name fills
-      match fill with
-      | .error (code, why) => .reject s!"{code}: {why}"
-      | .ok f =>
-        let profile := { profile with fills := f.map (·.work.length) }
-        let certified := pc.work.foldl (· + ·) 0 + ((f.map fun f => f.work.foldl (· + ·) 0).getD 0)
-        let covered := p.capacity.map fun cap => (cap, certified)
-        match p.capacity, p.floor with
-        | some cap, some (fs, n, d) =>
-          if certified * d < n * cap then .reject s!"idle: {idle certified cap fs}"
-          else .accept { served := pc, fill := f, covered } profile
-        | _, _ => .accept { served := pc, fill := f, covered } profile
+      let fill := e.fills.map fun fills =>
+        (Fill.periodFill p.key c.ledger e.pins p.main p.name fills).mapError fun (code, why) => s!"{code}: {why}"
+      let credited := match fill with
+        | some (.ok f) => some f
+        | _ => none
+      let profile : Profile :=
+        { period := p.name, windows := pc.windows.length, fills := credited.map (·.work.length) }
+      let served := pc.work.foldl (· + ·) 0
+      let certified := served + ((credited.map fun f => f.work.foldl (· + ·) 0).getD 0)
+      let covered := p.capacity.map fun cap => (cap, certified)
+      match p.capacity, p.floor with
+      | some cap, some (fs, n, d) =>
+        if idleRefused served cap n d then .reject s!"idle: {idle served cap fs}"
+        else .accept { served := pc, fill, covered } profile
+      | _, _ => .accept { served := pc, fill, covered } profile
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj ([("period", .str pr.period), ("windows", toJson pr.windows)] ++

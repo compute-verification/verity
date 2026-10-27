@@ -6,9 +6,10 @@ mutation each of the protocol's own framing (`FRAMING`): a parameter dropped or 
 evidence's keys other or the evidence a bare list; one period in each form the guarantee doesn't cover (`FORMS`): a
 Pearl-C pass among its windows, a circuit that is not an H1 window (a per-tile protocol's H1 tile), today's per-unit
 noise, J10-R's v6 and units at two K; and an honest period with its filler windows (``fill``, ``{fills, pins,
-windows}``), honest or with one of `pouw_fill_cases`' mutations (`FILLS`); and a period, with or without filler windows,
-whose verifier reads its coverage (`COVERAGE`): a capacity, with a floor the period meets (``covered``) or misses
-(``idle``), or a capacity or floor malformed (``params-floor``)."""
+windows}``), honest or with one of `pouw_fill_cases`' mutations (`FILLS`), which the period reports and no verdict
+reads; and a period, with or without filler windows (honest or not), whose verifier reads its coverage (`COVERAGE`): a
+capacity, with a floor its served work meets (``covered``) or misses (``idle``), or a capacity or floor malformed
+(``params-floor``)."""
 from __future__ import annotations
 
 import random
@@ -47,7 +48,7 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
     plain = name in FRAMING or name in FORMS or name in FILLS or name in COVERAGE
     d = credit_cases.period_instance(rng, "honest" if plain else name, **FORM_OF.get(name, COVERED))
     if name in FILLS or name in COVERAGE and rng.random() < 0.5:
-        d = fill_cases.with_fills(rng, d, name if name in FILLS else "fill")
+        d = fill_cases.with_fills(rng, d, name if name in FILLS else rng.choice(FILLS))
     if name == "form-pass":
         i = rng.randrange(len(d["windows"]))
         d["windows"][i] = {"context": rng.randbytes(8).hex(), "descriptor": d["windows"][i]["descriptor"],
@@ -76,13 +77,13 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def coverage(rng: random.Random, public: dict, idle: bool) -> dict:
-    """A capacity and floor for the credited period `public`: a floor its certified share meets, or (`idle`) one it
-    misses, below a capacity past what it certified."""
-    certified = sum(public["work"]) + sum(public.get("fill", {}).get("work", []))
+    """A capacity and floor for the credited period `public`: a floor its served work's share meets, or (`idle`) one it
+    misses, below a capacity past what it served (the floor reads no fill)."""
+    served = sum(public["work"])
     d = rng.randint(1, 100)
     if idle:
-        cap = certified + rng.randint(1, certified + 1)
-        return {"capacity": cap, "floor": f"{min(d, certified * d // cap + 1)}/{d}"}
-    cap = rng.randint(max(1, certified), 2 * certified + 1)
+        cap = served + rng.randint(1, served + 1)
+        return {"capacity": cap, "floor": f"{min(d, served * d // cap + 1)}/{d}"}
+    cap = rng.randint(max(1, served), 2 * served + 1)
     out = {"capacity": cap}
-    return out if rng.random() < 0.3 else {**out, "floor": f"{certified * d // cap}/{d}"}
+    return out if rng.random() < 0.3 else {**out, "floor": f"{served * d // cap}/{d}"}

@@ -25,9 +25,9 @@ window of the period's close is credited.
 | `Commitment` | the auditor's ledger, the lines the challenger signed, as canonical JSON: its period's open commits the circuit, K, T, the weights and the fixed length before any of the period's coins |
 | `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
 | `Evidence` | `{pins, windows}`: the challenger host's pins log, and each window's evidence in the close's order (`Credit.PERIOD_KEYS`, each drawn unit's and each round's proof outcome the verifier of record's verdict); or `{fills, pins, windows}`, with each filler window's evidence of the fill period `<name>:fill` in its close's order (`Fill.FILL_KEYS`) |
-| `check` | `Credit.periodCredit`, then, given `fills`, `Fill.periodFill`, then, given a floor, `idle` when W_cert/C is below it; a refusal is `code: why`, and it never leaves a period undecided |
-| `Public` | `Credit.PeriodCredit.toJson`: each window's credited calls and credited served work, K, δ and each window's ε; given `fills`, with `fill` beside them, `Fill.FillCredit.toJson` (each filler window's work, the fill period's K, δ and each filler window's ε); given a capacity, `covered` (`{capacity, certified, share}`: C, W_cert the served work and the fill's together, and W_cert/C); `work`'s rule unchanged, and a guarantee over a period reads it (`Credited.served`) |
-| `Profile` | `{period, windows}`: the period's name and its number of windows; given `fills`, `fills` its number of filler windows |
+| `check` | `Credit.periodCredit`, then, given `fills`, `Fill.periodFill`, reported and read by no decision, then, given a floor, `idle` when the served work alone is below n/d of C (`idleRefused`); a refusal is `code: why`, and it never leaves a period undecided |
+| `Public` | `Credit.PeriodCredit.toJson`: each window's credited calls and credited served work, K, δ and each window's ε; given `fills`, with `fill` beside them, `Fill.FillCredit.toJson` (each filler window's work, the fill period's K, δ and each filler window's ε) or `{refused: "code: why"}`; given a capacity, `covered` (`{capacity, certified, share}`: C, W_cert the served work and a credited fill's together, and W_cert/C); `work`'s rule unchanged, and a guarantee over a period reads it (`Credited.served`) |
+| `Profile` | `{period, windows}`: the period's name and its number of windows; given a credited fill, `fills` its number of filler windows |
 
 | module | `core_check.py` |
 | --- | --- |
