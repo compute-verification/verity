@@ -13,9 +13,9 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
   extra lanes, the paddings, the salts. `draw` reads those bytes from the OS in one read.
 * `ofDraws_ok`: what `ofDraws` keeps is what it commits: the rows, layers and root of a `Level0` it returns are `Link`'s
   of its own inputs (`toIn`), its root `Link.root toIn`, so a statement over `toIn` needs none of the stored fields.
-* `Registry`, `commit`: the loop's tables, each drawn for one table of a live session named by its coin tree's root
-  (`nameOf`, `Registry.draw`), once: a second draw for the same table, or one for a table the session does not have, is
-  refused. Each is gone when that session ends (`Registry.close`). A session's `Commit` is held to them: the root it
+* `Slots`, `commit`: the loop's tables, each drawn for one table of a live session named by its coin tree's root
+  (`nameOf`, `Slots.draw`), once: a second draw for the same table, or one for a table the session does not have, is
+  refused. Each is gone when that session ends (`Slots.close`). A session's `Commit` is held to them: the root it
   carries for its table `i` must be the `Level0` the loop drew for that session's table `i`, at that table's own `m`. So
   the level 0 a session binds is the one draw the loop made for the table, and the prover has no choice among draws.
 
@@ -191,7 +191,7 @@ structure Slot where
 /-- **The loop's tables' level 0**: each drawn one (`slots`), and the sessions a level-0 request may name (`sessions`):
 each live session's name, the hex of its coin tree's root (`nameOf`), its number and its count of tables. A slot lives
 only as long as the session it was drawn for (`close`). -/
-structure Registry where
+structure Slots where
   slots : Array Slot := #[]
   sessions : Array (String × Nat) := #[]
   tables : Array (Nat × Nat) := #[]
@@ -202,13 +202,13 @@ structure Registry where
 def nameOf (a : ByteArray) : String := hexOf (a.extract 5 69)
 
 /-- Session `sid`, named `name` once its `Hello`'s answer checked, with `n` tables. -/
-def Registry.name (R : Registry) (name : String) (sid n : Nat) : Registry :=
+def Slots.name (R : Slots) (name : String) (sid n : Nat) : Slots :=
   { R with sessions := R.sessions.push (name, sid), tables := R.tables.push (sid, n) }
 
 /-- **A level 0 drawn for table `j` of the session named `name`**, kept for it; else why not: a name no live session has,
 a table the session does not have, or a table the loop already drew a level 0 for in this session. One draw a table is
 what makes the level 0 the session binds the loop's one draw, not one the prover picked among several. -/
-def Registry.draw (R : Registry) (name : String) (j : Nat) (l : Level0) : Except String Registry :=
+def Slots.draw (R : Slots) (name : String) (j : Nat) (l : Level0) : Except String Slots :=
   match R.sessions.find? (·.1 == name) with
   | none => .error s!"a level-0 request for a session the loop is not serving (coin tree root {name})"
   | some (_, sid) =>
@@ -219,15 +219,15 @@ def Registry.draw (R : Registry) (name : String) (j : Nat) (l : Level0) : Except
     else .ok { R with slots := R.slots.push { l0 := l, owner := sid, table := j } }
 
 /-- Session `sid` ended: its name and every level 0 drawn for it, bound or not, are gone. -/
-def Registry.close (R : Registry) (sid : Nat) : Registry :=
+def Slots.close (R : Slots) (sid : Nat) : Slots :=
   { slots := R.slots.filter (·.owner != sid), sessions := R.sessions.filter (·.2 != sid),
     tables := R.tables.filter (·.1 != sid) }
 
 /-- **Session `sid`'s `Commit`**, of the session's tables `tables` (each with its statement's `m`), carrying `roots`: the
 root of table `i`, in table order, the `Level0` the loop drew for this session's table `i`, at its table's `m`, which the
 session then owns; else why it does not leave. -/
-def commit (R : Registry) (sid : Nat) (tables : Array (String × Nat)) (roots : List (String × ByteArray)) :
-    Except String Registry := do
+def commit (R : Slots) (sid : Nat) (tables : Array (String × Nat)) (roots : List (String × ByteArray)) :
+    Except String Slots := do
   if roots.map (·.1) != tables.toList.map (·.1) then
     throw s!"a Commit whose roots are of {roots.map (·.1)}, where the session's tables are {tables.toList.map (·.1)}"
   let mut S := R.slots
@@ -243,7 +243,7 @@ def commit (R : Registry) (sid : Nat) (tables : Array (String × Nat)) (roots : 
   return { R with slots := S }
 
 /-- Session `sid`'s table `t`'s level 0, once its `Commit` left. -/
-def ofSession (R : Registry) (sid : Nat) (t : String) : Option Level0 :=
+def ofSession (R : Slots) (sid : Nat) (t : String) : Option Level0 :=
   (R.slots.find? (·.bound == some (sid, t))).map (·.l0)
 
 end Flock.Firewall.Level0
