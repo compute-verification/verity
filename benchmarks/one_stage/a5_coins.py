@@ -138,7 +138,8 @@ def lines(path: Path) -> list[str]:
 
 
 #: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
-#: has signed its commitment, before its `ssh -R` tunnel listens on the peer's 127.0.0.1:PORT (live_challenger/serve.py)
+#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
+#: coins' path)
 TUNNEL_WAIT_S = 120
 
 
@@ -467,6 +468,7 @@ class Local:
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text(f"{LOCAL_HOST} research@127.0.0.1\n{LOCAL_PEER} research@127.0.0.1\n")
+        (root / "coin-ports").write_text(f"{LOCAL_PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
         self.pin = on_main(main)
         self.host.pins.write_text(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
         self.params = lms.Params(64, *LOCAL_PARAMS)
@@ -478,8 +480,6 @@ class Local:
         A, host = self.A, self.host
         body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(host, session, body)
-        i = argv.index("--peer")
-        del argv[i:i + 2]
         argv[argv.index("--port") + 1] = "0"
         argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
