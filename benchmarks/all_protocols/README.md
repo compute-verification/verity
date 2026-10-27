@@ -27,10 +27,12 @@ every machine of a census deployment, the pooled total first and the per-window 
     proof blocks are paid for once over that machine's windows (`HorizonLeakAccepted`): `Fmax = ⌈ln(1/δ)/q⌉` with `q`
     the least `k_i/n_i`, `16 · Fmax + ⌈log2 (N + 1)^Fmax⌉` bits for them with `N = Σ n_i`, plus each window's schedule,
     cell, free-input and jitter terms, which add over the period (free inputs dominate while the loop's window registers
-    none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. Its `share` is K over the period's output bits,
-    16 a unit; `fleet` is the deployment's machines joined by a union bound at δ/machines each (not in Lean); each
-    window's own `K` stands beside it. `HorizonLeakAccepted` is conditional on two per-window inputs not yet discharged (proofs' `SampledKSLive`
-    and the live `SampledLeakAccepted`), so this K is cited as conditional.
+    none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. The jitter term is 0 at jitter bound 1,
+    assumed (J) (`NetTiming.JitterBounded`), which the certifier doesn't meet at that bound: an offset the prover
+    chooses within a bucket reaches the client. Each K says so (`jitter_term`). Its `share` is K over the period's
+    output bits, 16 a unit; `fleet` is the deployment's machines joined by a union bound at δ/machines each (not in
+    Lean); each window's own `K` stands beside it. `HorizonLeakAccepted` is conditional on two per-window inputs not yet
+    discharged (proofs' `SampledKSLive` and the live `SampledLeakAccepted`), so this K is cited as conditional.
 - `verity_all_protocols/table.py`: the protocols (`TABLE`) and the one subprotocol interface. A subprotocol is
   `legs/<component>.py` defining `leg(period_dir, node, out) -> dict`. `period_dir` is the window's loop records (the
   window the loop wrote) with `period.json` (the window's index, the circuit registered before the loop ran, the run
@@ -64,8 +66,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   unregistered input rows (`circuit.json`): on acceptance `public.K`, the bits a covert sender in the server can move over the link in the
   period, except with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose
   tampered period must reject). `eps` sums its terms' δ (each audit's, and in the rows form each link-window's scan's),
-  so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. The session
-  stays in the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client
+  so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. Its jitter
+  term is 0 at jitter bound 1, assumed (J), which each answer's row in `summary.json` says (`jitter_term`). The
+  session stays in the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client
   certificates and out records only, and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what
   the verdict still stands on: the records are the certifier-only path's, not the network certifier's own cells; the
   device runs beside the server, not on the auditor's machine through the gate; and the output tie is computed in the
@@ -102,6 +105,15 @@ every machine of a census deployment, the pooled total first and the per-window 
   `--of-record` is S1's run of record (below). Every run writes its mode (`of_record` and its exact flags) to
   `$OUT/mode.json`, each window's `period.json` and report (`mode`) and its `ALLP` line, so its evidence says whether it
   counts.
+- `verity_all_protocols/parties.py` and `verity_all_protocols/deployment.py`: step 0's table for `verity run CONFIG`
+  (`tools/verity/cli/verity_cli/run.py`; `examples/toy_network/`), until each protocol's package holds its own parties.
+  `parties.py` is the toy's machine for sampled proofs' core parties (compute-accounting's); its own entry point, which
+  `parties.sh` runs, reads `tests/fixtures/sampled-proofs.toml`. `deployment.py` is what `verity run` reads: what each
+  of the six subprotocols and the toy declare to a configuration (`MANIFESTS`, `TOY`), each subprotocol's parties
+  (`PARTIES`: the network certifier's relay as an entry, around `tie.relay`, and sampled proofs' core parties in one
+  live run, `live`), and the toy's machine for them (`Machine`: `parties.Machine`'s, its serving tied to the relay,
+  and the network certifier's period check around `legs/certifier.py` as the verifier's `component`), whose verifier
+  gives each period's verdict through onsite's `product` over exactly the listed components.
 
 | name | subprotocol | file | owner | state |
 | --- | --- | --- | --- | --- |

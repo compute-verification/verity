@@ -11,8 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # suite; `integrations/torch_loop`: the loop each period serves; `benchmarks/prove_path/records_audit.py`,
 # `benchmarks/one_stage` and `verity_numerical.bench`: the integrity leg's audit, which the opt-in end-to-end test runs;
 # `benchmarks/network_traces`: the communication leg's certifier session (its plan, its stub and its records).
-# `examples/toy_network`: the configuration the sampled-proofs roles' tests read (`test_parties`).
-inputs = ["verity", "benchmarks/all_protocols/legs", "integrations/torch_loop", "examples/toy_network",
+inputs = ["verity", "benchmarks/all_protocols/legs", "integrations/torch_loop",
           "benchmarks/prove_path/records_audit.py",
           "benchmarks/one_stage", "benchmarks/census/deployments.json", "benchmarks/network_traces",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
