@@ -103,7 +103,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. The registration's window names
   the public file the statement reads (`window.public_file`, its SHA-512, `proofs.with_public`), and the check refuses
   evidence naming another (`publicWhy`, mirrored by `proofs.public_why`; `public_of_accept` in
-  `Security/Proofs/Properties/SampledProofs/OneStageZkPublic.lean`). The check runs
+  `Security/Proofs/Properties/SampledProofs/OneStageZkPublic.lean`). It names the draw's size too
+  (`window.draw_coins`, the 64-byte coins the draw opens, `proofs.with_draw`), and the check refuses a draw of another
+  size and a session past `MAX_ROUNDS` rounds or with a use of 2^64 F128s (`sizesWhy`, mirrored by `proofs.draw_why`
+  and `proofs.rounds_why`; `draw_of_accept` and `rounds_of_accept` in that file, and `sizesAt_of_accept` in
+  `Security/Proofs/Properties/Verity/SampledSizes.lean`, the per-session size bounds the canon line reads). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
