@@ -193,7 +193,7 @@ theorem prob_play_eq_zero (ns : List ℕ) (sign : ByteArray → List Bool → By
 
 /-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
 which subprotocol `a`'s claim fails with probability above the errors summed makes the conclusion fail for a verifier
-that accepts everything. So the one model-level failing instance (ONE19's, through that subprotocol's `_nontrivial`)
+that accepts everything. So the one model-level failing instance (through that subprotocol's `_nontrivial`)
 gives the theorem's, with no instance of its own. -/
 theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hreg : V.Registered θ F) (a : Audit)
@@ -217,8 +217,8 @@ theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d :
   exact lt_irrefl _ ((hle.trans (h θ F c σ)).trans_lt hlt)
 
 /-- **`soundness_at`'s event has probability `0` at the honest deployment**: at registered files and the honest
-commitment `commit θ F`, where the honest lemma of each claim the deployment decides holds there, the deployment's honest
-prover makes the theorem's event null. -/
+commitment `commit θ F`, where the honest lemma of each claim the deployment decides holds there, the deployment's
+honest prover makes the theorem's event null. -/
 theorem soundness_at_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) (D : Deployment)
     (commit : ByteArray → ByteArray → ByteArray) (h : ∀ a, D.Decides a → V.HonestHolds commit a) (θ F c : ByteArray)
     (hreg : V.Registered θ F) (hc : c = commit θ F) :
