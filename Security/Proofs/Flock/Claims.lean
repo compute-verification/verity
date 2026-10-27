@@ -123,6 +123,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowD
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.RoundWords
 import Proofs.Flock.Claims.Recursion.CoinTie
 import Proofs.Flock.Claims.Recursion.CoinPos
 import Proofs.Flock.Claims.Recursion.CapOpens
@@ -259,6 +260,12 @@ import Proofs.Flock.Claims.Recursion.VStarFinal
 import Proofs.Flock.Claims.Recursion.SlotsDeployed
 import Proofs.Flock.Claims.Recursion.VStarTraceAt
 import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+import Proofs.Flock.Claims.Recursion.VStarAccept
+import Proofs.Flock.Claims.Recursion.VStarPortNames
+import Proofs.Flock.Claims.Recursion.VStarDense
+import Proofs.Flock.Claims.Recursion.VStarTopsOk
+import Proofs.Flock.Claims.Recursion.HonestHalf
+import Proofs.Flock.Claims.Recursion.NumsFixedR
 import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Proofs.Flock.Claims.Recursion.LabelsFull

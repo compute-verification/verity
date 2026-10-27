@@ -40,14 +40,12 @@ theorem honest_partAccepts_final (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (
     let bL : Brings := { bR with rd := L.readers }
     let I := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
     let D := recBound _root_.Flock.Readable.relation bR L DeployedR.bdR.IVStar
-    NumsFixed bL.st → StagedSetsUp FlockDeploy.sha512 I.V bL → WitSatisfies FlockDeploy.sha512 I.V bL →
+    NumsFixed bL.st →
     ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}, Claims.Recursion.R D I x w →
       D.parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
       (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).out = .acc →
-      InnerAccepts FlockDeploy.sha512 I.V x (runCs (I.V.k (xIOf x) + kS x) r)
-        (((Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).msgs.take (I.V.k (xIOf x) + kS x)).map
-          histOf) →
+      HonestWitSatisfies FlockDeploy.sha512 I.V bL x w ω r →
     ∀ s < nS x,
       let hist := ((Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).msgs.take (I.V.k (xIOf x))).map histOf
       let wO := bL.ref.wit w ω.1 hist s
@@ -83,7 +81,7 @@ theorem honest_partAccepts_final (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (
         ∀ i < L.rounds x, ∀ m, L.held x s wO i = some m → ms.getD i [] = m) →
       Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
         Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x (Claims.coinSeq r) ms := by
-  intro b bR L bL I D hN hS hW w st hR hx hf ω r hacc hI s hs hist wO ms hTm hnc hA hpE hsch hSt hTops hok hWd hhFit
+  intro b bR L bL I D hN w st hR hx hf ω r hacc hW s hs hist wO ms hTm hnc hA hpE hsch hSt hTops hok hWd hhFit
   obtain ⟨xr, rs, hxr, hrs⟩ := hsch
   obtain ⟨stg, xO, hSP⟩ := hSt
   have hrun : I.V.k (xIOf x) + kS x ≤ (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).msgs.length :=
@@ -92,7 +90,7 @@ theorem honest_partAccepts_final (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (
   have hlen : RestRead.kI x - 1 ≤ hist.length := by
     simp only [hist, List.length_map, List.length_take]
     omega
-  exact honest_partAccepts_deployed mask Ir b0 x aux nOf hd recRest decI hN hS hW hR hx hf ω r hacc hI s hs hTm hnc
+  exact honest_partAccepts_deployed mask Ir b0 x aux nOf hd recRest decI hN hR hx hf ω r hacc hW s hs hTm hnc
     hA hpE (hhFit (hfit_A0 OpenRows.elemR hxr hrs hSP hlen (hok hTops) (hWd xr hxr)))
 
 end RecDeploy.VStarHonest
