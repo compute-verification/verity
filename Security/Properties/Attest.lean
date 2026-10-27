@@ -27,9 +27,10 @@ the period circuit's knowledge soundness (`Claims.KS`: `Pr[proof accepted ∧ E'
 of the party, all `B_τ` gets of the party is its code's messages on its true inputs (`ProverSeesMessages`), and its key
 signs each LMS leaf once, so `B_τ` is an EUF-CMA adversary against the party's keys with their signing oracle.
 
-**Zero knowledge.** `LivenessContentFree`: what the party's code sends in the clear (its liveness records) is the same on
-any two runs whose inputs differ only in the records' bytes. `AuditorSeesSkeleton`: under `Faithful`, `Confined` and
-`WitnessPathPrivate`, what the auditor sees of the party is that, so it learns nothing of the records from the party.
+**Zero knowledge.** `LivenessContentFree`: what the party's code sends in the clear (its liveness records) is what it
+sends on its inputs' skeleton, the records' bytes dropped. `AuditorSeesSkeleton`: under `Faithful`, `Confined` and
+`WitnessPathPrivate`, what the auditor sees of the party is that, on the party's coins and the skeleton of its true
+inputs, so it learns nothing of the records from the party.
 What it learns from the prover is the period's proofs, whose statement `x` is public (the identity, the deployment, the
 party, the attachment, the link, the period's index, the positions read, and outputs of at most 16 bits) and whose
 witness is `(lower, certificate, signature, count, root, records read, their paths)`: their zero knowledge is C-Flock's
@@ -225,18 +226,22 @@ noncomputable def forger {Ω : Type} (τ : Ω → PeriodRun) (ω : Ω) : Option 
   | some f => some f
   | none => rootSignature
 
+/-- **`Pr[B_τ outputs a forgery]`**: over coins `ω` uniform over `Ω`, the probability that the forger's output on the
+run `τ ω` verifies over a message the devices never signed under its key. -/
+noncomputable def forgeryPr (p : Lms.Params) {Ω : Type} [Fintype Ω] (τ : Ω → PeriodRun) : ℝ :=
+  Claims.Pr fun ω => ∃ pk m σ, forger τ ω = some (pk, m, σ) ∧ Forges p (τ ω).dev pk m σ
+
 /-- **A period's proof reads the device's records, at every prover strategy.** For coins `ω` uniform over any finite
 `Ω` (the prover's tape, the devices' coins, the verifier's and the extractor's) and the run `τ ω` of any prover
 strategy against the devices, read through the extractor: the probability that the check accepts the run's values and
 they are not the device's is at most the probability that `B'_τ` outputs a SHA-512 collision plus the probability that
-`B_τ` outputs a forgery against the devices' keys. -/
+`B_τ` outputs a forgery against the devices' keys (`forgeryPr`). -/
 def PeriodSound : Prop :=
-  ∀ (p : Lms.Params) (Ω : Type) [Fintype Ω] [Nonempty Ω] (τ : Ω → PeriodRun),
-    Claims.Pr (fun ω => let r := τ ω
-      Attest.check p r.identity r.deployment r.party r.root r.reads = .ok true ∧
-        ¬ OfDevice r.dev r.identity r.deployment r.party r.root r.reads) ≤
-      (collisionFinder Ω τ).Pr sha512 +
-        Claims.Pr (fun ω => ∃ pk m σ, forger τ ω = some (pk, m, σ) ∧ Forges p (τ ω).dev pk m σ)
+  ∀ (p : Lms.Params) (Ω : Type) [Fintype Ω] [Inhabited Ω] (τ : Ω → PeriodRun),
+    Claims.Pr (fun ω =>
+      Attest.check p (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads = .ok true ∧
+        ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads) ≤
+      (collisionFinder Ω τ).Pr sha512 + forgeryPr p τ
 
 /-! ## What the auditor and the prover see of the party -/
 
@@ -284,23 +289,25 @@ def code {Ω : Type} (deployment : ByteArray) (party : String) (I : Ω → ByteA
 def inClear (ms : List (Ch × ByteArray)) : List (Ch × ByteArray) := ms.filter fun m => dest m.1 = .clear
 
 /-- **The party's public records carry no content.** For any keys, coins and signing function, what the party's code
-sends in the clear on two input lists that differ only in the records' bytes is the same. -/
+sends in the clear on any inputs is what it sends on their skeleton (`Step.skeleton`, each record's bytes dropped): a
+function of the skeleton, so the same on any two inputs that differ only in the records' bytes. -/
 def LivenessContentFree : Prop :=
   ∀ {Ω : Type} (deployment : ByteArray) (party : String) (I : Ω → ByteArray) (hss : Ω → Nat → ByteArray → ByteArray)
-    (ω : Ω) (xs xs' : List Step), xs.map Step.skeleton = xs'.map Step.skeleton →
-      inClear ((code deployment party I hss).messages ω xs) = inClear ((code deployment party I hss).messages ω xs')
+    (ω : Ω) (xs : List Step),
+      inClear ((code deployment party I hss).messages ω xs) =
+        inClear ((code deployment party I hss).messages ω (xs.map Step.skeleton))
 
-/-- **The auditor sees no record of the party's.** Two runs of the party with its keys from the same coins, each
-`Faithful` to its code, `Confined` and with its witness path private (`WitnessPathPrivate`), on true inputs that differ
-only in the records' bytes, show the auditor the same. -/
+/-- **The auditor sees no record of the party's.** A run of the party `Faithful` to its code, `Confined` and with its
+witness path private (`WitnessPathPrivate`) shows the auditor what its code sends in the clear on its coins and the
+skeleton of its true inputs, as it goes on the wire: a function of its coins and the skeleton, so two runs from the
+same coins on inputs that differ only in the records' bytes show the auditor the same. -/
 def AuditorSeesSkeleton : Prop :=
   ∀ {Ω Wi A : Type} (deployment : ByteArray) (party : String) (I : Ω → ByteArray)
     (hss : Ω → Nat → ByteArray → ByteArray) (wire : Ch × ByteArray → Wi)
-    (r r' : Parties.Run Ω (Ω × Nat × List ByteArray) Step Ch ByteArray Wi A),
+    (r : Parties.Run Ω (Ω × Nat × List ByteArray) Step Ch ByteArray Wi A),
     Parties.Faithful (code deployment party I hss) r → Parties.Confined dest wire r → Parties.WitnessPathPrivate r →
-    Parties.Faithful (code deployment party I hss) r' → Parties.Confined dest wire r' → Parties.WitnessPathPrivate r' →
-    r.coins = r'.coins → r.truth.map Step.skeleton = r'.truth.map Step.skeleton →
-      Parties.auditorView wire r = Parties.auditorView wire r'
+      Parties.auditorView wire r =
+        (inClear ((code deployment party I hss).messages r.coins (r.truth.map Step.skeleton))).map wire
 
 /-- **The prover gets of the party only its code's messages.** A run of the party `Faithful` to its code, `Secret` and
 `Confined`: all the prover gets of it is its code's messages on its true inputs from its coins, as they go on the wire,
