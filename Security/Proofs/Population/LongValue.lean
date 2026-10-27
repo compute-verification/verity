@@ -215,8 +215,8 @@ theorem card_image_some_le {ι : Type} {O : Finset S} {V : Type} [Fintype V] [De
   rw [this]
   exact card_image_le
 
-/-- **Daniel's form over `Option V`**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the egress
-takes at most `#honest · C(|U|, m) · (|V| + 1) ^ (m E)` values. -/
+/-- **The uniform form over `Option V`**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the
+egress takes at most `#honest · C(|U|, m) · (|V| + 1) ^ (m E)` values. -/
 theorem opt_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V)

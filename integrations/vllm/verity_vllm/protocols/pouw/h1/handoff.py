@@ -1,4 +1,4 @@
-"""An H1 window handed from its serving process to a CPU process for its close (VLLM-68), so the GPU is held only while it
+"""An H1 window handed from its serving process to a CPU process for its close, so the GPU is held only while it
 serves: `H1Run.close` commits the window's empty calls, their tables and its rounds on the CPU, and the serving process's
 GPU lease ends only when it exits.
 
