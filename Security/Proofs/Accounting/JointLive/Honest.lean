@@ -23,7 +23,7 @@ open Verity Verity.Game
 /-- An event that fails on every run has probability 0 at every strategy. -/
 theorem prob_eq_zero_of_none {O : Type} {p : O → Prop} (h : ∀ o, ¬ p o) (G : Game O) (s : Strategy G) :
     prob p G s = 0 :=
-  le_antisymm ((prob_mono (fun o ho => h o ho) G s).trans (prob_false G s).le) (zero_le _)
+  le_antisymm ((prob_mono (fun o ho => h o ho) G s).trans (prob_false G s).le) zero_le
 
 theorem read_const (st : Step Unit (Fin 3)) (w : Window) (a : Fin 3) :
     Schedule.read (fun _ => st) w a = w.len * st.read a := by
