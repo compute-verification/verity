@@ -41,7 +41,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
 
-#: For each unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` is shared by all.
+#: For each unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` and ``settings`` are shared by all.
 ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
@@ -350,8 +350,8 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
 def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
     """A new package under ``verity`` is a new unit, listed in ``ALLOWED``; what is outside every unit is a grouping's
     ``__init__.py`` (``ml``, ``core``, ``core.protocols``) or a file directly under ``verity/``, and imports the standard
-    library and nothing else: ``verity/__init__.py`` re-exports nothing and ``verity/errors.py`` is shared by every unit, the
-    stdlib-only references included."""
+    library and nothing else: ``verity/__init__.py`` re-exports nothing, and ``verity/errors.py`` and the settings registry
+    ``verity/settings.py`` are shared by every unit, the stdlib-only references included."""
     offenders = []
     for path in _sources():
         if _unit(_dotted(path)) is not None:
