@@ -572,10 +572,10 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   an unsigned P and a SASS check that the IADD3 with two negated sources is one instruction. The native route-U kernel
   (`benchmarks/pouw/kernels/pouw_gemm.cu`, `ncp_route_u`) reads X + β already formed, so its SASS shows the u8 × s8 `IMMA` but not the
   forming step; `ncp-v1` stays at β = 128.
-- **γ is conditional on TTNCP_U(0.5%).** The red team found that A2, as first written, required the model program to
-  reproduce every output, not only the checked words. Restricted to the checked words, A2 makes the Theorem D chain
-  equivalent to TT_NCP rather than a reduction to milder assumptions (`Pouw.SecurityProofs.Dimension.A2WordsIff`). So
-  TTNCP_U, TT_NCP over the route-U checked values, stays the named conjecture, and every γ here holds only under it.
+- **γ is conditional on TTNCP_U(0.5%).** Theorem D's A2 (algebraic sufficiency of a machine's programs), restricted
+  to the checked words, is the per-word cost itself: it restates TT_NCP rather than reducing it to milder assumptions,
+  so it is not stated in Lean. TTNCP_U, TT_NCP over the route-U checked values, stays the named conjecture, and every
+  γ here holds only under it.
 
 - **P.** `ncp-v1` uses the word-granular production P v1.1: a SHAKE256 Fisher-Yates over the k/4 aligned words from
   seed `pous-pouw-ncp-Pword-v1`; repair 1 (seed + `/repair`) so that no word lands in its own 16-step; repair 2 (seed +

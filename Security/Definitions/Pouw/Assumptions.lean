@@ -1,5 +1,4 @@
 import Definitions.Pouw.Assumptions.Deadline
-import Definitions.Pouw.Assumptions.Dimension.A2Words
 import Definitions.Pouw.Assumptions.Dimension.Assumptions
 import Definitions.Pouw.Assumptions.Dimension.Embed
 import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions

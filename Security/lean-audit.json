@@ -9661,12 +9661,6 @@
    "assumptions": [],
    "type_hash": "aded53ec2e9f63def66fa95a6aa3556232c8a28a2b09e37a65ad3a573f8c3432"
   },
-  "Pouw.SecurityProofs.Dimension.A2WordsIff": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Dimension.A2WordsIff : Pouw.Guarantees.Dimension.A2WordsIff"],
-   "assumptions": [],
-   "type_hash": "d70e520ee34caac86538e78234078690949ecaa654bf5728b7fa184fdd70bee7"
-  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Dither.FleetSound : Pouw.Guarantees.Dither.FleetSound"],
@@ -11639,7 +11633,6 @@
    "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.Barrier.Generic": "lemma: leaves the list under the 5:11 PM ruling",
-   "Pouw.SecurityProofs.Dimension.A2WordsIff": "lemma: leaves the list under the 5:11 PM ruling",
    "Pouw.SecurityProofs.EndToEnd": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.GammaFromTT": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.BiasU8Iff": "lemma: leaves the list under the 5:11 PM ruling",

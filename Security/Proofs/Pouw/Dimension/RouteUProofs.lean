@@ -10,13 +10,12 @@ import Proofs.Pouw.NCP.RouteUWordProofs
 
 * `wordUSubV0`, `wordCUSubV0`: the shift is a function of `F₁` alone (`NCP.RouteUWordProofs.checkedUPos_sub`).
 * `combUV0Iff`, `secondDifferenceU`, `indepModShift` (generic), `indepModU`.
-* `pricedCountU`, `algBoundU`, `ttNCPAlgU`, `ttNCPOfA2U`, `algBoundCausalU`, `mixingLemmaU`: `count_le` (and the
+* `pricedCountU`, `algBoundU`, `ttNCPAlgU`, `algBoundCausalU`, `mixingLemmaU`: `count_le` (and the
   mixing lemma's own argument) on the route-U family, whose independence modulo `V₀` is `indepModShift` applied to
   the unbiased family's (`indep_sub`, `indep_subC`).
 * `algBoundWrappedU`, `algBoundWrappedUUnsigned`: the wrap is the identity for a signed `R` and `k ≤ 2^15`, or a
   permutation matrix and `k ≤ 2^16` (`wrapped_eq_wordU`, `NCP.RouteUWordProofs.int7Int32UPos`).
-* `a1U`: both spans are complements of `V₀` in `T ⊔ V₀` (the modular law), so A1 transfers; then `algBound4090U`,
-  `ttNCPOfA1A2U` and `ttNCPOfA1A2W1U`.
+* `a1U`: both spans are complements of `V₀` in `T ⊔ V₀` (the modular law), so A1 transfers; then `algBound4090U`.
 * `algWitnessU`, `algSharpU`, `alg4090WitnessU`, `algWrappedWitnessU`: one priced instruction at 16 per route-U word.
 -/
 
@@ -145,42 +144,6 @@ theorem not_event_of_bound {k m n : ℕ} {U : Finset ℕ} {C γ₀ : ℝ} (h16 :
 theorem ttNCPAlgU : TTNCPAlgU := by
   intro β k m n N R A B U L P γ₀ h16 hk hind hU hL hH hout hγ hγ1
   exact not_event_of_bound h16 hk (by exact_mod_cast algBoundU β k m n N R A B U L P hind hU hL hH hout) hγ hγ1
-
-/-- **TT_NCP from A2 into AlgM_16 on route U.** -/
-theorem ttNCPOfA2U : TTNCPOfA2U := by
-  intro β k m n N R A B U M q γ₀ γ₂ h16 hk hind hU hA2 hout hγ₂ hγ₀ hγ hev
-  obtain ⟨L, P, hL, hH, hPout, hcost⟩ := hA2 q
-  have hb := algBoundU β k m n N R A B U L P hind hU hL hH
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩)
-  obtain ⟨k', rfl⟩ := h16
-  have hk' : 1 ≤ k' := by omega
-  have h3 : 3 * (16 * k') / 16 - 1 = 3 * k' - 1 := by omega
-  rw [h3] at hb
-  have hbR : (16 : ℝ) * (U.card * (m * n) * (3 * k' - 1)) ≤ cost P := by
-    have : ((16 * (U.card * (m * n) * (3 * k' - 1)) : ℕ) : ℝ) ≤ cost P := by exact_mod_cast hb
-    push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at this
-    linarith
-  rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
-  rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have hk'R : (0 : ℝ) < k' := by exact_mod_cast hk'
-  have hid : (1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')) = 16 * (3 * k' - 1) := by
-    field_simp
-  have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
-  have step1 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (1 - γ₀) ≤
-      (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) :=
-    mul_le_mul_of_nonneg_left hγ (by positivity)
-  have step2 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      (1 - γ₂) * (16 * (U.card * (m * n) * (3 * k' - 1))) := by
-    rw [show (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      (1 - γ₂) * (U.card * (m * n) * ((1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')))) by ring, hid]
-    ring
-  have step3 : (1 - γ₂) * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ (1 - γ₂) * cost P :=
-    mul_le_mul_of_nonneg_left hbR (by linarith)
-  have e1 : (U.card : ℝ) * (3 * (m * (16 * k') * n)) = U.card * (m * n) * (3 * (16 * (k' : ℝ))) := by ring
-  rw [e1] at hev
-  linarith
 
 /-- **Theorem D with causal inputs on route U.** -/
 theorem algBoundCausalU : AlgBoundCausalU := by
@@ -340,49 +303,6 @@ theorem algBound4090U : AlgBound4090U := by
     mul_le_mul_of_nonneg_right hc (mul_nonneg (by linarith) (Nat.cast_nonneg _))
   have h3 : γ₁ * Module.finrank ℚ W ≤ γ₁ * D := mul_le_mul_of_nonneg_left hWD hγ0
   linarith
-
-/-- **`TT_NCP_of_A1_A2` on route U.** -/
-theorem ttNCPOfA1A2U : TTNCPOfA1A2U := by
-  intro β k m n N R A B U M q cs c γ₀ γ₁ γ₂ h16 hk hind hU hA2 hA1 hc hout hγ10 hγ11 hγ₂ hγ₀ hγ hev
-  obtain ⟨L, P, hL, hH, hPout, hcost⟩ := hA2 q
-  have hb := algBound4090U β k m n N R A B U L P cs c γ₁ hind hU hL hH
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩) hA1 hc hγ10 hγ11
-  obtain ⟨k', rfl⟩ := h16
-  have hk' : 1 ≤ k' := by omega
-  have h3 : 3 * (16 * k') / 16 - 1 = 3 * k' - 1 := by omega
-  rw [h3] at hb
-  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hb
-  rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
-  rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have hk'R : (0 : ℝ) < k' := by exact_mod_cast hk'
-  have hid : (1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')) = 16 * (3 * k' - 1) := by
-    field_simp
-  have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
-  set g := (1 - γ₂) * (1 - γ₁) with hg
-  have step1 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (1 - γ₀) ≤
-      (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) :=
-    mul_le_mul_of_nonneg_left hγ (by positivity)
-  have step2 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      g * (16 * (U.card * (m * n) * (3 * k' - 1))) := by
-    rw [show (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      g * (U.card * (m * n) * ((1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')))) by ring, hid]
-    ring
-  have step3 : g * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ (1 - γ₂) * cost P := by
-    have h4 : (1 - γ₁) * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ cost P := by linarith
-    calc g * (16 * (U.card * (m * n) * (3 * k' - 1)))
-        = (1 - γ₂) * ((1 - γ₁) * (16 * (U.card * (m * n) * (3 * k' - 1)))) := by rw [hg]; ring
-      _ ≤ (1 - γ₂) * cost P := mul_le_mul_of_nonneg_left h4 (by linarith)
-  have e1 : (U.card : ℝ) * (3 * (m * (16 * k') * n)) = U.card * (m * n) * (3 * (16 * (k' : ℝ))) := by ring
-  rw [e1] at hev
-  linarith
-
-/-- **`TT_NCP_of_A1_A2` at W1's constants on route U.** -/
-theorem ttNCPOfA1A2W1U : TTNCPOfA1A2W1U := by
-  intro β k m n N R A B U M q γ₀ γ₁ γ₂ h16 hk hind hMR hU hA2 hA1 hout hγ10 hγ11 hγ₂ hγ₀ hγ
-  exact ttNCPOfA1A2U β k m n N R A B U M q 8 2 γ₀ γ₁ γ₂ h16 hk hind hU hA2 (hA1 hind hMR) (by norm_num) hout hγ10
-    hγ11 hγ₂ hγ₀ hγ
 
 /-- One priced instruction at price `c` per non-final route-U word of the units in `U`. -/
 noncomputable def honestU (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
