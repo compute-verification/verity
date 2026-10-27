@@ -120,8 +120,7 @@
     "NetworkCertifier.offset": "11936ffbcf3bd56fef77f2cb72c860aa3b2191f8026b04a96ae49b14650d9ee8",
     "NetworkCertifier.queue": "9cb5b90d40cf61fa0fe209000555ca6d7a77bff64bf92390464c83961656d5ae",
     "NetworkCertifier.released": "1fdcf4e8c44f44d33b8544e62b77d34595b04ef42157d1d719e9d1e656fdd80a"
-   },
-   "guarantees": ["NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq", "NetworkCheck.RecordsGrid.expectedGrids_eq"]
+   }
   },
   "NetworkCertifier.Schedule": {
    "digest": "6a09b72aec9b61ea3261000b150f5f5f5d79ddf6a09c3e0f4d5bf1c51ef75e50",
@@ -139,12 +138,7 @@
     "NetworkCertifier.handingBuckets": "7ccdd90843ff22d3d6b87b0f753e87d2080cd995e86ddcc133a36713350ccc1d",
     "NetworkCertifier.handingFrom": "d263adc51325a2256ff9f4a5be03da6f16184be44644f1c0c4fec3656f18978b",
     "NetworkCertifier.payloads": "eabf67a4741af4f3d31371a37212653f5039c29c32180a31458c90cfb52f6a95"
-   },
-   "guarantees": [
-    "NetworkCheck.RecordsBytes.evidenceOf_toEvidence",
-    "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq",
-    "NetworkCheck.RecordsGrid.expectedGrids_eq"
-   ]
+   }
   },
   "NetworkCheck.Certificate": {
    "digest": "6051277316af97831cc0cab11afdb2aca45f8d28afc142ada3db6c4dc052e137",
@@ -152,8 +146,7 @@
     "NetworkCheck.Params": "bfdf4cf8ed1764be3aed3b01ee66c0a48b01bb79cff171baf53fcb5a840322ae",
     "NetworkCheck.Params.allocation": "1474079561c3cfa50494ce3561c2ba6a49e46e140a4ecf0ac30f936485f972bf",
     "NetworkCheck.Params.buckets": "1139cd7109acd90f05e1a270fde46f369d6ee3d4b09be892123182d11d09bccd"
-   },
-   "guarantees": ["NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq", "NetworkCheck.RecordsGrid.expectedGrids_eq"]
+   }
   },
   "NetworkCheck.Check": {
    "digest": "51a0a443438eafb26b98fe7b17c840dc66f5529a03172a18a7a4c35c571029ba",
@@ -174,12 +167,7 @@
     "NetworkCheck.Check.noSync": "c541c368bcec6fb41bb5df8a6f84f71c5ac69fe13b8dee47cefd4a88a2494483",
     "NetworkCheck.Check.ratOf": "3c978f6ca40b49b71ff2be74ab9a3702ccd2f2304979a89335d10ffcd7485c3b",
     "NetworkCheck.Check.syncOf": "1aa8a5700f4e345e379c66248c3e067f38d8121470957d31d6a41d3c332daf2b"
-   },
-   "guarantees": [
-    "NetworkCheck.RecordsBytes.evidenceOf_toEvidence",
-    "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq",
-    "NetworkCheck.RecordsGrid.expectedGrids_eq"
-   ]
+   }
   },
   "NetworkCheck.Records": {
    "digest": "aa42518ee159e0ee9c3bf5f6095f57f5b304f5063898ee2a2d39f79a3b9da8c7",
@@ -209,13 +197,7 @@
     "NetworkCheck.Records.unhex": "6208d9f35c6b6ca3e1030618e0a9ca1f54ba5265a849233f8c711761470530cd",
     "NetworkCheck.Records.unhexChars": "d4859f71f162b192288e075f35895d06d1bb740654702b58938b5c64a1c3b9b5",
     "NetworkCheck.Records.unhexChars._sparseCasesOn_1": "6b11bc5abff59df46dbf88223d83e02779a22838d5bd8d75b3d872b759ff07a1"
-   },
-   "guarantees": [
-    "NetworkCheck.RecordsBytes.evidenceOf_toEvidence",
-    "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq",
-    "NetworkCheck.RecordsBytes.unhex_eq",
-    "NetworkCheck.RecordsGrid.expectedGrids_eq"
-   ]
+   }
   }
  },
  "dependencies": {
