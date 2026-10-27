@@ -1,4 +1,4 @@
-"""The GEMM coordinate as an IR composite, parameterised by the k16 tensor-core step.
+"""The GEMM coordinate as a composite, parameterised by the k16 tensor-core step.
 
     DotBf16_v2{K, DOT}          f32 accumulator after K/16 `DOT` steps in ascending k from a zero accumulator
     GemmCoordinate_v2{K, DOT}   bf16 word: cvt.rn.bf16.f32(DotBf16)   (Triton `acc.to(bf16)`; the same on sm_80/sm_90)
@@ -6,7 +6,7 @@
                                 K - T bf16 +0 words (a masked k loop's loads), for T <= K: attention's PV at T keys
     PvRow_v1{T, K, D, DOT}      (p: bf16[T], v0..v{T-1}: bf16[D]) -> bf16[D]: one head's attention output row, dim d
                                 `GemmCoordinatePad_v1{T, K, DOT}` of p and (v0[d], ..., v{T-1}[d]); each key's V row is its own
-                                D-word row (128 bytes at D = 64), as a unit reads it whole from the unit that wrote it
+                                D-word row (128 bytes at D = 64), as a proof block reads it whole from the proof block that wrote it
     PvRowPad_v1{T, K, D, DOT}   (p: bf16[T], v0..v{T-1}: bf16[D], n: u16) -> bf16[D]: `PvRow_v1{T, K, D, DOT}` with key t's
                                 p word and V row +0 words unless t < n, so for 1 <= n <= T it is `PvRow_v1{T=n}` on the first
                                 n keys whatever the rest hold; n, the key count, is a position port (`KEY_COUNT`), the one
@@ -37,8 +37,12 @@ over it names no architecture (`prims`), and a refusal for any other step:
                                       `ScaledMmS8Coordinate_v1{K, DOT}` on the concatenations of x's and wrow's R parts, so
                                       that each operand is R rows of at most 262,144 bits (`UNIT_CLASS_MAX`) when K is
                                       past 32,768
+    ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}  (ScaledMmS8CoordinateRows_v1's ports, r: bf16) -> bf16: the residual
+                                      add in the coordinate's epilogue, `Bf16AddF2fp_v1(r, ScaledMmS8CoordinateRows_v1{K, R,
+                                      DOT})`: the coordinate rounded to bf16, then added to the residual stream's word r
+                                      as `Bf16AddRow_v1` adds it, so the projection's own word is never committed
     ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
-                                      `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
+                                      `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` proof block)
 
 census/v1 counts `GemmAccumulatorS8_v1`'s products as served by none (`census.serves_none`): it has no committed words of its
 own, so Lean's `Accounting.Gates.roleOf` puts its steps at `Site.other`.
@@ -47,10 +51,8 @@ own, so Lean's `Accounting.Gates.roleOf` puts its steps at `Site.other`.
 K mod k products. The s8 Definitions also refuse K >= `S8_K_LIMIT` = 2^17 (`integer.exact_k_limit`), where an s8 x s8 sum can
 leave s32 and the step clamps: below it the accumulator word is the exact sum, in any k order.
 
-Provenance: veritor `verity.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
-`GEMM_AMPERE` (b1.py) / `GEMM_HOPPER` (hopper.py).  The `_v1` forms, which named the Ampere step in their bodies, were not
-carried over: the static form is the definition the proof work targets, and their bodies would now name a different
-primitive id (see `prims.AmpereBF16TcDot16`).
+There are no `_v1` forms: they named the Ampere step in their bodies, which would now name a different primitive id (see
+`prims.AmpereBF16TcDot16`), and the static form is the definition the proofs target.
 """
 from __future__ import annotations
 
@@ -71,7 +73,7 @@ from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
            "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
            "GemmCoordinateNvf4", "GemmCoordinatePad", "KEY_COUNT", "PvRow", "PvRowPad", "S8_K_LIMIT", "ScaledMmS8",
-           "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "s8_gemm"]
+           "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "ScaledMmS8ResidualCoordinateRows", "s8_gemm"]
 
 _SCALE = Value(8)
 
@@ -165,7 +167,10 @@ def GemmCoordinatePad(B, S, x, wrow):
         return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, wrow)
     space, idx, leaf = B.call(P.const(16, 0)).refs[0]
     zeros = broadcast(space, idx, leaf, S.K - S.T)
-    pad = lambda a: Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+
+    def pad(a):
+        return Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+
     return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), pad(x), pad(wrow))
 
 
@@ -174,14 +179,14 @@ def GemmCoordinatePad(B, S, x, wrow):
            conformance="exact-model-tested", refuse=_refuse_d(_refuse_t(_K16)))
 def PvRow(B, S, p, *vs):
     """One head's attention output row at T <= K keys: for each of V's D dims, `GemmCoordinatePad_v1{T, K, DOT}` of the
-    probability row p and that dim's column of the T key rows v0..v{T-1}. One unit a head: each key row is D words (128 bytes
-    at D = 64), over the 111 bytes C-Flock needs of some row of a unit, where a coordinate's own two rows are 2T bytes."""
+    probability row p and that dim's column of the T key rows v0..v{T-1}. One proof block a head: each key row is D words (128 bytes
+    at D = 64), over the 111 bytes C-Flock needs of some row of a proof block, where a coordinate's own two rows are 2T bytes."""
     v = Coll(Array(S.T, Array(S.D, BF16)), concat([r.refs for r in vs]))
     return B.batch(bind(GemmCoordinatePad, T=S.T, K=S.K, DOT=S.DOT), p, v, axes=(None, 1))
 
 
-#: a padded unit's key count ``n``: a run input of kind position, public as an unpadded unit's T is. No coin port is beside
-#: it, so the Definition it types is never a seed (`tests/test_seed_ports.py`)
+#: a padded proof block's key count ``n``: a run input of kind position, public as an unpadded proof block's T is. No coin port is
+#: beside it, so the Definition it types is never a seed (`tests/test_seed_ports.py`)
 KEY_COUNT = Ports(params={"n": In(kind="position")})
 #: the key count's type: one unsigned word
 U16 = Value(16)
@@ -299,11 +304,26 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
 def ScaledMmS8CoordinateRows(B, S, *ports):
     """`ScaledMmS8Coordinate_v1{K, DOT}` on x and W's row each given as R consecutive parts of K/R codes, called on their
     concatenations: the same word for every input. Past K = 32,768 an s8 operand is wider than `partition_v2.UNIT_CLASS_MAX`
-    (262,144 bits), so a unit reads it as R rows."""
+    (262,144 bits), so a proof block reads it as R rows."""
     R = S.R
-    cat = lambda parts: Coll(Array(S.K, S8), concat([p.refs for p in parts]))
+
+    def cat(parts):
+        return Coll(Array(S.K, S8), concat([p.refs for p in parts]))
+
     x, sx, wrow, sw = cat(ports[:R]), ports[R], cat(ports[R + 1:2 * R + 1]), ports[2 * R + 1]
     return B.call(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, wrow, sw)
+
+
+@composite("ScaledMmS8ResidualCoordinateRows", 1, ["K", "R", "DOT"],
+           lambda S: ((*ScaledMmS8CoordinateRows.signature(S)[0], ("r", BF16)), BF16),
+           conformance=ScaledMmS8Coordinate.conformance, refuse=_refuse_r(_S8))
+def ScaledMmS8ResidualCoordinateRows(B, S, *ports):
+    """The residual add in a W8A8 coordinate's epilogue: `Bf16AddF2fp_v1(r, y)`, y `ScaledMmS8CoordinateRows_v1{K, R, DOT}`
+    of the other ports (its bf16 word, `cvt.rn.bf16.f32` of the scaled sum) and r the residual stream's word, in
+    `Bf16AddRow_v1`'s order (a the stream, b the projection). The same word as that add of the coordinate's word for every
+    input, with y never a committed value of its own."""
+    y = B.call(bind(ScaledMmS8CoordinateRows, K=S.K, R=S.R, DOT=S.DOT), *ports[:-1])
+    return B.call(F.Bf16AddF2fp, ports[-1], y)
 
 
 @composite("ScaledMmS8", 1, ["K", "N", "DOT"],

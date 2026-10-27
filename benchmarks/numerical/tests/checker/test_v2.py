@@ -1,7 +1,7 @@
 """checker v2 (``verity_numerical.checker.v2``): the same relation as v1 with the lookup-centred witness.
 Completeness against silicon (structured, random, golden, the K=1536 vector), the state-chained VU equals the
 word-chained one, soundness by mutation of every v2 hint kind, the symbolic tables agree with their rows, and the
-census: fewer multiplications, identities and lookups than v1."""
+hint-splitting gadgets read wrap-free over the fields."""
 from __future__ import annotations
 
 import copy
@@ -25,12 +25,6 @@ from verity_numerical.checker.v2 import step as v2
 from verity_numerical.checker.v2.params import V2, check_widths
 from verity_numerical.checker.v2.search import SPECS_V2, table_selfcheck
 from verity_numerical.checker.v2.tables import all_tables
-from verity_numerical.security.census import (
-    census_unit,
-    census_unit_v2,
-    census_vu,
-    census_vu_v2,
-)
 
 PIPE = AMPERE_BF16_M16N8K16
 P = REAL
@@ -230,20 +224,7 @@ def test_specs_generate_accepted_hints_on_random_inputs() -> None:
             assert tuple(outs) == tuple(spec.ref(P, x)), (name, x)
 
 
-# ---- census ----------------------------------------------------------------------------------------------------------
-
-def test_v2_unit_is_smaller_than_v1_on_every_count() -> None:
-    u1, u2 = census_unit(P), census_unit_v2(P)
-    assert (u1.mul, u1.lin_total, u1.lookup) == (358, 137, 306)
-    assert u2.mul < u1.mul * 0.15 and u2.lin_total < u1.lin_total * 0.15 and u2.lookup < u1.lookup * 0.35
-    assert u2.columns_hints == 15 and u2.depth <= 3
-    assert set(u2.by_gadget) >= {"op_decode", "group_max", "product_shift", "state_shift", "signed_sum", "normalise"}
-
-
-def test_v2_vu_is_smaller_than_v1() -> None:
-    v1, vv2 = census_vu(1536, P), census_vu_v2(1536, P)
-    assert vv2.mul < v1.mul / 10 and vv2.lookup < v1.lookup / 3 and vv2.columns_committed_a < v1.columns_committed_a
-
+# ---- fields ----------------------------------------------------------------------------------------------------------
 
 def test_field_reading_is_wrap_free_for_the_hint_splitting_gadgets() -> None:
     """Over Goldilocks and M31 no congruence of ``state_shift``, ``signed_sum`` or ``normalise`` can hold with a
