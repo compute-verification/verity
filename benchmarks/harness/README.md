@@ -23,8 +23,8 @@ verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in
 A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms and the modules of its experimental arms, its sweep (another file in
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
-which never enter identity). Loading is strict: an unknown key, a wrong type or an unknown GPU id is an error before
-anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
+which never enter identity). Loading is strict: an unknown key (an engine setting outside `presets.ENGINE_SETTINGS`
+included), a wrong type or an unknown GPU id is an error before anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
 `model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
 reads), which a dispatched point recomputes and refuses to run on when it differs.
 
@@ -182,7 +182,7 @@ GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3). A preemp
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
-count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8gpu`). The job runs
+count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, the only one). The job runs
 `benchmarks/harness/run_point.sh`, which uses the node's pinned-vLLM environment (`benchmarks/harness/env.sh`, which a
 benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher forwards, else the first that exists of
 `$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's) and
