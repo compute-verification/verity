@@ -1,0 +1,16 @@
+# The toy network example's rung on the ladder (examples/README.md). Every party is on one CPU machine (config.toml's
+# `local`), so level 2 needs the challenger, the network certifier and the verifier moved off it.
+protocol = ["sampled_proofs", "certifier"]
+workload = "torch_loop"
+level = 1
+
+[placement]
+prover = "local"      # the workers and the firewall
+verifier = "local"
+challenger = "local"
+certifier = "local"   # the network certifier
+
+[evidence]
+# `verity run` of a configuration `verity config new` wrote, two periods on vy-nebius-cpu-4, both accepted
+# (README.md): at 757f6e4d67, and at dd9b43a64f
+runs = ["r20261027-023857-d6ef", "r20261027-010850-30d7"]

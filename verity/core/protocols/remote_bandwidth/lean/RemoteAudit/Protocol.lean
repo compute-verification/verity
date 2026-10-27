@@ -5,20 +5,24 @@ import RemoteAudit.Difftest
 /-!
 # A remote bandwidth session as a core protocol
 
-The verifier's session (`Flight.run`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`), the
-bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms the
-difftest's `session` reads (`Difftest.sessionFn`):
+The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`),
+the bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms
+the difftest's `session` reads (`Difftest.sessionFn`):
 
-* params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, with
-  `groups_per_coin` and the pace's `in_flight` when they name them) and the verifier's clock floor;
+* params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, its windows a
+  draw's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
+  property of the code covers (`sessionOf`): a session at one window in flight (the pace's `in_flight` 1, `Flight`), so
+  what it replays is `Shared.run g` (`Session.run` at g = 1), which `Properties.RemoteAudit.Shared` and the memory line
+  are stated on;
 * the commitment: the registration (`Difftest.registrationOf`: node, blocks, payload root, codec seed, codec, receipt
   kind, `bind`, layout, rows), which the prover's payload root fixed before any coin; its digest `Registration.digest`;
 * the evidence `{"append_coins": [hex, …], "coins": [hex, …], "events": [...]}`: the verifier's log of the session, its
-  coins (W challenges and ⌈W/g⌉ openings coins, then the append coins in the order drawn) and every event it took with
+  coins (W challenges and W openings coins, then the append coins in the order drawn) and every event it took with
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
-  (a window not yet verified); it accepts once every window is.
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
+  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
 
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
@@ -67,15 +71,25 @@ def decodeEvidence (b : ByteArray) : V Evidence := do
   keys j ["append_coins", "coins", "events"] "evidence"
   pure ⟨← J.get j "append_coins" "evidence", ← J.get j "coins" "evidence", ← J.arr j "events" "evidence"⟩
 
-/-- The session after the log's events, and its windows a coin. -/
-def replay (p : Params) (reg : Registration) (e : Evidence) : V (Session.State × Nat) := do
+/-- The session the log replays: its parameters, its windows a draw's openings coin (`groups_per_coin` g,
+`Difftest.perCoinOf`), its coins, append coins and clock floor as `Difftest.sessionOf` reads them, and its events as
+`Difftest.eventOf` reads them. It refuses the one form no property of the code covers, one window in flight (the pace's
+`in_flight` 1, `Flight`), the one where `Flight.run f g` is not `Shared.run g` (`Flight.run_two`). -/
+def sessionOf (p : Params) (e : Evidence) :
+    V (Session.Params × Nat × Array ByteArray × Array ByteArray × Nat × Array Session.Event) := do
   let j := Json.mkObj [("append_coins", e.appendCoins), ("coins", e.coins), ("not_before_ns", p.notBeforeNs),
     ("params", p.params)]
   let (params, coins, appendCoins, notBeforeNs) ← Difftest.sessionOf j
   let g ← Difftest.perCoinOf j
-  let f ← Difftest.flightOf j
+  if (← Difftest.flightOf j) != 2 then throw "in_flight is 2: no property covers one window in flight"
   let events ← e.events.mapM Difftest.eventOf
-  let (_, s) ← Flight.run f g (Session.State.init params reg coins appendCoins notBeforeNs) events
+  pure (params, g, coins, appendCoins, notBeforeNs, events)
+
+/-- The session after the log's events through the Lean verifier (`Shared.run g` from `State.init`, `Session.run` at
+g = 1), and its windows a draw. -/
+def replay (p : Params) (reg : Registration) (e : Evidence) : V (Session.State × Nat) := do
+  let (params, g, coins, appendCoins, notBeforeNs, events) ← sessionOf p e
+  let (_, s) ← Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
   pure (s, g)
 
 /-- Each draw's receipts and draws, a draw being `g` consecutive windows (`audit.pooled_windows`). -/

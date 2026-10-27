@@ -107,13 +107,13 @@ def config_of(row: str) -> dict[str, Any]:
 
 def row_part(row: str, profile: str | None = None) -> dict[str, Any] | None:
     """The row's config (`config.RowConfig`, its file without the requests), the file's sha256 and the κ profile its Match folds with
-    (`profile`, else the role's: `engine.profiles.generic.module_name`).  None for a row without a file."""
+    (`profile`, else the role's: `observe.fold.profiles.generic.module_name`).  None for a row without a file."""
     p = WORKLOADS / f"{row}.json"
     if not p.is_file():
         return None
     cfg = RowConfig.load(p)
     if profile is None and cfg.case:
-        from verity_vllm.engine.profiles.generic import module_name
+        from verity_vllm.observe.fold.profiles.generic import module_name
         profile = module_name(cfg.case, int(config_of(row).get("tp") or 1))
     return {"file": f"workloads/{row}.json", "sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "profile": profile,
             "config": {k: v for k, v in cfg.to_json().items() if k != "requests"}}

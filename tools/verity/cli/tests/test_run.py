@@ -14,7 +14,7 @@ from verity.core.deploy import config as K
 from verity_cli import run as R
 
 ROOT = Path(__file__).resolve().parents[4]
-EXAMPLE = ROOT / "examples" / "toy-network" / "config.toml"
+EXAMPLE = ROOT / "examples" / "toy_network" / "config.toml"
 REG = R.registry()
 D = sys.modules[R.REGISTRY[1]]
 COMMIT = "a" * 40

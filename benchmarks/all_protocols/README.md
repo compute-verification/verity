@@ -96,7 +96,7 @@ every machine of a census deployment, the pooled total first and the per-window 
   `$OUT/mode.json`, each window's `period.json` and report (`mode`) and its `ALLP` line, so its evidence says whether it
   counts.
 - `verity_all_protocols/parties.py` and `verity_all_protocols/deployment.py`: step 0's table for `verity run CONFIG`
-  (`tools/verity/cli/verity_cli/run.py`; `examples/toy-network/`), until each protocol's package holds its own parties.
+  (`tools/verity/cli/verity_cli/run.py`; `examples/toy_network/`), until each protocol's package holds its own parties.
   `parties.py` is sampled proofs' parties (compute-accounting's). `deployment.py` is what `verity run` reads: what each
   of the six subprotocols and the toy declare to a configuration (`MANIFESTS`, `TOY`), the toy's workers, the network
   certifier's two parties around `tie.relay` and `legs/certifier.py`, the order a machine's parties run in, and

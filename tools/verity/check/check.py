@@ -724,7 +724,10 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup limit over it leaves, v2 or v1 (a pod's
-    /proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope)."""
+/proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope). A v2
+cgroup's page cache (active_file and inactive_file in its memory.stat) is in its memory.current, but the kernel reclaims it at
+the limit, so it counts as left, as in slot.py's `memory_gb`: 27 Oct 00:48Z, vy-nebius-cpu-1's user slice held 336 GB of
+cache in its 691 of 700 GB, and main's after-landing lean-agreement refused to run with "0 GB"."""
     def read(p: Path) -> str | None:
         try:
             return p.read_text().strip()
@@ -739,7 +742,9 @@ def memory_gb(root: Path = Path("/")) -> int:
             for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
                 m, used = read(c / "memory.max"), read(c / "memory.current")
                 if m and m.isdigit():
-                    left.append(int(m) - int(used if used and used.isdigit() else 0))
+                    stat = dict(ln.split()[:2] for ln in (read(c / "memory.stat") or "").splitlines() if len(ln.split()) >= 2)
+                    cache = sum(int(stat[k]) for k in ("active_file", "inactive_file") if stat.get(k, "").isdigit())
+                    left.append(int(m) - int(used if used and used.isdigit() else 0) + cache)
     v1 = root / "sys/fs/cgroup/memory"
     m, used = read(v1 / "memory.limit_in_bytes"), read(v1 / "memory.usage_in_bytes")
     if m and m.isdigit() and int(m) < 1 << 60:         # v1 writes "no limit" as a number near 2^63
