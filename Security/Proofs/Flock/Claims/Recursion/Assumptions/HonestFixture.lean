@@ -43,8 +43,17 @@ firewall, at f1asm 16a44e3b86). Its outer tree, with each part's `inst.bin`, `fo
 * `IrShaped`: passed in r20261027-025051-8aa6 (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
   both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
 * `TopsAt`: holds in 8aa6 (the reps' tops differ at levels 1–3).
-* `HonestWitSatisfies`: `vstar-trace --sat --session` on all 10 parts in 8aa6, pending.
-* `NoCollAt`: a digest-set check over each part's recorded and setup SHA-512 calls on the same tree, pending.
+* `HonestWitSatisfies`: passed in 8aa6 (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat --session`): all 10
+  parts, each at the table `verify --zk` sets up at the draw its session records, under the zero mask and a random
+  one, 20 of 20 lines with no bad rows, pin or region bits.
+* `NoCollAt`: passed in r20261027-033500-eeb1 (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
+  --nocoll`): per part and over all 10 together, no SHA-512 output has two inputs (`findColl = none` on full input
+  bytes): 44,952 calls, 32,323 distinct outputs for 32,323 distinct inputs. A planted pair (a recorded output under an
+  input one byte longer) is caught. The calls are a superset of `NoCollAt`'s: every hm96 salt and row call the part's
+  trace computes at every port and instance slot (padding included, each row digest held to the trace's own last
+  compression), not only `layR`'s recorded ones; and for `vcallsAt`, every input the verifier's setup hashes at the
+  part's statement and draw, logged by the logging oracle's setup (`setupLogged`), which is proved equal to the fast
+  one.
 
 16a44e3b86's verifier has `checkRoundWords`, `VStar/In` and `VStar/Trace`, and beside `DAt`'s it only refuses more
 (`checkEndReads`, and `--ks-form`'s port roots, which the run doesn't pass). What the run witnesses is weaker than the
@@ -63,7 +72,7 @@ block and range for range, on parts Python's `rec_vstage.stage` staged:
   its drawn level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and so did L0 of the recorded
   session (`test_the_recorded_plain_leaf_sessions_satisfy`).
 
-8aa6's checks run on 06c6's own tree. Neither difftest compares `refP`'s inner rounds (the inner prover `Ir`'s
+8aa6's and eeb1's checks run on 06c6's own tree. Neither difftest compares `refP`'s inner rounds (the inner prover `Ir`'s
 messages) with Python's builder. -/
 def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
