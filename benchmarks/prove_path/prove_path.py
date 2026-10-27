@@ -51,8 +51,9 @@ Two kinds of committed run:
         [--cap-bits L]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
-    prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE --out DIR \\
-        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] [--workers N] [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
+        --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
+        [--workers N] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -106,8 +107,9 @@ Two kinds of committed run:
   requests).
 * **window-commit** (the prover, V3c): the served window committed as that Circuit's units (`window_commit_of_advice`):
   slot k is the advice's k-th request, its row (occupancy, prompt length, ids) its ingress prompt, its values its sealed
-  record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, opened against the
-  committed weights root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
+  record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, composed from the
+  checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints``) and opened against the committed weights
+  root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the slot rows a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
@@ -1323,9 +1325,11 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     population and members, the registered weights whose root the window's is (``held``) and those it isn't, whose reads
     are free (``free``), and the seconds each part took."""
     import numpy as np
+    from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.check.replay.opening import CommittedStore
+    from verity_vllm.config import CHECKPOINTS
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
@@ -1360,7 +1364,10 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     p = compiler.load(0, 1, requests)
     k0 = next(iter(p.progs))
     tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
-    opened = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), None)
+    model = registered.phi.model
+    ck = WR.CheckpointIndex(a.checkpoint_dir, checkpoints_manifest=str(a.checkpoints or CHECKPOINTS), model=model["repo"],
+                            revision=model["revision"])
+    opened = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), ck)
     read = CPU.provider(opened, ProgramIndex(p.progs[k0], program_dir=p.dirs[k0]).prefix, set())
     sizes = {label: ty.leaves for label, ty in dict(low.fn.signature()[0])[WC.WEIGHTS].fields}
 
@@ -1387,7 +1394,6 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
         rows.append(row)
     lap("slots")
     reg = WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
-    model = registered.phi.model
     if (reg.repo, reg.revision) != (model["repo"], model["revision"]):
         raise ValueError(f"{a.registration} registers {reg.repo}@{reg.revision}'s weights, not the served "
                          f"{model['repo']}@{model['revision']}'s")
@@ -1558,6 +1564,9 @@ def main(argv: list[str] | None = None) -> int:
                    "0600 where it doesn't exist), the same every window of a period")
     p.add_argument("--registration", required=True, help="the committer's weights registration under --key "
                    "(weights-registration), the verifier's pins (records_audit.py audit --registered)")
+    p.add_argument("--checkpoint-dir", required=True, help="the served checkpoint, whose tensors the served weights are "
+                   "opened from against the committed weights root")
+    p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
     p.add_argument("--law", default="subset:1", help="the proof service's law of the window")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")

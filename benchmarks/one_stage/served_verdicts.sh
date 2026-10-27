@@ -73,15 +73,14 @@ vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 
 V3C=${V3C_CLASS:-4,32,4} v3c_ok=0; vtag=${V3C//,/-}
 REG=$D/weights-registration.json
+CK=$("$PY" -c 'import sys; from verity_vllm.config import checkpoint_dir; print(checkpoint_dir(*sys.argv[1:4]) or "")' \
+  "$REPO" "$REV" "$HF_HOME")
 register() {  # the committer's weights registration under its key, once a serve dir, before any window's draw: the verifier's pins
   [ -f "$REG" ] && return 0
-  local ck
-  ck=$("$PY" -c 'import sys; from verity_vllm.config import checkpoint_dir; print(checkpoint_dir(*sys.argv[1:4]) or "")' \
-    "$REPO" "$REV" "$HF_HOME")
-  [ -d "$ck" ] || { say "WEIGHTS-REGISTRATION: no checkpoint dir of $REPO@$REV under $HF_HOME"; return 1; }
+  [ -d "$CK" ] || { say "WEIGHTS-REGISTRATION: no checkpoint dir of $REPO@$REV under $HF_HOME"; return 1; }
   # off the GPU (it isn't leased here): the weights hashed by h1.registered's NumPy path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" \
-    --checkpoint-dir "$ck" --key "$D/private/committer.key" --out "$REG") \
+    --checkpoint-dir "$CK" --key "$D/private/committer.key" --out "$REG") \
     > "$OUT/weights-registration.json" 2> "$OUT/weights-registration.err" \
     || { say "WEIGHTS-REGISTRATION refused: $(grep -v '^ ' "$OUT/weights-registration.err" | tail -1 | cut -c1-800)"; return 1; }
   say "WEIGHTS-REGISTRATION: $(cut -c1-1500 "$OUT/weights-registration.json")"
@@ -93,7 +92,7 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
   [ -f "$REG" ] || { say "WINDOW-COMMIT class $V3C: no weights registration"; return 1; }
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout "${V3C_TIMEOUT:-120m}" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
-    --key "$D/private/committer.key" --registration "$REG" --out "$VW/window") \
+    --key "$D/private/committer.key" --registration "$REG" --checkpoint-dir "$CK" --out "$VW/window") \
     > "$OUT/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
   local rc=$?
   if [ "$rc" != 0 ]; then
