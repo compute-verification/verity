@@ -111,7 +111,7 @@ SUM_CHUNK = 64
 def _moe_sum_chunks(B, S, y):
     """`MoeSum_v1{TOPK,H}` on bits as a batch over its columns in chunks of `SUM_CHUNK`: member j is `MoeSum_v2{TOPK,64}` on
     columns [64j, 64j + 64) of the TOPK rows, and the last H mod 64 columns one `MoeSum_v2{TOPK,H mod 64}`. Each member reads a
-    TOPK x 1024-bit row, past one SHA-512 block (C-Flock's M0 refuses a unit whose rows all fit in one, as the coordinate's
+    TOPK x 1024-bit row, past one SHA-512 block (C-Flock's circuit prover refuses a unit whose rows all fit in one, as the coordinate's
     TOPK x 16 bits do), and both nodes read only the parameter and are returned whole, so the cut takes each member on its own
     (`verity.ml.circuits.cut.separable`)."""
     n, r = divmod(S.H, SUM_CHUNK)

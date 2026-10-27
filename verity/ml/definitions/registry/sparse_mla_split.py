@@ -31,8 +31,8 @@ quadratic interpolator, `verity.ml.circuits.ops.boolean.mufu.Fit` over `mufu_lg2
 from column 19, square_shift 1, shift 2), and v(0) = 0.  With E the exponent field and t = (E + 1) mod 128, M is the 43-bit
 `t << 36 | v` for E >= 127 and its complement below (|log2 x| 2^36 less one), and the word is M truncated to 24 significant bits:
 exponent bit_length(M) + 90, sign E < 127, +0 at M = 0.  A zero or subnormal gives -inf, a negative word or a NaN the MUFU NaN
-0x7FFFFFFF, +inf +inf.  The coefficients reproduce every mantissa at [1, 2) and 2^20 random words measured on sm_120 (run
-r20261004-060203-ba52); the measurements leave C0 a range in 39 segments, which moves v in three and no word at any exponent (the
+0x7FFFFFFF, +inf +inf.  The coefficients reproduce every mantissa at [1, 2) and 2^20 random words measured on
+sm_120; the measurements leave C0 a range in 39 segments, which moves v in three and no word at any exponent (the
 tests scan them), so `mufu_lg2_undetermined` names only the 126 powers of two below 1, where v(0) = 0 is unmeasured.  FA3 takes the
 log of a split's sum, in [1 - 2^-24, 2^12).  sm_90 is unmeasured: `tests/properties/glm53_fa3_split_capture_gpu.py` measures it.
 
@@ -65,6 +65,7 @@ from verity.ml.circuits.ops.mufu import DivFullRcp
 from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import sparse_mla as M
 from verity.ml.definitions.registry.prims import BF16, F32
@@ -82,7 +83,7 @@ BLOCK_N, MAX_SPLIT_BATCH = 64, 992
 _CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 split path, combine kernel and their SASS (the module "
          "docstring's files) at hdim 64 / hdimv 512; tests/properties/glm53_fa3_split_capture_gpu.py is its hardware check")
 _LG2_CONF = ("model-untested on cc 9.0: fit to cc 12.0's lg2.approx.ftz.f32 (every mantissa at [1, 2) and 2^20 random words, run "
-             "r20261004-060203-ba52, 0 mismatches); total on encodings, `mufu_lg2_undetermined` names the words the measurement "
+             f"{EVIDENCE['cc12_difftest']['run']}, 0 mismatches); total on encodings, `mufu_lg2_undetermined` names the words the measurement "
              "leaves open; tests/properties/glm53_fa3_split_capture_gpu.py measures cc 9.0")
 
 

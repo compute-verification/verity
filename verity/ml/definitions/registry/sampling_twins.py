@@ -11,9 +11,9 @@ from verity.ml.definitions.registry.sampling import M32, ONE_BITS, _f, _ftz, _lo
 
 
 def add_rz_ftz_v1_model(a: int, b: int) -> int:
-    """[F-stoch-r17-01 WITNESS -- not an evaluator] the `add.rz.ftz.f32` model that `nv_log1pf` used up to R17 (stoch M-0581 / revb
-    M-0603), kept word for word so the finding stays reproducible: it is round-to-NEAREST, not toward zero -- both toward-zero branches
-    step the fp32 value `rf` with `math.nextafter(rf, 0.0)` (one DOUBLE ulp) and `_u` rounds that straight back to `rf`'s word, so
+    """The `add.rz.ftz.f32` model that `nv_log1pf` used before, kept word for word so the finding stays reproducible: it is
+    round-to-NEAREST, not toward zero -- both toward-zero branches step the fp32 value `rf` with `math.nextafter(rf, 0.0)`
+    (one DOUBLE ulp) and `_u` rounds that straight back to `rf`'s word, so
     add_rz_ftz_v1_model(a, b) == ftz(RN32(a + b)) on every input (0 differences on 300,000 random pairs; a true RZ differs on 21.5 %).
 
     Its only caller was `nv_log1pf` (`__fadd_rz(a, 1.0f)`), where the sum feeds ONLY the binade selector `e`; the exhaustive scan of all
@@ -37,7 +37,7 @@ def add_rz_ftz_v1_model(a: int, b: int) -> int:
 
 
 def nv_log1pf_v1_model(a: int) -> int:
-    """[F-stoch-r17-01 WITNESS] `nv_log1pf` as it evaluated up to R17: `__fadd_rz` modelled RN (`add_rz_ftz_v1_model`).  Test-only:
+    """`nv_log1pf` as it evaluated before: `__fadd_rz` modelled RN (`add_rz_ftz_v1_model`).  Test-only:
     the exhaustive comparison with `nv_log1pf` is the proof that the registered lane did not move."""
     return _log1pf_from_sum(a & M32, add_rz_ftz_v1_model(a & M32, ONE_BITS))
 

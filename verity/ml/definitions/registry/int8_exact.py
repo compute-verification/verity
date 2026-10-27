@@ -54,6 +54,7 @@ from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I32Le, SelectI32
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import tables as T
 from verity.ml.definitions.registry.dsa import I32Sub
@@ -75,7 +76,8 @@ PV_KEY_LIMIT = 132_096
 
 _CONF = ("exact-model-tested; tests/program/test_int8_exact_defs.py: every Definition here against verity_vllm.engine.int8_exact / "
          "int8_attention (the torch the profile serves) on random inputs on the CPU, all words equal; that torch is bit-equal on the "
-         "RTX PRO 6000 to its CPU run and to fattn_ref.py (run r20261017-211407-3e75: 5,087,232 linear words, 884,736 attention words)")
+         f"RTX PRO 6000 to its CPU run and to fattn_ref.py (run {EVIDENCE['int8_fattn_ref_check']['run']}: 5,087,232 linear words, "
+         "884,736 attention words)")
 
 
 def _f64(bits: int) -> float:

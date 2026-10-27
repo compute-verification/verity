@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lane B200-FP8's job on the B200 (sm_100a): tcgen05.mma kind::f8f6f4 and kind::mxf8f6f4 captured and scored (f8_sm100.py).
+# The job on the B200 (sm_100a): tcgen05.mma kind::f8f6f4 and kind::mxf8f6f4 captured and scored (f8_sm100.py).
 #   f8_sm100.sh [GEN ARGS]   build tcgen05_f8.cu (SASS gate: exactly one UTC*MMA per kernel), gen into a kept scratch, under
 #                            one gpu-lease the capture (layout gate first), then eval on the CPU: $OUT/{capture,summary,
 #                            fixture}.json, the SASS opcodes and the device identity.
@@ -17,7 +17,7 @@ PY=${PYTHON:-python3}
 keep() {
   command -v research >/dev/null && research keep "$1" --owner @compute-accounting --expires 2026-10-26 --priority normal \
     --regenerate "research run --on vy-dc-b200 -- bash benchmarks/tc_probe_fp4/f8_sm100.sh" \
-    --why "lane B200-FP8: operands and captured D words, re-scored by f8_sm100.sh eval" || echo "f8_sm100.sh: not kept: $1" >&2
+    --why "B200 FP8 capture: operands and captured D words, re-scored by f8_sm100.sh eval" || echo "f8_sm100.sh: not kept: $1" >&2
 }
 
 if [ "${1:-}" = eval ]; then
