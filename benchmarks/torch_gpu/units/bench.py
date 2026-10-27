@@ -6,7 +6,7 @@ At each B of TIME_B, each unit and torch's nearest op, interleaved rep by rep, u
 - median_ms: the GPU's time.  A torch.cuda._sleep ahead of the start event keeps the stream busy while the host queues
   the launch, so the events bracket the kernels and nothing of the host; ``covered`` says the start event was still
   queued when the host had queued the end event (if not, the host's time leaked in);
-- host_ms: the start event on an idle stream, then the launch (the ruler of the first H200 session, which counts the
+- host_ms: the start event on an idle stream, then the launch (the ruler of the first H200 run, which counts the
   host's ~0.05 ms of a launch).
 Then a step row twice: ``summed_ms``, the units' medians times their counts at a decode step (STEP), and ``measured_ms``,
 that step's launches queued in a decode step's order (per layer: RMSNorm, quantizer of 16384, softmax at n = 32,
@@ -25,15 +25,15 @@ import sys
 if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__)))
 
-import torch  # noqa: E402
+import torch
 
-import add as AD  # noqa: E402
-import argmax as AM  # noqa: E402
-import lib as L  # noqa: E402
-import quant as Q  # noqa: E402
-import relu as RL  # noqa: E402
-import rmsnorm as RN  # noqa: E402
-import softmax as SM  # noqa: E402
+import add as AD
+import argmax as AM
+import lib as L
+import quant as Q
+import relu as RL
+import rmsnorm as RN
+import softmax as SM
 
 HEADS = 256
 LAYERS = 52

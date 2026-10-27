@@ -4,10 +4,10 @@ on the device, timed against stock vLLM on the same card at the panel's two shap
   python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
       --out RUN_DIR/e2e.json [--retain DIR] [--reps 3]
 
-The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
+The run:
 - **Model:** Llama-3.1-8B-Instruct, TP 1, eager, prefix caching off.  Every linear is in the kernels' domain: k is 4,096 or
   14,336, and n is 6,144, 4,096 or 28,672.
-- **Two engines stay resident, each in its own process on the one GPU** (the root's ruling, 12:11Z):
+- **Two engines stay resident, each in its own process on the one GPU:**
   - ``base``: stock vLLM ``quantization="fp8"``, the baseline the panel carries;
   - ``arm``: the BF16 model with every LinearBase apply wrapped.  Per rep the wrapper is off (``bf16``, stock vLLM) or runs
     the `PearlCDeviceRun` without hashing (``pearlc-nohash``) or with it (``pearlc``).
@@ -30,8 +30,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
-  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule of 11:50Z).
-- **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
+  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule).
+- **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
 size only, or ``--capture``'s sizes), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
@@ -82,8 +82,8 @@ GROUP = {"fp8": "base", "fp8-graphs": "base-graphs", "bf16": "arm", "pearlc-noha
 #: ``--statement``: ``pearlc`` with each decode forward's rows committed in the ZK statement's format too, once after the
 #: forward (served_zk/statement.py), timed after each ``pearlc`` rep
 ZK = ("pearlc-zk",)
-#: ``--fp8-graphs``: stock vLLM FP8 as vLLM serves it, compiled with its CUDA graphs (the decode headline's baseline, the
-#: 19:58Z ruling), in an engine of its own beside the eager one, timed after each eager ``fp8`` rep
+#: ``--fp8-graphs``: stock vLLM FP8 as vLLM serves it, compiled with its CUDA graphs (the decode headline's baseline),
+#: in an engine of its own beside the eager one, timed after each eager ``fp8`` rep
 GRAPHED = ("fp8-graphs",)
 #: the graphed engine's CUDA-graph batch sizes at the default decode batch; `configure` keeps those under ``--batch`` and adds it
 CAPTURE_32 = [1, 2, 4, 8, 16, 24, 32]
@@ -104,7 +104,7 @@ CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_l
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
 #: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
-#: Each is served at the fixed length SERVED_TOKENS under ignore_eos (Daniel, 19 Oct, ASK-39), and how it was served goes
+#: Each is served at the fixed length SERVED_TOKENS under ignore_eos, and how it was served goes
 #: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
 SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
 SERVED_RECORD = "served.json"
@@ -308,7 +308,8 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     gen = torch.Generator(device=dev).manual_seed(20261002)
     xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
     rows = 2 * m * len(weights) if run.hashing else 0
-    forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
+    def forward():
+        return [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
     keep = ("transcript_root", "activation_roots", "units", "tiles")
 
     def ended(ys):
@@ -763,7 +764,8 @@ class Worker:
 def prompts(reps: int) -> dict:
     """Every mode's prompts, the same in both engines: the prefill warm-up and one prompt per rep, and the decode batch."""
     rng = random.Random(8192)
-    ids = lambda n: [rng.randrange(100, 20000) for _ in range(n)]
+    def ids(n):
+        return [rng.randrange(100, 20000) for _ in range(n)]
     return {"warm": ids(PREFILL), "prefill": [ids(PREFILL) for _ in range(reps)], "decode": [ids(PROMPT) for _ in range(BATCH)]}
 
 

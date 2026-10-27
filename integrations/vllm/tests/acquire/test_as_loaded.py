@@ -58,7 +58,7 @@ def vllm_mxfp4(monkeypatch):
 
 
 @pytest.fixture
-def served(dsv4, tmp_path, vllm_mxfp4):  # noqa: F811
+def served(dsv4, tmp_path, vllm_mxfp4):
     """A model whose one Marlin layer serves the repack of rank 1's experts as loaded, beside a bf16 norm; the composer of record."""
     composer = {"checkpoint_dir": str(tmp_path / "snap"), "checkpoints_manifest": str(tmp_path / "checkpoints.json")}
     compose = WR.rank_composer(**composer, world=WORLD, rank=RANK)
@@ -77,7 +77,7 @@ def served(dsv4, tmp_path, vllm_mxfp4):  # noqa: F811
     return model, layer, loaded, composer
 
 
-def test_a_ranks_marlin_fields_are_registered_pinned_and_replayed_as_the_checkpoints_bytes(served, dsv4):  # noqa: F811
+def test_a_ranks_marlin_fields_are_registered_pinned_and_replayed_as_the_checkpoints_bytes(served, dsv4):
     model, _layer, loaded, composer = served
     view, info = AL.attach_rank(model, world=WORLD, rank=RANK, composer=lambda **kw: WR.rank_composer(**composer, **kw), repack=repack)
     assert isinstance(view, WeightsView) and info["layers"] == 1 and info["fields"] == 4

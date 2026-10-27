@@ -1,5 +1,5 @@
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Definitions.Accounting.Actual.WipePool
+import Proofs.Accounting.Defs.Actual.WipePool
 import Proofs.Core.Game.Prob
 
 /-!
@@ -16,7 +16,7 @@ its own `U`, which gives the pool per read, adaptive within a wipe as well.
 
 They are lemmas, not guarantees. `U` is a label on the tree, and `UnheldFails` (a passing draw challenges no block of
 `U`) holds of every tree once each `U` is empty, so it is no physical premise. The pool's physical premise is
-memory-accounting's restatement of it on the challenger's verdicts (MEM-55), which uses these lemmas at `k = 1`. The
+memory-accounting's restatement of it on the challenger's verdicts, which uses these lemmas at `k = 1`. The
 lemmas count only what the wipes see: a block dropped after one wipe and rebuilt before the next is in no `U`.
 
 The proof is finite optional stopping: from an un-held total `a`, the probability that every wipe passes with the total
