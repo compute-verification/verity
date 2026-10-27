@@ -124,8 +124,9 @@ much hardware stands behind the model the target computes with.
   epilogue as the other two; the registry's ``sm120.mma.m16n8k32.e4m3`` is this pipeline, and trust anchors it here.
 * The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity_sp1.proofs.families.make_tensor_core_gate_set`
   (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
-  bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
-  replays (``verity/ml/circuits/silicon/captures/vectors/``, schema ``verity/tc-reference-vector/v0``), not authenticated obligations.
+  bound to them** and no ``typed-obligation/v0`` lowering has been produced -- :data:`FP8_HOPPER_WGMMA`'s reference
+  vectors are model replays (``verity/ml/circuits/silicon/captures/vectors/``, schema ``verity/tc-reference-vector/v0``),
+  not authenticated obligations.
 * :data:`BF16_HOPPER` -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
   25.7M elements / 0 mismatches; the ``wgmma`` BF16 path runs the same pipeline), model
   :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16` (one group of 16, the 26-bit adder, floor -133; exact BF16
@@ -239,8 +240,8 @@ Status = Literal["frozen", "draft"]
 @dataclass(frozen=True, slots=True)
 class Target:
     """One target (a subcircuit): the gate family, the pipeline the steps are computed on, the program, the reference sizes, the
-    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every proof system proves it; ``draft``: stated
-    and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
+    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every proof system proves it; ``draft``: stated,
+    bound to nothing yet) with the id of the instruction class it is a relation over
     (``verity.ml.circuits.silicon.instructions.INSTRUCTIONS``)."""
 
     name: str
@@ -346,7 +347,7 @@ FP8_ADA_MMA = Target(
     statement_format=2,
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
-    reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
+    reference_vectors=(),
     anchor_device="NVIDIA GeForce RTX 4090",
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
@@ -380,7 +381,7 @@ NVFP4_SM120 = Target(
     statement_format=2,
     domain=_NVFP4_DOMAIN,
     epilogue=_NVFP4_EPILOGUE,
-    reference_vectors=("nvfp4-sm120-mma-k64", "nvfp4-sm120-mma-k1536"),
+    reference_vectors=(),
     anchor_device="NVIDIA GeForce RTX 5090",
     status="draft",
     instruction="sm120.mma.m16n8k64.e2m1.nvf4",
@@ -401,7 +402,7 @@ FP8_SM120_MMA = Target(
     statement_format=2,
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
-    reference_vectors=("fp8-sm120-mma-k32", "fp8-sm120-mma-k1536"),
+    reference_vectors=(),
     anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
     status="draft",
     instruction="sm120.mma.m16n8k32.e4m3",
