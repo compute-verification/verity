@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -167,7 +168,7 @@ def run(a: argparse.Namespace) -> int:
     ok = all(d["ok"] for d in docs.values())
     line = ("ok: " if ok else "FAILED: ") + "; ".join(verdict(k, d) for k, d in docs.items())
     print(json.dumps({"part": "verdict", "verdict": line}), flush=True)
-    if os.environ.get("RESEARCH_RUN_DIR"):
+    if SHARED.RESEARCH_RUN_DIR:
         result(a, docs, ok, line)
     return 0 if ok else 1
 
@@ -195,7 +196,7 @@ def verdict(name: str, doc: dict[str, Any]) -> str:
 def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, line: str) -> None:
     """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1): each layout's best step and, from its ``.count.json``, the host
     twin's compressions a row-slot."""
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"])
+    run_dir = Path(SHARED.need("RESEARCH_RUN_DIR"))
     ms = []
     for k, d in docs.items():
         ms.append({"name": f"{k}.step_gpu_s", "value": best_s(d), "unit": "s"})
@@ -206,7 +207,7 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
             ms.append({"name": f"{k}.compressions_a_row_slot", "value": d["count"]["compressions_a_row_slot"],
                        "unit": "compressions"})
     out = os.path.relpath(a.out, run_dir) if a.out.resolve().is_relative_to(run_dir.resolve()) else None
-    doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+    doc = {"schema": "research/result/v0.1", "run_id": SHARED.RESEARCH_RUN_ID or "",
            "workload_fingerprint": {"tool": "commit_slots/step.py", "slots": a.slots,
                                     "layouts": {k: d["layout"]["layout_digest"] for k, d in docs.items()}},
            "validation": {"status": "passed" if ok else "failed", "checker": "step.py (slots.commit_slot, slots.step_tree)",
