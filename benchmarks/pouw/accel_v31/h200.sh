@@ -13,7 +13,8 @@
 #   research run --on vy-dc-h200 --project verity --campaign cmp-172 --source . --cwd source --timeout 120m \
 #     --env GPU_LEASE_WHO=kernels-kcommitfb -- bash benchmarks/pouw/accel_v31/h200.sh
 #
-# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, and run.sh's.
+# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, and run.sh's
+# (NVFLAGS=-DV31_WG=1: the GEMM on warpgroup MMAs).
 set -uo pipefail
 D=benchmarks/pouw/accel_v31
 O=${OUT:?}

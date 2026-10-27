@@ -29,7 +29,8 @@
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU
 # (default gpu-lease 1 --wait --max-min 25 --; a timed run passes "gpu-lease 8 --wait --timed --max-min 30 --" under
 # `research run --no-sampler`; empty when already under a lease); CUTLASS=0 (no CUTLASS baseline), V31_CACHE (CUTLASS's
-# clone and object, default /workspace/pouw/accel_v31).
+# clone and object, default /workspace/pouw/accel_v31); NVFLAGS, more nvcc flags for every build (H200: -DV31_WG=1, the
+# GEMM on warpgroup MMAs).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -82,8 +83,9 @@ if [ "${CUTLASS:-1}" != 0 ]; then
   CUT=(-DV31_CUTLASS "$obj")
 fi
 build() {   # BIN LOG [nvcc flags]
-  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 "${CUT[@]}" "${@:3}" -o "$1" \
-    $D/v31.cu -lcuda -lcublasLt > "$2" 2>&1
+  # shellcheck disable=SC2086
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 "${CUT[@]}" ${NVFLAGS:-} "${@:3}" \
+    -o "$1" $D/v31.cu -lcuda -lcublasLt > "$2" 2>&1
 }
 build "$W/v31" "$O/build.log"
 echo "build rc $?" >> "$O/rc.txt"
