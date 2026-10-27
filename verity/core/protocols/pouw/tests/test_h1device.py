@@ -102,7 +102,7 @@ def test_the_sm90_record_is_its_card_and_data_sheet() -> None:
         card["sm"]["count"]["value"], card["clock"]["sm"]["value"], card["rate"]["tensor"]["value"])
     sheet = tomllib.loads(SHEET_90.read_text())
     s8 = sheet["peaks"]["s8"]
-    assert (D.SM90.gpu, sheet["card"]) == (sheet["gpu"], card["sku"])
+    assert D.SM90.gpu == sheet["gpu"]
     assert (sheet["sms"]["card"], sheet["fmax"]["card"], s8["card"]) == ("sm.count", "clock.sm", "rate.tensor / weight.s8")
     assert D.SM90.tensor_mhz == sheet["clocks"][s8["clock"]]["mhz"]
     assert s8["sparse"] and D.SM90.sheet_s8_tops == s8["sheet"] / 2

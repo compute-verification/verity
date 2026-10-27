@@ -2,7 +2,9 @@
 card's, an expression reads only ceilings, and a number written beside its card expression is refused."""
 from __future__ import annotations
 
+import csv
 import shutil
+import tomllib
 from fractions import Fraction
 
 import pytest
@@ -44,6 +46,39 @@ def test_each_device_reads_its_card(data, sku):
         s = S.sheet(data)
         assert (s.sms.value, s.fmax.value, s.peaks["s8"].macs, s.pipes["alu"].value) == (132, 1980, 4096, 64)
         assert E.table(data).mhz == 1980
+
+
+#: each DS-120 tensor kind's operand format (data/forms.toml gives its shape and whether it is 2:4 sparse)
+DS120_FORMATS = {"MMA": "s8", "IMMA16832": "s8", "IMMA16816": "s8", "IMMA8816": "s8", "IMMASP16864": "s8",
+                 "IMMASP16832": "s8", "HMMA16816": "f16", "HMMA16816F16": "f16", "HMMASP16832": "f16",
+                 "HMMA1688T": "tf32", "HMMA1684T": "tf32", "QMMA16832": "e4m3", "QMMASF16832": "e4m3",
+                 "QMMASP16864": "e4m3", "OMMASF16864": "nvf4"}
+
+
+def test_ds120s_lines_are_the_cards():
+    """sm_120 has no sheet.toml, so DS-120's census lines are held to the card here: a tensor form's MACs (half its
+    logical m · n · k when 2:4 sparse) over a SMSP's quarter of its format's rate, a pipe's 128 lanes over its rate, and
+    a shared-memory instruction one 128-byte request (DS_smem's description in rows.csv)."""
+    c = K.of(SM120)
+    forms = tomllib.loads((SM120 / "forms.toml").read_text())
+    forms["MMA"] = forms["IMMA16832"]
+    pipes = {"DS_imad": "rate.imad", "DS_shfl": "rate.shfl", "DS_xu": "rate.sfu"}
+    seen = set()
+    with open(SM120 / "census" / "DS-120.csv", newline="") as f:
+        for x in csv.DictReader(f):
+            got = Fraction(x["cycles"])
+            if x["row"] == "DS_tensor":
+                m, n, k = forms[x["kind"]]["shape"]
+                macs = Fraction(m * n * k, 2 if forms[x["kind"]].get("sparse") else 1)
+                assert got == macs / (K.value(c, f"rate.tensor / weight.{DS120_FORMATS[x['kind']]}") / 4), x
+            elif x["row"] in pipes:
+                assert got == 128 / K.value(c, pipes[x["row"]]), x
+            elif x["row"] == "DS_smem" and x["kind"].startswith(("LDS", "STS")):
+                assert got == 4 * 128 / K.value(c, "rate.smem * 4"), x
+            else:
+                continue
+            seen.add(x["row"])
+    assert seen == {"DS_tensor", "DS_smem", *pipes}
 
 
 def test_a_number_beside_its_card_expression_is_refused(tmp_path):
