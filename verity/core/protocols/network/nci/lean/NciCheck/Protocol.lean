@@ -6,9 +6,9 @@ import CoreProtocol.Protocol
 
 The inference-only policy (`Nci.Complies Γ α`, `Security/Definitions/Nci.lean`) asks that the declared circuit divide
 into inference blocks of at most `Γ` gates, each reading at most `α` bits of fresh input per gate: input from outside
-the block that is not registered information. `NciCheck.Baseline.evaluate` is the policy's check: the division's check at
-the size of the description (`NciCheck.Desc.evaluate`), then the provenance of the registered information against the
-deployment's registration log. This module makes that check a `Core.Protocol`, a subprotocol of onsite and remote
+the block that is not registered information. `NciCheck.Baseline.evaluate` is the policy's check: the division's check
+at the size of the description (`NciCheck.Desc.evaluate`), then the provenance of the registered information against
+the deployment's registration log. This module makes that check a `Core.Protocol`, a subprotocol of onsite and remote
 (`Core.Onsite.components`, `Core.Remote.components`). It has no rounds and reads no coins: it answers from the declared
 circuit, the declared division and the registered information it is handed, and is never undecided.
 
@@ -22,17 +22,19 @@ Its case splits the check's instance and trusted input as sampled proofs' one-st
   `verity-ir/descriptor/v1` Program, as text);
 * **commitment**: the run's own registration record, canonical JSON, an object, fixed before the run: the record whose
   digest sampled proofs' one-stage audit commits to. Its digest is `SHA-512(format || 0 || canon(record))`
-  (`NciCheck.Baseline.digest`, as one-stage's). θ's provenance reads its `program` (the declared circuit's SHA-512) and
-  the roots its `registered` entries give the program function's parameters;
+  (`NciCheck.Baseline.digest`, as one-stage's). Its `program` must be the declared circuit's SHA-512 (`names`), and
+  θ's provenance reads the roots its `registered` entries give the program function's parameters;
 * **evidence**: canonical JSON with exactly the keys `owner` (the declared division: per root node of the declared
   circuit, its inference block or `"input"`), `provenance` (per `theta` entry, the registration record, value and root
   it was registered under) and `theta` (the root input nodes that hold registered information), as `NciCheck.Desc` and
   `NciCheck.Baseline` read them;
-* **check**: `NciCheck.Baseline.evaluate` on the instance `{alpha, gamma, owner, program, provenance, theta}`
-  (`instanceOf`) and the trusted input `{log: log ++ [record], params: parameters, run: the record's digest}`
-  (`trustedOf`). It rejects with the check's refusal code (and its fix, where the check has one) when the instance or
-  the trusted input is refused, rejects naming the first inference block over its budget when the division doesn't
-  comply, and accepts exactly when it complies;
+* **check**: first that the record names the declared circuit, its `program` the circuit's SHA-512 (`names`), so that
+  the commitment binds the circuit whether or not the case has registered information; then
+  `NciCheck.Baseline.evaluate` on the instance `{alpha, gamma, owner, program, provenance, theta}` (`instanceOf`) and
+  the trusted input `{log: log ++ [record], params: parameters, run: the record's digest}` (`trustedOf`). It rejects
+  when the record names another circuit, with the check's refusal code (and its fix, where the check has one) when the
+  instance or the trusted input is refused, and naming the first inference block over its budget when the division
+  doesn't comply, and accepts exactly when it complies;
 * on acceptance, **public** is nothing beyond the verdict, `{}` (`Γ`, `α`, the declared circuit and its parameters are
   the params), and the **profile** is the check's report, `{"blocks", "gates"}`: per inference block
   `[gates, fresh-input bits]`, and the declared circuit's gates.
@@ -119,7 +121,20 @@ circuit's gates. -/
 def reportOf (out : Json) : Json :=
   Json.mkObj [("blocks", Baseline.getD out "ius"), ("gates", Baseline.getD out "gates")]
 
+/-- The run's record names the declared circuit: its `program` is the circuit's SHA-512 (`Prog.sha512`), what sampled
+proofs' one-stage audit asks of its own record and program (R2-program). θ's provenance asks it only of a case with
+registered information; here every case is bound to its circuit. A program that doesn't decode is left to the check,
+which refuses it (`program`). -/
+def names (p : Params) (c : Commitment) : Bool :=
+  match Flock.Program.decode p.program.toUTF8 with
+  | .ok P => Baseline.strAt c.record "program" == some (Flock.hexOf P.sha512)
+  | .error _ => true
+
+def UNNAMED : String :=
+  "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
+
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Unit Json :=
+  if !names p c then .reject UNNAMED else
   match Baseline.evaluate (instanceOf p e) (trustedOf p c) with
   | .error code => .reject (reasonOf (instanceOf p e) code)
   | .ok out =>

@@ -1,13 +1,14 @@
 """The inference-only policy as a core protocol (`NciCheck.Protocol`, `inference-only serve`, `verity/inference-only/v0`)
 against `nci_reference`'s `check_baseline` behind the protocol's decoders, through the difftest harness's `ProtocolPort`.
 
-The reference decodes the protocol's formats (`NciCheck/Protocol.lean`'s module docstring), rebuilds the check of
-record's instance and trusted input (the params' log with the run's own record, the commitment, appended, and that
-record's digest the run) and runs `check_baseline`, which `NciCheck.BaselineDifftest` holds `NciCheck.Baseline.check` to.
-The cases are θ's provenance difftest's declarations (`baseline_difftest_vectors.case`), split at the run's own record
-into the protocol's params, commitment and evidence, then at most one change (`MUTATIONS`): the division made to fail
-(`gamma` 0, so every inference block is over its gate budget), the run's record repeated in the log, and malformed
-params, commitments and evidence. Onsite's and remote's difftest (`verity/core/protocols/composition/tests/`) draws the
+The reference decodes the protocol's formats (`NciCheck/Protocol.lean`'s module docstring), checks that the run's
+record names the declared circuit (`names`), rebuilds the policy's check's instance and trusted input (the params' log
+with the run's own record, the commitment, appended, and that record's digest the run) and runs `check_baseline`, which
+`NciCheck.BaselineDifftest` holds `NciCheck.Baseline.check` to. The cases are θ's provenance difftest's declarations
+(`baseline_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
+then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
+budget), the run's record naming another circuit, the run's record repeated in the log, and malformed params,
+commitments and evidence. Onsite's and remote's difftest (`verity/core/protocols/composition/tests/`) draws the
 subprotocol's cases from `drawn` and answers them with `reference`."""
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ ID = "verity/inference-only/v0"
 PARAMS_KEYS = ["alpha", "gamma", "log", "parameters", "program"]
 EVIDENCE_KEYS = ["owner", "provenance", "theta"]
 NONCOMPLIANT = "the division does not comply"
+UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
 
 
 def _load(name: str):
@@ -75,8 +77,27 @@ def evidence(b: bytes) -> dict:
     return j
 
 
+def _digest(program: str) -> str | Exception:
+    """The declared circuit's SHA-512 (`Prog.sha512`), or why its program doesn't decode."""
+    try:
+        desc = json.loads(program)
+        NR.codec.decode_program(desc, NR.declared(desc))
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        return e
+    return NR.codec.program_digest(desc)
+
+
+def names(p: dict, record: dict) -> bool:
+    """`NciCheck.Protocol.names`: the run's record names the declared circuit, its `program` the circuit's SHA-512. A
+    program that doesn't decode is left to the check, which refuses it."""
+    digest = _digest(p["program"])
+    return isinstance(digest, Exception) or record.get("program") == digest
+
+
 def check(p: dict, c: tuple[dict, str], e: dict) -> tuple:
     record, run = c
+    if not names(p, record):
+        return "reject", UNNAMED
     instance = {"alpha": p["alpha"], "gamma": p["gamma"], "owner": e["owner"], "program": p["program"],
                 "provenance": e["provenance"], "theta": e["theta"]}
     trusted = {"log": [*p["log"], record], "params": p["parameters"], "run": run}
@@ -97,9 +118,10 @@ def reference(case) -> dict:
 
 # --- the cases ------------------------------------------------------------------------------------------------------------
 
-#: Each change and the verdict and kind it aims at (`_kind`): the decoder that refuses it, the policy's check, or
-#: `comply` for a division that fails the policy.
+#: Each change and the verdict and kind it aims at (`_kind`): the decoder that refuses it, the policy's check, `unnamed`
+#: for a record that names another circuit, or `comply` for a division that fails the policy.
 EXPECT = {"honest": ("accept", "accept"), "refused": ("reject", "code"), "noncompliant": ("reject", "comply"),
+          "record-program": ("reject", "unnamed"),
           "log-repeat": ("reject", "trusted"), "alpha-den-0": ("reject", "params"), "params-key": ("reject", "params"),
           "program-type": ("reject", "params"), "log-type": ("reject", "params"),
           "commitment-type": ("reject", "commitment"), "commitment-noncanonical": ("reject", "commitment"),
@@ -153,6 +175,8 @@ def case_of(seed: int, m: str, pick: int = 0) -> dict:
     e_bytes = None
     if m == "noncompliant":
         p["gamma"] = 0
+    elif m == "record-program":
+        c_bytes = D.canonical({**record, "program": f"{pick:02x}" * 64}).encode()
     elif m == "log-repeat":
         p["log"] = [*p["log"], record]
     elif m == "alpha-den-0":
@@ -213,6 +237,8 @@ def _kind(out: dict) -> str:
             return prefix
     if reason.startswith(NONCOMPLIANT):
         return "comply"
+    if reason == UNNAMED:
+        return "unnamed"
     return reason.split(":")[0]
 
 
