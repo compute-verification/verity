@@ -4,7 +4,8 @@ the class refuses is refused with its reason; a session through a stub gate keep
 the lane's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
-its draw on the gate's coins names the auditor's node as the coin link's peer, and the served node is refused."""
+on vllm's records art it reads requests.jsonl rebuilt in KEEP from the art's users map and the certified I/O, and
+refuses an endpoint with neither or an I/O that doesn't read whole; its draw on the gate's coins names the auditor's node as the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
 import io
@@ -160,6 +161,7 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     keep = tmp_path / "keep"
     (keep / RUN / "endpoint").mkdir(parents=True)
+    (keep / RUN / "endpoint" / "requests.jsonl").write_text("")
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "CR_N2_DRAW=4"]
     assert SS.main(argv) == 2
@@ -173,6 +175,48 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     assert SS.main([*argv, "N2_DRAW=4"]) == 2
     assert SS.main([*argv, "--draw", "8"]) == 0
     assert "CR_SCAN_ARGS=--draw 8" in (tmp_path / "seen").read_text().splitlines()
+
+
+def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_map(tmp_path, monkeypatch, capsys):
+    here, art, keep = tmp_path / "here", tmp_path / "art" / "serve", tmp_path / "keep"
+    for d in (here, art, keep / RUN, tmp_path / "bin"):
+        d.mkdir(parents=True)
+    (here / "chain_record.sh").write_text('env | grep "^CR_ENDPOINT=" > "$SEEN"\n')
+    (here / "leak_guard.py").write_text("")
+    (keep / RUN / "fetch.tar.gz").write_bytes(b"")
+    for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
+        (art / f).write_text("{}\n")
+    users = [json.dumps({"engine_id": f"e{j}", "user": f"user-{j}"}) + "\n" for j in range(3)]
+    (art / SS.USERS).write_text("".join(users))
+    (tmp_path / "bin" / "research").write_text(f'#!/bin/sh\n[ "$*" = "data fetch art:ep --to $5" ] && cp -a {art.parent}/. "$5/"\n')
+    (tmp_path / "bin" / "research").chmod(0o755)
+    monkeypatch.setattr(SS, "HERE", here)
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
+    io = {"accepted": True, "violations": [], "records": [
+        {"user": "user-0", "prompt": [5, 6], "max_tokens": 4, "output": [9, 128001]},
+        {"user": "user-1", "prompt": [7], "max_tokens": 4, "output": [1, 2]},
+        {"user": "user-2", "prompt": [8], "max_tokens": 4, "output": [1, 2, 3, 4]}]}
+    monkeypatch.setattr(SS, "certified_io", lambda fetch: io)
+    argv = ["chain", "--run", RUN, "--keep", str(keep), "--endpoint", "art:ep", "--eos-ids", "128001"]
+    assert SS.main(argv) == 0
+    dest = keep / RUN / "endpoint-rebuilt"
+    assert (tmp_path / "seen").read_text().strip() == f"CR_ENDPOINT={dest}" and dest.stat().st_mode & 0o777 == 0o700
+    got = [json.loads(x) for x in (dest / "serve" / "requests.jsonl").read_text().splitlines()]
+    assert [(r["engine_id"], r["user"], r["prompt_ids"], r["streamed_ids"], r["finish"]) for r in got] == [
+        ("e0", "user-0", [5, 6], [9, 128001], {"reason": "stop", "stop_reason": None}),
+        ("e1", "user-1", [7], [1, 2], {"reason": "stop", "stop_reason": None}),
+        ("e2", "user-2", [8], [1, 2, 3, 4], {"reason": "length", "stop_reason": None})]
+    assert not (art / "requests.jsonl").exists()
+    for bad in ({"engine_id": "e3", "user": None}, {"engine_id": "e3", "user": "user-1"}):
+        (art / SS.USERS).write_text("".join(users) + json.dumps(bad) + "\n")
+        assert SS.main(argv) == 2
+        assert f"engine request e3's user {bad['user']!r} is no certified request left" in capsys.readouterr().err
+    io["accepted"] = False
+    assert SS.main(argv) == 2 and "doesn't read whole off its cells" in capsys.readouterr().err
+    (art / SS.USERS).unlink()
+    assert SS.main([*argv[:-4], "--endpoint", str(art), "--eos-ids", "128001"]) == 2
+    assert f"no {SS.USERS} beside an advice_trace.jsonl" in capsys.readouterr().err
 
 
 def _gate_chain(tmp_path, monkeypatch, peer):

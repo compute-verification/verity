@@ -141,6 +141,7 @@
   "art:5af0506acb63abdf5f70c7edeefaa080d46afd35d75307f04f08d6130afdc5b7": "integrations/vllm/workloads/workload_phi3_mini_32x16_1req.json",
   "art:5467343b0a5b2030b21b6285b73a679823ec6404260a900139b66626094b76ec": "integrations/vllm/workloads/workload_qwen05_32x16_1req.json",
   "art:124a9d7ed54e99b74b05e0f90b7dbf48b7f2e6a59a16b2247ab2420addf04bc9": "integrations/vllm/workloads/workload_qwen15_32x16_1req.json",
+  "art:fdfa0b2082fef5a43cf9f24592b790cef05f0f2ea3548282a586827be99797ef": "benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"

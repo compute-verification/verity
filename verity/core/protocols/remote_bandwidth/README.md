@@ -5,7 +5,7 @@ node's registered store the node made. `PROTOCOL.md` has the semantics, the byte
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`; Daniel, 18 Oct: Lean is the definition and the
+The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is the definition and the
 verifier of record, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
 the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index

@@ -80,11 +80,12 @@ def _registered():
 @pytest.fixture(scope="module")
 def window():
     """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
-    state's, `STATE` committed as a stand-in for the network certifier's, as `Rows` and `Window` take them) and each
-    slot's `Slot` of its lane's row (`scan_slots`)."""
+    state's, `STATE` committed as a stand-in for the network certifier's, in ``row/v2`` rows as the scan's units commit
+    their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
     low = WC.lower(_registered(), CLASS, None, GRAIN)
     fields = _weights(low.fn)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))])
+    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
+                                 schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
@@ -200,6 +201,19 @@ def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
         WR.Rows(low, slots[::-1], values)
     with pytest.raises(ValueError, match=re.escape(f"give the scan state's registered value, {SS.SCAN_STATE}, with its rows")):
         WR.Rows(low, slots, {p: v for p, v in values.items() if p != SS.SCAN_STATE})
+
+
+def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
+    """Where no scan ran (`prove_path`'s window commit), `standin_state` is the scan state rows that give each slot its row
+    and ``max_tokens`` at its anchor and lane, every other field zero: bucket 0's row is `STATE`'s, which holds the slots'
+    lanes alone. It is committed under the committer's key at `STATE_NONCE` plus the window's index, a per-window value in
+    its reading port's rows, and `Rows` takes it as the scan state."""
+    low, _f, values, _w, slots = window
+    v = WR.standin_state(PROGRAM, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 1, window=RUN)
+    assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
+    assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
+    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and WR.STATE_NONCE > max(WW.weight_nonces(values).values())
+    WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
 
 def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
@@ -395,10 +409,13 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     (``row-seg``), each committed under the committer's key at a nonce of its own: the table and a weight are core's commits
     of those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
     registration's roots, `weights_registration`), and the entries name nothing but each value's size, domain and hiding
-    root. The scan state is no value of the committer's but the network certifier's, a row a bucket of the window. Another
-    parameter is refused."""
+    root. The scan state is no value of the committer's but the network certifier's, a row a bucket of the window. Each
+    value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)
+    reads = low.circuit.registered.reads
+    lays = {r.reader: dict(IF.layout(low.circuit.template(r.reader)).schemas) for r in reads}
+    assert {(r.param, got[r.param].schema) for r in reads} == {(r.param, lays[r.reader][r.port]) for r in reads}
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
