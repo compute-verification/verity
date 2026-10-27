@@ -48,6 +48,7 @@ import Proofs.Pouw.Fp8Atom.H1TGammaProofs
 import Proofs.Pouw.Fp8Atom.H1TGapStaging
 import Proofs.Pouw.Fp8Atom.H1TProofs
 import Proofs.Pouw.Fp8Atom.H1TRunningProofs
+import Proofs.Pouw.Fp8Atom.H1TShiftStaging
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 import Proofs.Pouw.Fp8Atom.H1TTileProofs
 import Proofs.Pouw.Fp8Atom.Proofs
