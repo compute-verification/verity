@@ -123,8 +123,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `p2.Session`'s books (`Books`) as its
   veto. `prove` is the prover's side of the channel.
 - `p2_lean.py`: the Lean verifier of record of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
-  it: built in `lean/` unless `--lean-exe` or `$VERITY_REMOTE_AUDIT_VERIFIER_EXE` names a built one, a fresh process
-  each session. The standard library only, so the party runs as an auditor gate starts it (`python3 -s -E`).
+  it: built in `lean/` unless `--lean-exe` names a built one (without lake on the PATH, the one built there), a fresh
+  process each session. The standard library only, so the party runs as an auditor gate starts it (`python3 -s -E`).
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
 - `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote and freed, as the audit's appends,

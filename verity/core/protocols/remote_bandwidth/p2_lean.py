@@ -8,7 +8,6 @@ from __future__ import annotations
 import fcntl
 import functools
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -16,7 +15,6 @@ from typing import Any
 
 PACKAGE = Path(__file__).resolve().parent / "lean"
 EXE = "remote-audit-verifier"
-ENV = "VERITY_REMOTE_AUDIT_VERIFIER_EXE"
 BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"
 """`verity_difftest.BUILD_LOCK`: Lake builds the package's path requires in place, so a build here and the difftest's
 build of `remote-audit-difftest` take turns."""
@@ -32,7 +30,7 @@ def build(package: Path = PACKAGE) -> Path:
     path."""
     if shutil.which("lake") is None:
         raise LeanError(f"lake is not on the PATH, so {EXE} cannot be built: put elan's bin on the PATH "
-                        f"(tools/verity/lean/setup.sh), or name a built one (--lean-exe, or ${ENV})")
+                        f"(tools/verity/lean/setup.sh), or name a built one (--lean-exe)")
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -43,11 +41,9 @@ def build(package: Path = PACKAGE) -> Path:
 
 
 def exe(given: Path | None = None) -> Path:
-    """The executable: `given`, else `$VERITY_REMOTE_AUDIT_VERIFIER_EXE`, else built here (`build`), or, where `lake`
-    isn't on the PATH, the one already built here: an auditor gate's party, whose pinned tree, never changed after,
+    """The executable: `given` (the caller's, `p2_party --lean-exe`), else built here (`build`), or, where `lake` isn't
+    on the PATH, the one already built here: an auditor gate's party, whose pinned tree, never changed after,
     `vy-verifier-pin` built it in."""
-    if given is None and os.environ.get(ENV):
-        given = Path(os.environ[ENV])
     if given is not None:
         return given
     built = PACKAGE / ".lake" / "build" / "bin" / EXE
