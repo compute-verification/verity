@@ -425,7 +425,7 @@ def write(low: Lane, input_set, lo: int, hi: int, path, k_max: int = IF.K_MAX) -
 
 def stage(low: Lane, input_set, lo: int, hi: int, out_dir, k_max: int = IF.K_MAX) -> Path:
     """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the lane netlist as ``<out_dir>/net.txt``: the
-    verifier's own staging (red-team-flock-2 IR2), every cut word the verifier's own computation."""
+    verifier's own staging, every cut word the verifier's own computation."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "net.txt").write_text(low.text)

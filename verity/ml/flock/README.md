@@ -34,7 +34,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   (`../../core/service/flock/Flock/Firewall`, `flock-firewall`, and its release side `../../core/service/firewall/`):
   `live/PROTOCOL.md` §10.4 says what each side computes.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.
-- `pod/`: the pod scripts, run through `research run` (`tool.py` declares the `flock_pure` tool).
+- `pod/`: the pod scripts, run on the nodes as jobs (`tool.py` declares the `flock_pure` tool).
 - `verifier/`: the verifier of record: the specification `PROTOCOL.md`, the executable Lean verifier (`../../core/service/flock/`,
   `flock-verify`) and the agreement scripts; its Lean proofs are under `Security/Proofs/Flock/` (`Level3/`,
   `Soundness/`). See its README.
