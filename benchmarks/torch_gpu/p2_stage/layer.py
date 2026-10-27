@@ -5,7 +5,7 @@
                     [--encode-budget S] [--encode-blocks N] [--m 4096,16384]
 
 - `LAYOUT` is the store's layout, CMP-95 item 2's fixture (`p2_v1/store.py layout`'s JSON), read by
-  `layout.store_layout`. `M` is the weights stream's manifest (`verity_torch_loop.weights manifest`; with `--digests`,
+  `layout.store_layout`. `M` is the weights stream's manifest (`e2e_h200.served_weights manifest`; with `--digests`,
   each tensor's SHA-256, which every staged tensor is held to) and `W` a file holding the stream's bytes at their stream
   offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a session reads (the scales, a
   matrix's last block) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
@@ -433,7 +433,7 @@ def main(argv=None) -> int:
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (CMP-95 item 2)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
-    ap.add_argument("--generator", default="verity_torch_loop.weights", help="the seeded generator, without --w")
+    ap.add_argument("--generator", default="e2e_h200.served_weights", help="the seeded generator, without --w")
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     store = ap.add_mutually_exclusive_group(required=True)

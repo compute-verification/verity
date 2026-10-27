@@ -53,16 +53,18 @@ them out of an audit (its summary says so), for a run of several audits of one c
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
-    records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--registration FILE]
+    records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
-registered only at a parameter ``--pin`` names, with the root the verifier fixed before the run, and only where the
-window's registration (``--registration``) records that root for it (`registration_roots`, `interface.held_params`), any
-other free. A pin names its parameter alone: for vLLM's window circuit, each weight's ``weights/<label>@<words>``. The
-served model's weights record, whose root of record the checkpoint's pinned shards fix before the run
-(`verity_vllm.check.weights_of_record`) and which `verity-vllm advice --weights-of-record` records for ``weights`` in each
-window's registration, holds none of them until each weight's committed root is tied to it (VLLM-125).
+registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
+and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
+`interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
+``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
+window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
+`verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
+and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has no root,
+so its reads stay free.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -308,6 +310,31 @@ def pin_arg(s: str) -> tuple[str, str]:
     return name, root
 
 
+def pins_of(pin: Iterable[tuple[str, str]], files: Iterable[str] = ()) -> dict[str, str]:
+    """The verifier's pins, ``{param: root}``: each ``--pin NAME=ROOT`` and each ``--pins FILE``'s, a JSON ``{param: root}``
+    or a registration of values ``{program, values: {param: entry}}`` (or a list of them) whose entries' roots they are,
+    each entry held to its domain as the audit's ``--registered`` holds it (`pinned`): vLLM's committer's weights
+    registration (`window_weights.weights_registration`, each weight's ``weights/<label>@<words>``). Refused (ValueError)
+    where two name one parameter, a root isn't hex digits, or the file is a weights record, which states each weight's
+    shape and no root."""
+    out = list(pin)
+    for f in files:
+        doc = json.loads(Path(f).read_text())
+        if isinstance(doc, Mapping) and ("registered_entries" in doc or "registered_roots" in doc):
+            raise ValueError(f"{f}: a weights record states each weight's shape, not its root: pin the committer's "
+                             "registration of its weights")
+        if isinstance(doc, list) or (isinstance(doc, Mapping) and "values" in doc):
+            doc = {p: e["root"] for p, e in pinned(doc).items()}
+        if not isinstance(doc, Mapping):
+            raise ValueError(f"{f}: pins are {{param: root}}, not {type(doc).__name__}")
+        out += list(doc.items())
+    pins = dict(out)
+    if len(pins) != len(out):
+        raise ValueError(f"two pins name one parameter: {sorted(n for n in pins if [p for p, _ in out].count(n) > 1)}")
+    IF.held_params(pins, {})
+    return pins
+
+
 #: the groups of committed values a window's registration may name, each ``{program, values: {param: entry}}``: its
 #: per-window values (``activations``: `TorchLoop.commit_activations`, PoUW's operands) and values pinned for it
 #: (``registered``: PoUW's weights), PoUW's `core_check.WINDOW_VALUES`
@@ -364,6 +391,15 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     except (KeyError, TypeError, AttributeError) as e:
         raise ValueError(f"a pin is {{program, values: {{param: entry}}}}, or a list of them: {type(e).__name__}: {e}") from e
     return {str(v): dict(e) for v, e in values.items()}
+
+
+def pin_roots(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+    """The pins `interface.input_count` holds to a window's roots (`window_roots`), ``{param: root}``, of pinned entries
+    (`pinned`, `window_pins`'): each entry's root alone, its domain and shape staying with the entries that
+    `interface.registered_reads` opens against. Refused (ValueError) where a root isn't hex digits."""
+    pins = {v: e["root"] for v, e in entries.items()}
+    IF.held_params(pins, {})
+    return pins
 
 
 def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Callable[[str], Any] = IF.resolve) -> set[str]:
@@ -665,11 +701,11 @@ def audit(a: argparse.Namespace) -> int:
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
-    pin_roots = {v: e["root"] for v, e in pins.items()}
-    row["leak"] = (declared_count(doc, bits, resolve, pin_roots, roots, untied)
+    counted = pin_roots(pins)
+    row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
-        row["registered"] = {"pins": pin_roots, "roots": roots, "members": len(reads)}
+        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
@@ -772,15 +808,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="a registered parameter, by "
                    "the record's name for it, and the root the verifier fixed for it before the run (repeatable; none: every "
                    "registered read is free)")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
+                   "registration of values {program, values} (vLLM's committer's weights registration, "
+                   "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
     a = ap.parse_args(argv)
     if a.cmd == "count":
         for m in a.catalog:
             importlib.import_module(m)
-        pins = dict(a.pin)
-        if len(pins) != len(a.pin):
-            ap.error(f"--pin names a parameter twice: {[n for n, _ in a.pin]}")
+        try:
+            pins = pins_of(a.pin, a.pins)
+        except ValueError as e:
+            ap.error(f"--pin/--pins: {e}")
         roots = registration_roots(json.loads(Path(a.registration).read_text())) if a.registration else {}
         print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=pins, roots=roots),
                          sort_keys=True))

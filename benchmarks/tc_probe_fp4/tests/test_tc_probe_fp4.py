@@ -72,7 +72,7 @@ def test_mixed_product_is_the_exact_product(fa, fb):
 
 @pytest.mark.parametrize("fmt,bits", [("e4m3", 8), ("e2m1", 4)])
 def test_groupsum_candidate_is_verity_groupsum_on_one_format(fmt, bits):
-    """On a single format the candidate is ``GroupSum`` itself; E4M3 (32,)/26/-133 is the vLLM lane's measured sm_120 step."""
+    """On a single format the candidate is ``GroupSum`` itself; E4M3 (32,)/26/-133 is the vLLM port's measured sm_120 step."""
     cand = k32.GroupSumCandidate("t", fmt, fmt, (32,), 26, -133)
     ref = M.GroupSum("t", "sm_120", fmt, bits, (32,), 26, -133, "test")
     rng = np.random.default_rng(7)

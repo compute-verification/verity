@@ -1,6 +1,6 @@
 """J10-R's per-call-noise units (`PouwH1Tile_v5` / `_v6`'s receipt; h1u.cu's kh_seeds_j10r, kh_units_multi_j10r and
-kh_units_multi_j10r_sm) at the frozen shape's linears (KS8-SIMPLE's SHAPES, #4472: width 16384, one KV head, MLP 65536) and
-M = 4,096 and 16,384 token rows, one call a linear, every row live (HASH-21):
+kh_units_multi_j10r_sm) at the frozen shape's linears (`LINEARS`: width 16384, one KV head, MLP 65536) and
+M = 4,096 and 16,384 token rows, one call a linear, every row live:
 
     python j10r90.py check  --lib NAME=PATH ... --out OUT [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--picks 24]
     python j10r90.py time   --lib NAME=PATH ... --out OUT [--ms ...] [--linears ...] [--reps 5] [--wgmma DIR]
@@ -27,7 +27,7 @@ verify (a CPU node, check's out/ as DIR): every sampled unit's receipt and z aga
 its 32 rows of A and of B regenerated: v5 on every sampled unit, v6 (stream=True) on the first --v6 of each call; z on
 PAIRS through the Definition and on every cell of the tile against the int64 product. Exit 4 on any mismatch.
 
-time (on the GPU): plain INT8, s8_linear's `int_mm.linear` (#4472) with its eager epilogue: torch._int_mm and the f32
+time (on the GPU): plain INT8, s8_linear's `int_mm.linear` with its eager epilogue: torch._int_mm and the f32
 epilogue as four eager kernels,
 against each build's J10-R call (seeds, rows and units: kh_units_multi_j10r_sm on every SM, the served launch), arms
 interleaved rep by rep; overhead = units / plain and gamma = (plain + units) / plain, a call and summed over a layer's
@@ -351,7 +351,7 @@ def check(args) -> int:
 
 
 def wgmma_of(d: str):
-    """KP2-S8's wgmma.linear (HASH-10, #4463 and #4520): its wgmma.py and configs.py from DIR beside build.sh's ship
+    """The s8 wgmma kernel's wgmma.linear: its wgmma.py and configs.py from DIR beside build.sh's ship
     (s8_wgmma.cubin, sass.json, MANIFEST.sha256), and a (M, N, K) -> Cfg pick by its tuned table as its run.py's
     table_cfg reads it, else its default."""
     os.environ.setdefault("S8_WGMMA_CUBIN", str(Path(d) / "s8_wgmma.cubin"))

@@ -187,7 +187,9 @@ UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a
 WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
-AGENTS_PAGE = 25            # GET /v1/agents page size (50 503s every call since 16:25Z, 26 Oct; 25 answers): 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
+AGENTS_PAGE = 10            # GET /v1/agents page size, halved on each 503 down to AGENTS_PAGE_MIN for the process's life: the
+AGENTS_PAGE_MIN = 2         # largest page Cursor answers keeps shrinking (100 and 50 503'd from 26 Oct 16:25Z, 25 from 27 Oct
+#                             ~00:00Z, which blinded the watch for 3.5 h; 10 answers)
 SWEEP_READS_S = 12 * 60     # a sweep's reads stop after this long (a sweep takes ~6 min; with reads near their 60 s timeout, one
 #                             took 24 min, 26 Oct, and the cloud watch alerts after 20 min without a finished sweep)
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
@@ -225,8 +227,8 @@ WORKER_RELAUNCH = (
     "You are a fresh launch of Verity worker {old} ({short}, lane {lane}, a worker of the @{handle} coordinator), which the "
     "agent watch found idle with its task unfinished ({why}) after {runs} ended, with nobody resuming it within {mins} min, so "
     "it launched you in its place (Daniel, 19 Oct: fast failure detection). You are a worker, not a coordinator: you hold no "
-    "handle, and @{handle}'s coordinator still owns the lane and your task. Read origin/main's AGENTS.md and the lane contract "
-    "first. Report to your coordinator in its inbox thread, your checkpoints, your final report and any question: "
+    "handle, and @{handle}'s coordinator still owns the lane and your task. Read origin/main's AGENTS.md, its team skill "
+    "(`.agents/skills/team/SKILL.md`) and the lane contract first. Report to your coordinator in its inbox thread, your checkpoints, your final report and any question: "
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
     "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
     "run on you with its result. Your branches: {branches}; fetch the one you work on and push only to it. Read your runs' "
@@ -679,6 +681,7 @@ class Api:
         self.auth = "Basic " + base64.b64encode(f"{key}:".encode()).decode()
         self.base, self.timeout, self.clock = base, timeout, clock
         self.reads_until: float | None = None
+        self.page = AGENTS_PAGE
 
     def _req(self, method: str, path: str, body: dict | None = None, headers: dict | None = None):
         data = json.dumps(body).encode() if body is not None else None
@@ -703,7 +706,14 @@ class Api:
     def agents(self) -> Iterator[dict]:
         cursor = None
         while True:
-            page = self.get("/v1/agents", limit=AGENTS_PAGE, cursor=cursor, includeArchived="false")
+            try:
+                page = self.get("/v1/agents", limit=self.page, cursor=cursor, includeArchived="false")
+            except urllib.error.HTTPError as e:
+                if e.code != 503 or self.page <= AGENTS_PAGE_MIN:
+                    raise
+                self.page = max(AGENTS_PAGE_MIN, self.page // 2)
+                print(f"{iso(time.time())} GET /v1/agents 503: page size now {self.page}", file=sys.stderr, flush=True)
+                continue
             yield from page.get("items") or []
             cursor = page.get("nextCursor")
             if not cursor:
