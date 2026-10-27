@@ -11,7 +11,9 @@
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
-#     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
+#     so the engine's idle closes them into one window. The lease ends once every closed window is sealed. Each request's
+#     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
+#     committed step's end is $OUT/serve/step_trace.jsonl's t_end, on the clock of the timings' start_unix.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
@@ -207,6 +209,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
   rc=$?
   say "REQUESTS (exit $rc, release run $release): $(tail -1 "$OUT/load.log" | cut -c1-300)"
+  mkdir -p "$OUT/timings" && cp "$D/load.timings.json" "$OUT/timings/" || say "TIMINGS: no $D/load.timings.json"
   for _ in $(seq 1 450); do     # every closed window's seal line
     c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
     [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
