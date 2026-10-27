@@ -61,7 +61,9 @@ def examples(root: Path) -> list[Example]:
 
 def _git(root: Path, *argv: str) -> list[str]:
     p = subprocess.run(["git", *argv], cwd=root, capture_output=True, text=True)
-    return [x for x in p.stdout.split("\0") if x] if p.returncode in (0, 1) else []
+    if p.returncode not in (0, 1):      # 1: git grep found nothing
+        raise RuntimeError(f"git {' '.join(argv[:2])} in {root} failed: {p.stderr.strip()} (the checks read a git checkout)")
+    return [x for x in p.stdout.split("\0") if x]
 
 
 @cache
