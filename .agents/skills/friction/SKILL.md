@@ -155,6 +155,9 @@ Landing:
 
 Protocols and claims:
 
+- (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
+  under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  ties them by a premise or trusts them separately.
 - (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - (8 Oct) A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the

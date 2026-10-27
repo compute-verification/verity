@@ -37,6 +37,8 @@ SUPPORTED: dict[str, Supported] = {
                                                     "(default: vLLM's, on)"),
     "enable_prefix_caching": Supported(bool, None, "True lets a request read another's cached KV blocks for a shared prefix "
                                                    "(default: off)"),
+    "async_scheduling": Supported(bool, None, "False schedules each step once the previous step's output is in (LAG 0) "
+                                              "(default: vLLM's resolution, on)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
     "execution": Supported((str, type(None)), None, "the execution label the engine is built for (engine.served.EXECUTIONS), which "
                                                     "sets its batch invariance and enforce_eager (default: bi-eager, or bi-compiled "
@@ -54,7 +56,7 @@ SUPPORTED: dict[str, Supported] = {
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
 ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "kv_cache_memory_bytes", "enable_chunked_prefill",
-               "enable_prefix_caching", "dtype",
+               "enable_prefix_caching", "async_scheduling", "dtype",
                "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend", "seed")
 #: Explicit overrides that can select kernels outside a protocol option's Build.
 KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend")
@@ -160,6 +162,8 @@ class LLM:
     * ``enable_chunked_prefill`` (bool): False holds a prefill that doesn't fit a step instead of cutting it; default vLLM's.
     * ``enable_prefix_caching`` (bool): True lets a request read the KV blocks another computed for the same prefix; default
       off.
+    * ``async_scheduling`` (bool): False schedules each step once the previous step's output is in (LAG 0); default vLLM's
+      resolution, on.
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
     * ``execution`` (str): the execution label the engine is built for, a key of ``engine.served.EXECUTIONS``, which sets

@@ -378,7 +378,7 @@ the sizes differ. The stratified sampling design is unchanged.
   `n_s` units faulty has acceptance probability at most `((n_s − b_s)/n_s)^(f_s)`, so `f_s ≈ ln(1/δ)/ε_s` catches a
   faulty fraction `ε_s` of it up to `δ`. Floors of at least the stratified sampling design's sizes at `C` for the strata
   that do no work keep that design's guarantee for them.
-- **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Faulty units that do a fraction `ε` of the work
+- **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Faulty proof blocks that do a fraction `ε` of the work
   have acceptance probability at most `(1 − ε)^K` (`work_escape_le`), whatever the floors. At the sizing of record,
   `δ = 2^-40` and `ε = 0.1%`, `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not
   (`record_sizing_one_fewer`). Rounding up keeps every unit's inclusion probability at least `K w_s / W`, which the bound
@@ -398,13 +398,13 @@ the sizes differ. The stratified sampling design is unchanged.
   - What it guarantees (`soundness/FlockSoundness/Audit/Closure.lean`): a set's acceptance probability under the closure
     draw is the work sampling design's for the set with the units it makes unsound, those whose closure meets it
     (`closure_escape`). The unsound work is the work of both: the closure map need not list a tile in its own closure,
-    so the faulty units' own work is counted explicitly. A faulty unit's harm is its own work and that of every unit
+    so the faulty proof blocks' own work is counted explicitly. A faulty proof block's harm is its own work and that of every unit
     above it, so one that is never drawn on its own, such as a node, is charged all of it (`harm_le_unsoundWork`). At
     any floors, the audit accepts while the unsound work is at least a fraction `ε` of the work with probability at most
     `(1 − ε)^K + ε_ks + ε_bind` (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40`
     (`audit_work_closure_of_record`).
   - `Law.widen`'s `escape_widen_le` is weaker. It carries only the base sampling design's bounds on acceptance
-    probability, and only to a widening on the same coins, and those bound the faulty units' own work, not the unsound
+    probability, and only to a widening on the same coins, and those bound the faulty proof blocks' own work, not the unsound
     work.
 
 The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
@@ -1563,13 +1563,16 @@ setting (`verify --session-tables J`, default 1), never the record's. Only `veri
 statements define such a session; any other statement refuses `J > 1`.
 
 - **The tables.** Take the session's units: the record's draw's (§7.3), or without a draw the population's `0 … N − 1`.
-  - The draw must be a `subset` draw of the registered population. A Bernoulli or stratified draw is refused, since its
-    count is not fixed.
+  - The draw must have a fixed count: a `subset` draw of the registered population (`k` units), or a `stratified` one
+    (Σ_s k_s units, one draw over the sampling block, every stratum included). A Bernoulli draw is refused, since its
+    count is not fixed, and so is a work draw, whose closure is not split (`Draw.tablesWhy`, `Draw.TABLES_LAW`).
   - Refused as well: `J > 64`, no units, or a count `J` doesn't divide.
   - The units split into `J` equal consecutive parts of `k` units. Table `j` is `circuit-{j:02}`. Its statement is §16.10's
     drawn statement of `{"law": "subset", "population": N, "k": k, "units": part j}`, under the identity plus
     `session: {tables: J, table: j, units: "the draw's units (without a draw, the population's) in equal consecutive
-    parts; table j proves part j as a subset draw of the population"}`.
+    parts; table j proves part j as a subset draw of the population"}`. A stratified draw's parts are subset
+    statements too: the draw's sorted units split consecutively, whatever their strata, and only the session's draw
+    (U1–U3) is held to the stratified law.
   - Nothing in the record describes a table's units.
 - **The session.**
   - Every table must have the same `m_pts`.
