@@ -1433,10 +1433,10 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
             if eps > GR.FLAG:
                 raise CompileError("cover", f"seed group {g} (sites {[s for s, k in enumerate(group_of) if k == g]}): the "
                                             f"grind term of its {kind} dots is {100 * eps:.4g}%, over {100 * GR.FLAG:g}% at "
-                                            f"T = 2^{GR.T_BITS} (decision 122: GRIND's premium over its rows' noise bits and "
+                                            f"T = 2^{GR.T_BITS} (`grind.visible_premium` over its rows' noise bits and "
                                             f"readers): commit more of the call's heads and requests together, and below "
                                             f"that (decode at a small batch, a short prompt) the group's noise is a live "
-                                            f"per-round coin's (decision 36), not a seed's")
+                                            f"per-round coin's, not a seed's")
     fn = bind(PouwCompiled, SERVED=served, SCHEME=scheme, GROUPS=group_of)
     try:
         compiled = Program(fn, registered=registered)
