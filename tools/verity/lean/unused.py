@@ -28,8 +28,9 @@ A module of PKG is kept, with the first reason that holds:
   test's Lean text), keeps what M imports too, transitively, since that Lean may use any of it;
 - `queued`: a PR in the merge queue (`--queued`: what `--fetch-queued` wrote from `research queue status` and each PR's
   diff) edits, renames or deletes its file, or adds an `import` of it or (in another file: a lock, a test) its name; what
-  it imports is kept too, unless the PRs only edit it and it declares nothing (an edit of an import-only module is its
-  imports, which the diff shows);
+  it imports is kept too where `named` would keep it (an added `import`, a name a difftest or a shell script adds) or
+  the PRs edit it, unless they only edit it and it declares nothing (an edit of an import-only module is its imports,
+  which the diff shows);
 - `checks`: it is a conformance check, which no guarantee reaches by design: it holds an `example`, or its name (or an
   enclosing module's) ends in `Checks` or `Vectors`. Its owner decides whether it goes;
 - `cited`: a comment of a Lean file outside PKG (a Definition's docstring) cites it, by its module's name or path or a
@@ -244,10 +245,27 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
 ADDED_IMPORT = re.compile(r"^\+[ \t]*(?:(?:public|private)[ \t]+)?(?:meta[ \t]+)?import[ \t]+(?:all[ \t]+)?([^\s]+)[ \t]*$")
 
 
+def pr_entry(diff: list[tuple[str, str, str]]) -> dict:
+    """A PR's entry of `fetch_queued`'s document from its diff, (file, previous path or "", patch) per file."""
+    files, imports, names, reads = set(), set(), set(), set()
+    for fn, prev, patch in diff:
+        files |= {fn, prev} - {""}
+        if fn.endswith(".lean"):
+            imports |= {m.group(1) for line in patch.splitlines() if (m := ADDED_IMPORT.match(line))}
+        else:
+            lines = [line for line in patch.splitlines() if line.startswith("+")]
+            added = {q for line in lines for q in QUALIFIED.findall(line)}
+            names |= added
+            reads |= added if "difftest" in fn or fn.endswith(".sh") else set()
+            reads |= {i for line in lines for i in LEAN_IMPORT.findall(line)}
+    return {"files": sorted(files), "imports": sorted(imports), "names": sorted(names), "reads": sorted(reads)}
+
+
 def fetch_queued(path: Path) -> dict:
     """Every PR `research queue status` lists, in any state, with the files its diff touches (old and new paths), the modules
-    its added `import` lines name, and the qualified names its other files' added lines hold (a lock's entry, a test's
-    module), written to ``path``: {PR: {"files": [...], "imports": [...], "names": [...]}}."""
+    its added `import` lines name, the qualified names its other files' added lines hold (a lock's entry, a test's
+    module), and those of them a difftest or a shell script holds or an added `import` line names, written to ``path``:
+    {PR: {"files": [...], "imports": [...], "names": [...], "reads": [...]}}."""
     from concurrent.futures import ThreadPoolExecutor
 
     status = subprocess.run(["research", "queue", "status"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
@@ -259,14 +277,7 @@ def fetch_queued(path: Path) -> dict:
                            cwd=ROOT, capture_output=True, text=True)
         if r.returncode:
             raise SystemExit(f"unused: the files of PR #{n} can't be read: {r.stderr.strip()[-300:]}")
-        files, imports, names = set(), set(), set()
-        for fn, prev, patch in (json.loads(line) for line in r.stdout.splitlines() if line.strip()):
-            files |= {fn, prev} - {""}
-            if fn.endswith(".lean"):
-                imports |= {m.group(1) for line in patch.splitlines() if (m := ADDED_IMPORT.match(line))}
-            else:
-                names |= {q for line in patch.splitlines() if line.startswith("+") for q in QUALIFIED.findall(line)}
-        return str(n), {"files": sorted(files), "imports": sorted(imports), "names": sorted(names)}
+        return str(n), pr_entry([tuple(json.loads(line)) for line in r.stdout.splitlines() if line.strip()])
 
     with ThreadPoolExecutor(8) as ex:
         doc = dict(ex.map(one, prs))
@@ -274,18 +285,30 @@ def fetch_queued(path: Path) -> dict:
     return doc
 
 
-def queued_modules(queued: dict, pkg: str, mods: dict[str, str]) -> dict[str, tuple[list[str], bool]]:
+#: how a queued PR reaches a module, weakest first
+REACH = ("mentions", "edits", "reads")
+
+
+def queued_modules(queued: dict, pkg: str, mods: dict[str, str]) -> dict[str, tuple[list[str], str]]:
     """{module of PKG: (the PRs of ``queued`` (`fetch_queued`'s document) whose diff touches its file, or adds an import or
-    another mention of it; whether one of them imports or names it, rather than only touching its file)}."""
+    another mention of it; the strongest of `REACH` among them: `reads` (an added import, or a name ``reads`` holds, every
+    name of a document without ``reads``), `edits` (its file) or `mentions` (any other name))}."""
     by_path = {f"{pkg}/{r}": m for m, r in mods.items()}
     out: dict[str, set[str]] = collections.defaultdict(set)
-    named: set[str] = set()
+    how: dict[str, str] = {}
+
+    def mark(m: str, n: str, h: str) -> None:
+        out[m].add(f"#{n}")
+        how[m] = max(how.get(m, h), h, key=REACH.index)
+
     for n, pr in queued.items():
-        those = [i for i in [*pr.get("imports", []), *pr.get("names", [])] if i in mods]
-        named.update(those)
-        for m in [by_path[f] for f in pr.get("files", []) if f in by_path] + those:
-            out[m].add(f"#{n}")
-    return {m: (sorted(v, key=lambda s: int(s[1:])), m in named) for m, v in out.items()}
+        reads = {*pr.get("imports", []), *pr.get("reads", pr.get("names", []))}
+        for m in [by_path[f] for f in pr.get("files", []) if f in by_path]:
+            mark(m, n, "edits")
+        for i in [*pr.get("imports", []), *pr.get("names", [])]:
+            if i in mods:
+                mark(i, n, "reads" if i in reads else "mentions")
+    return {m: (sorted(v, key=lambda s: int(s[1:])), how[m]) for m, v in out.items()}
 
 
 def owners(policies: dict[str, dict], pins: dict[str, str | None], files: list[str], pkg: str) -> dict[str, str]:
@@ -382,9 +405,9 @@ def decide(pkg: Path, policy: dict, used: dict, files: list[str], frozen: list[s
             if reads:
                 for i in sorted(closure({m}, graph, scope) - {m}):
                     keep(i, f"named: imported by {m}, which {f} reads")
-    for m, (by, imported) in sorted(queued_modules(queued or {}, p, mods).items()):
+    for m, (by, how) in sorted(queued_modules(queued or {}, p, mods).items()):
         keep(m, f"queued: {', '.join(by[:4])}" + (f" and {len(by) - 4} more" if len(by) > 4 else "") + " touch or import it")
-        if not imported and (facts.get(m) or {}).get("constants", 1) == 0:
+        if how == "mentions" or how == "edits" and (facts.get(m) or {}).get("constants", 1) == 0:
             continue
         for i in sorted(closure({m}, graph, scope) - {m}):
             keep(i, f"queued: imported by {m}, which {by[0]} touches or imports")

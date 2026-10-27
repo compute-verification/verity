@@ -88,12 +88,32 @@ def test_what_a_queued_pr_touches_or_imports_is_kept(stand_in):
     got = U.decide(pkg, policy, used, [test], [], named)
     assert got["kept"]["Prune.B.Old"] == "queued: #5001 touch or import it"
     assert got["kept"]["Prune.B.Group"].startswith("aggregator: ") and got["unused"] == []
+    mentioned = {"5003": {"files": [], "imports": [], "names": ["Prune.B.Old"], "reads": []}}
+    got = U.decide(pkg, policy, used, [test], [], mentioned)
+    assert got["kept"]["Prune.B.Old"] == "queued: #5003 touch or import it" and got["unused"] == ["Prune.A.Side"]
+    read = {"5004": {"files": [], "imports": [], "names": ["Prune.B.Old"], "reads": ["Prune.B.Old"]}}
+    assert U.decide(pkg, policy, used, [test], [], read)["unused"] == []
+    assert U.queued_modules({**mentioned, **read}, U.rel(pkg), U.C.lean_modules(pkg)) == {
+        "Prune.B.Old": (["#5003", "#5004"], "reads")}
     umbrella = {"5002": {"files": [f"{U.rel(pkg)}/Prune/B/Group.lean"], "imports": []}}
     got = U.decide(pkg, policy, used, [test], [], umbrella)
     assert got["kept"]["Prune.B.Group"].startswith("queued: ") and got["unused"] == ["Prune.A.Side", "Prune.B.Old"]
     doc = U.listing(pkg, got, {U.rel(pkg): policy}, used, [test], {"Prune.B.Group": got["kept"]["Prune.B.Group"]})
     assert [r["module"] for r in doc["held"]] == ["Prune.B.Group"] and doc["total"]["held"] == 1
     assert "## Held: unused but for a queued PR, as a check or cited (1 modules" in U.table(doc)
+
+
+def test_a_queued_diff_reads_only_what_a_reader_or_an_import_names():
+    got = U.pr_entry([
+        ("Security/Proofs/Proofs/A.lean", "", "+import Proofs.B\n-import Proofs.C\n"),
+        ("tools/x.py", "tools/old.py", "+# as `Proofs.D`'s clash showed\n+SOURCE = \"import Proofs.E\\n\"\n"),
+        ("verity/core/difftest/run.py", "", "+MODULE = \"Proofs.F\"\n Proofs.G\n"),
+        ("scripts/build.sh", "", "+lake build Proofs.H\n"),
+    ])
+    assert got == {"files": ["Security/Proofs/Proofs/A.lean", "scripts/build.sh", "tools/old.py", "tools/x.py",
+                             "verity/core/difftest/run.py"],
+                   "imports": ["Proofs.B"], "names": ["Proofs.D", "Proofs.E", "Proofs.F", "Proofs.H"],
+                   "reads": ["Proofs.E", "Proofs.F", "Proofs.H"]}
 
 
 def test_a_conformance_check_is_kept_without_its_imports(stand_in):
