@@ -5,6 +5,8 @@ attention), with random weights registered under a committer's key.
 """
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
@@ -305,6 +307,29 @@ def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(w
     assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
     with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('m/row_quant_1', .*\) \(1 ops\)"):
         WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], _read(store))
+
+
+def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(window):
+    """FA3's key block follows its launch's query rows, so the engine's prefill attention is `Attention_v4` at another
+    ``BN`` than the class Program's one-row decode's: a node served under other statics of its class node's Definition is
+    taken where its value is the class node's on its operands, and refused by name where it isn't."""
+    low, _f, _t, weights, slots = window
+    s0, k = slots[0], _position(low.fn, "Attention")[0]
+    rows, store = _served(low, s0, T=1)
+    op = f"op{k}"
+    rows = [{**d, "spec": re.sub(r"(?<=[{,])BN=(\d+)", lambda m: f"BN={int(m[1]) + 64}", d["spec"])}
+            if (d["op_path"], d["step"]) == (op, 0) else d for d in rows]
+    prefill = [d for d in rows if (d["op_path"], d["step"]) == (op, 0)]
+    assert len(prefill) == s0.row[1] and all(d["spec"] != descriptor_id(low.fn.body.nodes[k].fn) for d in prefill)
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, _read(store)))
+    assert got.source[k] == WR.SERVED
+    assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
+    m = prefill[0]["members"][0][0]
+    bad = dict(store)
+    bad[(0, op, m)] = bad[(0, op, m)] ^ np.uint16(1)
+    with pytest.raises(ValueError, match=rf"node {k} .* at position 0: served as .*not its Definition's value on its "
+                                         r"operands \(served as Attention_v4\{"):
+        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, _read(bad)))
 
 
 def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):

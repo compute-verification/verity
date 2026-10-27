@@ -6,7 +6,10 @@ request's tapped words in the sealed record, `Served`), else the class Program's
 (`numerics.rows.ROWS`) on the node's operands. The engine never computes the positions past a request's last output, nor,
 at a prompt position before the last, the nodes prefill prunes (the last layer from its query on, the final norm, the LM
 head and the token select), so those are computed. An embedding's value is the table's row at its position's token, and a
-token select's the first maximum of its logits, whichever source gives it; a served one that isn't is refused by name.
+token select's the first maximum of its logits, whichever source gives it; a served one that isn't is refused by name. So
+is a node the engine computed under other statics of its Definition than the class node's whose value isn't the class
+node's on its operands: FA3's key block follows its launch's query rows (`targets.fa3_kblock_n`), so a prefill's
+attention isn't the class Program's one-row decode's, though at as few keys as one block of either holds the two agree.
 
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`). Every other unit holds its Definition's
 function of the window's values:
@@ -156,11 +159,14 @@ class Slot:
         for j, node in enumerate(fn.body.nodes):
             self._node(j, node, None if served is None else served(self.position[j], j - first[self.position[j]], node))
 
-    def _node(self, j: int, node: Any, got: list[np.ndarray] | None) -> None:
+    def _node(self, j: int, node: Any, served: tuple[str, list[np.ndarray]] | None) -> None:
         fam, fields, what = node.fn.name, _fields(node.fn), f"node {j} ({node.fn.id}) at position {self.position[j]}"
         if fam == "Embedding":
             self._token(self.position[j], node.args[0])
         pin = _pinned(fam)
+        if served is not None and served[0] != descriptor_id(node.fn):
+            pin = f"its Definition's value on its operands (served as {served[0]})"
+        got = None if served is None else served[1]
         want = self._evaluate(node, fields, what) if got is None or pin else None
         if got is not None:
             if len(got) != len(fields):
@@ -265,8 +271,8 @@ class Served:
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
     computes them all, which is the class Program's node order within a position however the prefill interleaves the
     others. Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
-    boundary's op path names an fx node numbered over the request's steps. A row whose spec isn't its class node's
-    descriptor id is refused by name."""
+    boundary's op path names an fx node numbered over the request's steps. A row of another Definition than its class
+    node's is refused by name; one of its Definition at other statics is `Slot`'s to hold to the class node's value."""
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
@@ -317,9 +323,9 @@ class Served:
             rows.append({**d, "spec": r["spec"]})
         return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, op, m, lo, hi))
 
-    def __call__(self, p: int, k: int, node: Any) -> list[np.ndarray] | None:
-        """Position ``p``'s node ``k`` (``node``, its index within its position) as served, None where the engine didn't
-        compute it."""
+    def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
+        """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
+        None where the engine didn't compute it."""
         if k >= len(self.prefill):
             raise ValueError(f"node {k} of a position, past the served request's {len(self.prefill)} ops a position")
         if p < self.LP:
@@ -329,7 +335,7 @@ class Served:
             d = self.decode[p - self.LP][k] if p - self.LP < len(self.decode) else None
         if d is None:
             return None
-        if d["spec"] != descriptor_id(node.fn):
+        if RM.spec_family(d["spec"]) != RM.spec_family(descriptor_id(node.fn)):
             raise ValueError(f"position {p}'s node {k} is {descriptor_id(node.fn)}, served as {d['spec']} ({d['op_path']})")
         members = list(d["members"])
         if len(members) > 1:
@@ -342,7 +348,7 @@ class Served:
             if a is None:
                 raise ValueError(f"position {p}'s node {k}: {why}")
             out.append(a)
-        return out
+        return str(d["spec"]), out
 
 
 class Rows:
