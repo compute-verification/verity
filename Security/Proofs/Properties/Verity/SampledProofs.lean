@@ -6,19 +6,19 @@ import Proofs.Flock.Bridge.SampledSound
 
 `Vocab.SampledProofsSound` (`Target .sampled`: `Accounting.PeriodLive.Sound` at `Vocab.live` and `Vocab.error`, whose
 LMS forger is its own term `Vocab.forges`) holds at every vocabulary coupled, strategy by strategy, to a C-Flock live session (`SampledIn`): the session's setting (`Flock.Guarantees.LiveAt`), the strategy of
-it the play induces, a collision event `Brk` of the play, and five facts relating them. F3 names `ecr/sha-512` and
-`euf-cma/lms-sha512-n64` separately, each applied to its own fixed finder outside the theorem (Daniel's ruling), so a
+it the play induces, a collision event `Brk` of the play, and five facts relating them. The vocabulary names `ecr/sha-512` and
+`euf-cma/lms-sha512-n64` separately, each applied to its own fixed finder outside the theorem, so a
 forged release is charged to the vocabulary's forger (`Vocab.forger`, `Vocab.Forges`: a `Vocab.forgery` against the
 device's signed log in the outcome) and never reduced to a SHA-512 collision.
 
 * `accept_le`: outside the collision and the forgery, sampled proofs' verdict in the play is at most as likely as
-  flock-verify's acceptance in the session (ONE-4's projection of the device's releases onto the session's coins, and
-  ONE-3t's `acc_of_accepts`).
-* `break_le`: the collision (ONE-4's `Properties.Challenger.Break` at a `.collision` witness) is at most the loss at
+  flock-verify's acceptance in the session (the projection of the device's releases onto the session's coins, and
+  `acc_of_accepts`).
+* `break_le`: the collision (`Properties.Challenger.Break` at a `.collision` witness) is at most the loss at
   the probability that the vocabulary's finder outputs a collision, as `Accounting.Live.sound_of_break` charges it.
   The forgery (its `.forgery` witness) is `Vocab.forges`, the forger's success probability in the play.
 * `unbound_le`: the units the vocabulary's extractor leaves unbound are at most those faulty under the session
-  extractor's witness (`LiveAt.faultyE`: wrong, or with a committed value unopened; R4′; ONE-7's `place` and ONE78's
+  extractor's witness (`LiveAt.faultyE`: wrong, or with a committed value unopened; `place` and
   `circuitOfFile`).
 * `cr`: where the vocabulary's finder meets its quantitative premise (`Vocab.FinderCR`), the finders C-Flock builds
   from the induced strategy meet theirs (`LiveAt.CR`).
@@ -26,8 +26,8 @@ device's signed log in the outcome) and never reduced to a SHA-512 collision.
 
 `sampledProofsSound` composes them with `LiveAt.soundF`. Its error is the vocabulary's (`Vocab.error`, the conditional
 form `Accounting.condError`, with the forger's term), so it asks nothing of the strategy. `sampledProofsSound_nontrivial` is
-`soundness_of_subprotocols_nontrivial_of`'s hypothesis at a commitment that opens no committed value of any unit, ONE19's
-instance (#4867); `honestHolds_sampled` is `Vocab.HonestHolds .sampled` at the honest commitment.
+`soundness_of_subprotocols_nontrivial_of`'s hypothesis at a commitment that opens no committed value of any unit,
+`sampledKSLivePub_nontrivial`'s instance; `honestHolds_sampled` is `Vocab.HonestHolds .sampled` at the honest commitment.
 -/
 namespace Verity
 
@@ -117,7 +117,7 @@ theorem le_error (S : SampledIn V θ F c σ) :
 
 end SampledIn
 
-/-- **Sampled proofs' target** (`Vocab.SampledProofsSound`, ONE-8): at every vocabulary coupled to C-Flock's live
+/-- **Sampled proofs' target** (`Vocab.SampledProofsSound`): at every vocabulary coupled to C-Flock's live
 session at every `θ`, `F`, `c` and strategy (`SampledIn`), for every strategy, the probability that sampled proofs'
 verdict accepts while more than an `ε` share of the units are unbound in the extractor's transcript is at most
 `Vocab.error .sampled` there: the published `δ` at the strategy's cost, its loss at the collision finder, and the
@@ -129,7 +129,7 @@ theorem sampledProofsSound (V : Vocab d α) (C : ∀ θ F c (σ : Game.Strategy 
 
 /-- **Sampled proofs' claim fails where the commitment opens no committed value of any unit**: every unit has a
 committed input or output the commitment opens to no value, so every unit is unbound, and the claim fails at any
-`ε < 1` once there is a unit. ONE19's instance (#4867, `sampledKSLivePub_nontrivial`: a commitment with no rows, one
+`ε < 1` once there is a unit. `sampledKSLivePub_nontrivial`'s instance (a commitment with no rows, one
 unit holding a returned computed gate) is this case. -/
 theorem not_holds_sampled_of_unopened (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (o : Outcome) (hio : ∀ u, ∃ g ∈ (V.partsOf F).io u, ∀ v, ¬ V.Opens θ F c g v) (hε : (V.certOf θ).ε < 1)
@@ -148,7 +148,7 @@ theorem not_holds_sampled_of_unopened (V : Vocab d α) (θ F c : ByteArray) (σ 
   linarith
 
 /-- **Sampled proofs' target is not trivial** (`soundness_of_subprotocols_nontrivial_of`'s hypothesis at `.sampled`):
-at a strategy whose commitment opens no committed value of any unit (ONE19's instance), with `ε < 1`, a unit, and the
+at a strategy whose commitment opens no committed value of any unit (`sampledKSLivePub_nontrivial`'s instance), with `ε < 1`, a unit, and the
 errors summing below one, the errors sum below the probability that sampled proofs' claim fails. -/
 theorem sampledProofsSound_nontrivial (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (hio : ∀ u, ∃ g ∈ (V.partsOf F).io u, ∀ v, ¬ V.Opens θ F c g v) (hε : (V.certOf θ).ε < 1) (hn : 0 < V.units F)
