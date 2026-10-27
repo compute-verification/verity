@@ -21,7 +21,7 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
    pseudo-random ones) decode on the device to the reference's decode under the reference's keys, with the device's keys
    equal to the reference's; and no kernel flag raised. **A failed kernel gate stops the run; it times nothing.**
 2. **Setup and encode.** `W` is the weight set's bytes, packed as 2,054-byte payloads (`p2-2054B`), in `B` blocks, whole
-   segments of 65,536. The commitment to `W` comes first, then the setup salt from it (§4). Encoding is two roots per block,
+   segments of 65,536. The commitment to `W` comes first, then the setup salt from it. Encoding is two roots per block,
    so the device encodes the first `--p2-encode-blocks` blocks (encode GB/s is their payload bytes over the device time) and
    the rest of `C` is uniformly random canonical blocks: every `C` is the encoding of its decode, the decode's cost does not
    depend on the bytes, and the audit is over `C`'s leaves.
@@ -342,7 +342,7 @@ def profile(k: int, limit_ns: int, gaps: tuple[str, ...], scheme: str = R.PROTOC
             "assumptions": list(ASSUMPTIONS), "gaps": list(gaps),
             "certified": bool(storage and storage.get("certified")) and not gaps,
             **({"storage_profile": storage} if storage is not None else {}),
-            "experimental": "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"}
+            "experimental": "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (decision 8)"}
 
 
 def plaintext_rows(bound: Any, c: Any, dropped: list[int]) -> Any:

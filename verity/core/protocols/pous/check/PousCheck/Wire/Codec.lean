@@ -3,8 +3,8 @@ import PousCheck.Randomness
 /-!
 # The decode an audit with verification flag bit 0 checks
 
-`p2/PROTOCOL.md` §3 and §4 (`reference.expand_prefix`, `stream`, `keys`, `d`, `sigma`, `decode`), at the spec's prefix
-(the model commitment and the 32-byte setup salt):
+`benchmarks/pous/p2_v1/reference.py`'s `expand_prefix`, `stream`, `keys`, `d`, `sigma` and `decode`, at the spec's
+prefix (the model commitment and the 32-byte setup salt):
 
 ~~~text
 prefix    Z("verity/pous/p2/keys/v4\0" ‖ frame("p2/v4") ‖ frame(prime id) ‖ frame(model) ‖ frame(salt)), Z zero-pads to

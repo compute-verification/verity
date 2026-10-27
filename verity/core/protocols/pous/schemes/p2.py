@@ -1,9 +1,9 @@
 """P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
 v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, amended to v1.1 by Daniel's
-ruling of 4 Oct 2026 and to v4 by his ruling of 6 Oct 2026, one hash, SHA-512, in `../p2/PROTOCOL.md`, which this
-module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only
-in how a block's keys are expanded:
+ruling of 4 Oct 2026 and to v4 by his ruling of 6 Oct 2026, one hash, SHA-512; `benchmarks/pous/p2_v1/reference.py`
+is its reference, and the package README's "P2 v4" its outline).  Every block is independent, and its decode is two
+big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
 
 - `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names
   (decision F4).
@@ -135,16 +135,16 @@ squaring (`regate.py`) over the root's 16,486 squaring-equivalents, 5,960.54 µs
 Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring (run r20260929-060834-0ec4,
 art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the cooperating root is 1,708,058.35 ns
 and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
-art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
+art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, Daniel's ruling of 4 Oct 2026)."""
 
 DELTA_NS = 500_000
-"""Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""
+"""Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (decision F2)."""
 
 RTT_ALLOWANCE_CAP_NS = 354_000
-"""The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12): the
-largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
-it, and the verifier any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum
-alone admits up to `ROOT_CALL_NS − 1`."""
+"""The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026: the largest whole µs with
+`Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past it, and the verifier
+any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum alone admits up to
+`ROOT_CALL_NS − 1`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,8 +333,9 @@ def below(p: int, candidates) -> int:
 
 
 def sha512_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int]:
-    """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's §4 streams: `K` is the first
-    `w/8` bytes of `stream(base, "K")`, and `t` the first `w/8`-byte word of `stream(base, "t")` below `p`."""
+    """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's streams (`reference.keys`):
+    `K` is the first `w/8` bytes of `stream(base, "K")`, and `t` the first `w/8`-byte word of `stream(base, "t")` below
+    `p`."""
     nb, base = params.block_bytes, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
     k = int.from_bytes(stream(base, b"K", nb), "big")
     return k, below(params.p, (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count()))

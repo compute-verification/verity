@@ -9,18 +9,18 @@ import PousCheck.Prim.PyJson
 /-!
 # `p2-audit-wire/v4`: a setup and one timed audit, verified to its `FINAL` frame
 
-`p2/PROTOCOL.md` §4 ("Audit protocol and wire formats") and §5, as the reference verifier (`benchmarks/pous/p2_v1/wire.py`,
-`verify_audit`) reads them. A frame is `"P2AU" ‖ 0x04 ‖ type ‖ u32be(len body) ‖ body`, and a session is
-SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*, SETUP_ROOT, AUDIT_OPEN, then CHALLENGE and RESPONSE alternating. `verifyAudit`
-returns the `FINAL` frame the verifier sends, byte for byte, with its verdict, failure code, the transcript's hash and one
-147-byte record per round reached; or, when there is no audit identity to report under, the fault; or the verifier's
-refusal of its own inputs (`Stop.refused`).
+As the reference verifier (`benchmarks/pous/p2_v1/wire.py`, `verify_audit`) defines it, on the vectors beside it. A
+frame is `"P2AU" ‖ 0x04 ‖ type ‖ u32be(len body) ‖ body`, and a session is SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*,
+SETUP_ROOT, AUDIT_OPEN, then CHALLENGE and RESPONSE alternating. `verifyAudit` returns the `FINAL` frame the verifier
+sends, byte for byte, with its verdict, failure code, the transcript's hash and one 147-byte record per round reached;
+or, when there is no audit identity to report under, the fault; or the verifier's refusal of its own inputs
+(`Stop.refused`).
 
 Every check is the Python's, in the Python's order, because the first failing check names the code:
 
 * setup: the manifest is canonical JSON naming a P2 store (`manifestParams`); SETUP_SALT, every SETUP_BLOCK and
   SETUP_ROOT repeat the commitment (and the salt), the blocks come in order, each canonical below `p`. Several faults
-  report the spec's 1, 2, 3, 5 precedence: a malformed frame at once, a binding mismatch once every setup frame is read
+  report `wire.py`'s 1, 2, 3, 5 precedence: a malformed frame at once, a binding mismatch once every setup frame is read
   (`parseSetup`). Then `setupFailure`: a private setup's declared root must be the root the verifier built from `W`
   itself (`Verifier.privateRoot`), which it never trusts; a public setup's blocks must hash to the declared root and
   decode back to the committed `W`. A setup failure is reported under the first AUDIT_OPEN in the session.
@@ -59,7 +59,7 @@ def RESPONSE : Nat := 0x12
 def FINAL : Nat := 0x13
 def TYPES : List Nat := [SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK, SETUP_ROOT, AUDIT_OPEN, CHALLENGE, RESPONSE, FINAL]
 
-/-! Failure codes (§4): the `FINAL`'s second status byte. -/
+/-! Failure codes (`wire.py`'s): the `FINAL`'s second status byte. -/
 def SUCCESS : Nat := 0
 def MALFORMED : Nat := 1
 /-- Identity, round, index, replay or domain. -/
@@ -199,7 +199,7 @@ def bind (mismatch : Option Fault) (ok : Bool) (message : String) : Option Fault
   if ok || mismatch.isSome then mismatch else some ⟨IDENTITY, message⟩
 
 /-- The setup frames (`_parse_setup`) from the first, and the index of the frame after SETUP_ROOT. A malformed frame (1)
-fails at once; a binding mismatch (2) only once every setup frame is read, so that several faults report the spec's
+fails at once; a binding mismatch (2) only once every setup frame is read, so that several faults report `wire.py`'s
 1, 2, 3, 5 precedence whatever the frames' order (3 and 5 are `setupFailure`'s). -/
 def parseSetup (frames : Array ByteArray) : W (Setup × Nat) := do
   let (_, body) ← parseEnvelope (frames[0]?.getD .empty) (some SETUP_COMMIT)
@@ -250,14 +250,14 @@ def parseSetup (frames : Array ByteArray) : W (Setup × Nat) := do
   if let some m := mismatch then throw m
   pure (⟨manifest, commitment, salt, q, blocks, root, epochId manifest commitment salt q.blocks root⟩, cursor)
 
-/-- `W` from its payloads (`pack_payloads`, §4): `bits` bits each, packed continuously, the first payload and its most
+/-- `W` from its payloads (`pack_payloads`): `bits` bits each, packed continuously, the first payload and its most
 significant bit first, zero-padded to whole bytes. -/
 def packPayloads (payloads : Array Nat) (bits : Nat) : ByteArray :=
   let total := payloads.size * bits
   let pad := (8 - total % 8) % 8
   be (payloads.foldl (fun acc m => (acc <<< bits) ||| m) 0 <<< pad) ((total + pad) / 8)
 
-/-- The commitment to `W` (`w_commitment`, §4): `tagged_sha512("verity-pous/w-commitment/v2", u64be(len manifest) ‖
+/-- The commitment to `W` (`w_commitment`): `tagged_sha512("verity-pous/w-commitment/v2", u64be(len manifest) ‖
 manifest ‖ W)`, the manifest canonical JSON of the reference's six fields (no `expander`, unlike `Commit.manifest`),
 which a setup's manifest is (`manifestParams` admits no other bytes). A payload too long for the tag's u64 length has
 no commitment, and matches none. -/

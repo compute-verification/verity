@@ -1,4 +1,4 @@
-"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames (spec §4, "Audit protocol and wire formats"): the builders the
+"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames: the builders the
 vectors are made with, and the reference verifier, `verify_audit`, which reads a setup and one audit transcript and returns
 the exact `FINAL` frame.
 
@@ -40,7 +40,7 @@ RESPONSE_FIXED = D + S + 2 + 8 + 4 + 2
 SETUP_ROOT_BYTES = D + S + 8 + D + 1
 FINAL_FIXED = D + S + 1 + 1 + 2 + 8 + 8 + D + 2
 RECORD_BYTES = 2 + 8 + 8 + 1 + D + D
-"""Body lengths (spec §4's table): AUDIT_OPEN 124, CHALLENGE 138, RESPONSE 112 + n + 64·h, SETUP_ROOT 169,
+"""Body lengths: AUDIT_OPEN 124, CHALLENGE 138, RESPONSE 112 + n + 64·h, SETUP_ROOT 169,
 FINAL 182 + 147·r."""
 
 
@@ -225,7 +225,7 @@ def _params(m: dict) -> tuple[R.Params, int]:
 
 
 def _parse_setup(frames: Sequence[bytes], private_root: bytes | None) -> tuple[Setup, int]:
-    """The setup, raising its failure in the spec's 1, 2, 3, 5 precedence whatever the frames' order: a malformed frame
+    """The setup, raising its failure in the 1, 2, 3, 5 precedence whatever the frames' order: a malformed frame
     (1) at once, a binding mismatch (2) once every setup frame is read, and a root or decode failure (3, 5) as
     `Setup.failure` only when neither came first."""
     cursor = 0

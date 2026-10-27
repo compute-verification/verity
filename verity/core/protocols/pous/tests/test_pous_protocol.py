@@ -638,9 +638,9 @@ def test_p2_square_is_exact_for_every_accepted_c0(w, c0):
 
 
 def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_under_it():
-    """Spec v1.1 (§12, Daniel's ruling of 4 Oct 2026): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
-    from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py` at
-    w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5 (run
+    """Spec v1.1 (SeqRoot, Daniel's ruling of 4 Oct 2026): `ROOT_CALL_NS` is half the cooperating root in ns, rounded
+    down, from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py`
+    at w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5 (run
     r20260929-060834-0ec4).  The RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
     admits the cap and refuses every whole µs past it; what it admits past the cap is under 1 µs."""
     from fractions import Fraction
@@ -662,7 +662,7 @@ def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_u
 
 
 def test_p2_refuses_an_rtt_past_the_cap_or_a_delta_other_than_the_spec_s_even_inside_the_certificate():
-    """Spec v1.1 sets Δ = 0.5 ms and caps the measured RTT allowance at 354 µs ("Sequential reveal and deadlines", §6).
+    """Spec v1.1 sets Δ = 0.5 ms and caps the measured RTT allowance at 354 µs (decision F2).
     The certificate reads only `Δ + RTT`, so Δ = 0 with RTT = 854,028 ns, the certificate's edge 28 ns past the cap, or
     a Δ above 0.5 ms are inside it; the verifier refuses each, and `research=True` runs one with the refusal as a gap."""
     one = schemes.get("p2-16448/v4")
@@ -681,7 +681,7 @@ def test_p2_refuses_an_rtt_past_the_cap_or_a_delta_other_than_the_spec_s_even_in
 
 
 def test_p2_v4_keys_are_the_specs():
-    """v4's keys are the spec's §4 counter-mode SHA-512 streams: given the spec's prefix, `sha512_keys` gives every pinned
+    """v4's keys are the spec's counter-mode SHA-512 streams: given the spec's prefix, `sha512_keys` gives every pinned
     K and t of the spec's `vectors.json` (`fixtures/p2-v4-keys.json`, copied with that file's hash), at w = 64, 96, 128
     and 16,448.  The protocol's prefix frames its 24-byte salt where the spec frames the model commitment and its 32-byte
     setup salt, and nothing else differs; both are zero-padded to whole 128-byte blocks."""

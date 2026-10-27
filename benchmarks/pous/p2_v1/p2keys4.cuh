@@ -1,4 +1,4 @@
-// P2's per-block keys with the v4 framing on the GPU (`reference.keys`, the spec's section 4): row P (K or t) is the first
+// P2's per-block keys with the v4 framing on the GPU (`reference.keys`): row P (K or t) is the first
 // W/8 bytes of SHA-512(prefix || u64be(segment) || u64be(block) || P || u32be(i)) for i = 0, 1, ..., written as big-endian
 // rows like `gpu.Kernels.keys`.
 //

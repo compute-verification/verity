@@ -139,7 +139,7 @@ def test_the_root_exponent_splits_as_the_kernel_takes_it():
 
 
 def test_params_refuse_a_modulus_below_the_payload():
-    """Every payload is below p (spec §2, `m < 2^b < p`): a c0 past 2^w (a negative modulus, which is 3 mod 4 in Python's
+    """Every payload is below p (`m < 2^b < p`): a c0 past 2^w (a negative modulus, which is 3 mod 4 in Python's
     arithmetic), or one leaving p at or below the largest payload, is refused rather than rejecting every block."""
     R, _, _ = _p2()
     for c0 in ((1 << 32) + 5, (1 << 32) - 3, (1 << 32) - (1 << 24) + 1):

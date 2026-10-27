@@ -6,7 +6,7 @@ import Definitions.Pous.Model.StreamedWipe
 Added on 19 Oct 2026 for Daniel's tier 3, a proof of secure erasure for memory wipes, in place of the permutation-based
 retention for wipes: the ideal-permutation premise (C8) is false for the reference Feistel10-SHAKE256 `Π₂`, where
 1.53% of the fill rebuilds any label (verity#1122). The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`,
-the protocol `verity/core/protocols/pous/PROTOCOL.md` ("The streamed-label wipe"). Proofs:
+the protocol `verity/core/protocols/pous/streamed_wipe.py` and its verdict `MemoryChallenger.StreamedWipe`. Proofs:
 `Security/Proofs/Pous/StreamedWipe/`.
 
 **What they rest on.** No named assumption. The labels' PRF (C3, claim `prf/sha-512`) enters as an advantage term in

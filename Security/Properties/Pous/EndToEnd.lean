@@ -337,11 +337,11 @@ root; at `16,447` a responder completes a root. The two roots are sequential (th
 first), so even a root in fewer rounds leaves the attack about twice as far as `D`.
 
 The timing. `pous-ring-speed` at this `D` says no allowed hardware finishes 16,447 sequential multiplication rounds
-within `Δ + RTT ≤ 854 µs`. `ROOT_CALL_NS` (PROTOCOL.md, P2's SeqRoot) is half the fastest modelled root, the timing red
-team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×
-(run `r20260929-060834-0ec4`): about 103.6 ns per round, so 16,447 rounds take at least 1,704 µs, 1.995 × 854 µs. The
-PROTOCOL's 2.0001× counts the root's 20 extra multiplications, which a round of the ring model performs beside its
-squaring. Under the red team's sync model (4.24× and 5.55× at 8 cores) the margin is 1.64× and 1.25×.
+within `Δ + RTT ≤ 854 µs`. `ROOT_CALL_NS` (P2's SeqRoot, `schemes/p2.py`) is half the fastest modelled root, the
+timing red team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8-core cooperation speedup of
+3.490× (run `r20260929-060834-0ec4`): about 103.6 ns per round, so 16,447 rounds take at least 1,704 µs,
+1.995 × 854 µs. SeqRoot's 2.0001× counts the root's 20 extra multiplications, which a round of the ring model performs
+beside its squaring. Under the red team's sync model (4.24× and 5.55× at 8 cores) the margin is 1.64× and 1.25×.
 
 `L` is bounded because `P2RingAuditSecure` is not claimed for every `L` at `k = 105`: the truncation attack
 (`PousP2Ring.trunc_seq_accepted`, which refutes `k ≤ 88` from `L = 2^30`) passes `k = 105` once it drops about 167

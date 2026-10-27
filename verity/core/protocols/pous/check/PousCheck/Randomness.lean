@@ -4,8 +4,7 @@ import Flock.Draw
 /-!
 # `verity.ml.randomness` v2
 
-The derivation the audit's challenges are drawn by (`p2/PROTOCOL.md` Appendix A, `verity/ml/randomness/__init__.py`),
-executable on Flock's SHA-512:
+The derivation the audit's challenges are drawn by (`verity/ml/randomness/__init__.py`), executable on Flock's SHA-512:
 
 ~~~text
 frame(x)            = tag || u64be(len(body)) || body          tags b (bytes), s (UTF-8), i (minimal big-endian, 0 is 0x00)
