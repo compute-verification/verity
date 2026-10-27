@@ -1635,10 +1635,12 @@ registered Definitions, each checked by circuit-check at its sidecar's binding (
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
 
-## ACCEL (protocol v3.2)
+## Dither (v3.2)
 
-ACCEL, credit for a served model's int8 matmuls from committed noised prefix sums, is specified in
-`verity/core/protocols/pouw/accel/PROTOCOL.md` while it is experimental.
+Dither, PoUW's no-fold protocol, credit for a served model's int8 matmuls from committed noised prefix sums, is specified
+in `verity/core/protocols/pouw/dither/PROTOCOL.md` while it is experimental. The served PoUW moves to Dither's no-fold
+receipt (CMP-172): its H1 and J10-R units fold their words into keyed receipts, whose detection rests on
+`SharedNoiseLucks` (`Properties.Pouw.PeriodJ10R`), and that premise has no place in Dither.
 
 ## Not here yet
 
