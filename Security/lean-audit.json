@@ -38,6 +38,10 @@
    "owner": "@compute-accounting",
    "digest": "0506b11a4a3f1738de9dabb70892c42e45fc8838e62bf1820606b0ffe0c242d5"
   },
+  "Accounting.Assumptions.Coverage": {
+   "owner": "@training",
+   "digest": "1e6f95d1a14c679962ca2491f34afe8efb0c2c22e1c2301aa8cc7729465d77f5"
+  },
   "Accounting.Assumptions.EncodeChainHardness": {
    "owner": "@memory-accounting",
    "digest": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
@@ -45,6 +49,10 @@
   "Accounting.Assumptions.HelpWithinCertifier": {
    "owner": "@lean",
    "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab"
+  },
+  "Accounting.Assumptions.IntegrityContains": {
+   "owner": "@training",
+   "digest": "1df4db03c30501febd18c60155c7307bd97bc43bc4cca2ae3ec661eabd7cb899"
   },
   "Accounting.Assumptions.KeyBinding": {
    "owner": "@memory-accounting",
@@ -254,6 +262,10 @@
    "owner": "@memory-accounting",
    "digest": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
   },
+  "Accounting.Assumptions.WipeState": {
+   "owner": "@training",
+   "digest": "994ec5141785d9a3fa5652fc2c48c620d1e976a3e1001c2396f46b97ca25cda6"
+  },
   "Accounting.Assumptions.WordCostsMacs": {
    "owner": "@lean",
    "digest": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
@@ -289,6 +301,10 @@
   "Accounting.CausalStrategy": {
    "owner": "@network-accounting",
    "digest": "c925dc397dff2c7afd95eeafa0c098ada1ed84ad87f7acaec4069157ab2d4083"
+  },
+  "Accounting.CertifierLinks": {
+   "owner": "@training",
+   "digest": "41f4976fd7f85cb508322546684b7d7c9a9d041b9812bf9ecff95cd544358f74"
   },
   "Accounting.CoinFlow.Program.Desc": {
    "owner": "@compute-accounting",
@@ -453,6 +469,14 @@
   "Accounting.Memory.DeterminesAdvice": {
    "owner": "@memory-accounting",
    "digest": "044d87c4d62cdc247e32c17d11254755d63f8de976c1b199ecd87fcc35637f35"
+  },
+  "Accounting.Onsite.Valid": {
+   "owner": "@training",
+   "digest": "c0cfd3665d2519e61fe1dc86877370c37cb48fdde18e38057ba64e7976b24157"
+  },
+  "Accounting.OnsiteClass": {
+   "owner": "@training",
+   "digest": "f9d70d66f16ce6d9e60509418f660cc59511c1a00d7483cd94369f017b6efef1"
   },
   "Accounting.PeriodLive.Sound": {
    "owner": "@lean",
@@ -2101,30 +2125,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.Assumptions.Coverage": {
-   "owner": "@training",
-   "digest": "1e6f95d1a14c679962ca2491f34afe8efb0c2c22e1c2301aa8cc7729465d77f5"
-  },
-  "Accounting.Assumptions.IntegrityContains": {
-   "owner": "@training",
-   "digest": "1df4db03c30501febd18c60155c7307bd97bc43bc4cca2ae3ec661eabd7cb899"
-  },
-  "Accounting.Assumptions.WipeState": {
-   "owner": "@training",
-   "digest": "994ec5141785d9a3fa5652fc2c48c620d1e976a3e1001c2396f46b97ca25cda6"
-  },
-  "Accounting.CertifierLinks": {
-   "owner": "@training",
-   "digest": "41f4976fd7f85cb508322546684b7d7c9a9d041b9812bf9ecff95cd544358f74"
-  },
-  "Accounting.Onsite.Valid": {
-   "owner": "@training",
-   "digest": "c0cfd3665d2519e61fe1dc86877370c37cb48fdde18e38057ba64e7976b24157"
-  },
-  "Accounting.OnsiteClass": {
-   "owner": "@training",
-   "digest": "f9d70d66f16ce6d9e60509418f660cc59511c1a00d7483cd94369f017b6efef1"
   }
  },
  "meaning": [
