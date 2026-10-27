@@ -23,7 +23,8 @@
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 5), wcw (256), ccta (1), pf (0), diag (0) (v31.cu's Knobs) and nreg (the GEMM's
-# register cap, a build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict
+# register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS
+# (default 7); Q, the proof blocks a verdict
 # opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU
@@ -91,7 +92,7 @@ build "$W/v31" "$O/build.log"
 echo "build rc $?" >> "$O/rc.txt"
 [ -x "$W/v31" ] || { cat "$O/rc.txt"; tail -20 "$O/build.log"; exit 1; }
 for n in $(for v in $VARIANTS; do knob "$v" nreg ""; done | sort -u); do
-  build "$W/v31-n$n" "$O/build-n$n.log" -DV31_MAXNREG="$n"
+  build "$W/v31-n$n" "$O/build-n$n.log" -DV31_MAXNREG="$n" -DV31_WG_NREG="$n"
   echo "build n$n rc $?" >> "$O/rc.txt"
 done
 
