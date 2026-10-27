@@ -362,7 +362,7 @@ def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
     for NVIS in range(1, WindowClass(4, 32, 4).positions + 1):
         new, old = _first_blocks(64, NVIS, 128, S)
         lay = IF.layout(new)
+        assert (lay.outer[1:], IF.layout(old).outer[1:]) == ((NVIS, S * NVIS), (NVIS, NVIS))
         rows = lay.cut({"k": NVIS, "v": S * NVIS})
         assert [(p.partition("#")[0], w) for p, w, _ in rows] == [("q", 64)] + [("k", 64)] * NVIS + [("v", n)] * (S * NVIS)
         assert len(rows) + len(lay.outs) == 5 * NVIS + 4 <= grain.rows
-        assert IF.layout(old).outer[2] == NVIS
