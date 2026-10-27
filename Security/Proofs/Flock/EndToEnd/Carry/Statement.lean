@@ -106,7 +106,7 @@ variable {W : ℕ → SamplingBlock} (x : CarriedLeaf W)
 /-- The leaf's sessions, as a type. -/
 abbrev Ses : Type := {t // t ∈ x.sessions}
 
-instance : Nonempty x.Ses := x.nonempty.coe_sort
+instance instNonemptySes : Nonempty x.Ses := x.nonempty.coe_sort
 
 /-- The bytes the leaf's sessions encode its values as. -/
 noncomputable def encs : Finset (List UInt8) :=
