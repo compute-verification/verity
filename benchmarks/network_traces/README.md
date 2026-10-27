@@ -291,10 +291,12 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   schedule: it enters the compute audit's terms, which go into JointPeriod.
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-- No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
-  warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
-  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
+- No faulty term with every unit drawn.
+- The jitter term is charged at D_j = 2 (`chain_record.JITTER_BOUND`): one bit a bucket, T = 32 bits a link-window.
+  J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel, measured lower bound 0.118 bit a bucket).
+  The warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`), and a warden on the host's clock always paces. Still, the
+  host's state after the server's writes for the next bucket moves when a bucket reaches the client.
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
@@ -309,31 +311,32 @@ The scale:
 - Each machine has one network certifier in front of all its compute, serving at the run's rate.
 - The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
 
-**`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
+**`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term one bit a
+bucket, at D_j = 2):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
-| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
-| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,368 |
-| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,368 |
-| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
-| year | 1,000 | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 143,368 |
+| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,400 |
+| week | 1,000 | 2.71·10^13 (1,371×) | 2.71·10^13 (1,371×) | 2.71·10^13 (1,371×) | 143,400 |
+| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,400 |
+| month | 1,000 | 1.16·10^14 (5,874×) | 1.16·10^14 (5,874×) | 1.16·10^14 (5,874×) | 143,400 |
+| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,400 |
+| year | 1,000 | 1.41·10^15 (71,471×) | 1.41·10^15 (71,471×) | 1.41·10^15 (71,471×) | 143,400 |
 
 As registered today, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
 monitoring period.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering, LEAN-49)**, bits, and the share of
-the weights (the jitter term 0, assumed (J)):
+the weights (the jitter term one bit a bucket, at D_j = 2):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
-| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |
-| month | 1 | 1.22·10^9 (6.15%) | 1.22·10^9 (6.16%) | 1.22·10^9 (6.15%) | 1,501 |
-| month | 1,000 | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1,501 |
-| year | 1 | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1,501 |
-| year | 1,000 | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1,501 |
+| week | 1 | 2.91·10^8 (1.47%) | 2.92·10^8 (1.48%) | 2.9·10^8 (1.47%) | 1,533 |
+| week | 1,000 | 2.9·10^11 (14.7×) | 2.9·10^11 (14.7×) | 2.9·10^11 (14.7×) | 1,533 |
+| month | 1 | 1.24·10^9 (6.29%) | 1.24·10^9 (6.29%) | 1.24·10^9 (6.28%) | 1,533 |
+| month | 1,000 | 1.24·10^12 (62.8×) | 1.24·10^12 (62.8×) | 1.24·10^12 (62.8×) | 1,533 |
+| year | 1 | 1.51·10^10 (76.4%) | 1.51·10^10 (76.4%) | 1.51·10^10 (76.4%) | 1,533 |
+| year | 1,000 | 1.51·10^13 (764×) | 1.51·10^13 (764×) | 1.51·10^13 (764×) | 1,533 |
 
 This second table is what the generator-form lowering would give if it registers `prog` everywhere but its anchors
 (ONE-TAP is on it). It is not the record's number.
@@ -344,10 +347,10 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
-- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
-  receiver no more than an idle one.
+- The jitter term is T bits a link-window, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
+  host-state channel, measured lower bound 0.118 bit a bucket).
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
-  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
+  anchored table's machine-week is 1.04% of the weights and its machine-year 53.8%; as registered today it is 1.37×
   a machine-week either way.
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriod's sum.
 
@@ -376,10 +379,12 @@ and the secrets of a covert sender whose every window meets `WindowGood` number 
 
 K = log2 #S_s + Σ_c log2(cap_c + 1) + Σ_i [#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 D_j].
 
-The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, not met at D_j = 1 until a
-run shows the written buckets tell a receiver no more than an idle one. The warden and the served proxy each hand every
-bucket to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`,
-`warden_serve.py --paced-ms`; `active.Proxy(paced=…)`, `certifier_serve.py --paced-ms`).
+The report takes D_j = 2 (`chain_record.JITTER_BOUND`), so its jitter term is k_i bits, one a step: J assumed at
+D_j = 2; at D_j = 1 not met (next-bucket host-state channel, measured lower bound 0.118 bit a bucket). J is one bound
+over every step, so every bucket pays its bit, not only the ones beside a written bucket. The warden and the served
+proxy each hand every bucket to a pacer that releases it at a time fixed before the bucket is made
+(`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`; `active.Proxy(paced=…)`, `certifier_serve.py --paced-ms`).
+The scan's period check (`scan_period.py`) passes the same bound as `NetworkCheck.Period`'s `jitter`.
 
 `NetTiming.periodLeak_le_sum` (#4324) sums the windows' failures by a union bound:
 

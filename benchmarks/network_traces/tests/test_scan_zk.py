@@ -384,6 +384,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                                         16 + bits["egress"]["o1"])
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    assert (p["jitter"], out["public"]["scans"][0]["jitter"]) == (SP.CR.JITTER_BOUND, T)
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "

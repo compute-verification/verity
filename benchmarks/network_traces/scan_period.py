@@ -5,8 +5,9 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, jitter
-  bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
+  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, the jitter
+  bound `chain_record.JITTER_BOUND` (K's jitter term T bits a link-window, `chain_record.JITTER`), and the scan that
+  Program's
   descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the scan's
   registration; the evidence the scan's answer, the certificates of W's three records (``certified.jsonl``:
   requests, responses, fails) and W's two row registrations (``cells.jsonl``, as ``answers.json`` carries them).
@@ -32,6 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import chain_record as CR  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
@@ -76,7 +78,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
         sig = certs[1]["signature"]
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
-    params = {"audits": [], "cells": [], "first": x["window"], "jitter": 1, "key": dep["key"]["public"],
+    params = {"audits": [], "cells": [], "first": x["window"], "jitter": CR.JITTER_BOUND, "key": dep["key"]["public"],
               "link": WS.LINK, "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}
