@@ -177,9 +177,8 @@ the labels' PRF advantage against the distinguisher those moves make (the standa
 `Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network certifier's count of
 the egress enters (NET-78). A constant `ε` reads the labels as ideal. `Pous.Guarantees.StreamedWipe` is the streamed
 game's proved bound, and `StreamedWipeMeetsFamily` (#4490) and `StreamedWipeMeetsReads` (#4707) its instances at what
-`verity/wipe/v0` publishes. `Pous.Guarantees.SecureErasureMeetsFamily` is no bound on a wipe at the reference `Π₂`,
-where its ideal-permutation model is refuted (`feistel-indifferentiability`). The bridge from an accepted verdict to
-this bound is memory-accounting's, in a package that sees both. -/
+`verity/wipe/v0` publishes. The bridge from an accepted verdict to this bound is memory-accounting's, in a package that
+sees both. -/
 def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ)
     (ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
       (Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) → ℝ≥0∞) : Prop :=
