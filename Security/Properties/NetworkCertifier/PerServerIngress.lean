@@ -21,19 +21,27 @@ every prover:
   certifier registers it at the scan's ingress gates, is not one the scan's Program accepts (`IngressDeclared`) with
   probability at most `Σ_i (δ + ε_ks + ε_bind + Pr[B_tap])`, each window's errors at its statement;
 * **the count**: the secrets an outside sender passes into the server through the warden, whose every window's ingress
-  the scan accepts, number at most `∏_i #bound_i · (∏_ℓ (r ℓ + 1))^n · D^n`. At `δ` below every non-empty faulty
-  set's, `bound_i` is `2^windowBits`, so the content is `ingressBits = W · windowBits` bits over `W` windows.
+  the scan accepts, number at most
+  `∏_i Σ_(F faulty at δ) 2^(#ingress(F) · faultyIngressBits + windowBits) · (∏_ℓ (r ℓ + 1))^n · D^n`. Where the
+  draw takes every ingress unit, no faulty set holds one, and the content is `log2 #faultySets + windowBits` bits a
+  window.
 
-`windowBits` is the plan's `N · (C·K·IDB + 112)` at the window's most requests `N = lanes · ⌈T / (D + 1)⌉`, with three
-per-request terms the plan leaves out (`requestSlack`: the connection ordinal, the prompt's length and a failed
-request's prefix) and the interleaving of lanes within a bucket.
+`windowBits` is `N · requestBits + T · bucketBits`, at the window's most requests `N = lanes · ⌈T / (D + 1)⌉`.
+`requestBits` is a request's ordinal (32: the scan checks only that it is above the last), its head (content-length,
+`max_tokens` and `seed` 32 each, `temperature` and `top_p` 24 each, `model` and `user` 406 each), and its prompt ids
+(`K0 + (C − 1)·K` of `IDB` bits); `bucketBits` is each lane's block, absent or `d ≤ r` data cells then padding. A faulty
+ingress unit's `ok` is the prover's: its bucket's whole row enters, and its forged state lets each lane carry two
+requests more (`faultyIngressBits`). At w63 (T = 32, D = 27) a request is 36,382 bits, a bucket 12, a window 291,440,
+and a faulty ingress unit 356,592.
 
 **What it reads.** The soundness reads the check of record through `AnswersOfRecord` (an accepted window's answer is
 the sampled verifier's acceptance of that window's statement on that window's coins), and each window's statement
 through `ScanScope` (the sampled audit's scope at the scan's layout, with the gates the scan checks committed). The
-count reads the warden's record (`RecordsCells`), its registration at the scan's gates (`IngressOpens`, which holds the
-registered-read chain of parse states as equal openings), and `ScanCountsRequests`, the count of one window's frame
-streams the scan accepts, a conjecture on the scan class's Program checked by enumeration at a toy class.
+count reads the warden's record (`RecordsCells`), the openings the verifier holds at the scan's gates (`OpensPass`,
+`WardenRowsOpen`, `OkOpens`, and `ChainOpens`, which holds the registered-read chain of parse states as equal
+openings), and `ScanCountsRequests`, the count of one window's frame streams the scan accepts, a conjecture on the scan
+class's Program checked by enumeration at toy classes. Each window's prover may read every other window's coins
+(`WindowTape`), so the period's provers may be adaptive.
 
 **The form.** The rows form accepts a window only on a `verity/registration/v2` answer. Until v2's members form lands
 (PRF-224), the rows form's acceptance is unreachable on #4873's head, so `PerServerIngress` holds there vacuously;
@@ -49,41 +57,61 @@ open Properties.NetworkScan (gateAt layOf)
 
 /-! ## The scan class's numbers -/
 
-/-- The scan class's public shape: `C` cells a request at most (a prompt of at most `C · K` ids) and `idb`-bit ids. -/
+/-- The scan class's public shape: `C` cells a request at most and `idb`-bit ids. -/
 structure ScanClass where
   C : ℕ
   idb : ℕ
 
-/-- `K = (B − 9) / 11` ids a cell: the warden-form id request's 10-digit decimal id fields of 11 bytes after the cell's
-9-byte header. -/
+/-- `K = (B − 9) / 11` ids a cell: the warden-form id request's prompt fields (`[` or `,`, then a u32 in 10 characters)
+after the cell's 9-byte header. -/
 def idsPerCell (s : Schedule) : ℕ := (s.cellBytes - 9) / 11
 
-/-- The plan's bits a request: `C · K · IDB` of ids and `112` of fields (`max_tokens` and `seed` u32, `temperature` and
-`top_p` 24 bits each). -/
-def planRequestBits (s : Schedule) (cls : ScanClass) : ℕ := cls.C * idsPerCell s * cls.idb + 112
+/-- The first prompt field's offset in a request's first cell (`io_request.layout(B).start`): the request's HTTP head,
+its content-length and its body up to `"prompt":`, the same at every `B` whose first cell holds them. -/
+def promptStart : ℕ := 367
 
-/-- What a request carries beyond the plan's bits: its connection's ordinal (`u32`), whether its prompt ends at its last
-cell, how many of its `C` cells a failed request sent, and whether it came at all. -/
-def requestSlack (cls : ScanClass) : ℕ := 32 + 1 + clog2 (cls.C + 1) + 1
+/-- `K0 = (B − 9 − 367) / 11` ids in a request's first cell, after its head. -/
+def firstCellIds (s : Schedule) : ℕ := (s.cellBytes - 9 - promptStart) / 11
 
-def requestBits (s : Schedule) (cls : ScanClass) : ℕ := planRequestBits s cls + requestSlack cls
+/-- A request's most prompt ids: `K0` in its first cell and `K` in each other of its `C`. -/
+def requestIds (s : Schedule) (cls : ScanClass) : ℕ := firstCellIds s + (cls.C - 1) * idsPerCell s
 
-/-- A window's most requests: each lane holds a request at least `D + 1` buckets, `lanes · ⌈T / (D + 1)⌉`. -/
+/-- A name's bits (`model`, `user`, which the scan checks only for form): a quote, up to 62 of the 93 printable ASCII
+characters but `"` and `\`, a quote and spaces, `⌈log2 Σ_(k ≤ 62) 93^k⌉`. -/
+def nameBits : ℕ := 406
+
+/-- A request's head's bits: its content-length (free while the request is unfinished), `max_tokens` and `seed` (u32
+each), `temperature` and `top_p` (`%8.6f` in `[0, 10)`, 10^7 values, 24 bits each), and its two names. -/
+def headBits : ℕ := 32 + 32 + 32 + 24 + 24 + 2 * nameBits
+
+/-- **A request's bits**: its connection's ordinal (a u32, which the scan checks only above the last), its head, and its
+prompt ids. -/
+def requestBits (s : Schedule) (cls : ScanClass) : ℕ := 32 + headBits + requestIds s cls * cls.idb
+
+/-- **A bucket's bits**: each lane's block is absent, or `d ≤ r` data cells then padding, `r + 2` cases. -/
+def bucketBits (s : Schedule) : ℕ := s.lanes * clog2 (s.slots + 2)
+
+/-- A window's most requests: a slot is held `D + 1` buckets from its admission, `lanes · ⌈T / (D + 1)⌉`. -/
 def windowRequests (s : Schedule) : ℕ := s.lanes * ((s.window + s.delay) / (s.delay + 1))
 
-/-- A window's ingress bits: its requests' and, per bucket and lane, how many of the lane's `slots` cells it carries. -/
-def windowBits (s : Schedule) (cls : ScanClass) : ℕ :=
-  windowRequests s * requestBits s cls + s.lanes * s.window * clog2 (s.slots + 1)
+/-- **A window's ingress bits**, every unit correct: its requests' and its buckets'. -/
+def windowBits (s : Schedule) (cls : ScanClass) : ℕ := windowRequests s * requestBits s cls + s.window * bucketBits s
 
-/-- The period's ingress bits over `W` windows. -/
+/-- The period's ingress bits over `W` windows, every ingress unit drawn. -/
 def ingressBits (s : Schedule) (cls : ScanClass) (W : ℕ) : ℕ := W * windowBits s cls
 
-/-- **One window's bound** at the faulty sets `RAcc δ` allows: for each, its committed bits, each of its units' whole
-row and requests (a faulty bucket's `ok` is the prover's), and the window's bits. At `δ` where only the empty set is
-possible it is `2^windowBits`. -/
-noncomputable def scanBound (s : Schedule) (cls : ScanClass) (C : Prog) (P : Partition) (d : Design) (δ : ℝ) : ℕ :=
-  ∑ F ∈ faultySets d P δ, 2 ^ (faultyBits C P F + F.card * (8 * s.cellBytes * s.allocation + s.lanes * requestBits s cls) +
-    windowBits s cls)
+/-- **A faulty ingress unit's bits**: its `ok` is the prover's, so its bucket's whole row (`8 · S · B` bits) enters,
+and its forged state lets each lane carry two requests more, the forged state's own and one admission its reset
+allows. -/
+def faultyIngressBits (s : Schedule) (cls : ScanClass) : ℕ :=
+  8 * s.cellBytes * s.allocation + 2 * s.lanes * requestBits s cls
+
+open Classical in
+/-- **The faulty set's ingress units**: `F`'s units that hold a gate the scan checks or a gate of its rows. A faulty unit
+that holds neither (an egress unit) frees no ingress. -/
+noncomputable def faultyIngress {S : ℕ} (P : Partition) (lay : Layout 1 S) (k : ℕ) (ok : List ℕ) (F : Finset ℕ) :
+    ℕ :=
+  (F.filter fun v => ∃ g ∈ RU.gates (P.rus.getD v []), g ∈ ok ∨ ∃ t < k, g ∈ lay.ingress t).card
 
 /-! ## The gates the scan checks -/
 
@@ -126,18 +154,38 @@ def ScanDeclared {S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : Layout
     (∀ e ∈ links, a e.1 = valOver C (lay.inputOf k ins a) free e.2) ∧
     ∀ g ∈ ok, valOver C (lay.inputOf k ins a) free g = true}
 
-/-- **The openings `ops` register the window's rows `ins` at the scan's gates** of the statement `st`: each passes under
-the statement's roots; every ingress gate of the `T` steps has one, whose value is its bit of `ins`; every `ok` gate has
-one, of value 1 (the verifier's check); and both ends of every state link have one, of one value (the registered read
-of the previous bucket's state). -/
+/-- **The openings the verifier holds pass** (named assumption, sampled proofs): each of `ops` passes under the
+statement's roots. -/
+def OpensPass (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
+  ∀ q ∈ ops, Cm.Opens H st.roots q = true
+
+/-- **The warden registers the window's rows** (named assumption, network accounting; `trusted-nebius-host`, as
+`TapOpens`): the window is `T` rows, and every ingress gate of its steps has an opening in `ops`, whose value is that
+bit of the rows `ins`. -/
+def WardenRowsOpen (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) (ins : List (List Bool)) : Prop :=
+  ins.length = s.window ∧
+    ∀ t < s.window, (ins.getD t []).length = ((layOf s st).ingress t).length ∧
+      ∀ j g, ((layOf s st).ingress t)[j]? = some g →
+        (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = (ins.getD t []).getD j false
+
+/-- **Every bucket's `ok` opens to 1** (named assumption, sampled proofs: the verifier opens each unit's `o0` and
+requires 1): every `ok` gate has an opening in `ops`, of value 1, and is no constant 0 (as `TapOpens` reads a constant
+gate's opening). -/
+def OkOpens (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
+  ∀ g ∈ (checksOf s st).1, (∀ b, st.prog.gates[g]? = some (.const b) → b = true) ∧ (∃ q ∈ ops, q.pos = g) ∧
+    tapVal ops g = true
+
+/-- **The state chain opens as one value** (named assumption, sampled proofs: the registered read of the previous
+bucket's state, which the Claims model has no form for): both ends of every state link have an opening in `ops`, of one
+value, and a written end that is a constant opens to it (as `TapOpens` reads a constant gate's opening). -/
+def ChainOpens (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
+  ∀ e ∈ (checksOf s st).2, (∃ q ∈ ops, q.pos = e.1) ∧ (∃ q ∈ ops, q.pos = e.2) ∧ tapVal ops e.1 = tapVal ops e.2 ∧
+    ∀ b, st.prog.gates[e.2]? = some (.const b) → tapVal ops e.2 = b
+
+/-- **The openings `ops` register the window's rows `ins` at the scan's gates**: all four of the above. -/
 def IngressOpens (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (s : Schedule) (st : Stmt)
     (ops : List (Opening Bool)) (ins : List (List Bool)) : Prop :=
-  (∀ q ∈ ops, Cm.Opens H st.roots q = true) ∧ ins.length = s.window ∧
-    (∀ t < s.window, (ins.getD t []).length = ((layOf s st).ingress t).length ∧
-      ∀ j g, ((layOf s st).ingress t)[j]? = some g →
-        (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = (ins.getD t []).getD j false) ∧
-    (∀ g ∈ (checksOf s st).1, (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = true) ∧
-    ∀ e ∈ (checksOf s st).2, (∃ q ∈ ops, q.pos = e.1) ∧ (∃ q ∈ ops, q.pos = e.2) ∧ tapVal ops e.1 = tapVal ops e.2
+  OpensPass H Cm st ops ∧ WardenRowsOpen s st ops ins ∧ OkOpens s st ops ∧ ChainOpens s st ops
 
 /-- **The window's registered ingress is one the scan accepts**: the statement `x` parses and has a partition, and every
 window the openings `ops st` register at its gates is in `ScanDeclared` at its Program, partition and design. -/
@@ -178,11 +226,20 @@ link is one cell, `8B` bits, and not all zero, so padding is the zero cell. -/
 def RecordsCells {K S : ℕ} (s : Schedule) (o : List (Obs 1 K S)) : Prop :=
   ∀ y ∈ o, ∀ σ c, y.rows 0 σ = some c → c.length = 8 * s.cellBytes ∧ c.any id = true
 
-/-- **The scan counts requests** (named conjecture, network accounting; a pytest checks it by enumeration at a toy
-class): the frame streams of the windows the scan's Program accepts at the statement `st` are at most `scanBound`. -/
+/-- **One window's bound**: over the faulty sets `RAcc δ` allows, the window's bits and each of its faulty ingress
+units' (`faultyIngressBits`). Where no faulty set holds an ingress unit it is `#faultySets · 2^windowBits`. -/
+noncomputable def scanBound (s : Schedule) (cls : ScanClass) (st : Stmt) (P : Partition) (δ : ℝ) : ℕ :=
+  ∑ F ∈ faultySets st.design P δ,
+    2 ^ (faultyIngress P (layOf s st) s.window (checksOf s st).1 F * faultyIngressBits s cls + windowBits s cls)
+
+/-- **The scan counts requests** (named assumption, network accounting): the frame streams of the windows the scan's
+Program accepts at the statement `st` are at most `scanBound`. A conjecture on the scan's Program, which
+`verity/core/protocols/certifier/tests/test_network_certifier_scan_counts.py` tries to falsify against the scan's
+reference: each term's field checks at their edges, and every window of rows over a cell alphabet at toy classes, from
+the empty state and from a faulty unit's forged states. -/
 def ScanCountsRequests (s : Schedule) (cls : ScanClass) (st : Stmt) (P : Partition) (δ : ℝ) : Prop :=
   (frameStream s '' ScanDeclared st.prog P st.design (layOf s st) s.window (checksOf s st).1 (checksOf s st).2 δ).encard ≤
-    (scanBound s cls st.prog P st.design δ : ℕ∞)
+    (scanBound s cls st P δ : ℕ∞)
 
 /-! ## The check of record -/
 
@@ -198,21 +255,35 @@ def WindowAnswered (p : Params) (s : Schedule) (sd : ByteArray) (c : NetworkChec
 abbrev PeriodCoins {Coin Col T : Type} (D : Deploy Coin Col T) {n : ℕ} (x : Fin n → Claims.Msg) (Ω : Type) : Type :=
   Ω × ((i : Fin n) → Fin (D.V.k (x i)) → Coin)
 
-/-- **The answers are of record** (named assumption, sampled proofs): the evidence `ev ω` is the prover's on the
+/-- Window `i`'s prover's tape: the prover's own and the live coins of every other window. A window's prover has seen
+the earlier windows' coins; the tape grants it the later windows' too. -/
+abbrev WindowTape {Coin Col T : Type} (D : Deploy Coin Col T) {n : ℕ} (x : Fin n → Claims.Msg) (Ω : Type) (i : Fin n) :
+    Type :=
+  Ω × ((j : {j : Fin n // j ≠ i}) → Fin (D.V.k (x j.1)) → Coin)
+
+/-- Window `i`'s prover's tape on the period's coins `ω`. -/
+def tapeOf {Coin Col T : Type} {D : Deploy Coin Col T} {n : ℕ} {x : Fin n → Claims.Msg} {Ω : Type}
+    (ω : PeriodCoins D x Ω) (i : Fin n) : WindowTape D x Ω i :=
+  (ω.1, fun j => ω.2 j.1)
+
+/-- **The answers are of record** (named assumption, sampled proofs): the evidence `ev ω` is the provers' on the
 period's coins `ω`, and where its window `i` is answered (`WindowAnswered`), the sampled verifier's run on that window's
-statement `x i`, at the prover's tape and that window's coins, accepted: the answer is the verifier's own. -/
+statement `x i`, with window `i`'s prover `P i` at its tape (`tapeOf`) and on that window's coins, accepted: the
+answer is the verifier's own. -/
 def AnswersOfRecord {Coin Col T : Type} [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T)
     (p : Params) (s : Schedule) (sd : ByteArray) (c : NetworkCheck.Period.Commitment) (x : Fin p.windows → Claims.Msg)
-    {Ω : Type} (P : Claims.Prover Ω) (ev : PeriodCoins D x Ω → Evidence) : Prop :=
-  ∀ ω i, WindowAnswered p s sd c (ev ω) i.val → (Claims.run H P D.V (x i) ω.1 (ω.2 i)).out = .acc
+    {Ω : Type} (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i)) (ev : PeriodCoins D x Ω → Evidence) :
+    Prop :=
+  ∀ ω i, WindowAnswered p s sd c (ev ω) i.val → (Claims.run H (P i) D.V (x i) (tapeOf ω i) (ω.2 i)).out = .acc
 
-/-- The period's error: each window's `δ + ε_ks + ε_bind + Pr[B_tap]` at its statement. -/
+/-- The period's error: each window's `δ + ε_ks + ε_bind + Pr[B_tap]` at its statement and its prover. -/
 noncomputable def periodErr {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (δ : ℝ) (decode : List (ℕ × Col) → List T)
     (ops : Stmt → List (Opening Bool)) {n : ℕ} (x : Fin n → Claims.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
-    (P : Claims.Prover Ω) : ℝ :=
-  ∑ i, (κ D δ (x i) + Real.sqrt (γ D (x i) * Claims.PrB H D.V P (x i)) + (Bext H D.V (E D decode) Ω P (x i)).Pr H +
-    (Btap H D.V (E D decode) D.commit D.parse ops Ω P (x i)).Pr H)
+    (P : (i : Fin n) → Claims.Prover (WindowTape D x Ω i)) : ℝ :=
+  ∑ i, (κ D δ (x i) + Real.sqrt (γ D (x i) * Claims.PrB H D.V (P i) (x i)) +
+    (Bext H D.V (E D decode) (WindowTape D x Ω i) (P i) (x i)).Pr H +
+    (Btap H D.V (E D decode) D.commit D.parse ops (WindowTape D x Ω i) (P i) (x i)).Pr H)
 
 /-- **`chk`'s acceptance is sound for the period's ingress**: over the period's coins, `chk` accepts the evidence while
 some window's registered ingress is not one the scan accepts with probability at most `periodErr`. -/
@@ -220,7 +291,8 @@ def PeriodSound (chk : Params → NetworkCheck.Period.Commitment → Evidence �
     {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (s : Schedule) (δ : ℝ) (decode : List (ℕ × Col) → List T)
     (ops : Stmt → List (Opening Bool)) (p : Params) (c : NetworkCheck.Period.Commitment) (x : Fin p.windows → Claims.Msg)
-    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ev : PeriodCoins D x Ω → Evidence) : Prop :=
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i))
+    (ev : PeriodCoins D x Ω → Evidence) : Prop :=
   Claims.Pr (fun ω : PeriodCoins D x Ω => PeriodAccepts (chk p c (ev ω)) ∧ ∃ i, ¬ IngressDeclared H D s ops δ (x i)) ≤
     periodErr H D δ decode ops x Ω P
 
@@ -234,13 +306,15 @@ set_option linter.unusedVariables false
 that lists every trace within Flock's radius, at `δ ≥ 0`, over a rows-form period `p` (schedule `s`) whose `W` windows'
 statements `x i` are the scan's (`ScanScope`), with the openings `ops st` at each statement and the scan class `cls`:
 
-* every prover whose answers are of record has
+* every period's provers (window `i`'s reading every other window's coins) whose answers are of record have
   `Pr[chk accepts ∧ some window's ingress isn't one the scan accepts] ≤ Σ_i (δ + ε_ks + ε_bind + Pr[B_tap])`;
 * an outside sender passing secrets `Ms` into the server through the warden (the interaction `I` on the requests' link,
   `n = W · T` steps, under W2, W4 with allocation `r`, and J at `Dj`), whose every run keeps its statuses complete,
-  whose record holds cells, whose windows' statements are `sw i` (partition `Pw i`) and register the record's rows at
-  the scan's gates, and whose secrets a decoder reads off the wire: its secrets whose every window's ingress the scan
-  accepts number at most `∏_i scanBound_i · (∏_ℓ (r ℓ + 1))^n · Dj^n`, where the scan counts requests. -/
+  whose record holds cells, whose windows' statements are `sw i` (partition `Pw i`) with the record's rows registered
+  at the scan's gates, and whose secrets a decoder reads off the wire: its secrets whose every window's ingress the
+  scan accepts number at most
+  `∏_i Σ_(F faulty at δ) 2^(#ingress(F) · faultyIngressBits + windowBits) · (∏_ℓ (r ℓ + 1))^n · Dj^n`, where the
+  scan counts requests: each faulty ingress unit costs its whole bucket's row and two requests a lane. -/
 def PerServerIngressBy (chk : Params → NetworkCheck.Period.Commitment → Evidence → Core.Outcome Public Profile) :
     Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
@@ -250,8 +324,8 @@ def PerServerIngressBy (chk : Params → NetworkCheck.Period.Commitment → Evid
     (p : Params) (s : Schedule) (sd : ByteArray) (sc : Scan) (hform : p.form = .rows s sd sc) (cls : ScanClass)
     (ops : Stmt → List (Opening Bool)),
     (∀ (c : NetworkCheck.Period.Commitment) (x : Fin p.windows → Claims.Msg) (hx : ∀ i, ScanScope D s (x i))
-        (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ev : PeriodCoins D x Ω → Evidence)
-        (hrec : AnswersOfRecord H D p s sd c x P ev),
+        (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i))
+        (ev : PeriodCoins D x Ω → Evidence) (hrec : AnswersOfRecord H D p s sd c x P ev),
         PeriodSound chk H D s δ decode ops p c x Ω P ev) ∧
       ∀ {K : ℕ} {Z In Act Wire : Type} (I : Interaction 1 K s.allocation Z In Act Wire) (Dj : ℕ) (r : Fin 1 → ℕ)
         (view : ℕ → Obs 1 K s.allocation → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
@@ -263,11 +337,16 @@ def PerServerIngressBy (chk : Params → NetworkCheck.Period.Commitment → Evid
           st.prog = (sw i).prog ∧ st.desc = (sw i).desc ∧ st.design = (sw i).design ∧ D.partition st = some (Pw i))
         (hacc : ∀ m ∈ Ms, StatusComplete (p.windows * s.window) (I.obsRun m (p.windows * s.window)))
         (hcells : ∀ m ∈ Ms, RecordsCells s (I.obsRun m (p.windows * s.window)))
-        (hopen : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st →
-          IngressOpens H D.commit s st (ops st) (windowIns s (I.obsRun m (p.windows * s.window)) i.val))
+        (hpass : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → OpensPass H D.commit st (ops st))
+        (hrows : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st →
+          WardenRowsOpen s st (ops st) (windowIns s (I.obsRun m (p.windows * s.window)) i.val))
+        (hok : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → OkOpens s st (ops st))
+        (hchain : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → ChainOpens s st (ops st))
         (dec : List Wire → Z) (hdec : ∀ m ∈ Ms, dec (I.wireRun m (p.windows * s.window)) = m),
         {m | m ∈ Ms ∧ ∀ i, IngressDeclared H D s ops δ (xm m i)}.encard ≤
-          (((∏ i, scanBound s cls (sw i).prog (Pw i) (sw i).design δ) *
+          (((∏ i, ∑ F ∈ faultySets (sw i).design (Pw i) δ,
+              2 ^ (faultyIngress (Pw i) (layOf s (sw i)) s.window (checksOf s (sw i)).1 F * faultyIngressBits s cls +
+                windowBits s cls)) *
             ((∏ ℓ, (r ℓ + 1)) ^ (p.windows * s.window) * Dj ^ (p.windows * s.window)) : ℕ) : ℕ∞)
 
 /-- **The server's ingress over a rows-form period** (NET-92): `PerServerIngressBy` at the check of record,
@@ -307,8 +386,8 @@ def PerServerIngressNontrivial : Prop :=
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (s : Schedule) (δ : ℝ) (decode : List (ℕ × Col) → List T)
       (ops : Stmt → List (Opening Bool)) (p : Params) (c : NetworkCheck.Period.Commitment)
-      (x : Fin p.windows → Claims.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω)
-      (ev : PeriodCoins D x Ω → Evidence),
+      (x : Fin p.windows → Claims.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
+      (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i)) (ev : PeriodCoins D x Ω → Evidence),
       (∃ i, ¬ IngressDeclared H D s ops δ (x i)) → periodErr H D δ decode ops x Ω P < 1 →
         ¬ PeriodSound chk H D s δ decode ops p c x Ω P ev
 
