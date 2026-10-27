@@ -239,6 +239,10 @@
    "owner": "@compute-accounting",
    "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572"
   },
+  "Properties.Pouw.PeriodJ10RStrata.StrataDrawIsCoin": {
+   "owner": "@compute-research",
+   "digest": "b6039c004f6202b9861b2b79fee2fa88f87b94fe22d929eeeb05bde7cc17cc3b"
+  },
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
