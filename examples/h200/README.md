@@ -1,16 +1,29 @@
-# e2e_h200: the H200 walking skeleton's step driver
+# The H200 example: the walking skeleton
 
-The GPU serving loop of the one-H200 demo (CMP-96): steps of the frozen MQA shape (`shape.FROZEN`, ALLP-IFACE's `H200`) on
-the plain INT8 weights, loaded once into the card's memory and resident across steps (Demo A, M1-M3; `--weights staged` keeps
-M4's decode-to-staging path from the store), every op's output committed through the per-step commit call, drawn slots
-opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each subprotocol run against the
-step or named, and a replay bundle and block record written. `verity bench e2e_h200 --out OUT [...]` runs it
-(`run.py --help`).
+The GPU serving loop of the one-H200 demo (CMP-96) and its audit: steps of the frozen MQA shape (`shape.FROZEN`, ALLP-IFACE's
+`H200`) on the plain INT8 weights, loaded once into the card's memory and resident across steps (Demo A, M1-M3; `--weights
+staged` keeps M4's decode-to-staging path from the store), every op's output committed through the per-step commit call,
+drawn slots opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each
+subprotocol run against the step or named, and a replay bundle and block record written. `verity example h200 --out OUT
+[...]` runs it (`run.py --help`). It is compute-accounting's.
 
-It lives here, not in `integrations/`, because it is a run harness that composes pieces from several owners (memory's
-store and decode call, kernels' GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run, as
-`benchmarks/` holds; `integrations/torch_loop` stays the CPU loop of `verity.ml.windows.interface`. When the real pieces land
-they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
+Its protocol is the composite `onsite` in skeleton form (`e2e_h200/legs.py`): sampled proofs are the replay and the
+opening, PoUW is H200-PERCALL's per-call tiles as a `--subcircuit`, PoUS is spot reads and the wipe and reload on the M4
+path's store, the network certifier's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
+interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
+
+It is an example, not an integration: it composes pieces from several owners (memory's store and decode call, kernels'
+GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run, and
+`integrations/torch_loop` stays the CPU loop of `verity.ml.windows.interface`. When the real pieces land they replace the
+fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
+
+## Workload and placement
+
+The workload is the frozen MQA shape on ALLP-IFACE's seeded INT8 weights (`verity_torch_loop.weights`), with `--shape
+tiny|small|slice` for CPU runs; it isn't an integration yet (`example.toml`: `workload = "none"`). Every party runs in the
+one run on one GPU node (`vy-dc-h200-2` for `percall_job.sh`): the driver and its commit call on the prover's side, and the
+replay and the opening on the verifier's, on fixture coins. `example.toml` puts the example at level 0 (moved) on the ladder
+(`examples/README.md`).
 
 ## What runs, and what stands in
 

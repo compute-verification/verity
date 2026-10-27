@@ -1,0 +1,9 @@
+# The H200 example's rung on the ladder (examples/README.md): moved, its evidence not yet cited. Its legs are onsite's in
+# skeleton form (README); level 2 needs the replay and the opening on an auditor host, on live coins.
+protocol = "onsite"
+workload = "none"    # the frozen MQA shape on seeded INT8 weights, not yet an integration
+level = 0
+
+[placement]
+prover = "gpu-node"    # the driver and its commit call (vy-dc-h200-2 for percall_job.sh)
+verifier = "gpu-node"  # the replay of drawn units and the opening of drawn slots, in the same run
