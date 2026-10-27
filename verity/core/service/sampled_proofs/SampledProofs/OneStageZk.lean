@@ -616,18 +616,14 @@ def main (args : List String) : IO UInt32 := do
     (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/1/session", 1, 1), ("slot/1/t/rep0", 2, 5)]
 #guard (roundRequest "t/é" (ByteArray.mk (Array.replicate 64 7)) 261).data ==
   #[0, 4, 116, 47, 195, 169] ++ Array.replicate 64 7 ++ #[5, 1, 0, 0, 0, 0, 0, 0]
-#guard publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
-  digest := .empty } ("".pushn 'a' 128) == none
-#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
-  digest := .empty } ("".pushn 'b' 128)).isSome
-#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'A' 128))])],
-  digest := .empty } ("".pushn 'A' 128)).isSome
-#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [])], digest := .empty } ("".pushn 'a' 128)).isSome
-
 /-- A registration whose window is `w`. -/
 private def windowed (w : List (String × Json)) : OneStage.Commitment :=
   { record := Json.mkObj [("window", Json.mkObj w)], digest := .empty }
 
+#guard publicWhy (windowed [("public_file", Json.str ("".pushn 'a' 128))]) ("".pushn 'a' 128) == none
+#guard (publicWhy (windowed [("public_file", Json.str ("".pushn 'a' 128))]) ("".pushn 'b' 128)).isSome
+#guard (publicWhy (windowed [("public_file", Json.str ("".pushn 'A' 128))]) ("".pushn 'A' 128)).isSome
+#guard (publicWhy (windowed []) ("".pushn 'a' 128)).isSome
 #guard drawCountWhy (windowed [("draw_coins", Lean.toJson (3 : Nat))]) 3 == none
 #guard (drawCountWhy (windowed [("draw_coins", Lean.toJson (3 : Nat))]) 2).isSome
 #guard (drawCountWhy (windowed [("draw_coins", Lean.toJson (0 : Nat))]) 0).isSome
