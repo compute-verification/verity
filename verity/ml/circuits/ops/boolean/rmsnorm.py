@@ -1,5 +1,5 @@
-"""A bf16 row's RMSNorm as Boolean Definitions: one proof block a row where the row fits a unit, and CMP-92's two-level form
-where it doesn't. Every output fits its size class: 16 bits a bf16 word, 32 an f32.
+"""A bf16 row's RMSNorm as Boolean Definitions: one proof block a row where the row fits a proof block, and the e2e demo's two-level
+form where it doesn't. Every output fits its size class: 16 bits a bf16 word, 32 an f32.
 
     RmsNormRow_v1{N, EPS}       (x: Array<N, BF16>, w: Array<N, BF16>) -> Array<N, BF16>
     RmsSumSqPart_v1{C}          (x: Array<C, BF16>) -> F32
@@ -21,17 +21,16 @@ Every f32 operation's NaN is the GPU's 0x7FFFFFFF and every bf16 rounding F2FP's
 nothing is flushed. A NaN in the row makes rs a NaN and so every output 0x7FFF; `RMSNormRef_v1`'s outputs differ from these
 only there (its NaN is torch's).
 
-A long row doesn't fit one unit: at N = 16,384 its three 32 KiB rows are 768 SHA-512 compressions, 2^26 bits of C-Flock's
-block by themselves, and its 3,364 ANDs an element another 2^26, past the 2^27 a block holds. There the two-level form (CMP-92
-section 1b) computes the same steps with the sum's grouping stated: `RmsSumSqPart` sums a chunk's squares from +0 in ascending
+A long row doesn't fit one proof block: at N = 16,384 its three 32 KiB rows are 768 SHA-512 compressions, 2^26 bits of C-Flock's
+block by themselves, and its 3,364 ANDs an element another 2^26, past the 2^27 a block holds. There the two-level form computes the same steps with the sum's grouping stated: `RmsSumSqPart` sums a chunk's squares from +0 in ascending
 order, `F32SumPart` sums a group of those chunk sums from +0 in ascending order, `RmsNormRecip` sums the G group sums from +0
 in ascending order and takes rs from that, and `RmsNormOut` writes a chunk of the output. At N = 16,384 the chunks are 128
-words and the groups 64 chunk sums, so G = 2: 128 + 2 + 1 + 128 units a row. With one chunk and G = 1 it is `RmsNormRow`'s
+words and the groups 64 chunk sums, so G = 2: 128 + 2 + 1 + 128 proof blocks a row. With one chunk and G = 1 it is `RmsNormRow`'s
 function (+0 + s = s for every s it sums). An f32 sum is not associative, so another grouping is another Definition's
 binding, never a regrouping of these.
 
-C-Flock refuses a unit none of whose rows is over 111 bytes, which `RmsNormRecip` (one 64-bit row) and `F32SumPart` (wired to
-G four-byte rows) are. `RmsNormOutSums` folds them into the output (CIR-109): it is
+C-Flock refuses a proof block none of whose rows is over 111 bytes, which `RmsNormRecip` (one 64-bit row) and `F32SumPart` (wired to
+G four-byte rows) are. `RmsNormOutSums` folds them into the output: it is
 ``RmsNormOut{C}(x, RmsNormRecip{N, G, EPS}(F32SumPart{S/G} of each run of S/G consecutive s), w)`` word for word, so it
 reads x, w and all S chunk sums. Its s is one parameter, so a statement may lay it out one sum a row (128 four-byte rows at N
 = 16,384, 131 rows in all and so 256 hm96 slots) or several a row, as `RmsSumSqChunks` writes them: C/K chunk sums, chunk i
@@ -39,7 +38,7 @@ reads x, w and all S chunk sums. Its s is one parameter, so a statement may lay 
 
 The square root is `f32_sqrt_rn`, ``PouwF32SqrtRn_v1``'s builder (PoUW's `PouwF32SqrtRn_v2` traces it in
 `verity.core.protocols.pouw.circuit.boolean`, which `verity.ml` can't import): `isqrt` and `f32_sqrt_rn` here are copies of
-it. #4238 moves that builder into `ops.boolean.sqrt`; its rebase deletes the copies here for ``from .sqrt import f32_sqrt_rn``.
+it. `ops.boolean.sqrt` holds the same builder, which replaces these copies (``from .sqrt import f32_sqrt_rn``).
 """
 from __future__ import annotations
 

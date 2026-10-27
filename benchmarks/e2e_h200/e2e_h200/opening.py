@@ -1,7 +1,7 @@
 """Opening drawn slots by replaying their requests, for the ``slots`` commit backend (`commit`), under which a run keeps no
 step's tables.
 
-After the run, a FIXTURE coin draws slots of the batch (`draw_slots`; PRF-170's plan draws from live coins). Each drawn slot
+After the run, a FIXTURE coin draws slots of the batch (`draw_slots`; the sampling plan draws from live coins). Each drawn slot
 is replayed alone (`replay_slot`): one row through positions 0 .. the drawn step, on the run's resident weights, each step
 under that step's salt key with the slot's own nonce, so its subtree is rebuilt and compared with the slot root the step
 committed. A mismatch means the committed outputs are not the ones the slot's request computes. The replayed tables then give

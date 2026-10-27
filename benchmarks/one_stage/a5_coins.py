@@ -7,7 +7,7 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
   writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
-  tree's. ``loopback:HOST:PORT``: the same development session in a process of its own, the challenger party
+  tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
@@ -140,7 +140,8 @@ def lines(path: Path) -> list[str]:
 
 
 #: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
-#: has signed its commitment, before its `ssh -R` tunnel listens on the peer's 127.0.0.1:PORT (live_challenger/serve.py)
+#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
+#: coins' path)
 TUNNEL_WAIT_S = 120
 
 
@@ -469,6 +470,7 @@ class Local:
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text(f"{LOCAL_HOST} research@127.0.0.1\n{LOCAL_PEER} research@127.0.0.1\n")
+        (root / "coin-ports").write_text(f"{LOCAL_PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
         self.pin = on_main(main)
         self.host.pins.write_text(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
         self.params = lms.Params(64, *LOCAL_PARAMS)
@@ -480,15 +482,14 @@ class Local:
         A, host = self.A, self.host
         body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(host, session, body)
-        i = argv.index("--peer")
-        del argv[i:i + 2]
         argv[argv.index("--port") + 1] = "0"
         argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+    def open(self, root: str | Callable[[str], str], layout: list, minutes: int = MINUTES, scheme: str = SCHEME
+             ) -> tuple[str, str, str]:
         """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does: (address, secret,
-        commitment)."""
+        commitment). `root` may be a function of the reserved session, for a root that binds it (a filler window's)."""
         A, host, now = self.A, self.host, datetime.now(timezone.utc)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
@@ -497,6 +498,8 @@ class Local:
         if rc:
             raise Ch.CoinError(f"the local gate refused the reserve: {out.decode().strip()}")
         self.session = json.loads(out)["session"]
+        if callable(root):
+            root = root(self.session)
 
         def start(s: str) -> None:
             self.thread = threading.Thread(target=self._serve, args=(s,), daemon=True)
@@ -581,8 +584,8 @@ class Gate:
 
 
 class Loopback:
-    """The challenger party running as its own process on this machine (`challenger_party.py`, `verity run CONFIG --party
-    challenger`'s step 0) at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
+    """The challenger party's host on this machine (`challenger_party.Host`, `verity run CONFIG --party challenger`'s)
+    at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
     from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
 
     def __init__(self, address: str) -> None:

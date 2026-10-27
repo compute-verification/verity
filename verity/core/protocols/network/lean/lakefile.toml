@@ -9,6 +9,11 @@ relaxedAutoImplicit = false
 name = "flock_verifier"
 path = "../../../service/flock"
 
+# The period's check reads a scan's layout off its description as NCI's check does (`NciCheck.Desc`'s layout checks).
+[[require]]
+name = "nci_check"
+path = "../nci/lean"
+
 # The check is a core protocol, reads the Program's grid from the certifier program (`expectedRow`, Σ_sync) and verifies
 # certificates with the LMS port.
 [[require]]
@@ -27,6 +32,11 @@ path = "../../../primitives/lms/lean"
 [[require]]
 name = "core_identity"
 path = "../../../primitives/identity"
+
+# The period check runs one-stage v2 on each link-window's proof (`SampledProofs.OneStageZk`).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../../service/sampled_proofs"
 
 [[lean_lib]]
 name = "NetworkCheck"

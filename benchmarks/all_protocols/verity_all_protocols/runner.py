@@ -66,7 +66,7 @@ unit's ``x`` the same row (`loop.TorchLoop.wired_circuit`).
 ``--challenger local|loopback:HOST:PORT --main FILE``: each window's integrity draw on a development challenger session's
 coins (the leg's ``period.json`` ``challenger``, `legs/sampled_proofs.py`), under an LMS key made for it and pinned on the
 verifier's copy of main's first-parent history: ``local`` opened by the audit itself, ``loopback:HOST:PORT`` by the
-challenger party's own process (`challenger_party.py`, one session at a time, so with ``--windows 1``). Without it, the
+challenger party's host (`challenger_party.py`, one session at a time, so with ``--windows 1``). Without it, the
 draw is on the verifier's in-process coins.
 
 ``--of-record``: S1's run of record (`OF_RECORD`), the one way a run counts as its evidence. It sets ``--tie --pouw h1

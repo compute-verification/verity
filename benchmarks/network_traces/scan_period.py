@@ -5,19 +5,21 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, and the
-  scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
-  commitment the scan's registration; the evidence the scan's answer, the certificates of W's three records
-  (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as ``answers.json``
-  carries them). The rows form reads a registration of one link-window's 2T units, so a group of more is refused.
+  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, jitter
+  bound 1 (K's jitter term 0, assumed (J), which the certifier doesn't meet at 1), and the scan that Program's
+  descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the scan's
+  registration; the evidence the scan's answer, the certificates of W's three records (``certified.jsonl``:
+  requests, responses, fails) and W's two row registrations (``cells.jsonl``, as ``answers.json`` carries them).
+  The rows form reads a registration of one link-window's 2T units, so a group of more is refused.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
-  ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: accept where the scan's answer
-  accepts, else reject. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  ``network-period check`` (``--lean``), whose verdicts must agree and be reject: the period check refuses the rows
+  form at the scan's answer until one-stage v2 runs the scan, and the forged and tampered cases before it. ``DIR``
+  gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -122,8 +124,7 @@ def main(argv=None) -> int:
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
-        scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
-        want = "accept" if not round_ and scan_said == {"accept"} else "reject"
+        want = "reject"
         good = py.get("verdict") == lean.get("verdict") == want and py.get("public") == lean.get("public")
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]

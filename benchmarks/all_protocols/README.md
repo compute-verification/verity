@@ -15,8 +15,8 @@ every machine of a census deployment: each resource's pooled figure first, then 
   statement that pays δ once over the period, evaluated by the same executable (`Core.Onsite.Pooled`): integrity's faulty
   proof blocks (`IntegrityHorizon`, 73 at k = 64 of n = 1024 and δ = 1%, whatever `B` is) with the per-block threshold at δ/B
   beside them (`IntegrityPeriod`), PoUS's certified sampling periods (`pooledShort_log`) and the network certifier's leak in bits
-  (`HorizonLeakAccepted`, conditional on its per-block inputs), each meeting its statement's arithmetic by a property
-  of `Properties.Onsite` (its `tied_by`). `open` names what no guarantee states: the memory term's `δ_PoUS` (no
+  (`HorizonLeakAccepted`, conditional on its per-block inputs, its jitter term assumed (J), `jitter_term`), each
+  meeting its statement's arithmetic by a property of `Properties.Onsite` (its `tied_by`). `open` names what no guarantee states: the memory term's `δ_PoUS` (no
   subprotocol publishes it), bandwidth pooled over a period, space as `proved, not locked` (`pooledShort_log` is in no
   lock yet), and a per-machine leak joined over machines.
   - Proved: each block's verdict, by onsite's Lean, and each figure's evaluation, by the same executable. Scaled: the
@@ -51,12 +51,15 @@ every machine of a census deployment: each resource's pooled figure first, then 
   `period` of `periods`), in front of the loop's model (`benchmarks/network_traces/torch_loop_stub.py`), a link-window
   per window; N2's verdict of record on each link-window (`--zk` behind the Lean firewall); the certified outputs
   checked against the period's registered ones; then `NetworkCheck.Period` (`verity/certifier/v0`,
-  `network-period check`) on the period's link-windows and its compute audit, whose free inputs are the window's
+  `network-period check`) on the period's link-windows, running one-stage v2 on each one's proof itself (`n2_zk.py`
+  writes v2's parameters and each link-window's evidence beside the proof; the case's blobs are the paths of the files
+  the proofs name), and its compute audit, whose free inputs are the window's
   unregistered input rows (`circuit.json`): on acceptance `public.K`, the bits a covert sender in the server can move over the link in the
   period, except with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose
   tampered period must reject). `eps` sums its terms' δ (each audit's, and in the rows form each link-window's scan's),
-  so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. The session
-  stays in the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client
+  so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. Its jitter
+  term is 0 at jitter bound 1, assumed (J), which each answer's row in `summary.json` says (`jitter_term`). The
+  session stays in the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client
   certificates and out records only, and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what
   the verdict still stands on: the records are the certifier-only path's, not the network certifier's own cells; the
   device runs beside the server, not on the auditor's machine through the gate; and the output tie is computed in the
@@ -72,10 +75,11 @@ every machine of a census deployment: each resource's pooled figure first, then 
   --window-per-group`, the gate's scan rehearsal, a period's link-windows its group's in `groups.json`), honest and with
   the stub's tampers (`WARDEN_TAMPER`, default `late,byte`), publishing the gate's public files alone to
   `$OUT/warden-session/`. Its link-window 0 is proved by the scan (`scan_zk.py prove --warden-run --draw`), and a period
-  whose every link-window has a scan answer is decided in certifier/v0's rows form; a later period waits on
+  whose every link-window has a scan answer is put to certifier/v0's rows form, which refuses it by name at the scan's
+  answer until one-stage v2 runs the scan; a later period waits on
   `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them. `block_leg`
-  turns a period's accepted answer of either path into the block record's `certifier` entry (`verity/block-record/v1`,
-  CMP-95 item 6), the one shape a loop's run and the H200 fallback write.
+  turns a period's accepted answer of either path into the block record's `certifier` entry (`verity/block-record/v1`),
+  the one shape a loop's run and the H200 fallback write.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and
   one `ALLP` line per window, led by the monitoring period. Outer proofs go through the firewall one at a time, one
   firewalled session on the run whichever window it belongs to, so the windows are audited one after another and each
@@ -92,6 +96,15 @@ every machine of a census deployment: each resource's pooled figure first, then 
   `--of-record` is S1's run of record (below). Every run writes its mode (`of_record` and its exact flags) to
   `$OUT/mode.json`, each window's `period.json` and report (`mode`) and its `ALLP` line, so its evidence says whether it
   counts.
+- `verity_all_protocols/parties.py` and `verity_all_protocols/deployment.py`: step 0's table for `verity run CONFIG`
+  (`tools/verity/cli/verity_cli/run.py`; `examples/toy_network/`), until each protocol's package holds its own parties.
+  `parties.py` is the toy's machine for sampled proofs' core parties (compute-accounting's); its own entry point, which
+  `parties.sh` runs, reads `tests/fixtures/sampled-proofs.toml`. `deployment.py` is what `verity run` reads: what each
+  of the six subprotocols and the toy declare to a configuration (`MANIFESTS`, `TOY`), each subprotocol's parties
+  (`PARTIES`: the network certifier's relay as an entry, around `tie.relay`, and sampled proofs' core parties in one
+  live run, `live`), and the toy's machine for them (`Machine`: `parties.Machine`'s, its serving tied to the relay,
+  and the network certifier's period check around `legs/certifier.py` as the verifier's `component`), whose verifier
+  gives each period's verdict through onsite's `product` over exactly the listed components.
 
 | name | subprotocol | file | owner | state |
 | --- | --- | --- | --- | --- |

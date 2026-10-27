@@ -285,6 +285,27 @@ is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's epo
 so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
 Its Lean port is open.
 
+**Filler periods** (`fill`, CMP-172, CMP-67; Lean `PouwCheck.Fill`). Filler windows run Dither calls
+(`circuit.dither`) on tensor pipes the served windows leave idle, each call's A its per-call pad (`dither.fill_seeds`)
+and its B a published checkpoint's s8 weights, its proof units `PouwDitherBlock_v1` blocks. They count toward the served
+period's companion ``<name>:fill``, whose open commits its circuit (`fill.descriptor`: the filler shape, whose
+t = min(L, K)/L′ is at most 8 (`fill.T_MAX`), the call count and B's checkpoint digest) and K. A period's credit carries
+their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each filler window's root is `fill.open_root` of its circuit and session, and its
+session holds a salt coin, a call coin a call and a draw coin (`fill.families`): the salt coin and every call coin open
+after the root, the window's salt is the salt coin's (`h1tile.live_salt`), call c's seeds are `dither.fill_seeds` of
+that salt and call coin c, and the draw coin opens after `fill.draw_root` over the salt and every call's value root, so
+every value is fixed before the draw. The draw is over one stratum of every call's blocks; every drawn block must be
+accepted on its own statement (`fill.statement`) with its values opened at its call's value root, and one refused filler
+window refuses the whole fill. The fill is each window's m·n·K a call at the fill period's K, with its ε at
+`credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not under it yet.
+
+**Coverage** (IDLE-COVERED, CMP-67). Given the period's monitored capacity C in MACs (``capacity``, the verifier's
+parameter), the credit carries ``covered``: W_cert, the served work and the fill's together, and W_cert/C. Given a floor
+too (``floor``, ``n/d``, the verifier's parameter and never the protocol's), a period whose W_cert/C is below it is
+refused (``idle``). The ledger holds one open period a lane, so a fill period opens after its served period closes, and
+filler windows can't yet run while that period's served windows do. `benchmarks/pouw/fill_period` runs one filler period
+on a development gate.
+
 ## Registered weights (`registration`)
 
 One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.check_registration`) and served FP8's Pearl-C
@@ -359,10 +380,10 @@ level and K′ are in `window`'s docstring). This section is the window's layout
 that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
 window this way.
 
-**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a row of record
+**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a workload of record
 serves at a public fixed length, ignore_eos at each slot's public max_tokens, which the window registers (its `length`
 item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
-a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
+a workload whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
 verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
 `length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
 credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
@@ -1634,10 +1655,12 @@ registered Definitions, each checked by circuit-check at its sidecar's binding (
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
 
-## ACCEL (protocol v3.2)
+## Dither (v3.2)
 
-ACCEL, credit for a served model's int8 matmuls from committed noised prefix sums, is specified in
-`verity/core/protocols/pouw/accel/PROTOCOL.md` while it is experimental.
+Dither, PoUW's no-fold protocol, credit for a served model's int8 matmuls from committed noised prefix sums, is specified
+in `verity/core/protocols/pouw/dither/PROTOCOL.md` while it is experimental. The served PoUW moves to Dither's no-fold
+receipt (CMP-172): its H1 and J10-R units fold their words into keyed receipts, whose detection rests on
+`SharedNoiseLucks` (`Properties.Pouw.PeriodJ10R`), and that premise has no place in Dither.
 
 ## Not here yet
 

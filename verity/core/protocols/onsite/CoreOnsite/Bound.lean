@@ -207,7 +207,8 @@ def pooledJ (i : Inputs) (B : Nat) (δ : Ratio) : Json :=
         ("faulty_blocks_at_most", natJ f), ("faulty_once_bits", natJ faulty), ("proof_blocks", natJ (B * l.units)),
         ("except_with", .str "δ + Σ_i e_i + Σ_i e'_i"),
         ("conditional", .str ("on hesc and hleak (SampledKSLive at each block's history, the live " ++
-          "SampledLeakAccepted), not yet discharged"))])]
+          "SampledLeakAccepted), not yet discharged")),
+        ("jitter_term", .str "assumed (J): NetTiming.JitterBounded at jitter bound 1, which the certifier doesn't meet")])]
 
 private def horizonJ (blocks : Nat) (e : Ratio) : List (String × Json) :=
   [("blocks", natJ blocks), ("error", ratioJ e), ("vacuous", .bool ((⟨1, 1⟩ : Ratio).le e))]

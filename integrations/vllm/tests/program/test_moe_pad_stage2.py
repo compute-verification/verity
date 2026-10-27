@@ -222,7 +222,7 @@ def test_c_unselected_slots_are_disabled_bot_in_weight_and_output_never_inv_and_
                 assert a.z[e] == [BOT16] * H, (route, e)                          # every output word of the slot is enc(bot)...
                 assert all(v != 0 and v != INV16 for v in a.z[e])                 # ...not Active(0) (a zero filler), not INV
         assert all(v >> 16 == 0 for v in a.y) and all(u >> 16 == 0 for uj in a.u for u in uj)
-        # the slot's INNER words (not returned), read from the transcript by node name: the enable gate `slot<e>/enable` is Active(0)/(1),
+        # the slot's INNER words (not returned), read from the trace by node name: the enable gate `slot<e>/enable` is Active(0)/(1),
         # the routed-weight chain `slot<e>/g*` is bot on a disabled slot and Active on an enabled one -- and there is NO `slot<e>/x` gate
         # any more: x is wired in unchanged (A12), the slot's inactivity is its enable, not a replaced input
         prog = Program(sp)

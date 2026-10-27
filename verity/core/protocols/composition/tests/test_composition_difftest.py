@@ -11,7 +11,8 @@ own inputs (a component dropped, unknown, repeated or out of order, a case under
 commitment, non-canonical or malformed evidence, blobs missing or malformed; onsite's registration under another id or
 other params, its digest unbound, or left out) or the case itself (a field missing or not hex, not an object), and every
 field of the outcome but its reason must agree exactly. v2 accepts only on a session's proof, which no case carries, so
-integrity is undecided at best and no product accepts here."""
+integrity and communication (whose period check runs v2 on each link-window) are undecided at best and no product
+accepts here."""
 
 from __future__ import annotations
 
@@ -59,8 +60,9 @@ def pouw_periods() -> dict[str, list[dict]]:
             R.REJECT: [PPC.instance(random.Random(f"{n}/0"), n) for n in PPC.NAMES]}
 
 OS = R.ONE_STAGE
-#: The files every product case hands its components as blobs: v2's cases name them as their circuit and public file.
-CIRCUIT, PUBLIC = b"not a circuit file", b"not a public file"
+#: The files every product case hands its components as blobs: v2's cases, and the period check's link-windows, name
+#: them as their circuit and public file.
+CIRCUIT, PUBLIC = R.ZK.CIRCUIT, R.ZK.PUBLIC
 BLOBS = [CIRCUIT, PUBLIC]
 
 
@@ -116,9 +118,9 @@ V2_CASES = {R.UNDECIDED: empty_draws().map(v2_case),
                                 st.builds(v2_case, empty_draws(), st.sampled_from(V2_BREAKS)))}
 
 NP = R.PERIOD
-#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
-PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case")
-                for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
+#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`):
+#: none accepts, since v2 is undecided at best on each link-window.
+PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case") for v in (R.REJECT, R.UNDECIDED)}
 
 #: NCI's changes by the verdict they aim at; NCI is never undecided (`kinds`).
 NCI_CASES = {R.ACCEPT: ("honest",), R.REJECT: tuple(m for m in R.NCI.MUTATIONS if m != "honest")}
@@ -133,6 +135,8 @@ def kinds(C) -> list[str]:
         return [k for k in KINDS if k in C.cases]
     if C is R.SAMPLED_PROOFS:
         return list(V2_CASES)
+    if C is R.CERTIFIER:
+        return list(PERIOD_CASES)
     if C is R.WIPE:
         return list(R.WIPE_CASES.KINDS)
     if C is R.NCI_CHECK:
@@ -156,7 +160,8 @@ def component_case(draw, C, kind: str | None) -> dict:
     elif C is R.POUW_PERIOD:
         case = draw(st.sampled_from(pouw_periods()[kind]))
     elif C is R.CERTIFIER:
-        case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
+        ms = PERIOD_CASES[R.UNDECIDED if kind == R.ACCEPT else kind]
+        case = NP.build(draw(st.sampled_from(ms)), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.WIPE:
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
     elif C is R.NCI_CHECK:
