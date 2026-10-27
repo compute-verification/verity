@@ -7,7 +7,7 @@ ends) and the PR's newest `ready` label at the head that landed:
   queue     ready mark -> the first check of a train with the PR in it, at that head
   rework    that first check -> the check the PR landed with (trains thrown away by rebuilds, failures, ejections)
   machine   that check's launch -> its check slot
-  check     its slot -> the last of its steps that ended before the landing (a deferred step, `--defer`, ends after it)
+  check     its slot -> the last of its steps that ended before the landing (a deferred step ends after it)
   land      that verdict -> the tick that landed it"""
 from __future__ import annotations
 
