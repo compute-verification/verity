@@ -269,8 +269,8 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
     t0 = time.time()
     rec: dict[str, Any] = {"stage": stage, "cmd": shlex.join(cmd), "log": str(log_path), "status": "ok", "returncode": None, "reason": None}
     peak = 0.0
-    # [R16 sys, BRIEF §5] the Match stage's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
-    # process each (`work.*`), the CPU stages (fold, resolve, ...) are validation
+    # [R16 sys, BRIEF §5] the Match phase's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
+    # process each (`work.*`), the CPU phases (fold, resolve, ...) are validation
     try:
         from verity_vllm.pipeline.timeline import Timeline
         _tl = Timeline.from_env("run_config", hot=False)
@@ -626,7 +626,7 @@ def main(a: Options) -> int:
         return 0
 
     man = write_manifest(plan, a)
-    spec_note = write_spec_for(plan, a, man)          # D88: spec.json (known before execution) -- written once, before any GPU stage
+    spec_note = write_spec_for(plan, a, man)          # D88: spec.json (known before execution) -- written once, before any GPU phase
     recs = load_stages(plan.run)
     logs = plan.run / "logs"
     if a.phase in ("gpu", "all"):
@@ -795,7 +795,7 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
 
 # [R15 EXEC-02 / COORD M-0063 (2)] torch-free mirror of vllm_adapter.execution_of_workload (this driver runs on the laptop): the row's
 # declared execution label (explicit `execution` / `sweep.execution`, else the row-id suffix) and the enforce_eager it implies
-# (`engine.served.ENFORCE_EAGER`).  The GPU stages derive the same from the workload themselves and refuse a contradicting engine arg
+# (`engine.served.ENFORCE_EAGER`).  The GPU phases derive the same from the workload themselves and refuse a contradicting engine arg
 # (build_engine).
 
 
@@ -940,7 +940,7 @@ def instances_form() -> str:
     (every maximal run one item, the node-space K/V gathers listed run by run: 54 M items / 1.63 GB on a B8 1024/128 row); `progressions`
     = the same references with the node space as compact progressions built from the fold's own Refs objects in O(1) per part (no
     `runs()` expansion at write; ~3 % of the text), parameter-space runs unchanged.  Lossless either way.  The LIBRARY default stays `runs`
-    (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match stage ("compact
+    (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match phase ("compact
     refs stay compact end to end": readers accept both forms)."""
     v = (os.environ.get(INSTANCES_FORM_ENV) or "runs").strip().lower()
     if v not in ("runs", "progressions"):
@@ -1047,7 +1047,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     acc = getattr(result, "accesses", None) or []
     if acc:
         p = run_dir / "accesses.jsonl.gz"
-        # [COORD R17-28 F1, mprof] the journal is 22 % of the fold stage at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
+        # [COORD R17-28 F1, mprof] the journal is 22 % of the fold phase at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
         # Match-pipeline stage reads it (the regression fixtures pin it).  Under row_pod's MATCH_PIPELINE=shared
         # it is compressed at level 1 (same lines, ~4x less compressor time, a larger file); unset = level 9 as before.
         level = 1 if os.environ.get("MATCH_PIPELINE", "") == "shared" else 9

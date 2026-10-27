@@ -1,6 +1,6 @@
-"""F1 (`fp4-tile-only/sm120`): every multiplier on sm_120a priced per nonzero product against dense NVFP4 (lane pouw rtx-pro GPU 4).
+"""F1 (`fp4-tile-only/sm120`): every multiplier on sm_120a priced per nonzero product against dense NVFP4.
 
-The FP4-tile model (docs/pouw/fp4-tile-model.md §1) claims that no sm_120 instruction multiplies faster than the NVFP4 m16n8k64
+The FP4-tile model claims that no sm_120 instruction multiplies faster than the NVFP4 m16n8k64
 tile per nonzero product.  This tool measures that claim over every ``mma.sync`` / ``mma.sp::ordered_metadata`` kind, shape,
 type and sparsity ptxas accepts for sm_120a, and over the CUDA-core multipliers, each in the same process as dense NVFP4:
 
@@ -19,7 +19,7 @@ table: dense NVFP4 1, FP8 2, BF16 4, TF32 8, FFMA about 17), where a sparse form
 
 Gates, before any timing (a failed gate writes no measurements): the device UUID and compute capability 12.0; the build's SASS
 gate (each timed loop holds its form's instruction count, and no kernel in the library has an FP32 ``FADD``/``FFMA``/``FMUL``
-with ``.FTZ``, the 09:34Z rule; the build passes no ``-ftz``/fast-math flag); every kernel's outputs finite and bit-identical
+with ``.FTZ``; the build passes no ``-ftz``/fast-math flag); every kernel's outputs finite and bit-identical
 across two launches; every launch one wave; and, after timing, every kernel's outputs finite at its timed length (a failure there
 publishes no measurements either).  ``--corrupt-word`` flips one gate word: the run must then fail.  A form ptxas
 emulates (s4, u4, b1 and FP16 m8n8k4 on sm_120a: one ``CALL`` per PTX instruction to a subroutine of unpacking and other MMAs)
@@ -27,8 +27,8 @@ passes the SASS gate as ``emulated``, with its callee's MMAs recorded, and is ti
 
 Operands are uniform random codes of each form's types (small magnitudes where the accumulator is FP16, so no chain reaches inf);
 the sparse forms carry real 2:4 metadata (every nibble one of the six index pairs ordered_metadata accepts, drawn per lane and per
-operand set; 1:2 for TF32), and ``sp_nvf4_meta_const`` repeats OMMA.SF.SP with one constant nibble, as the assessor's sparse FP8
-probe did.  A product narrower than an E2M1 product (``s4``, ``u4``, ``b1``) is priced per its own product and flagged: it can't
+operand set; 1:2 for TF32), and ``sp_nvf4_meta_const`` repeats OMMA.SF.SP with one constant nibble.
+A product narrower than an E2M1 product (``s4``, ``u4``, ``b1``) is priced per its own product and flagged: it can't
 hold one E2M1 x E2M1 product (12 x 12 as integers after the x2), so it is not a like-for-like multiplier.  Labels: every rate
 and price is Measured; the per-E2M1-product prices of the narrow forms are Derived from them.
 """
@@ -66,7 +66,7 @@ REF = "nvf4"
 #: sparse metadata nibbles mma.sp::ordered_metadata accepts: index pairs p0 < p1 of four as (p1 << 2) | p0; TF32's 1:2 pairs
 META_24 = (0b0100, 0b1000, 0b1001, 0b1100, 0b1101, 0b1110)
 META_12 = (0b0100, 0b1110)
-NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / --use_fast_math (the 09:34Z rule); the build refuses them anyway
+NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / --use_fast_math; the build refuses them anyway
 FTZ_RE = re.compile(r"\b(FADD|FFMA|FMUL)(\.[A-Z0-9_]+)*\.FTZ\b")
 MMA_RE = re.compile(r"MMA")
 MULT_RE = re.compile(r"MMA|FMA|MUL|MAD|IDP|DP[24]A|POPC")

@@ -1,19 +1,23 @@
-"""verity_vllm.program.predict.window_circuit's int8 linears (VLLM-33's G3): an exact-int8 checkpoint served with its linears
+"""verity_vllm.program.predict.window_circuit's int8 linears: an exact-int8 checkpoint served with its linears
 int8 (serve-openai's verity_int8) is the same class circuit with each decoder linear its quantizer unit and s8 GEMM slices,
 pinned on `test_window_circuit`'s TINY class, windows and grain.
 """
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, OTHER, WINDOW, _blocks, _label, _labels, _source, held
+from tests.program.predict.test_window_circuit import (CLASS, GRAIN, KEY, OTHER, ROPE, WINDOW, _alone, _blocks, _checkpoint, _label,
+                                                       _labels, _source, held)
+from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.window_circuit import window_circuit
@@ -58,8 +62,8 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
     assert {(WB.weight_param(f"{w}.{t}", n), p, 0, n) for w in layer for t, p, n in (("weight", "w", 512),
                                                                                      ("weight_scale", "sw", 32))} <= reads
-    assert len(circuit.registered.params) == 24
-    assert {p.split("/", 1)[0] for p in circuit.registered.params} == {WC.WEIGHTS}
+    assert len(circuit.registered.params) == 26
+    assert {p.split("/", 1)[0] for p in circuit.registered.params} == {WC.WEIGHTS, WC.SLOT_ROWS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
     assert _blocks(circuit) == _blocks(other)
     labels = _labels(circuit)
@@ -68,6 +72,36 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
         i = np.arange(w.units, dtype=np.int64)
         reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
         assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
+
+
+@pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
+                                         ("model.layers.0.self_attn.v_proj.weight_scale",
+                                          "model.layers.0.self_attn.qkv_proj.weight_scale@32")])
+def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rotary_tables(tmp_path, flip, param):
+    """On TINY's exact-int8 checkpoint the committer's registration (`weights_registration` at the window's grain under its
+    key), held to the verifier's weights record (`registration_pins`), has a hiding root for each weight parameter the
+    window circuit registers, each linear's s8 codes and f32 row scales their own, but the rotary table: pinned at them,
+    every weight read but the rotary table's is registered, and the window's free bits are its reads and the slot rows, a
+    per-window value no registration holds. A committer serving one byte changed in a linear's codes, or in its scales, refuses to register that
+    weight, and a window that serves it commits another root for that parameter alone, whose reads go free besides."""
+    reg = _registered()
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    doc = json.loads(json.dumps(circuit.description()))
+    d, man = _checkpoint(tmp_path, quant=INT8_EXACT_QUANT)
+    registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    pins = WW.registration_pins(registration, WW.weights_record(reg, d, man, grain=GRAIN))
+    assert (ADV.registered_weights(registration), len(pins), list(registration["unrooted"])) == (pins, 24, [ROPE])
+    assert set(pins) == set(circuit.registered.params) - {ROPE, WC.SLOT_ROWS}
+    rope = _alone(doc, ROPE)
+    assert IF.input_count(doc, pins=pins, roots=pins) == {"units": 1774, "inputs": 10617760, "wired": 1601056,
+                                                         "registered": 9016320 - rope, "ingress": 0, "free": rope + 2 * 6 * 32}
+    served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
+    refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}
+    with pytest.raises(ValueError, match=re.escape(f"no weight registered: {refused} ")):
+        WW.weights_registration(reg, KEY, d, served, checkpoints_manifest=man, grain=GRAIN)
+    roots = {p: v.root.hex() for p, v in WW.weight_values(reg, served, KEY, GRAIN).items()}
+    assert [p for p in pins if pins[p] != roots[p]] == [f"{WC.WEIGHTS}/{param}"]
+    assert IF.input_count(doc, pins=pins, roots=roots)["free"] == 2 * 6 * 32 + rope + _alone(doc, f"{WC.WEIGHTS}/{param}") > rope
 
 
 def test_a_word_is_whole_leaves_of_one_byte_width():

@@ -1,11 +1,11 @@
-"""The `dither-a` arm: ASK-71's option A (CA's card), the provisional credit form since Daniel's 21:59Z ruling (19 Oct).
+"""The `dither-a` arm: option A of the credit form, the provisional credit form.
 Under it the noised work is credited on the operands A, B of a served product that is value-checked (on every drawn
 unit z_u = A_u B_u^T, proved and committed before the draw, y from the committed z), so the served product may come from
-a plain GEMM beside the receipted one.  Every run is labelled by `forms.form_of` (`Side.label`): form=ASK-71 A
-(provisional) only for -so<D> with -zy (`dither_so`) on a ruled-in form, whose served epilogue commits #3018's per-unit
+a plain GEMM beside the receipted one.  Every run is labelled by `forms.form_of` (`Side.label`): form=`forms.FORM_A`
+only for -so<D> with -zy (`dither_so`) on a ruled-in form, whose served epilogue commits the per-unit
 z/y records under round s's root before coin s (the receipts need no z of their own); form=beside (unadopted arm) for
 -so's -ab/-abn and -ov arms; form=beside, receipts beside the served GEMM, for the row z tables or no z, and for every
-arm outside the -so order (RT4-INT-12), which this module's arms all are.
+arm outside the statement's order (-so), which this module's arms all are.
 
 Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): exactlin's quantizer, which also stores
 the call's live rows and scales (rows < m, unless the step's flags say no-write) into the window's A slot
@@ -16,7 +16,7 @@ y = dequant(z), exact-fused's y bit for bit (`dithera_mm`, `dithera_mm_tma`).
 Side stream, forked after the quantizer (it reads only window-owned buffers): the call's A table (`h1c_a_call`, the
 window's form: DITHER_A_FORM, 3 unless set), its seeds (h1r version 0, from the window's salt and root(A_j), root(B_j))
 and its receipts of the noised product T = (A + N_A)(B + N_B)^T only, no peel and no z: h1r's block or split form per
-call (`unit="h1r"`: versions 3 and 4, wide where the call's column blocks outnumber the SMs, as dither-1s-mix's units)
+call (`unit="h1r"`: versions 3 and 4, wide where the call's column tiles outnumber the SMs, as dither-1s-mix's units)
 or h1u.cu's kh_unit_ws (`unit="kh"`), or the K split build's kh_one (`unit="hbk"`, h1k where the call's live units
 fit, its z and y to scratch, read under a flagless copy of the step; `unit="hbr"`, the same call in the H1K_RONLY
 build, which writes no z or y and skips their MMA), into a staging buffer.  At the forward's last call `dithera_commit` copies the
@@ -123,7 +123,7 @@ ZY_KIND = "zy-unit-table"
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
 ZY1_ENV = "DITHER_ZY1"
-# "1": the z/y and y tables' rows in a row block past m take their x from `dead_rows` (hashed once a window, from the
+# "1": the z/y and y tables' rows in a row tile past m take their x from `dead_rows` (hashed once a window, from the
 # bytes such a row holds) and hash no segments; the same leaves and roots
 ZDEAD_ENV = "DITHER_ZDEAD"
 # "1" (-zy under DITHER_ZDEAD): RT4-INT-11's compare of the served y with the records' y halves made on their bytes in
@@ -189,7 +189,7 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
             if ZL == 1:     # row-major, a slot's N int32 a leaf
                 tl.store(z_ptr + offs_m[:, None] * N + offs_n[None, :], zv, mask=mask)
             else:
-                # one record a UR x UC unit (row block i // UR, column block j // UC; record (i // UR) (N / UC) + j // UC):
+                # one record a UR x UC unit (row tile i // UR, column tile j // UC; record (i // UR) (N / UC) + j // UC):
                 # its z int32 row-major, then its y = dequant(z) bf16 row-major, as dither_a.ZY's leaf; a slot past m is
                 # zero codes under s_a = +0 (scaled_mm_zy's empty row), so its y is h1zy's dq(0, +0, s_w), not 0
                 r = offs_m[:, None] % UR
@@ -304,11 +304,11 @@ def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S
 @triton.jit
 def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, rec_ptr, bad_ptr, M, N, T, stride_y, UR: tl.constexpr,
                     UC: tl.constexpr, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, CMP: tl.constexpr):
-    # the served y (int16 view; the bytes the next layer reads), rows < m, into the call's y records (unit row block,
-    # then column block; Y_KIND), and past m the epilogue's empty-slot y, dq(0, +0, s_w); F_NW_TILES = 2: nothing
+    # the served y (int16 view; the bytes the next layer reads), rows < m, into the call's y records (unit row tile,
+    # then column tile; Y_KIND), and past m the epilogue's empty-slot y, dq(0, +0, s_w); F_NW_TILES = 2: nothing
     # written; F_FAULT_Y = 64: bit 0 of y[0, 0] flipped in place first, so the next layer and the record read the
     # tampered y.  CMP (YCMP_ENV): those bytes against the y halves of the call's z/y records (rec_ptr, int16) on the
-    # rows of the live UR-row blocks, the rows the y tables hash under DITHER_ZDEAD, and bad_ptr (int32) set to 1 on any
+    # rows of the live UR-row tiles, the rows the y tables hash under DITHER_ZDEAD, and bad_ptr (int32) set to 1 on any
     # that differs
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
@@ -568,8 +568,8 @@ class Side:
                                                                    BLOCK_M=32, BLOCK_N=128, CMP=cmp, **EL.OPTS)
 
     def dead_rows(self) -> list[dict]:
-        """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row block past m (the
-        window's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column block's x is hashed here once."""
+        """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row tile past m (the
+        window's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column tile's x is hashed here once."""
         from verity_vllm.engine import int8_exact as E
         win, out = self.win, []
         for w in range(win.L):

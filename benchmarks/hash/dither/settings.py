@@ -1,8 +1,8 @@
 """Dither's harness's settings: every variable its benches, windows and gates read, declared once (`verity_config.settings`).
 
 It owns ``DITHER_``, ``SBENCH_`` and ``HB_``: a variable with one of them that nothing here declares is refused when the
-registry loads, which every module of this directory that reads one does (``of(__file__)``). The shell-only ones (sbench.sh's,
-hb_served.sh's and prefill.sh's, which never reach a Python read) are declared too, so their exports are known. ``H1U_*``
+registry loads, which every module of this directory that reads one does (``of(__file__)``). The shell-only ones (sbench.sh's
+and hb_served.sh's, which never reach a Python read) are declared too, so their exports are known. ``H1U_*``
 are h1u.cu's nvcc macros (``-DH1U_JRC=1``), not variables; ``HB_KC_FLAGS`` and its kin carry them to the build.
 
 A build's path (``DITHER_H1C``, ``HB_H1U``, ...) is ``where``: sbench.sh and hb_served.sh build each from this tree's sources

@@ -1,4 +1,4 @@
-"""W1 price microbenchmarks for the FP4 path on sm_120a (lane pouw rtx-pro GPU 4): what one MMA of each row costs on this card.
+"""W1 price microbenchmarks for the FP4 path on sm_120a: what one MMA of each row costs on this card.
 
     python benchmarks/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR --expect-uuid GPU-... [--rows nvf4,mxf4,...] [--reps 10]
     python benchmarks/tc_probe_fp4/w1_price.py --out /tmp/w1 --sass-only          # build + SASS gate, no device
@@ -14,7 +14,7 @@ Each row is one ``mma.sync`` of ``rows_fp4.cuh`` (the mnemonic the probe's captu
 Every launch's SM clock is its longest thread-0 clock64 span over its event time, so each rate is also stated per SM per clock,
 which does not depend on the clock.  The rows:
 
-  nvf4                 kind::mxf4nvf4 4X ue4m3 m16n8k64      OMMA  the honest dense NVFP4 rate (GPU 7's fp4_attack ``dense`` too)
+  nvf4                 kind::mxf4nvf4 4X ue4m3 m16n8k64      OMMA  the honest dense NVFP4 rate
   mxf4                 kind::mxf4nvf4 2X ue8m0 m16n8k64      OMMA
   f8f6f4               kind::f8f6f4 e2m1 x e2m1 m16n8k32     QMMA  unscaled E2M1 in 8-bit containers
   f8f6f4_e2m1_e4m3     kind::f8f6f4 e2m1 x e4m3 m16n8k32     QMMA

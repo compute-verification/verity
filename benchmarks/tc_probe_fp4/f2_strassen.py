@@ -1,4 +1,4 @@
-"""F2 (lane pouw rtx-pro GPU 4): one- and two-level Strassen over one NVFP4 group on the TF32 tensor core, against dense NVFP4 on
+"""F2: one- and two-level Strassen over one NVFP4 group on the TF32 tensor core, against dense NVFP4 on
 sm_120a, word for word.
 
 A cheaper-computation search: Strassen's 2 x 2 recursion multiplies block matrices in 7 products instead of 8, so L levels over
@@ -63,7 +63,7 @@ ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f2-strassen-sm120/v1"
 SRC = HERE / "f2_strassen.cu"
 HEADER = HERE / "nvf4_step.cuh"
-NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math (the 09:34Z rule); build refuses them
+NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math; build refuses them
 NATIVE_TPB = 128
 LEVELS = {"l1": 1, "l2": 2}
 FAMILIES, TIMED, GATE_LENGTHS = F3.FAMILIES, F3.TIMED, F3.GATE_LENGTHS
@@ -71,7 +71,7 @@ NATIVE_OPCODE, NATIVE_PRODUCTS = F3.NATIVE_OPCODE, F3.NATIVE_PRODUCTS
 TF32_OPCODE = {1: "HMMA.1688.F32.TF32", 2: "HMMA.1684.F32.TF32"}
 #: distinct Strassen tiles per launch (warps take tile w mod NTILES), and the column tiles they cycle through
 NTILES, NCT = 256, 4
-#: F1's TF32 prices in FP4 slots per product, m16n8k8 and m16n8k4 (collect r20260930-111747-26f3, Measured)
+#: F1's TF32 prices in FP4 slots per product, m16n8k8 and m16n8k4 (F1's collect, Measured)
 F1_TF32_SLOTS = {1: 8.0, 2: 16.0}
 FAVOURS_STRASSEN = ("the pre-additions outside the timed loop: A's (U) are amortized over the N/TN column tiles, B's (V) are "
                     "preprocessing of fixed weights; so is the E2M1 codes' conversion to TF32",

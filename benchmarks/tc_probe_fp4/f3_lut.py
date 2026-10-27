@@ -1,4 +1,4 @@
-"""F3 (lane pouw rtx-pro GPU 4): LUT-GEMM over the 16-code E2M1 alphabet, tables from the weights, against dense NVFP4 on sm_120a.
+"""F3: LUT-GEMM over the 16-code E2M1 alphabet, tables from the weights, against dense NVFP4 on sm_120a.
 
 A cheaper-computation search: with the weights fixed, the partial dots of G consecutive weights of C columns against every one
 of the 16^G activation-code tuples can be tabulated in advance, so one table lookup replaces G x C E2M1 products.  This tool
@@ -59,7 +59,7 @@ ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f3-lut-sm120/v1"
 SRC = HERE / "f3_lut.cu"
 HEADER = HERE / "nvf4_step.cuh"
-NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math (the 09:34Z rule); build refuses them
+NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math; build refuses them
 LUT_TPB, NATIVE_TPB = 256, 128
 AROW = 9
 WIDTHS = {"g1c2": (1, 2), "g1c4": (1, 4), "g1c8": (1, 8), "g2c2": (2, 2), "g2c4": (2, 4), "g4c2": (4, 2)}
