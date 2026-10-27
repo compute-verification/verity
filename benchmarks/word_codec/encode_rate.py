@@ -14,8 +14,8 @@ of 2, 4 and 8 CTAs an SM, `kv_bench.chain`):
     decode      likewise, k squarings a word
 
 each over the reference (`kv.cu` before FOLD 6, 1.499e10) and the stated ceiling's GPU part, `timing.GPU_SQUARINGS_PER_S`
-(1.67 × the reference, Daniel's card e2a13d4a) less the host's share h = 12.5% (s ≈ 1.485, `kv.cu`'s FOLD 6 less its
-MOV and SEL, by ra-squaring-ceiling's rule). Then the encode
+(1.67 × the reference) less the host's share h = 12.5% (s ≈ 1.485, `kv.cu`'s FOLD 6 less its
+MOV and SEL). Then the encode
 through memory (`kv_encode_bound` of --blocks blocks, each under an offset of its own, in place) alone and on a
 low-priority stream beside a bf16 GEMM loop (--gemm M,K,N) on a high-priority one, at grids of two CTAs an SM, one, and
 a word a thread (CTAs that end after one word each, so the GEMM's take the SMs as they free): the encode's rate under a

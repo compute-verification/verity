@@ -29,10 +29,10 @@ import Definitions.Accounting.JointBridge.H200
 import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
-import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Definitions.Accounting.Memory
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical
+import Definitions.Accounting.Overhead
 import Definitions.Accounting.Pouw
 import Definitions.Accounting.PouwWork
 import Definitions.Accounting.RateAudit

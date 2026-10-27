@@ -1,8 +1,8 @@
-"""I2's served window as one Circuit (VLLM-103's V3b, `verity.ml.windows.interface`): the window *class's* circuit, every
+"""I2's served window as one Circuit (`verity.ml.windows.interface`): the window *class's* circuit, every
 unit's output a committed row and every input row wired, registered or ingress.
 
-A window class (`WindowClass`, N1's scan class: note:network-accounting/20261025T0830Z-report-net68-scan-router) has a
-fixed number of slots a network timestep (ASK-122): ``lanes`` slots at each boundary, one every ``every`` scan buckets from the
+A window class (`WindowClass`, N1's scan class) has a
+fixed number of slots a network timestep: ``lanes`` slots at each boundary, one every ``every`` scan buckets from the
 window's start, ``slots`` in all, each of at most ``prompt`` prompt ids and ``outputs`` outputs. Slot 4b + j at the class of
 record is boundary b's lane j, anchored at bucket 16b. Its circuit is one class Program a slot, whatever the traffic
 (`class_circuit`): the Build's greedy request Program at one prompt row and P - 1 decode steps, P = prompt + outputs - 1
@@ -32,14 +32,14 @@ the units, their feeds, gathers and weight reads, and wires them):
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
   aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
-- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut (#4263, CIR-96): each head's Calls (`AttentionHead_v19`'s
+- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut: each head's Calls (`AttentionHead_v19`'s
   body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
   nb = ⌈T / BN⌉), each full block below it `AttnBlock_v5` and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each
   block's running state its predecessor's rows. A block's keys and values are one row a KV group, which its group's heads
   read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
   `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
   `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
-- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way (VLLM-127): its first visited block
+- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way: its first visited block
   `AttnBlockFirst_v1` (FA3's first iteration is FA2's word for word), each full block below it
   `AttnBlock_v4{FIRST=False, CHECK = b >= MASKED_FROM}` and its end `AttnHeadEnd_v1{D, INV=Fa3InvSum_v1}`. `CUTS` names
   the versions cut by key block and the cut of each.
@@ -82,9 +82,8 @@ is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
 verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
-registration records for it; anywhere else they are free. The root of record of the weights record (`weights_record`, from
-the checkpoint's pinned shards), which `verity-vllm advice --weights-of-record` records for ``weights``, holds none of
-them: nothing yet ties a weight's committed root to it (VLLM-125).
+registration records for it; anywhere else they are free. The pins are the hiding roots the committer registered once per
+model and key, never roots the verifier computes (`window_weights`).
 """
 from __future__ import annotations
 
@@ -102,7 +101,6 @@ from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19
 from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
-from verity_vllm.check import weights_of_record as WR
 
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
@@ -111,12 +109,12 @@ from .window_builder import WEIGHTS, Grain, Row, _Builder, _step
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
-#: the Definition that reads a slot's ingress row, (occupancy, prompt length, ids). A placeholder for the row network-
-#: accounting's BLOCKS-NET PR names (ASK-122: token ids in a committed row with a private occupancy word, tied to the
-#: certified bytes by #4548's id form); the lowering reads a slot's row only through this
+#: the Definition that reads a slot's ingress row, (occupancy, prompt length, ids). A placeholder for network
+#: accounting's row: token ids in a committed row with a private occupancy word, tied to the certified bytes by their
+#: id form; the lowering reads a slot's row only through this
 SLOT_ROW = IO.SlotRow
 #: a request held across the window's end, which the class doesn't take: whether the network certifier's lanes hold one
-#: across a window boundary is open (thread 1793030365.246499), and a slot that does needs a Program running into the next
+#: across a window boundary is open, and a slot that does needs a Program running into the next
 #: window
 ACROSS = "held across the window's end"
 #: the most keys a head reads through one `AllGather_v1{T, D}` where its attention's version has no per-key-block cut (its
@@ -129,8 +127,8 @@ CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
 
 @dataclass(frozen=True)
 class WindowClass:
-    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (ASK-122:
-    fixed slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
+    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (fixed
+    slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
     ``outputs`` outputs, ``lanes`` of them anchored at each boundary, one every ``every`` scan buckets from the window's
     start (lanes 0: every slot at the window's one boundary). Slot ``lanes · b + j`` is boundary b's lane j, anchored at bucket
     ``every · b``, and the window is ``buckets`` = every · (slots / lanes) buckets."""
@@ -167,7 +165,7 @@ class WindowClass:
         return self.boundaries[slot // self.lanes]
 
 
-#: the class of record, the certifier run of record's envelope at ASK-122's slots (network-accounting took vllm's pick):
+#: the class of record, the network certifier's envelope at these fixed slots:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
@@ -717,27 +715,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, name)
 
 
-def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
-                   kv_cache_dtype: str = "auto") -> dict[str, Any]:
-    """The weights of record of the circuit's registered ``weights`` (`check.weights_of_record`): each field of the class
-    Program's weights record, in its order, composed from the checkpoint's pinned shards (``checkpoints_manifest``, default
-    the repository's ``manifests/checkpoints.json``) at ``registered``'s model and revision. Its root of record is the root
-    the verifier pins for ``weights`` before the run and a window's registration records (`verity-vllm advice
-    --weights-of-record`). It holds no weight read on its own: the circuit reads each weight as its own parameter, held
-    only by its own pin (`interface.input_count`), and nothing yet ties a weight's committed root to the record's
-    (VLLM-125). The weights record is the model's, one at every class."""
-    from verity_vllm.config import CHECKPOINTS
-
-    from .common import _arr_shape
-
-    r = class_program(registered, WindowClass(1, 2, 2))
-    fields = [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
-    model = registered.phi.model
-    ck = WR.CheckpointIndex(checkpoint_dir, checkpoints_manifest=str(checkpoints_manifest or CHECKPOINTS), model=model["repo"],
-                            revision=model["revision"])
-    return WR.weights_of_record({"instances": {}, "result": {"program_digest": r.digest}, "dir": None}, ck, prefix="",
-                                kv_cache_dtype=kv_cache_dtype, fields=fields)
-
-
 __all__ = ["ACROSS", "CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "SLOT_ROW", "WindowClass", "class_circuit",
-           "class_program", "weights_record", "window_circuit"]
+           "class_program", "window_circuit"]
