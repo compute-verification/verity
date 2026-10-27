@@ -120,14 +120,14 @@
         "verity/",
         "verity/core/protocols/sampled_proofs/",
         "archive/",
-        "benchmarks/one_stage/",
+        "examples/one_stage/",
         "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
-        "benchmarks/private_circuit/",
+        "examples/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
@@ -582,7 +582,7 @@
         "benchmarks/one_stage/served_verdicts.sh",
         "benchmarks/one_stage/served_verdicts.py",
         "benchmarks/one_stage/tests/test_served_verdicts.py",
-        "benchmarks/one_stage/tests/served_verdicts.pyproject.toml"
+        "benchmarks/one_stage/tests/pyproject.toml"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
