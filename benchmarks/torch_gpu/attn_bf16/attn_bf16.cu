@@ -1,11 +1,11 @@
 // Attention's two BF16 GEMMs on sm_90a (H100, H200) and sm_120a (RTX PRO 6000), each output word exactly
 // GemmCoordinate_v2{K, GEMM_HOPPER}: K/16 `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` steps in ascending k from
 // a +0 accumulator, then one `cvt.rn.bf16.f32`.  Both cards' mma.sync BF16 step is Hopper's (sm90.mma.m16n8k16.bf16, pinned;
-// the PRO 6000's capture of sm120.mma.m16n8k16.bf16 agrees with it).  Softmax is its own unit: QK^T's words come out, PV's
+// the PRO 6000's capture of sm120.mma.m16n8k16.bf16 agrees with it).  Softmax is its own Definition: QK^T's words come out, PV's
 // P goes in.
 //
-//   attn_qk_d{64,128}[_h8|_h16|_s16]   S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])          for j < len(b,q)
-//   attn_pv_d{64,128}[_h8|_h16|_s16]   O[b,h,q,d] = GemmCoordinate{K=kp}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)
+//   attn_qk_d{64,128}[_h8|_h16|_s16|_ref]   S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])     for j < len(b,q)
+//   attn_pv_d{64,128}[_h8|_h16|_s16|_ref]   O[b,h,q,d] = GemmCoordinate{K=kp}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)
 //                                                                                                        len = len(b,q)
 //
 // with kp = max(kpv, pad16(len)): kpv = 0 pads each query's keys to a multiple of 16, and kpv = 32 is the H200 model's PV
@@ -17,10 +17,10 @@
 //
 // A warp computes a 16 x 8 tile of output words at a time and runs each word's whole k chain in registers: no split-K, no
 // atomics, no shared reduction.  In the q8 kernels a tile's 8 columns are 8 queries of one head (grid: query tiles of 8, H,
-// B), and a block's warps stride over its key tiles (QK^T) or d tiles (PV).  In the _h8 kernels they are one query of 8
-// heads that share a KV head (8 divides 2^gshift; grid: Mq, any Y, B): block y runs the head groups y, y + Y, ..., its
+// B), and a CTA's warps stride over its key tiles (QK^T) or d tiles (PV).  In the _h8 kernels they are one query of 8
+// heads that share a KV head (8 divides 2^gshift; grid: Mq, any Y, B): CTA y runs the head groups y, y + Y, ..., its
 // warps take every warps-th of them, and a warp runs every tile of its group (QK^T: each key tile, with the group's Q loaded
-// once; PV: each d tile, with P loaded once a key block), so a decode step reads each key and value once for 8 heads.  The
+// once; PV: each d tile, with P loaded once a key segment), so a decode step reads each key and value once for 8 heads.  The
 // _h16 kernels run head groups of 16 (16 divides 2^gshift) the same way, with the heads as the tile's 16 rows instead.  The
 // _s16 kernels are _h16's tiles where every query sees at most S16_KEYS = 32 keys and PV's kp is at most 32 (the H200
 // model's decode step): a warp loads the shared operand once for all of its groups of one KV head (K's 4 key tiles, V's 2
@@ -33,10 +33,14 @@
 // time where the buffer's strides and base allow, and its PV O's rows 16 bytes a lane where they allow that (store_o).
 // A word's products depend only on its row of A and column of B, so keys past a column's length are zero
 // codes in both operands, as the Definition pads them: P is loaded as zero there, and V too.  V is shared by the tile's
-// columns, and in the query-tiled kernels they can stop at different keys, so in a 16-key block each distinct stopping
+// columns, and in the query-tiled kernels they can stop at different keys, so in a 16-key segment each distinct stopping
 // point gets its own mma with V zeroed past it, and each column takes its word from the mma of its own; a column whose keys
-// ended before the block keeps its accumulator unless the block is below kpv, so its chain is its own kp/16 steps.  The _h8
-// kernels' columns share one length, so each block is one mma.
+// ended before the segment keeps its accumulator unless the segment is below kpv, so its chain is its own kp/16 steps.  The _h8
+// kernels' columns share one length, so each segment is one mma.
+// The _ref kernels are the slow reference path, tuned for nothing: a CTA takes 8
+// columns (QK^T: keys; PV: d) of one KV head and sequence (grid: column tiles, Hkv, B), its warps take turns over the
+// (16 query heads of that KV head, query row) pairs, and every operand word is gathered on its own, so a tile's rows share
+// one query and its chain is that query's.
 //
 // The kernels do no floating-point arithmetic: operands and accumulators move as bits, and the only floating-point
 // instructions are the mma and the cvt (sass_gate.py refuses any other).
@@ -84,7 +88,7 @@ __device__ __forceinline__ void k_rows(uint32_t (&A)[4], const uint16_t* karow, 
     A[3] = jbok ? ld_pair(kbrow + c + 8) : 0u;
 }
 
-// A q8 block's tile, from the grid alone (no division: the SASS gate refuses the floating-point reciprocal an integer one
+// A q8 CTA's tile, from the grid alone (no division: the SASS gate refuses the floating-point reciprocal an integer one
 // becomes): columns c are queries q0 + c of head h.
 struct Tile {
     int b, h, q0, warp, warps, L, M;
@@ -161,7 +165,7 @@ __device__ __forceinline__ void pv(const AttnArgs& a) {
             const uint32_t Bf[2] = {pack(p[0], p[1]), pack(p[2], p[3])};
             const int ma = min(max(La - k0, 0), 16), mb = min(max(Lb - k0, 0), 16);
             float next[4] = {acc[0], acc[1], acc[2], acc[3]};
-            for (int j = 0; j < 8; ++j) {  // warp-uniform: one mma per distinct count of the block's keys a column sees
+            for (int j = 0; j < 8; ++j) {  // warp-uniform: one mma per distinct count of the segment's keys a column sees
                 const int m = min(max(w.seen(j) - k0, 0), 16);
                 bool again = m == 0 && k0 >= a.kpv;
                 for (int i = 0; i < j; ++i) again |= min(max(w.seen(i) - k0, 0), 16) == m;
@@ -555,6 +559,62 @@ __device__ __forceinline__ void pv16s(const AttnArgs& a) {
     }
 }
 
+// Word i of p, the zero code unless ok.
+__device__ __forceinline__ uint32_t word(const uint16_t* p, int64_t i, bool ok) { return ok ? (uint32_t)p[i] : 0u; }
+
+// The _ref kernels.  Item i of a CTA is row tile i & (2^rs - 1) of query i >> rs: rows ra and rb are heads
+// (kvh << gshift) + ra and + rb, the zero code past the KV head's G heads, and B's column is key or d c0 + g.
+template <int D, bool QK>
+__device__ __forceinline__ void ref(const AttnArgs& a) {
+    const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+    const int b = blockIdx.z, kvh = blockIdx.y, c0 = 8 * (int)blockIdx.x, L = a.lens[b], M = a.nq[b];
+    const int G = 1 << a.gshift, rs = max(a.gshift - 4, 0), h0 = kvh << a.gshift;
+    const uint16_t* KV = a.kv + b * a.kvs[0] + kvh * a.kvs[1];
+    const int64_t kr = a.kvs[2];
+#pragma unroll 1
+    for (int i = threadIdx.x >> 5; i < (M << rs); i += blockDim.x >> 5) {
+        const int q = i >> rs, ra = 16 * (i & ((1 << rs) - 1)) + g, rb = ra + 8, n = L - M + q + 1;
+        if (n <= 0 || (QK && c0 >= n)) continue;
+        const bool aok = ra < G, bok = rb < G;
+        const uint16_t* xa = a.x + b * a.xs[0] + (h0 + (aok ? ra : 0)) * a.xs[1] + q * a.xs[2];
+        const uint16_t* xb = a.x + b * a.xs[0] + (h0 + (bok ? rb : 0)) * a.xs[1] + q * a.xs[2];
+        const int col = c0 + g;
+        float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        if (QK) {
+            const bool kok = col < n;
+            const uint16_t* kc = KV + (kok ? col : 0) * kr;
+#pragma unroll 1
+            for (int k0 = 0; k0 < D; k0 += 16) {
+                const int lo = k0 + 2 * t, hi = lo + 8;
+                const uint32_t A[4] = {pack(word(xa, lo, aok), word(xa, lo + 1, aok)), pack(word(xb, lo, bok), word(xb, lo + 1, bok)),
+                                       pack(word(xa, hi, aok), word(xa, hi + 1, aok)), pack(word(xb, hi, bok), word(xb, hi + 1, bok))};
+                const uint32_t Bf[2] = {pack(word(kc, lo, kok), word(kc, lo + 1, kok)), pack(word(kc, hi, kok), word(kc, hi + 1, kok))};
+                mma_bf16(acc, A, Bf, acc);
+            }
+        } else {
+            const int steps = max(a.kpv >> 4, (n + 15) >> 4);
+            const uint16_t* vc = KV + col;
+#pragma unroll 1
+            for (int s = 0; s < steps; ++s) {
+                const int lo = 16 * s + 2 * t, hi = lo + 8;
+                const bool l0 = lo < n, l1 = lo + 1 < n, h0k = hi < n, h1k = hi + 1 < n;
+                const uint32_t A[4] = {pack(word(xa, lo, aok && l0), word(xa, lo + 1, aok && l1)),
+                                       pack(word(xb, lo, bok && l0), word(xb, lo + 1, bok && l1)),
+                                       pack(word(xa, hi, aok && h0k), word(xa, hi + 1, aok && h1k)),
+                                       pack(word(xb, hi, bok && h0k), word(xb, hi + 1, bok && h1k))};
+                const uint32_t Bf[2] = {pack(word(vc, lo * kr, l0), word(vc, (lo + 1) * kr, l1)),
+                                        pack(word(vc, hi * kr, h0k), word(vc, (hi + 1) * kr, h1k))};
+                mma_bf16(acc, A, Bf, acc);
+            }
+        }
+        // this lane's words: columns c0 + 2t and c0 + 2t + 1 of rows ra (acc 0, 1) and rb (2, 3), 16 bits a store
+        const int cc = c0 + 2 * t;
+        uint16_t* out = a.out + b * a.os[0] + q * a.os[2] + cc;
+        if (aok) st2(out + (h0 + ra) * a.os[1], acc[0], acc[1], cc, QK ? n : D, false);
+        if (bok) st2(out + (h0 + rb) * a.os[1], acc[2], acc[3], cc, QK ? n : D, false);
+    }
+}
+
 }  // namespace
 
 extern "C" __global__ void __launch_bounds__(256) attn_qk_d64(const AttnArgs a) { qk<64>(a); }
@@ -573,3 +633,7 @@ extern "C" __global__ void __launch_bounds__(256) attn_qk_d64_s16(const AttnArgs
 extern "C" __global__ void __launch_bounds__(256) attn_qk_d128_s16(const AttnArgs a) { qk16s<128>(a); }
 extern "C" __global__ void __launch_bounds__(256) attn_pv_d64_s16(const AttnArgs a) { pv16s<64>(a); }
 extern "C" __global__ void __launch_bounds__(256) attn_pv_d128_s16(const AttnArgs a) { pv16s<128>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_qk_d64_ref(const AttnArgs a) { ref<64, true>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_qk_d128_ref(const AttnArgs a) { ref<128, true>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_pv_d64_ref(const AttnArgs a) { ref<64, false>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_pv_d128_ref(const AttnArgs a) { ref<128, false>(a); }

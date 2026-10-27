@@ -7,12 +7,12 @@ import Proofs.Population.Determinacy
 * `tight_cum`, `tight_exists`: **the stopping-time bound is attained.** A strategy that leaks `ℓ` every window and
   escapes each window with mass exactly `exp (-κ ℓ)` reaches `(j + 1) ℓ` with probability exactly `exp (-κ j ℓ)`, which
   is `tail_cum`'s bound at `x = (j + 1) ℓ`; for every `κ ≥ 0` and `ℓ > 0` there is such a draw.
-* `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no draw catches: no wrong unit, a draw
-  known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
+* `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no draw catches: no faulty proof block,
+  a draw known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
 * `no_halt_cumUpTo`, `pressure_empty`: **without a halt**, a strategy caught in every window still leaks `n ℓ`, and it
   meets detection pressure at every `κ`.
 * `seedCopy_checked`, `seed_egress`: **without bound inputs**, a checked population whose units copy a prover-chosen
-  seed to the egress shows all `2 ^ k` values with no wrong unit, so no draw sees it.
+  seed to the egress shows all `2 ^ k` values with no faulty proof block, so no draw sees it.
 * `not_trustedModel_of_reveal`: **without a trusted model**, an honest model whose outputs determine the target gives it
   to any guesser.
 -/
@@ -44,7 +44,7 @@ theorem prob_true (hμ : IsDist μ) (n : ℕ) : prob μ n (fun _ => True) = 1 :=
 /-! ## Tightness -/
 
 /-- **The constant strategy, exactly**: it reaches `(j + 1) ℓ` within `n > j` windows exactly when its first `j` coins
-escape, with probability `a ^ j`, `a` the escape mass. -/
+escape, with probability `a ^ j`, `a` the acceptance probability. -/
 theorem tight_cum (hμ : IsDist μ) {ℓ : ℝ} (hℓ : 0 < ℓ) (s : Finset Ω) :
     ∀ (n j : ℕ) (h : List Ω), j < n →
       prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ (constStrategy ℓ s).cum n h cs) = (∑ c ∈ s, μ c) ^ j
@@ -76,8 +76,8 @@ theorem tight_cum (hμ : IsDist μ) {ℓ : ℝ} (hℓ : 0 < ℓ) (s : Finset Ω)
     simp only [key]
     rw [sum_ite_esc, pow_succ']
 
-/-- **`tail_cum` is attained**: when every window's escape mass is exactly `exp (-κ ℓ)`, the constant strategy reaches
-`(j + 1) ℓ` with probability `exp (-κ ((j + 1) ℓ - ℓ))`, the bound itself. -/
+/-- **`tail_cum` is attained**: when every window's acceptance probability is exactly `exp (-κ ℓ)`, the constant
+strategy reaches `(j + 1) ℓ` with probability `exp (-κ ((j + 1) ℓ - ℓ))`, the bound itself. -/
 theorem tight_tail (hμ : IsDist μ) {κ ℓ : ℝ} (hℓ : 0 < ℓ) {s : Finset Ω} (hs : ∑ c ∈ s, μ c = Real.exp (-(κ * ℓ)))
     {n j : ℕ} (h : List Ω) (hj : j < n) :
     prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ (constStrategy ℓ s).cum n h cs) =
@@ -139,7 +139,7 @@ theorem no_halt_cumUpTo (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n �
     ring
 
 omit [Fintype Ω] [DecidableEq Ω] in
-/-- It meets detection pressure at every `κ`: its escape mass is zero. -/
+/-- It meets detection pressure at every `κ`: its acceptance probability is zero. -/
 theorem pressure_empty (κ ℓ : ℝ) : DetectionPressure μ κ (constStrategy ℓ (∅ : Finset Ω)) :=
   fun _ => by simpa [constStrategy] using (Real.exp_pos _).le
 
@@ -193,8 +193,8 @@ theorem seedCopy_checked (k : ℕ) : (seedCopy k).Checked := by
     rw [hsw] at hsr
     cases hsr
 
-/-- **No wrong unit, every seed on the egress**: with the seed slots left to the prover (`X` = the inputs), the
-assignments with no wrong unit show all `2 ^ k` egress values. -/
+/-- **No faulty proof block, every seed on the egress**: with the seed slots left to the prover (`X` = the inputs), the
+assignments with no faulty proof block show all `2 ^ k` egress values. -/
 theorem seed_egress (k : ℕ) :
     2 ^ k ≤ ((seedCopy k).egress (seedFns k) (fun _ => false) (seedCopy k).input (univ.image Sum.inr) ∅).card := by
   classical

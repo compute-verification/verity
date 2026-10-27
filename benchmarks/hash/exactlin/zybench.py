@@ -30,14 +30,15 @@ from pathlib import Path
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kbench
 import kgate
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_fused as F
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
 
 ARMS = ("scaled_mm", "scaled_mm_zy", "int_mm")
 TESTS = ("tests/engine/test_int8_zy.py", "tests/engine/test_int8_ops.py")

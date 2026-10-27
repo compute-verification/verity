@@ -7,7 +7,8 @@ projection (`project`) from an exact lowering of one Program of the same registr
 key block, which the tests hold to the exact lowering past one block and two, and at the class of record itself:
 
 * every template but the heads and their key gathers is a fixed number of units a position (`TokenFeed_v1` a prompt
-  position, `SlotRow_v1` one a Program), read off the probe, which is refused unless each divides evenly;
+  position; `ScanSlots_v1`, at the class's scan state row, `SlotRow_v1` and `SlotEntry_v1` one a Program; `OutCollect_v1`
+  one a position, its first the first's), read off the probe, which is refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
   ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). Its
@@ -31,6 +32,8 @@ from collections import Counter
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.program.predict import scan_state as SS
+
 from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
 
 FIRST = "AttnBlockFirst_v1"
@@ -38,6 +41,9 @@ END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
 ROW = "SlotRow_v1"
+SCAN = "ScanSlots_v1"
+COLLECT = "OutCollect_v1"
+ENTRY = "SlotEntry_v1"
 GATHER = "AllGather_v1"
 
 
@@ -49,6 +55,12 @@ def label(fn: Any) -> str:
 def statics(lab: str) -> tuple[str, dict[str, Any]]:
     fam, _, body = lab.partition("{")
     return fam, {k: json.loads(v) for k, v in (kv.split("=") for kv in body.rstrip("}").split(",") if kv)}
+
+
+def _relabel(lab: str, **at: Any) -> str:
+    """``lab`` with the statics ``at`` names set to theirs, where it has them."""
+    fam, s = statics(lab)
+    return fam + "{" + ",".join(f"{k}={json.dumps(at.get(k, v))}" for k, v in s.items()) + "}"
 
 
 def census(circuit: Any) -> dict[str, int]:
@@ -96,10 +108,14 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
             out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1 if s["FIRST"] else cls.prompt - 1
             if n != (1 if s["FIRST"] else NP0 - 1):
                 raise ValueError(f"the probe has {n} {lab} units, not one a prompt position")
-        elif fam == ROW:
-            out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1
+        elif fam in (SCAN, ROW, ENTRY):
+            out[label(SS.bridge(cls.scan, cls.prompt)) if fam == SCAN else _relabel(lab, NP=cls.prompt, KO=cls.outputs)] += 1
             if n != 1:
                 raise ValueError(f"the probe has {n} {lab} units, not one a Program")
+        elif fam == COLLECT:
+            out[_relabel(lab, KO=cls.outputs)] += 1 if s["FIRST"] else P - 1
+            if n != (1 if s["FIRST"] else P0 - 1):
+                raise ValueError(f"the probe has {n} {lab} units, not one a position")
         elif n % P0:
             raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {P0} positions")
         elif n:
@@ -116,10 +132,12 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
-#: circuits' compositions of the blocks this estimate scaled or interpolated, each staged by C-Flock's `UnitStager` at V3b's
-#: cuts (thread 1792894842.280569, 25 Oct)
+#: the compositions of the blocks this estimate scaled or interpolated, each staged by C-Flock's `UnitStager` at V3b's
+#: cuts
 COMPOSED = ("circuits' compositions r20261025-183214-951f, r20261025-183237-6217 and r20261025-183911-2915 "
             "(art:65bc8cddf39ec0076f17c19b4e13a74ad26554736b531b43fe6063f778cdcaf3)")
+#: the source of a scan slot unit circuit-check lowered whole, of 3 rows in and out
+ROWS_3 = "circuit-check --no-cache r20261027-045850-de6d; k_log an estimate, not composed: its 3 rows' (rows_k)"
 #: ANDs and k_log a unit at Llama-3.2-1B, each with its source: k_log is CIR-95's table at its cut reads
 #: (note:circuits/20261024T0443Z-report-windows-advice-windows, r20261025-093758-baf3) unless said otherwise
 MEASURED: dict[str, tuple[int, int, str]] = {
@@ -138,8 +156,15 @@ MEASURED: dict[str, tuple[int, int, str]] = {
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, "#4263, r20261025-123346-091b"),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, "CHECK=false's (#4263, r20261025-123346-091b), "
                                                                    "which circuits found it equal to"),
+    "ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (0, 23, ("wires (circuit-check --no-cache r20261027-045850-de6d); k_log an "
+                                                        "estimate, not composed: its 9 rows' (rows_k), the state row 149,648 bits")),
+    "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
+    "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
+    "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, ("C-Flock's lowering (ir_lower) in r20261027-045850-de6d, whose "
+                                           "circuit-check --no-cache passed it (3,064 IR gates, past whole lowering's 256); k_log an "
+                                           "estimate, not composed: its 3 rows' (rows_k)")),
 }
-#: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where #4263 (r20261025-123346-091b: NVIS 1, 17, 128) and circuits (`COMPOSED`)
+#: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where the heads' run (NVIS 1, 17, 128) and the compositions (`COMPOSED`)
 #: composed it, linear between
 FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 571_031, 12: 843_099, 14: 979_101, 15: 1_047_070,
                 16: 1_115_295, 17: 1_231_456, 24: 1_708_199, 32: 2_252_527, 33: 2_368_688, 34: 2_436_657, 36: 2_573_043,
