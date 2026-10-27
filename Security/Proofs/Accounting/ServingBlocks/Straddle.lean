@@ -5,38 +5,32 @@ import Definitions.Accounting.Guarantees.ServingBlocks.Straddle
 # The uncertified cap across the certified boundary: proofs
 
 Two ways of paying for a family of counted operations, each with every gate in at most `μ` bodies:
-* `charge_le`: each has a gate of its body in `T`, so they weigh at most `ω_max μ |T|`;
+* `le_boundary`: each is assigned to `R` and not computed wholly inside it, so they weigh at most `ω_max μ |in(R) \ θ|`
+  (`boundary_le`);
 * `capacity_le`: each has at least `s` gates of its body in `U`, so they weigh at most `ω_max μ |U| / s`.
 
 What the blocks leave of `R` splits by where an operation's representative is and whether its body is inside `R`'s
-uncertified gates `U`. Inside `U`, `capacity_le` pays at `s` gates each. Straddling with its representative in `U`,
-`exists_crossing` finds a gate of its body in `in(U) \ θ`; with its representative in a block `B i`, one in
-`in(B i) \ θ` (`blocks_charge`).
+uncertified gates `U`. Inside `U`, `capacity_le` pays at `s` gates each. A straddler with its representative in `U` is
+not computed wholly inside `U`, so `le_boundary` charges it to `in(U) \ θ`; one with its representative in a block
+`B i` is not computed wholly inside `B i`, so it is charged to `in(B i) \ θ` (`blocks_charge`).
 -/
 
 namespace Accounting.SecurityProofs.ServingBlocks
 
 open Verity Finset Accounting.ServingBlocks
 
-/-- **The charge**: counted operations `F`, each with a gate of its body in `T`, weigh at most `ω_max μ |T|`. -/
-theorem charge_le {C : Circuit} (J : Counted C) (F : Finset (Fin C.N)) (hF : F ⊆ J.V) (T : Finset (Fin C.N))
-    (ωmax : ℝ) (μ : ℕ) (hμ : Overlap J μ) (hω0 : 0 ≤ ωmax) (hω : ∀ v ∈ J.V, J.ω v ≤ ωmax)
-    (hT : ∀ v ∈ F, ∃ a ∈ T, a ∈ J.body v) :
-    ∑ v ∈ F, J.ω v ≤ ωmax * μ * T.card := by
+/-- **The boundary charge of a family**: counted operations `F`, each assigned to `R` and not computed wholly inside it,
+weigh at most `ω_max μ |in(R) \ θ|`. -/
+theorem le_boundary {d : Declaration} (J : Counted d.D) (R F : Finset (Fin d.D.N)) (hF : F ⊆ J.V) (ωmax : ℝ) (μ : ℕ)
+    (hB : OperationBodies d J) (hμ : Overlap J μ) (hω0 : 0 ≤ ωmax) (hω : ∀ v ∈ J.V, J.ω v ≤ ωmax)
+    (hR : ∀ v ∈ F, v ∈ R ∧ ¬ J.body v ⊆ R) :
+    ∑ v ∈ F, J.ω v ≤ ωmax * μ * (d.unregistered R).card := by
   classical
-  calc ∑ v ∈ F, J.ω v ≤ ∑ a ∈ T, ∑ v ∈ F with a ∈ J.body v, J.ω v :=
-        sum_le_sum_sum_filter F T (fun a v => a ∈ J.body v) J.ω (fun v hv => J.ω_nonneg v (hF hv)) hT
-    _ ≤ ∑ _a ∈ T, ωmax * μ := by
-        refine Finset.sum_le_sum fun a _ => ?_
-        calc _ ≤ ∑ v ∈ J.V with a ∈ J.body v, J.ω v :=
-              Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset_filter _ hF)
-                fun v hv _ => J.ω_nonneg v (Finset.mem_of_mem_filter v hv)
-          _ ≤ ∑ v ∈ J.V with a ∈ J.body v, ωmax :=
-              Finset.sum_le_sum fun v hv => hω v (Finset.mem_of_mem_filter v hv)
-          _ = (J.V.filter fun v => a ∈ J.body v).card * ωmax := by rw [Finset.sum_const, nsmul_eq_mul]
-          _ ≤ μ * ωmax := mul_le_mul_of_nonneg_right (by exact_mod_cast hμ a) hω0
-          _ = ωmax * μ := mul_comm _ _
-    _ = ωmax * μ * T.card := by rw [Finset.sum_const, nsmul_eq_mul, mul_comm]
+  refine le_trans ?_ (boundary_le d J R ωmax μ hB hμ hω0 hω)
+  unfold Counted.outside
+  exact Finset.sum_le_sum_of_subset_of_nonneg
+    (fun v hv => Finset.mem_filter.2 ⟨hF hv, (hR v hv).1, fun _ => (hR v hv).2⟩)
+    fun v hv _ => J.ω_nonneg v (Finset.mem_of_mem_filter v hv)
 
 /-- **The capacity**: counted operations `F`, each with at least `s > 0` gates of its body in `U`, weigh at most
 `ω_max μ |U| / s`: counted with their gates in `U`, they hold at most `μ |U|` gates. -/
@@ -78,9 +72,9 @@ theorem blocks_charge {d : Declaration} (J : Counted d.D) {ι : Type*} [Fintype 
         sum_le_sum_sum_filter F univ (fun i v => v ∈ B i) J.ω (fun v hv => J.ω_nonneg v (hF hv))
           fun v hv => (hin v hv).imp fun i hi => ⟨Finset.mem_univ i, hi⟩
     _ ≤ ∑ i, ωmax * μ * ((d.unregistered (B i)).card : ℝ) := Finset.sum_le_sum fun i _ =>
-        charge_le J _ ((Finset.filter_subset _ _).trans hF) _ ωmax μ hμ hω0 hω fun v hv => by
+        le_boundary J (B i) _ ((Finset.filter_subset _ _).trans hF) ωmax μ hB hμ hω0 hω fun v hv => by
           obtain ⟨hvF, hvi⟩ := Finset.mem_filter.1 hv
-          exact exists_crossing hB (hF hvF) hvi (hout v hvF i)
+          exact ⟨hvi, hout v hvF i⟩
     _ = ωmax * μ * ∑ i, (d.unregistered (B i)).card := by rw [← Finset.mul_sum, Nat.cast_sum]
 
 /-- The operations what the blocks leave of `R` sums over. -/
@@ -105,10 +99,9 @@ theorem StraddleBound : Guarantees.ServingBlocks.StraddleBound := by
   rw [← Finset.sum_filter_add_sum_filter_not F (· ∈ uncertified R B)]
   have hU : ∑ v ∈ F with v ∈ uncertified R B, J.ω v ≤
       ωmax * μ * (d.unregistered (uncertified R B)).card :=
-    charge_le J _ ((Finset.filter_subset _ _).trans hF) _ ωmax μ hμ hω0 hω fun v hv => by
+    le_boundary J (uncertified R B) _ ((Finset.filter_subset _ _).trans hF) ωmax μ hB hμ hω0 hω fun v hv => by
       obtain ⟨hvF, hvU⟩ := Finset.mem_filter.1 hv
-      obtain ⟨hvV, -, -, hnot⟩ := Finset.mem_filter.1 hvF
-      exact exists_crossing hB hvV hvU hnot
+      exact ⟨hvU, (Finset.mem_filter.1 hvF).2.2.2⟩
   have hBl : ∑ v ∈ F with v ∉ uncertified R B, J.ω v ≤ ωmax * μ * ∑ i, (d.unregistered (B i)).card :=
     blocks_charge J B _ ((Finset.filter_subset _ _).trans hF) ωmax μ hB hμ hω0 hω
       (fun v hv => by
