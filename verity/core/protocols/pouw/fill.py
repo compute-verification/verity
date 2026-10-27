@@ -3,7 +3,7 @@
 
 A filler window is Dither calls (`circuit.dither`) the prover runs on tensor pipes its served windows leave idle, each a
 call whose A is its per-call pad (`dither.fill_seeds`, `dither.pad_rows`) and whose B is a published checkpoint's s8
-weights, committing its T_1 .. T_S (`dither.Shape` with ``o=False``). Its proof units are `PouwDitherBlock_v1` blocks,
+weights, committing its T_1 .. T_S (`dither.Shape` with ``o=False``). Its proof blocks are `PouwDitherBlock_v1`'s,
 one cell and one segment each. It counts toward the companion period ``<name>:fill`` (`period_name`), which the
 auditor's ledger opens and closes as it does a served period: its open commits the circuit (the SHA-512 of the filler
 descriptor, `descriptor_of`) and the draw K (`credit.K_FIELD`). `work` and its rule (`credit.period_credit`) are unchanged.

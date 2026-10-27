@@ -288,22 +288,26 @@ Its Lean port is open.
 
 **Filler periods** (`fill`, CMP-172, CMP-67; Lean `PouwCheck.Fill`). Filler windows run Dither calls
 (`circuit.dither`) on tensor pipes the served windows leave idle, each call's A its per-call pad (`dither.fill_seeds`)
-and its B a published checkpoint's s8 weights, its proof units `PouwDitherBlock_v1` blocks. They count toward the served
+and its B a published checkpoint's s8 weights, its proof blocks `PouwDitherBlock_v1`'s. They count toward the served
 period's companion ``<name>:fill``, whose open commits its circuit (`fill.descriptor`: the filler shape, whose
 t = min(L, K)/L′ is at most 8 (`fill.T_MAX`), the call count and B's checkpoint digest) and K. A period's credit carries
-their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each filler window's root is `fill.open_root` of its circuit and session, and its
-session holds a salt coin, a call coin a call and a draw coin (`fill.families`): the salt coin and every call coin open
+their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each filler window's root is
+`fill.open_root` of its circuit and session, and its session holds a salt coin, a call coin a call and a draw coin (`fill.families`): the salt coin and every call coin open
 after the root, the window's salt is the salt coin's (`h1tile.live_salt`), call c's seeds are `dither.fill_seeds` of
 that salt and call coin c, and the draw coin opens after `fill.draw_root` over the salt and every call's value root, so
 every value is fixed before the draw. The draw is over one stratum of every call's blocks; every drawn block must be
 accepted on its own statement (`fill.statement`) with its values opened at its call's value root, and one refused filler
 window refuses the whole fill. The fill is each window's m·n·K a call at the fill period's K, with its ε at
-`credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not under it yet.
+`credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not under it yet, and until a guarantee
+covers it no decision reads it: the period reports its fill, credited or ``{refused: "code: why"}``, and its verdict is
+the same without it (the verifier gains no form ahead of its proof). Beside the fill the credit carries ``gaps``
+(`period_check.GAPS`), which says no guarantee covers the fill yet, so no reader takes it as proved.
 
-**Coverage** (IDLE-COVERED, CMP-67). Given the period's monitored capacity C in MACs (``capacity``, the verifier's
-parameter), the credit carries ``covered``: W_cert, the served work and the fill's together, and W_cert/C. Given a floor
-too (``floor``, ``n/d``, the verifier's parameter and never the protocol's), a period whose W_cert/C is below it is
-refused (``idle``). The ledger holds one open period a lane, so a fill period opens after its served period closes, and
+**Utilization** (IDLE-COVERED, CMP-67). Given the period's monitored capacity C in MACs (``capacity``, the verifier's
+parameter), the credit carries ``utilization``: C, ``certified``, the served work alone, the work
+`H1J10RCheckedCreditPeriod` covers, and its share of C. Nothing named certified holds the fill. The protocol carries no
+policy parameter: the period surfaces what its draw established, and whoever reads it decides whether it was idle. The
+ledger holds one open period a lane, so a fill period opens after its served period closes, and
 filler windows can't yet run while that period's served windows do. `benchmarks/pouw/fill_period` runs one filler period
 on a development gate.
 
