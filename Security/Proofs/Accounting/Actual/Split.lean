@@ -58,8 +58,8 @@ theorem width_into_region_inter_le (X : Finset L) (t t' : ℕ) (G : Finset (Fin 
       exact (mem_region A).2 ⟨hgi, hgx, hgt⟩
   · exact Or.inr ⟨hai, hx⟩
 
-/-- **The split** (model v2, section 2): what `A[X, [t, t'))` reads from outside itself is at most what `X` carries
-across `t` plus what crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside `X`. -/
+/-- **The split**: what `A[X, [t, t'))` reads from outside itself is at most what `X` carries across `t` plus what
+crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside `X`. -/
 theorem width_into_region_le (X : Finset L) (t t' : ℕ) (h : A.Forward X) :
     A.width (A.into (A.region X (Set.Ico t t'))) ≤ A.state X t + A.ingress X (Set.Ico t t') := by
   have := width_into_region_inter_le A X t t' univ h
