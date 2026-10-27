@@ -10,7 +10,7 @@
 #     from integrations/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
 #     stratified:4); the forged one SiluMul_v2{I=1536} at step 16, all 3 units drawn, on ranks PP_FORGED_RANKS (default 0).
 #   PP_LLAMA=art:ID: a single-GPU (TP1) Commit's row dir in the store, fetched once per node into PP_CACHE (default
-#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 (art:f7428299…, $LROW, the sealed bundle
+#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 ($LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
 #     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
 #     --row-dir, the verifier's from its own trace of each (PP_VLLM_PYTHON), and the Build manifest falls back to
@@ -19,7 +19,7 @@
 #     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR|art:ID PP_WINDOW=K PP_SERVE_ROWS=DIR|art:ID: a serve-openai run's closed Commit window K (default 0), its
-#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir (#3532's form); PP_TARGET=F the
+#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
 #     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
@@ -59,7 +59,7 @@
 #     input, so only each request's own row is free), in members of one unit
 #     (PP_TORCH_LOOP_CAP default 1) under stratified:3 (a unit of every template), with its weights one row a linear, plus
 #     an arm whose quantize units' codes are tampered (--tamper-activations), which the drawn quantize unit must refuse.
-#   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, CMP-92's 2-layer
+#   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, a 2-layer
 #     transformer, its four templates' units), honest and tampered, against the circuit registered before it ran, in members
 #     of PP_TORCH_LOOP_CAP units (default 16), committed by PP_TORCH_DECODER_WORKERS processes (default 8);
 #     PP_TORCH_LOOP_SHAPE: more serve_transformer.py flags (--prompt, --generate, --bf16-dot). The public member files
@@ -244,12 +244,12 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     case $SR in art:*) SR=$W/serve-run; R data fetch $PP_SERVE_RUN --to $SR >> $O/fetch.log 2>&1 || { tail -20 $O/fetch.log; exit 8; };; esac
     served served $SR ${PP_WINDOW:-0} || rc=1
   else
-    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload integrations/vllm/workloads/$LROW.json"
+    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload examples/vllm/workloads/$LROW.json"
     if [ -n "${PP_SERVE_STANDIN:-}" ]; then
       $PP serve-standin $LLAMA --out $W/serve-run | tee $O/serve-standin.json || exit 8
       served llama-served $W/serve-run 0 || rc=1
     else
-      $PP advice --workload integrations/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+      $PP advice --workload examples/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
       run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi

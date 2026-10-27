@@ -4,10 +4,10 @@ the head) come out of the forward pass.
 A table is one op's output at one step, one row a sequence slot (`tables`, from circuits' FAMILIES map, `plan.Map`, in the
 order the step writes them); a quantizer's table also has the f32 scale as each row's word. Backends:
 
-    slots       kernels' commit call (CMP-95 item 3, #4469, ``benchmarks/torch_gpu/commit_slots``): ``hm96-sha512/row/v2``
+    slots       kernels' commit call (``benchmarks/torch_gpu/commit_slots``): ``hm96-sha512/row/v2``
                 rows under hiding leaves in ``frame-v3-sha512`` trees, step -> slot -> unit -> rows, so a drawn unit opens
                 by replaying its own request. `layout` lays a slot's tables out as the map's units: one group a step group,
-                one commit unit a proof unit, its rows that unit's output rows (`plan.Units`: a coordinate's 16-bit row, a
+                one commit unit a proof block, its rows that unit's output rows (`plan.Units`: a coordinate's 16-bit row, a
                 chunk row, a quantizer chunk's codes row and the scale), so a gather's rows are its parts' bytes again.
                 The commit unit of a family's unit i is ``bases[family] + i`` (`Committer.unit_of`). Streamed: each group goes to
                 `slots_gpu.StepCommitter.add` (a side stream on CUDA, the engine's host twin on the CPU) as it is written,
@@ -33,6 +33,7 @@ import torch
 
 from .plan import Entry, Map, Table
 from .shape import Shape
+from verity.ml.commitments import layout as L
 
 COMMIT_SLOTS = Path(__file__).resolve().parents[2] / "torch_gpu" / "commit_slots"
 BACKENDS = ("slots", "reference", "host", "device")
@@ -60,30 +61,30 @@ def layout(shape: Shape) -> Any:
     return _layout(shape)[0]
 
 
-def _group(S: Any, entries: list[Entry]) -> tuple[Any, list[tuple[str, int]]]:
-    """A group of the map as a `slots.Group`, and each family's (name, first unit in the group)."""
+def _group(entries: list[Entry]) -> tuple[L.Group, list[tuple[str, int]]]:
+    """A group of the map as a `verity.ml.commitments.layout` group, and each family's (name, first unit in the group)."""
     sources: list[int] = []
-    units: list[tuple[Any, ...]] = []
+    units: list[tuple[L.Row, ...]] = []
     firsts = []
     for t, us in entries:
         src = len(sources)
         sources += [t.nbytes, 4] if t.quant else [t.nbytes]
-        scale = (S.Row((S.Part(src + 1, 0, 4),)),)
+        scale = (L.Row((L.Part(src + 1, 0, 4),)),)
         for u in us:
             firsts.append((u.name, len(units)))
-            units += [(S.Row((S.Part(src, u.offset + i * u.stride, u.nbytes),)),) + (scale if u.scale else ())
+            units += [(L.Row((L.Part(src, u.offset + i * u.stride, u.nbytes),)),) + (scale if u.scale else ())
                       for i in range(u.count)]
-    return S.Group(tuple(sources), tuple(units)), firsts
+    return L.Group(tuple(sources), tuple(units)), firsts
 
 
 def _layout(shape: Shape) -> tuple[Any, dict[str, int]]:
-    """The layout, and each family's first commit unit. Every layer's group is one `slots.Group` (their rows are alike)."""
+    """The layout, and each family's first commit unit. Every layer's group is one `L.Group` (their rows are alike)."""
     S, _ = _slots()
     m = Map(shape)
-    layer = _group(S, m.layer(0))[0]
+    layer = _group(m.layer(0))[0]
     groups, bases, u0 = [], {}, 0
     for i, entries in enumerate(m.groups()):
-        g, firsts = _group(S, entries) if not 1 <= i <= shape.layers else (layer, _firsts(entries))
+        g, firsts = _group(entries) if not 1 <= i <= shape.layers else (layer, _firsts(entries))
         groups.append(g)
         bases.update({name: u0 + k for name, k in firsts})
         u0 += len(g.units)

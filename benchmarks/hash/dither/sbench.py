@@ -46,8 +46,8 @@ Arms:
                  (the window's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
                  tables, the step trees, the round and the receipt trees between steps.  It serves the dithered product, so
                  its tokens are not exact's (reported, not gated)
-    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate (#2684's
-                 `credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
+    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate
+                 (`credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
     dither-1s-warp  dither-1s with its units a warp each (DITHER_UNITS=warp, `h1o_units`), not a block each
     dither-1s-split  dither-1s with its units in the split form (DITHER_UNITS=split, `h1o_unitss`: six warps a unit)
     dither-1s-cpeel  dither-1s with the credited peel (DITHER_PEEL=1, `h1o_unitsbp`; CA, 11:02Z and 12:16Z, H1V3's
@@ -58,13 +58,13 @@ Arms:
                  carveout (DITHER_UNITS=block2 / split2, `h1o_unitsb2p` / `h1o_unitss2p`: two units' blocks an SM, not
                  the driver's default one; block2 with immediate barrier ids), the same code and values
     dither-1s-mix-cpeel  dither-1s-cpeel with a units form per call (DITHER_UNITS=mix, `dither_one.MIX_FORMS`): block2
-                 where the call's column blocks outnumber the SMs (qkv, gate_up), split elsewhere (o, down)
-    dither-1s-percall0  dither-1s with ASK-64's per-call round between each call's A table and its units (`h1o_percall`:
+                 where the call's column tiles outnumber the SMs (qkv, gate_up), split elsewhere (o, down)
+    dither-1s-percall0  dither-1s with the per-call challenger round between each call's A table and its units (`h1o_percall`:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
-                 (DITHER_PERCALL_WAITS: `percall_rtt.py`'s paced samples from the serving node, replayed in order)
-    dither-a     ASK-71's option A, the provisional credit form (`dither_a`; every dither arm labelled by
-                 `forms.form_of`, RT4-INT-39: form=ASK-71 A for -so<D> with -zy on -aom/-aomn without -ov, form=beside
+                 (DITHER_PERCALL_WAITS: paced round-trip samples from the serving node, replayed in order)
+    dither-a     option A, the provisional credit form (`dither_a`; every dither arm labelled by
+                 `forms.form_of`: form=`forms.FORM_A` for -so<D> with -zy on -aom/-aomn without -ov, form=beside
                  (unadopted arm) for -so's -ab/-abn and -ov, form=beside for every other arm, these and dither-1s's and
                  dither's included): exact-fused's
                  quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
@@ -136,7 +136,7 @@ Arms:
                  H1U_JCS=2's, shorter; DITHER_SO_PREQ=0 makes the stalls rarer without removing them
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
-    ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
+    ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row tiles are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
                  one with DITHER_SO_RDEAD=0 (J10-R's default computes them in full, which $DITHER_SO_RDEAD=1 refuses)
     ARM-lag1, ARM-lag2  a dither-a-so arm with DITHER_SO_ROOT_LAG=1 or 2
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
@@ -333,9 +333,9 @@ DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "Cutlas
 
 def kernels_of(llm) -> dict:
     """The linear kernels the engine's layers really run: class name -> layers."""
-    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import handle
     seen: dict = {}
-    for _, mod in prof.get_model_runner(llm).get_model().named_modules():
+    for _, mod in handle.model_runner(llm).get_model().named_modules():
         k = getattr(getattr(mod, "scheme", None), "kernel", None)
         q = getattr(mod, "quant_method", None)
         name = type(k).__name__ if k is not None else (type(q).__name__ if q is not None and hasattr(mod, "weight") else None)
@@ -466,7 +466,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         sys.path.insert(0, str(vllm_dir))
         from tests.engine import int8_exact_gpu as G
         from verity_vllm.engine.build import build_engine
-        from verity_vllm.program.frontend.target_profile import TargetProfile
+        from verity_vllm import TargetProfile
         target = TargetProfile.from_device().with_overrides(int8_exact="all")
         ns = argparse.Namespace(checkpoints=str(vllm_dir / "manifests" / "checkpoints.json"), role="LLAMA31_8B_INT8",
                                 base_role="LLAMA31_8B", repo="verity-int8/Llama-3.1-8B-INT8",

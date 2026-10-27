@@ -12,10 +12,9 @@ population `n` (the public file's `pub.n`) give the key program `keyProg D.unrol
 (`keyCircuit`, `keyPartition`) the session's game and V3 are stated over. Here that circuit is core's:
 
 * `Verity.Circuit.ofAudit C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), through the
-  Boolean profile (`FlockSoundness.Audit.Circuit.toCircuit`): the same gates, one bit each.
-  `Verity.Partition.ofAudit P` is the same partition, and `Verity.Circuit.ofBits xs` a transcript of bits.
-  `Verity.Partition.wrong_ofAudit`: the wrong units are the same, so every statement about the game's wrong units is
-  one about core's.
+  Boolean profile (`FlockSoundness.Audit.Circuit.toCircuit`): the same gates, one bit each. `Verity.Partition.ofAudit P` is
+  the same partition, and `Verity.Circuit.ofBits xs` a transcript of bits. `Verity.Partition.wrong_ofAudit`: the wrong
+  units are the same, so every statement about the game's wrong units is one about core's.
 * `circuitOf D hU n := .ofAudit (keyCircuit D hU n)` and `partsOf D hU n := .ofAudit (keyPartition D hU n)`: the
   parsed file as core's circuit and its `n` units. `circuitOf_eq` and `partsOf_eq` restate the key program's circuit
   and partition as the ones `circuitOf` and `partsOf` embed (by definition), and `partsOf_wrong` its wrong units as
