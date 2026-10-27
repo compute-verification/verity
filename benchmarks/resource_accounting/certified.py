@@ -49,8 +49,9 @@ CLEAR = ROOT / "benchmarks" / "pouw" / "clear"
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)
-#: the PR whose (n, k) and layout lookup prices γ at the Llama linears
-GAMMA_PIN = "#1809"
+#: the Lean domains whose twins state γ at a linear's (n, k) and over a served layout's linears (`price_twins`' n, k
+#: and layout keys), which price γ at the Llama linears
+GAMMA_PIN = "pearlCDomainDevNK, pearlCDomainDevShapes"
 #: the served layout whose twin is γ's max over its linears
 LAYOUT = "llama31_8b"
 #: the bandwidth protocol's red-team grant (with conditions), whose point `granted_params` is

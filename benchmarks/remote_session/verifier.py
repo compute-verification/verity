@@ -61,7 +61,7 @@ are then the binding's, and verifier.json keeps the binding (`binding`: the pin'
 store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.py` credits on. A process takes one
 hello, so its sessions share the one root it held; another process's payload key is fresh, so its root is another.
 
-The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`): it holds
+The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
 the registry and every session, and each registration, session, event and window goes to it and to `audit.Session`
 at one reading of the clock (`Pair`). An accepted session's record is the Lean's (`Pair.record`), and its ledger
 reads that record. `audit.Session` keeps the driver's books (its coins, its plans, when the next boundary leaves) and

@@ -53,7 +53,7 @@
 # from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). The verifier builds
-# the Lean verifier of record with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
+# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
