@@ -1,5 +1,5 @@
-# Up to 3 small Commits at once on one GPU, as clients of an MPS daemon of the pod's own (note:20260930T2220Z-draft-node1-mps-commit-
-# packing-cutover; Daniel approved it for node 1 at 3:22 PM PDT Sep 30). One Kueue workload in deployments-gpu requesting 1 GPU, so
+# Up to 3 small Commits at once on one GPU, as clients of an MPS daemon of the pod's own, on node 1.
+# One Kueue workload in deployments-gpu requesting 1 GPU, so
 # Kueue's GPU accounting is unchanged; the host runs no MPS daemon and its compute mode stays Default.
 #
 # The dispatcher (dispatch.py, PACK_COMMITS=1) spools config-run's gpu task of each eligible Commit (TP1, <= 4B, B <= 8, deferred
