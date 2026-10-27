@@ -40,6 +40,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import socket
 import sys
@@ -433,28 +434,21 @@ def segments_of(c: Mapping[str, Any], memory: wipe_store.Memory | None) -> int:
     return n
 
 
-def disks(mounts: Path = Path("/proc/mounts"), skip: Collection[str] = ()) -> int:
-    """The bytes of this host's filesystems on block devices (`/dev/…`, loop devices aside), each filesystem once, but
-    those on whole disks all in `skip` (`wipe_store.whole_disks`: disks a store declares)."""
-    seen, total = set(), 0
-    try:
-        lines = mounts.read_text().splitlines()
-    except OSError:
-        return 0
-    for line in lines:
-        src, at, *_ = line.split()
-        if not src.startswith("/dev/") or src.startswith("/dev/loop"):
+NOT_DISKS = re.compile(r"(loop|z?ram)\d+")
+"""`/sys/block` names that are no disk of their own: a loop device (a file on another disk) and a RAM disk (DRAM)."""
+
+
+def disks(sys_block: Path = Path("/sys/block"), skip: Collection[str] = ()) -> dict[str, int]:
+    """Every whole block device of this host, mounted or not (`/sys/block`), by name with its size in bytes: all but
+    loop and RAM devices (`NOT_DISKS`), a device-mapper or md device over others (its `slaves`, each counted itself),
+    an empty one, and those in `skip` (`wipe_store.whole_disks`: the disks a store declares)."""
+    out = {}
+    for d in sorted(sys_block.iterdir()):
+        if d.name in skip or NOT_DISKS.fullmatch(d.name) or (d / "slaves").is_dir() and any((d / "slaves").iterdir()):
             continue
-        try:
-            dev, st = os.stat(at).st_dev, os.statvfs(at)
-        except OSError:
-            continue
-        if dev not in seen:
-            seen.add(dev)
-            if skip and (under := wipe_store.whole_disks(dev)) and set(under) <= set(skip):
-                continue
-            total += st.f_blocks * st.f_frsize
-    return total
+        if size := int((d / "size").read_text()) * 512:
+            out[d.name] = size
+    return out
 
 
 def _parts(store: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
@@ -464,7 +458,7 @@ def _parts(store: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
 def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     """The memory this host holds outside the declared tier `tier` (`declared_bytes` of it), which `M` doesn't count:
     the device's memory outside the tier (from `store`, `wipe_store`'s `info`, when it gives `total_bytes` past the
-    tier), the host's DRAM (outside the tier when it is the tier; none when it is declared whole) and its local disks
+    tier), the host's DRAM (outside the     tier when it is the tier; none when it is declared whole) and each of its block devices, mounted or not, whole
     (`disks`). A joint store's (`wipe_store.Joint`) tiers are its parts', each at its declared bytes, and the disks a
     `disk` part declares are no one's undeclared memory."""
     out, parts = [], _parts(store)
@@ -480,9 +474,8 @@ def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None =
         out.append({"tier": "host-dram", "bytes": rest, "what": "the host's DRAM outside the declared tier"
                     if "host-dram" in declared else "the host's DRAM"})
     skip = {d for p in parts for d in p.get("disks") or {}}
-    if d := disks(skip=skip):
-        out.append({"tier": "disk", "bytes": d, "what": "the host's filesystems on block devices" + (
-            " outside the declared disks" if skip else "")})
+    out += [{"tier": "disk", "bytes": n, "what": f"the host's block device {name}" + (
+        ", outside the declared disks" if skip else "")} for name, n in disks(skip=skip).items()]
     return out
 
 
@@ -643,7 +636,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = ["CONFIG", "COUNT_BITS", "DISK", "DRAM", "EPS", "EXPERIMENTAL", "LIMIT_NS", "LINK_KEYS", "MAX_READS",
-           "PROTOCOL", "READS", "SAMPLING_BITS", "SEGMENTS", "SEGMENT_BYTES", "UNCOUNTED", "Keeping", "Wipe", "answer",
+           "NOT_DISKS", "PROTOCOL", "READS", "SAMPLING_BITS", "SEGMENTS", "SEGMENT_BYTES", "UNCOUNTED", "Keeping", "Wipe", "answer",
            "case", "certify", "config", "digest", "disk_gaps", "disks", "dram_available", "foreign_bits",
            "foreign_labels", "gaps", "keeping", "leg",
            "main", "memory_bits",

@@ -310,14 +310,30 @@ def test_what_a_joint_store_and_its_disks_leave_out() -> None:
     assert W.uncertified(where, None)[-2:] == gaps and W.disk_gaps(None) == []
 
 
-def test_the_disks_are_the_block_device_filesystems_once(tmp_path) -> None:
-    st = os.statvfs(tmp_path)
-    mounts = tmp_path / "mounts"
-    mounts.write_text("\n".join([f"/dev/x {tmp_path} ext4 rw 0 0", f"/dev/y {tmp_path} ext4 rw 0 0",
-                                 f"/dev/loop3 {tmp_path} squashfs ro 0 0", f"tmpfs {tmp_path} tmpfs rw 0 0",
-                                 "/dev/z /nonexistent/wipe-period ext4 rw 0 0"]) + "\n")
-    assert W.disks(mounts) == st.f_blocks * st.f_frsize
-    assert W.disks(tmp_path / "missing") == 0
+def test_an_unmounted_block_device_no_target_is_on_is_undeclared_whole(tmp_path, monkeypatch) -> None:
+    """Every `/sys/block` device, mounted or not (vy-dc-h200-2's 1 MiB `vdb`, the cloud's seed disk, is on no mount),
+    but loop and RAM devices, an empty one and a device-mapper device over a disk counted itself; the declared disks
+    are left out."""
+    block = tmp_path / "block"
+    for name, sectors in (("vda", 1 << 20), ("vdb", 2048), ("nvme0n1", 1 << 21), ("dm-0", 1 << 21), ("loop0", 8),
+                          ("ram0", 8), ("zram0", 8), ("sr0", 0)):
+        (block / name / "slaves").mkdir(parents=True)
+        (block / name / "size").write_text(f"{sectors}\n")
+    (block / "dm-0" / "slaves" / "nvme0n1").touch()
+    assert W.disks(block) == {"nvme0n1": 1 << 30, "vda": 1 << 29, "vdb": 1 << 20}
+    with pytest.raises(FileNotFoundError):
+        W.disks(tmp_path / "missing")
+    real = W.disks
+    monkeypatch.setattr(W, "disks", lambda skip=(): real(block, skip))
+    disk = {"tier": "disk", "total_bytes": 1 << 29, "bytes": 1 << 28, "spare_bytes": 0, "direct": True,
+            "disks": {"vda": {"bytes": 1 << 29, "driver": "virtio_blk"}}}
+    joint = {"tier": "disk+host-dram", "parts": [disk, {"tier": "host-dram", "bytes": 100}]}
+    got = [u for u in W.undeclared("disk+host-dram", 0, joint) if u["tier"] == "disk"]
+    assert got == [{"tier": "disk", "bytes": 1 << 30, "what": "the host's block device nvme0n1, outside the declared disks"},
+                   {"tier": "disk", "bytes": 1 << 20, "what": "the host's block device vdb, outside the declared disks"}]
+    where = WP.placement("n0", "auditor", store=joint, links=[], undeclared=got)
+    assert ("tier disk: the host's block device vdb, outside the declared disks (1048576 bytes) is undeclared: the fill "
+            "doesn't cover it and M doesn't count it") in W.uncertified(where, None)
 
 
 def test_the_dram_a_fill_can_take_is_memavailable(tmp_path) -> None:
