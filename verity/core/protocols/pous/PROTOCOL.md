@@ -288,6 +288,11 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).
+  - Above 2^23 blocks the run protocol takes `p2.wide_certificate`, the per-period guarantee
+    `Pous.Period.SecurityProofs.periodHeldAt`: every block count from 2^19 to 2^27 at the registered width and prime,
+    the same `⌊ρ·blocks·w⌋` at `1% + 2^-128`, so Demo B's 1038 segments of 2^16 blocks certify 1,060,008,348,186 bits
+    (`PeriodHeldDemo`). It is in the ring model and rests on the open conjecture `P2RingRoundSecureWide`, the device
+    model `RingDeviceAt` and the coin commitments' hiding at that count (`p2.WIDE_CLAIMS`).
   - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854,029 ns), half the fastest 16,448-bit root with 8 cores of one chiplet
     cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. v1's 1 ms RTT allowance
     (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12), Daniel's ruling of
