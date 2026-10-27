@@ -56,7 +56,7 @@ ACCEPTED_TOKENS = va.ACCEPTED_TOKENS   # the B0 request's accepted tokens (kept 
 def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
     """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
     table is a derived weight computed on the GPU (vLLM `_compute_cos_sin_cache`, CUDA cosf/sinf); the one-stage audit reads the
-    `cos_sin` field from this file (`benchmarks/one_stage/a11.py`)."""
+    `cos_sin` field from this file (`examples/one_stage/a11.py`)."""
     import numpy as np
     import torch
 

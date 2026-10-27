@@ -1510,6 +1510,16 @@
         "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
         "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/": "examples/one_stage/",
+        "benchmarks/one_stage/served_verdicts.sh": "benchmarks/one_stage/served_verdicts.sh",
+        "benchmarks/one_stage/served_verdicts.py": "benchmarks/one_stage/served_verdicts.py",
+        "benchmarks/one_stage/tests/test_served_verdicts.py": "benchmarks/one_stage/tests/test_served_verdicts.py",
+        "benchmarks/one_stage/tests/served_verdicts.pyproject.toml": "benchmarks/one_stage/tests/pyproject.toml",
+        "benchmarks/private_circuit/": "examples/private_circuit/"
+      }
     }
   ]
 }
