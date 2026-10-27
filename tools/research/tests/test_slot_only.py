@@ -26,6 +26,14 @@ def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_
     assert not S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--status"])
 
 
+def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
+    """27 Oct: `verity lean try --on vy-nebius-1` without `--pool` was refused, and the refusal named only slot.py by hand."""
+    (tmp_path / "proofs").write_text("p0 0-15\n")
+    why = S.refusal(tmp_path / "marker", {"proofs": str(tmp_path / "proofs"), "soundness": str(tmp_path / "soundness")})
+    assert "add `--pool proofs` to `research run` or `verity lean try`" in why
+    assert "slot.py [--by NAME] -- CMD" in S.refusal(tmp_path / "marker", {"soundness": str(tmp_path / "soundness")})
+
+
 def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_accepts(capsys):
     """INF-27/28: a lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
     c = S.in_pool("research", "compute-accounting", ["python3", "search.py", "--n", "4"])

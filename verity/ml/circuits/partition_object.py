@@ -18,9 +18,10 @@
   (`cut`'s step 0); otherwise `evaluate` raises `QueryInapplicable` and `verify` refuses (`query-inapplicable`).
 * **Q_word v2**, the same parameters: v1's evaluation exactly (the same Calls, units, owners and committed sets, so the same
   `owners_digest`; the object's digest differs by its version), and `verify` checks every Call's cut as v1 does but for one rule: a
-  value computed in two units is reported (`recomputed_across`), not refused (`gate-recomputed`) (`cut`'s "Q_word v2").  v2's units
-  may compute a common value, so a count of them bounds wrong work but is not distinct work; a consumer that credits work takes v1.
-* **Q_call v1**, `params = {"X": <bits>}` (`call_query`, 32 the agreed value; `CallPartition`; the algorithm in `cut`'s "Q_call v1",
+  value computed in two units is reported (`recomputed_across`), not refused (`gate-recomputed`) (`cut`'s "Q_word v2").  v2's proof
+  blocks may compute a common value, so a count of them bounds the faulty ones' size but counts a shared value more than once;
+  a consumer that credits size takes v1.
+* **Q_call v1**, `params = {"X": <bits>}` (`call_query`, 32 in use; `CallPartition`; the algorithm in `cut`'s "Q_call v1",
   `PROTOCOL.md` §11).  The same Calls, each cut in isolation; a unit is a gate interval of the Call (the Call, a body node, a member or
   an iteration), cut down from the Call until its outputs fit in X bits; Input gates and constants are in no unit and every other gate
   is in exactly one.  Units are numbered by Call, then layout order (`locate`, `gates`); `owners_digest` digests their owners.  The
