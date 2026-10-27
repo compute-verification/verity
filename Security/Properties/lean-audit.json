@@ -3,6 +3,7 @@
   "Properties.Pouw",
   "Properties.Pouw.Check",
   "Properties.Pouw.PeriodCheck",
+  "Properties.Pouw.PeriodJ10R.Check",
   "Properties.Pouw.Commit",
   "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period",
@@ -318,7 +319,8 @@
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
-   "except": ["Properties.Pouw.Credit", "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R"],
+   "except": ["Properties.Pouw.Credit", "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R",
+    "Properties.Pouw.PeriodJ10R.Check"],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.Commit": {
@@ -510,8 +512,13 @@
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
-   "except": [],
+   "except": ["Properties.Pouw.PeriodJ10R.Check"],
    "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
+  },
+  "Properties.Pouw.PeriodJ10R.Check": {
+   "imports": ["Properties.Pouw.PeriodJ10R", "Properties.Pouw.PeriodCheck"],
+   "except": [],
+   "why": "the period protocol's accept, read as `Properties.Pouw.PeriodJ10R.WindowAccepts` for each of its windows: the period check's property module and the period model's window predicate, never a proof"
   }
  },
  "reads_exempt": {
@@ -1665,6 +1672,9 @@
    "signature": ["Properties.Pouw.PeriodCheck.refuses : Properties.Pouw.PeriodCheck.Refuses"],
    "assumptions": [],
    "type_hash": "5c6e19cf151c14a6cdc50b17897d1bf3579dd453f948a1b1788259b5b2291c77"
+  },
+  "Properties.Pouw.PeriodJ10R.Check.acceptedWindows": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -2847,6 +2857,10 @@
    "Properties.Pouw.PeriodCheck.refuses": {
     "function": "PouwCheck.Period.protocol.check",
     "outcome": "none"
+   },
+   "Properties.Pouw.PeriodJ10R.Check.acceptedWindows": {
+    "function": "PouwCheck.Period.protocol.check",
+    "outcome": "accept"
    },
    "Properties.Pouw.Window.bucket8192": {
     "function": "PouwWindow.bucket",

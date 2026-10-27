@@ -13,6 +13,7 @@
   "Proofs.Properties.Pouw",
   "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.PeriodCheck",
+  "Proofs.Properties.Pouw.PeriodJ10R.Check",
   "Proofs.Properties.Pouw.Commit",
   "Proofs.Properties.Pouw.LiveSalt",
   "Proofs.Properties.Pouw.Strata",

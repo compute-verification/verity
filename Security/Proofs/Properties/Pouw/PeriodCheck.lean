@@ -123,6 +123,91 @@ theorem neverUndecided : NeverUndecided := by
   unfold Period.check at h
   split at h <;> cases h
 
+theorem bind_ok {ε α β : Type} {x : Except ε α} {a : α} {f : α → Except ε β} (hx : x = .ok a) :
+    x >>= f = f a := by
+  rw [hx]; rfl
+
+theorem mapError_ok {ε ε' α : Type} {x : Except ε α} {f : ε → ε'} {a : α} (hx : x = .ok a) :
+    x.mapError f = .ok a := by
+  rw [hx]; rfl
+
+theorem exists_bind {ε α β : Type} {x : Except ε α} {a : α} {f : α → Except ε β} (hx : x = .ok a)
+    (h : ∃ b, f a = .ok b) : ∃ b, x >>= f = .ok b := by
+  rw [hx]; exact h
+
+theorem exists_bind_of {ε α β : Type} {x : Except ε α} {f : α → Except ε β} (hx : ∃ a, x = .ok a)
+    (h : ∀ a, ∃ b, f a = .ok b) : ∃ b, x >>= f = .ok b := by
+  obtain ⟨a, hx⟩ := hx
+  exact exists_bind hx (h a)
+
+/-- **A loop that never refuses or stops early succeeds**: when every step of `f` at an element meeting `P` yields,
+the loop over a list of such elements returns. -/
+theorem forIn_ok {α ε σ : Type} (P : α → Prop) (f : α → σ → Except ε (ForInStep σ))
+    (hf : ∀ x s, P x → ∃ s', f x s = .ok (.yield s')) :
+    ∀ (l : List α) (s : σ), (∀ x ∈ l, P x) → ∃ r, forIn l s f = .ok r
+  | [], s, _ => ⟨s, rfl⟩
+  | x :: l, s, h => by
+    obtain ⟨s', hs'⟩ := hf x s (h x (List.mem_cons_self ..))
+    obtain ⟨r, hr⟩ := forIn_ok P f hf l s' fun y hy => h y (List.mem_cons_of_mem _ hy)
+    exact ⟨r, by rw [List.forIn_cons, hs']; exact hr⟩
+
+/-- **`periodCredit` credits an honest period**: one whose evidence is a list of windows, whose ledger verifies for it
+(`LedgerVerifies`) and each of whose windows verifies (`WindowVerifies`). -/
+theorem periodCredit_honest (key ledger pins main : Json) (name : String) (windows : Json) (ws : List Json)
+    (K T : Nat) (k : SampledProofs.Challenger.ChallengerKey) (hws : windowsOf windows = some ws)
+    (hl : LedgerVerifies key ledger name ws K T k)
+    (hw : ∀ q ∈ ws.zipIdx, WindowVerifies k key ledger pins main name K T q.2 q.1) :
+    ∃ pc, periodCredit key ledger pins main (.str name) windows = .ok pc := by
+  obtain ⟨hper, hK, hT, ⟨W, hW⟩, hk⟩ := hl
+  unfold periodCredit
+  split
+  · rename_i ws' hws'
+    have hw' : ws' = ws := Option.some.inj (hws'.symm.trans hws)
+    subst hw'
+    refine exists_bind hper ?_
+    refine exists_bind hK ?_
+    refine exists_bind hT ?_
+    refine exists_bind (x := discard (committedWeights ledger name)) (by rw [hW]; rfl) ?_
+    refine exists_bind (mapError_ok hk) ?_
+    refine exists_bind_of (forIn_ok (fun q : Json × Nat => WindowVerifies k key ledger pins main name K T q.2 q.1)
+      _ ?_ _ _ hw) fun _ => ⟨_, rfl⟩
+    intro ⟨w, i⟩ s hv
+    obtain ⟨d, hd, a, ha, hp, got, layout, rows, hwl⟩ := hv
+    refine ⟨(s.1 ++ [got], s.2.1 ++ [creditedWork layout got rows], s.2.2 ++ [established layout got rows K]), ?_⟩
+    dsimp only
+    split
+    · rename_i d' hd'
+      have hdd : d' = d := Option.some.inj (hd'.symm.trans hd)
+      subst hdd
+      refine (bind_ok (mapError_ok ha)).trans ?_
+      dsimp only
+      split
+      · rename_i why hwhy
+        exact Option.noConfusion (hp.symm.trans hwhy)
+      · refine (bind_ok (mapError_ok hwl)).trans ?_
+        rfl
+    · rename_i hd'
+      exact Option.noConfusion (hd.symm.trans hd')
+  · rename_i hws'
+    exact Option.noConfusion (hws.symm.trans hws')
+
+/-- **The period check accepts an honest period** (`AcceptMeans`'s honest lemma, a completeness theorem): with its
+`n` windows credited, `n` the evidence's. -/
+theorem honestAccepts (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (ws : List Json) (K T : Nat)
+    (k : SampledProofs.Challenger.ChallengerKey) (hws : windowsOf e.windows = some ws)
+    (hl : LedgerVerifies p.key c.ledger p.name ws K T k)
+    (hw : ∀ q ∈ ws.zipIdx, WindowVerifies k p.key c.ledger e.pins p.main p.name K T q.2 q.1) :
+    ∃ pc, Period.protocol.check p c e = .accept pc { period := p.name, windows := pc.windows.length } ∧
+      pc.windows.length = ws.length := by
+  obtain ⟨pc, hpc⟩ := periodCredit_honest _ _ _ _ _ _ ws K T k hws hl hw
+  obtain ⟨ws', hws', _, _, _, _, hlen, _⟩ := periodCreditMeans _ _ _ _ _ _ _ hpc
+  have : ws' = ws := Option.some.inj (hws'.symm.trans hws)
+  subst this
+  refine ⟨pc, ?_, hlen.symm⟩
+  change Period.check p c e = _
+  unfold Period.check
+  rw [hpc]
+
 theorem refuses : Refuses := by
   refine ⟨{ key := .null, main := .null, name := "" }, { ledger := .null, bytes := .empty },
     { pins := .null, windows := .null }, fun pc prof h => ?_⟩
