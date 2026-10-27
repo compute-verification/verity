@@ -107,9 +107,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_remote as SR, serve_row as RW
-from verity_vllm.pipeline import serve_seal as SS
+from verity_vllm.pipeline import serve_h1 as SH, serve_remote as SR, serve_row as RW, serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
