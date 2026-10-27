@@ -583,7 +583,7 @@ def load(refresh: bool = True) -> list[Measure]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
-    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is (no `research data refresh`)")
+    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is, without refreshing it first")
     a = ap.parse_args()
     measures = load(refresh=not a.no_refresh)
     if not measures:
