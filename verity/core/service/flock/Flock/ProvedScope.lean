@@ -178,7 +178,7 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
     16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each"
   else "a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk"
 
-/-- **A templated circuit the hidden-output headlines cover** (PRF-133; ASK-112 option A: its statement circuit is the flat
+/-- **A templated circuit the hidden-output headlines cover** (its statement circuit is the flat
 circuit its template unrolls to, `HmOut.unrolled`), checked on the template's description, never on the rows it unrolls
 to: a `--zk` session of one table at hidden outputs without the verifier's own registered reads, whose unrolled unit
 (`Tmpl.unroll`'s net: the root's columns, the template's ports) reads only its leaf group and returns the outputs, so the

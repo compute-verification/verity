@@ -90,9 +90,8 @@ def test_kj19s_exhaustive_count_is_the_combinatorial_one():
 
 
 def test_the_soundness_status_is_the_ruling():
-    """Daniel's statement of the task (16 Oct, 17:02Z): XOR-in-13 and LI need (RT) and (G3); ram binds pairs only. It had
-    duo proved; duo is proved for runs of one, two and three words, and four at the deployed keys, and needs (D) past
-    them (FOLD-R r2, 17 Oct)."""
+    """XOR-in-13 and LI need (RT) and (G3); ram binds pairs only. Duo is proved for runs of one, two and three words,
+    and four at the deployed keys, and needs (D) past them."""
     status = {f: (d["status"], d["needs"]) for f, d in F.FOLDS.items()}
     assert status == {"duo": ("open", ("D",)), "xin13": ("open", ("RT", "G3")), "li": ("open", ("RT", "G3", "HO")),
                       "ram": ("pairs-only", ()), "xin7": ("retired", ())}

@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.ExecPlacement
 import Proofs.Flock.Soundness.TmplUnitNet
 
 /-!
-# A templated unit is its logical net placed at `posMap` (PRF-133)
+# A templated unit is its logical net placed at `posMap`
 
 A circuit carrying a read templated unit `tu`, whose unit net is `tu.net`: its logical net (`lunit`) is `Tmpl.unroll`'s,
 a `Built` net (`built_tmpl`), and `tu.net` is that net's rows moved to `posMap`'s positions (`Net.ofRowsAt`,

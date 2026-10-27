@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 
 /-!
-# The committed circuit's keys from the statement circuit's (PRF-133, ASK-112 option A)
+# The committed circuit's keys from the statement circuit's
 
 A templated session commits `cs`, its unit net `Tmpl.unitNet`'s, and its statement circuit is `HmOut.unrolled cs`, the
 same circuit with the logical unit net. The two read the same input ports, leaves, cuts and wires; only a wire out of a

@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 
 /-!
-# The hidden-output `--zk` chain's statement circuit (PRF-133, ASK-112 option A)
+# The hidden-output `--zk` chain's statement circuit
 
 The hidden-output `--zk` chain states its circuit hypotheses at the statement circuit, `HmOut.parseStmt … = .ok c`: a
 templated file's is its template unrolled (`HmOut.unrolled`), any other file's `HmOut.parse`'s. What the chain reads of a

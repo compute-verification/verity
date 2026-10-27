@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 set_option Elab.async false
 
 /-!
-# The hidden-output `--zk` session theorems at the session's statement circuit (PRF-133 G-B)
+# The hidden-output `--zk` session theorems at the session's statement circuit
 
 `zk_flock_countC_execOS_atH`, `zk_session_soundH`, `zk_session_soundHJ` and `zk_session_composedHJ` read the session's
 circuit from `HmOut.parse`, which refuses a templated file. Their `…St` forms here read it from `HmOut.parseStmt`

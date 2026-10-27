@@ -1,10 +1,9 @@
-"""REDTEAM phase 14, target 1, on the compile slice: `ChargeCount_v1{N}` alone is a faithful function of its witness
-``en``, ``bit`` and ``carry`` (`cursor/redteam-phase14-enc-061a`'s `test_network_certifier_arith_encode_phase14.py`), so
-a prover under-counts by clearing an asked slot's enable or choosing the carry until the slice binds them. In
-`compile_slice.CompileSlice_v1` none of the three is witness: ``en`` is i < ``count`` and ``bit`` is ``adv``'s
+"""The compile slice's charge inputs: `ChargeCount_v1{N}` alone is a faithful function of its witness ``en``, ``bit``
+and ``carry``, so a prover under-counts by clearing an asked slot's enable or choosing the carry until the slice binds
+them. In `compile_slice.CompileSlice_v1` none of the three is witness: ``en`` is i < ``count`` and ``bit`` is ``adv``'s
 decisions, the committed advice that ReplayLoad holds the scanned window row to, and the carry is ``cin``, which
 `charge_chain.ChargeLink_v1` holds to ``cout`` and the verifier chains window to window (`charge_chain.check_chain`).
-Each of REDTEAM's cases, on w212 at vLLM 8eb1's engine class (`test_network_certifier_compile_slice_w212.py`)."""
+Each case runs on w212 at its vLLM engine class (`test_network_certifier_compile_slice_w212.py`)."""
 from __future__ import annotations
 
 import pytest
@@ -56,7 +55,7 @@ def test_clearing_an_asked_enable_is_refused(x):
 
 def test_the_run_is_the_committed_decisions(x):
     """The run each decision is charged at moves over the committed decisions in commit order from ``cin``'s: ``cout``
-    is that carry', and any other carry-out (the run REDTEAM's cleared enable leaves, 1 in place of 0) is refused by
+    is that carry', and any other carry-out (the run a cleared enable leaves, 1 in place of 0) is refused by
     ``code``."""
     honest = CS.case(x.S, x.sl, BOOK, served=x.served, carry=CARRY)
     cb, _prior = AE.charge_book(BOOK, x.S.D)
@@ -76,7 +75,7 @@ def test_the_padding_is_inert():
 
 def test_a_chosen_carry_is_refused(x):
     """A carry-in of the prover's choosing (counts fitted to w212, 25 bits in place of 27) is accepted by the unit, which
-    takes any carry-in, as REDTEAM found; the verifier's chain refuses it (``CH-carry``) whether the prover commits it
+    takes any carry-in; the verifier's chain refuses it (``CH-carry``) whether the prover commits it
     under a fresh salt or the public start salt; and a window whose carry-out claims such a restart for the next one has
     its own unit refused by ``code``."""
     honest = CS.case(x.S, x.sl, BOOK, served=x.served, carry=CARRY)

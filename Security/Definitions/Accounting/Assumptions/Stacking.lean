@@ -92,8 +92,8 @@ carries nothing about its encoding, and only work after the coin helps rebuild i
 rest:
 
 * no pass reads an append's blocks `L` or more windows after the one it joined (remote_bandwidth's `lifetime`,
-  `Properties.RemoteAudit.LifetimeCapped`, proved in #2463), whose game form is this premise's hypothesis;
-* a re-key appends the block again and draws a fresh coin (`Properties.RemoteAudit.AppendsInOrder`, proved in #2463,
+  `Properties.RemoteAudit.LifetimeCapped`, proved), whose game form is this premise's hypothesis;
+* a re-key appends the block again and draws a fresh coin (`Properties.RemoteAudit.AppendsInOrder`, proved
   with the live coins uniform): each append has its own uniform coin, as in the game's coins.
 
 So the work that helps rebuild an appended tile a pass reads lies in the `L` windows ending at the pass, counting the

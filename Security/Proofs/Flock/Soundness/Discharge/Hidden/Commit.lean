@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 import Proofs.Flock.Soundness.TmplLayout
 
 /-!
-# A hidden-output session on the committed circuit (PRF-133, ASK-112 option A)
+# A hidden-output session on the committed circuit
 
 A session commits the circuit `HmOut.parseCommit` reads: `HmOut.parse`'s for a flat file, `HmOut.parseTmpl`'s, which
 carries its template, for a templated one (`Tags.isTmpl`). What the session side reads of `HmOut.parse … = .ok st.c` it
@@ -360,7 +360,7 @@ theorem Committed.unpinned_of_rep (ht : tags.typed = false) (hC : Committed tags
   · obtain ⟨hp, hc⟩ := parse_untyped ht hC
     exact FlockSoundness.Discharge.Hidden.unpinned_of_rep hp hc h
   · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases hC
-    exact FlockSoundness.Discharge.Hidden.unpinned_of_rep hp hck h
+    exact FlockSoundness.Discharge.Hidden.unpinned_of_rep (c := c₀) hp hck h
 
 /-- **An untyped hidden statement of one output row per output port pins no output** (`Committed.unpinned_of_rep`). -/
 theorem setupHidden_unpinned (ht : tags.typed = false)

@@ -246,7 +246,7 @@ def outRowsV2Identity (id : Json) : Json :=
       "the circuit; the public file has no output word"))
   else id
 
-/-- A hidden-output statement with pinned outputs (META `pinned_outputs`, CMP-149's form B): `outputs` names them, as the
+/-- A hidden-output statement with pinned outputs (META `pinned_outputs`): `outputs` names them, as the
 prover's does; a statement without them keeps its identity. -/
 def pinnedIdentity (id : Json) : Json :=
   if (id.getObjVal? "outputs").toOption.isSome then
