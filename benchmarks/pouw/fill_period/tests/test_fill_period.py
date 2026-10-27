@@ -17,6 +17,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import fill_period as FP  # noqa: E402
 
 
+def test_each_unit_is_one_tile_of_one_call_inside_its_rows():
+    """`units_of` walks every (call, tile) once in the Program's order: positions consecutive, each call's first unit its
+    `u0`, its A rows inside its K's pad (M rows a call) and its B rows inside its linear's rows of the checkpoint."""
+    (r, c), m = FP.TILE, FP.TILE[0]
+    layout = {"calls": [[name, 0] for name, _k, _n in FP.LOOP_LINEARS], "linears": [list(x) for x in FP.LOOP_LINEARS],
+              "m": m, "tile": [r, c]}
+    units = FP.units_of(layout)
+    assert [u["unit"] for u in units] == list(range(sum(m // r * n // c for _l, _k, n in FP.LOOP_LINEARS)))
+    tiles = {(u["call"], u["tile"]) for u in units}
+    assert len(tiles) == len(units)
+    for call, (name, k, n) in enumerate(FP.LOOP_LINEARS):
+        mine = [u for u in units if u["call"] == call]
+        before = [nn for _l, kk, nn in FP.LOOP_LINEARS[:call] if kk == k]
+        assert all(u["u0"] == mine[0]["unit"] and u["k"] == k for u in mine)
+        assert {u["b"] for u in mine} == {sum(before) + c * j for j in range(n // c)}
+        assert {u["a"] for u in mine} == {m * len(before) + r * i for i in range(m // r)}
+
+
 @pytest.mark.slow
 def test_a_filler_period_on_a_local_gate_is_credited_and_its_negatives_refused(tmp_path: Path, monkeypatch):
     """The filler window's coins come from its session (the stub logged their requests), its draw is the committed K's,

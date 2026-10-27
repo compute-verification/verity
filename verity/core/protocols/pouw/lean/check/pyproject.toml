@@ -29,6 +29,7 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",
           "verity/core/protocols/pouw/period_check.py", "verity/core/protocols/pouw/fill.py",
           "verity/core/protocols/pouw/verifier.py", "verity/core/protocols/pouw/salt.py",
+          "verity/core/protocols/pouw/grind.py",
           "verity/core/protocols/pouw/credit.py", "verity/core/protocols/pouw/weights.py",
           "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/audit.py",
           "verity/core/protocols/pouw/protocol.py", "verity/ml/randomness",
