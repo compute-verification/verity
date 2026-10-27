@@ -58,6 +58,12 @@ drawn proof blocks have a VERDICT line that says accepted (C-Flock ``--zk``, M0 
 line is ok with every negative refused; until then it is `FALLBACK_STATUS` (the file's ``status``, which may say
 nothing else), and each block not accepted is a visible failure.
 
+**Per-call noise's serving overhead** (CMP-126, 27 Oct 02:23Z) is `serve_noise_line`: the seconds it adds a step, its
+units' and commit's parts, and two ratios, against the commit-bound step γ_step was measured on and against #4562's
+served step, never γ_step alone; then the units' share of the tensor peak, and the commit's own overhead (CMP-149) as a
+separate line. Demo A's part 2 renders it as ``⟨SERVE_NOISE⟩``; in M3's report a section with ``"serve_noise": true``
+ends with it, and a section row about per-call noise is refused.
+
 The measurements file::
 
     {"format": "verity/demo-a-measurements/v1",
@@ -128,7 +134,14 @@ BANNED = re.compile(r"\b(legs?|windows?|templates?|integrity|work|space|communic
 CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
 PLACEHOLDER = re.compile(r"⟨([A-Z][A-Z0-9_]*)⟩")
 #: placeholders that stand for a rendered block rather than one number
-BLOCKS = ("LABEL", "RECORDS", "VISIBLE_FAILURES", "SUBCIRCUITS", "PERIODS", "CAVEATS", "SOURCES", "SECTIONS", "MISSES")
+BLOCKS = ("LABEL", "RECORDS", "VISIBLE_FAILURES", "SUBCIRCUITS", "PERIODS", "CAVEATS", "SOURCES", "SECTIONS", "MISSES",
+          "SERVE_NOISE")
+#: the numbers `serve_noise_line` states
+SERVE_NOISE = ("SERVE_NOISE_S", "SERVE_NOISE_BATCH", "SERVE_NOISE_UNITS_S", "SERVE_NOISE_COMMIT_S",
+               "SERVE_NOISE_GAMMA_STEP", "SERVE_NOISE_BASE_S", "SERVE_NOISE_RATIO_4562", "SERVE_STEP_4562_S",
+               "SERVE_NOISE_UNITS_PEAK", "SERVE_COMMIT_OVERHEAD_S")
+#: a section row that states per-call noise itself, which `serve_noise_line` states instead
+NOISE_ROW = re.compile(r"per-call noise|γ_step|gamma_step", re.IGNORECASE)
 #: M3's report: the measurements file's ``sections`` and ``proved``
 M3_TEMPLATE = Path(__file__).parent / "m3.template"
 #: what a section row names: the number, its run, its own verdict line quoted and its target
@@ -199,7 +212,18 @@ MEASURED: dict[str, str] = {
                            "block ran",
     "SERVE_COMMIT_S": "CMP-97's block run: seconds of commits a step (HASH-20)",
     "SERVE_STEP_S": "CMP-97's block run: seconds a step",
-    "SERVE_NOISE_SHARE": "CMP-126 (KCOMMIT-FB): per-call noise's timed overhead over plain INT8 at the block's M",
+    "SERVE_NOISE_S": "CMP-126 (kraqwxsc): seconds per-call noise adds a step, its source naming the noise run, then the "
+                     "plain run it is measured against (r20261026-113133-5cb4 against r20261026-120015-3773)",
+    "SERVE_NOISE_BATCH": "CMP-126: the batch those two runs served",
+    "SERVE_NOISE_UNITS_S": "CMP-126: of SERVE_NOISE_S, the seconds a step of per-call noise's units",
+    "SERVE_NOISE_COMMIT_S": "CMP-126: of SERVE_NOISE_S, the seconds a step of committing their values",
+    "SERVE_NOISE_GAMMA_STEP": "CMP-126: γ_step, the noise run's step over the plain run's",
+    "SERVE_NOISE_BASE_S": "CMP-126: the plain run's served step, mostly FAMILIES' slot commit (`commit_gpu`)",
+    "SERVE_STEP_4562_S": "#4562's served step on the H200, in seconds",
+    "SERVE_NOISE_UNITS_PEAK": "RHO-H200 (r20261027-022021-3a48): the share of the tensor peak per-call noise's units "
+                              "reach, ALU-bound",
+    "SERVE_COMMIT_OVERHEAD_S": "CMP-149 (r20261027-004614-d98c): the commit's own overhead a step at 1 KiB rows, after "
+                               "#4915",
     "SIMULATED_RTT_MS": "CMP-97's block run: the challenger's simulated round trip",
     "STEP_S_B512": "M3's block run on the H200 at batch 512: seconds a step",
     "ROW_SLOT_NS_B512": "the same run: nanoseconds a step per row-slot",
@@ -227,6 +251,7 @@ DERIVED: dict[str, str] = {
     "Y": "PROVING_GPU_S / BLOCK_GPU_S",
     "PLANNER_RATIO": "PROVING_GPU_S / PLANNER_PREDICTED_S",
     "SERVE_COMMIT_SHARE": "SERVE_COMMIT_S / SERVE_STEP_S",
+    "SERVE_NOISE_RATIO_4562": "(SERVE_STEP_4562_S + SERVE_NOISE_S) / SERVE_STEP_4562_S, to two figures",
     "BOUND_CITATION": "JOINT_LOCKED: LEAN-56's `Flock.Guarantees.JointStratified` when locked, else #4358's "
                       "per-subcircuit bound with the joint figure unlocked",
     "HORIZON_CITATION": "JOINT_LOCKED: LEAN-56's `JointStratifiedHorizon` when locked, else #4358's "
@@ -373,6 +398,9 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
         if not str(x.get("source") or "").strip():
             raise ValueError(f"measurements: ⟨{name}⟩ names no source; say which run or field it came from")
         values[name] = V(x["value"], x["source"], x.get("label"))
+    if "SERVE_NOISE_S" in values and len(RUN_ID.findall(values["SERVE_NOISE_S"].source)) != 2:
+        raise ValueError("measurements: ⟨SERVE_NOISE_S⟩'s source names its two runs, the noise run then the plain run "
+                         "it is measured against (`r... against r...`)")
     if "WORLD_GATES_YEAR" in values and values["WORLD_GATES_YEAR"].label != WORLD_LABEL:
         raise ValueError(f"measurements: ⟨WORLD_GATES_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")
     subcircuits = [dict(s) for s in doc.get("subcircuits") or []]
@@ -455,6 +483,9 @@ def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) ->
     ratio("Y", "PROVING_GPU_S", "BLOCK_GPU_S")
     ratio("PLANNER_RATIO", "PROVING_GPU_S", "PLANNER_PREDICTED_S")
     ratio("SERVE_COMMIT_SHARE", "SERVE_COMMIT_S", "SERVE_STEP_S", pct=True)
+    noise, step = _num(values.get("SERVE_NOISE_S")), _num(values.get("SERVE_STEP_4562_S"))
+    if noise is not None and step:
+        put("SERVE_NOISE_RATIO_4562", f"{float((step + noise) / step):.2g}", "SERVE_NOISE_S", "SERVE_STEP_4562_S")
     if (lk := values.get("JOINT_LOCKED")) is not None:
         put("BOUND_CITATION", "LEAN-56's `Flock.Guarantees.JointStratified` (locked)" if lk.value is True else
             "#4358's per-subcircuit bound, the joint figure unlocked", "JOINT_LOCKED")
@@ -489,12 +520,30 @@ def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) ->
     return out
 
 
-def _cell(name: str, values: Mapping[str, V], quiet: str | None = None) -> str:
+def _cell(name: str, values: Mapping[str, V], quiet: str | None = None, fmt=_fmt) -> str:
     """A number in place, with its label unless it is ``quiet`` (the records' label, stated once at the top)."""
     v = values.get(name)
     if v is None:
         return f"⟨{name}⟩"
-    return _fmt(v.value) + (f" *({v.label})*" if v.label and v.label != quiet else "")
+    return fmt(v.value) + (f" *({v.label})*" if v.label and v.label != quiet else "")
+
+
+def serve_noise_line(values: Mapping[str, V], quiet: str | None = None) -> str:
+    """Per-call noise's serving overhead as the seconds it adds a step, with both ratios (module docstring)."""
+    c = lambda n, fmt=_fmt: _cell(n, values, quiet, fmt)
+
+    def runs(name: str) -> str:
+        v = values.get(name)
+        return " against ".join(RUN_ID.findall(v.source)) if v and RUN_ID.search(v.source) else f"⟨{name}⟩'s run"
+
+    return (f"Per-call noise adds **+{c('SERVE_NOISE_S')} s a step at batch {c('SERVE_NOISE_BATCH')}** "
+            f"({c('SERVE_NOISE_UNITS_S')} s of units plus {c('SERVE_NOISE_COMMIT_S')} s of commit, "
+            f"{runs('SERVE_NOISE_S')}): {c('SERVE_NOISE_GAMMA_STEP')}× against that commit-bound "
+            f"{c('SERVE_NOISE_BASE_S')} s served step, which is mostly FAMILIES' slot commit (`commit_gpu`), and about "
+            f"{c('SERVE_NOISE_RATIO_4562')}× against #4562's {c('SERVE_STEP_4562_S')} s served step. The units are "
+            f"ALU-bound at about {c('SERVE_NOISE_UNITS_PEAK', _pct)} of the tensor peak (RHO-H200, "
+            f"{runs('SERVE_NOISE_UNITS_PEAK')}). The commit's own overhead is a separate line (CMP-149): "
+            f"+{c('SERVE_COMMIT_OVERHEAD_S')} s at 1 KiB rows after #4915 ({runs('SERVE_COMMIT_OVERHEAD_S')}).")
 
 
 def _records(records: Sequence[Mapping[str, Any]], failures: int = 0) -> str:
@@ -665,6 +714,8 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
             names.append("JOINT_LOCKED")
         if name == "PERIODS":
             names = [n for p, _ in PERIODS for n in _period_names(p)]
+        if name == "SERVE_NOISE" or name == "SECTIONS" and any(s.get("serve_noise") for s in sections):
+            names = list(SERVE_NOISE)
         order += [n for n in dict.fromkeys(names) if n not in order]
     banner = (f"> The {record_label}'s numbers are not marked in place: every number read from the block records "
               f"(block record {records[0]['run']}), and every measurement labelled *({record_label})*, is the "
@@ -675,7 +726,8 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
               "PERIODS": _periods(values, record_label),
               "CAVEATS": _caveats(records, values, caveats, record_label, fixed),
               "SOURCES": _sources(order, values, subcircuits, failures),
-              "SECTIONS": _sections(sections, rows), "MISSES": _misses(rows, failures)}
+              "SECTIONS": _sections(sections, rows, serve_noise_line(values, record_label)),
+              "MISSES": _misses(rows, failures), "SERVE_NOISE": serve_noise_line(values, record_label)}
     out = PLACEHOLDER.sub(lambda m: blocks[m[1]] if m[1] in blocks else _cell(m[1], values, record_label), text)
     if status:
         out = f"{status}\n\n{out}"
@@ -710,6 +762,11 @@ def section_rows(sections: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             if missing := [k for k in ROW_FIELDS if row.get(k) is None or str(row[k]).strip() == ""]:
                 raise ValueError(f"measurements: row {row.get('what')!r} names no {', '.join(missing)}; every number "
                                  f"carries its run, its own verdict line quoted, and its target")
+            if NOISE_ROW.search(str(row["what"])):
+                raise ValueError(f"measurements: row {row['what']!r} states per-call noise on its own (CMP-126): put "
+                                 f"the {', '.join(n for n in SERVE_NOISE if n in MEASURED)} values in `values` and "
+                                 f"\"serve_noise\": true on its section, which states the seconds it adds a step with "
+                                 f"both ratios")
             if not RUN_ID.search(str(row["run"])):
                 raise ValueError(f"measurements: row {row['what']!r}: run {row['run']!r} has no run id (rYYYYMMDD-"
                                  f"HHMMSS-xxxx) or art: id")
@@ -795,12 +852,12 @@ def _row(r: Mapping[str, Any]) -> str:
             f"Verdict: {_code(str(r['verdict']))}" + (f" {r['note']}" if r.get("note") else ""))
 
 
-def _sections(sections: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str:
+def _sections(sections: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]], noise: str) -> str:
     parts = []
     for n, sec in enumerate(sections, 1):
-        mine = [r for r in rows if r["section"] == sec["title"]]
+        mine = [_row(r) for r in rows if r["section"] == sec["title"]] + [f"- {noise}"] * bool(sec.get("serve_noise"))
         parts.append(f"## {n}. {sec['title']}\n\n" + (f"{sec['text']}\n\n" if sec.get("text") else "")
-                     + "\n".join(_row(r) for r in mine))
+                     + "\n".join(mine))
     return "\n\n".join(parts)
 
 

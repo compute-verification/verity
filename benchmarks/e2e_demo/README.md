@@ -71,7 +71,9 @@ server, with the other subprotocols absent.
 price. A measurements file with `sections` or `proved` renders M3's report (`m3.template`): every row is one number with
 its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is
 DRAWPROVE's run (PRF-172), its VERDICT and PROVEBUNDLE lines verbatim: the first line is the M3 fallback's until all 8
-drawn H200 proof blocks are proved in C-Flock and accepted by Lean, and M3's after. The rendered report goes to the
+drawn H200 proof blocks are proved in C-Flock and accepted by Lean, and M3's after. Per-call noise's serving overhead
+is one line, `serve_noise_line` (CMP-126): the seconds it adds a step with both ratios, never γ_step alone, ending the
+section marked `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
 evidence store (`research data put --kind demo-a-report/v1 --file F --preserve`), never Git.
 
     python -m verity_e2e_demo.report [RECORD.json ...] --measurements M.json --out FILE

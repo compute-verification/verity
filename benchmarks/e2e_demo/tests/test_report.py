@@ -53,7 +53,7 @@ def test_every_placeholder_is_one_number_of_the_report() -> None:
     assert not record & measured and not record & derived and not measured & derived
     periods = {n for n in derived if n.split("_")[0] in ("BLOCKS", "H", "B") and n.endswith(("WEEK", "MONTH", "YEAR"))}
     assert names == ((record | measured | derived | set(D.BLOCKS)) - periods - {"H_POOLED", "B_POOLED", "JOINT_LOCKED"}
-                     - {"SECTIONS", "MISSES"})
+                     - {"SECTIONS", "MISSES"} - set(D.SERVE_NOISE))
     assert D.BANNED.search(D.TEMPLATE.read_text()) is None
 
 
@@ -318,3 +318,44 @@ def test_proved_refuses_another_status_and_an_undrawn_block() -> None:
         D.render([], doc)
     with pytest.raises(ValueError, match="needs its run id"):
         D.render([], {**_proved(), "proved": {"run": "DRAWPROVE", "drawn": [1], "lines": []}})
+
+
+NOISE = {"SERVE_NOISE_S": (8.5, "kraqwxsc r20261026-113133-5cb4 against r20261026-120015-3773"),
+         "SERVE_NOISE_BATCH": (4096, "r20261026-113133-5cb4"), "SERVE_NOISE_UNITS_S": (5.59, "r20261026-113133-5cb4"),
+         "SERVE_NOISE_COMMIT_S": (2.8, "r20261026-113133-5cb4"), "SERVE_NOISE_GAMMA_STEP": (1.115, "CMP-126"),
+         "SERVE_NOISE_BASE_S": (74.4, "r20261026-120015-3773"), "SERVE_STEP_4562_S": (3.78, "#4562"),
+         "SERVE_NOISE_UNITS_PEAK": (0.10, "RHO-H200 r20261027-022021-3a48"),
+         "SERVE_COMMIT_OVERHEAD_S": (0.42, "CMP-149 r20261027-004614-d98c")}
+NOISE_LINE = ("Per-call noise adds **+8.5 s a step at batch 4,096** (5.59 s of units plus 2.8 s of commit, "
+              "r20261026-113133-5cb4 against r20261026-120015-3773): 1.115× against that commit-bound 74.4 s served "
+              "step, which is mostly FAMILIES' slot commit (`commit_gpu`), and about 3.2× against #4562's 3.78 s served "
+              "step. The units are ALU-bound at about 10% of the tensor peak (RHO-H200, r20261027-022021-3a48). The "
+              "commit's own overhead is a separate line (CMP-149): +0.42 s at 1 KiB rows after #4915 "
+              "(r20261027-004614-d98c).")
+
+
+def _noise() -> dict:
+    return {k: {"value": v, "source": s} for k, (v, s) in NOISE.items()}
+
+
+def test_per_call_noise_is_seconds_a_step_with_both_ratios_never_gamma_step_alone() -> None:
+    """CMP-126's 02:23Z correction: γ_step 1.115 is against a commit-bound 74.4 s step, so the line states +8.5 s a step
+    with 1.115× and about 3.2× against #4562's 3.78 s step, in M3's part 2 and in Demo A's."""
+    doc = _proved()
+    doc["values"] = _noise()
+    doc["sections"][0]["serve_noise"] = True
+    out = D.render([], doc)
+    part2 = out.split("## 2. Commit overhead")[1].split("\n## ")[0]
+    assert f"- {NOISE_LINE}" in part2 and "| ⟨SERVE_NOISE_RATIO_4562⟩ | 3.2 |" in out
+    demo = D.render([_load("block-record-r2-period0")], {"format": D.MEASUREMENTS, "values": _noise()})
+    assert " ".join(NOISE_LINE.split()) in " ".join(demo.split())
+    assert "⟨SERVE_NOISE_RATIO_4562⟩× against #4562's ⟨SERVE_STEP_4562_S⟩ s" in D.render([_load("block-record-r2-period0")])
+
+
+def test_a_row_stating_per_call_noise_alone_is_refused() -> None:
+    for what in ("per-call noise's γ_step", "gamma_step at batch 4,096"):
+        with pytest.raises(ValueError, match="states per-call noise on its own"):
+            D.render([], _fallback(what=what, value=1.115, unit="×", target={"none": "a ratio"}))
+    doc = {"format": D.MEASUREMENTS, "values": {**_noise(), "SERVE_NOISE_S": {"value": 8.5, "source": "kraqwxsc"}}}
+    with pytest.raises(ValueError, match="names its two runs"):
+        D.render([_load("block-record-r2-period0")], doc)
