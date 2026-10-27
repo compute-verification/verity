@@ -92,8 +92,8 @@ the observation horizon the link's (its link-windows' buckets, `certifier_serve.
 (N2 holds the planned profile's egress counts exactly, so no observation moves), and no connection through the network
 certifier but the link, whose counts the profile fixes (``cells`` empty).
 
-**The block record** (`block_leg`): a period's accepted answer, of either path, as the network certifier's entry in
-``verity/block-record/v1``: K in bits, its error the answer's exact ``eps``, and the certificate at
+**The block record** (`block_leg`): a period's accepted answer, of either path, as the certifier leg of
+``verity/block-record/v1`` (CMP-95 item 6): K in bits, its error the answer's exact ``eps``, and the certificate at
 δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most δ. A loop's leg and the H200 fallback's write that one shape.
 """
 from __future__ import annotations
@@ -1333,7 +1333,7 @@ BLOCK_ERROR_FROM = "quantity.eps"
 
 def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
               owner: str | None = "network-accounting") -> dict[str, Any]:
-    """The block record's network certifier entry (``legs.certifier`` of ``verity/block-record/v1``) of one
+    """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v1``, CMP-95 item 6) of one
     period's ``network-period check`` answer, in the clock form or the rows form: the answer's verdict, reason,
     commitment and public; the quantity K, the bits a covert sender in ``server`` can move over the link in the
     period's ``windows`` link-windows; the error the answer's exact ``eps``; and the certificate at each δ of

@@ -78,8 +78,8 @@ REFERENCE_THREADED = (10.0, 37248.0)
 #: (NVIDIA's dense headline implies 2,597 MHz against the credited 2,430: 6.4%, C4 dossier); the host CPUs at their INT8
 #: AMX datasheet peak (two Xeon 6776Ps, 128 cores x 2,048 ops per cycle x 3.6 GHz: 11.8% of the GPUs' FP8 rate);
 #: 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
-#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, as memory-accounting's
-#: streamed labels do) and the memory
+#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, memory-accounting
+#: MEM-51) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once the network's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
