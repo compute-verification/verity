@@ -17,9 +17,11 @@
 #include "../pearl_c/hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take, then their PD_STAMP twins
-// (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit lets the call's forming launch behind it (pdl_entry)
+// (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit waits at its entry for the launch before it and lets the
+// call's forming launch behind it (pdl_entry); PD_SM90: hash_decode.cuh's PD_SM90_FORMS
 #define PD_VARIANT_LIST(X) X(851) X(979) X(883) X(1011)
 #define PD_PDL
+#define PD_SM90
 #include "../pearl_c_sm120/hash_decode.cuh"
 // A's commitment past decode's rows (run.py's chain "pl", PL_VARIANT)
 #include "hash_prefill.cuh"
@@ -111,13 +113,18 @@ DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
 }
 // the maps are written before the launch (run.py's encode_maps), so a prefetch is all they need
 // a launch behind the launch before it on its stream (run.py's PDL_KERNELS): every thread waits for that launch to complete
-// before it touches global memory, then lets the next launch start behind this one; both are no-ops in a plain launch
+// before it touches global memory that a launch since the weights' jobs writes, then lets the next launch start behind this
+// one; both are no-ops in a plain launch
 DEV void pdl_entry() { asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory"); }
 // its two halves, for a kernel that reads the launch before it's output late (gemm_body's LATE)
 DEV void pdl_wait() { asm volatile("griddepcontrol.wait;" ::: "memory"); }
 DEV void pdl_launch() { asm volatile("griddepcontrol.launch_dependents;" ::: "memory"); }
 // run.py launches PDL_KERNELS programmatically only from a cubin with this kernel (PDL_MARK), whose PDL_KERNELS wait
 extern "C" __global__ void pdl_waits() {}
+// and PDL_ENTRY_KERNELS (widen_a, and hash_decode.cuh's pd_commit under PD_PDL) only from one with this (PDL_ENTRY_MARK)
+extern "C" __global__ void pdl_waits_entry() {}
+// run.py gives pd_commit a call's BF16 rows (p15, i5) only from a cubin with this (BF16_ROWS_MARK), whose pd_commit reads them
+extern "C" __global__ void pd_reads_bf16() {}
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 // box (c0 = byte offset along the depth, c1 = row) of `map` into dst, counted on bar
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -640,14 +647,20 @@ template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV vo
   static_assert(!WORDS || EP, "the windows are form_s5_ep's");
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
-  pdl_entry();
   const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
-  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
-  const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
-                     (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
-  const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
-  // the windows' F_B^T bytes, read now so their latency is under the forming: line n's 16-byte chunk c, a warp's quarter on
-  // eight lines (n & 7) of one chunk, so its staging stores hit distinct banks
+  auto stage_f = [&] {
+    const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
+                       (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
+      *reinterpret_cast<uint4*>(sF + core(r, 16 * c)) = *reinterpret_cast<const uint4*>(F + (size_t)(t0 + r) * 32 + 16 * c);
+    }
+  };
+  // The F lines (p3) and the windows' F_B^T bytes (p7) are a weight's, written by its job's launches when it is registered and
+  // by no launch since, so they are read before the wait, their latency under the launch before (GR's expert map, p5, after).
+  // The F_B^T bytes: line n's 16-byte chunk c, a warp's quarter on eight lines (n & 7) of one chunk, so its staging stores hit
+  // distinct banks
   uint4 fb[2];
   if constexpr (WORDS) {
 #pragma unroll
@@ -656,6 +669,11 @@ template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV vo
       fb[j] = *reinterpret_cast<const uint4*>(a.p[7] + (size_t)n * k + t0 + 16 * c);
     }
   }
+  if constexpr (!GR) stage_f();
+  pdl_entry();
+  if constexpr (GR) stage_f();
+  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
+  const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
   uint4 ev = *reinterpret_cast<const uint4*>(E + eo);
   if constexpr (EP) {
     const float beta = reinterpret_cast<const float*>(a.p[5])[r0 + tid / 2];
@@ -671,11 +689,6 @@ template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV vo
     if (blockIdx.x == 0) *reinterpret_cast<uint4*>(a.p[6] + eo) = ev;
   }
   *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) = ev;
-#pragma unroll
-  for (int j = 0; j < 2; j++) {
-    const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
-    *reinterpret_cast<uint4*>(sF + core(r, 16 * c)) = *reinterpret_cast<const uint4*>(F + (size_t)(t0 + r) * 32 + 16 * c);
-  }
   const float* x = reinterpret_cast<const float*>(a.p[0]);
   const float* alpha = reinterpret_cast<const float*>(a.p[1]);
   const int rA = 16 * (tid / 32) + (tid % 32) / 4, cA = 2 * (tid % 4);
@@ -781,7 +794,8 @@ extern "C" __global__ void quant_s5(const Args a) {
 // (`pearl_c_sm90.run.widen`'s choice "fp8_block": a defined B, not the exact real one when code x scale doesn't fit FP32).
 // p0 source, p1 scales (widen_fp8_block), p2 out (rows x k FP32); i0 rows, i1 k (a multiple of 8).  A thread per 8 elements.
 // widen_a: a served call's A words (pouw_pearl_c_device's xa), widen_bf16's widening of its i0 rows, then rows i0 to i2 - 1
-// zero, in one launch; p2 out (i2 x k FP32).
+// zero, in one launch; p2 out (i2 x k FP32).  A PDL_ENTRY_KERNELS launch (pdl_entry), so the call's pd_commit, launched
+// behind it, is resident when it completes.
 DEV void widen8(const uint4* src, uint4* out, size_t g) {
   const uint4 v = src[g];
   const uint32_t w[4] = {v.x, v.y, v.z, v.w};
@@ -793,6 +807,7 @@ extern "C" __global__ void widen_bf16(const Args a) {
   if (g < (size_t)a.i[0] * a.i[1] / 8) widen8(reinterpret_cast<const uint4*>(a.p[0]), reinterpret_cast<uint4*>(a.p[2]), g);
 }
 extern "C" __global__ void widen_a(const Args a) {
+  pdl_entry();
   const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x, real = (size_t)a.i[0] * a.i[1] / 8;
   uint4* out = reinterpret_cast<uint4*>(a.p[2]);
   if (g < real)

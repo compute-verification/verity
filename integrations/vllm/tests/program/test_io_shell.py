@@ -1,15 +1,16 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
-`reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, and the
-Boolean Definition against its word."""
+`reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and a slot's `SlotRow_v1` and
+`SlotMask_v1`."""
 from __future__ import annotations
 
 import json
 
 import numpy as np
 import pytest
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_io_shell as BX
-from verity_vllm.program.registry import io_shell as X
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_io_shell as BX
+from verity.ml.definitions.registry import io_shell as X
 
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
@@ -114,6 +115,55 @@ def test_an_id_past_the_vocabulary_is_not_ok():
 def test_statics_without_a_layout_are_refused(kw):
     with pytest.raises(ValueError, match="refuses this binding"):
         bind(X.IngressPrompt, **kw)
+
+
+def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
+    """`TokenFeed_v1` chained down a class Program of NP = 5 prompt ids from each prompt length lp = 1..5: positions below lp
+    take the prompt's ids, every later one the select it reads, and each carries (lp − p − 1, ids[p + 1:], 0s) on; the first
+    position takes ids[0] whatever its slot's count, and the statics it has no layout for are refused."""
+    NP, ids = 5, [7, 0xFFFFFFFF, 0, 123456, 1 << 31]
+    sels = [1000 + p for p in range(NP)]
+    first, rest = bind(X.TokenFeed, NP=NP, FIRST=True), bind(X.TokenFeed, NP=NP, FIRST=False)
+
+    def run(fn, *rows):
+        args = [np.array([r], dtype=np.uint64).astype(np.uint32) for r in rows]
+        return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
+
+    for lp in range(1, NP + 1):
+        slot, toks = [lp, *ids], []
+        for p in range(NP):
+            sel = None if p == 0 else sels[p - 1]
+            got = run(first, slot) if sel is None else run(rest, slot, [sel])
+            tok, carried = X.feed_reference(slot, sel, NP)
+            assert got == [tok, *carried]
+            toks.append(got[0])
+            slot = got[1:]
+            assert slot == [(lp - p - 1) & 0xFFFFFFFF, *ids[p + 1:], *[0] * (p + 1)]
+        assert toks == ids[:lp] + sels[lp - 1:NP - 1]
+    assert run(first, [0, *ids])[0] == ids[0]
+    for kw in ({"NP": 0, "FIRST": True}, {"NP": 2, "FIRST": 1}):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(X.TokenFeed, **kw)
+
+
+def test_a_slots_row_opens_into_its_occupancy_and_feed_and_an_empty_slot_outputs_no_token():
+    """`SlotRow_v1` copies a slot's ingress row (occupancy, lp, ids) out as its occupancy word and the first `TokenFeed_v1`'s
+    slot; `SlotMask_v1` passes the select through while the occupancy word's low bit is 1 and otherwise outputs `EMPTY`,
+    which no token id is, at every occupancy word and token tried."""
+    def run(fn, *rows):
+        args = [np.array([r], dtype=np.uint64).astype(np.uint32) for r in rows]
+        return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
+
+    row, ids = bind(X.SlotRow, NP=3), [7, 0, 0xFFFFFFFF]
+    for occ, lp in ((1, 3), (0, 0), (0xFFFFFFFE, 1)):
+        assert run(row, [occ, lp, *ids]) == [occ, lp, *ids]
+    mask = bind(X.SlotMask)
+    for occ in (0, 1, 2, 3, 0x80000000, 0xFFFFFFFF):
+        for tok in (0, 5, 128255, 0xFFFFFFFF):
+            assert run(mask, [occ], [tok]) == [X.mask_reference(occ, tok)] == [tok if occ & 1 else X.EMPTY]
+    assert X.EMPTY >= 1 << 31
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(X.SlotRow, NP=0)
 
 
 @pytest.mark.parametrize("st", [SMALL, {"MODEL": MODEL, "LP": 2, "V": V}], ids=["small", "served"])

@@ -64,6 +64,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
 from .class_statement import ClassDefinition
 
 __all__ = ["HOLO_KEY", "InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
@@ -83,7 +84,7 @@ V_VALUE = "rec-v"
 # unit's name does not say, and the verifier (`Flock.RecResiduals.HOLO_KEY`) builds the one net it selects, absent meaning plain
 HOLO_KEY = "holo"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
-# (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
+# (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 512 (`coin_spec_of`)
 MAX_REGIONS = 64
 # a part's sha512x3 slots per instance, at most (`slots`): 160 slots of 2^18 bits (2^25.32) beside its hm96 slots' 2^24 (at
 # most MAX_REGIONS) leave room for a 2^22 unit in a 2^26 block (for a 2^23 unit, as at 12 claims, 159 do), below
@@ -517,6 +518,7 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(st.program)))
     (d / "partition.json").write_text(json.dumps(st.part))
+    RB.check({"format": RG.READS, "ports": entries}, st.defn.id, n)
     (d / "registered.json").write_text(json.dumps({"format": RG.READS, "ports": entries}))
     ds = getattr(st, "digests", None) or (FC.digest(text), FC.class_digest(text))
     FC.write(text, SimpleNamespace(name=st.zero_value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),

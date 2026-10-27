@@ -13,10 +13,10 @@ from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import dsv4_decode_indices_twin as T
-from verity_vllm.program.registry import boolean_dsv4_decode_indices as BX
-from verity_vllm.program.registry import dsv4_decode_indices as X
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import dsv4_decode_indices_twin as T
+from verity.ml.definitions.registry import boolean_dsv4_decode_indices as BX
+from verity.ml.definitions.registry import dsv4_decode_indices as X
 
 U = np.uint32
 M32 = 0xFFFFFFFF

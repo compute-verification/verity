@@ -446,6 +446,24 @@ def test_the_record_update_wrote_is_kept_so_its_commit_runs_nothing_and_requirer
         "the record before the update never passed; the requirer did on it"
 
 
+def test_a_package_that_reads_the_same_files_as_one_that_passed_still_runs(reuse, tmp_path, monkeypatch, capsys):
+    """`Security` and `Security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
+    `--records Security`, whose requirer `Security/Properties` failed, was taken as that requirer's: `--records
+    Security/Properties --update` then ran nothing and wrote no record (r20261026-050354-87cc). Here `a` requires `p` by
+    path and `p` is proved in `a`."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (reuse / "p" / "lean-audit.json").write_text('{"proved_in": ["../a"], "guarantees": {"P.t": {}}}')
+    files = LC.LA.COMMON.tracked_files()
+    assert LC.closure_inputs("a", files) == LC.closure_inputs("p", files)
+    monkeypatch.setenv("AUDIT_FAILS", "a")
+    assert LC.audit_records("p", deps, tree) == 1 and len(_calls(tmp_path)) == 2, "p passes, its requirer a fails"
+    capsys.readouterr()
+    assert LC.audit_records("a", deps, tree, update=True) == 1
+    assert [c["argv"][-1] for c in _calls(tmp_path)] == [str(tree / "a")], "a runs; p, which passed on these inputs, doesn't"
+    assert "lean-records: p: reused" in capsys.readouterr().out
+
+
 def test_the_lean_checks_own_pass_on_the_same_inputs_stands_for_a_records_run(reuse, tmp_path, capsys):
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     files = LC.LA.COMMON.tracked_files()

@@ -16,7 +16,8 @@ one open and its one root (`oneRoot_of`), and so for `PouwCheck.liveSaltCheck` (
 and the ledger's are `LedgerShows`, from the ledger's invariant (`Ledger.ledgerShows_of`). Two accepted passes of one
 epoch are pinned on one root, so they read one session of the ledger, and each one's commitment has the root whose hex
 the session's `end` recorded (`Ledger.sessionNamed_root`). So, given `LiveCoinBinding`, their salt coins are one coin
-and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`).
+and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`). `LiveSalt.Coin` proves
+`LiveCoinBinding` (`liveCoinBinding`), so `onePair` holds with no hypothesis.
 -/
 
 set_option mvcgen.warning false
@@ -272,11 +273,21 @@ theorem epochRoot_unique {m : Json} {w w' : ByteArray} {k k' : Nat} (h : EpochRo
   cases hw'
   exact ⟨rfl, Option.some.inj (hk.symm.trans hk')⟩
 
+/-- `LiveCoinBinding` of two commitments with one root. -/
+theorem binding_of_root (hb : LiveCoinBinding) {c c' : LiveCommitment} {o o' : LiveOpening} {label : String}
+    {index : Int} {after after' : ByteArray} (hr : c.root = c'.root) (h : liveReason c o label index after = .ok none)
+    (h' : liveReason c' o' label index after' = .ok none) :
+    (c = c' ∧ o.coin = o'.coin) ∨ Collides (hashedBy c o label index) (hashedBy c' o' label index) := by
+  obtain ⟨s, e, fs, r⟩ := c
+  obtain ⟨s', e', fs', r'⟩ := c'
+  obtain rfl : r = r' := hr
+  exact hb s s' e e' fs fs' _ o o' label index after after' h h'
+
 /-- `OnePair` for `PouwCheck.liveSaltCheck`, given `LiveCoinBinding`: two accepted passes of one epoch are pinned on one
 root, so they read one session and two commitments with one root; the binding gives one coin, and one coin one salt,
 unless the openings exhibit a collision. -/
 theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwCheck.liveSaltCheck := by
-  intro key ledger pins main session session' m m' salt salt' w k h h' he he'
+  intro key ledger pins main session session' m m' salt salt' h h' w k he he'
   obtain ⟨w1, k1, a, c, o, hA⟩ := acceptMeans _ _ _ _ _ _ _ h
   obtain ⟨w2, k2, a', c', o', hA'⟩ := acceptMeans _ _ _ _ _ _ _ h'
   obtain ⟨ck, os, rcv, hck, hsch, hER, hpin, hnamed, hcounts, hshows, hnames, hcoins, hop, hlive, hsalt, hsaltj⟩ := hA
@@ -291,7 +302,7 @@ theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwCheck.liveSaltCh
   refine ⟨a, c, c', o, o', ⟨ck, os, rcv, hck, hsch, hER, hpin, hnamed, hcounts, hshows, hnames, hcoins, hop, hlive, hsalt,
     hsaltj⟩, ⟨ck, os', rcv', hck', hsch', hER', hpin', hnamed', hcounts', hshows', hnames', hcoins', hop', hlive',
     hsalt', hsaltj'⟩, ?_⟩
-  rcases hb c c' o o' _ _ _ _ hroot hlive hlive' with ⟨rfl, hcoin⟩ | hcol
+  rcases binding_of_root hb hroot hlive hlive' with ⟨rfl, hcoin⟩ | hcol
   · left
     rw [hcoin] at hsalt
     exact Except.ok.inj (hsalt.symm.trans hsalt')

@@ -1,7 +1,7 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS), bandwidth and communication (the network certificate check); space and bandwidth are stubs until their
-# ports land. Its executable is the core CLI
-# (`onsite id | check | serve`), which the difftest drives. Code: no Mathlib.
+# space (PoUS's run check), bandwidth (the remote bandwidth session) and communication (the network certifier over the
+# period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
+# drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite"]
 
@@ -30,10 +30,21 @@ path = "../../service/sampled_proofs"
 name = "pouw_check"
 path = "../pouw/lean/check"
 
-# Communication: the network certificate check, with the certifier program it reads the Program's grid from.
+# Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
+# verifier it reads certificates with.
 [[require]]
 name = "network_check"
 path = "../network/lean"
+
+# Space: PoUS's check of a run, on the memory challenger's Lean.
+[[require]]
+name = "pous_check"
+path = "../pous/check"
+
+# Bandwidth: the remote bandwidth audit's session.
+[[require]]
+name = "remote_audit"
+path = "../remote_bandwidth/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"

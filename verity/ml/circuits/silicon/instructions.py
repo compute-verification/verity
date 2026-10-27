@@ -496,6 +496,51 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "SASS IGMMA.64x8x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,254,336 elements: "
                       "r20261019-043020-f267 (tc-evidence art:240115d34164094f3254ce6c2c68aff72eda20cc62195b7150d990fa226ba14c)"),
         ),
+        # The N an s8 GEMM's warpgroup tile issues (KP2-S8's sm_90a GEMM: m64n{64,128,256}k32; lane kernels, 2026-10-26).
+        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-26 before these entries said so;
+        # all eight forms of each (s8/u8 operands, .satfinite or not) agreed, from one run on one H200.
+        _i(
+            id="sm90.wgmma.m64n64k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n64k32.s32.s8.s8.satfinite",
+            shape=(64, 64, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:cefe56718712a2f5aab9f11bcc93f88d1397f65de22214cdc9e9ea4a6a9b25ae",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x64x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,330,112 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:383858621ad3a9bbcc29e1f84c17abd2bb57c6ba755fcc818b00bb3327b64686)"),
+        ),
+        _i(
+            id="sm90.wgmma.m64n128k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n128k32.s32.s8.s8.satfinite",
+            shape=(64, 128, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:0591e812e5d097de162d8fd7123b587205b41ea1cb8aa762e6f7c77b0d29ecec",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x128x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,428,416 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:0a2c4a3b704b37a5a34389cf47cabd6210a948a54f62606c58a67f70916773ef)"),
+        ),
+        _i(
+            id="sm90.wgmma.m64n256k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n256k32.s32.s8.s8.satfinite",
+            shape=(64, 256, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:a8edefe33c92be56eec3de9fc36e3c313cad3ba7657fc3b924367d834547665a",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x256x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,616,832 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:99307205fd01b708f117203d2a483f74e3d2660c723288031d830f66df0b8ecf)"),
+        ),
         _i(
             id="sm90.mma.m16n8k32.s8",
             sm="sm_90",

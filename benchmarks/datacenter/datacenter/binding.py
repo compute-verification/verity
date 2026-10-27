@@ -12,7 +12,7 @@ value produced in one block and read in another; crossings are derived, never de
 change it.
 
 What is public is the placement's `Profile`: the occupancy each certifier port must show, the committed bits each block
-exports through it, the work each block is to be credited with and the proof units it rests on, the trusted data each
+exports through it, the work each block is to be credited with and the proof blocks it rests on, the trusted data each
 block consumes, the registered stores and the registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
 placement itself.
 """
@@ -123,7 +123,7 @@ class Placement:
         at the data sheet's rates, which outside δ no accepted window undercuts over any route. `weights` is what an
         audit credits for one unit of each kind of work (PoUW's W_ref, a public constant of its scheme), 1 for a kind it
         doesn't list. `record` is the sampled proofs' one-stage registration of the Program and `query` the verifier's
-        copy of its partition query: each block's proof units are the units of that partition whose gates run there, and
+        copy of its partition query: each block's proof blocks are the units of that partition whose gates run there, and
         the record must name that query, its partition and its population (proofs, review 4). Without a record they are
         the served query's (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed
         (`Profile.partition`), and none for a Program that query doesn't apply to."""
@@ -162,7 +162,7 @@ class Placement:
         return out
 
     def _units(self, record: Mapping[str, Any] | None, query: Mapping[str, Any] | None) -> tuple[dict[str, int], str | None]:
-        """Each block's proof units under the registered partition, as core's one-stage verifier evaluates and checks it,
+        """Each block's proof blocks under the registered partition, as core's one-stage verifier evaluates and checks it,
         or the served query's as circuits evaluates it, assumed; and which it was."""
         from verity.core.protocols.sampled_proofs.one_stage import partition as P
         from verity.core.protocols.sampled_proofs.one_stage.registration import query_digest
@@ -242,7 +242,7 @@ class Profile:
     carry it out before registration (`salt_out`, in bits), and the credit of the block's work that depends on it
     (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
     in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Each
-    block's proof units (`units`): the units of the Program's partition whose gates run there, which its `Computed` claim
+    block's proof blocks (`units`): the units of the Program's partition whose gates run there, which its `Computed` claim
     rests on, and whether that partition was the one-stage registration's or the served query's, assumed (`partition`:
     "registered", "assumed", or None when no partition applies). The export (`exported`): the committed bits each
     egress port carries out of its block in the epoch, to another block or outside, from the declared crossings."""

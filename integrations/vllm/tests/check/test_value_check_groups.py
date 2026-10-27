@@ -7,8 +7,8 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity_vllm.check import value_check as vc  # noqa: E402
-from verity_vllm.engine.profiles import layer_classes as LC  # noqa: E402
+from verity_vllm.check import value_check as vc
+from verity_vllm.engine.profiles import layer_classes as LC
 
 
 def _module(*mro: str) -> object:

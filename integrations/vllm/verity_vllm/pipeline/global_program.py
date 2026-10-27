@@ -2,7 +2,8 @@
 
     verity-vllm global-program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
 
-Inputs (pre-execution only): the request manifest (request ids, prompt lengths, caps, `arrive_step`, the row's declared `target`
+Inputs (pre-execution only): the request manifest, read through the workload record (`records.workload.Workload`, which refuses a
+missing or unknown field by name: request ids, prompt lengths, caps, `arrive_step`, the sampling block, the row's declared `target`
 block) and derive_step request artifacts (`descriptor.json.gz` + `construction_manifest.json` / `instances.json.gz`) — one per
 distinct (prompt_len, cap-1) shape, exactly the shapes X-09's Build derives. Nothing from an execution record is read. Exit 4 lists
 the shapes still to derive.  `LAG` (the declared scheduler's post-EOS rows, `TargetProfile.lag()` of the manifest's target) is a
@@ -33,7 +34,8 @@ from verity_vllm import settings
 from verity_vllm.config import RowEngine, done_source_refusal, option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
-from verity_vllm.program.registry.catalog import load as _load_registry
+from verity_vllm.records.workload import Workload, WorkloadSampling
+from verity.ml.definitions.registry.catalog import load as _load_registry
 
 # the request descriptors decode through the registry the Match reads (`program_compare._registry`): every registry module loaded
 for _e in _load_registry()[1]:
@@ -51,21 +53,19 @@ def request_id_of(index: int) -> str:
     return f"r{int(index)}"
 
 
-def manifest_requests(m: dict) -> list[dict]:
-    reqs = m.get("requests") or (m.get("workload") or {}).get("requests") or []
+def manifest_requests(w: Workload) -> list[dict]:
+    """The workload record's requests in manifest order: their Program ids, shapes and declared arrivals (the request's own
+    `arrive_step`, else 0), and a warm request's cached rows and their producers (`program.prefix_plan`)."""
     out = []
-    for i, r in enumerate(reqs):
-        idx = int(r.get("index", i))
-        if idx != i:
-            raise ValueError(f"manifest request {i} declares index {idx}: requests must be listed in index order (r<k> = position k)")
-        wrid = r.get("request_id") or r.get("id") or None
-        lp = r.get("prompt_len") or len(r.get("prompt_token_ids") or ())
-        cap = r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens")
-        if not lp or not cap:
-            raise ValueError(f"manifest request {wrid or i}: no prompt_len / max_tokens")
-        out.append({"request_id": request_id_of(i), "workload_request_id": wrid, "index": i, "prompt_len": int(lp), "cap": int(cap),
-                    "arrive_step": int(r.get("arrive_step", 0) or 0)})
-    for r, p in zip(out, PP.plan(m) if reqs and PP.prefix_caching(m) else ()):   # a warm request's cached rows and their producers
+    for i, r in enumerate(w.requests):
+        if r.index is not None and r.index != i:
+            raise ValueError(f"manifest request {i} declares index {r.index}: requests must be listed in index order (r<k> = position k)")
+        if not r.prompt_length or not r.max_tokens:
+            raise ValueError(f"manifest request {r.request_id}: no prompt_len / max_tokens")
+        out.append({"request_id": request_id_of(i), "workload_request_id": r.request_id, "index": i, "prompt_len": r.prompt_length,
+                    "cap": r.max_tokens, "arrive_step": r.arrive_step or 0})
+    doc = w.dump()
+    for r, p in zip(out, PP.plan(doc) if out and PP.prefix_caching(doc) else ()):   # a warm request's cached rows and their producers
         r["cached"], r["producers"] = p["cached"], [request_id_of(q) for q in p["producers"]]
     return out
 
@@ -75,14 +75,15 @@ def shape_of(r: dict) -> tuple[int, ...]:
     return PP.shape(r["prompt_len"], r["cap"] - 1, r.get("cached", 0))
 
 
-def execution_of_workload(m: dict) -> str:
-    """The row's declared execution label: `execution` / `sweep.execution` when present, else the row-id suffix (`…__bi-eager`,
-    `…__bi-compiled`, `…__bi-eager-fa2`) -- the same rule as exec's EXEC-02 `execution_of_workload`, kept local so the
-    Build does not import the adapter."""
-    ex = m.get("execution") or (m.get("sweep") or {}).get("execution")
-    if ex:
+def execution_of_workload(w: Workload) -> str:
+    """The row's declared execution label: `sweep.execution` when present, else the `sweep.row_id` suffix (`…__bi-eager`,
+    `…__bi-compiled`, `…__bi-eager-fa2`) -- exec's EXEC-02 `execution_of_workload` over the workload record, kept local so the
+    Build does not import the adapter.  The record has no top-level `execution` or `row_id` (no writer writes one), so a workload
+    carrying either is refused by name before it gets here."""
+    sweep = w.sweep or {}
+    if ex := sweep.get("execution"):
         return str(ex)
-    rid = (m.get("sweep") or {}).get("row_id") or m.get("row_id") or ""
+    rid = str(sweep.get("row_id") or "")
     return rid.rsplit("__", 1)[-1] if "__" in rid else ""
 
 
@@ -118,20 +119,6 @@ def compilation_facts(block: dict | None) -> dict:
 # vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
 # TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable (M-0261)
 _MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
-
-
-def eos_lag_rows_declared(engine: dict | None) -> int | None:
-    """The post-EOS rows a DECLARED engine block computes: async_scheduling True -> 1, False -> 0, undeclared /
-    non-boolean -> None.  GP-01 always declares it (`workload_lag`), so None here means a Program built before it did: GM-01 G6 then FAILS
-    by name on any EOS stop (nothing is read from the record as the rule) and labels a record without an EOS stop `lag.exercised false`."""
-    if not isinstance(engine, dict):
-        return None
-    v = engine.get("async_scheduling")
-    if isinstance(v, bool):
-        return 1 if v else 0
-    if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return 1 if v.strip().lower() == "true" else 0
-    return None
 
 
 def workload_target(target: dict | None):
@@ -345,11 +332,11 @@ def component_applicability(d: str) -> dict:
     return {}
 
 
-def workload_applicability(m: dict, comps: dict) -> dict:
+def workload_applicability(w: Workload, comps: dict) -> dict:
     """The workload Program's declared applicability = the components' (all must agree on the execution profile) + the engine
     conditions above + the row's execution label.  `refusal` names why the Program does NOT model this row (fail closed)."""
     execs = {str(a.get("execution")) for a in comps.values() if a}
-    row_ex = execution_of_workload(m)
+    row_ex = execution_of_workload(w)
     keys = ("execution", "numerics_profile", "gemm_target", "tuned_gemm_arch_family", "tuned_gemm_table_sha256", "attention_backend",
             "flash_attn_version_applied", "sampler", "num_sms", "vllm_version", "torch_version", "triton_version", "engine")
     agreed, disagreed = {}, {}
@@ -371,7 +358,7 @@ def workload_applicability(m: dict, comps: dict) -> dict:
         refusal = f"components disagree on applicability fields {sorted(disagreed)}"
     else:
         engine, refusal = modelled_engine(sorted(execs)[0], comps)
-    engine["enable_prefix_caching"] = PP.prefix_caching(m)
+    engine["enable_prefix_caching"] = PP.prefix_caching(w.dump())
     return {"schema": "verity/workload-program/v1/applicability", "execution": sorted(execs)[0] if len(execs) == 1 else sorted(execs),
             "row_execution": row_ex, "engine": engine, "components": agreed, "components_disagree": disagreed or None,
             "refusal": refusal}
@@ -420,13 +407,13 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
            "rule": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
-           "source": "verity_vllm.program.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
+           "source": "verity.ml.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
     if nsm is None:
         out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count "
                           "cannot be evaluated -- the Program does not model this row's sampler geometry")
         return out
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     out["splits"] = S = int(registered_splits(int(nsm)))
     if samp.get("splits") != S:
         out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "
@@ -471,20 +458,19 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
     return out
 
 
-def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, manifest: dict | None = None) -> dict:
+def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampling: WorkloadSampling | None = None) -> dict:
     """[F-pm-24] The STOP RULE the workload Program declares for a request that ends before its cap: the model's
     EOS token ids, read from the checkpoint the verifier pinned (config.json / generation_config.json `eos_token_id`, int or list) or
     given explicitly.  The bounded request Program has no EOS semantics of its own, so GM-01 needs this declaration to verify that an
     early stop IS an EOS stop (served[-1] in the set) and not a dropped / aborted / stop-string request recorded as `finish_reason=stop`.
     Not part of the Program digest (a declaration beside `applicability`); a Program without it makes GM-01 FAIL CLOSED on any
-    request that stopped early."""
+    request that stopped early.  `sampling`: the workload record's sampling block (`Workload.sampling`), None for none."""
     ids: set[int] = set(int(x) for x in (eos_token_ids or []))
     sources: dict[str, list[int]] = {}
     if eos_token_ids:
         sources["--eos-token-ids"] = sorted(ids)
     # the manifest's sampling block may add per-workload stop ids (vLLM stop_token_ids) or switch EOS off (ignore_eos: every request
     # must then reach its cap -- any early stop FAILS); both are declared here so GM-01 reads one rule [rev-pm M-0548 (2), M-0560 (2)]
-    samp = (manifest or {}).get("sampling") or {}
     if checkpoint_dir:
         for fn in ("generation_config.json", "config.json"):
             p = os.path.join(checkpoint_dir, fn)
@@ -501,8 +487,8 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, manif
                 ids.update(vs)
     # [COORD M-0571 (1)] the EOS set pinned INTO the manifest is the declaration of record when present; a checkpoint given beside it
     # must agree (a manifest pinned from another tokenizer/generation config is refused by name), else the checkpoint is the source
-    if samp.get("eos_token_ids") is not None:
-        ms = sorted({int(x) for x in samp["eos_token_ids"]})
+    if sampling is not None and sampling.eos_token_ids is not None:
+        ms = sorted(set(sampling.eos_token_ids))
         sources["manifest.sampling.eos_token_ids"] = ms
         ck = sorted({v for k, v in sources.items() if k in ("config.json", "generation_config.json") and isinstance(v, list) for v in v})
         if ck and set(ck) != set(ms):
@@ -510,11 +496,11 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, manif
                     "refusal": f"manifest sampling.eos_token_ids {ms} != the pinned checkpoint's eos_token_id set {ck}: the manifest was pinned "
                                f"from another tokenizer/generation config"}
         ids = set(ms) | {int(x) for x in (eos_token_ids or [])}
-    if samp.get("stop_token_ids"):
-        st = [int(x) for x in samp["stop_token_ids"]]
+    if sampling is not None and sampling.stop_token_ids:
+        st = [int(x) for x in sampling.stop_token_ids]
         sources["manifest.sampling.stop_token_ids"] = sorted(st)
         ids.update(st)
-    if samp.get("ignore_eos"):
+    if sampling is not None and sampling.ignore_eos:
         return {"schema": "verity/workload-program/v1/stop-rule", "eos_token_ids": [], "ignore_eos": True, "source": sources or None,
                 "checkpoint_dir": checkpoint_dir, "rule": "manifest sampling.ignore_eos: every request must reach max_tokens; any early stop FAILS G6"}
     if not ids:
@@ -609,8 +595,9 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     artifact_root = os.path.abspath(artifact_root) if artifact_root else os.path.dirname(os.path.abspath(out))
     raw = open(workload_path, "rb").read()
     m = json.loads(raw)
+    w = Workload.of(m, workload_path)     # config's own readers (`done_source_refusal`, `RowEngine`) take the document `m`
     mdigest = hashlib.sha256(raw).hexdigest()
-    reqs = manifest_requests(m)
+    reqs = manifest_requests(w)
     # bind each manifest request to the derived shape (LP, cap-1) — derived once per distinct shape, reused for equal shapes
     shapes: dict[tuple[int, ...], str] = {}
     for d in derived_dirs:
@@ -629,7 +616,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         return _refused(out, {"schema": W.SCHEMA + "/result", "ok": False, "reason": "missing_derived", "missing_derived": missing,
                               "hint": "derive_step --wrapper request --LP <lp> --T <t> --workload <manifest> for each"})
     # [COORD M-0063 (1)] the Program declares the execution profile + engine conditions it models and REFUSES a row it does not model
-    app = workload_applicability(m, {s: component_applicability(shapes[s]) for s in need})
+    app = workload_applicability(w, {s: component_applicability(shapes[s]) for s in need})
     if app["refusal"]:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "applicability", "message": app["refusal"], "applicability": app,
                "manifest_sha256": mdigest}
@@ -716,7 +703,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
                "manifest_sha256": mdigest}
         return _refused(out, res)
     art["weights_of_record"] = wor
-    art["stop_rule"] = stop_rule(checkpoint_dir, eos_token_ids, m)   # [F-pm-24] the declared EOS set GM-01 verifies early stops against
+    art["stop_rule"] = stop_rule(checkpoint_dir, eos_token_ids, w.sampling)   # [F-pm-24] the declared EOS set GM-01 verifies early stops against
     if art["stop_rule"].get("refusal"):
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "stop_rule", "message": art["stop_rule"]["refusal"], "stop_rule": art["stop_rule"],
                "manifest_sha256": mdigest}
@@ -727,7 +714,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["stop_rule"]["eos_lag_rows"] = art["stop_rule"]["lag"] = wl.lag
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "
                                           "applicability.engine.async_scheduling carries the resolved value the record must attest (G1/G6)")
-    assert eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
+    assert W.eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
     # a stochastic row declares its top-p split geometry: the registered split count of the declared num_SMs, which GM-01 holds every
     # launch to. Greedy rows carry no declaration (None -> omitted).
     sgeo = sampler_geometry(app, reqs)
@@ -778,7 +765,7 @@ def main(a: Options) -> int:
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
     early, canon = None, {}
     if a.follow:
-        reqs = manifest_requests(json.load(open(a.workload)))
+        reqs = manifest_requests(Workload.load(a.workload))
         early = follow_components(a.derived, {shape_of(r) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
                                   stop=a.follow_stop)
         if early is None:

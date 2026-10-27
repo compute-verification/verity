@@ -66,20 +66,20 @@ def _contiguous(shape, strides) -> bool:
 
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     """The facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
-    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest)."""
+    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest),
+    and a log that is there but can't be read is None with `run_header_unreadable` saying why."""
     out: dict[str, Any] = {}
     for key, rel in (("fold_summary_sha256", "fold_summary.json"), ("instances_sha256", "instances.jsonl")):
         pth = os.path.join(match_dir, rel)
         out[key] = hashlib.sha256(open(pth, "rb").read()).hexdigest() if os.path.exists(pth) else None
     lg = os.path.join(match_dir, "capture", "log.jsonl.gz")
-    hdr = None
+    out["run_header_sha256"] = None
     if os.path.exists(lg):
         try:
             with gzip.open(lg, "rb") as f:
-                hdr = hashlib.sha256(f.readline()).hexdigest()
-        except OSError:
-            hdr = None
-    out["run_header_sha256"] = hdr
+                out["run_header_sha256"] = hashlib.sha256(f.readline()).hexdigest()
+        except (OSError, EOFError) as e:
+            out["run_header_unreadable"] = f"unreadable: capture/log.jsonl.gz ({type(e).__name__}: {e})"[:240]
     return out
 
 

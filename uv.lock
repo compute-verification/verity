@@ -34,6 +34,7 @@ members = [
     "verity-check",
     "verity-circuit-check",
     "verity-cli",
+    "verity-commit-slots",
     "verity-commitments-benchmarks",
     "verity-config",
     "verity-core-composition",
@@ -57,6 +58,7 @@ members = [
     "verity-pouw-check-difftest",
     "verity-pouw-window-difftest",
     "verity-proof-throughput",
+    "verity-sha512-rows",
     "verity-slack-events",
     "verity-sp1",
     "verity-tc-probe",
@@ -2234,6 +2236,21 @@ version = "0.0.0"
 source = { editable = "tools/verity/cli" }
 
 [[package]]
+name = "verity-commit-slots"
+version = "0.0.0"
+source = { virtual = "benchmarks/torch_gpu/commit_slots" }
+dependencies = [
+    { name = "numpy" },
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "verity", editable = "." },
+]
+
+[[package]]
 name = "verity-commitments-benchmarks"
 version = "0.0.0"
 source = { virtual = "benchmarks/commitments" }
@@ -2581,6 +2598,21 @@ requires-dist = [
     { name = "verity", editable = "." },
     { name = "verity-flock", editable = "verity/ml/flock" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
+]
+
+[[package]]
+name = "verity-sha512-rows"
+version = "0.0.0"
+source = { virtual = "benchmarks/torch_gpu/sha512_rows" }
+dependencies = [
+    { name = "numpy" },
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "verity", editable = "." },
 ]
 
 [[package]]

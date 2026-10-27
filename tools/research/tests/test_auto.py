@@ -58,11 +58,15 @@ def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
     assert target == (CPU1, "research") and "r0 blocked" in why and "shortest line" in why, "a blocked slot is no free one"
 
 
-def test_a_machine_that_cant_be_read_is_skipped_and_with_no_pool_fitting_the_job_queues_on_node_2():
+def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node_2_the_job_is_refused():
+    """26 Oct: node 2 stopped, and a job too big for a pool slot went to its queue, which refused it on a stale admission
+    window."""
     target, why = auto.choose({N2: "exit 255: ssh: connect refused", CPU1: pool(slot("r0"))}, 4, 16)
     assert target == (CPU1, "research") and why.startswith(f"{N2}'s share wasn't read (exit 255: ssh: connect refused); ")
-    target, why = auto.choose({N2: "exit 255: ssh: connect refused", CPU1: "no answer in 30 s"}, 4, 16)
-    assert target is None and why.endswith("no pool fits, so the queue there as before")
+    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} can't be reached.*research run --on MACHINE --mem-gb N"):
+        auto.choose({N2: "exit 255: ssh: connect refused", CPU1: "no answer in 30 s"}, 4, 16)
+    with pytest.raises(auto.Unplaceable, match="no slot of .* gives 64 CPUs and 300 GB"):
+        auto.choose({N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))}, 64, 300)
     target, why = auto.choose({N2: share(waiters=5), CPU1: {"research": {"error": "OSError: no slots"}}}, 4, 16)
     assert target is None and f"{CPU1}'s research pool skipped: OSError: no slots" in why
 
@@ -152,6 +156,18 @@ def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path,
     assert main([*runs, "--cpus", "16", "--mem-gb", "160", "--", "pytest"]) == 3
     assert "no slot of /workspace/research/locks/research/slots gives 16 CPUs and 160 GB" in capsys.readouterr().err
     assert [(s["node"], s["gpus"], s["cpus"]) for s in placed] == [(N2, 1, None), (N2, None, 16)]
+
+
+def test_on_auto_refuses_a_job_too_big_for_any_slot_while_node_2_is_down(tmp_path, monkeypatch, capsys):
+    launched, placed = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--cpus", "64", "--mem-gb", "300", "--", "pytest"]) == 2
+    assert launched == placed == []
+    assert f"research run --on auto: refused: {N2}'s share wasn't read" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("text, n", [("8-19", 12), ("0", 1), ("48-51,56-63", 12)])

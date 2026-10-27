@@ -49,7 +49,7 @@ structure ZkOuterR (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
   own : Array Flock.Registered.Port
   dj : Finset (Fin nv) → Lean.Json
   wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript
-  hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω)
+  hDraw : FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ I dj mPts Lv
   hTags : TagsOkZHJ I
   hJ : nTab I = J
   rd : ∀ (ht : I.tags.typed = false) (S₀ : Finset (Fin nv)) (d₀ : Lean.Json)

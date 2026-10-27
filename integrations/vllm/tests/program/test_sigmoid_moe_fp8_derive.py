@@ -35,10 +35,10 @@ from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.targets import wgmma_tile
-from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row, silu_mul_fp8_block_quant_rows
-from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import fp8_moe
-from verity_vllm.program.registry import moe as MOE
+from verity.ml.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row, silu_mul_fp8_block_quant_rows
+from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.ml.definitions.registry import fp8_moe
+from verity.ml.definitions.registry import moe as MOE
 
 F8 = torch.float8_e4m3fn
 PROF = dict(mode="profile", profile="b1-eager-v3")
@@ -214,8 +214,8 @@ class _InputQuant(nn.Module):
 
 @pytest.mark.parametrize("ue8m0,family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
 def test_per_token_group_fp8_quant_derives_one_row_form_per_row_equal_to_the_twin(ue8m0, family, on_target):
-    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_row
-    from verity_vllm.program.kernels.derived_rows import fp8_group_quant_row
+    from verity.ml.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row
+    from verity.ml.definitions.numerics.derived_rows import fp8_group_quant_row
 
     on_target(H200)
     x = _bf16(np.random.default_rng(6), M, 2 * G)
@@ -412,7 +412,7 @@ def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_pro
     """The refusal of the GLM-5.3 rank-0 derive at layer 3's `mlp.experts` (`_C.per_token_group_fp8_quant(use_ue8m0=True)` had no
     registered Definition) cleared: the step's whole chain derives, its input quant `Fp8GroupQuantUe8m0_v1` per token row, and the
     Program's words are the twins'."""
-    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_rows
+    from verity.ml.definitions.numerics.deepgemm_twins import ue8m0_group_quant_rows
 
     on_target(H200)
     logits, x = _logits(E), _bf16(np.random.default_rng(7), M, H)

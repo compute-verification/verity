@@ -1,4 +1,6 @@
 import Definitions.Pouw.PearlC.W1
+-- `W1.Instr.exec`'s equation lemmas, realized there first: two modules that each realize them don't import together
+import Proofs.Pouw.PearlC.W1BudgetAbort
 import Proofs.Pouw.PearlC.RowSeedGamma
 
 /-!
@@ -76,7 +78,12 @@ theorem instr_frame (dv : W1.W1Device) (i : W1.Instr) (M : W1.Mem) {x : W1.Addr}
   | prmt d _ _ _ => exact upd d _ h
   | sel d _ _ _ => exact upd d _ h
   | fop _ d _ _ _ => exact upd d _ h
-  | cvt _ d _ _ _ => exact upd d _ h
+  | cvt f d _ _ _ =>
+    simp only [W1.Instr.exec]
+    by_cases hf : f = .s8
+    · rw [ite_eq_left hf]
+    · rw [ite_eq_right hf]
+      exact upd d _ h
   | mma f d _ _ _ _ _ =>
     simp only [W1.Instr.exec]
     by_cases hh : dv.has f = true

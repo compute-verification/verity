@@ -22,8 +22,11 @@ database's URL and data source (`pages`). A coordinator asks directly, one quest
 Only keys and claims need him (8 Oct, narrowed 13 Oct): access and keys, and what a guarantee says or rests on. Anything else,
 spend included, is its owner's call, and his standing rulings stand until he reverses them. Check the recorded rulings first
 (`AGENTS.md`, the skills, "Standing rulings" in `.agents/skills/friction/SKILL.md`): if one covers the case, follow it.
+A question whose answer follows from what the system already is isn't an ask either. ASK-112 asked which circuit a
+templated unit's theorem names, and the answer was the circuit its template unrolls to, which is what the IR is for (Daniel,
+26 Oct).
 
-Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't money, keys or access
+Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't keys or access
 goes on its page already decided: Status *Decided by lane*, Choose set to your pick, and Decision "Provisionally accepted
 (Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with that option and
 `--provisional` (implied by a `--note` starting "Provisionally accepted"), so the card says your lane decided, not Daniel, and act
@@ -53,6 +56,9 @@ Two to four short paragraphs: what is being decided, why now, what goes wrong wi
 ## Background
 What a reader needs to judge the options: the current statement in LaTeX, numbers with units and their source, what is
 proved and what is assumed.
+## The design the rules want
+The design that meets every design rule in AGENTS.md (everything zero-knowledge, one hash, live coins, no form ahead of its
+proof), priced even when it's the expensive one, and which option below it is. Or the rule that makes it impossible.
 ## Options
 ### A. <label> (recommended)
 What changes (the exact new statement or premise in LaTeX), what it costs, what it unblocks, what risk it takes on,
@@ -77,6 +83,8 @@ Links: notes (GitHub research-notes URLs), PRs, branches, Lean declarations, run
 - **The page is current.** A correction or new data edits the page in place (the numbers, the options, the recommendation)
   and adds a dated line under "Updates since the card". Don't stack addenda in the card's thread.
 - **Exact statements.** A claim ask shows the statement or premise as it would enter the lock, in LaTeX, with its Lean name.
+- **Price the design the rules want,** not just tweaks to today's design. ASK-122 priced three anchor spacings and never
+  all-private fixed slots, which Daniel then chose (26 Oct).
 
 ## Post it
 

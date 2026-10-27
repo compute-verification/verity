@@ -77,7 +77,7 @@ def build(arm: str, a, scratch: Path):
         sys.path.insert(0, str(VLLM_DIR))
         from tests.engine import int8_exact_gpu as G
         from verity_vllm.engine.build import build_engine
-        from verity_vllm.program.frontend.target_profile import TargetProfile
+        from verity_vllm import TargetProfile
         target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
         cps = G.scratch_checkpoints(str(VLLM_DIR / "manifests" / "checkpoints.json"), entry, scratch)
         eng = build_engine(cps, case=ROLE, target=target, max_num_seqs=SEQS,

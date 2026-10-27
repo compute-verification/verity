@@ -20,8 +20,8 @@ from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Group, Per
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
 from verity_vllm.program.frontend.rules.vllm_dsv4 import COMPRESSORS, FLASHMLA_GEOMETRY
-from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
-from verity_vllm.program.registry import dsv4_compressor as C
+from verity.ml.definitions.numerics.flashmla_twin import num_sm_parts, request_splits, sched_meta
+from verity.ml.definitions.registry import dsv4_compressor as C
 
 SPARSE_DECODE_OP = "_flashmla_C.sparse_decode_fwd"
 SPARSE_PREFILL_OP = "_flashmla_C.sparse_prefill_fwd"

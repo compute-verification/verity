@@ -1,0 +1,170 @@
+{
+ "schema": "verity-vllm/definition-models/v1",
+ "about": "The models each Definition module that belongs in Verity exists for, by its path (from the integration root, or from the repository root under verity/): the `__models__` marker it can't carry, since Verity's vocabulary has no models (`verity_vllm.glue`).",
+ "models": {
+  "verity/ml/definitions/numerics/deepgemm_rows.py": [
+   "zai-org/GLM-5.3",
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/deepgemm_twins.py": [
+   "zai-org/GLM-5.3",
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsa_norm_rows.py": [
+   "zai-org/GLM-5.3",
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_compressor_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_decode_indices_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_decode_metadata_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_indexer_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_indices_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_moe_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_qnorm_insert_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/dsv4_rows.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/flashmla_prefill_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/flashmla_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/fp8_moe_rows.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/numerics/glm53_rows.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/numerics/marlin_moe_rows.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/mhc_twin.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/numerics/sparse_mla_split_twins.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/bf16_gemm_check.py": [
+   "zai-org/GLM-5.3",
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_dsa.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/boolean_dsa_norm.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/boolean_dsv4_compressor.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_dsv4_decode_indices.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_dsv4_decode_metadata.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_dsv4_indexer.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_dsv4_indices.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_dsv4_moe.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_dsv4_qnorm_insert.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_flashmla.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_flashmla_prefill.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_marlin_moe.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_mhc.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/boolean_sparse_mla.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/boolean_sparse_mla_split.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/deepgemm.py": [
+   "zai-org/GLM-5.3",
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/dsa.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/dsa_norm.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/dsv4_compressor.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/dsv4_decode_indices.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/dsv4_decode_metadata.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/dsv4_indexer.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/dsv4_indices.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/dsv4_moe.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/dsv4_qnorm_insert.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/flashmla.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/flashmla_prefill.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/fp8_moe.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/marlin_moe.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/mhc.py": [
+   "deepseek-ai/DeepSeek-V4-Pro"
+  ],
+  "verity/ml/definitions/registry/sparse_mla.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/sparse_mla_split.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/tp_allreduce.py": [
+   "zai-org/GLM-5.3"
+  ],
+  "verity/ml/definitions/registry/tp_allreduce_check.py": [
+   "zai-org/GLM-5.3"
+  ]
+ }
+}

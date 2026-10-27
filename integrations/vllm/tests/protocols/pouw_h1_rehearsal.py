@@ -56,7 +56,7 @@ tree must be one with the model registry, #3204, on main from dbf3a75e31, archiv
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
 
     git archive --format=tar.gz -o gate-tree.tgz COMMIT verity benchmarks/live_challenger \\
-      integrations/vllm/manifests/checkpoints-int8.json
+      integrations/vllm/manifests/checkpoints-int8.json integrations/torch_loop/manifests/checkpoints-int8.json
     git rev-list --first-parent origin/main > main.txt
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
@@ -85,7 +85,7 @@ What changes from the rehearsal: the gate is vy-challenger-1's forced command ov
 registered for, ``vllm``), not ``python -I local_gate.py DIR``; `MODEL`'s registration under the period's circuit is
 vy-admin's, made before the run (the run registers nothing); its key is ``lms.DEPLOYED``, pinned by ``--key-sha512``
 (the auditor's ``public_sha512``, art:d12f85becc, which the run checks against ``GATE pubkey``), not a test key made in a
-temporary directory; serve.py runs on vy-challenger-1 and reaches the serving node through ``ssh -R`` to the peer named
+temporary directory; serve.py on vy-challenger-1 reaches the serving node by its certifier coin link, the peer named
 in ``/etc/vy/peers`` (``--peer``, the serving node), whose 127.0.0.1:PORT the window connects to, PORT the one the open
 answers (7811..7899, `pouw_h1_window.at_port`), not 27811.. on the node itself; its coins are the Lean verifier's on
 vy-challenger-1; the session's end is read from ``GATE status`` (the live gate has no ``wait``); and no session is
@@ -599,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
     ap.add_argument("--gate", help="the live gate's command (ssh ... research@vy-challenger-1); default: a local gate of --tree")
-    ap.add_argument("--tree", help="infra's tree (git archive COMMIT verity benchmarks/live_challenger, gzipped)")
+    ap.add_argument("--tree", help="infra's tree (git archive COMMIT of local_gate.ARCHIVE's paths, gzipped)")
     ap.add_argument("--commit", help="the commit --tree is (the local gate's pinned commit)")
     ap.add_argument("--coins", choices=("lean", "stub"), default="lean")
     ap.add_argument("--peer", default="local", help="the serving node's name in the gate's peers")

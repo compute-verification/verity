@@ -1,17 +1,18 @@
 {
- "roots": ["RemoteAudit", "RemoteAudit.Difftest", "RemoteAudit.Verifier"],
+ "roots": ["RemoteAudit", "RemoteAudit.Difftest", "RemoteAudit.Verifier", "RemoteAudit.Protocol"],
  "exempt": {
   "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof",
-  "RemoteAudit.VerifierMain": "the remote-audit-verifier executable's entry point, one line; it runs RemoteAudit.Verifier.serve, audited under RemoteAudit.Verifier"
+  "RemoteAudit.VerifierMain": "the remote-audit-verifier executable's entry point, one line; it runs RemoteAudit.Verifier.serve, audited under RemoteAudit.Verifier",
+  "RemoteAudit.ProtocolMain": "the remote-audit-protocol executable's entry point, one line; its command is Core.Protocol.main of RemoteAudit.Protocol.protocol, audited under RemoteAudit.Protocol and CoreProtocol"
  },
  "layers": {
   "RemoteAudit": {
-   "imports": ["Std", "Flock", "Randomness", "RemoteAudit"],
+   "imports": ["Std", "Flock", "Randomness", "CoreProtocol", "PousCheck.Merkle", "RemoteAudit"],
    "except": ["RemoteAudit.Difftest"],
-   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, and core's randomness; no Mathlib and nothing of Security. The difftest's table (RemoteAudit.Difftest) also imports the difftest server"
+   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (RemoteAudit.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, RemoteAudit.P2); no Mathlib and nothing of Security. The difftest's table (RemoteAudit.Difftest) also imports the difftest server"
   }
  },
  "dependencies": {
-  "toolchain": "67182288f4701e1c98266195f69c10a9fd4d7d7c92bf3b3f6ba382bd0dd31687"
+  "toolchain": "7e5e738e4840d9266989ec372ac6a921cc3efa7fc3158d3d06f480b0b3ea0029"
  }
 }

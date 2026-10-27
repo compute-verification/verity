@@ -413,22 +413,25 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
 def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> dict[str, dict[str, Any]]:
     """The protocols config (`load_settings`) of a pipeline that is its run's own auditor (the Commit, a Match capture):
     PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`),
-    unless the config names the auditor host's ``challenger``, H1's one coin source."""
+    unless the config names the auditor host's ``challenger``, the coins' one source."""
     from verity_vllm.protocols import pouw
-    settings = load_settings(config)
-    if "challenger" in settings.get(pouw.NAME, {}):
-        return settings
-    return pouw.challenged(settings, getattr(profile, "protocols", None))
+    return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
 
 
-def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None) -> Any:
+def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None,
+                 commit_scheme: str | None = None) -> Any:
     """The Commit's check before its engine is built: ``profile`` back unchanged when the Commit can run its set, else
     exit 3 (fail-closed) with every reason printed.  ``hot`` is a hot Commit worker and ``installs`` False a Commit that
-    installs no options (the TP Commit): both refuse any declared set."""
+    installs no options (the TP Commit): both refuse any declared set.  ``commit_scheme``, the committer's
+    (``--commit-scheme``), must be the one sampled proofs is declared with."""
     try:
         ctx = commit_context(profile, world=world, settings=settings)
         if ctx is not None and (hot or not installs):
             raise Refused([f"this Commit ({'the hot worker' if hot else 'TP'}) installs no protocol options yet"])
+        declared = ctx.scheme("sampled-proofs") if ctx is not None else None
+        if commit_scheme is not None and declared is not None and declared != commit_scheme:
+            raise Refused([f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
+                           f"commits under {commit_scheme}: run it with --commit-scheme {declared}"])
     except Refused as e:
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None

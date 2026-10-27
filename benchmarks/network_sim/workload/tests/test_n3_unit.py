@@ -1,4 +1,4 @@
-"""N3's proof unit for one port-window (`n3_unit`): a descriptor puts its declared frame on its outbox rows, an outbox
+"""N3's proof block for one port-window (`n3_unit`): a descriptor puts its declared frame on its outbox rows, an outbox
 holds its unit's messages' bytes, every opening the unit makes is its tree's, N2's frames root in gates is N2's, and the
 circuit equals its Python reference. An honest window gives ok; a flipped bit, an extra frame, written fill, a wrong
 outbox row (in a byte its segment reads or one it doesn't, or a nonzero row for an empty segment), descriptor salt,

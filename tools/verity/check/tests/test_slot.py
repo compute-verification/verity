@@ -48,6 +48,7 @@ def outside_a_slot(monkeypatch):
     """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once, and a
     `research run --mem-gb` (an agent-test job's 16 GiB) sets RUN_MEM_ENV, which would raise every slot's mem= the tests name."""
     monkeypatch.delenv("CHECK_SLOT", raising=False)
+    monkeypatch.delenv("CHECK_SLOTS", raising=False)
     monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
@@ -150,6 +151,7 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
 
     monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
     monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", tmp_path / "no-dropins")
     (tmp_path / "slots").write_text("b 0 scope=1\n")
     with pytest.raises(Exec):
         SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
@@ -160,6 +162,21 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
     with pytest.raises(Exec):
         SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
     assert ran["argv"] == ["uv", "run", "check.py"] and ran["unit"] is None, "no scope=1: CMD as it is, and no stale unit name"
+
+
+def test_a_scoped_check_on_a_node_that_caps_login_sessions_gets_the_same_memory_cap(tmp_path, monkeypatch):
+    """26 Oct: the research suite's local `research run` tests exited 75 inside a scoped check on vy-nebius-cpu-5, since
+    `research run` refuses an uncapped cgroup on a node whose login sessions have a MemoryMax."""
+    dropins = tmp_path / "session-.scope.d"
+    dropins.mkdir()
+    (dropins / "50-vy-job-memory.conf").write_text("[Scope]\nMemoryMax=600G\n")
+    (dropins / "60-other.conf").write_text("[Scope]\nTasksMax=infinity\n")
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", dropins)
+    argv, unit = SLOT.scoped(["uv", "run", "check.py"], "b", "r1")
+    assert argv == ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit=check-b-r1", "--property=MemoryMax=600G",
+                    "--", "uv", "run", "check.py"]
+    (dropins / "70-off.conf").write_text("[Scope]\nMemoryMax=infinity\n")
+    assert "--property=MemoryMax=600G" not in SLOT.scoped(["true"], "b", "r1")[0], "the last drop-in that sets it wins"
 
 
 def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
@@ -334,6 +351,19 @@ def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     with pytest.raises(Exec) as e:
         SLOT.main(["--", "true"], now=lambda: NOW)
     assert e.value.args[0] == ["true"]
+
+
+def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, monkeypatch, capsys):
+    """INF-278: CHECK_SLOTS named a pool vy-nebius-1 didn't have, and the job ran unpinned beside the GPU jobs."""
+    for pool, line in (("proofs", "p0 0-1\n"), ("trains", "t 2 only=trains\n")):
+        (tmp_path / pool).mkdir()
+        (tmp_path / pool / "slots").write_text(line)
+    monkeypatch.setenv("CHECK_SLOTS", str(tmp_path / "soundness" / "slots"))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "soundness" / "slots")
+    monkeypatch.setattr(SLOT.os, "execvp", lambda f, argv: pytest.fail(f"ran {argv}"))
+    assert SLOT.main(["--", "true"], now=lambda: NOW) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err
+    assert "doesn't have" in err and err.rstrip().endswith(f": proofs; exit {SLOT.NOT_STARTED}")
 
 
 def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):
@@ -877,6 +907,8 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
             in capsys.readouterr().err)
     monkeypatch.undo()                                                             # undoes any_core's pin too
+    monkeypatch.delenv("CHECK_SLOT", raising=False)                               # and outside_a_slot's
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
     monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))

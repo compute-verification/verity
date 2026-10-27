@@ -8,14 +8,15 @@ Definition module imports.  An import is any import statement, at module level o
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
-REGISTRY = VLLM / "verity_vllm" / "program" / "registry"
-PKG = "verity_vllm.program.registry"
+PKG = "verity.ml.definitions.registry"
+REGISTRY = Path(importlib.util.find_spec(PKG).origin).parent
 DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",
                       "boolean_dsa", "sparse_mla", "boolean_sparse_mla"]
 VOCAB = "attention_vocab"
@@ -25,7 +26,7 @@ MOVES = {"fa2_check_inf": ("KBLOCK_M", "fa2_masked_from"), "fa3_check_inf": ("fa
 #: another family's registry module -> the names a family Definition module may take from it (None: the whole module), and why
 OTHER_FAMILIES = {
     "prims": (None, "the word primitives (F32MaxFtz, MufuEx2Ftz, F2fpBf16, ...) and their types (A16, BF16, F32, I32, bits_of)"),
-    "b1": ({"ZERO16", "_lane", "_scale_log2_bits", "AttnBlockV2", "AttnBlockV3", "AttentionHeadV2", "AttentionHeadV3", "AttentionV2",
+    "b1": ({"ZERO16", "_lane", "scale_log2_bits", "AttnBlockV2", "AttnBlockV3", "AttentionHeadV2", "AttentionHeadV3", "AttentionV2",
             "AttentionV3"},
            "Const16's zero, the mma accumulator's lane map and the softmax scale's word constant the bodies read, and the "
            "accepted chains the Boolean versions lower"),
@@ -50,7 +51,8 @@ def _core(name: str) -> bool:
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
@@ -74,7 +76,7 @@ def _top_level(mod: str) -> set[str]:
 
 def _violations(mod: str) -> list[str]:
     tree = ast.parse((REGISTRY / f"{mod}.py").read_text(encoding="utf-8"))
-    package = ["verity_vllm", "program", "registry"]
+    package = PKG.split(".")
     out, aliases = [], {}
 
     def take(other: str, names: list[str], line: int) -> None:
@@ -130,10 +132,10 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
         "from verity.ml.circuits.defs import composite\n"
-        "from verity_vllm.program.registry import prims as P, targets\n"
-        "from verity_vllm.program.registry.b1 import ZERO16, fa2_kblock_n\n"
+        "from verity.ml.definitions.registry import prims as P, targets\n"
+        "from verity.ml.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
         "from verity_vllm.config import X\n\n\n"
-        "def f():\n    from verity_vllm.program.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
+        "def f():\n    from verity.ml.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
-    assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == [
-        "imports verity_vllm.config", "imports verity_vllm.program.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"]
+    assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == sorted([
+        "imports verity_vllm.config", "imports verity.ml.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])

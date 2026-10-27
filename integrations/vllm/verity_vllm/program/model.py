@@ -28,8 +28,8 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry.prims import BF16
 from verity.ml.circuits.types import Array, Record, Value
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
@@ -247,8 +247,8 @@ def _fp8_fields(fields: list[tuple[str, Any]], G: int, g: int) -> list[tuple[str
     g)][cdiv(H, g)]` and `w2_ws [E][cdiv(H, g)][cdiv(I, g)]` on the rank's g-block grid (`fp8_moe_block`): the shapes vLLM's
     `Fp8MoEMethod.create_weights` gives `w13_weight_scale_inv` / `w2_weight_scale_inv`.  The router `gate_w` and the norms stay bf16
     (`quant_refusal` admits the router only in `modules_to_not_convert`)."""
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
-    from verity_vllm.program.registry.prims import F32
+    from verity.ml.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity.ml.definitions.registry.prims import F32
 
     def cdiv(a: int, b: int) -> int:
         return -(-a // b)
@@ -325,7 +325,7 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
 def _int8_fields(fields: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
     """A dense layer's fields under the exact-int8 checkpoint (`INT8_EXACT_QUANT`): each linear of `FP8_LINEAR_FIELDS` is s8 `[N][K]`
     (`Value<8>`, the stored bytes) followed by its f32 per-row scale `[N][1]` (`weight_scale`, the checkpoint's and vLLM's shape)."""
-    from verity_vllm.program.registry.prims import F32
+    from verity.ml.definitions.registry.prims import F32
     scale_of = dict(FP8_LINEAR_FIELDS)
     out: list[tuple[str, Any]] = []
     for n, t in fields:
@@ -343,8 +343,8 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
     the shared experts' fused gate/up and down projections, and the routed experts' `w13 [E][2I][H]` / `w2 [E][H][I]`.
     A block-FP8 checkpoint stores every linear except the router and the DSA indexer's replicated key/weight projection as e4m3 followed
     by its f32 block scales.  A bf16 checkpoint retains the original GLM-4.7 layout."""
-    from verity_vllm.program.registry.prims import F32
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
+    from verity.ml.definitions.registry.prims import F32
+    from verity.ml.definitions.registry.fp8 import E4M3, weight_blocks
     H, NH, QL, L, DN, DR, DV = (int(C[k]) for k in ("H", "NH", "Q_LORA", "KV_LORA", "QK_NOPE", "QK_ROPE", "V_HEAD"))
     G = int(C.get("FP8_BLOCK") or 0)
 
@@ -390,8 +390,8 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
 
 def mla_indexer_weights_type(C: dict[str, Any]) -> Record:
     """One full GLM-5.3 DSA indexer.  Shared indexer layers have no parameters and therefore no entry in the top-level indexer array."""
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
-    from verity_vllm.program.registry.prims import F32
+    from verity.ml.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity.ml.definitions.registry.prims import F32
 
     H, QL, IH, ID, G = (int(C[k]) for k in ("H", "Q_LORA", "INDEX_HEADS", "INDEX_HEAD_DIM", "FP8_BLOCK"))
     return Record(
@@ -459,7 +459,7 @@ def weights_type(C: dict[str, Any]) -> Record:
         fields.append(("lm_head", Array(C["V"], Array(C["H"], BF16))))   # guard: b1.weights_type may carry the untied field itself
     if C.get("INT8_LM_HEAD"):
         # the int8 LM head (`INT8_EXACT_LMHEAD_QUANT`): s8 `[V][H]` and its f32 per-row scale `[V][1]`, as `_int8_fields` states a linear
-        from verity_vllm.program.registry.prims import F32
+        from verity.ml.definitions.registry.prims import F32
         i = next(k for k, (n, _) in enumerate(fields) if n == "lm_head")
         fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"], Value(8)))), ("lm_head_ws", Array(C["V"], Array(1, F32)))]
     if C.get("embed_normalizer") is not None:

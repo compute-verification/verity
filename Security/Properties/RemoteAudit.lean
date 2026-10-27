@@ -13,9 +13,9 @@ premise or a proofs unit of the bridge, named in each docstring.
 
 The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
 verifier accepts: `Properties.RemoteAudit.Line.LineHeld` and `LineHeldIdentity` (`Properties/RemoteAudit/Line.lean`,
-proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with the line's code-to-model premises named in
-`Properties/RemoteAudit/Line/Premises.lean` and the W's cover of the session's pooled bound in
-`Properties/RemoteAudit/Pooled.lean`.
+proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with no code-to-model premise (`Registered` holds of the trace of
+record, `Properties/RemoteAudit/Line/Premises.lean`, and the verifier refuses a record not of the registration given,
+`LineRegistered`) and the W's cover of the session's pooled bound in `Properties/RemoteAudit/Pooled.lean`.
 
 The window (`verifyWindow`):
 
@@ -55,9 +55,11 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 
 When the session reads a window's openings coin, and what its draw fixes (the code's half of the opening draw's
-`Refused` and `Live`), is `Properties.RemoteAudit.Coins`. That the verifier's process, which takes the events one
-request at a time on the coins the challenger sent and settles each window's check later, accepts what `Session.run`
-accepts on the events its transcript records is `Properties.RemoteAudit.Live` (`LiveIsRun`).
+`Refused` and `Live`), is `Properties.RemoteAudit.Coins`, and at one openings coin over `g` windows
+(`groups_per_coin`, `Shared.run g`) `Properties.RemoteAudit.Shared`. That the verifier's process, which takes the events
+one request at a time on the coins the challenger sent and settles each window's check later, accepts what
+`Shared.run g` (`Session.run` at g = 1) accepts on the events its transcript records, at two windows in flight, is
+`Properties.RemoteAudit.Live` (`LiveIsRun`).
 -/
 
 open RemoteAudit

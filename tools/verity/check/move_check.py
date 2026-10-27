@@ -5,8 +5,8 @@ train (Daniel, 4 Oct). It relaxes no gate: a certified move still goes through `
 
 Every path git sees changed must be one of:
 - a rename with byte-identical content and mode (git's 100% rename);
-- an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root)
-  is rewritten to where it is now, in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
+- an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
+  after a variable such as `$REPO/`) is rewritten to where it is now, in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
   the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
   line left may only rewrite a moved path as written below a directory its old and new places share
   (`verity_vllm/program/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a
@@ -246,13 +246,17 @@ def map_path(p: str, pmap: dict[str, str]) -> str:
 
 @functools.lru_cache(maxsize=8)
 def _paths_pattern(olds: tuple[str, ...]) -> re.Pattern:
-    return re.compile(r"(?:(?<![\w.\-/])|(?<=^/))(" + "|".join(map(re.escape, olds)) + r")(?![\w.\-])", re.M)
+    """A moved path from the root: alone, at a line's `/`, or after a variable holding the checkout (`$REPO/`, `${ROOT}/`),
+    as `tools/move/layout.py` rewrites it; never the tail of a longer path."""
+    return re.compile(r"(?:(?<![\w.\-/])|(?<=^/)|(?<![\w.\-/$])(\$\{?\w+\}?/))(" + "|".join(map(re.escape, olds))
+                      + r")(?![\w.\-])", re.M)
 
 
 def substitute(text: str, pmap: dict[str, str]) -> str:
     if not pmap:
         return text
-    return _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).sub(lambda m: pmap[m.group(1)], text)
+    return _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).sub(lambda m: (m.group(1) or "") + pmap[m.group(2)],
+                                                                          text)
 
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:

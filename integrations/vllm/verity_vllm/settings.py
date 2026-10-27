@@ -5,8 +5,9 @@ setting can change:
 
 * ``value`` (`VALUE`): what is computed or committed.  `record` carries every value setting in force, and the value families
   (`FAMILIES`), so a value setting can't stay out of a run's record.  A setting is ``value`` unless it is one of the other two.
-  A credential's value never enters a record: `record` names it with `REDACTED` in place of its value.  A credential is a
-  setting declared ``secret``, or any variable whose name holds one of `SECRET_WORDS`, declared or not.
+  A credential's value never enters a record: `record` names it with `REDACTED` in place of its value, and so does `redact`,
+  through which every other record that copies the environment by family passes it.  A credential is a setting declared
+  ``secret``, or any variable whose name holds one of `SECRET_WORDS`, declared or not.
 * ``where`` (`WHERE`): only where and how long things run: paths, devices, hosts, interpreters, run ids and liveness bounds.
 * ``debug`` (`DEBUG`): diagnostics that change nothing a run computes: dumps, traces, profiles, injected delays.
 
@@ -52,6 +53,11 @@ def flag(raw: str) -> bool:
 def csv(raw: str) -> tuple[str, ...]:
     """A comma-separated list, in order; empty items are dropped."""
     return tuple(x for x in raw.split(",") if x)
+
+
+def paths(raw: str) -> tuple[str, ...]:
+    """A list of paths separated by ``os.pathsep``, as ``PATH`` is, in order; empty items are dropped."""
+    return tuple(x for x in raw.split(os.pathsep) if x)
 
 
 def stripped(raw: str) -> str:
@@ -206,6 +212,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
     S("VERITY_WORD_CHECK", str, None, VALUE, "the strict word check's widths, X/W"),
+    S("VERITY_WORKLOADS", paths, (), WHERE, "directories of row files beside workloads/, os.pathsep-separated: a row id resolves to "
+      "the one file of its name among them (`config.row_file`), whose path and sha256 the row's effective config records"),
     S("MATCH_IMPL", str, None, VALUE, "the global match's checker, fast or record (the audit); unset, `global_match`'s default, fast, "
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
     S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request legs; empty, min(cpu_count, 8)"),
@@ -378,11 +386,18 @@ def is_secret(name: str) -> bool:
     return bool(s and s.secret) or any(w in name.upper() for w in SECRET_WORDS)
 
 
+def redact(environ: Mapping[str, str]) -> dict[str, str]:
+    """``environ`` as a record holds it: each variable in its order, a credential (`is_secret`) by name, `REDACTED` in place of its
+    value.  `record` holds its values so, as does every record that copies a family of the environment
+    (``tests/test_record_credentials.py``)."""
+    return {k: REDACTED if is_secret(k) else v for k, v in environ.items()}
+
+
 def record(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
     """The value settings in force: every ``value`` variable that is set, as the environment holds it (a credential by name,
-    `REDACTED` in place of its value: `is_secret`), with the digest (SHA-512 of the canonical JSON of ``values``)."""
+    `REDACTED` in place of its value: `redact`), with the digest (SHA-512 of the canonical JSON of ``values``)."""
     env = os.environ if environ is None else environ
-    values = {k: REDACTED if is_secret(k) else env[k] for k in sorted(env) if role_of(k) == VALUE}
+    values = redact({k: env[k] for k in sorted(env) if role_of(k) == VALUE})
     blob = json.dumps(values, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     return {"schema": RECORD_SCHEMA, "values": values, "digest": hashlib.sha512(blob).hexdigest()}
 

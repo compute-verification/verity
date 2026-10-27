@@ -46,8 +46,9 @@ use sha2::{Digest, Sha512};
 const TABLE: &str = "circuit";
 /// The most tables in one session (`--session-tables`); their names sort in table order (`circuit-00` to `circuit-63`).
 const MAX_TABLES: usize = 64;
-const BERNOULLI_TABLES: &str = "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables \
-                                could not split it evenly)";
+/// The Lean verifier's `Draw.TABLES_LAW`: several tables split one draw of fixed count, a subset or a stratified one.
+const TABLES_LAW: &str = "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli \
+                          draw's count is random, so the tables could not split it evenly, and a work draw's closure is not split)";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -316,6 +317,9 @@ fn identity(c: &Composite) -> Value {
         let v2_run = c.out_rows().iter().enumerate().any(|(j, p)| p.segs.is_none() && c.out_group(j).1 > 1);
         id["outputs"] = json!(if v2_run { OUT_ROWS_V2_IDENTITY } else { OUT_ROWS_SEG_IDENTITY });
     }
+    if c.pinned > 0 {
+        id["outputs"] = json!(PINNED_IDENTITY);
+    }
     id
 }
 
@@ -401,7 +405,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
     }
     let units = match draw {
         Some(d) if d["population"].as_u64() != Some(inst.n as u64) => return Err("U: the draw's population is not this registered population".into()),
-        Some(d) if d["law"] != "subset" => return Err(BERNOULLI_TABLES.into()),
+        Some(d) if d["law"] != "subset" && d["law"] != "stratified" => return Err(TABLES_LAW.into()),
         Some(d) => flock_live::unit_draw::check(d)?,
         None => (0..inst.n).collect(),
     };
@@ -585,11 +589,11 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
 }
 
 /// M2's committed coin schedule: the session's stream (the link points), then every table's two reps, in table order (a
-/// subtree per table and rep); 256 rounds of at most 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
+/// subtree per table and rep); 512 rounds of at most 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
 fn coin_spec_of(tables: &[String]) -> flock_live::coin_tree::Spec {
     use flock_live::coin_tree::{SESSION, Spec};
     let streams = std::iter::once(SESSION.to_string()).chain(tables.iter().flat_map(|t| [rep_stream(t, 0), rep_stream(t, 1)])).collect();
-    Spec { streams, rounds_log: 8, block: 512 }
+    Spec { streams, rounds_log: 9, block: 512 }
 }
 
 /// A test harness's fixed verifier coins: M0's step-0 seed, or under M2 the committed schedule's random tape.
@@ -755,7 +759,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     if count > 1 {
         let probe = match (&given, &law) {
             (Some(d), _) => Some(d.clone()),
-            (None, Some(Law::Bernoulli { .. })) => refuse(BERNOULLI_TABLES.into()),
+            (None, Some(Law::Bernoulli { .. })) => refuse(TABLES_LAW.into()),
             (None, Some(l)) => l.first(inst.n as u64),
             (None, None) => None,
         };
@@ -4430,16 +4434,21 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         if name == "tables_unsplittable_draw_refused" {
             // both sides refuse, before Hello, a draw two tables cannot split: a Bernoulli law's (its count is random), and an
-            // odd count; the server also refuses them at configuration (`server_tables`)
+            // odd count, subset or stratified; the server also refuses them at configuration (`server_tables`)
             let n = inst.n as u64;
             let units = |k: u64| (0..k).collect::<Vec<_>>();
+            let strat = |k: u64| json!({"law": "stratified", "population": n, "k": k,
+                                        "strata": [{"template": "t", "units": [[0, n]], "k": k}], "units": units(k)});
             let bern = session_tables(st, inst, Some(&json!({"law": "bernoulli", "p": "1/1", "population": n, "units": units(n)})), 2).err();
             let odd = (n >= 3).then(|| session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": 3, "units": units(3)})), 2).err());
+            let odd_strat = (n >= 3).then(|| session_tables(st, inst, Some(&strat(3)), 2).err());
             let every = session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": n, "units": units(n)})), 2).err();
-            let pass = bern.as_deref() == Some(BERNOULLI_TABLES) && odd.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")))
-                && every.is_none();
-            return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit splits", "bernoulli": bern,
-                          "odd": odd, "every_unit": every, "pass": pass});
+            let stratified = (n >= 2).then(|| session_tables(st, inst, Some(&strat(2)), 2).err());
+            let splits_not = |e: &Option<Option<String>>| e.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")));
+            let pass = bern.as_deref() == Some(TABLES_LAW) && splits_not(&odd) && splits_not(&odd_strat) && every.is_none()
+                && stratified.as_ref().is_none_or(|e| e.is_none());
+            return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit and an even stratified draw split",
+                          "bernoulli": bern, "odd": odd, "odd_stratified": odd_strat, "every_unit": every, "stratified": stratified, "pass": pass});
         }
         // the public-circuit ZK proof's J = 2: both tables' roots in one Commit, a coin subtree per table and rep, and every
         // proof after the session's last coin. A prover without the barrier sends table 0's proofs before table 1's coins: the
@@ -4755,7 +4764,10 @@ fn with_tail(text: &str) -> (String, String) {
 /// honest session's record and proofs re-verified offline under each, then with rep 0's lincheck `z_partial` or first round
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
 /// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
-/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept.
+/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept. Under
+/// `--zk` the lincheck is the zk replay's (`zk_veil::replay` folds its own comb; `FC_LINCHECK` is not read), so there is one
+/// mode: the proofs are re-encoded with their `InnerProof`, and each alteration must be refused by the inner proof's batched
+/// constraint.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -4763,11 +4775,18 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     if !verified(&v) || proofs.len() != 2 {
         return json!({"case": "lincheck_modes_agree", "accepted": v["accepted"], "pass": false, "why": v["why"]});
     }
+    let zk = is_zk(st);
     let alter = |f: &dyn Fn(&mut R1csProofLigerito)| -> Vec<Vec<u8>> {
         let mut ps = proofs.clone();
-        let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
-        f(&mut p);
-        ps[0] = bincode::serialize(&(c, p)).unwrap();
+        if zk {
+            let (c, mut p, i): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&ps[0]).unwrap();
+            f(&mut p);
+            ps[0] = bincode::serialize(&(c, p, i)).unwrap();
+        } else {
+            let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
+            f(&mut p);
+            ps[0] = bincode::serialize(&(c, p)).unwrap();
+        }
         ps
     };
     let reencoded = alter(&|_| {}) == proofs;
@@ -4784,7 +4803,9 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         }
         r
     };
-    let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
+    let modes: &[sverify::Lincheck] =
+        if zk { &[sverify::Lincheck::Partial] } else { &[sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both] };
+    let name = |m: sverify::Lincheck| if zk { "zk replay".to_string() } else { format!("{m:?}") };
     let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
         let ver = CircuitVerifier { lincheck: m, ..CircuitVerifier::one(st, inst) };
@@ -4792,18 +4813,24 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
             Ok(mut s) => {
                 let f = s.finish();
                 let reps = f["reps"].as_array().cloned().unwrap_or_default();
-                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"], "without_refusal": f["without_refusal"],
+                json!({"mode": name(m), "accepted": f["accepted"], "why": f["why"], "without_refusal": f["without_refusal"],
                        "verify_s": f["verify_s"], "phases": reps.iter().map(|r| r["timing"]["phases"].clone()).collect::<Vec<_>>()})
             }
-            Err(e) => json!({"mode": format!("{m:?}"), "accepted": false, "why": e}),
+            Err(e) => json!({"mode": name(m), "accepted": false, "why": e}),
         }
     }).collect())).collect();
     let all = |what: &str, ok: &dyn Fn(&Value) -> bool| runs.iter().filter(|r| r.0 == what).all(|r| r.1.iter().all(ok));
     let same_why = runs.iter().all(|r| r.1.iter().all(|x| in_scope(x)["why"] == in_scope(&r.1[0])["why"]));
-    let lincheck_rejects = |x: &Value| !verified(x) && in_scope(x)["why"].as_str().is_some_and(|w| w.contains("sumcheck-final"));
+    let refusal = if zk { "zk inner: the batched constraint fails" } else { "sumcheck-final" };
+    let lincheck_rejects = |x: &Value| !verified(x) && in_scope(x)["why"].as_str().is_some_and(|w| w.contains(refusal));
     let pass = reencoded && same_why && all("honest", &verified) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
-    json!({"case": "lincheck_modes_agree", "expect": "flat, partial and both: the same verdict on honest and altered lincheck proofs",
+    let expect = if zk {
+        "the zk replay: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
+    } else {
+        "flat, partial and both: the same verdict on honest and altered lincheck proofs"
+    };
+    json!({"case": "lincheck_modes_agree", "expect": expect,
            "gpu": gpu, "accepted": v["accepted"], "reencoded_identical": reencoded, "same_why": same_why,
            "runs": runs.iter().map(|(w, r)| json!({"proofs": w, "modes": r})).collect::<Vec<_>>(), "pass": pass})
 }

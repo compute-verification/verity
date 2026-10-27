@@ -8,8 +8,8 @@ The properties of the executable check (`verity/core/protocols/pouw/lean/check/`
 the types its decoders produce. Each is a `Prop`, and `Proofs.Properties.Pouw.Check` proves every one.
 
 `AcceptMeans` is the check's whole meaning: what it accepts is a registration that keeps PoUW's rule
-(`RegistrationKeeps`), which the service accepted with the profile and draw the rule fixes (`ServiceAccepted`), and it
-then publishes the window's items at the verifier's values and the service's draw. The rest are its consequences a reader
+(`RegistrationKeeps`), which the service accepted with the profile and draw the rule fixes (`ServiceAccepted`), with a
+live window's salt its live coin's and a seeded window's answer carrying none (`SaltKept`), and it then publishes the window's items at the verifier's values and the service's draw. The rest are its consequences a reader
 checks first, and what the other verdicts mean. That the check accepts every such registration is completeness,
 `Proofs.Properties.Pouw.Check.acceptMeans_complete`.
 
@@ -56,13 +56,19 @@ def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (
   draw.law = .subset f.sampling.k ∧ draw.population = f.work.n ∧
   draw.units.size = f.sampling.k ∧ Ascending draw.units.toList ∧ ∀ u ∈ draw.units.toList, u < f.work.n
 
-/-- What the check accepts is a registration that keeps PoUW's rule, which the service accepted as the rule fixes; it
-then publishes the check item, the level's work, the sampling item, the verifier's max_tokens, `root_W` and the drawn
+/-- The salt the service's answer carries is the window's: a live window's (`coins` live) is its live coin's, taken
+from the salt-only session the auditor's ledger opened on the salt epoch root of the registration's weights' root W, the
+root X of the activations it committed before its salt (`windowAnchors`) and the answer's epoch, after that root
+(`windowSaltReason`, `core_check.window_salt`), and a seeded window's answer carries none. -/
+def SaltKept (p : Params) (c : Registration) (e : Evidence) : Prop := windowSaltReason p c e.salt = none
+
+/-- What the check accepts is a registration that keeps PoUW's rule, which the service accepted as the rule fixes with
+the window's salt; it then publishes the check item, the level's work, the sampling item, the verifier's max_tokens, `root_W` and the drawn
 units, and the profile is the service's. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
-      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
+      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩
 
 /-- An accepted window is credited a grid level inside the declared range: its credited tiles are at least `lo`, and

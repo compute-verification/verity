@@ -253,7 +253,7 @@ def test_a_tree_pinned_before_the_torch_loops_manifest_still_serves_vllms_roles(
     with pytest.raises(M.Refused, match="0 entries"):
         M.manifest_entry(model["tree"], TORCH_LOOP_ROLE)
     (mlp["tree"] / M.MANIFESTS[1]).write_text("{")
-    with pytest.raises(M.Refused, match="torch_loop/manifests/checkpoints-int8.json is not readable JSON"):
+    with pytest.raises(M.Refused, match="integrations/torch_loop/manifests/checkpoints-int8.json is not readable JSON"):
         M.manifest_entry(mlp["tree"], "LLAMA32_1B_INT8")
     (mlp["tree"] / M.MANIFESTS[1]).write_text(json.dumps({"checkpoints": [mlp["entry"]]}))
     (mlp["tree"] / M.MANIFEST).unlink()

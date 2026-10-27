@@ -1,0 +1,267 @@
+"""`verity bench rho`: ρ for every scenario, how it moves, and where it falls below a target.
+
+    uv run python benchmarks/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
+                                        [--out DIR] [--figures DIR]
+
+Prints Markdown; with `--out` (or `$OUT`, as under `research run`) also writes `rho.md`, `rho.json` and the figures (in
+`figures/`) there. `--figures DIR` writes the figures (`rho/figures.py`, matplotlib) to DIR. `--set` overrides any
+registry key for the whole run.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from rho import analysis, operating
+from rho.classes import REFERENCE, weight_per_gate
+from rho.figures import jsonable
+from rho.params import Registry
+from rho.scenario import Estimate, Result, Scenario
+
+
+def fmt(x: float) -> str:
+    if isinstance(x, float) and (math.isnan(x) or math.isinf(x)):
+        return "—" if math.isnan(x) else "∞"
+    return f"{x:.3g}"
+
+
+def row(e: Estimate) -> dict:
+    s = e.slowdown
+    return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "rho": s.rho if s else None,
+            "g": s.g if s else None, "declared_rho": e.declared, "outside": e.outside,
+            "binding": {k: v.cut for k, v in s.serving.items()} if s else {},
+            "terms": dict(s.terms) if s else {}}
+
+
+def when(s: Scenario, rho: float) -> str:
+    return operating.human(s.seconds(rho))
+
+
+def lower(rho: float, unmonitored: float) -> str:
+    """A lower end, flagged where it is below the adversary no protocol encumbers (`Result.unmonitored`)."""
+    return fmt(rho) + (" (vacuous)" if rho < unmonitored * (1 - 1e-9) else "")
+
+
+def monitored(r: Result) -> float:
+    """The share of the adversary's counted weight on monitored gates, for the family the adversary picks."""
+    best = min(r.families, key=lambda f: f.lo, default=None)
+    return best.combined.slowdown.monitored if best and best.combined.slowdown else math.nan
+
+
+def operating_md(points: list[operating.Point]) -> list[str]:
+    out = []
+    for kind, head in (("work", "work"), ("exfil", "exfiltration through side channels")):
+        rows = [p for p in points if p.kind == kind]
+        if rows:
+            cols = list(rows[0].seconds)
+            out += [f"Operating points, {head}:", "", "| reference | " + " | ".join(cols) + " |",
+                    "|---|" + "---|" * len(cols)]
+            out += [f"| {p.name} | " + " | ".join(operating.human(p.seconds[c]) for c in cols) + " |" for p in rows]
+            out.append("")
+    return out
+
+
+def faulty_md(reg: Registry, fo: operating.Row) -> list[str]:
+    if math.isinf(fo.capacity):
+        return ["Faulty outputs: no sampled proofs, so nothing detects them.", ""]
+    drawn = "every unit proved" if fo.q >= 1 else f"steps the sampled proofs draw at q = {fmt(fo.q)} a step"
+    head = (f"Faulty outputs ({drawn}): {fmt(fo.capacity)} bits before the first detection, except with chance "
+            f"δ = {fmt(fo.delta)}.")
+    out = [head, "", "| reference | bits | chance of detection |", "|---|---|---|"]
+    out += [f"| {n} | {fmt(reg[f'exfil.{n}.bits'])} | {fmt(p)} |" for n, p in fo.detect.items()]
+    return out + [""]
+
+
+def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Term],
+                points: list[operating.Point], faulty: list[str]) -> list[str]:
+    s = r.scenario
+    c = s.context
+    delta = s.regime.delta(c)
+    by = "; ".join(f"{k} {fmt(co)} + {fmt(cr)}" for k, (co, cr) in delta.by.items())
+    prf = ", the wipe's PRF" if "wipe" in delta.by else ""
+    unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
+    setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
+               f"ε_dark {c.fleet.eps_dark:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
+               f"{c.horizon.name}, {c.units.gates_per_flop:g} gates a FLOP; target {s.run.name} (T_0 = "
+               f"{s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
+    un = r.unmonitored
+    verdict = ("the lower end is below it, so **vacuous**: it doesn't exclude even that adversary" if r.vacuous(r.lo)
+               else f"the lower end is {fmt(r.lo / un)} times it")
+    st = s.structure
+    best = min(r.families, key=lambda f: f.lo, default=None)
+    gates = fmt(st.gates(weight_per_gate(best.profile, c.units))) if best else "—"
+    s_times = (f"the reference's gates per counted product (`2G / κ`, {gates} for {best.family if best else '—'})"
+               if st.s_times == REFERENCE else f"{gates} gates")
+    premise = f", under {', '.join(st.cites())}." if st.cites() else ", which needs no straddling premise."
+    out = [f"## {s.name}", "", setting, "",
+           (f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**, the circuit's size over the reference's. **Time to the target:** "
+            f"{when(s, r.lo)} to {when(s, r.hi)} (`ρ T_0 / Φ_total`, the reference at the inventory's full capacity)."),
+           "",
+           (f"With no protocol the adversary sits at **ρ = {fmt(un)}** (`μ / MFU`, its circuit padded to capacity at "
+            f"MFU {fmt(s.mfu)}): {verdict}. A bound counts each uncertified or dark gate at `ω_max / s_×` with `s_×` "
+            f"{s_times} (`structure.{st.name}`){premise}"),
+           "",
+           (f"The envelopes fail, summed over subprotocols and serving blocks, with probability at most δ_coin = "
+            f"{fmt(delta.coin)} (the coins' draws) plus δ_crypto = {fmt(delta.crypto)} (binding, knowledge soundness"
+            f"{prf}), plus Pr[Break] (a forgery of the logged coins, not bounded here); by subprotocol, coin + "
+            f"crypto: {by or 'none'}."), "",
+           "ρ's lower end from only the bounds and cuts at least as strong as: "
+           + ", ".join(f"{st} {lower(v, un)}" for st, v in by_status.items()) + ".", "",
+           "What sets ρ (each part's share of the bound's weight per gate `dark + (1 − ε_dark) g`, and the most ρ can be "
+           "while it remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
+           f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
+    out += operating_md(points) + faulty
+    for f in r.families:
+        fu = f.profile.efficiency / s.mfu
+        out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)}; no protocol: ρ = {fmt(fu)})", "",
+                "| argument | side | status | premises | ρ | g | ρ in one inference block | binding cut |",
+                "|---|---|---|---|---|---|---|---|"]
+        for e in f.bounds + (f.combined,) + f.attacks:
+            d = row(e)
+            if e.slowdown is None:
+                out.append(f"| {e.argument} | {e.side} | outside | | | | | {e.outside} |")
+            else:
+                rho = lower(e.rho, fu) if e.side == "bound" else fmt(e.rho)
+                out.append(f"| {e.argument} | {e.side} | {e.status} | {e.premise} | {rho} | {fmt(d['g'])} | "
+                           f"{fmt(e.declared)} | {', '.join(f'{k}: {v}' for k, v in d['binding'].items())} |")
+        terms_ = f.combined.slowdown.terms
+        out += ["", "g's terms (lower bound): " + ", ".join(f"{k} {fmt(v)}" for k, v in terms_.items() if v), ""]
+        if f.contradictions:
+            out += [f"**Contradiction:** {', '.join(f.contradictions)} exceed the best attack: a premise is false here.", ""]
+    return out
+
+
+def crossings(ds: list[analysis.Danger]) -> str:
+    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (ρ {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
+
+
+def below_md(name: str, base: float, un: float, by_status: dict[str, float], corner: analysis.Corner,
+               dangers: dict[float, list[analysis.Danger]], rescues: dict[float, list[analysis.Danger]]) -> list[str]:
+    out = [f"### {name} (ρ = {lower(base, un)} today; no protocol: {fmt(un)})", ""]
+    if corner.path:
+        prev, steps, rest = base, [], 0
+        for k, v in corner.path:
+            if v < prev * (1 - 5e-3):
+                steps.append(f"`{k}` → {fmt(corner.values.get(k, math.nan))}: {fmt(v)}")
+            else:
+                rest += 1
+            prev = v
+        more = f", and {rest} more that each move it under 0.5%" if rest else ""
+        out.append(f"- **Corner:** ρ = {fmt(corner.rho)} with every ranged parameter at the worse end of its range "
+                   f"at once; one at a time, worst first: {', '.join(steps)}{more}"
+                   + ("." if corner.joint == corner.rho else f" (all at once: {fmt(corner.joint)})."))
+    else:
+        out.append("- **Corner:** no ranged parameter lowers ρ.")
+    for t in sorted(dangers):
+        if base >= t:
+            if dangers[t]:
+                found = f"falls below it within a plausible range: {crossings(dangers[t])}."
+            else:
+                found = ("no single parameter's plausible range takes it below; "
+                         + (f"the corner does (ρ {fmt(corner.rho)})." if corner.rho < t else "nor does the corner."))
+            weaker = [st for st, v in by_status.items() if v < t]
+            if weaker:
+                found += f" From only {weaker[-1]} or stronger bounds and cuts, ρ = {fmt(by_status[weaker[-1]])}."
+        else:
+            found = "already below it today; " + (f"lifted above it by: {crossings(rescues[t])}." if rescues[t]
+                                                  else "no single parameter's plausible range lifts it there.")
+        out.append(f"- **ρ = {fmt(t)}:** {found}")
+    return out + [""]
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--scenario", action="append", help="scenario names (default: all)")
+    ap.add_argument("--target", action="append", type=float, help="ρ targets for the danger scan (default: 10, 100)")
+    ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
+    ap.add_argument("--out", default=os.environ.get("OUT"), help="write rho.md, rho.json and figures/ here ($OUT)")
+    ap.add_argument("--figures", help="write the figures (PNG and the JSON they plot) here")
+    args = ap.parse_args()
+
+    reg = Registry.load()
+    if args.set:
+        reg = reg.override({k: json.loads(v) for k, v in (a.split("=", 1) for a in args.set)})
+    names = args.scenario or reg.names("scenario")
+    targets = sorted(args.target or [10.0, 100.0])
+
+    md: list[str] = []
+    head = ("| scenario | ρ ∈ | no protocol (`μ / MFU`) | time to the target | the bound that sets it: status, "
+            "premises | from conditional or stronger bounds and cuts | on monitored gates | set by | at the corner |")
+    summary = ["# ρ", "", "A lower end below the adversary no protocol encumbers is vacuous.", "", head,
+               "|---|---|---|---|---|---|---|---|---|"]
+    below = ["## Where ρ falls below target", ""]
+    record: dict = {"targets": targets, "scenarios": {}}
+    for name in names:
+        r = analysis.result(reg, name)
+        by_status = {st: analysis.at(reg, name, None, analysis.upto(st)) for st in analysis.STATUSES[:3]}
+        terms = analysis.attribution(r)
+        points = operating.points(reg, r)
+        fo = operating.faulty(reg, r.scenario)
+        md += scenario_md(r, by_status, terms, points, faulty_md(reg, fo))
+        swings = analysis.tornado(reg, name)
+        un = r.unmonitored
+        md += [f"Tornado (ρ's lower end at each parameter's plausible ends; no protocol: ρ = {fmt(un)}):", "",
+               "| parameter | low | high | ρ at low | ρ at high | decades |", "|---|---|---|---|---|---|"]
+        md += [f"| {s.key} | {fmt(s.low)} | {fmt(s.high)} | {lower(s.at_low, un)} | {lower(s.at_high, un)} | "
+               f"{fmt(s.size)} |" for s in swings[:12]]
+        md.append("")
+        dangers = {t: analysis.dangers(reg, name, t, swings=swings) for t in targets}
+        rescues = {t: analysis.rescues(reg, name, t, swings=swings) for t in targets}
+        corner = analysis.corner(reg, name, swings=swings)
+        below += below_md(name, r.lo, un, by_status, corner, dangers, rescues)
+        met = [e for e in min(r.families, key=lambda f: f.lo).bounds if e.slowdown] if r.families else []
+        best = max(met, key=lambda e: e.rho, default=None)
+        standing = f"{best.argument}: {best.status}, {best.premise}" if best else ""
+        s = r.scenario
+        summary.append(f"| {name} | [{lower(r.lo, un)}, {fmt(r.hi)}] | {fmt(un)} | {when(s, r.lo)} to "
+                       f"{when(s, r.hi)} | {standing} | {lower(by_status['conditional'], un)} | "
+                       f"{monitored(r):.1%} | " + (f"{terms[0].name} {terms[0].share:.0%}" if terms else "")
+                       + f" | {lower(corner.rho, un)} |")
+        record["scenarios"][name] = {
+            "lo": r.lo, "hi": r.hi, "unmonitored": un, "vacuous": r.vacuous(r.lo),
+            "structure": {"name": s.structure.name, "s_times": s.structure.s_times, "cites": s.structure.cites()},
+            "delta": s.regime.delta(s.context).json(),
+            "seconds": {"lo": s.seconds(r.lo), "hi": s.seconds(r.hi)},
+            "lo_by_status": by_status,
+            "attribution": [vars(t) for t in terms], "monitored": monitored(r),
+            "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
+            "faulty_outputs": {"capacity_bits": fo.capacity, "detect": dict(fo.detect)},
+            "families": {f.family: {"lo": f.lo, "hi": f.hi, "contradictions": list(f.contradictions),
+                                    "estimates": [row(e) for e in f.bounds + (f.combined,) + f.attacks]}
+                         for f in r.families},
+            "tornado": [vars(s) for s in swings],
+            "dangers": {str(t): [vars(d) for d in ds] for t, ds in dangers.items()},
+            "rescues": {str(t): [vars(d) for d in ds] for t, ds in rescues.items()},
+            "corner": {"rho": corner.rho, "base": corner.base, "joint": corner.joint, "values": dict(corner.values),
+                       "path": corner.path},
+        }
+    text = "\n".join(summary + [""] + md + below)
+    print(text)
+    out = Path(args.out) if args.out else None
+    figures = Path(args.figures) if args.figures else (out / "figures" if out else None)
+    if figures:
+        try:
+            from rho.figures import render
+            written = render(reg, figures, names, targets)
+        except ImportError as e:
+            if args.figures:
+                raise
+            print(f"no figures ({e}): install matplotlib, or pass --figures DIR to fail on it", file=sys.stderr)
+        else:
+            record["figures"] = {k: [str(p) for p in v] for k, v in written.items()}
+            print(f"figures: {figures}", file=sys.stderr)
+    if out:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "rho.md").write_text(text + "\n")
+        (out / "rho.json").write_text(json.dumps(jsonable(record), indent=1, default=str) + "\n")
+
+
+if __name__ == "__main__":
+    main()

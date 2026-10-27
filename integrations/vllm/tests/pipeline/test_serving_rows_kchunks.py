@@ -19,10 +19,10 @@ from verity.ml.windows import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.kernels import fp8_moe_rows as FR
-from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-from verity_vllm.program.registry import boolean_fp8_moe as BFM
-from verity_vllm.program.registry import fp8_moe_experts as X
+from verity.ml.definitions.numerics import fp8_moe_rows as FR
+from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+from verity.ml.definitions.registry import boolean_fp8_moe as BFM
+from verity.ml.definitions.registry import fp8_moe_experts as X
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind

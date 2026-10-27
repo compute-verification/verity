@@ -44,45 +44,10 @@ theorem Pr_bad_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * D.V.k x * (PrBe H D I DO decO P x + PrBr H D I DO decO P x)) := by
-  have h1 : Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
-      ∑ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-          eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) := by
-    refine (Pr_mono fun t ht => ?_).trans (Pr_exists_le _)
-    obtain ⟨hs, hna⟩ := ht
-    simp only [Agrees, not_forall] at hna
-    obtain ⟨j, hj, hne⟩ := hna
-    exact ⟨⟨j, hj⟩, hs, hne⟩
-  have h2 : ∀ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-        eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) ≤
-      Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) := fun j => by
-    have hp := Pr_plur_fork j (fun ω d => (eoOut H D I DO decO P x ω d).isSome = true)
-      (fun ω d => eoMsg H D I DO decO P x ω d j)
-    refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (Real.sqrt_le_sqrt (Pr_mono fun t ht => ?_)))
-    · simp only [opAt, fork_preCoins]
-    · obtain ⟨hg₁, hg₂, hf⟩ := ht
-      obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hg₁
-      obtain ⟨ws', hws'⟩ := Option.isSome_iff_exists.1 hg₂
-      refine ⟨ws, ws', eoGives_of_some hws, eoGives_of_some hws', ?_⟩
-      simpa [eoMsg, hws, hws', dec] using hf
-  have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (I.V.k (xI D x))))
-    (f := fun _ : Fin (I.V.k (xI D x)) => (1 : ℝ)) (g := fun j => Pr (OpensDiffer H D I DO decO P x j))
-    (fun _ => zero_le_one) (fun j => Pr_nonneg _)
-  simp only [Real.sqrt_one, one_mul, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
-    mul_one] at hcs
-  have h4 := sum_opensDiffer_le_played hV hO hT hR decO x P
-  calc Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2)
-      ≤ ∑ j : Fin (I.V.k (xI D x)), Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) :=
-        h1.trans (Finset.sum_le_sum fun j _ => h2 j)
-    _ ≤ Real.sqrt (I.V.k (xI D x)) * Real.sqrt (∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        hcs
-    _ = Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
-    _ ≤ Real.sqrt (I.V.k (xI D x) * (D.V.k x * (PrBe H D I DO decO P x + PrBr H D I DO decO P x))) :=
-        Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left h4 (Nat.cast_nonneg _))
-    _ = Real.sqrt (I.V.k (xI D x) * D.V.k x * (PrBe H D I DO decO P x + PrBr H D I DO decO P x)) := by
-        rw [mul_assoc]
+  rw [mul_assoc]
+  exact (Pr_bad_le_opens H D I DO decO x P).trans
+    (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_opensDiffer_le_played hV hO hT hR decO x P)
+      (Nat.cast_nonneg _)))
 
 /-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkReg j])`**: `Pr_bad_le_fork`, with the played rounds'
 openings (`forkColl_of_openingPlayed`), each fork charging `Be`'s collision or `Br`'s registered tie. -/
@@ -93,44 +58,9 @@ theorem Pr_bad_le_fork_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkReg H D I DO decO P x j)) := by
-  have h1 : Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
-      ∑ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-          eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) := by
-    refine (Pr_mono fun t ht => ?_).trans (Pr_exists_le _)
-    obtain ⟨hs, hna⟩ := ht
-    simp only [Agrees, not_forall] at hna
-    obtain ⟨j, hj, hne⟩ := hna
-    exact ⟨⟨j, hj⟩, hs, hne⟩
-  have h2 : ∀ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-        eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) ≤
-      Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) := fun j => by
-    have hp := Pr_plur_fork j (fun ω d => (eoOut H D I DO decO P x ω d).isSome = true)
-      (fun ω d => eoMsg H D I DO decO P x ω d j)
-    refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (Real.sqrt_le_sqrt (Pr_mono fun t ht => ?_)))
-    · simp only [opAt, fork_preCoins]
-    · obtain ⟨hg₁, hg₂, hf⟩ := ht
-      obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hg₁
-      obtain ⟨ws', hws'⟩ := Option.isSome_iff_exists.1 hg₂
-      refine ⟨ws, ws', eoGives_of_some hws, eoGives_of_some hws', ?_⟩
-      simpa [eoMsg, hws, hws', dec] using hf
-  have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (I.V.k (xI D x))))
-    (f := fun _ : Fin (I.V.k (xI D x)) => (1 : ℝ)) (g := fun j => Pr (OpensDiffer H D I DO decO P x j))
-    (fun _ => zero_le_one) (fun j => Pr_nonneg _)
-  simp only [Real.sqrt_one, one_mul, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
-    mul_one] at hcs
-  calc Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2)
-      ≤ ∑ j : Fin (I.V.k (xI D x)), Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) :=
-        h1.trans (Finset.sum_le_sum fun j _ => h2 j)
-    _ ≤ Real.sqrt (I.V.k (xI D x)) * Real.sqrt (∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        hcs
-    _ = Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
-    _ ≤ Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkReg H D I DO decO P x j)) :=
-        Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
-          (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_openingPlayed hV hO hT decO x P t)
-          (Nat.cast_nonneg _))
+  exact (Pr_bad_le_opens H D I DO decO x P).trans (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
+    (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_openingPlayed hV hO hT decO x P t)
+    (Nat.cast_nonneg _)))
 
 /-- **A rejected inner view is what every fork charges**: `Pr_innerRejects_le_fork`, where V* accepts off a collision or
 a registered tie (`InnerAcceptsR`), each `Be`'s or `Br`'s at the fork (`coll_or_reg`), and `Be` reads only true

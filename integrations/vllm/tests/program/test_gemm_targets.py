@@ -77,7 +77,7 @@ def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     of the compute_80 PTX on the Hopper step, so its attention is the H100 forced-FA2 chain (`BN=fa2_kblock_n(D)`,
     `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
     `Attention_v3`; a declared FA3 is refused by name."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     from verity_vllm.program.frontend import targets as TG
 
     assert PRO6000_TP.tensor_core_family == "blackwell_consumer" and PRO6000_TP.effective_flash_attn_version() == 2

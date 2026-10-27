@@ -253,7 +253,11 @@ coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch
 (`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
 `Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. The
 salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
-`PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. Round r's coin opens after
+`PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. A Pearl-C pass's session
+takes its salt coin alone (`SALT_FAMILIES`, `salt_epoch_reason`; `Properties.Pouw.LiveSalt`), opened after its salt
+epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k, the pass's `pass_index`, which
+the verifier recomputes and never reads from the pass), so it ends complete once that coin is released. Round r's coin
+opens after
 the verifier recorded round r's root, the root of the values round r commits, and round r's noise key is
 `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
 products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
@@ -355,10 +359,10 @@ level and K′ are in `window`'s docstring). This section is the window's layout
 that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
 window this way.
 
-**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a row of record
+**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a workload of record
 serves at a public fixed length, ignore_eos at each slot's public max_tokens, which the window registers (its `length`
 item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
-a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
+a workload whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
 verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
 `length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
 credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
@@ -726,7 +730,7 @@ sampling design is a seam:
     others' 1 unless POUS sets them. A call's work is in one stratum (0 < w_s·n_s in one only) and its tiles are of one
     template: `work_table`, `WorkLaw.budget` and `window_laws` refuse any other (`plan.check_work_strata`), since the
     window guarantee takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is
-    under-drawn: in the red team's window ten faulty units have acceptance probability 0.156 against a claimed 2.4·10⁻⁴
+    under-drawn: in the red team's window ten faulty proof blocks have acceptance probability 0.156 against a claimed 2.4·10⁻⁴
     (`test_the_red_team_s_capped_window_is_refused`).
   - `plan.law_object` is the sampling design `verify` derives from it, each stratum `{template, units, work, floor, k}`.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
@@ -1620,7 +1624,7 @@ name not registered.
   column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
   The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
   ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a
-  legal proof unit (since ASK-61 a unit's outputs fit a public size class up to 262,144 bits, so 8,320 fit), or the warp check must be a unit kind of its own aggregating coordinates, is
+  legal proof block (since ASK-61 a unit's outputs fit a public size class up to 262,144 bits, so 8,320 fit), or the warp check must be a unit kind of its own aggregating coordinates, is
   decision 107's, still open.
 
 The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are
@@ -1629,6 +1633,11 @@ registered Definitions, each checked by circuit-check at its sidecar's binding (
 
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
+
+## ACCEL (protocol v3.2)
+
+ACCEL, credit for a served model's int8 matmuls from committed noised prefix sums, is specified in
+`verity/core/protocols/pouw/accel/PROTOCOL.md` while it is experimental.
 
 ## Not here yet
 

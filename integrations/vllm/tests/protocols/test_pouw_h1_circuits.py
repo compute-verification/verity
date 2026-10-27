@@ -95,6 +95,67 @@ def test_the_period_open_commits_each_stratums_circuit_file_sha512(program, tmp_
     assert PC.build(d, out, lower=stand_in)["files"] == {**files, "k64": _sha(b"another lowering's file\n")}
 
 
+def test_a_commit_runs_period_open_commits_its_declared_fixed_length(tmp_path, monkeypatch):
+    """``pouw_h1_gpu.py --commit --peer --period P`` opens P with ``--length``, its ``--declare``'s fixed length, and
+    ``--circuit-files``, each K's and the live template's, in the form the gate takes and core's credit reads back
+    (`credit.committed_length`, `credit.committed_files`), so credit holds its window to both."""
+    from verity_vllm.protocols.pouw import h1 as PH
+
+    from tests.protocols import pouw_h1_gpu as GPU
+    decl = PH.Static((1,) * 32, 3, 32, 4)
+    files = {"k4096": "2b" * 64, "k14336": "3c" * 64, CR.LIVE: "4d" * 64}
+    argv = GPU.period_open_argv("o1", "a" * 128, 7, decl, files)
+    assert argv[:11] == ["period-open", "--name", "o1", "--cap", "1", "--circuit", "a" * 128, "--draw-k", "7",
+                         "--rows", "32"]
+    length = _auditor(monkeypatch).length_of(argv[argv.index("--length") + 1])
+    assert length == GPU.fixed_length(decl) == {"max_tokens": [3] * 32, "stop": "fixed"}
+    assert _auditor(monkeypatch).circuit_files_of(argv[argv.index("--circuit-files") + 1]) == files
+    ledger = CH.Ledger(tmp_path / "windows.jsonl", 1)
+    ledger.period_open("o1", circuit="a" * 128, draw_k=7, rows=32, length=length, circuit_files=files)
+    assert CR.committed_length(ledger.lines, "o1") == ([3] * 32, None)
+    assert CR.committed_files(ledger.lines, "o1") == (files, None)
+
+
+def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit_reads_them(program, tmp_path):
+    """``--live T,S`` adds the live template's circuit file, bound to the live Program of S rounds at T rows under the
+    declared Program's PREFIX (core's credit verifies each ``live@<s>`` on ``circuit_files["live"]``), kept on a second
+    build. A Commit's period opens on exactly that manifest's files (`pouw_h1_gpu.period_files`): built for its circuit,
+    every stratum and the live template, at its own T and S."""
+    from types import SimpleNamespace
+
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    from tests.protocols import pouw_h1_gpu as GPU
+    d, raw = program
+    lived = []
+
+    def stand_in_live(T, part, path):
+        lived.append(T)
+        path.write_text(f"the live template at T = {T}, bound to {P.digest(part)}\n")
+    out = tmp_path / "circuits"
+    doc = PC.build(d, out, lower=lambda k, tile, bind, path: path.write_text(f"k{k}\n"), live=(ROWS, STEPS),
+                   lower_live=stand_in_live)
+    part = PC.live_part(ROWS, STEPS, CR._prefix(raw))
+    assert lived == [ROWS] and doc["files"][CR.LIVE] == _sha((out / PC.LIVE_FILE).read_bytes())
+    assert doc["live_bind"] == {"T": ROWS, "S": STEPS, "partition": P.digest(part), "program": part["program"]}
+    assert sorted(doc["files"]) == ["k128", "k64", CR.LIVE]
+    assert PC.build(d, out, lower=lambda *_a: pytest.fail("relowered"), live=(ROWS, STEPS),
+                    lower_live=stand_in_live) == doc and lived == [ROWS]
+
+    layout = json.loads((d / RH.PROGRAM_META).read_text())["layout"]
+    decl = SimpleNamespace(rows=ROWS, steps=STEPS)
+    assert GPU.period_files(out, _sha(raw), layout, decl) == doc["files"]
+    with pytest.raises(ValueError, match="not the period's"):
+        GPU.period_files(out, "a" * 128, layout, decl)
+    with pytest.raises(ValueError, match=f"not the window's {ROWS}, {STEPS + 1}"):
+        GPU.period_files(out, _sha(raw), layout, SimpleNamespace(rows=ROWS, steps=STEPS + 1))
+    with pytest.raises(ValueError, match="no circuit files"):
+        GPU.period_files(tmp_path / "none", _sha(raw), layout, decl)
+    PC.build(d, out, lower=lambda *_a: None)
+    with pytest.raises(ValueError, match="live circuit file is for T = None"):
+        GPU.period_files(out, _sha(raw), layout, decl)
+
+
 def test_a_template_the_declared_program_does_not_define_is_lowered_for_no_stratum(program, tmp_path, monkeypatch):
     """The lowering is of the declared Program's own templates: when K's template (`h1window.template` over
     `tile_unit` at the layout's tile) is none of the descriptor's definitions, no file is built and nothing is

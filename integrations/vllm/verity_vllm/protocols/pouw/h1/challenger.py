@@ -38,6 +38,10 @@ verifier's check that a served window's coins are that challenger's.
   (`challenger.pinned_session` and `challenger.session_named`: its record, signed close, release log and refused
   hellos the ones the end sealed); its coins pass the checks above, the salt by `core_check.salt` and the rounds by
   `core_check.rounds`.
+* **Pearl-C passes** (`salt_session_reason`): a Pearl-C device run's session is reserved with its salt coin alone
+  (`window.SALT_FAMILIES`) and opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and the
+  pass's ``pass_index``, recomputed, never read from the pass), so it counts only ended closed and complete, its one coin
+  released; the pass's salt is that coin's over the weights' root, read from the session, never from the pass.
 * **Pins**: every session read is held to the host's pins log (`challenger.pinned_session`): the open's signed body
   seals the log's lines (``pins``), and the log, as infra published it (the gate's ``pins``, put by ``publish.sh`` as
   kind ``challenger-pins/v1``, labelled ``challenger-pins head``), must begin with them and record the open's
@@ -79,7 +83,10 @@ from typing import Any, Callable, Mapping, Sequence
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.audit import salt_of
+from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
@@ -87,6 +94,7 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, Coin
                                                              session_named)
 
 from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw import pearl_c as PPD
 
 SCHEME = Wd.LIVE_SCHEME
 #: the pouw setting ``session``: the gate's open answer (``commitment`` from ``status SESSION`` when the answer's is
@@ -406,10 +414,13 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     `trusted_rounds_reason` checks a session's: its salt by `core_check.salt`, S the ledger's reserve's session and R
     its open's root, and its rounds by `core_check.rounds`, both under the ledger's pins log and `main`); None when it
     is. `registered` is the weights' root the period registered and `commit` the window's Commit root as the verifier
-    holds it, which the window's must be. Fails closed."""
+    holds it, which the window's must be. A Pearl-C pass's (``scheme`` one of `pouw_pearl_c_device.SCHEMES`) session
+    is held to its salt session instead (`salt_session_reason`). Fails closed."""
     if commits.get("coin_source") != "challenger":
         return ("the window's coins were held in the serving process, not drawn by the auditor host's challenger (the pouw "
                 "setting 'challenger'), so no session binds them")
+    if commits.get("scheme") in PPD.SCHEMES:
+        return salt_session_reason(commits, ledger, fetch, registered, commit, verify)
     why, window = held(commits.get("session"), ledger, commit)
     if why is not None:
         return why
@@ -422,6 +433,66 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
         return f"session {sid} is not trusted: {e}"
     return _window_reason(commits, ledger.key, list(ledger.lines), _listed(ledger.pins), _listed(ledger.main),
                           {"root": root}, files, trusted, received, sid, verify)
+
+
+def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
+                        commit: str | None = None, verify: Any = lms_verify) -> str | None:
+    """Why a Pearl-C pass (its device run's commitment `commits`) isn't held to its salt session, the one whose salt
+    coin follows the pass's salt epoch's root R = `salt.epoch_open_root` of its weights' root W (``weights_root``)
+    and its epoch's number k (``pass_index``, an integer in [0, 2^64)) rather than a window's open root
+    (statement: Lean `Properties.Pouw.LiveSalt.Accepted`); None when it is. R is recomputed here, never read from the
+    pass. The session is the one the auditor's `ledger` opened on R, ended closed and complete under the commitment the
+    pass names (`held`, its ``session``: id, ledger ``seq``, R and commitment, never its hello's ``secret``; `commit`
+    and `registered`, when the verifier holds them, must be W), reserved with the salt coin alone
+    (`window.SALT_FAMILIES`) and having released that coin and nothing else. Its coins are read as core reads a session
+    (`evidence`), never from the pass: the commitment its challenger signed, of that layout (`window.salt_epoch_reason`)
+    and the pass's ``coins``, and its log, showing R alone as the root its salt coin followed. Under that commitment the
+    pass's ``salt_opening`` is ``pouw/salt`` coin 0 opened after R (`challenger.live_reason`), and its ``salt`` is
+    `audit.salt_of` of that coin over W. Fails closed."""
+    w = commits.get("weights_root")
+    if not (isinstance(w, str) and _ROOT.match(w)):
+        return "the pass's weights' root is not 128 lowercase hex, so no session was opened on it"
+    if commit is not None and commit != w:
+        return f"the pass's weights' root {w[:16]}... is not {str(commit)[:16]}..., the one the verifier holds"
+    if registered is not None and w != bytes(registered).hex():
+        return "the pass's weights' root is not the one the period registered"
+    try:
+        root = PS.epoch_open_root(bytes.fromhex(w), commits.get("pass_index"))
+    except DomainError as e:
+        return f"the pass's pass_index names no salt epoch: {e}"
+    if isinstance(commits.get("session"), Mapping) and "secret" in commits["session"]:
+        return "the pass's session names its hello's secret, which a pass never records: a refused pass"
+    why, window = held(commits.get("session"), ledger, root.hex())
+    if why is not None:
+        return why
+    sid, reserve, end = window["open"]["session"], window["reserve"], window["end"]["body"]
+    families = None if reserve is None else reserve["body"].get("families")
+    salt_only = [list(f) for f in Wd.SALT_FAMILIES]
+    if json.dumps(families) != json.dumps(salt_only):
+        return f"session {sid} was reserved with {families}, not the salt coin alone {salt_only}: a refused pass"
+    if json.dumps(end.get("released"), sort_keys=True) != json.dumps({Wd.SALT: 1}):
+        return f"session {sid} released {end.get('released')}, not its one salt coin: a refused pass"
+    try:
+        _, trusted, received = evidence(ledger, root.hex(), fetch, verify)
+    except CoinError as e:
+        return f"session {sid} is not trusted: {e}"
+    if (why := Wd.salt_epoch_reason(trusted)) is not None:
+        return f"session {sid}'s signed coins: {why}"
+    if dict(received) != {Wd.SALT: (root,)}:
+        return f"session {sid}'s signed log does not show the epoch root alone as the root its salt coin followed"
+    try:
+        claimed = LiveCommitment.from_json(commits.get("coins"))
+        opening = LiveOpening.from_json(commits.get("salt_opening"))
+    except CoinError as e:
+        return f"the pass's coins are malformed ({e})"
+    if claimed != trusted:
+        return (f"the pass's coins {claimed.root.hex()[:16]}... are not the coin commitment session {sid}'s challenger "
+                f"signed ({trusted.root.hex()[:16]}...)")
+    if (why := live_reason(trusted, opening, Wd.SALT, 0, root)) is not None:
+        return f"the pass's salt coin: {why}"
+    if salt_of(trusted, opening.coin, bytes.fromhex(w)).hex() != commits.get("salt"):
+        return "the pass's salt is not audit.salt_of of its session's salt coin over its weights' root"
+    return None
 
 
 def _incomplete(ledger: Ledger, outcome: Mapping[str, Any]) -> str:
@@ -672,4 +743,4 @@ def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, An
 __all__ = ["DRAW_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS", "address", "carried",
            "credit_reason", "draw_k", "draw_reason", "drawn_of", "evidence", "families", "held", "lms_verify",
            "manifest_reason", "period_credit", "period_reason", "pinned_key", "pins_head", "pins_of", "program_salt_of",
-           "session_of", "session_reason", "statement", "trusted_rounds_reason", "window_evidence"]
+           "salt_session_reason", "session_of", "session_reason", "statement", "trusted_rounds_reason", "window_evidence"]

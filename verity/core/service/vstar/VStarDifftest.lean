@@ -230,6 +230,93 @@ def innerDraw (j : Json) : Except String Json := do
     | .ok () => Json.mkObj [("draw", (Flock.RecCoins.recordDraw record).getD Json.null)]
     | .error e => Json.mkObj [("refused", (e : Json))]
 
+def hexB (j : Json) (ctx : String) : Except String ByteArray := do Flock.unhex (← jStr j ctx)
+
+def f128 (j : Json) (ctx : String) : Except String Flock.F128 := do Flock.f128OfHex (← jStr j ctx)
+
+def arrOf {α : Type} (f : Json → String → Except String α) (j : Json) (ctx : String) : Except String (Array α) := do
+  (← jArr j ctx).mapM (f · ctx)
+
+def pair (j : Json) (ctx : String) : Except String (Json × Json) := do
+  let a ← jArr j ctx
+  unless a.size == 2 do throw s!"{ctx}: a pair"
+  pure (a[0]!, a[1]!)
+
+/-- `VStar.In.Src` as the test writes it: F elements and bytes as hex (`{hi:016x}{lo:016x}` an element), a message row and
+a top node as `[words, salt]` and `[node, salt]`, the fresh salts as `{dir: {port: [salt, ...]}}`. -/
+def srcOf (j : Json) : Except String In.Src := do
+  let o ← jObj j ["msgs", "openings", "tops", "acc_salts", "kappa", "eq_a", "vs", "fresh"] "src"
+  let row : Json → String → Except String In.Row := fun x ctx => do
+    let (w, s) ← pair x ctx
+    pure { words := ← arrOf jNat w ctx, salt := ← hexB s ctx }
+  let opening : Json → String → Except String In.Opening := fun x ctx => do
+    let q ← jObj x ["rep", "level", "j", "pos", "row", "sibs"] ctx
+    pure { rep := ← jNatAt q "rep" ctx, level := ← jNatAt q "level" ctx, j := ← jNatAt q "j" ctx,
+            pos := ← jNatAt q "pos" ctx, row := ← arrOf f128 (q "row") ctx, sibs := ← arrOf hexB (q "sibs") ctx }
+  let node : Json → String → Except String (ByteArray × ByteArray) := fun x ctx => do
+    let (n, s) ← pair x ctx
+    pure (← hexB n ctx, ← hexB s ctx)
+  let fj := o "fresh"
+  let fresh : String → String → Nat → ByteArray := fun d p i => match (fj.getObjValD d).getObjValD p with
+    | .arr a => match a[i]? with
+      | some (.str s) => (Flock.unhex s).toOption.getD .empty
+      | _ => .empty
+    | _ => .empty
+  pure { msgs := ← arrOf (arrOf row) (o "msgs") "msgs", openings := ← arrOf opening (o "openings") "openings",
+         tops := ← arrOf (arrOf (arrOf node)) (o "tops") "tops", accSalts := ← arrOf hexB (o "acc_salts") "acc_salts",
+         kappa := ← arrOf (arrOf (arrOf (arrOf f128))) (o "kappa") "kappa",
+         eqA := ← arrOf (arrOf (arrOf f128)) (o "eq_a") "eq_a", vs := ← arrOf (arrOf f128) (o "vs") "vs", fresh }
+
+/-- Bytes' SHA-512, its first 8 bytes as hex: one row's or one salt's fingerprint. -/
+def short (b : ByteArray) : Json := Flock.hexOf ((Flock.Sha512.hash b).extract 0 8)
+
+def u16le (ws : Array Nat) : ByteArray := ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) .empty
+
+/-- One V* part's port inputs (`VStar.In`) on the stager's inputs `src`: `stmt` a level's statement (`{"kind": "level",
+"level", "LANES", "H", "n"}`), a part of the algebra's (`{"kind": "inner", "ports": [[name, n], ..], "v": [..]}`) or a
+cap's (`{"kind": "cap", "level", "N"}`), `prog` its program's SHA-512 hex. Each port, in the circuit's order, as its table
+rows' and salts' fingerprints (`short` of a row's u16 little-endian words, of a salt) and its refs. -/
+def partInFn (j : Json) : Except String Json := do
+  let o ← input' j ["src", "prog", "stmt"]
+  let src ← srcOf (o "src")
+  let prog ← jStr (o "prog") "prog"
+  let st := o "stmt"
+  let p ← match ← jStr (st.getObjValD "kind") "stmt.kind" with
+    | "level" => do
+      let q ← jObj st ["kind", "level", "LANES", "H", "n"] "stmt"
+      In.levelIn src prog (← jNatAt q "level" "stmt") (← jNatAt q "LANES" "stmt") (← jNatAt q "H" "stmt") (← jNatAt q "n" "stmt")
+    | "inner" => do
+      let q ← jObj st ["kind", "ports", "v"] "stmt"
+      let ports ← (← jArr (q "ports") "ports").mapM fun x => do
+        let (nm, n) ← pair x "port"
+        pure (← jStr nm "port", ← jNat n "port")
+      In.algebraIn src prog ports.toList (← arrOf jNat (q "v") "v").toList
+    | "cap" => do
+      let q ← jObj st ["kind", "level", "N"] "stmt"
+      In.capIn src (← jNatAt q "level" "stmt") (← jNatAt q "N" "stmt")
+    | k => throw s!"stmt.kind: level, inner or cap, not {k}"
+  let port : String × In.PortIn → Json := fun (nm, q) => Json.arr #[(nm : Json), Json.mkObj [
+    ("rows", Json.arr (q.rows.map fun (r : In.Row) => short (u16le r.words))),
+    ("salts", Json.arr (q.rows.map fun (r : In.Row) => short r.salt)), ("refs", natsJson q.refs.toList)]]
+  pure (Json.mkObj [("ports", Json.arr (p.map port))])
+
+/-- A rep's tops in the order `VStar.In.Src.tops` lists them: `level0`, the node count of level 0's top (`root_B`, at
+`fast100(m)`'s first cap), then `later`, each later level's top's, in the order the rep's schedule commits them
+(`RecVStar.topSizes` of `repRounds`, or `holoRepRounds` with `holo`). -/
+def topSizesFn (j : Json) : Except String Json := do
+  let o ← input' j ["m", "k_log", "claims", "holo"]
+  let m ← jNatAt o "m" "input"
+  let kLog ← jNatAt o "k_log" "input"
+  let claims ← jNatAt o "claims" "input"
+  let holo ← match o "holo" with
+    | .bool b => pure b
+    | _ => throw "input.holo: not a boolean"
+  let some s := Flock.fast100 m | throw s!"m = {m}: no fast100 schedule"
+  let some rs := (if holo then Flock.RecVStar.holoRepRounds else Flock.RecVStar.repRounds) m kLog claims
+    | throw s!"m = {m}, k_log = {kLog}: no rep schedule"
+  pure (Json.mkObj [("level0", ((2 ^ (s.levels.getD 0 default).cap : Nat) : Json)),
+    ("later", natsJson (Flock.RecVStar.topSizes rs))])
+
 end VStar.DT
 
 open VStar.DT in
@@ -239,4 +326,5 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("structure", structureFn), ("spec", specFn false), ("parts", partsFn), ("statements", statementsFn false),
   ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
   ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
-  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw)])
+  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn),
+  ("top_sizes", topSizesFn)])
