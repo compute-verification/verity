@@ -269,7 +269,7 @@ the wrong bind unfolds both programs and costs more than the step. -/
 elab "cl_bind_of " c:ident : tactic => do
   let n ← realizeGlobalConstNoOverload c
   let tgt := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
-  unless tgt.isAppOfArity ``CL 3 do throwError "cl_bind_of: not a CL goal"
+  unless tgt.getAppNumArgs == 3 do throwError "cl_bind_of: not a CL or Ret goal"
   let x := (tgt.getArg! 1).headBeta
   unless x.isAppOfArity ``Bind.bind 6 && (x.getArg! 4).getAppFn.isConstOf n do
     throwError "cl_bind_of: not a bind of {n}"
@@ -279,7 +279,7 @@ open Lean Elab Tactic Meta in
 elab "cl_head " c:ident : tactic => do
   let n ← realizeGlobalConstNoOverload c
   let tgt := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
-  unless tgt.isAppOfArity ``CL 3 && (tgt.getArg! 1).headBeta.getAppFn.isConstOf n do
+  unless tgt.getAppNumArgs == 3 && (tgt.getArg! 1).headBeta.getAppFn.isConstOf n do
     throwError "cl_head: not a program headed by {n}"
 
 /-- One step of the decoder's walk. -/
@@ -317,5 +317,157 @@ theorem cl_decodeJ (h : ByteArray → ByteArray) (keep : Bool → Bool) (spec : 
     | (cl_bind_of ForIn.forIn; with_reducible refine cl_bind_forIn (xs := spec.repStreams) (c := 1) (fun _ _ => ?_) (fun _ => ?_) ?_)
     | dec_step)
   all_goals omega
+
+/-! ## What the decoder returns -/
+
+/-- Some run of `x` returns `a`. -/
+def Ok {α : Type} (x : LogV α) (a : α) : Prop := ∃ l l', x.go l = (.ok a, l')
+
+/-- Every value a run of `x` returns satisfies `Q`. -/
+def Ret {α : Type} (x : LogV α) (Q : α → Prop) : Prop := ∀ a, Ok x a → Q a
+
+theorem ret_bind {α β : Type} {x : LogV α} {f : α → LogV β} {Q : β → Prop} (hf : ∀ a, Ok x a → Ret (f a) Q) :
+    Ret (x >>= f) Q := by
+  rintro b ⟨l, l', e⟩
+  rw [go_bind] at e
+  rcases hx : x.go l with ⟨r, l₁⟩
+  rw [hx] at e
+  cases r with
+  | error _ => cases e
+  | ok a => exact hf a ⟨l, l₁, hx⟩ b ⟨l₁, l', e⟩
+
+theorem ret_lift_bind {α β : Type} {v : Flock.V α} {f : α → LogV β} {Q : β → Prop}
+    (hf : ∀ a, v = .ok a → Ret (f a) Q) : Ret (liftM v >>= f) Q :=
+  ret_bind fun a ⟨_, _, e⟩ => hf a (by rw [go_liftM] at e; exact (Prod.mk.inj e).1)
+
+theorem ret_lift_ok_bind {α β : Type} {a : α} {f : α → LogV β} {Q : β → Prop} (hf : Ret (f a) Q) :
+    Ret (liftM (Except.ok a : Flock.V α) >>= f) Q :=
+  ret_lift_bind fun _ e => (Except.ok.inj e) ▸ hf
+
+theorem ret_pure {α : Type} {a : α} {Q : α → Prop} (h : Q a) : Ret (pure a : LogV α) Q := by
+  rintro b ⟨l, l', e⟩
+  rw [go_pure] at e
+  cases e
+  exact h
+
+theorem ret_throw {α : Type} (e : String) (Q : α → Prop) : Ret (throw e : LogV α) Q := by
+  rintro b ⟨l, l', e'⟩
+  rw [go_throw] at e'
+  cases e'
+
+theorem ret_throw_bind {α β : Type} (e : String) (f : α → LogV β) (Q : β → Prop) : Ret (throw e >>= f) Q :=
+  ret_bind fun _ ⟨_, _, e'⟩ => by rw [go_throw] at e'; cases e'
+
+theorem ret_ite {α : Type} {c : Prop} [Decidable c] {t e : LogV α} {Q : α → Prop} (ht : Ret t Q) (he : Ret e Q) :
+    Ret (if c then t else e) Q := by
+  by_cases hc : c
+  · rw [if_pos hc]; exact ht
+  · rw [if_neg hc]; exact he
+
+/-- One step of a walk to what a program returns: a bind keeps its first program's run (`Ok`), a lifted step its
+value's equation. -/
+macro "ret_step" : tactic => `(tactic| first
+  | (cl_bind_of MonadExcept.throw; with_reducible exact ret_throw_bind _ _ _)
+  | (cl_bind_of liftM; with_reducible refine ret_lift_ok_bind ?_)
+  | (cl_bind_of liftM; with_reducible refine ret_lift_bind fun _ _ => ?_)
+  | (cl_head Bind.bind; with_reducible refine ret_bind fun _ _ => ?_)
+  | (cl_head MonadExcept.throw; with_reducible exact ret_throw _ _)
+  | (cl_head ite; with_reducible refine ret_ite ?_ ?_)
+  | (cl_head Pure.pure; with_reducible refine ret_pure ?_)
+  | split
+  | dsimp only)
+
+theorem list_mapM_ret {α β : Type} {g : α → LogV β} {p : β → Prop} :
+    ∀ (xs : List α), (∀ a ∈ xs, Ret (g a) p) → Ret (xs.mapM g) (∀ b ∈ ·, p b)
+  | [], _ => by rw [List.mapM_nil]; exact ret_pure fun b hb => by cases hb
+  | a :: xs, hg => by
+    rw [List.mapM_cons]
+    refine ret_bind fun b hb => ret_bind fun bs hbs => ret_pure fun y hy => ?_
+    rcases List.mem_cons.1 hy with rfl | hy
+    · exact hg a (List.mem_cons_self ..) _ hb
+    · exact list_mapM_ret xs (fun y hy => hg y (List.mem_cons_of_mem _ hy)) bs hbs _ hy
+
+theorem mapM_ret {α β : Type} {g : α → LogV β} {p : β → Prop} {xs : Array α} (hg : ∀ a ∈ xs, Ret (g a) p)
+    {bs : Array β} (h : Ok (xs.mapM g) bs) : ∀ b ∈ bs, p b := by
+  rw [Array.mapM_eq_mapM_toList, map_eq_pure_bind] at h
+  refine ret_bind (fun ys hys => ret_pure (Q := (∀ b ∈ ·, p b)) fun b hb => ?_) bs h
+  exact list_mapM_ret xs.toList (fun a ha => hg a (by simpa using ha)) ys hys b (by simpa using hb)
+
+theorem mapIdxM_go_ok_length {α β : Type} {g : ℕ → α → LogV β} :
+    ∀ (xs : List α) (acc : Array β) (ys : List β), Ok (List.mapIdxM.go g xs acc) ys → ys.length = acc.size + xs.length
+  | [], acc, ys, ⟨l, l', e⟩ => by
+    simp only [List.mapIdxM.go] at e
+    rw [go_pure] at e
+    cases e
+    simp
+  | a :: xs, acc, ys, ⟨l, l', e⟩ => by
+    simp only [List.mapIdxM.go] at e
+    rw [go_bind] at e
+    rcases h1 : (g acc.size a).go l with ⟨r, l₁⟩
+    rw [h1] at e
+    cases r with
+    | error _ => cases e
+    | ok b =>
+      have := mapIdxM_go_ok_length xs (acc.push b) ys ⟨l₁, l', e⟩
+      simp only [Array.size_push, List.length_cons] at this ⊢
+      omega
+
+theorem mapIdxM_ok_size {α β : Type} {g : ℕ → α → LogV β} {xs : Array α} {ys : Array β} (h : Ok (xs.mapIdxM g) ys) :
+    ys.size = xs.size := by
+  obtain ⟨l, l', e⟩ := h
+  have e' : (Array.toList <$> xs.mapIdxM g).go l = (.ok ys.toList, l') := by
+    rw [map_eq_pure_bind, go_bind, e]
+    rfl
+  rw [Array.toList_mapIdxM] at e'
+  have := mapIdxM_go_ok_length xs.toList #[] ys.toList ⟨l, l', e'⟩
+  simpa using this
+
+/-- **Every session the decoder returns has at most `R` rounds a stream**, `R` bounding the record's streams' rounds. -/
+theorem ret_decodeJ_rounds (h : ByteArray → ByteArray) (keep : Bool → Bool) (spec : SessionSpec) (j : Lean.Json)
+    (sj : Array Lean.Json) (R : ℕ) (hsj : Record.arr j "streams" = .ok sj)
+    (hR : ∀ s ∈ sj, ∀ rj, Record.arr s "rounds" = .ok rj → rj.size ≤ R) :
+    Ret (Record.decodeJWithK keep (Hashes.logged h) spec j) fun sess => ∀ s ∈ sess.streams, s.rounds.size ≤ R := by
+  unfold Record.decodeJWithK
+  rw [hsj]
+  repeat' ret_step
+  all_goals
+    refine mapM_ret (fun s hs => ?_) ‹Ok (Array.mapM _ sj) _›
+    repeat' ret_step
+    all_goals
+      rw [mapIdxM_ok_size ‹Ok (Array.mapIdxM _ _) _›]
+      exact hR s hs _ ‹Record.arr s "rounds" = _›
+
+/-! ## The schedules and the verdict -/
+
+theorem fast100_none_of_gt (m : ℕ) (h : 35 < m) : fast100 m = none := by
+  have : (m < 22 || m > 35) = true := by rw [Bool.or_eq_true, decide_eq_true_iff, decide_eq_true_iff]; omega
+  unfold fast100
+  rw [ite_eq_left_of_eq_true _ _ (eq_true this)]
+  rfl
+
+/-- **Every fast100 schedule's Ligerito makes at most `2^16` calls** (64,568 at `m = 35`, the most). -/
+theorem ligC_fast100 {m : ℕ} {sch : Schedule} (hs : fast100 m = some sch) : ligC sch ≤ 2 ^ 16 := by
+  have key : ∀ m < 36, (match fast100 m with
+      | some s => decide (ligC s ≤ 2 ^ 16)
+      | none => true) = true := by
+    decide +kernel
+  by_cases hm : m < 36
+  · have h := key m hm
+    rw [hs] at h
+    simpa using h
+  · rw [fast100_none_of_gt m (by omega)] at hs
+    cases hs
+
+/-- **A verdict's SHA-512 calls on every run, at a record of known shape**: the record's streams `sj`, each of at most
+`R` rounds, whether the verdict accepts or throws. -/
+theorem cl_verifyJ_rec (h : ByteArray → ByteArray) (keep : Bool → Bool) (spec : SessionSpec) (tabs : Array Setup)
+    (j : Lean.Json) (proofs : Array ByteArray) (sj : Array Lean.Json) (R : ℕ) (hsj : Record.arr j "streams" = .ok sj)
+    (hR : ∀ s ∈ sj, ∀ rj, Record.arr s "rounds" = .ok rj → rj.size ≤ R) :
+    CL (verifyJWithMK keep (Hashes.logged h) spec tabs j proofs)
+      (2 * spec.tables.size + 2 + sj.size * (2 * R) + spec.repStreams.size +
+        (spec.repStreams.size + tabs.size * (2 * (2 ^ 16 + R)))) :=
+  cl_verifyJ h keep spec tabs j proofs _ _ R (cl_decodeJ h keep spec j sj R hsj hR)
+    (fun l sess l' e => ret_decodeJ_rounds h keep spec j sj R hsj hR sess ⟨l, l', e⟩)
+    (fun _ _ hs => ligC_fast100 hs)
 
 end FlockDeploy.KS
