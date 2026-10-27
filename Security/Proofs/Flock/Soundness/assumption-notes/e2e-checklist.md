@@ -19,7 +19,7 @@ lists (`ASSUMPTIONS.md`, The headline), every hypothesis with its kind:
 - numeric conditions: `hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`, and the budgets `qF`, `qS`, `qT`, which Lean
   doesn't check.
 
-It bounds faulty units of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template
+It bounds faulty proof blocks of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template
 and the Definition's Boolean semantics in Lean, which a generic Boolean-semantics lemma replaces once lane proofs-ir
 lands. Its round coins are A6's (`uniform/flock-coin-server`), which the model embodies: live uniform OS coins drawn
 each round, so it is cited only for runs that use them (`ASSUMPTIONS.md`, its coins).

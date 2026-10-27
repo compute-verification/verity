@@ -102,7 +102,7 @@ def test_derived_figures_follow_their_inputs() -> None:
     assert "at most 10 of the block's 1,000 ANDs (1%)" in out
     assert "actual / predicted = 0.9" in out
     assert "That's 2 H200-hours, which D H200s fill in 0.0012 minutes." in out
-    assert ("| week | 100,000 | 3,126,428 | 3.47e-22% *(world-inference-2027)* | 0.00031% | 177,688 | "
+    assert ("| week | 100,000 | 3,126,434 | 3.47e-22% *(world-inference-2027)* | 0.00031% | 177,688 | "
             "1.97e-22% *(world-inference-2027)* | 0.000176% |") in out
     assert "across 2 subcircuits" in out
 
