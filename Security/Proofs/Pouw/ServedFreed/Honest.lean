@@ -28,6 +28,7 @@ open Properties.Pouw.Served Properties.Pouw.Served.SecurityProofs
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
 open Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open Accounting.SecurityProofs.ComposePeriod
 
 /-! ## The registered devices' period -/
 
