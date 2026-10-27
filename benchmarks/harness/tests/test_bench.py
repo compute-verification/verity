@@ -469,7 +469,7 @@ def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
 
     kinds_toml = Path(__file__).resolve().parents[3] / "infra" / "cluster" / "kinds" / "benchmarks.toml"
     kinds = tomllib.loads(kinds_toml.read_text())["kinds"]
-    phase_gpus = {"gpu1": 1, "gpu8-timed": 8}
+    phase_gpus = {"gpu1": 1}
     specs = [load_spec(p) for p in sorted(SPEC_ROOT.glob("*.toml")) if "vllm-spec/v0" in p.read_text().splitlines()[0]]
     assert specs
     for spec in specs:
@@ -477,7 +477,7 @@ def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
         assert phase_gpus[kind["phase"]] == spec.preset.gpu_count, spec.id
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
     with pytest.raises(ValueError, match="register one in infra/cluster/kinds/benchmarks.toml"):
-        jobs.queue_kind(4)
+        jobs.queue_kind(8)
 
 
 def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):

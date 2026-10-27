@@ -240,7 +240,7 @@ def _relative_spec(source: str | Path, root: Path) -> str:
         raise ValueError("a recorded benchmark spec must be inside the source tree") from None
 
 
-QUEUE_KINDS = {1: "vllm-bench-1gpu", 8: "vllm-bench-8gpu"}
+QUEUE_KINDS = {1: "vllm-bench-1gpu"}
 # A point writes its records, out/ and what its setup builds (a few MB; the venv and model cache are shared). The
 # queue's default 20 GB request would hold every point once the node's disk nears research disk-hold's 80%.
 POINT_DISK_GB = 5
