@@ -109,7 +109,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   window's draws after its roots; and, once the session has its outcome and no root can follow, the commitment and
   every released coin's opening (`audit.Session.disclose`; the remote session's `coins` after `ended`), which it
   checks each coin it was sent against (`received_reason`). The commitment's root is a function of every coin, so the
-  prover holds none of it while the session runs (soundness's ruling of 27 Oct, `PROTOCOL.md` §4).
+  prover holds none of it while the session runs, and no guarantee takes a hiding premise on it (`PROTOCOL.md` §4).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
 - `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
