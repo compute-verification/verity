@@ -41,7 +41,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
 
-#: For each unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` is shared by all.
+#: For each unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` and ``settings`` are shared by all.
 ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
@@ -167,6 +167,15 @@ INFRA_IMPORTERS = {
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
+    # the H200 example (benchmarks/e2e_h200 and e2e_demo, moved to examples/h200 by #4903): its runner loads kernels' and
+    # memory-accounting's benchmark code by path
+    "examples/h200/e2e_h200/attention.py": "compute-accounting: kernels' attn_ref (`benchmarks/torch_gpu/attn_ref`)",
+    "examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
+    "examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
+    "examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the s8 decode linear "
+                                       "(`benchmarks/torch_gpu/s8_dec_linear`)",
+    "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
+                                                                 "(`benchmarks/torch_gpu/commit_slots`)",
     # the served path: verity_vllm runs benchmarks' code
     "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
                                                        "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
@@ -187,7 +196,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
         "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
-        "verity/ml/flock/python/verity_flock/lean_rows.py", "verity/ml/flock/python/verity_flock/register.py",
+        "verity/ml/flock/python/verity_flock/register.py",
         "verity/ml/flock/tests/plain_hidden.py", "verity/ml/flock/tests/served_registered.py",
         "verity/ml/flock/tests/test_backend.py", "verity/ml/flock/tests/test_circuit.py",
         "verity/ml/flock/tests/test_class_statement.py", "verity/ml/flock/tests/test_derive.py",
@@ -335,8 +344,8 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
 def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
     """A new package under ``verity`` is a new unit, listed in ``ALLOWED``; what is outside every unit is a grouping's
     ``__init__.py`` (``ml``, ``core``, ``core.protocols``) or a file directly under ``verity/``, and imports the standard
-    library and nothing else: ``verity/__init__.py`` re-exports nothing and ``verity/errors.py`` is shared by every unit, the
-    stdlib-only references included."""
+    library and nothing else: ``verity/__init__.py`` re-exports nothing, and ``verity/errors.py`` and the settings registry
+    ``verity/settings.py`` are shared by every unit, the stdlib-only references included."""
     offenders = []
     for path in _sources():
         if _unit(_dotted(path)) is not None:
@@ -651,7 +660,7 @@ def test_nothing_outside_benchmarks_imports_it() -> None:
     """``benchmarks/`` is measurement only (top's repository organization plan, 27 Oct): no file outside it imports a module
     of it, by name or by path, apart from ``BENCHMARKS_IMPORTERS``, which only shrinks."""
     packages = _benchmarks_packages()
-    assert {"verity_bench", "verity_numerical", "verity_e2e_demo", "e2e_h200"} <= packages, packages
+    assert {"verity_bench", "verity_numerical"} <= packages, packages
     found = _benchmarks_importers(_tracked_python(), packages)
     offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in BENCHMARKS_IMPORTERS for hit in hits]
     assert not offenders, ("benchmarks/ is measurement only, and nothing outside it imports it: move the code you need out "

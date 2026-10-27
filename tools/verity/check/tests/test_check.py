@@ -405,6 +405,14 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
     assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    launched.clear()
+    # drive's after-landing run: circuit-check's passes come from the gathered pack (main imports only theirs)
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(given_to) == 3
+    [cmd] = launched
+    tail = cmd[cmd.index("--") + 1:]
+    assert tail[-4:-2] == ["--no-cache", "--circuit-cache"] and tail[-2] == "--verdicts-in", tail
+    launched.clear()
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 3
     head = launched[0][:launched[0].index("--")]
     assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
         "custody uploads the packs however the run ends, never trimming them as undeclared"
@@ -1102,6 +1110,24 @@ def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_pa
     assert len(CHECK.groups(out, 8)) == 3
 
 
+def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path, monkeypatch):
+    """Drive's after-landing run (`--no-cache --circuit-cache`): the suites and the Lean steps run cold, and circuit-check reuses
+    its per-target passes, since a cold `--all` (~4 h) outlasted every after-landing run from 24 Oct.  `--no-cache` alone (the
+    nightly `audit-main`) leaves circuit-check cold too."""
+    out, _ = _pinned(tmp_path, monkeypatch)
+
+    def steps(**kw) -> dict:
+        return {name: argv for g in CHECK.groups(out, 8, **kw) for name, argv, _ in g}
+
+    cached, cold, after = steps(), steps(cache=False), steps(cache=False, circuit_cache=True)
+    cc = ["--cache", str(CHECK.cache_dir() / "circuit-check"), "--catalog-units"]
+    assert " ".join(cc) in " ".join(cached["circuit-check"]) and " ".join(cc) in " ".join(after["circuit-check"])
+    assert "--cache" not in cold["circuit-check"]
+    for s in ("pytest", "lean-suites", "lean-audit"):
+        assert "--fresh" in " ".join(after[s]) and "--fresh" not in " ".join(cached[s]), s
+    assert after["lean-changed"].startswith("skipped: --no-cache")
+
+
 def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
@@ -1396,6 +1422,10 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     # the flags, the store key
     p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest,circuit-check", "--circuit-cache")
+    assert p.returncode == 2 and "train: --circuit-cache refused without --no-cache" in p.stderr, p.stderr
     p = train("--against", "main")
     assert p.returncode == 2 and "train: --against refused" in p.stderr, p.stderr
 
@@ -1505,6 +1535,10 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     p = train("HEAD", "vy-x", "--agreement")
     args = argv.read_text().split()
     assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
+    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
+                                                                     "--circuit-cache", "--no-regenerate"], args
 
     (tmp_path / "origin.git").rename(tmp_path / "gone.git")
     (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
