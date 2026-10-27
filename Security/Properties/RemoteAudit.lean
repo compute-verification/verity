@@ -12,8 +12,9 @@ the receipts' and the store's meaning as the game's oracle and words, the window
 premise or a proofs unit of the bridge, named in each docstring.
 
 The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
-verifier accepts: `Properties.RemoteAudit.Line.LineHeld` and `LineHeldIdentity` (`Properties/RemoteAudit/Line.lean`,
-proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with the line's code-to-model premises named in
+verifier accepts: `Properties.RemoteAudit.Line.LineHeld`, the bits its credited passes read
+(`Properties/RemoteAudit/Line.lean`, proved in `Proofs/Accounting/RemoteHeld/Line.lean`, where `heldAt_of_read` derives
+memory held from it under the device model), with the line's code-to-model premises named in
 `Properties/RemoteAudit/Line/Premises.lean` and the W's cover of the session's pooled bound in
 `Properties/RemoteAudit/Pooled.lean`.
 
