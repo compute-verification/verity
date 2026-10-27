@@ -1152,9 +1152,10 @@ def protocol : Core.Protocol where
 #guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ #[({ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }, 0)] #[] 1 1).K ==
   0
 -- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit drawn, and its tied audit (the
--- toy block) of 32 units whose free inputs are their Programs' rows, 4,496 bits each: K is the tied audit's 143,872
-#guard (rowsTerms #[{ units := 32, drawn := 32, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512⟩
-  #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 32 * 4496)] #[] 1 1).K == 143872
+-- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
+-- entries, 1,136 bits each: K is the tied audit's 9,088
+#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512⟩
+  #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136)] #[] 1 1).K == 9088
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
 #guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0)] #[] 1 2
   ).eps.toString == "2/15"
