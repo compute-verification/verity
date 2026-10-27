@@ -18,7 +18,8 @@ the facts relating them that no lemma gives yet, each its owner's:
   `acc_of_accepts` and a decode of `ComponentAccepts`; ONE-4's coupling of the device's releases to the session's
   coins and `DrawnByDevice`);
 * `break_le`: the break at the finder's loss (ONE-4's `findBreak` as the finder; LMS forgery to a SHA-512 collision);
-* `unbound_le`: the unbound units at most the session extractor's wrong ones (`place`'s openings bridge, ONE-7);
+* `unbound_le`: the unbound units at most the session's faulty ones (`LiveAt.faultyE`; `place`'s openings bridge,
+  ONE-7);
 * `cr`: the vocabulary's finder premise gives C-Flock's (C-Flock's finders as one `Claims.Finder`, ONE19);
 
 the deployment's constants (`k = kDep`, `M = R_w = 2^192`, `ρ = 1/2`, `v ≤ 2^80`, at most `2^40` committed wires),
@@ -79,7 +80,7 @@ structure SampledDeploy (V : Vocab d α) where
   unbound_le : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
     (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤
-      ((A θ F c σ r hr).wrongE (q θ) (τOf θ F c σ r hr)).card
+      ((A θ F c σ r hr).faultyE (q θ) (τOf θ F c σ r hr)).card
   cr : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
     V.FinderCR .sampled θ F c σ → (A θ F c σ r hr).CR (τOf θ F c σ r hr)
