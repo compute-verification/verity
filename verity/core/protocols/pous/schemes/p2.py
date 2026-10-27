@@ -47,6 +47,11 @@ leaves and challenge derivation), not with the expander.
   independent forward-only uniform permutations of `[0, p)`, with no hypothesis, and the same for both codecs.
   `P2.certificate` is it at the registered point alone (`2^19` blocks); `family_certificate` is it for any v4 store in
   that block range, which the run protocol takes where the registered one doesn't fit.
+- Above `2^23` blocks the run protocol takes `wide_certificate`: the per-period guarantee
+  `Pous.Period.SecurityProofs.periodHeldAt`, for every block count `2^19 ≤ N ≤ 2^27` at the registered width and prime,
+  the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
+  is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
+  above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
 - **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
@@ -100,6 +105,11 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
   that the prover doesn't control and nothing attests (core's `trusted-host`)."""
 
+WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
+"""What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
+conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
+commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
+
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
 segments."""
@@ -109,6 +119,10 @@ CERT_BLOCKS = 1 << 19
 CERT_FAMILY_BLOCKS = (1 << 8, 1 << 23)
 """The block counts `P2SlackFamilyUncond` proves its `λ = 128` row at `k = 105` for, at the registered width and prime
 (`family_certificate`)."""
+
+CERT_WIDE_BLOCKS = (1 << 19, 1 << 27)
+"""The block counts `Pous.Period.PeriodHeldAt` covers at the registered width and prime (`wide_certificate`), the range
+of `P2RingRoundSecureWide`."""
 
 CERT_K = 105
 """The spec's k (decision F6): `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""
@@ -473,7 +487,20 @@ def family_certificate(params: P2Params) -> Certificate | None:
                        theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
 
 
-__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
-           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "P2", "P2ChaCha", "P2Params",
+def wide_certificate(params: P2Params) -> Certificate | None:
+    """`Pous.Period.SecurityProofs.periodHeldAt` for a v4 store at the registered width and prime of any block count in
+    `CERT_WIDE_BLOCKS`, in any number of segments: at every point of the run's composed check and every `N` from `2^19`
+    to `2^27`, an accepted period with no break while the node held fewer than `⌊ρ·N·16448⌋` bits has probability at
+    most `δ + ε_max = 1% + 2^-128`, read at `N` = the store's blocks, under `WIDE_CLAIMS`.  The run protocol takes it
+    above `family_certificate`'s range (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    lo, hi = CERT_WIDE_BLOCKS
+    if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
+        return None
+    return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                       theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
+
+
+__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
+           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
-           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream"]
+           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]
