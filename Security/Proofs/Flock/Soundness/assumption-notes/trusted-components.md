@@ -46,5 +46,5 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   (`v4.34.0-patch2`) and Mathlib `5ed29652` (`v4.34.0`). Lean 4.34.0. The definitions used from them (Reed–Solomon
   codes, `mcaError`, Johnson bounds) are part of what the statement means. `reads` does not follow them, so a bump's
   reviewer compares them by hand.
-- **Everything around the verifier's checks:** the session record's custody, the verifier's source of coins (spec §7),
+- **Everything around the verifier's checks:** the session record's custody, the verifier's source of coins (`Tags.coinScheme`),
   and the registered roots.

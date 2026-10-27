@@ -366,7 +366,7 @@ found `fast100` run twice at best 2^-75.6 under Fiat–Shamir), and, for small p
 that is planned. The per-coin lemmas of `rep_sound` and the separate round-by-round term of the out-of-domain samples
 stay as they are proved.
 
-**The `seed` coin mode is not Fiat–Shamir** (spec §7.2). Coins come from a seed the verifier commits at step
+**The `seed` coin mode is not Fiat–Shamir** (`Tags.coinScheme`). Coins come from a seed the verifier commits at step
 0, so soundness adds only seed hiding and SHA-256 as a PRF. It is the bridge to zero knowledge against a malicious
 verifier (§6), not to non-interactive proofs.
 

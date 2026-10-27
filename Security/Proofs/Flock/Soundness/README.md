@@ -344,7 +344,7 @@ term below 2^-170.
 
 **Not assumptions** (proved, or to be proved, from the libraries):
 
-- **Ring switching.** The spec's variant (spec §12, A9: seven coins per claim, then batching, with Ligerito's sumcheck
+- **Ring switching.** The verifier's variant (`Flock.Opening`, A9: seven coins per claim, then batching, with Ligerito's sumcheck
   in place of the standalone one) is not Diamond–Posen's. Its soundness follows from the paper's Appendix B argument
   (injective recombination over GF(2)) plus Schwartz–Zippel. ArkLib's ring switching (legacy layer, 18 admits, the
   other variant) is not used.
@@ -381,7 +381,7 @@ term below 2^-170.
   - **Soundness per session** is the union bound over its tables, `Σ tableError`, since each table's bound holds for
     every prover strategy.
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the
-  commitment (spec §9.1; paper Remark 11). A committed table therefore binds the prover to a short list of codewords,
+  commitment (`Flock.Piop`; paper Remark 11). A committed table therefore binds the prover to a short list of codewords,
   not to one witness. The list has at most 200 entries at rate 1/2 (ArkLib's Johnson bound, `1/(2ηρ)` with
   `η = 1/200`; `Flock.Schedule`'s 0.02 is a diagnostic).
   - "The committed values satisfy the circuit" means that some codeword of that list packs a satisfying witness
