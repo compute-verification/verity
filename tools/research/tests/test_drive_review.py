@@ -1618,8 +1618,17 @@ def test_a_hand_sync_waits_for_a_running_lean_check_whose_prefix_holds_an_ejecte
 
 def test_research_queue_drive_refuses_off_drive_and_pushes_nothing(world, monkeypatch, capsys):
     """CI-190 (1): a tick lands onto `main` and rebuilds `next`, which only drive's App may move."""
+    import research.merge as M
     from research.cli import main as research_main
 
+    calls = []
+
+    def gh(repo, *args):
+        calls.append(args)
+        assert args[:2] == ("pr", "list"), args
+        return "[]"
+
+    monkeypatch.setattr(M, "_gh_cli", gh)                                   # the branch sweep's, which runs before the sync
     monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     monkeypatch.delenv("RESEARCH_DRIVE")
@@ -1628,7 +1637,7 @@ def test_research_queue_drive_refuses_off_drive_and_pushes_nothing(world, monkey
     assert research_main(["queue", "drive", "--on", "m1", "--workdir", str(world.tmp / "q" / "verity"), "--remote",
                           str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "store"), "--rules",
                           str(world.dev / "ci" / "queue.toml")]) == 1
-    assert "/data/infra/drive.sh once" in capsys.readouterr().err and refs() == before
+    assert "/data/infra/drive.sh once" in capsys.readouterr().err and refs() == before and calls == []
 
 
 def test_a_member_that_doesnt_compile_under_a_passed_lean_check_lets_its_pushed_fix_in(world, monkeypatch):
@@ -1653,6 +1662,61 @@ def test_a_member_that_doesnt_compile_under_a_passed_lean_check_lets_its_pushed_
     out = h.tick()
     assert out.startswith("landed #3"), (out, world.logs)
     assert _git(world.origin, "show", "main:pkg/bad.py") == "x = 1"
+
+
+def test_a_cut_below_a_lean_change_under_a_passed_lean_check_waits_for_a_lean_check_of_what_lands(world, monkeypatch):
+    """CI-191: #1 and #2 both change pkg's lock, and #2 doesn't compile; a Lean check of #1 + #2 + #3 passed, `_compiles` cut
+    below #2, and drive landed #1 alone on that check, a tree no Lean check ever saw."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    h.d.max_lean_checks = 1                                                # one check holds both Lean changes
+    world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
+    world.gh.put(2, world.change({"pkg/lean-audit.json": '{"a": 1, "b": 2}', "pkg/bad.py": "def (:\n"}, base=one))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    top, below = _tip(world), _main(world)
+    assert h.launched == [(top, "m1", False)], world.logs
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert not out.startswith("landed") and _main(world) == below, (out, world.logs)
+    own = h.q.chain()[0].commit
+    assert h.launched[1] == (own, "m1", False) and top not in h.d.q.load_state()["drive"]["lean"], world.logs
+    (again,) = h.lean_ids()[1:]
+    h.run_state[again] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, again, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert out.startswith("landed #"), (out, world.logs)
+    assert _git(world.origin, "show", "main:pkg/lean-audit.json") == '{"a": 1}'
+    assert f"research queue drive: landed #1 #3 on `main` at {_main(world)[:12]} (check {again})" in world.logs, world.logs
+
+
+def test_drives_own_pushes_of_main_refuse_off_drive_and_in_shadow_too(world, monkeypatch):
+    """CI-191 (a): `_land` and `_revert` push `main` whoever calls them; off drive they refuse before anything, `--shadow` too,
+    which never reaches them."""
+    h = Review(world, monkeypatch, baseline=False)                         # nothing lands before `main`'s own run
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert not h.tick().startswith("landed")
+    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    before = refs()
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.d.land_reviewed(h.q.load_state()["drive"], dry_run=False)
+    _move_main(world, {"z.txt": "z\n"})
+    h.q.fetch()
+    before, moved = refs(), _main(world)
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.d._revert([moved])
+    h.q.shadow = True
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.d._revert([moved])
+    assert refs() == before
+    h.q.shadow = False
+    monkeypatch.setenv("RESEARCH_DRIVE", "1")
+    assert h.d._revert([moved]) == "pushed" and _git(world.origin, "rev-parse", "main^1") == moved
 
 
 def test_lean_check_refuses_a_commit_whose_recorded_lean_check_passed_naming_its_run(world, monkeypatch):

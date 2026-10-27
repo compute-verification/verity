@@ -3153,8 +3153,8 @@ class Driver:
     def land_reviewed(self, drive: dict, dry_run: bool) -> tuple[Member | None, str]:
         """Land `next`'s longest prefix whose every member has a land verdict at its head and no hold (`queue.unreviewed`, by none
         of `_owners`), cut below a Lean change no passed Lean check holds (`_lean_gate`) and below a member whose Python doesn't
-        compile (`_compiles`): a fast-forward of `main` to its top, through `_land`.  (the member landed or None, what the tick
-        did)"""
+        compile (`_compiles`), the gate then run again on what is left below that cut: a fast-forward of `main` to its top,
+        through `_land`.  (the member landed or None, what the tick did)"""
         q = self.q
         base, chain = self._chain()
         if not chain:
@@ -3169,10 +3169,12 @@ class Driver:
             return None, f"nothing reviewed lands: {stop}"
         t, rid = self._lean_gate(drive, chain, k, dry_run)
         t = self._past_failed(drive, chain, t)
-        if t >= 0:
-            if (cut := self._compiles(drive, chain, base, t)) < t:
-                self._drop_passed_above(drive, chain, cut)
-            t = self._past_failed(drive, chain, cut)
+        while t >= 0 and (cut := self._compiles(drive, chain, base, t)) < t:
+            # the gate's cover read the trees of `chain[:k]`: a Lean check above the cut covers what lands only while no Lean
+            # change lies between them (CI-191: #1 landed alone on a check of #1 + #2, both changing one lock)
+            t, rid = self._lean_gate(drive, chain, cut + 1, dry_run) if cut >= 0 else (-1, "")
+            t = self._past_failed(drive, chain, t)
+            self._drop_passed_above(drive, chain, cut)
         if t < 0:
             return None, f"nothing lands: #{chain[0].pr} at {chain[0].head[:8]} waits (see above)"
         m, members = chain[t], chain[: t + 1]
