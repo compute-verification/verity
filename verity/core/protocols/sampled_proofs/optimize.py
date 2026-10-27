@@ -38,7 +38,7 @@ from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, nextaft
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.ml.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
 
 #: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
 SHA512_ANDS = 58_120
@@ -56,8 +56,8 @@ def row_ands(nbytes: int) -> int:
 class Candidate:
     """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.unit_class`, at
-    most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.size_class`, at
+    most `SIZE_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
     (m = k_log + nbl <= 35); `per_replay` proof blocks of it lie in each replay block of domain `replay`; and `kind` is its weight
@@ -83,10 +83,10 @@ class Candidate:
     def __post_init__(self) -> None:
         if not self.op or not self.template or self.units < 1 or self.cap < 1 or self.out_bits < 0 or self.out_gates < 0 \
                 or min(self.work, self.influence, self.ands, self.commit_bits, self.commit_rows, *self.rows, 0) < 0 \
-                or unit_class(self.out_bits) is None or (bool(self.replay) != (self.per_replay > 0)) \
+                or size_class(self.out_bits) is None or (bool(self.replay) != (self.per_replay > 0)) \
                 or self.per_replay > self.units:
             raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs in a "
-                             f"size class (<= {UNIT_CLASS_MAX} bits), and per_replay in [1, units] with a replay")
+                             f"size class (<= {SIZE_CLASS_MAX} bits), and per_replay in [1, units] with a replay")
 
     @property
     def alternative(self) -> str:

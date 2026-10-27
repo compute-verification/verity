@@ -20,7 +20,7 @@ and its units, from the finest up:
   main yet, so stubs here (every id `stub:`), each one's ANDs composed from pinned pieces. A row op is a unit whole
   when its outputs fit a size class, or commits its row statistic as a unit of its own (`shared`: RMSNorm's 1/rms, the
   quantizer's scale, softmax's max and sum) read by coordinate units or chunks (`chunked`: the quantizer at N > 16,384,
-  whose whole row of N/2 code pairs and its scale is over `UNIT_CLASS_MAX`), or recomputes it in each reader
+  whose whole row of N/2 code pairs and its scale is over `SIZE_CLASS_MAX`), or recomputes it in each reader
   (`recomputed`); ReLU is a coordinate or a chunk of at most 16,384. The planner chooses (`candidates.cuts`).
 
 The harm is faulty ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a

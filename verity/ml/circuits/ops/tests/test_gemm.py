@@ -245,12 +245,12 @@ def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordi
 
 def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated() -> None:
     """`ScaledMmS8CoordinateRows_v1{K, R}` is `ScaledMmS8Coordinate_v1{K}` on x's and W's row's R parts, for R = 1, 2 and 4.
-    At K = 65,536 (the demo's MLP down projection) R = 2 makes each s8 operand one `UNIT_CLASS_MAX` row, where the unsplit
+    At K = 65,536 (the demo's MLP down projection) R = 2 makes each s8 operand one `SIZE_CLASS_MAX` row, where the unsplit
     coordinate's are twice it."""
     import numpy as np
 
     from verity.ml.circuits import evaluation as E
-    from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+    from verity.ml.circuits.partition_v2 import SIZE_CLASS_MAX
 
     rng = np.random.default_rng(33)
     n, K = 400, 128
@@ -267,8 +267,8 @@ def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated
     def bits(fn):
         return [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
 
-    assert bits(bind(G.ScaledMmS8CoordinateRows, K=65536, R=2, **G.GEMM_SM90_S8)) == [UNIT_CLASS_MAX] * 2 + [32] + [UNIT_CLASS_MAX] * 2 + [32]
-    assert bits(bind(G.ScaledMmS8Coordinate, K=65536, **G.GEMM_SM90_S8)) == [2 * UNIT_CLASS_MAX, 32, 2 * UNIT_CLASS_MAX, 32]
+    assert bits(bind(G.ScaledMmS8CoordinateRows, K=65536, R=2, **G.GEMM_SM90_S8)) == [SIZE_CLASS_MAX] * 2 + [32] + [SIZE_CLASS_MAX] * 2 + [32]
+    assert bits(bind(G.ScaledMmS8Coordinate, K=65536, **G.GEMM_SM90_S8)) == [2 * SIZE_CLASS_MAX, 32, 2 * SIZE_CLASS_MAX, 32]
 
 
 @pytest.mark.parametrize("K,R", [(128, 1), (128, 2), (128, 4), pytest.param(16384, 2, marks=pytest.mark.slow),

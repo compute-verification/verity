@@ -63,8 +63,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and draws, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
-  from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
-  16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
+  from 16 to 262,144 bits, and its output bits count in leakage (provisional; `sizeClassMax` = 16, `SIZE_CLASS_MAX` in
+  Python, restores the 16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
   refuses a plain session past what the plain theorem covers (one table today).
 - **One proof service** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the

@@ -213,7 +213,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
-  in a public size class (`verity.ml.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
+  in a public size class (`verity.ml.circuits.partition_v2.size_class`); `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## Not yet in Lean
@@ -336,7 +336,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 - The one-stage audit applies `Q_template_instance` v0 and `Q_template_instances` v0, and `Q_word` v1 at X = 16 and
   `Q_call` v1 at X <= 16. Under a template query each instance of a listed template in the program's root body is one
   proof block, in canonical order (node, then member). Every proof block's committed bits fit a public size class, a power of two
-  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`; provisional), and a program with a wider proof block is refused. The
+  from 16 to `SIZE_CLASS_MAX` bits (`size_class`; provisional), and a program with a wider proof block is refused. The
   template queries are demo queries for template runs, not the serving partition. Only they define strata; any other
   query refuses the stratified and work sampling designs.
 - A record made before the canonical envelope names `{"program", "query"}`, and keeps that object's digest under the same

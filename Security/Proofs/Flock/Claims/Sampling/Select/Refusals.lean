@@ -13,7 +13,7 @@ clause of it, each a named Prop over the statements the verifier evaluates:
 * `RefusesUncovered`: the proof units' gates are the program's, and every gate but a constant is among them.
 * `RefusesEmpty`: every proof unit has a gate.
 * `RefusesWide`: every proof unit's committed values (the claims' `committed`, on its own gates) fit its public size
-  class (`unitClass`).
+  class (`sizeClass`).
 
 On partitions of the shape of the verifier's own layouts (`DrawSlots`), whose replay units are one proof unit each
 (`slotPartition_single`, `Partition.single_of_shape`), the
@@ -38,7 +38,7 @@ def Partition.Covers (P : Partition) (C : Prog) : Prop :=
 a gate, and each committing values that fit its public size class. -/
 def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ P.Covers C ∧ (∀ u ∈ P.rus.flatten, u ≠ []) ∧
-    ∀ u ∈ P.rus.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+    ∀ u ∈ P.rus.flatten, ∃ w, sizeClass C u = some w ∧ committed C u ≤ w
 
 /-- A partition of `C` cuts it into proof units. -/
 theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C :=
@@ -109,9 +109,9 @@ def RefusesUncovered (D : Deploy Coin Col T) : Prop := Evaluated D fun C P => P.
 def RefusesEmpty (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => ∀ u ∈ P.rus.flatten, u ≠ []
 
 /-- **The verifier refuses a proof unit wider than its size class**: every proof unit of a partition it evaluates has a
-public size class that holds its committed values (`unitClass`; `committed`, `Prog.Boundary` on the unit's own gates). -/
+public size class that holds its committed values (`sizeClass`; `committed`, `Prog.Boundary` on the unit's own gates). -/
 def RefusesWide (D : Deploy Coin Col T) : Prop :=
-  Evaluated D fun C P => ∀ u ∈ P.rus.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+  Evaluated D fun C P => ∀ u ∈ P.rus.flatten, ∃ w, sizeClass C u = some w ∧ committed C u ≤ w
 
 /-- **The program part from the five refusals**: on the verifier's own partitions (`DrawSlots`) and where the scope check
 is its evaluation (`QueryCheck`), the scope check is the readable scope's program part. -/

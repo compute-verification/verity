@@ -7,7 +7,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
 from verity.core.protocols.sampled_proofs.optimize import CostModel, Objective, frontier
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.ml.circuits.partition_v2 import SIZE_CLASS_MAX
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
 CHUNK = Shape("Dot{K=256}", 8 * 4190, 256, 32, rows=(256, 256, 4, 4), commit_bits=32, cap=4096, parts=((STEP, 8),))
@@ -48,13 +48,13 @@ def test_size_classes_admit_rows_and_tiles_and_prune_past_the_widest():
                 cap=4096, parts=((coord, 128),))
     _, alts, _ = cuts("row", row, N, costs, OBJECTIVE, grid=21)
     assert (("Row{N=128}", N),) in alts.values()
-    n = UNIT_CLASS_MAX // 32 + 1
+    n = SIZE_CLASS_MAX // 32 + 1
     wide = Shape(f"Row{{N={n}}}", n * 4190, n * 1024, 32 * n, out_gates=n, rows=(4 * n,), commit_bits=32 * n,
                  cap=4096, parts=((coord, n),))
     _, alts, _ = cuts("wide", wide, N, costs, OBJECTIVE, grid=21)
     assert alts == {"c0": (("Coord", n * N),)}
     with pytest.raises(ValueError, match="fit no size class"):
-        cuts("wide", Shape("Wide", 1, 1, UNIT_CLASS_MAX + 1, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
+        cuts("wide", Shape("Wide", 1, 1, SIZE_CLASS_MAX + 1, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
 
 
 def test_boundary_pressure_names_the_unit_between_two_definitions():

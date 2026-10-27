@@ -6,7 +6,7 @@ body's children (`parts`) and other decompositions (`ways`), its statics re-boun
 accumulator) or a shared subcircuit recomputed inside each reader (a covering).
 
 `cuts` is a dynamic program at each density of `optimize`'s sweep: a node is a proof block at its statics when its outputs fit a
-public size class (`verity.ml.circuits.partition_v2.unit_class`, the one-stage partition's), or descends by its cheapest way.  A
+public size class (`verity.ml.circuits.partition_v2.size_class`, the one-stage partition's), or descends by its cheapest way.  A
 proof block is priced as the planner prices a subcircuit, serving's commitment on every instance plus the touched statements and
 proved proof blocks of its draw, so a finer cut pays for the wires it commits.
 Each distinct cheapest cut over the grid becomes one alternative of the op (`Candidate.cut`), and the planner chooses among
@@ -25,7 +25,7 @@ from itertools import zip_longest
 from math import log
 
 from verity.core.protocols.sampled_proofs.optimize import Candidate, CostModel, Objective, _k, template_cost
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.ml.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
 
 Parts = tuple[tuple["Shape", int], ...]
 
@@ -69,7 +69,7 @@ class Pressure:
 
 
 def _legal(s: Shape) -> bool:
-    return unit_class(s.out_bits) is not None
+    return size_class(s.out_bits) is not None
 
 
 def _candidate(op: str, s: Shape, n: int, label: str = "", replay: tuple[str, int] | None = None) -> Candidate:
@@ -107,7 +107,7 @@ class _Program:
             options.append((sum(p for p, _ in subs), tuple(u for _, us in subs for u in us)))
         if not options:
             raise ValueError(f"{s.id} has no legal cut: its {s.out_bits} bits out fit no size class (at most "
-                             f"{UNIT_CLASS_MAX}) and it has no parts or ways to descend into")
+                             f"{SIZE_CLASS_MAX}) and it has no parts or ways to descend into")
         self.memo[key] = min(options, key=lambda o: o[0])
         return self.memo[key]
 

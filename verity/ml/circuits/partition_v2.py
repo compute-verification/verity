@@ -95,11 +95,11 @@ FLAT, PARTS = 1, 2
 OWNERS_PER_ROW, SHAPES_PER_ROW, PAIRS_PER_ROW = ROW_BYTES // 4, ROW_BYTES // 64, ROW_BYTES // 16
 GRID_BITS = 4
 WIDTH = 16
-#: the widest public size class of a proof block's bits out (the claims' `Claims.Sampling.unitClassMax`), provisional: at 16,
-#: `UNIT_CLASSES` is the literal 16-bit limit alone
-UNIT_CLASS_MAX = 262_144
-#: the public size classes, the powers of two from 16 to `UNIT_CLASS_MAX`, ascending (the claims' `unitClasses`)
-UNIT_CLASSES = tuple(16 << i for i in range((UNIT_CLASS_MAX // 16).bit_length()))
+#: the widest public size class of a proof block's bits out (the claims' `Claims.Sampling.sizeClassMax`), provisional: at 16,
+#: `SIZE_CLASSES` is the literal 16-bit limit alone
+SIZE_CLASS_MAX = 262_144
+#: the public size classes, the powers of two from 16 to `SIZE_CLASS_MAX`, ascending (the claims' `sizeClasses`)
+SIZE_CLASSES = tuple(16 << i for i in range((SIZE_CLASS_MAX // 16).bit_length()))
 PARAM_MAX = PO.PARAM_MAX
 
 _KEYS = {"format", "family", "predicates", "units", "advice"}
@@ -126,9 +126,9 @@ def definition_digest(fn: Any) -> str:
     return hashlib.sha512(b"verity/partition/v2/definition\0" + fn.id.encode()).hexdigest()
 
 
-def unit_class(bits: int) -> int | None:
-    """A unit's size class: the least of `UNIT_CLASSES` that holds its ``bits`` out (`cut.boundary_widths`), None past the widest."""
-    return next((w for w in UNIT_CLASSES if bits <= w), None)
+def size_class(bits: int) -> int | None:
+    """A proof block's size class: the least of `SIZE_CLASSES` that holds its ``bits`` out (`cut.boundary_widths`), None past the widest."""
+    return next((w for w in SIZE_CLASSES if bits <= w), None)
 
 
 class MixedClasses(ValueError):
@@ -142,7 +142,7 @@ class MixedClasses(ValueError):
                           for w, (d, u) in sorted(self.spans.items(), key=lambda s: (s[0] is None, s[0] or 0)))
         super().__init__(f"a v2 private partition's units span {len(self.spans)} size classes ({named}): it holds one class until "
                          f"its predicates state a width per class, so cut it so that every unit's bits out fall in one of "
-                         f"{UNIT_CLASSES[0]}..{UNIT_CLASSES[-1]}")
+                         f"{SIZE_CLASSES[0]}..{SIZE_CLASSES[-1]}")
 
 
 # --- the advice ------------------------------------------------------------------------------------------------------------------
@@ -197,7 +197,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
     """The advice of `program`'s partition: the cuts of the query `q` (`Q_word` v1 or v2, `Q_call` excluded, or a template query:
     each instance one unit), or of `owners(fn, graph)` (a unit per computing gate of each root Call's Definition, cut flat, one cut
     per Definition).  Default: `Q_word{16, 32}` v1.  It refuses a partition whose units span more than one size class
-    (`unit_class`, `MixedClasses`)."""
+    (`size_class`, `MixedClasses`)."""
     advice, spans = _advice(program, q, owners)
     if len(spans) > 1:
         raise MixedClasses(spans)
@@ -248,7 +248,7 @@ def _advice(program: Any, q: Mapping[str, Any] | None,
         shape, classes = _classes(uc.shape for uc in a.circuits(owner))
         n = len(shape) if units is None else units
         for u, bits in enumerate(boundary_widths(graph(fn), owner, n)[0]):
-            spans.setdefault(unit_class(bits), (fn.id, u))
+            spans.setdefault(size_class(bits), (fn.id, u))
         return Entry(definition_digest(fn), FLAT, graph(fn).n, n, owner, shape, classes)
 
     def add(fn: Any) -> int:
@@ -1022,7 +1022,7 @@ def from_v1(obj: Mapping[str, Any]) -> dict[str, Any]:
     raise ValueError(f"no v2 predicates for {q['name']!r} v{q['version']!r}")
 
 
-__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "UNIT_CLASS_MAX",
-           "UNIT_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "Unit", "grid", "definition_digest",
-           "unit_class", "build", "rows", "pad", "decode", "predicates",
+__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "SIZE_CLASS_MAX",
+           "SIZE_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "Unit", "grid", "definition_digest",
+           "size_class", "build", "rows", "pad", "decode", "predicates",
            "statement", "validate", "digest", "check", "locate", "unit", "check_unit", "openings", "from_v1"]

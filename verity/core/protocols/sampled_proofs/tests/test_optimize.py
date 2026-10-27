@@ -21,7 +21,7 @@ from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment
                                                            max_harm_check, needs_benchmark,
                                                            overlaps, perturb, replay_cost, row_ands, sensitivity,
                                                            template_cost, touched, weigh, work_law)
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.ml.circuits.partition_v2 import SIZE_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
 
@@ -229,9 +229,9 @@ def test_row_ands_follows_hm96_table():
 
 
 def test_candidates_fit_a_size_class():
-    for bits, gates in ((16, 1), (64, 2), (2048, 128), (UNIT_CLASS_MAX, UNIT_CLASS_MAX // 16)):
+    for bits, gates in ((16, 1), (64, 2), (2048, 128), (SIZE_CLASS_MAX, SIZE_CLASS_MAX // 16)):
         Candidate("a", "A", 1, 1, bits, out_gates=gates)
-    for bits, gates in ((UNIT_CLASS_MAX + 1, 1), (UNIT_CLASS_MAX + 32, 8193)):
+    for bits, gates in ((SIZE_CLASS_MAX + 1, 1), (SIZE_CLASS_MAX + 32, 8193)):
         with pytest.raises(ValueError, match="size class"):
             Candidate("a", "A", 1, 1, bits, out_gates=gates)
     with pytest.raises(ValueError, match="per_replay"):

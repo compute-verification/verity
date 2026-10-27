@@ -14,8 +14,8 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
   activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
   (`benchmarks/verifier_cost/`'s `partition`). Every proof block's committed bits fit a public size class
-  (`verity.ml.circuits.partition_v2`'s `UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits; provisional), its
-  class the least that holds them (`unit_class`), a public property of its Definition: a program with a proof block wider
+  (`verity.ml.circuits.partition_v2`'s `SIZE_CLASSES`, powers of two from 16 to `SIZE_CLASS_MAX` bits; provisional), its
+  class the least that holds them (`size_class`), a public property of its Definition: a program with a proof block wider
   than the widest class is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a
   `Q_call` proof block's count the constants and Input gates of its Definition's activation, `_committed_bits`, which `Q_call`'s width rule leaves
   out; a `Q_word` proof block's are its cut's), as is one with a template of no gate. `ranges`, `units` and `strata` read their
@@ -42,7 +42,7 @@ from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.ml.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
 from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.types import Value
@@ -65,7 +65,7 @@ def digest(obj: Mapping[str, Any]) -> str:
 
 
 def _check_word(part: PO.Partition) -> None:
-    """Each `Q_word` proof block's committed bits fit a public class (`unit_class`): each Definition's cut, once, on its Call's
+    """Each `Q_word` proof block's committed bits fit a public class (`size_class`): each Definition's cut, once, on its Call's
     graph."""
     seen: set[str] = set()
     for p, (_k, c) in enumerate(part.calls):
@@ -77,10 +77,10 @@ def _check_word(part: PO.Partition) -> None:
         if len(owner) != g.n:
             raise QueryRefused(f"{fid}'s cut leaves a computing gate out", {"definition": fid})
         ob, _ = boundary_widths(g, owner)
-        wide = [u for u, b in enumerate(ob) if unit_class(b) is None]
+        wide = [u for u, b in enumerate(ob) if size_class(b) is None]
         if wide:
             raise QueryRefused(f"unit {wide[0]} of {fid} commits {ob[wide[0]]} bits, more than the widest class, "
-                               f"{UNIT_CLASS_MAX}", {"definition": fid, "unit": wide[0], "bits": ob[wide[0]]})
+                               f"{SIZE_CLASS_MAX}", {"definition": fid, "unit": wide[0], "bits": ob[wide[0]]})
 
 
 def _committed_bits(fn: Any, units: Sequence[tuple[int, int]]) -> list[int]:
@@ -123,7 +123,7 @@ def _template_bits(fn: Any) -> int:
 
 def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
     """Refuses a template of no gate, and a template instance or `Q_call` proof block whose committed bits fit no public class
-    (`unit_class`; `_template_bits`, and `_committed_bits` with constants counted, which `Q_call`'s width rule leaves
+    (`size_class`; `_template_bits`, and `_committed_bits` with constants counted, which `Q_call`'s width rule leaves
     out), each Definition once, as activations of one Definition commit alike."""
     if isinstance(part, PO.TemplatePartition):
         templates = {t: program.root.body.nodes[k].fn for k, t, _first, n in part.ranges if n}
@@ -131,17 +131,17 @@ def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition
             if fn.gates == 0:
                 raise QueryRefused(f"template {t} has no gate", {"template": t})
             bits = _template_bits(fn)
-            if unit_class(bits) is None:
-                raise QueryRefused(f"an instance of {t} commits {bits} bits, more than the widest class, {UNIT_CLASS_MAX}",
+            if size_class(bits) is None:
+                raise QueryRefused(f"an instance of {t} commits {bits} bits, more than the widest class, {SIZE_CLASS_MAX}",
                                    {"template": t, "bits": bits})
         return
     for cut in {cut.fn.id: cut for _k, cut in part.calls}.values():
         fn = cut.fn
         bits = _committed_bits(fn, [(lo, hi) for lo, hi, _path in cut.units])
-        wide = next((u for u, b in enumerate(bits) if unit_class(b) is None), None)
+        wide = next((u for u, b in enumerate(bits) if size_class(b) is None), None)
         if wide is not None:
             raise QueryRefused(f"unit {wide} of {fn.id} commits {bits[wide]} bits, more than the widest class, "
-                               f"{UNIT_CLASS_MAX}", {"definition": fn.id, "unit": wide, "bits": bits[wide]})
+                               f"{SIZE_CLASS_MAX}", {"definition": fn.id, "unit": wide, "bits": bits[wide]})
 
 
 def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition | PO.Partition | PO.CallPartition:
