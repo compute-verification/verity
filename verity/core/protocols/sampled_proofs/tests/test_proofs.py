@@ -268,6 +268,7 @@ REFUSED = {"points not a list": _record(**{"link.points": {}}), "a point not hex
            "streams not a list": _record(streams={}), "a stream unnamed": _record(**{"streams.1.stream": 1}),
            "rounds not a list": _record(**{"streams.1.rounds": None}),
            "a stream named as the points' family": _record(**{"streams.1.stream": "session"}),
+           "a stream's name past 65535 bytes": _record(**{"streams.1.stream": "é" * 32768}),
            "a round without its digest": _record(**{"streams.0.rounds.0": {"coins": []}}),
            "a short round digest": _record(**{"streams.0.rounds.1.msg_sha512": "02" * 63}),
            "an uppercase round digest": _record(**{"streams.0.rounds.1.msg_sha512": "AB" * 64}),
@@ -291,17 +292,28 @@ def _uses(slot: int, text: str) -> dict:
         return {"refused": str(refused)}
 
 
-def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_digest():
+def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_request():
     """`session_uses` (the prover's side of v2's round-coins check, `OneStageZk.roundsWhy`): the link points after the
-    SHA-512 of the table's root_B digest, then each round after its own digest, a 64-byte coin for each four F128s,
-    under the session's slot. A record whose link names other than the statement's one table, whose streams aren't its
-    rep streams, each once, or whose round doesn't retain its message, ending in the squeeze header of its coins, is
-    refused."""
+    SHA-512 of the table's root_B digest, then each round after the SHA-512 of its request, its stream's name, its
+    stream's chain (the SHA-512 of the previous round's chain and its own digest) and its F128 count, a 64-byte coin
+    for each four F128s, under the session's slot. Two rounds of equal bytes are two uses. A record whose link names
+    other than the statement's one table, whose streams aren't its rep streams, each once, or whose round doesn't
+    retain its message, ending in the squeeze header of its coins, is refused."""
     pts = ["0" * 32, "1" * 32, "2" * 32, "3" * 32, "4" * 32]
+    a0 = hashlib.sha512(hashlib.sha512(ROUND0).digest()).digest()
+    a1 = hashlib.sha512(a0 + hashlib.sha512(ROUND1).digest()).digest()
+    q0 = b"\x00\x0ccircuit/rep0" + a0 + (5).to_bytes(8, "little")
+    assert PF.round_request("circuit/rep0", a0, 5) == q0 and PF.parse_round_request(q0) == ("circuit/rep0", a0, 5)
     assert PF.session_uses(3, json.dumps(_record())) == [
         ("slot/3/session", hashlib.sha512(b"\xaa" * 64).digest(), 2, pts),
-        ("slot/3/circuit/rep0", hashlib.sha512(ROUND0).digest(), 2, ["5" * 32] * 5),
-        ("slot/3/circuit/rep0", hashlib.sha512(ROUND1).digest(), 1, ["6" * 32] * 4)]
+        ("slot/3/circuit/rep0", hashlib.sha512(q0).digest(), 2, ["5" * 32] * 5),
+        ("slot/3/circuit/rep0", hashlib.sha512(PF.round_request("circuit/rep0", a1, 4)).digest(), 1, ["6" * 32] * 4)]
+    same = PF.session_uses(3, json.dumps(_record(**{"streams.0.rounds.1": _round(ROUND0, ["5" * 32] * 5)})))
+    a1 = hashlib.sha512(a0 + hashlib.sha512(ROUND0).digest()).digest()
+    assert same[1][1] == hashlib.sha512(q0).digest() != same[2][1]
+    assert same[2][1] == hashlib.sha512(PF.round_request("circuit/rep0", a1, 5)).digest()
+    for bad in (b"", b"\x00", b"\x00\x0ccircuit/rep0" + a0, q0 + b"\x00", b"\x00\x02\xff\xfe" + a0 + bytes(8)):
+        assert PF.parse_round_request(bad) is None, bad
     for name, r in REFUSED.items():
         assert "refused" in _uses(0, r if isinstance(r, str) else json.dumps(r)), name
     assert PF.squeeze_count(ROUND0) == 5 and PF.squeeze_count(b"\x04" * 15) is None

@@ -264,12 +264,40 @@ def _unhex(h: str) -> bytes:
     return bytes.fromhex(h)
 
 
+def round_request(stream: str, chain: bytes, n: int) -> bytes:
+    """Lean `OneStageZk.roundRequest`: round k's request to the window's challenger, all of it public: its stream's name
+    (two bytes big-endian of its UTF-8 length, then the name), the stream's chain at the round (64 bytes), then the
+    round's coin count `n`, its F128s as the record's `coins` lists them (eight bytes little-endian). Its coins are
+    released after its SHA-512."""
+    s = stream.encode()
+    if len(s) >= 1 << 16:
+        raise ValueError("record: a stream's name is past 65535 bytes")
+    return len(s).to_bytes(2, "big") + s + chain + n.to_bytes(8, "little")
+
+
+def parse_round_request(request: bytes) -> tuple[str, bytes, int] | None:
+    """`round_request`'s `(stream, chain, n)` read back from its bytes; None when they are not one."""
+    if len(request) < 2:
+        return None
+    k = int.from_bytes(request[:2], "big")
+    if len(request) != 2 + k + 64 + 8:
+        return None
+    try:
+        stream = request[2:2 + k].decode()
+    except UnicodeDecodeError:
+        return None
+    return stream, request[2 + k:2 + k + 64], int.from_bytes(request[-8:], "little")
+
+
 def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str]]]:
     """Lean `OneStageZk.sessionUses`: session `slot`'s uses of the challenger's coins as `(label, after, coins, want)`,
     `want` the record's F128 hex its coins' bytes must begin with: its link points, of family `slot/<slot>/session`
     after the SHA-512 of its tables' `link.root_b_sha512` digests in key order, then each stream's rounds in the
-    record's order, of family `slot/<slot>/<stream>` after the round's ``msg_sha512``; ceil(n/4) coins of 64 bytes for
-    n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Lean
+    record's order, of family `slot/<slot>/<stream>` after the SHA-512 of the round's request (`round_request`) at the
+    stream's chain a_k = SHA-512(a_{k-1} ‖ msg_sha512_k) from a_{-1} empty and the round's own coin count, the record's
+    F128s n (two rounds of equal bytes are two uses, and a release after a request of another count is no use);
+    ceil(n/4) coins of 64 bytes for n F128s.
+    A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Lean
     reads them (`usesOf`) only once the record's link, streams and rounds are what `_rounds_ok` asks. Raises ValueError with
     Lean's reason."""
     j = json.loads(record)
@@ -297,9 +325,12 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
             raise ValueError("record: a stream's name is not a string")
         if name == "session":
             raise ValueError("record: a stream is named session, the link points' family")
+        if len(name.encode()) >= 1 << 16:
+            raise ValueError("record: a stream's name is past 65535 bytes")
         rounds = s.get("rounds")
         if type(rounds) is not list:
             raise ValueError(f"record: {name}'s rounds are not a list")
+        chain = b""
         for r in rounds:
             sha = r.get("msg_sha512") if isinstance(r, dict) else None
             if type(sha) is not str:
@@ -307,7 +338,9 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
             if len(sha) != 128:
                 raise ValueError(f"record: a round of {name}'s msg_sha512 is not 64 bytes of hex")
             cs = _hexes(r.get("coins"), f"the coins of a round of {name}")
-            out.append((f"slot/{slot}/{name}", _unhex(sha), (len(cs) + 3) // 4, cs))
+            chain = hashlib.sha512(chain + _unhex(sha)).digest()
+            out.append((f"slot/{slot}/{name}", hashlib.sha512(round_request(name, chain, len(cs))).digest(),
+                        (len(cs) + 3) // 4, cs))
     _rounds_ok(rbs, streams)
     return out
 
@@ -389,5 +422,5 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "PACKAGE", "STATEMENT", "STREAMS", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2",
-           "evidence_v2", "executable", "file_sha512", "proved_units", "reads_registered", "session_uses",
-           "squeeze_count", "uses_v2", "v2_executable", "verdicts_v2", "verify"]
+           "evidence_v2", "executable", "file_sha512", "parse_round_request", "proved_units", "reads_registered",
+           "round_request", "session_uses", "squeeze_count", "uses_v2", "v2_executable", "verdicts_v2", "verify"]
