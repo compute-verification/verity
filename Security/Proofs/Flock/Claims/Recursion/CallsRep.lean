@@ -159,4 +159,131 @@ theorem cs_ringSwitch (h : ByteArray → ByteArray) (m : ℕ) (claims : Array Cl
   unfold ringSwitchWith
   tw_walk h
 
+/-! ## The Ligerito layer -/
+
+theorem Calc.bind_le {m : Type → Type} [Monad m] {P : ∀ {α : Type}, m α → ℕ → Prop} (C : Calc m P) {α β : Type}
+    {x : m α} {f : α → m β} {n b : ℕ} (hx : P x n) (hf : ∀ a, P (f a) (b - n)) (h : n ≤ b) : P (x >>= f) b :=
+  C.mono (C.bind hx hf) (by omega)
+
+theorem Calc.ite_k {m : Type → Type} [Monad m] {P : ∀ {α : Type}, m α → ℕ → Prop} (_C : Calc m P) {α : Type}
+    {c : Prop} [Decidable c] {t e : m α} {k : ℕ} (ht : P t k) (he : P e k) : P (if c then t else e) k := by
+  split
+  · exact ht
+  · exact he
+
+/-- A throw costs nothing, and what would follow it never runs. -/
+theorem cs2_throw_bind {α β : Type} (e : String) (f : α → LMW LogV β) (k : ℕ) : CS2 potT (throw e >>= f) k :=
+  fun s t l => by
+    have : (((throw e >>= f : LMW LogV β).run s).run t).go l = (.error e, l) := rfl
+    rw [this, bnd_error]
+    omega
+
+theorem cs_throw_bind {α β : Type} (e : String) (f : α → TMW LogV β) (k : ℕ) : CS potT (throw e >>= f) k :=
+  fun t l => by
+    have : ((throw e >>= f : TMW LogV β).run t).go l = (.error e, l) := rfl
+    rw [this, bnd_error]
+    omega
+
+/-- One step of a walk over a Ligerito program whose calls are all squeezes, at any budget. -/
+macro "lw_step" h:term : tactic => `(tactic| first
+  | with_reducible exact cs2_throw_bind _ _ _
+  | with_reducible refine (calcCS2 potT).bind0 ?_ fun _ => ?_
+  | with_reducible exact (calcCS2 potT).pure' _ _
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftW (cs_sample $h)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftW (cs_sampleVec $h _)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftW (cs_sampleK $h)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftLM (keepL_nextMsg _)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftLM (keepL_nextOod _)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftLM (keepL_claimPow _)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftLM (keepL_nonceFrom _ _ _)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_liftLM (by keep_walk)) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_get (σ := LState) (τ := Transcript) potT) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_set (σ := LState) (τ := Transcript) potT _) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_modify (σ := LState) (τ := Transcript) potT _) (Nat.zero_le _)
+  | with_reducible exact (calcCS2 potT).mono (cs2_throw (σ := LState) (τ := Transcript) potT _) (Nat.zero_le _)
+  | with_reducible refine (calcCS2 potT).mono ((calcCS2 potT).range_forIn (c := 0) (fun _ _ => ?_) _ _) (by simp)
+  | with_reducible refine (calcCS2 potT).mono ((calcCS2 potT).forIn (c := 0) (fun _ _ => ?_) _ _) (by simp)
+  | with_reducible refine (calcCS2 potT).ite_k ?_ ?_
+  | split
+  | dsimp only)
+
+theorem cs2_challenge (h : ByteArray → ByteArray) (p : LigeritoProof) :
+    CS2 potT (challengeWith (Hashes.logged h) p) 0 := by
+  unfold challengeWith
+  repeat' lw_step h
+
+theorem cs2_oodIntro (h : ByteArray → ByteArray) (p : LigeritoProof) (dim split : ℕ) :
+    CS2 potT (oodIntroWith (Hashes.logged h) p dim split) 0 := by
+  unfold oodIntroWith
+  repeat' lw_step h
+
+/-- **A level's queries cost `qc lv`**: its Merkle check; every coin is a squeeze. -/
+theorem cs2_queryLevel (h : ByteArray → ByteArray) (ms : MerkleScheme) (p : LigeritoProof) (lv : Level)
+    (cap : Array ByteArray) (rows : Array (Array F128)) (sibs salts : Array ByteArray) (fold : Array F256) :
+    CS2 potT (queryLevelWith (Hashes.logged h) ms p lv cap rows sibs salts fold) (qc lv) := by
+  unfold queryLevelWith
+  repeat' (first
+    | with_reducible refine (calcCS2 potT).bind_le (cs2_mlift (cl_merkle h _ _ _ _ _ _ _ _ _)) (fun _ => ?_) ?_
+    | lw_step h)
+  rw [positions_size]
+  exact Nat.le_refl _
+
+/-- A schedule's levels' query calls together. -/
+def qAll (sch : Schedule) : ℕ := (sch.levels.toList.map qc).sum
+
+theorem le_sum_map {α : Type} (f : α → ℕ) : ∀ {l : List α} {x : α}, x ∈ l → f x ≤ (l.map f).sum
+  | _ :: _, _, .head _ => by rw [List.map_cons, List.sum_cons]; omega
+  | _ :: _, _, .tail _ h => by have := le_sum_map f h; rw [List.map_cons, List.sum_cons]; omega
+
+theorem qc_getD_le (sch : Schedule) (i : ℕ) : qc (sch.levels.getD i default) ≤ qAll sch := by
+  unfold Array.getD
+  split
+  · exact le_sum_map qc (Array.getElem_mem_toList _)
+  · exact Nat.zero_le _
+
+theorem Calc.bind0r {m : Type → Type} [Monad m] {P : ∀ {α : Type}, m α → ℕ → Prop} (C : Calc m P) {α β : Type}
+    {x : m α} {f : α → m β} {k : ℕ} (hx : P x k) (hf : ∀ a, P (f a) 0) : P (x >>= f) k :=
+  C.mono (C.bind hx hf) (by omega)
+
+theorem cs_run2 {σ τ α : Type} {pot : τ → ℕ} {x : StateT σ (StateT τ LogV) α} {n : ℕ} (hx : CS2 pot x n) (s : σ) :
+    CS pot (x.run s) n :=
+  hx s
+
+/-- One step of a walk over a transcript program whose calls are all squeezes, at any budget. -/
+macro "tw_step" h:term : tactic => `(tactic| first
+  | with_reducible exact cs_throw_bind _ _ _
+  | with_reducible refine (calcCS potT).bind0 ?_ fun _ => ?_
+  | with_reducible exact (calcCS potT).pure' _ _
+  | with_reducible exact (calcCS potT).mono (cs_sample $h) (Nat.zero_le _)
+  | with_reducible exact (calcCS potT).mono (cs_sampleVec $h _) (Nat.zero_le _)
+  | with_reducible exact (calcCS potT).mono (cs_sampleK $h) (Nat.zero_le _)
+  | with_reducible exact (calcCS potT).mono (cs_throw potT _) (Nat.zero_le _)
+  | with_reducible exact (calcCS potT).mono (cs_liftTM (keepT_check _ _)) (Nat.zero_le _)
+  | with_reducible exact (calcCS potT).mono (cs_liftTM (by keep_walk)) (Nat.zero_le _)
+  | with_reducible refine (calcCS potT).mono ((calcCS potT).range_forIn (c := 0) (fun _ _ => ?_) _ _) (by simp)
+  | with_reducible refine (calcCS potT).ite_k ?_ ?_
+  | split
+  | dsimp only)
+
+set_option maxHeartbeats 20000000 in
+/-- **Ligerito's calls are its levels' queries**: one level-0 query and one per later round, each at most `qAll`. -/
+theorem cs_ligerito (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray)
+    (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) :
+    CS potT (ligeritoWith (Hashes.logged h) ms sch T cap p basisAt) ((1 + (sch.levels.size - 1)) * qAll sch) := by
+  unfold ligeritoWith
+  repeat' (first
+    | with_reducible refine (calcCS potT).bind0r (cs_run2 ?_ _) fun _ => ?_
+    | with_reducible refine (calcCS2 potT).bind_le (cs2_queryLevel h _ _ _ _ _ _ _ _) (fun _ => ?_) ?_
+    | with_reducible refine (calcCS2 potT).bind_le ((calcCS2 potT).range_forIn (β := _ × _ × _ × _)
+                              (c := qAll sch) (fun _ _ => ?_) _ _) (fun _ => ?_) ?_
+    | with_reducible exact (calcCS2 potT).mono (cs2_challenge h _) (Nat.zero_le _)
+    | with_reducible exact (calcCS2 potT).mono (cs2_oodIntro h _ _ _) (Nat.zero_le _)
+    | lw_step h
+    | tw_step h)
+  all_goals first
+    | exact qc_getD_le _ _
+    | (have := qc_getD_le sch 0
+       simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, Nat.add_mul, Nat.one_mul]
+       omega)
+
 end FlockDeploy.KS
