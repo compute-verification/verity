@@ -613,9 +613,9 @@ def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
     return draw_coins(ChallengerKey.from_json(ch["key"]), p["window_root"], ch["label"], c[1], e.get("coins"), lms_verify)
 
 
-def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool:
+def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool | ValueError:
     """`OneStage.coinsReason`: the draw's units are not the ones `src` draws under the law (`coins.draw_first` read in
-    order), or a coin opened was not read."""
+    order, its refusal the problem), or a coin opened was not read."""
     n = rec.get("population")
     if not _nat(n):
         return True
@@ -628,8 +628,8 @@ def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool:
         return b
     try:
         units = draw_first(OwnRandomness(source), mine, n)["units"]
-    except ValueError:
-        return True
+    except ValueError as refused:
+        return refused
     drawn = [u for u in draw["units"] if _nat(u)] if isinstance(draw.get("units"), list) else []
     return list(units) != drawn or -(-read // COIN_BYTES) != len(src) // COIN_BYTES
 
@@ -3652,7 +3652,8 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
         draw = drawn_from(d.read)
         accepts(audit_of(d, draw, coins))
         other = next(x for x in (drawn_from(rng.randbytes(4 * len(d.read) + 256)) for _ in range(64)) if x["units"] != draw["units"])
-        stranger = Drawn(rng, before=True, after=after, reads=reads)
+        stranger = next(x for x in (Drawn(rng, before=True, after=after, reads=reads) for _ in range(16))
+                        if x.s.key != d.s.key)
         elsewhere = Drawn(rng, reads=reads)
         rejected = [audit_of(d, other, coins), audit_of(d, draw, d.evidence(d.segment.to_json())),
                     audit_of(d, draw, None), audit_of(d, draw, coins, challenger={"key": stranger.s.key.to_json(),

@@ -17,8 +17,8 @@ root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. An H
 from a draw session of its own (`DrawSession`, the pouw setting ``draw_session``, reserved with `window.DRAW_FAMILIES`),
 which the gate opens withheld on the window's draw root once the prover's commitment is in (CMP-177), so its challenger
 releases its coin commitment only after that commitment. The challenger is auditor-trusted
-(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it through ``ssh -R``
-on its own 127.0.0.1.
+(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
+127.0.0.1, through its certifier coin link.
 
 A reserve joins its lane's open period, and a Pearl-C salt-only session is a window H1's checks refuse
 (`window.live_epoch_reason`), so one reserved in an H1 period (`H1_PERIOD`) is a wasted session whose period earns
