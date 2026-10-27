@@ -1,4 +1,4 @@
-"""[X-06] Stochastic token selection of vLLM d9105ea80's batch-invariant sampler with the per-request SEED, the POSITION and the
+"""Stochastic token selection of vLLM d9105ea80's batch-invariant sampler with the per-request SEED, the POSITION and the
 TEMPERATURE as OPERANDS (bound inputs of the Program) — seeds are inputs, not structure.
 
 The launched chain for a request with temperature T (`vllm/v1/worker/gpu/sample/sampler.py::Sampler.sample`, no top-k/top-p,
@@ -27,11 +27,13 @@ RTX 4090 by the static-seed composites below, 64/64 G4 cases):
   * `GumbelArgmaxBf16_v1{V, SEED, POS}(logits: Array<V, bf16>) -> i32` and `GumbelArgmaxTempBf16_v1{V, SEED, POS, T}` (steps
     `GumbelArgmaxStep_v1`, `GumbelArgmaxTempStep_v1{T}`) — the same selection at temperature 1 and at a T not in {0, 1}, with
     seed, position and T as STATICS: the forms checked bit-exact against vLLM's kernels on the RTX 4090, which the sampled-row
-    profiles bind (`engine/profiles/gen_ov_sampling_patterns.py`).  They came from the quarantine lane `ov-sampling`
-    (`SEMANTIC_ID` "ov-sampling/GumbelArgmaxBf16@v1") with their bodies verbatim, so their ids are the lane's.
+    profiles bind (`verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py`).  Their bodies are the ones first checked,
+    verbatim, so their ids are unchanged.
+  * `TopPMask_v1{V}` (step `TopPMaskStep_v1`) and `GumbelTopPTokenSelect_v1{V}` — vLLM's p-only split top-p pipeline
+    (`_apply_topp_split`, a sampler batch of at most 64 without top-k) and the token select over its masked row.
 
-NOT defined here (fail-closed in Bet A's `SAMPLERS_BOUND`): top-p / top-k masking (`_topp_sb_{stats,step,mask}_kernel`,
-`_topk_topp_kernel`) — see the lane's failure record F-dense-02 for what an exact model needs.
+NOT defined here, and refused by the vLLM integration's builder: top-k masking and vLLM's other top-p kernels
+(`_topp_sb_{stats,step,mask}_kernel`, `_topk_topp_kernel`).
 """
 from __future__ import annotations
 

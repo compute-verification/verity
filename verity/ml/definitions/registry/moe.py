@@ -10,9 +10,8 @@ word -- each output word of the pair-major intermediates is one ascending-k chai
 (`DotBf16`), then one f32 -> bf16 conversion (with the routing weight multiplied in before the conversion on the down projection).
 The tile constants (BLOCK_SIZE_M/N/K, GROUP_SIZE_M, num_warps/stages) vLLM picks per M (`try_get_optimal_moe_config`) schedule which
 CTA owns which pair rows and how the k-loop is chunked; a chunk of BLOCK_SIZE_K is BLOCK_SIZE_K/16 k16 steps into the SAME carried
-accumulator, so the per-coordinate chain is the tile-independent one -- checked, not assumed: `verity_vllm/ops/moe_kernel_xcheck.py`
-evaluates these bodies against the real kernels at several M (different tilings, naive vs sorted schedule, different
-routing patterns).
+accumulator, so the per-coordinate chain is the tile-independent one -- checked, not assumed: these bodies were evaluated against the
+real kernels at several M (different tilings, naive vs sorted schedule, different routing patterns).
 
 Representation (the one that fits the existing operand kinds; the precedent is `Embedding_v1`): the expert index `e` is an ordinary I32
 VALUE operand of the pair body -- produced by `MoeRouterTopK_v1` from the router logits, never a structural input or an observed
