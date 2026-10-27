@@ -31,7 +31,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
-- ``L4``, one member root: the registration is O(members) today (`Registration`), every member's public body (every row's
+- ``L4``, one member root: the registration is O(members) (`Registration`), every member's public body (every row's
   b || c, 128 bytes) SHA-512'd on the CPU for `rows.leaf_layer` and written out, and every port root a JSON entry; under one
   Merkle root over members, each member's leaf over its port roots, it is a root, and an audit opens K members in O(K log M).
 
