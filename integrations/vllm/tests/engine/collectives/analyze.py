@@ -1,4 +1,4 @@
-"""Lane tp2: torch-free evidence over the per-rank raw logs of `tp.capture` (numpy only; runs on the pod or on small logs).
+"""Torch-free evidence over the per-rank raw logs of `tp.capture` (numpy only; runs on the pod or on small logs).
 
     python -m tests.engine.collectives.analyze inventory RUN_DIR [--out PATH]        collectives per rank: op, step, phase, module,
                                                                                     operand/result views, ordinal, position in the layer

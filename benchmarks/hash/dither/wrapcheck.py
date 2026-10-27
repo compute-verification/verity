@@ -1,14 +1,14 @@
-"""The wrap correction's pieces against CA's H1V3 on the CPU, before sbench.sh asks for a GPU (`dither_one.h1v3_itself`'s
+"""The wrap correction's pieces against H1V3 on the CPU, before sbench.sh asks for a GPU (`dither_one.h1v3_itself`'s
 tree, this source's own unless DITHER_H1V3_TREE names another, run through `h1v3_ref.py`):
 
 * the byte-mask rule `h1r.cu` computes wb with (`badd`, `wrap_masks`, `wrap_s8`, emulated here word for word) equals
   H1V3's `wrap_bits` on every (B, c, U) byte triple, and on random words (4 entries at once);
-* this lane's CPU twin (`dither_one.h1v3_unit`, the gate's) equals H1V3's `h1tile.reference(stream=True)` in z and
+* the gate's CPU twin (`dither_one.h1v3_unit`) equals H1V3's `h1tile.reference(stream=True)` in z and
   receipt on random full-range units (entries at A = 127 and |B| = 127 forced) at m = 2 and m = 3, and z = X (B + c)^T
   (H1V3 peeled, 4733b9ab0c on: its z is A B^T, and the twin's peel of its own z is held to it);
-* the peel (CA, 11:02Z and 12:16Z) on the twin's z: z - b B^T - A c^T - b c^T + 256 xw (B + c)^T and the kernel's form
-  z + 256 xw B^T - X c^T - b B^T are A B^T on every cell, xw = [A = 127 and b = 1] where the s8 X wraps (the cells CA's
-  first formula as written misses are counted), and the peeled kernel's operands (`is80` of X's byte and b for xw, b and
+* the peel on the twin's z: z - b B^T - A c^T - b c^T + 256 xw (B + c)^T and the kernel's form
+  z + 256 xw B^T - X c^T - b B^T are A B^T on every cell, xw = [A = 127 and b = 1] where the s8 X wraps (the cells the
+  peel as first written misses are counted), and the peeled kernel's operands (`is80` of X's byte and b for xw, b and
   c times 0xFF for -b and -c, emulated) are those values on every byte and bit.
 
     python wrapcheck.py    # one JSON line; exit 1 on any difference
