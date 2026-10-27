@@ -23,6 +23,7 @@ view; the Program calls the Boolean Definition whose `word` that is):
 | ``RmsSumSqChunks_v1{C, K}``, ``RmsNormOutSums_v1{C, S, G, N, EPS}`` | the same |
 | ``RowAbsMax_v1{N, RELU}`` | ``RowAbsMax_v2`` |
 | ``QuantChunkS8_v1{N, RELU}`` | ``QuantChunkS8_v2`` (chunk 0's scale is the linear's ``sx``) |
+| ``RmsNormAbsMax_v1{C, S, G, N, EPS}``, ``RmsNormQuantCodes_v1{C, S, G, N, EPS}``, ``QuantScaleS8_v1`` (``fused`` ``norm``) | the same, the combine over the parts' partials ``RowAbsMax_v2`` (chunk 0's scale is the linear's ``sx``) |
 | ``ScaledMmS8CoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` | ``ScaledMmS8CoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}`` |
 | ``ScaledMmS8ResidualCoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` (``fused`` ``residual``) | ``ScaledMmS8ResidualCoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}``, r the stream's word |
 | ``QkSoftmaxRowPad_v1{T, D}`` | ``QkSoftmaxRowPad_v1{T, D, HopperBF16WgmmaDot16_v2}`` |
@@ -38,6 +39,7 @@ from __future__ import annotations
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import moe as BM
+from verity.ml.circuits.ops.boolean import norm_quant as NQ
 from verity.ml.circuits.ops.boolean import quant as BQ
 from verity.ml.circuits.ops.boolean import rmsnorm as RN
 from verity.ml.circuits.ops.boolean import rows as BR
@@ -85,17 +87,45 @@ def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
         a = dict(zip((p for p, _ in params), args))
         tok, n = a["token"], a["n"]
 
-        def norm(op: str, x: Coll, gain: Coll) -> Coll:
+        def sums(op: str, x: Coll) -> Coll:
             N, sc = x.type.n, f.sums_c(x.type.n)
+            return B.batch(bind(RN.RmsSumSqChunks, C=sc, K=c), x.reshape(Array(N // sc, Array(sc, BF16))), axes=(0,),
+                           name=op + "_sums").reshape(Array(N // c, F32))
+
+        def norm(op: str, x: Coll, gain: Coll) -> Coll:
+            N = x.type.n
             rows = N // c
-            sums = B.batch(bind(RN.RmsSumSqChunks, C=sc, K=c), x.reshape(Array(N // sc, Array(sc, BF16))), axes=(0,),
-                           name=op + "_sums")
             out = B.batch(bind(RN.RmsNormOutSums, C=c, S=rows, G=f.groups(N), N=N, EPS=EPS_KEY),
-                          x.reshape(Array(rows, Array(c, BF16))), gain.reshape(Array(rows, Array(c, BF16))),
-                          sums.reshape(Array(rows, F32)), axes=(0, 0, None), name=op + "_norm")
+                          x.reshape(Array(rows, Array(c, BF16))), gain.reshape(Array(rows, Array(c, BF16))), sums(op, x),
+                          axes=(0, 0, None), name=op + "_norm")
             return out.reshape(Array(N, BF16))
 
-        def quant(op: str, x: Coll, relu: bool) -> Coll:
+        def normed(op: str, qop: str, x: Coll, gain: Coll) -> tuple[list[Coll], Coll]:
+            """RMSNorm ``op`` into the quantizer ``qop``: under the ``norm`` fusion the amax a block a part and a combine
+            over the partials, the codes a block of ``ncodes`` words, each part and block from x, the gain and the sums,
+            and each chunk's scale a block from the amax."""
+            if "norm" not in fused:
+                return quant(qop, norm(op, x, gain), False)
+            N = x.type.n
+            (parts, pw), q, cw = f.norm_parts(N), f.qchunk(N), f.ncodes(N)
+            st = dict(S=N // c, G=f.groups(N), N=N, EPS=EPS_KEY)
+            s = sums(op, x)
+            if parts > 1:
+                cut = Array(parts, Array(pw, BF16))
+                partial = B.batch(bind(NQ.RmsNormAbsMax, C=pw, **st), x.reshape(cut), gain.reshape(cut), s,
+                                  axes=(0, 0, None), name=qop + "_amax.part")
+                amax = B.call(bind(BQ.RowAbsMax, N=parts, RELU=False), partial, name=qop + "_amax")
+            else:
+                amax = B.call(bind(NQ.RmsNormAbsMax, C=N, **st), x, gain, s, name=qop + "_amax")
+            blocks = Array(N // cw, Array(cw, BF16))
+            codes = B.batch(bind(NQ.RmsNormQuantCodes, C=cw, **st), x.reshape(blocks), gain.reshape(blocks), s, amax,
+                            axes=(0, 0, None, None), name=qop + "_quant").reshape(Array(N // q, Array(q, CODE)))
+            scale = B.batch(BQ.QuantScaleS8, Coll(Array(N // q, BF16), concat([amax.refs] * (N // q))), axes=(0,),
+                            name=qop + "_quant.scale")
+            return [codes[r] for r in range(N // q)], scale[0]
+
+        def quant(op: str, x: Coll, relu: bool) -> tuple[list[Coll], Coll]:
+            """The quantizer ``op`` over x: each chunk's codes, and chunk 0's scale (the linear's ``sx``)."""
             N = x.type.n
             parts, pw = f.parts(N)
             if parts > 1:
@@ -106,18 +136,22 @@ def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
             else:
                 amax = B.call(bind(BQ.RowAbsMax, N=N, RELU=relu), x, name=op + "_amax")
             q = f.qchunk(N)
-            return B.batch(bind(BQ.QuantChunkS8, N=q, RELU=relu), x.reshape(Array(N // q, Array(q, BF16))), amax,
-                           axes=(0, None), name=op + "_quant")
+            out = B.batch(bind(BQ.QuantChunkS8, N=q, RELU=relu), x.reshape(Array(N // q, Array(q, BF16))), amax,
+                          axes=(0, None), name=op + "_quant")
+            return [out[r][0] for r in range(N // q)], out[0][1]
 
-        def linear(op: str, qx: Coll, stream: Coll | None = None) -> Coll:
-            """Linear ``op``'s coordinates; given the residual ``stream``, each adds its word to the stream's."""
+        def linear(op: str, qx: tuple[list[Coll], Coll], stream: Coll | None = None) -> Coll:
+            """Linear ``op``'s coordinates over the quantizer's (chunk codes, scale); given the residual ``stream``, each
+            adds its word to the stream's."""
             W, sw = a[op], a[op + ".scale"]
             N, K = W.type.n, W.type.elem.n
             q = f.qchunk(K)
             R = K // q
-            xs = [qx[r][0] for r in range(R)]
+            xs, sx = qx
+            if len(xs) != R:
+                raise ValueError(f"{op}: {len(xs)} quantizer chunks, not R = {R}")
             wrows = [Coll(Array(N, Array(q, CODE)), strided_view(W, r * q * 8, q * 8, K * 8, 1, N * q * 8)) for r in range(R)]
-            ports, axes = [*xs, qx[0][1], *wrows, sw], (None,) * (R + 1) + (0,) * (R + 1)
+            ports, axes = [*xs, sx, *wrows, sw], (None,) * (R + 1) + (0,) * (R + 1)
             if stream is None:
                 return B.batch(bind(BG.ScaledMmS8CoordinateRows, K=K, R=R, DOT=S8_DOT), *ports, axes=axes, name=op)
             return B.batch(bind(BG.ScaledMmS8ResidualCoordinateRows, K=K, R=R, DOT=S8_DOT), *ports, stream,
@@ -137,7 +171,7 @@ def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
         ks, vs = [], []
         for i in range(L):
             p = f"l{i}."
-            qa = quant(p + "attn", norm(p + "attn", x, a[p + "attn_norm"]), False)
+            qa = normed(p + "attn", p + "attn", x, a[p + "attn_norm"])
             qh = linear(p + "wq", qa).reshape(Array(h, Array(d, BF16)))
             ks.append(linear(p + "wk", qa))
             vs.append(linear(p + "wv", qa))
@@ -148,9 +182,9 @@ def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
             att = B.batch(bind(BG.PvRowPad, T=PV_K, K=PV_K, D=d, DOT=BF16_DOT), probs, *vrows, axes=(0,) + (None,) * len(vrows),
                           name=p + "pv")
             x = projection(p + "wo", quant(p + "o", att.reshape(Array(h * d, BF16)), False), x, p + "attn_residual")
-            up = linear(p + "wup", quant(p + "up", norm(p + "mlp", x, a[p + "mlp_norm"]), False))
+            up = linear(p + "wup", normed(p + "mlp", p + "up", x, a[p + "mlp_norm"]))
             x = projection(p + "wdown", quant(p + "down", up, True), x, p + "mlp_residual")
-        logits = linear("head", quant("head", norm("final", x, a["final_norm"]), False))
+        logits = linear("head", normed("final", "head", x, a["final_norm"]))
         nxt = B.call(bind(BR.Argmax, V=sh.vocab), logits, name="argmax")
         return tuple_of(nxt, array_of(ks), array_of(vs))
 

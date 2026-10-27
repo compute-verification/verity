@@ -83,8 +83,8 @@ def inputs(shape, w: Weights, rp: Replayer, step: int, b: int) -> list[np.ndarra
     return out
 
 
-@pytest.fixture(scope="module", params=[(TINY, frozenset()), (MINI, frozenset()), (MINI, frozenset({"residual"}))],
-                ids=lambda p: p[0].name + "-fused-residual" * bool(p[1]))
+@pytest.fixture(scope="module", params=[(TINY, frozenset()), (MINI, frozenset()), (MINI, frozenset({"norm", "residual"}))],
+                ids=lambda p: "-".join([p[0].name, *(["fused", *sorted(p[1])] if p[1] else [])]))
 def served(request):
     shape, fused = request.param
     w, d, rp = drive(shape, fused)
@@ -102,13 +102,18 @@ def test_every_family_is_the_drivers_table_and_the_return_is_the_steps_token_and
         checked = 0
         for name, out in named.items():
             if name.endswith("_quant"):
-                q = np.ascontiguousarray(tables[name][0][b]).nbytes
-                chunk = rp.map.f.qchunk(q)
-                rows = out.reshape(q // chunk, 8 * chunk + 32)
-                assert np.array_equal(np.packbits(rows[:, :8 * chunk].reshape(-1), bitorder="little"),
-                                      np.ascontiguousarray(tables[name][0][b]).view(np.uint8)), name
-                assert np.array_equal(np.packbits(rows[0, 8 * chunk:], bitorder="little"),
-                                      np.asarray(tables[name][1][b], np.float32).reshape(1).view(np.uint8)), name
+                codes = np.ascontiguousarray(tables[name][0][b]).view(np.uint8)
+                chunk = rp.map.f.qchunk(codes.size)
+                rows = out.reshape(codes.size // chunk, -1)
+                assert rows.shape[1] in (8 * chunk, 8 * chunk + 32), name
+                assert np.array_equal(np.packbits(rows[:, :8 * chunk].reshape(-1), bitorder="little"), codes), name
+                if rows.shape[1] > 8 * chunk:
+                    assert np.array_equal(np.packbits(rows[0, 8 * chunk:], bitorder="little"),
+                                          np.asarray(tables[name][1][b], np.float32).reshape(1).view(np.uint8)), name
+                checked += 1
+            elif name.endswith("_quant.scale"):
+                word = np.asarray(tables[name.removesuffix(".scale")][1][b], np.float32).reshape(1).view(np.uint8)
+                assert all(np.array_equal(np.packbits(r, bitorder="little"), word) for r in out.reshape(-1, 32)), name
                 checked += 1
             elif name.endswith("_amax.part") or name.endswith("_amax"):
                 table = np.ascontiguousarray(tables[name.removesuffix(".part")][0][b]).view(np.uint8)

@@ -77,8 +77,8 @@ def _group(entries: list[Entry]) -> tuple[L.Group, list[tuple[str, int]]]:
         scale = (L.Row((L.Part(src + 1, 0, 4),)),)
         for u in us:
             firsts.append((u.name, len(units)))
-            units += [(L.Row((L.Part(src, u.offset + i * u.stride, u.nbytes),)),) + (scale if u.scale else ())
-                      for i in range(u.count)]
+            units += [scale if u.scale_only else (L.Row((L.Part(src, u.offset + i * u.stride, u.nbytes),)),)
+                      + (scale if u.scale else ()) for i in range(u.count)]
     return L.Group(tuple(sources), tuple(units)), firsts
 
 
