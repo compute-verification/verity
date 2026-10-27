@@ -268,7 +268,7 @@ def test_a_failing_health_check_prints_its_error_in_its_place_and_hides_nothing_
     assert out[out.index("## Errors") + 1:] == ["- queue: queue is down"]
     f.fail, f.inbox_list = set(), None
     out, errors = D.digest(LANE, s, f.sources(), [("bc-1", "prover", "cursor/a-93c1")])
-    assert not errors and "- inbox: no tools/agent-guard/inbox.py in /workspace" in health(out)
+    assert not errors and "- inbox: no /opt/agent-guard/inbox.py" in health(out)
     assert "- worker prover bc-1: no branch cursor/a-93c1 on origin; inbox unread" in health(out)
     assert "- WARNING #11 is not in the queue (base main): t" in health(out)
     f.rows = [row(11, "waiting")]

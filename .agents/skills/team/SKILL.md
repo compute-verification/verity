@@ -37,9 +37,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   results depends on one: pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
   `budgets.toml`) and runs preserve their results from the pod. The lane whose budget line pays for a machine stops it
   when its work there ends.
-- **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
-  print the environment or every process's command line; on a VM booted without it, run origin/main's
-  `tools/agent-guard/boot.sh`. A secret is stored as one line (a key as base64, `NAME_B64`).
+- **Secrets.** The shell hook (`.cursor/hooks.json`, `/opt/agent-guard/shell_hook.py`: the agent guard, which lives in
+  compute-verification/infra) refuses a command that would print the environment or every process's command line. The
+  environment's start installs it with the guard's boot.sh; on a VM booted without it, every command is refused. A secret is stored as one line (a key as base64, `NAME_B64`).
 
 ## Landing
 
@@ -106,7 +106,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
 - **Reach a running subagent** on your VM through its next shell command, since it never rereads a shared file mid-run:
-  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
+  `python3 /opt/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's

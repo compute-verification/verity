@@ -80,7 +80,6 @@
       "owns": [
         "infra/",
         "infra/cluster/",
-        "tools/agent-guard/",
         "tools/research/",
         ".cursor/",
         ".python-version"
@@ -489,7 +488,6 @@
       "linear": "LEAN",
       "owns": [
         "tools/verity/lean/",
-        "tools/lean/",
         ".agents/skills/lean-proofs/",
         "Security/"
       ],

@@ -53,8 +53,10 @@ REVERT_SUBJECT = re.compile(r'^Revert "Queue: #(\d+)')
 RESULT_HEADING = re.compile(r"#{2,4}\s+result so far", re.IGNORECASE)
 HEADING = re.compile(r"#{1,6}\s")
 RESULT_LINES = 3
-#: The checkout the shell hook and the inbox run from.
+#: The coordinator's checkout.
 WORKSPACE = Path("/workspace")
+#: the agent guard's subagent inbox, installed by compute-verification/infra's tools/agent-guard/boot.sh
+INBOX = Path("/opt/agent-guard/inbox.py")
 #: An inbox delivery pending longer than this is flagged: its agent has run no shell command since.
 INBOX_STALE_S = 30 * 60
 #: A worktree whose branch tip is on origin and older than this is a finished worker's.
@@ -321,7 +323,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
     try:
         got = src.inbox()
         if got is None:
-            lines.append(f"- inbox: no tools/agent-guard/inbox.py in {WORKSPACE}")
+            lines.append(f"- inbox: no {INBOX}")
         else:
             pending = {d["agent"]: d for d in got}
     except Exception as e:
@@ -505,10 +507,9 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
         return _git(repo, "log", "-1", "--format=%cr %h", f"origin/{branch}").strip()
 
     def inbox() -> list[dict] | None:
-        tool = WORKSPACE / "tools/agent-guard/inbox.py"
-        if not tool.is_file():
+        if not INBOX.is_file():
             return None
-        r = subprocess.run([sys.executable, str(tool), "list"], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, str(INBOX), "list"], capture_output=True, text=True)
         if r.returncode:
             raise RuntimeError(f"`inbox.py list` exited {r.returncode}: {r.stderr.strip()[-300:]}")
         return parse_inbox(r.stdout)
