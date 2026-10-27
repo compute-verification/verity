@@ -39,13 +39,13 @@ theorem unitIn_of_drop {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.Un
 
 /-- **Off the unit input rows, `HmIn.delta`'s level-0 entries are `HmOut.delta`'s**: `HmRow.delta`'s, then `outPairs`. -/
 theorem da_offUnit {tags : Tags} {st : Stmt} (L0 : Layout (flatTwin st)) (F0 : Aliased.UnitFacts tags (flatTwin st))
-    {pi : HmIn.Ports} (hp : HmIn.parse st.c = .ok pi) (hda : st.da = (HmIn.delta st.c pi st.pin).1) (r : ℕ)
-    (hr : ¬ UnitIn st.c r) (i : ℕ) :
+    {pi : HmIn.Ports} (hp : HmIn.parse st.c = .ok pi) (hda : st.da = (HmIn.delta st.c pi st.pin).1)
+    (hpin : HmRow.pinnedCount st.c.metaJ = 0) (r : ℕ) (hr : ¬ UnitIn st.c r) (i : ℕ) :
     deltaEntry st.da r i = deltaEntry ((HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray) r i := by
   have hk : keepCol st.c pi r = true := by
     by_contra hn
     exact hr (unitIn_of_drop L0 F0 hp (Bool.eq_false_iff.2 hn))
-  rw [hda, (deltaEntry_kept hk i).1, hidden_delta']
+  rw [hda, (deltaEntry_kept hk i).1, hidden_delta_unpinned hpin]
 
 namespace Any
 
