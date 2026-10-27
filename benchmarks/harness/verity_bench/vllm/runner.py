@@ -776,7 +776,8 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     share one exact KV pool, ``resident_kv_cache_memory_bytes`` or ``block_kv_cache_memory_bytes``: vLLM schedules by
     free KV blocks, and an arm whose install leaves a different amount of free memory would otherwise get a different
     pool, a different schedule, and (through batch-composition-dependent kernels) different tokens than its control.
-    Without a pin the kv-pool gate catches unequal pools."""
+    Without a pin the kv-pool gate catches unequal pools. ``attention_backend`` and ``attention_config`` pass to vLLM as
+    set, for a preset whose Build's row declares them (the B200's FlashAttention 2)."""
 
     settings = preset.engine_settings
     engine: dict[str, Any] = {
@@ -809,6 +810,10 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     kv_pin = settings.get("resident_kv_cache_memory_bytes" if resident else "block_kv_cache_memory_bytes")
     if kv_pin is not None:
         engine["kv_cache_memory_bytes"] = int(kv_pin)
+    if settings.get("attention_backend") is not None:
+        engine["attention_backend"] = str(settings["attention_backend"])
+    if settings.get("attention_config") is not None:
+        engine["attention_config"] = dict(settings["attention_config"])
     return engine
 
 
