@@ -12,8 +12,17 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from rho import classes, lean
-from rho.classes import CLASSES, STANDINGS, Outside, counted, premise_status, premises
+from rho import classes, hardware, lean
+from rho.classes import (
+    CLASSES,
+    STANDINGS,
+    FlopBudget,
+    Outside,
+    counted,
+    premise_status,
+    premises,
+)
+from rho.params import Registry
 from rho.profile import Profile
 from rho.theorem import Budget
 
@@ -29,8 +38,8 @@ KIMI = Profile(
     kappa_forward=0.294, kappa_wgrad=0.294, layers=61, layer_weights=4e8, layer_bits=1.04e12 * 2.5 / 61,
     thread_k=2e7, entry_width=512, price=2.8, price_max=8, gamma=1, beta_v=0.63, map_width=7168, map_width_min=7168,
     h_eff=17, b_ps=1, step_tokens=6.7e7)
-DECLARED = Budget(6.4e16, K)
-WINDOW = Budget(5.5e20, 7.3e11)
+DECLARED = FlopBudget(6.4e16, K)
+WINDOW = FlopBudget(5.5e20, 7.3e11)
 
 
 def gates(alpha0, a):
@@ -145,7 +154,7 @@ def test_a_count_on_another_set_is_converted_to_the_profiles_counted_products_an
         assert arg.counts in ("kappa", "keyed") or arg.counts in Profile.__dataclass_fields__
 
 
-def test_at_the_server_window_only_the_linear_counts_cap():
+def test_at_the_serving_block_only_the_linear_counts_cap():
     finite = {n for n, arg in CLASSES.items() if arg.allowance(KIMI)(WINDOW) < KIMI.kappa * WINDOW.compute / 2}
     assert finite == {"fanout-priced", "fanout-split"}
 
@@ -161,7 +170,7 @@ def test_a_class_whose_field_is_unknown_is_outside():
 def test_every_class_allows_no_less_with_more_bits(name):
     a = CLASSES[name].allowance(KIMI)
     ks = [10 ** (4 + i / 4) for i in range(36)]
-    counts = [a(Budget(1e30, k)) for k in ks]
+    counts = [a(FlopBudget(1e30, k)) for k in ks]
     assert all(x <= y for x, y in itertools.pairwise(counts)), counts
 
 
@@ -190,3 +199,13 @@ def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
 def test_every_class_cites_its_statement_first():
     for arg in CLASSES.values():
         assert lean.status(arg.cites[0]) in ("proved", "draft"), arg.name
+
+
+def test_a_class_caps_a_block_of_gates_through_the_one_conversion():
+    """`q_T(c, k)` on gates is the FLOP-model statement at `c / G` FLOPs, and a gate holds `w = κ / (2G)`: the capacity
+    `w c` is `κ/2` a FLOP."""
+    u = hardware.units(Registry.load())
+    a = CLASSES["fanout-priced"].allowance(KIMI)
+    c = u.gates(WINDOW.compute)
+    assert classes.per_block(a, u)(Budget(c, WINDOW.inputs)) == a(WINDOW)
+    assert classes.weight_per_gate(KIMI, u) * c == pytest.approx(KIMI.kappa * WINDOW.compute / 2)

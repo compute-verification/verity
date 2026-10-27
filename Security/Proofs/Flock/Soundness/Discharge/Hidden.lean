@@ -1,11 +1,14 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
@@ -28,6 +31,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 
 * `Defs`: the hidden-output statement (`Spec`, `outPairs`, `outBytes`, `commitPair`) and the frozen statements;
 * `Spec`: `setupHidden_spec'`, the walk of `Stmt.setupHidden` to its `Spec`;
+* `PortsP`: the public leaves `HmIn.parse` accepted (`publicCol_at`), and the rows `HmIn.delta` keeps (`keepCol`,
+  `deltaEntry_inDelta`);
 * `Facts`: what is read off `Spec` and `HmOut.parse` (`setupHidden_hm96`, `setupHidden_wf`, `parse_untyped`, ...);
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
@@ -35,6 +40,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Rows`: an output row is a padded lone port or an exact run of ports (`checkRows_out`: `HmOut.checkRows`), and
   `sha512/row/v1` output rows are one per output port (`out_rows_v1`);
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
+* `LayoutP`: its layout at public inputs (`hidden_layoutP`), Δ without the pairs into a public leaf's bits;
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words

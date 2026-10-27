@@ -224,7 +224,7 @@ def test_luck_and_the_total():
 
 
 def test_adapt_is_a_proof_units_term():
-    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof unit's."""
+    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
     assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
     assert E.adapt("segment").eps == 0.21 and E.adapt("whole").eps == 0.0035
     assert {E.design(n).unit for n in E.designs()} == {"whole"}   # decision 72: whole dot products
@@ -233,7 +233,7 @@ def test_adapt_is_a_proof_units_term():
     assert e0.terms()["adapt"] is None and e.terms()["adapt"] == 0.0035
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck - 0.0035) * (1 - e.clock))
     assert E.eps(DUO, PI, 8, adapt=E.adapt("per-stage")).total() == pytest.approx(e0.total())
-    with pytest.raises(SystemExit, match="no proof unit 'none'"):
+    with pytest.raises(SystemExit, match="no proof block 'none'"):
         E.adapt("none")
     assert all(E.adapt(n).selection for n in E.adapts())
 
@@ -312,7 +312,7 @@ def test_the_table_route_is_bound_by_L2():
 
 
 def test_designs_read_what_exists():
-    """Every design reads the census, names a leaf of NOISE for each product, a proof unit and, where one is on main,
+    """Every design reads the census, names a leaf of NOISE for each product, a proof block and, where one is on main,
     its perplexity arm; decision 79's three names are designs, and each alias names one design."""
     c = census(model(), vector(PIN).epoch)
     for n in E.designs():
@@ -392,7 +392,7 @@ def test_cli(capsys):
     assert "ε core     " in out and "ε_sample" not in out and "ε_luck     0.153%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled"]) == 0
     out = capsys.readouterr().out
-    assert "ε_adapt 0.350%: proof unit whole" in out and "ε_sample   0.350%" in out
+    assert "ε_adapt 0.350%: proof block whole" in out and "ε_sample   0.350%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled", "--adapt", "segment"]) == 0
     assert "ε_sample   21.000%" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="--checking sampled"):
@@ -438,7 +438,7 @@ def test_cli(capsys):
     assert main(["eps", "--vector", PIN, "--table", "dither-c", "dither-2s", "--operands", "floor", "--credit",
                  "floor", "--checking", "sampled"]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert "checking sampled" in lines[0] and "the proof unit (each design its own)" in lines[0]
+    assert "checking sampled" in lines[0] and "the proof block (each design its own)" in lines[0]
     head = lines[1].split()
     assert head[-4:] == ["|", "unit", "adapt", "sample"] and lines[2].split()[-4:-2] == ["|", "whole"]
     assert head[head.index("floor") + 1:head.index("floor") + 3] == ["luck", "core@2"]

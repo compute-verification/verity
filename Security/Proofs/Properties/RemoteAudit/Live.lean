@@ -1,24 +1,26 @@
 import Batteries.Tactic.OpenPrivate
 import Properties.RemoteAudit.Live
 import Proofs.Properties.RemoteAudit.Order
+import Proofs.Properties.RemoteAudit.SharedLink
 
 /-!
-# The verifier's process accepts what `Session.run` accepts (`liveIsRun`)
+# The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)
 
 The recorded run is taken at `W c a s`, the process's session `s` with the coins `c` and the append coins `a`.
 
-* Each event commutes with `W` (`step_W`) as long as the coins it reads agree: the challenge it releases, the openings
-  coin it draws from and the next append coin. No event changes the coins (`step_keeps`), and `withCoin` only fills a
-  coin not yet sent or pushes an append coin (`withCoin_le`), so every coin the process holds stays, and `Agree c a` at
-  the end holds at every request before it (`step_le`). The event's `unset` check says each coin it read is sent and
-  of a coin's size (`unset_released`, `unset_drew`), so `Agree` gives it in `c` (`event_W`).
+* Each event commutes with `W` (`step_W`, `sclose_W`, `sstep_W`) as long as the coins it reads agree: the challenge it
+  releases, its draw's openings coin and the next append coin. No event changes the coins (`sstep_keeps`), and
+  `withCoin` only fills a coin not yet sent or pushes an append coin (`withCoin_le`), so every coin the process holds
+  stays, and `Agree c a` at the end holds at every request before it (`step_le`). The event's `unset` check says each
+  coin it read is sent and of a coin's size (`unset_released`, `unset_drew`), so `Agree` gives it in `c` (`event_W`).
 * A `verify`'s verdict is `checkWindowChunked`'s, which is `checkWindow`'s (`chunkedIsWhole`), at a point of the
   recorded run where the window awaits openings (`ChecksOK`). At its `settle`, later, the window still awaits them, and
   `checkWindow` gives the same verdict there (`verdict_kept`): its draws, record, registration and digest are kept
-  (`recordKeptAfterDraw`, `run_frz`), and the appends only grow past the blocks its draws read, which are receipts of
-  its plans (`DrawsIn`). So the process's `verifyBy` on that verdict is the recorded `verify` (`verifyBy_congr`).
+  (`Shared.recordKeptAfterDraw`, `srun_kept`), and the appends only grow past the blocks its draws read, which are
+  receipts of its plans (`Shared.DrawsIn`, `Shared.checkWindow_grow`). So the process's `verifyBy` on that verdict is
+  the recorded `verify` (`verifyBy_congr`).
 
-`run_sim` puts them together by induction on the requests, from the end (`snoc_induction`).
+`run_sim` puts them together by induction on the requests, from the end (`snoc_induction`), over `Shared.srunL g`.
 -/
 
 open RemoteAudit RemoteAudit.Session
@@ -257,12 +259,117 @@ theorem withCoin_le {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : St
     · rename_i hk; subst hk; simp at hy
     · exact hy
 
-theorem eventOn_ok {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
-    (h : Verifier.eventOn 2 1 s e coin = .ok (r, s₂)) :
-    ∃ s₁, (∀ c a, W c a s₁ = W c a s) ∧ CoinsLE s s₁ ∧ Session.step s₁ e = .ok (r, s₂) ∧
-      Verifier.unset 1 s₂ e (some r) = none := by
+theorem sclose_W {g : Nat} {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : Result} {s₁ : State}
+    (h₁ : Shared.close g s t now = .ok (r, s₁))
+    (hc : (∃ d, r = .drew d) → c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!) :
+    Shared.close g (W c a s) t now = .ok (r, W c a s₁) := by
+  generalize hres : Shared.close g (W c a s) t now = res
+  unfold Shared.close at h₁ hres
+  dsimp only [W] at hres
+  dsimp only at h₁
+  simp only [deadline_W] at hres
+  split at h₁
+  · rename_i f hf
+    split at hres
+    · rename_i f' hf'
+      cases hf.symm.trans hf'
+      cases h₁; cases hres; rfl
+    · rename_i hf'; exact (hf' f hf).elim
+  rename_i hf
+  split at hres
+  · rename_i f' hf'; exact (hf f' hf').elim
+  split at h₁
+  · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
+  rename_i h; rw [ite_eq_right h] at hres
+  split at h₁
+  · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
+  rename_i h; rw [ite_eq_right h] at hres
+  split at h₁
+  · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
+  rename_i h; rw [ite_eq_right h] at hres
+  split at h₁
+  · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
+  rename_i h; rw [ite_eq_right h] at hres
+  cases hdl : s.deadline t.toNat <;> simp only [hdl] at h₁ hres
+  all_goals
+    split at h₁
+    · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
+    rename_i h; rw [ite_eq_right h] at hres
+    split at h₁
+    · rename_i u hu; rw [hu] at hres; cases h₁; cases hres; rfl
+    rename_i hu
+    rw [Shared.find_none' hu] at hres
+    dsimp only at hres
+    split at h₁
+    · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
+    rename_i h; rw [ite_eq_right h] at hres
+    split at h₁
+    · rename_i drawn hd
+      cases h₁
+      rw [hc ⟨_, rfl⟩, hd] at hres
+      cases hres
+      rfl
+    · cases h₁
+
+theorem sstep_nonclose {g : Nat} {s : State} {e : Event} (hn : ∀ t now, e ≠ .close t now) :
+    Shared.step g s e = Session.step s e := by
+  unfold Shared.step
+  split
+  · rfl
+  · cases e <;> first | rfl | exact (hn _ _ rfl).elim
+
+theorem sstep_close {g : Nat} (hg : 2 ≤ g) (s : State) (t : Int) (now : Nat) :
+    Shared.step g s (.close t now) = Shared.close g s t now := by
+  show (if g ≤ 1 then Session.step s (.close t now) else Shared.close g s t now) = _
+  rw [ite_eq_right (by omega)]
+
+theorem sstep_verify {g : Nat} (s : State) (t : Int) (o : Array Opening) :
+    Shared.step g s (.verify t o) = Session.step s (.verify t o) :=
+  sstep_nonclose fun _ _ h => by cases h
+
+/-- `step_W` at `g` windows a draw: a close reads its draw's openings coin, `W + t / g`. -/
+theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array ByteArray}
+    (he : Shared.step g s e = .ok (r, s₁))
+    (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
+    (hd : ∀ t now d, e = .close t now → r = .drew d →
+      c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!)
+    (ha : ∀ x, s.appendCoins[s.appendDrawn]? = some x → a[s.appendDrawn]? = some x) :
+    Shared.step g (W c a s) e = .ok (r, W c a s₁) := by
+  rcases Nat.lt_or_ge g 2 with hg2 | hg2
+  · obtain rfl : g = 1 := by omega
+    rw [RemoteAudit.Shared.step_one] at he ⊢
+    exact step_W he hs (fun t now d he' hr => by simpa only [Nat.div_one] using hd t now d he' hr) ha
+  · rcases Shared.sstep_of hg2 he with ⟨t, now, rfl, hc⟩ | ⟨hn, hs'⟩
+    · rw [sstep_close hg2]
+      exact sclose_W hc fun ⟨d, hr⟩ => hd t now d rfl hr
+    · rw [sstep_nonclose hn]
+      exact step_W hs' hs (fun t now d he' _ => (hn t now he').elim) ha
+
+/-- No event changes the coins or the append coins. -/
+theorem sstep_keeps {g : Nat} {s : State} {e : Event} {r : Result} {s₁ : State}
+    (he : Shared.step g s e = .ok (r, s₁)) : s₁.coins = s.coins ∧ s₁.appendCoins = s.appendCoins := by
+  rcases Nat.lt_or_ge g 2 with hg2 | hg2
+  · rw [Shared.step_le_one (by omega)] at he
+    exact step_keeps he
+  · rcases Shared.sstep_of hg2 he with ⟨t, now, rfl, hc⟩ | ⟨-, hs⟩
+    · rcases Shared.sclose_spec hc with ⟨-, rfl⟩ | ⟨u, f, -, rfl⟩ | ⟨d, -, -, -, -, -, -, -, -, rfl⟩ <;>
+        exact ⟨rfl, rfl⟩
+    · exact step_keeps hs
+
+theorem sstep_close_params {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State}
+    (he : Shared.step g s (.close t now) = .ok (r, s₁)) : s₁.params = s.params := by
+  rcases Nat.lt_or_ge g 2 with hg2 | hg2
+  · rw [Shared.step_le_one (by omega)] at he
+    exact close_params he
+  · rw [sstep_close hg2] at he
+    exact (Shared.sclose_dr he).2.2.2.1
+
+theorem eventOn_ok {g : Nat} {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
+    (h : Verifier.eventOn 2 g s e coin = .ok (r, s₂)) :
+    ∃ s₁, (∀ c a, W c a s₁ = W c a s) ∧ CoinsLE s s₁ ∧ Shared.step g s₁ e = .ok (r, s₂) ∧
+      Verifier.unset g s₂ e (some r) = none := by
   unfold Verifier.eventOn at h
-  simp only [bind, Except.bind, Flight.step_two, Shared.step_one] at h
+  simp only [bind, Except.bind, Flight.step_two] at h
   repeat' (split at h <;> try dsimp only at h)
   all_goals (try contradiction)
   all_goals
@@ -271,8 +378,8 @@ theorem eventOn_ok {s : State} {e : Event} {coin : Option ByteArray} {r : Result
     injection h with h
     injection h with h1 h2
     subst r s₂
-    have hu : Verifier.unset 1 s' e (some r') = none := by
-      cases hu : Verifier.unset 1 s' e (some r') with
+    have hu : Verifier.unset g s' e (some r') = none := by
+      cases hu : Verifier.unset g s' e (some r') with
       | none => rfl
       | some why => exact (hun why hu).elim
   · exact ⟨v₁, fun c a => withCoin_W hw c a, withCoin_le hw, hstep, hu⟩
@@ -292,115 +399,15 @@ theorem unset_released {g : Nat} {s : State} {e : Event} {k : Nat} (he : ∃ now
     | none => simp [hk] at h
     | some x => simp [hk] at h; exact ⟨x, rfl, h⟩
 
-theorem unset_drew {s : State} {t : Int} {now : Nat} {d : Array (Nat × Nat)}
-    (h : Verifier.unset 1 s (.close t now) (some (.drew d)) = none) :
-    ∃ x, s.coins[s.params.windows + t.toNat]? = some x ∧ x.size = Codec.COIN_BYTES := by
+theorem unset_drew {g : Nat} {s : State} {t : Int} {now : Nat} {d : Array (Nat × Nat)}
+    (h : Verifier.unset g s (.close t now) (some (.drew d)) = none) :
+    ∃ x, s.coins[s.params.windows + t.toNat / g]? = some x ∧ x.size = Codec.COIN_BYTES := by
   unfold Verifier.unset at h
-  try simp only [Nat.div_one] at h
-  cases hk : s.coins[s.params.windows + t.toNat]? with
+  cases hk : s.coins[s.params.windows + t.toNat / g]? with
   | none => simp [hk] at h
   | some x => simp [hk] at h; exact ⟨x, rfl, h⟩
 
-/-! ## Each draw is a receipt of its window -/
-
-/-- Each drawn window's draws are receipts of its passes' plans. -/
-def DrawsIn (ws : Array Win) : Prop :=
-  ∀ (u : Nat) (d : Array (Nat × Nat)), ws[u]!.drawn = some d → ∀ k (hk : k < d.size),
-    d[k].1 < ws[u]!.plans.size ∧ d[k].2 < ws[u]!.plans[d[k].1]!.length
-
-theorem drawsIn_modify {ws : Array Win} (u : Nat) (f : Win → Win) (hf : ∀ w, (f w).drawn = w.drawn)
-    (hp : ∀ w, (f w).plans = w.plans) (h : DrawsIn ws) : DrawsIn (ws.modify u f) := by
-  intro v d hd k hk
-  rw [Properties.RemoteAudit.getElem!_modify'] at hd ⊢
-  by_cases hc : u = v ∧ v < ws.size
-  · rw [ite_eq_left hc] at hd ⊢
-    rw [hf] at hd
-    rw [hp]
-    exact h v d hd k hk
-  · rw [ite_eq_right hc] at hd ⊢
-    exact h v d hd k hk
-
-theorem drawsIn_draw {ws : Array Win} (u : Nat) (d : Array (Nat × Nat)) (f : Win → Win)
-    (hf : ∀ w, (f w).drawn = some d) (hp : ∀ w, (f w).plans = w.plans) (h : DrawsIn ws)
-    (hd : ∀ k (hk : k < d.size), d[k].1 < ws[u]!.plans.size ∧ d[k].2 < ws[u]!.plans[d[k].1]!.length) :
-    DrawsIn (ws.modify u f) := by
-  intro v d' hd' k hk
-  rw [Properties.RemoteAudit.getElem!_modify'] at hd' ⊢
-  by_cases hc : u = v ∧ v < ws.size
-  · rw [ite_eq_left hc] at hd' ⊢
-    rw [hf] at hd'
-    cases hd'
-    rw [hp, ← hc.1]
-    exact hd k hk
-  · rw [ite_eq_right hc] at hd' ⊢
-    exact h v d' hd' k hk
-
-theorem plans_modify (ws : Array Win) (u v : Nat) (f : Win → Win) (hp : ∀ w, (f w).plans = w.plans) :
-    (ws.modify u f)[v]!.plans = ws[v]!.plans := by
-  rw [Properties.RemoteAudit.getElem!_modify']
-  split
-  · exact hp _
-  · rfl
-
-theorem close_drawsIn {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State}
-    (he : close s t now = .ok (r, s₁)) (h : DrawsIn s.windows) : DrawsIn s₁.windows := by
-  unfold close State.fail at he
-  dsimp only at he
-  repeat' (split at he <;> try dsimp only at he)
-  all_goals (try contradiction)
-  all_goals cases he
-  all_goals first
-    | exact h
-    | exact drawsIn_modify _ _ (fun _ => rfl) (fun _ => rfl) (drawsIn_modify _ _ (fun _ => rfl) (fun _ => rfl) h)
-    | exact drawsIn_modify _ _ (fun _ => rfl) (fun _ => rfl) h
-    | skip
-  all_goals
-    have hdr := ‹draws _ _ _ _ _ = some _›
-    obtain ⟨_, _, -, -, -, hrange, -⟩ := drawIsSubset _ _ _ _ _ _ hdr
-    refine drawsIn_draw _ _ _ (fun _ => rfl) (fun _ => rfl)
-      (drawsIn_modify _ _ (fun _ => rfl) (fun _ => rfl) h) fun k hk => ?_
-    obtain ⟨hi, hp, -⟩ := hrange k hk
-    have hpl : (s.windows.modify t.toNat ({· with final := true}))[t.toNat]!.plans = s.windows[t.toNat]!.plans :=
-      plans_modify _ _ _ _ (fun _ => rfl)
-    rw [hpl]
-    simp only [Array.size_map] at hi
-    refine ⟨hi, ?_⟩
-    have e : ∀ i (hi : i < s.windows[t.toNat]!.plans.size),
-        (s.windows[t.toNat]!.plans.map fun x : Plan => x.length)[i]! = s.windows[t.toNat]!.plans[i]!.length :=
-      fun i hi => by
-        rw [getElem!_pos (s.windows[t.toNat]!.plans.map fun x : Plan => x.length) i (by simpa using hi),
-          getElem!_pos s.windows[t.toNat]!.plans i hi, Array.getElem_map]
-    rw [e _ hi] at hp
-    exact hp
-
-theorem drawsIn_step {s : State} {e : Event} {r : Result} {s' : State} (h : FInv s) (hin : DrawsIn s.windows)
-    (he : Session.step s e = .ok (r, s')) : DrawsIn s'.windows := by
-  have hf := (finv_step h he).2.1
-  have keep : Keep s.windows s'.windows → DrawsIn s'.windows := by
-    intro hk u d hd k hkd
-    have hd' : dr s'.windows u = some d := by rw [dr_eq]; exact hd
-    rcases hk.2 u with e | ⟨-, e⟩
-    · rw [e, dr_eq] at hd'
-      obtain ⟨-, -, -, e4, -⟩ := (hf u).1 (by rw [hd']; rfl)
-      rw [e4]
-      exact hin u d hd' k hkd
-    · rw [e] at hd'; cases hd'
-  cases e with
-  | start now => injection he with he; exact keep (keep_start he)
-  | boundary now => injection he with he; exact keep (keep_boundary he)
-  | append root count => exact keep (keep_append he)
-  | release runs withdrawn => injection he with he; exact keep (keep_release he)
-  | receive t i root runs change st now => injection he with he; exact keep (keep_receive he)
-  | close t now => exact close_drawsIn he hin
-  | verify t openings => injection he with he; exact keep (keep_verify he)
-
-theorem run_drawsIn {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat} {es : List Event}
-    {rs : Array Result} {s : State} (hm : 1 ≤ params.minPasses)
-    (h : runL (State.init params reg c a nb) es = .ok (rs, s)) : FInv s ∧ DrawsIn s.windows := by
-  rw [← run_toArray] at h
-  exact run_inv (fun s => FInv s ∧ DrawsIn s.windows)
-    (fun _ _ _ _ ⟨hs, hd⟩ he => ⟨(finv_step hs he).1, drawsIn_step hs hd he⟩) _ _ _ _
-    ⟨finv_init params reg c a nb hm, fun u d hd => by simp [State.init] at hd; cases hd⟩ h
+/-! ## A window's verdict is kept -/
 
 theorem awaiting_some {s : State} {t : Int} {w : WindowRecord} {d : Array (Nat × Nat)}
     (h : s.awaiting t = some (w, d)) :
@@ -421,64 +428,58 @@ theorem awaiting_some {s : State} {t : Int} {w : WindowRecord} {d : Array (Nat �
     · cases h
       exact ⟨by omega, by omega, rfl, rfl⟩
 
-/-- A drawn window's draws are receipts of its record's passes. -/
-theorem draw_in_record {s : State} (hI : Inv s) (hin : DrawsIn s.windows) {t : Nat} (ht : t < s.windows.size)
-    {d : Array (Nat × Nat)} (hd : s.windows[t]!.drawn = some d) {k : Nat} (hk : k < d.size) :
-    d[k]!.1 < (s.record t).passes.size ∧ d[k]!.2 < (s.record t).passes[d[k]!.1]!.plan.length := by
-  have h' : InvOn _ _ _ _ _ _ _ _ _ _ := hI
-  obtain ⟨h1, h2⟩ := hin t d hd k hk
-  rw [getElem!_pos d k hk]
-  have hsz : (s.record t).passes.size = s.windows[t]!.roots.size := by simp [State.record]
-  have hpl : s.windows[t]!.plans.size = s.windows[t]!.roots.size := by
-    rw [getElem!_pos s.windows t ht]; exact (h'.sizes t ht).1
-  have hi : d[k].1 < (s.record t).passes.size := by rw [hsz, ← hpl]; exact h1
-  refine ⟨hi, ?_⟩
-  rw [(record_pass s t _ hi).1]
-  exact h2
+/-- What a run from `State.init` keeps from a point `sV` of it to a later one `s`: the invariant, each drawn window's
+draws in its plans (`Shared.DrawsIn`), `Frz`, and the registration. -/
+theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
+    {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)
+    (h₀ : Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV))
+    (h₂ : Shared.srunL g sV es₂ = .ok (rs₂, s)) :
+    Inv sV ∧ Shared.DrawsIn sV.windows ∧ Inv s ∧ Frz sV s ∧ s.reg = sV.reg := by
+  rw [← Shared.srun_toArray] at h₀ h₂
+  rcases Nat.lt_or_ge g 2 with hg2 | hg2
+  · rw [Shared.run_le_one (by omega)] at h₀ h₂
+    obtain ⟨hFV, -, -, -, -, -, -, hinV, -⟩ :=
+      run_inv (Shared.Link1 params reg c) (fun _ _ _ _ hx he => Shared.link1_step hx he) _ _ _ _
+        (Shared.link1_init params reg c a nb hm) h₀
+    obtain ⟨hF, hf⟩ := run_frz _ _ _ _ hFV h₂
+    have hr : s.reg = sV.reg := (run_inv (fun x => Inv x ∧ x.reg = sV.reg)
+      (fun _ _ _ _ ⟨hx, e⟩ he => have ⟨hx', f⟩ := step_inv hx he; ⟨hx', f.2.1.trans e⟩) _ _ _ _ ⟨hFV.1, rfl⟩ h₂).2
+    exact ⟨hFV.1, hinV, hF.1, hf, hr⟩
+  · obtain ⟨hSF, hpre, -, -, -, -, hL, -⟩ :=
+      Shared.srun_inv g (Shared.LinkInv g params reg c) (fun _ _ _ _ hx he => Shared.linkInv_step hg2 hx he)
+        _ _ _ _ (Shared.linkInv_init g params reg c a nb hm) h₀
+    obtain ⟨hS, hf⟩ := Shared.srun_frz hg2 _ _ _ _ hSF h₂
+    have hr : s.reg = sV.reg := (Shared.srun_inv g (fun x => Inv x ∧ x.reg = sV.reg)
+      (fun _ _ _ _ ⟨hx, e⟩ he => have ⟨hx', f, _⟩ := Shared.sstep hg2 hx he; ⟨hx', f.2.1.trans e⟩) _ _ _ _
+        ⟨hSF.1.1, rfl⟩ h₂).2
+    exact ⟨hSF.1.1, Shared.drawsIn_of_link hg hSF.1.1 hpre hSF.2 hL, hS.1.1, hf, hr⟩
 
 /-- A window's verdict on its openings is the same at any later point of the session where it still awaits them: its
 draws, its record, the registration and the digest are kept, and the appends only grow past the blocks it reads. -/
-theorem verdict_kept {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
+theorem verdict_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
     {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)
-    (h₀ : runL (State.init params reg c a nb) es₀ = .ok (rs₀, sV)) (h₂ : runL sV es₂ = .ok (rs₂, s))
+    (h₀ : Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV))
+    (h₂ : Shared.srunL g sV es₂ = .ok (rs₂, s))
     {t : Int} {w w' : WindowRecord} {d d' : Array (Nat × Nat)}
     (hv : sV.awaiting t = some (w, d)) (hs : s.awaiting t = some (w', d')) (o : Array Opening) :
     checkWindow s.reg s.digest s.appends w' d' o = checkWindow sV.reg sV.digest sV.appends w d o := by
   obtain ⟨-, ht, hd, rfl⟩ := awaiting_some hv
   obtain ⟨-, -, hd', rfl⟩ := awaiting_some hs
-  obtain ⟨hFV, hinV⟩ := run_drawsIn hm h₀
+  obtain ⟨hIV, hinV, hI, hf, hr⟩ := srun_kept hg hm h₀ h₂
   have h₀' := h₀
-  rw [← run_toArray] at h₀' h₂
-  obtain ⟨hF, hk, hdig, more, happ⟩ := run_frz _ _ _ _ hFV h₂
-  have hIV : Inv sV := hFV.1
-  have hI : Inv s := hF.1
-  have hr : s.reg = sV.reg := (run_inv (fun x => Inv x ∧ x.reg = sV.reg)
-    (fun _ _ _ _ ⟨hx, e⟩ he => have ⟨hx', f⟩ := step_inv hx he; ⟨hx', f.2.1.trans e⟩) _ _ _ _ ⟨hIV, rfl⟩ h₂).2
+  have h₂' := h₂
+  rw [← Shared.srun_toArray] at h₀' h₂'
   have hdV : drawnOf sV t.toNat = some d := by
     show dr sV.windows t.toNat = some d
     rw [dr_eq]; exact hd
-  obtain ⟨hds, hrec, -⟩ := recordKeptAfterDraw params reg c a nb _ _ _ _ _ _ h₀' h₂ t.toNat d hm hdV
+  obtain ⟨hds, hrec, -⟩ := Shared.recordKeptAfterDraw g params reg c a nb _ _ _ _ _ _ h₀' h₂' t.toNat d hm hdV
   have e : d' = d := by
     have : dr s.windows t.toNat = some d := hds
     rw [dr_eq, hd'] at this
     exact Option.some.inj this
   subst e
-  rw [hrec, hr, hdig, happ, checkWindow_eq, checkWindow_eq]
-  split
-  · rfl
-  congr 1
-  apply findSome?_congr
-  intro k hk
-  rw [List.mem_range] at hk
-  obtain ⟨hi, hp⟩ := draw_in_record hIV hinV ht hd hk
-  unfold rejectAt
-  rw [checkOpening_congr]
-  apply appendOf_extend
-  · rw [← happ]; exact firsts_mono hI
-  · intro k' hk' hk''
-    have := firsts_big hIV hI more happ hr k' hk' (by rw [happ]; exact hk'')
-    have hb := record_reads hIV t.toNat ht _ _ hi hp
-    rw [← happ]; omega
+  obtain ⟨more, happ⟩ := hf.2.2
+  rw [hrec, hr, hf.2.1, Shared.checkWindow_grow hIV hI hinV more happ hr ht hd o]
 
 /-! ## The process's requests on the recorded run -/
 
@@ -490,20 +491,21 @@ theorem agree_of_le {c a : Array ByteArray} {s s' : State} (h : CoinsLE s s') (h
 
 /-- An event the process took on `s` is the same event on the recorded run, at `W c a s`, for coins that agree with
 the ones the process holds after it. -/
-theorem event_W {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State} {c a : Array ByteArray}
-    (h : Verifier.eventOn 2 1 s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
-    Session.step (W c a s) e = .ok (r, W c a s₂) ∧ CoinsLE s s₂ := by
+theorem event_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
+    {c a : Array ByteArray} (h : Verifier.eventOn 2 g s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
+    Shared.step g (W c a s) e = .ok (r, W c a s₂) ∧ CoinsLE s s₂ := by
   obtain ⟨s₁, hW, hle, hstep, hun⟩ := eventOn_ok h
-  obtain ⟨h1, h2⟩ := step_keeps hstep
+  obtain ⟨h1, h2⟩ := sstep_keeps hstep
   refine ⟨?_, coinsLE_trans hle (coinsLE_of_eq h1 h2)⟩
   rw [← hW c a]
-  refine step_W hstep (fun k he hr => ?_) (fun t now d he hr => ?_) (fun x hx => hc.2 _ x (by rw [h2]; exact hx))
+  refine sstep_W hg hstep (fun k he hr => ?_) (fun t now d he hr => ?_)
+    (fun x hx => hc.2 _ x (by rw [h2]; exact hx))
   · subst hr
     obtain ⟨x, hx, hs⟩ := unset_released he hun
     rw [bang (hc.1 k x hx hs), ← h1, bang hx]
   · subst he hr
     obtain ⟨x, hx, hs⟩ := unset_drew hun
-    rw [close_params hstep] at hx
+    rw [sstep_close_params hstep] at hx
     rw [bang (hc.1 _ x hx hs), ← h1, bang hx]
 
 theorem verifyBy_keeps (s : State) (t : Int) (f : Array (Nat × Nat) → Verdict) :
@@ -545,13 +547,13 @@ theorem verifyBy_congr {s : State} {t : Int} {f g : Array (Nat × Nat) → Verdi
     rw [h _ _ ha]
   · rfl
 
-theorem runL_snoc' {s s₁ s₂ : State} {xs : List Event} {e : Event} {rs : Array Result} {r : Result}
-    (h : runL s xs = .ok (rs, s₁)) (he : Session.step s₁ e = .ok (r, s₂)) :
-    runL s (xs ++ [e]) = .ok (rs.push r, s₂) := by
-  unfold runL at h ⊢
+theorem srunL_snoc' {g : Nat} {s s₁ s₂ : State} {xs : List Event} {e : Event} {rs : Array Result} {r : Result}
+    (h : Shared.srunL g s xs = .ok (rs, s₁)) (he : Shared.step g s₁ e = .ok (r, s₂)) :
+    Shared.srunL g s (xs ++ [e]) = .ok (rs.push r, s₂) := by
+  unfold Shared.srunL at h ⊢
   rw [List.foldlM_append, h]
-  show List.foldlM stepAcc (rs, s₁) [e] = _
-  rw [List.foldlM_cons, stepAcc_ok he]
+  show List.foldlM (Shared.sAcc g) (rs, s₁) [e] = _
+  rw [List.foldlM_cons, Shared.sAcc_ok (acc := (rs, s₁)) he]
   rfl
 
 theorem snoc_induction {α : Type} {P : List α → Prop} (nil : P []) (snoc : ∀ l x, P l → P (l ++ [x])) (l : List α) :
@@ -574,11 +576,11 @@ theorem foldlM_snoc {α β ε : Type} {f : β → α → Except ε β} {b : β} 
     | error e => simp [hf] at h
     | ok v => simp only [hf, Except.ok.injEq] at h; rw [h]
 
-theorem run_nil (chunk : Nat) (p : Proc) : run chunk p [] = .ok ([], [], p) := rfl
+theorem run_nil (chunk g : Nat) (p : Proc) : run chunk g p [] = .ok ([], [], p) := rfl
 
-theorem run_snoc {chunk : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answers : List Answer}
-    {es : List Event} (h : run chunk p (qs ++ [q]) = .ok (answers, es, p')) :
-    ∃ ans₁ es₁ p₁ x e?, run chunk p qs = .ok (ans₁, es₁, p₁) ∧ step chunk p₁ q = .ok (x, e?, p') ∧
+theorem run_snoc {chunk g : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answers : List Answer}
+    {es : List Event} (h : run chunk g p (qs ++ [q]) = .ok (answers, es, p')) :
+    ∃ ans₁ es₁ p₁ x e?, run chunk g p qs = .ok (ans₁, es₁, p₁) ∧ step chunk g p₁ q = .ok (x, e?, p') ∧
       answers = ans₁ ++ [x] ∧ es = es₁ ++ e?.toList := by
   unfold run at h ⊢
   obtain ⟨⟨ans₁, es₁, p₁⟩, h₁, h₂⟩ := foldlM_snoc h
@@ -593,8 +595,8 @@ theorem run_snoc {chunk : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answers 
   exact ⟨x, e?, h₁, hs, rfl, rfl⟩
 
 /-- A request keeps the session's coins of a coin's size and its append coins. -/
-theorem step_le {chunk : Nat} {p p' : Proc} {q : Req} {x : Answer} {e? : Option Event}
-    (h : step chunk p q = .ok (x, e?, p')) : CoinsLE p.session p'.session := by
+theorem step_le {chunk g : Nat} {p p' : Proc} {q : Req} {x : Answer} {e? : Option Event}
+    (h : step chunk g p q = .ok (x, e?, p')) : CoinsLE p.session p'.session := by
   cases q with
   | event e coin =>
     simp only [step, bind, Except.bind] at h
@@ -604,7 +606,7 @@ theorem step_le {chunk : Nat} {p p' : Proc} {q : Req} {x : Answer} {e? : Option 
     obtain ⟨r, s⟩ := v
     cases h
     obtain ⟨s₁, -, hle, hstep, -⟩ := eventOn_ok hv
-    obtain ⟨h1, h2⟩ := step_keeps hstep
+    obtain ⟨h1, h2⟩ := sstep_keeps hstep
     exact coinsLE_trans hle (coinsLE_of_eq h1 h2)
   | verify t id frames =>
     simp only [step] at h
@@ -621,15 +623,16 @@ theorem step_le {chunk : Nat} {p p' : Proc} {q : Req} {x : Answer} {e? : Option 
 
 /-- Each check the process holds was spawned where the recorded run, on `c` and `a`, had its window awaiting openings,
 with the verdict `checkWindow` gives there. -/
-def ChecksOK (params : Params) (reg : Registration) (c a : Array ByteArray) (nb : Nat) (p : Proc) (es : List Event) :
-    Prop :=
-  ∀ ch ∈ p.checks, ∃ es₀ es₁ rs₀ sV, es = es₀ ++ es₁ ∧ runL (State.init params reg c a nb) es₀ = .ok (rs₀, sV) ∧
+def ChecksOK (g : Nat) (params : Params) (reg : Registration) (c a : Array ByteArray) (nb : Nat) (p : Proc)
+    (es : List Event) : Prop :=
+  ∀ ch ∈ p.checks, ∃ es₀ es₁ rs₀ sV, es = es₀ ++ es₁ ∧
+    Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV) ∧
     ∃ w d, sV.awaiting ch.t = some (w, d) ∧
       ch.verdict = checkWindow sV.reg sV.digest sV.appends w d (Wire.openingsOf ch.frames)
 
-theorem checksOK_extend {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat} {p p' : Proc}
-    {es : List Event} (es' : List Event) (h : ChecksOK params reg c a nb p es) (hp : ∀ ch ∈ p'.checks, ch ∈ p.checks) :
-    ChecksOK params reg c a nb p' (es ++ es') := by
+theorem checksOK_extend {g : Nat} {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
+    {p p' : Proc} {es : List Event} (es' : List Event) (h : ChecksOK g params reg c a nb p es)
+    (hp : ∀ ch ∈ p'.checks, ch ∈ p.checks) : ChecksOK g params reg c a nb p' (es ++ es') := by
   intro ch hch
   obtain ⟨es₀, es₁, rs₀, sV, rfl, h₀, hv⟩ := h ch (hp ch hch)
   exact ⟨es₀, es₁ ++ es', rs₀, sV, by rw [List.append_assoc], h₀, hv⟩
@@ -641,13 +644,14 @@ theorem results_snoc (ans : List Answer) (x : Answer) :
 
 /-- The process's run, on any coins that agree with the ones it holds at the end, is the recorded run: its results,
 and its session but for the coins; and every check it holds is right. -/
-theorem run_sim {chunk : Nat} {params : Params} {reg : Registration} {coins appendCoins : Array ByteArray} {nb : Nat}
-    (hm : 1 ≤ params.minPasses) (qs : List Req) :
+theorem run_sim {chunk g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration}
+    {coins appendCoins : Array ByteArray} {nb : Nat} (hm : 1 ≤ params.minPasses) (qs : List Req) :
     ∀ {answers : List Answer} {es : List Event} {p : Proc},
-      run chunk { session := State.init params reg coins appendCoins nb } qs = .ok (answers, es, p) →
+      run chunk g { session := State.init params reg coins appendCoins nb } qs = .ok (answers, es, p) →
       ∀ {c a : Array ByteArray}, Agree c a p.session →
-        runL (State.init params reg c a nb) es = .ok ((answers.filterMap Answer.result?).toArray, W c a p.session) ∧
-          ChecksOK params reg c a nb p es := by
+        Shared.srunL g (State.init params reg c a nb) es =
+            .ok ((answers.filterMap Answer.result?).toArray, W c a p.session) ∧
+          ChecksOK g params reg c a nb p es := by
   induction qs using snoc_induction with
   | nil =>
     intro answers es p h c a _
@@ -666,10 +670,10 @@ theorem run_sim {chunk : Nat} {params : Params} {reg : Registration} {coins appe
       rename_i v hv
       obtain ⟨r, s⟩ := v
       cases hs
-      obtain ⟨hstep, -⟩ := event_W hv hc
+      obtain ⟨hstep, -⟩ := event_W hg hv hc
       refine ⟨?_, checksOK_extend _ ihc fun _ h => h⟩
       rw [results_snoc]
-      exact runL_snoc' ihr hstep
+      exact srunL_snoc' ihr hstep
     | verify t id frames =>
       simp only [step] at hs
       split at hs
@@ -701,9 +705,10 @@ theorem run_sim {chunk : Nat} {params : Params} {reg : Registration} {coins appe
       cases hs
       have hm' : ch ∈ p₁.checks := List.mem_of_find?_eq_some hch
       obtain ⟨es₀, es₂, rs₀, sV, e, h₀, wV, dV, hv, hverdict⟩ := ihc ch hm'
-      have hstep : Session.step (W c a p₁.session) (.verify ch.t (Wire.openingsOf ch.frames)) =
+      have hstep : Shared.step g (W c a p₁.session) (.verify ch.t (Wire.openingsOf ch.frames)) =
           .ok ((verifyBy p₁.session ch.t fun _ => ch.verdict).1,
             W c a (verifyBy p₁.session ch.t fun _ => ch.verdict).2) := by
+        rw [sstep_verify]
         show pure (verify _ _ _) = _
         rw [verify_eq_verifyBy, verifyBy_W]
         have hc : verifyBy p₁.session ch.t
@@ -714,15 +719,15 @@ theorem run_sim {chunk : Nat} {params : Params} {reg : Registration} {coins appe
           obtain ⟨-, -, -, hrec⟩ := awaiting_some hw
           rw [← hrec, hverdict]
           rw [e] at ihr
-          obtain ⟨rs', s', rs₂, h₀', h₂⟩ := runL_append ihr
-          have hs' : (rs', s') = (rs₀, sV) := runL_det h₀' h₀
+          obtain ⟨rs', s', rs₂, h₀', h₂⟩ := Shared.srunL_append ihr
+          have hs' : (rs', s') = (rs₀, sV) := Shared.srunL_det h₀' h₀
           cases hs'
-          exact verdict_kept hm h₀ h₂ hv (s := W c a p₁.session) hw _
+          exact verdict_kept hg hm h₀ h₂ hv (s := W c a p₁.session) hw _
         erw [hc]
         rfl
       refine ⟨?_, checksOK_extend _ ihc fun ch' h => (List.mem_filter.1 h).1⟩
       rw [results_snoc]
-      exact runL_snoc' ihr hstep
+      exact srunL_snoc' ihr hstep
 
 end Properties.RemoteAudit.Live
 
@@ -730,8 +735,8 @@ namespace Properties.RemoteAudit
 
 open Live in
 theorem liveIsRun : LiveIsRun := by
-  intro chunk params reg coins appendCoins nb qs answers es p h c a hm hc ha
-  rw [run_toArray]
-  exact (run_sim hm qs h (c := c) (a := a) ⟨hc, ha⟩).1
+  intro chunk g params reg coins appendCoins nb qs answers es p h c a hg hm hc ha
+  rw [Shared.srun_toArray]
+  exact (run_sim hg hm qs h (c := c) (a := a) ⟨hc, ha⟩).1
 
 end Properties.RemoteAudit

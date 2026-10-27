@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import EnginePin
+from verity_vllm import EnginePin
 from verity_vllm.engine import spec as ES
 
 SPECS = Path(__file__).resolve().parents[1]
