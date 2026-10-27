@@ -734,10 +734,10 @@ def evidence(published: dict, segment: dict) -> dict | None:
         return None
 
     def coins_of(s: Any) -> tuple | None:
-        try:
-            return s["label"], s["start"], s["after"], [o["coin"] for o in s["openings"]]
-        except (KeyError, TypeError):
+        if not (isinstance(s, Mapping) and type(s.get("openings")) is list
+                and all(isinstance(o, Mapping) for o in s["openings"])):
             return None
+        return s.get("label"), s.get("start"), s.get("after"), [o.get("coin") for o in s["openings"]]
     at = coins_of(segment)
     settled = next((s for s in published.get("segments", ()) if at is not None and coins_of(s) == at), segment)
     return {"key": published["key"], "ledger": published["ledger"], "main": published["main"], "pins": published["pins"],
