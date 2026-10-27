@@ -877,7 +877,9 @@ def graphOf (env : Environment) (mnames : Array Name) (oleans : Array String) : 
 
 /-- The usage mode's `usage`: each pin's module (null when no imported module declares it), and for each module whose
 `own` flag is set its constants, how many of them the closure of `pins` and `extra` holds (`usesIn`, transitively), the
-first pin whose closure reaches one (`by`), and the other own modules its constants use (`refs`). -/
+first pin whose closure reaches one (`by`), and the other own modules its constants use (`refs`). `refs` reads the module's
+own `ConstantInfo`s, not `table`: a realized constant (an equation lemma) can be declared by several modules, and `table`
+holds one module's copy, whose proof can use that module's own auxiliaries. -/
 def usageInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (mnames : Array Name) (own : Array Bool)
     (pins extra : Array Name) : Json := Id.run do
   let ownOf (c : Name) : Option Nat := do
@@ -901,7 +903,7 @@ def usageInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (mname
     let data := env.header.moduleData[i]!
     let mut refs : Std.HashSet Nat := {}
     for ci in data.constants do
-      for d in usesIn env table ci.name do
+      for d in uses ci do
         if let some j := ownOf d then
           if j != i then refs := refs.insert j
     return (mnames[i]!.toString, Json.mkObj [("constants", toJson data.constants.size), ("used", toJson (count.getD i 0)),
