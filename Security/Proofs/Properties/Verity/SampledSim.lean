@@ -1,7 +1,8 @@
 import Proofs.Properties.Verity.SampledAccept
+import Proofs.Properties.Verity.PlayDevice
 
 /-!
-# `PlayCoupling.prob_le` by driving the play through the live audit (ONE-8's `accept_le`, PRF-205)
+# `PlayCoupling.prob_le` by driving the play through the live audit (`SampledDeploy.accept_le`'s reduction)
 
 The reduction runs a strategy of the play against the live audit (`Exec.auditLive` over `Composed.liveOfZJ`), one
 release of the challenger device at a time (`Game.dom_reach`). It reads each release's bytes for what the release is to
