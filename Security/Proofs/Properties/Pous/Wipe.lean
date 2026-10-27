@@ -27,8 +27,8 @@ import Mathlib.Tactic.DefEqTransformations
   egress, `certify` certifies (`certify_zero`).
 * **The honest and nontrivial lemmas** (`wipeSurvivorBoundHonest`, `wipeSurvivorBoundNontrivial`): the honest strategy
   reads back what it wrote; the cheating strategy keeps `⌈2^28/19⌉` bits of foreign content in the store
-  (`segHold`, `segKeep`) with probability 1, and with a verdict that accepts every run and every egress in `A` the PRF
-  advantage and `δ_net` are 0.
+  (`storeHold`, `storeKeep`) with probability 1, and with a verdict that accepts every run and every egress in `A` the
+  PRF advantage and `δ_net` are 0 (`not_survivorBound_cheat`, on any device whose store holds the content).
 -/
 
 namespace MemoryChallenger.Properties.SecurityProofs
@@ -303,46 +303,52 @@ theorem wipeSurvivorBoundHonest : WipeSurvivorBoundHonest := by
     simp
   · exact honestRead_honestFill h σ L (c i)
 
-/-- The cheating run's foreign content: `⌈2^28/19⌉` bits, the segment's `foreign_bits` with no egress. -/
-def segS : ℕ := (2 ^ 19 * 512 + 18) / 19
+/-- Foreign content held in the first `S` bits of the device's store. -/
+def storeHold {ι : Type} (d : Accounting.Device ι) {S : ℕ} (z : Pous.Bits S) : Device.State d :=
+  ⟨fun _ => false, fun a => if ha : a.val < S then z ⟨a.val, ha⟩ else false⟩
 
-theorem segS_le : segS ≤ segmentDevice.mem := by
-  unfold segS segmentDevice
-  norm_num
+/-- The foreign content read back from the first `S` bits of the store. -/
+def storeKeep {ι : Type} {d : Accounting.Device ι} {S : ℕ} (hS : S ≤ d.mem) {E : ℕ} {Ch : Type}
+    (σ : Device.State d) (_ : Fin E → Bool) (_ : Ch) : Pous.Bits S :=
+  fun i => σ.store ⟨i.val, lt_of_lt_of_le i.isLt hS⟩
 
-/-- The foreign content held in the first `segS` bits of the segment's store. -/
-def segHold (z : Pous.Bits segS) : Device.State segmentDevice :=
-  ⟨fun i => i.elim0, fun a => if ha : a.val < segS then z ⟨a.val, ha⟩ else false⟩
-
-/-- The foreign content read back from the first `segS` bits of the store. -/
-def segKeep {E : ℕ} {Ch : Type} (σ : Device.State segmentDevice) (_ : Fin E → Bool) (_ : Ch) : Pous.Bits segS :=
-  fun i => σ.store ⟨i.val, lt_of_lt_of_le i.isLt segS_le⟩
-
-theorem segKeep_hold {E : ℕ} {Ch : Type} (z : Pous.Bits segS) (ξ : Fin E → Bool) (c : Ch) :
-    segKeep (segHold z) ξ c = z := by
+theorem storeKeep_hold {ι : Type} {d : Accounting.Device ι} {S : ℕ} (hS : S ≤ d.mem) {E : ℕ} {Ch : Type}
+    (z : Pous.Bits S) (ξ : Fin E → Bool) (c : Ch) : storeKeep hS (storeHold d z) ξ c = z := by
   funext i
-  simp [segKeep, segHold]
+  simp [storeKeep, storeHold]
+
+/-- A strategy that keeps the whole store, under a verdict that accepts every run, fails the survivor bound at any
+`ε₀ < 1` on a device whose store holds `F` bits of foreign content beside its on-chip state: the PRF's advantage and
+`δ_net` are 0 there, and the foreign content is read back with probability 1. -/
+theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B)
+    (b : Fin B) {n k : ℕ} [NeZero n] (carry : Device.State d → s.Carried b) {κ : ℕ}
+    (prf : Pous.Bits κ → Accounting.Wipe.Labels n) {F : ℕ} (hF : F + d.chip ≤ d.mem) {ε₀ : ℝ≥0∞} (hε : ε₀ < 1) :
+    ¬ ((cheat d s b n k carry).wipe (fun _ _ _ => True) prf).SurvivorBound F fun _ hold keep =>
+        ε₀ + Pous.StreamedWipe.prfAdvantage prf
+            ((cheat d s b n k carry).distinguisher (fun _ _ _ => True) Finset.univ hold keep) +
+          (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ hold := by
+  classical
+  intro hsb
+  have h := hsb (F + d.chip) (by show F + (d.chip + (d.mem - d.mem)) ≤ F + d.chip; omega) (storeHold d)
+    (storeKeep hF)
+  have hadv : Pous.StreamedWipe.prfAdvantage prf
+      ((cheat d s b n k carry).distinguisher (fun _ _ _ => True) Finset.univ (storeHold d) (storeKeep hF)) = 0 :=
+    prfAdvantage_of_forall prf fun x => ⟨trivial, storeKeep_hold hF _ _ _, Finset.mem_univ _⟩
+  have hdelta : (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ (storeHold d) = 0 :=
+    pr_eq_zero fun x hx => hx.2 (Finset.mem_univ _)
+  beta_reduce at h
+  rw [value_draw_pr, Pous.pr_eq_one, hadv, hdelta, add_zero, add_zero] at h
+  · exact absurd h (not_le.mpr hε)
+  · exact fun x => ⟨trivial, storeKeep_hold hF _ _ _⟩
 
 theorem wipeSurvivorBoundNontrivial : WipeSurvivorBoundNontrivial := by
-  classical
-  intro C B s b carry κ prf hsb
-  rw [certify_zero (q := segmentParams) rfl le_rfl] at hsb
-  set τ := cheat segmentDevice s b (2 ^ 19) WipeProtocol.READS carry
-  have h := hsb segS (le_of_eq rfl) segHold segKeep
-  have hadv : Pous.StreamedWipe.prfAdvantage prf
-      (τ.distinguisher (fun _ _ _ => True) Finset.univ segHold segKeep) = 0 :=
-    prfAdvantage_of_forall prf fun x => ⟨trivial, segKeep_hold _ _ _, Finset.mem_univ _⟩
-  have hdelta : τ.deltaNet (fun _ _ _ => True) prf Finset.univ segHold = 0 :=
-    pr_eq_zero fun x hx => hx.2 (Finset.mem_univ _)
-  have heps : ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) < 1 := by
+  intro C B s b carry κ prf
+  rw [certify_zero (q := segmentParams) rfl le_rfl]
+  refine not_survivorBound_cheat segmentDevice s b carry prf ?_ ?_
+  · show (2 ^ 19 * 512 + 18) / 19 + 0 ≤ 2 ^ 19 * 512
+    norm_num
+  · show ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) < 1
     rw [Nat.cast_one, one_div, ENNReal.inv_lt_one]
     exact_mod_cast (by norm_num : (1 : ℕ) < 2 ^ 128)
-  rw [value_draw_pr, Pous.pr_eq_one] at h
-  · refine absurd (h.trans_eq ?_) (not_le.mpr heps)
-    show ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) +
-        Pous.StreamedWipe.prfAdvantage prf (τ.distinguisher (fun _ _ _ => True) Finset.univ segHold segKeep) +
-        τ.deltaNet (fun _ _ _ => True) prf Finset.univ segHold = _
-    rw [hadv, hdelta, add_zero, add_zero]
-  · exact fun x => ⟨trivial, segKeep_hold _ _ _⟩
 
 end MemoryChallenger.Properties.SecurityProofs
