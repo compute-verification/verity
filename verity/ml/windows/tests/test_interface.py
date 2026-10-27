@@ -16,7 +16,9 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -766,6 +768,79 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
                       wires=(I.Wire(GID, "x", SID, "o0", at=0, radix=(REQUESTS,), base=0, step=(1,)), *chain().wires),
                       registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
     return circuit, w, [sx, sw], [sy], ins, outs
+
+
+def _loop_turns(f) -> int:
+    """The jumps Python makes in `verity.ml.windows`' modules while ``f()`` runs (`sys.monitoring`'s JUMP events: every
+    turn of a loop, a comprehension's included, is one): the work a window does in Python, counted, not timed."""
+    mon, here, ours = sys.monitoring, str(Path(I.__file__).parent), {}
+    tool, turns = next(t for t in range(6) if mon.get_tool(t) is None), 0
+
+    def jump(code, _at, _to):
+        nonlocal turns
+        if (mine := ours.get(code)) is None:
+            mine = ours[code] = str(Path(code.co_filename).parent) == here
+        if not mine:
+            return mon.DISABLE
+        turns += 1
+
+    mon.use_tool_id(tool, "loop turns")
+    try:
+        mon.register_callback(tool, mon.events.JUMP, jump)
+        mon.set_events(tool, mon.events.JUMP)
+        f()
+    finally:
+        mon.set_events(tool, mon.events.NO_EVENTS)
+        mon.register_callback(tool, mon.events.JUMP, None)
+        mon.free_tool_id(tool)
+        mon.restart_events()
+    return turns
+
+
+def _long_chain(layers: int, d: Path) -> None:
+    """A ``Gemm_v2{K=16, N=16}`` chain of ``layers`` layers of two units, a member a unit (cap 1), layer 0's ``x`` a
+    ``Gemm_v2{K=32, N=16}`` feed's output and layer l's layer l - 1's, a wire each, and each layer's ``w`` its own row of
+    a registered value, a read each, both recorded by reference: the window built, recorded, closed and written, and the
+    verifier's window, wiring check and ``--registered`` files made from its record."""
+    rng = np.random.default_rng(5)
+
+    def bf16(a: np.ndarray) -> np.ndarray:
+        return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+    sx, sw, w = bf16(rng.standard_normal((2, 32))), bf16(rng.standard_normal((2, 16, 32)) / 4), bf16(
+        rng.standard_normal((layers, 16, 16)) / 4)
+    ys = [np.asarray(evaluate_batch(SRC, sx, sw, kernel="reference"), dtype=np.uint16).reshape(2, 16)]
+    for j in range(layers):
+        ys.append(np.asarray(evaluate_batch(GEMM, ys[-1], np.repeat(w[j][None], 2, axis=0), kernel="reference"),
+                             dtype=np.uint16).reshape(2, 16))
+    wires = [I.Wire(GID, "x", SID if j == 0 else GID, "o0", at=2 * j, radix=(2,), base=2 * max(j - 1, 0), step=(1,))
+             for j in range(layers)]
+    reads = tuple(I.Read(GID, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(layers))
+    circuit = I.Circuit("long", ((SRC, 2), (GEMM, 2 * layers)), external=(f"{SID}/x", f"{SID}/w"), wires=tuple(wires),
+                        registered=I.Registered({"w": 256 * layers}, reads=reads))
+    win = I.Window(circuit, RUN, LAW, 1, registered={"w": Bound("w", w.reshape(layers, 256))})
+    win.record(SRC, [sx, sw], ys[:1])
+    win.record(GEMM, [None, None], [np.concatenate(ys[1:])])
+    c = win.close(salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
+                         "digest": staticmethod(lambda rec: "d")})
+    win.write(c, d, {"by": "test"}, registrar=reg)
+    doc = json.loads((d / "circuit.json").read_bytes())
+    mine = I.window_of_record(doc, LAW, {SID: SRC, GID: GEMM}.__getitem__)
+    assert WI.check(mine.members, {m.key: c.public_body(k) for k, m in enumerate(mine.members)}) == {}
+    pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": layers, "words": 256, "domain": "ef" * 64}}
+    assert len(I.registered_reads(doc, mine, pin, registered=REG)) == 2 * layers
+
+
+def test_a_windows_commit_is_linear_in_its_members(tmp_path):
+    """A window's commit and the verifier's rebuild of it from its record (`_long_chain`) run loops whose turns grow with
+    its members, wires and reads, not with their products: from 32 layers to 64 the turns grow at most about twice what
+    they grow from 16 to 32 (the difference drops what a window does once, such as its hiding tables). The 4,32,4 window
+    class's commit (58,719 members, 166,038 wired member ports, 6,727 reads) ran each port's hashes past every port's, each
+    member past every read and each wired port past every member, hours on one core; a timing can't say which, a count
+    can."""
+    a, b, c = (_loop_turns(lambda n=n: _long_chain(n, tmp_path / str(n))) for n in (16, 32, 64))
+    assert c - b <= 2.2 * (b - a), (a, b, c)
 
 
 def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_given_in_full(tmp_path):
