@@ -16,17 +16,33 @@
    "and": 9025,
    "type": "87f6df74df3431726fccb1b22cd327668b7af1582053a5ea4fea8c67bd6ca762a4b82596d0f70ae0aa14f2329f4453a6f6019e648510dedeaa6352cc38a963bc"
   },
-  "PouwDitherBlock_v1{L=96,FIRST=False}": {
-   "and": 13545,
-   "type": "1e1b4397efe2cfe042ccef83975459256903c34bceb7a42849bdc54f4846cf5cd67899b2f618bafed5e2a58a86b927a928e4a5180fb0a106466654c09d21afac"
-  },
-  "PouwDitherBlock_v1{L=96,FIRST=True}": {
-   "and": 13530,
-   "type": "a5cb1e12292897ed6ff24539053d1d18828ff41d5e9ce624b2b78ae0740fc0e7c102486683c8c687c506538b348c7a07501a8247784dcf4a49b8870f629d0620"
-  },
   "PouwDitherFirst_v2": {
    "and": 15,
    "type": "ba9bdb64c17d93cf1ebb07c052a1e3169b73b30571e9ac7e07074ed21cef265e166534a2259237cd16faf4e04eac788797179e1fff704632d32be2e1737444f8"
+  },
+  "PouwDitherLastOk_v2": {
+   "and": 47,
+   "type": "966455d9a12c741b1c764438aa4f94d05742675e885dce926c5a51089c7c261f653402ef0b51d1326f2a451f52ef918b8ed1165ff0a78d7e60b49ac144dd6af8"
+  },
+  "PouwDitherLast_v1{K=64,L=64}": {
+   "and": 11514,
+   "type": "5ed6f86a2597af151ae650819b2dfda4b38caa274bcbadacbf96b63a8381d38a0d3fdd3e72bae94c1b82b4834375039ffd590059d8b309cfe2e2ceab9952bbed"
+  },
+  "PouwDitherLast_v1{K=96,L=64}": {
+   "and": 26294,
+   "type": "3b3a256b0d4aabcd9eadac0e7070ff7d0a5ea88511ec80112f7f84416fb5f9c72947299d5fef6af0ee938e96cf0dbe2f2550bc37b120f284093c815418937c51"
+  },
+  "PouwDitherOnlyOk_v2": {
+   "and": 31,
+   "type": "e6c5987b632f7266ce5ea88e03c5d12419121b8be4a3ae1789b83a8a6030a183041238e67d1c84560ee3f99496a70bc39e17b2a821943a3430670a822938de7f"
+  },
+  "PouwDitherOutDot0_v2": {
+   "and": 5729,
+   "type": "8c76c95fd63f6a17636c1c7ce9c0fb721a23864bacd9f83917f657266bf06488913b7fc44081185d3f39bb15dcbe92e5560bf6e906fd6c715d2bc9142181ce5f"
+  },
+  "PouwDitherOutDot_v2": {
+   "and": 5754,
+   "type": "b4fa757a0cc7eb34fc9c12eef23f75a120882712ad2e346fca3cb7215e7abdf9c3596c3a332e3c4071f6bf5e131aaca9b06ac66c5643ab3e95a9c81204c9ee19"
   },
   "PouwDitherStep_v2": {
    "and": 30,
