@@ -199,9 +199,9 @@ theorem sampledKSLiveV2_nontrivial :
       Bridge.kDep (2 ^ 192) (2 ^ 192) t' →
     ¬ SampledKSLiveV2All := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb
-    src hA3 hTags hCust K₀ hK₀ τ t' v q L P vb σ Cc hkdn hK1 hports hout hW ht0 ht hv0 hv hCR hLink hAll
+    src hA3 hTags hCust K₀ hK₀ τ t' v q L P vb σ Cc hkdn hK1 hports hout hW ht0 htv hv0 hv hCR hLink hAll
   exact sampledKSLivePub_nontrivial n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj
-    S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust K₀ hK₀ τ t' v q hkdn hK1 hports hout hW ht0 ht hv0 hv hCR hLink
+    S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust K₀ hK₀ τ t' v q hkdn hK1 hports hout hW ht0 htv hv0 hv hCR hLink
     (sampledKSLivePubAll_of_v2All hAll)
 
 open Classical in
@@ -320,7 +320,7 @@ theorem sampledKSLiveV3_nontrivial :
       Bridge.kDep (2 ^ 192) (2 ^ 192) t' →
     ¬ SampledKSLiveV3All := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hn desc qr kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb
-    src hA3 hTags hCust K₀ hK₀ τ t' v q L P vb σ Cc hkdn hK1 hports hout hW ht0 ht hv0 hv hCR hLink hAll
+    src hA3 hTags hCust K₀ hK₀ τ t' v q L P vb σ Cc hkdn hK1 hports hout hW ht0 htv hv0 hv hCR hLink hAll
   obtain ⟨g, hg, hgi⟩ := hout
   obtain ⟨hk, hRw, hM, hρ, hρk, -⟩ := sampledKSLivePub_honest
   have hrate : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j Bridge.kDep ≤ 1 / 2 := fun S R j =>
@@ -344,12 +344,14 @@ theorem sampledKSLiveV3_nontrivial :
     intro g
     cases hrow : FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g with
     | none => rfl
-    | some r => exact absurd r.2.1.isLt (by omega)
+    | some r =>
+      have := r.2.1.isLt
+      omega
   obtain ⟨u, -⟩ := Bridge.unit_some P hgi
   have hnk : n ≤ K₀ * kd := by
     rw [hkdn]
     exact Nat.le_mul_of_pos_left n hK1
-  have hlt := Bridge.deltaPub_lt_one (W := Bridge.ioSum P) u.pos hK₀ hnk hW ht0 ht hv0 hv
+  have hlt := Bridge.deltaPub_lt_one (W := Bridge.ioSum P) u.pos hK₀ hnk hW ht0 htv hv0 hv
   exact not_le.2 (Bridge.exceeds_of_not τ (Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _
     (Bridge.commitDep_opens_none Cc _ hr D.unroll n _ _) _ (by positivity) hg hgi) hlt) h
 
