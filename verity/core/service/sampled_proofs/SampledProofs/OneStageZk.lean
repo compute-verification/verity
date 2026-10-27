@@ -440,7 +440,8 @@ def ROUNDS_NEED_CHALLENGER : String :=
 are. The uses are the draw's (its family, after the registration's digest, as many coins as its segment opens) and
 each session's (`sessionUses`, slot `i` the session's index), each with its segment: the draw's `coins.segment`, then
 each session's `coins`. The log must release the draw before any of a session's families, and a session's link
-points before its rounds (`order`). Every coin a session's record holds must be the challenger's (`coinsMismatch`). -/
+points before its rounds (`order`), and each use of a session's coins must be one run among that session's releases
+(`groups`, one a session). Every coin a session's record holds must be the challenger's (`coinsMismatch`). -/
 def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : Option String :=
   match p.base.challenger, p.base.verifier.windowRoot with
   | some (key, label), some w =>
@@ -451,6 +452,7 @@ def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.B
       let mut wants : Array (Option (String × Array String)) := #[none]
       let mut segments : Array Json := #[draw]
       let mut order : Array (String × String) := #[]
+      let mut groups : Array (List String) := #[]
       for (s, i) in e.sessions.toList.zipIdx do
         let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
           | throw s!"session {s.name}'s record is not UTF-8"
@@ -460,12 +462,13 @@ def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.B
         let points := Hello.slotStream i POINTS
         let fams := (us.map (·.1.label)).eraseDups
         order := order ++ (fams.map (label, ·)).toArray ++ ((fams.filter (· != points)).map (points, ·)).toArray
+        groups := groups.push fams
         uses := uses ++ us.toArray.map (·.1)
         wants := wants ++ us.toArray.map fun (u, hs) => some (s!"{s.name}'s {u.label}", hs)
         segments := segments ++ s.coins
       let coins := Json.mkObj [("ledger", getD e.base.coins "ledger"), ("main", getD e.base.coins "main"),
         ("pins", getD e.base.coins "pins"), ("segments", Json.arr segments), ("session", getD e.base.coins "session")]
-      let ξs ← Challenger.roundCoins key w uses.toList order.toList coins
+      let ξs ← Challenger.roundCoins key w uses.toList order.toList groups.toList coins
       for (ξ, want) in ξs.zip wants.toList do
         if let some (what, hs) := want then
           if let some why := coinsMismatch hs ξ then throw s!"session {what}: {why}"
