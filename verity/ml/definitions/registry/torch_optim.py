@@ -32,8 +32,7 @@ where `AdamWScalars` sets a = 1.0 and ``RN(p * 1) = p`` for every word but a NaN
 
 LERP_FMA is the one contraction the source leaves to nvcc: 1 reads step 2's branches as ``fma(w, d, m)`` and
 ``fma(-d, RN(1 - w), g)``, 0 as ``RN(m + RN(w * d))`` and ``RN(g - RN(d * RN(1 - w)))``. The sm_120 SASS of
-``multi_tensor_apply_kernel<…LerpFunctor…>`` in torch 2.14's libtorch_cuda.so has both FFMAs, LERP_FMA = 1
-(r20261027-042723-8ec6).
+``multi_tensor_apply_kernel<…LerpFunctor…>`` in torch 2.14's libtorch_cuda.so has both FFMAs, LERP_FMA = 1.
 
 k is the step's seven f32 scalars, the kernels' ``Scalar::to<float>()`` of the host's Python floats, which
 `AdamWScalars` computes from the private hyperparameters: ``(a, w, b2, c2, s2, e, st) = (f32(1 - lr * lambda), f32(1 - beta1),

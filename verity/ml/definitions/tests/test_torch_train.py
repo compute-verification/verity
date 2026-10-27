@@ -201,8 +201,8 @@ def test_rms_backward_refuses_launches_it_does_not_build() -> None:
 
 # --- RMSNorm weight gradient -------------------------------------------------------------------------------------------------
 
-#: w.grad's 576 bf16 words on sm_120 (RTX PRO 6000, torch 2.14.0) for ``(w * hb).backward(dy)`` on `cancel_inputs(M)`, by M
-#: (run r20261027-050613-60d7)
+#: w.grad's 576 bf16 words on sm_120 (RTX PRO 6000, torch 2.14.0) for ``(w * hb).backward(dy)`` on `cancel_inputs(M)`, by M,
+#: from a GPU probe
 WGRAD_SM120 = np.load(Path(__file__).parent / "fixtures" / "torch_train_wgrad_sm120.npz")
 #: sm_120's grid over CTAs a column at H = 576: 188 multiprocessors times 1536 / 128 blocks, over 5 blocks of columns
 SM120_GRID_CTAS = 452
