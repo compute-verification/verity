@@ -19,8 +19,8 @@ opens refuses, from a digit changed, a Programs' entry off its outputs or a Prog
 nothing; the same traffic at a KI one below request 3's prompt is refused at the cell that takes it past; a window
 circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
 is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
-`scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63 class's state is the layout
-NEG sized (note:network-accounting/20261025T0830Z-report-net68-scan-router) with the outputs N2's view reads."""
+`scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63 class's state is the scan's
+sized layout, with the outputs N2's view reads."""
 from __future__ import annotations
 
 import asyncio
