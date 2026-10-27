@@ -16,7 +16,7 @@
 # verdict.txt's VERDICT lines.
 #
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --timeout 90m \
-#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
+#     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
 # ROUNDS (3), LOCK_MHZ (1980), LEASE_MIN (25), HC_TAG (v7.1.2), JOBS (16), SHAPES ("128 256 384 512 640 768 1024").
 set -uo pipefail
 export O=${OUT:?}
@@ -90,7 +90,7 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   probe() { "$W/hashcat_forms" time 5 2>/dev/null | python3 -c "import sys, json; print(int(min(json.loads(l)[\"mhz\"] for l in sys.stdin)))"; }
   sudo -n nvidia-smi -i "$U" -lgc "$LOCK,$LOCK" > "$O/lock.txt" 2>&1; echo "lock rc $?" >> "$O/rc.txt"
   trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1; nvidia-smi -i $U -q -d CLOCK > $O/clock-after.txt 2>&1" EXIT
-  # a lock this card resolves below LOCK (vy-dc-h200 puts -lgc 1980,1980 at 1830 under load): unlocked, if the
+  # a lock this card resolves below LOCK (vy-dc-h200 put -lgc 1980,1980 at 1830, r20261027-040452-3d4d): unlocked, if the
   # boost holds LOCK under load, else the lock as it resolves
   locked=$(probe) free=n/a mode=locked
   if [ "${locked:-0}" -lt "$LOCK" ]; then
