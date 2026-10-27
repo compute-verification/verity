@@ -9,7 +9,6 @@
   "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941": "verity/ml/circuits/silicon/discrepancy_log.json",
   "art:ad3eaa3e52972a08384ee2de612b657a52efc4cc8dcc15d37fb94ad78c6cee55": "integrations/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
   "art:712ec77fca7da4c4f72121af05125eb4ac7237ce1a5735eb56b0269565ae0048": "fixtures/lean-vectors",
-  "art:df4d6bbee2db9cea59216dc535327ab23211aba279f6bc8c9b2a3c353c03f4a7": "fixtures/redteam-v2/gkr",
   "art:cb796395face65cdcb01321729bc5477942b5d33cbe1b65b5f6dab018308a00c": "verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json",
   "art:88a9a67d87412aec852c6e6695d1ac8a3245d5454b10491af28d6b7e443d3b65": "fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json",
   "art:0cd02a9d343d7136cc00cf59505f4279a0312fd27e250f416ce9e553fc227e26": "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy",

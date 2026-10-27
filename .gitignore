@@ -59,7 +59,6 @@ verity/ml/flock/tests/fixtures/rec-coins
 verity/ml/flock/tests/fixtures/zk-sessions
 integrations/vllm/tests/protocols/fixtures/challenger_periods
 fixtures/lean-vectors
-fixtures/redteam-v2/gkr
 verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
 integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy
