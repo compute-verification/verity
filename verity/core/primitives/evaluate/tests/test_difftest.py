@@ -46,6 +46,7 @@ from pathlib import Path
 import pytest
 import verity_difftest as DT
 from hypothesis import strategies as st
+from verity_difftest import settings
 
 from verity.core.protocols.pouw.circuit import words as W
 from verity.ml.circuits import boolean as BL
@@ -1499,7 +1500,7 @@ def _logf_block(b: int) -> tuple[dict[str, int], list[tuple]]:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(os.environ.get(FULL_LOGF) != "1",
+@pytest.mark.skipif(settings.get(FULL_LOGF) != "1",
                     reason=f"set {FULL_LOGF}=1: NvLogf_v1 and _v2 on all 2^32 words, about 85 core-hours (Lean 1.4 s and "
                            "Python 0.9 s per 2^16 words and log), half an hour on a 192-vCPU machine")
 def test_the_logs_on_every_word():
@@ -1537,10 +1538,9 @@ def test_the_gpu_log_probe(server, tmp_path):
     """Every input word of the L40S and H100 probe of `__nv_logf` (20,007: the edges, then random negatives and NaNs) under
     each FTZ build: `NvLogf_v2` gives the GPU's word. Skipped where the evidence store is not reachable."""
     import glob
-    import os
 
     store = _store_io()
-    if os.environ.get("VERITY_SKIP_STORE") == "1" or not store.reachable():
+    if settings.get("VERITY_SKIP_STORE") == "1" or not store.reachable():
         pytest.skip("the evidence store is not reachable here")
     root = store.fetch(LOG_PROBE, to=tmp_path / "probe")
     runs = sorted(glob.glob(str(root / "*" / "out-*-ftz-true-*.json")))
