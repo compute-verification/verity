@@ -142,7 +142,7 @@ them by the rounding margin outright, unpinned.
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
 
-## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN, PR #2710)
+## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN)
 
 The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
 coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
