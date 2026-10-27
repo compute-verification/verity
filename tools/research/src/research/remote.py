@@ -1735,7 +1735,7 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
         path.insert(0, str(_research_bin(req["tool"], runs_root)))
     if (elan := Path.home() / ".elan" / "bin").is_dir() and str(elan) not in path:
-        path.append(str(elan))                    # `lake` for a Lean job: vy-nebius-2 has it only there (rc 127, r20261019-072345-9757)
+        path.append(str(elan))                    # `lake` for a Lean job: a node may have it only there (else the job exits 127)
     env["PATH"] = os.pathsep.join(path)
     gpus = req.get("gpus")
     if _kueue_owns_every_gpu():
