@@ -104,8 +104,8 @@ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row 
 with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
 with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
 cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong computation.
-The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by extraction. The
-knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about 65 bits
+The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids this by
+extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about 65 bits
 per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight (ASK-73).
 Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
 but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still

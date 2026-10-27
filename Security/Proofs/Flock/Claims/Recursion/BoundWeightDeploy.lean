@@ -3,8 +3,8 @@ import Proofs.Flock.Claims.Recursion.BoundWeight
 /-!
 # The deployed bound record at `coverW`, and the route with (P3) discharged
 
-The deployed bound record states its inner claim at `IVStar` at the weight `coverW` of `deployPlainTrim`'s weight, the
-least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
+Daniel's ruling (19 Oct, 2:06 PM PDT, ASK-72): the deployed bound record states its inner claim at `IVStar` at the weight
+`coverW` of `deployPlainTrim`'s weight, the least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
 
 * **The weight** is `wCover rel = coverW (deployPlainTrim rel).weight`, and **the deployed bound record** `bdCover` is
   `bdDeployed` at it, at every other choice the code side makes. `bdDeployed` keeps `γ`'s weight at `IVStar` a parameter,
