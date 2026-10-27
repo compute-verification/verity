@@ -911,12 +911,33 @@ noncomputable def breakAt (recs : ByteArray → Outcome → List (String × Lean
   if h : ∃ w, (∃ r ∈ recs θ o, Properties.Challenger.findBreak (V.deviceOf θ o) (keyAt θ) r.1 r.2 = some w) ∧
       w.Valid (V.deviceOf θ o) (keyAt θ) then some (Classical.choose h) else none
 
-/-- **The collision `col` counts**: the play's break where it is a SHA-512 collision, on its strings' bytes. -/
-noncomputable def colAt (recs : ByteArray → Outcome → List (String × Lean.Json)) (θ : ByteArray) (o : Outcome) :
+open Classical in
+/-- Whether `p` is a SHA-512 collision: two different byte strings with one digest. -/
+noncomputable def isCol (p : ByteArray × ByteArray) : Bool :=
+  decide (p.1 ≠ p.2 ∧ Flock.Sha512.hash p.1 = Flock.Sha512.hash p.2)
+
+theorem isCol_iff (p : ByteArray × ByteArray) :
+    isCol p = true ↔ p.1 ≠ p.2 ∧ Flock.Sha512.hash p.1 = Flock.Sha512.hash p.2 := by
+  unfold isCol; exact decide_eq_true_iff
+
+/-- The first pair of `ps` that is a SHA-512 collision (`isCol`). -/
+noncomputable def firstCol (ps : List (ByteArray × ByteArray)) : Option (ByteArray × ByteArray) := ps.find? isCol
+
+/-- Where `ps` holds a collision, `firstCol` finds one. -/
+theorem firstCol_some {ps : List (ByteArray × ByteArray)} {x y : ByteArray} (hm : (x, y) ∈ ps) (hne : x ≠ y)
+    (hh : Flock.Sha512.hash x = Flock.Sha512.hash y) :
+    ∃ p, firstCol ps = some p ∧ p.1 ≠ p.2 ∧ Flock.Sha512.hash p.1 = Flock.Sha512.hash p.2 := by
+  obtain ⟨p, hp⟩ := Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨(x, y), hm, (isCol_iff _).2 ⟨hne, hh⟩⟩)
+  exact ⟨p, hp, (isCol_iff p).1 (List.find?_some hp)⟩
+
+/-- **The collision `col` counts**: the play's break where it is a SHA-512 collision, else the first collision among
+the outcome's pairs `pairs θ o` (a request's bytes beside the record's bytes that its digest names), on their bytes. -/
+noncomputable def colAt (recs : ByteArray → Outcome → List (String × Lean.Json))
+    (pairs : ByteArray → Outcome → List (ByteArray × ByteArray)) (θ : ByteArray) (o : Outcome) :
     Option (Claims.Msg × Claims.Msg) :=
   match V.breakAt recs θ o with
   | some (.collision x y) => some (x.data.toList, y.data.toList)
-  | _ => none
+  | _ => (firstCol (pairs θ o)).map fun p => (p.1.data.toList, p.2.data.toList)
 
 /-- **The forgery the sampled-proofs forger outputs**: the play's break where it is a forgery. -/
 noncomputable def forgerAt (recs : ByteArray → Outcome → List (String × Lean.Json)) (θ : ByteArray) (o : Outcome) :
@@ -928,10 +949,11 @@ noncomputable def forgerAt (recs : ByteArray → Outcome → List (String × Lea
 /-- **A break on a record the finder runs on is counted**: where the sampled-proofs forger is `forgerAt` (`hf`), a
 break at the play's device under its registered key on a record of `recs θ o` is the collision `colAt` reads off the
 outcome or the forger's success. -/
-theorem break_counted {recs : ByteArray → Outcome → List (String × Lean.Json)} {θ : ByteArray} {o : Outcome}
+theorem break_counted {recs : ByteArray → Outcome → List (String × Lean.Json)}
+    {pairs : ByteArray → Outcome → List (ByteArray × ByteArray)} {θ : ByteArray} {o : Outcome}
     (hf : V.forger .sampled θ o = V.forgerAt recs θ o) {l : String} {j : Lean.Json} (hm : (l, j) ∈ recs θ o)
     (hb : Properties.Challenger.Break (V.deviceOf θ o) (keyAt θ) l j) :
-    ColEvent (V.colAt recs θ) o ∨ V.Forges .sampled θ o := by
+    ColEvent (V.colAt recs pairs θ) o ∨ V.Forges .sampled θ o := by
   obtain ⟨w, hw, hv⟩ := hb
   have h : ∃ w, (∃ r ∈ recs θ o, Properties.Challenger.findBreak (V.deviceOf θ o) (keyAt θ) r.1 r.2 = some w) ∧
       w.Valid (V.deviceOf θ o) (keyAt θ) := ⟨w, ⟨(l, j), hm, hw⟩, hv⟩
@@ -953,17 +975,45 @@ theorem break_counted {recs : ByteArray → Outcome → List (String × Lean.Jso
 /-- **A break at one of the uses is counted**: where the finder runs on the records of the uses `us` of `coins`
 (`hrec`) and the sampled-proofs forger is `forgerAt`, a break from one use's record (`RoundsByDevice`'s second case,
 `rounds_at_play`) is the collision `colAt` reads off the outcome or the forger's success. -/
-theorem use_break_counted {recs : ByteArray → Outcome → List (String × Lean.Json)} {θ : ByteArray} {o : Outcome}
+theorem use_break_counted {recs : ByteArray → Outcome → List (String × Lean.Json)}
+    {pairs : ByteArray → Outcome → List (ByteArray × ByteArray)} {θ : ByteArray} {o : Outcome}
     (hf : V.forger .sampled θ o = V.forgerAt recs θ o) {us : List _root_.SampledProofs.Challenger.Use}
     {coins : Lean.Json} (hrec : recs θ o = recsOf us coins)
     (hb : ∃ (i : Nat) (u : _root_.SampledProofs.Challenger.Use), us[i]? = some u ∧
       Properties.Challenger.Break (V.deviceOf θ o) (keyAt θ) u.label (Properties.Challenger.useCoins coins i)) :
-    ColEvent (V.colAt recs θ) o ∨ V.Forges .sampled θ o := by
+    ColEvent (V.colAt recs pairs θ) o ∨ V.Forges .sampled θ o := by
   obtain ⟨i, u, hu, hb⟩ := hb
   obtain ⟨hi, -⟩ := List.getElem?_eq_some_iff.1 hu
   refine V.break_counted hf ?_ hb
   rw [hrec, recsOf]
   exact List.mem_filterMap.2 ⟨i, List.mem_range.2 hi, by simp [hu]⟩
+
+/-- The play's break, where there is one, is valid at the play's device under its registered key. -/
+theorem breakAt_valid {recs : ByteArray → Outcome → List (String × Lean.Json)} {θ : ByteArray} {o : Outcome}
+    {w : Properties.Challenger.Witness} (h : V.breakAt recs θ o = some w) : w.Valid (V.deviceOf θ o) (keyAt θ) := by
+  unfold breakAt at h
+  split at h
+  · rename_i hw
+    cases h
+    exact (Classical.choose_spec hw).2
+  · cases h
+
+/-- **A collision among the outcome's pairs is counted**: where `pairs θ o` holds two different byte strings with one
+SHA-512 digest, `colAt` reads a collision off the outcome (the play's break, or the first such pair). -/
+theorem pair_counted {recs : ByteArray → Outcome → List (String × Lean.Json)}
+    {pairs : ByteArray → Outcome → List (ByteArray × ByteArray)} {θ : ByteArray} {o : Outcome} {x y : ByteArray}
+    (hm : (x, y) ∈ pairs θ o) (hne : x ≠ y) (hh : Flock.Sha512.hash x = Flock.Sha512.hash y) :
+    ColEvent (V.colAt recs pairs θ) o := by
+  obtain ⟨p, hp, hne', hh'⟩ := firstCol_some hm hne hh
+  show ∃ u v, V.colAt recs pairs θ o = some (u, v) ∧ Claims.Collision sha512Msg u v
+  cases hB : V.breakAt recs θ o with
+  | none => exact ⟨_, _, by simp [colAt, hB, hp], collision_sha512Msg hne' hh'⟩
+  | some w =>
+    cases w with
+    | collision x' y' =>
+      obtain ⟨hne'', hh''⟩ : x' ≠ y' ∧ Flock.Sha512.hash x' = Flock.Sha512.hash y' := V.breakAt_valid hB
+      exact ⟨x'.data.toList, y'.data.toList, by simp only [colAt, hB], collision_sha512Msg hne'' hh''⟩
+    | forgery m sig => exact ⟨_, _, by simp [colAt, hB, hp], collision_sha512Msg hne' hh'⟩
 
 end Vocab
 
