@@ -51,7 +51,7 @@ def uncalibrated_model_note(key: str) -> str:
     return f"no calibration for model '{key}': dense default coefficients (phi3's, the largest measured dense set) -- every term is an estimate"
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Measured constants.  value + unit + the R17 evidence that pins it.  These are the only numbers in the model.
+# Measured constants.  value + unit + the evidence that pins it.  These are the only numbers in the model.
 # ---------------------------------------------------------------------------------------------------------------------
 CALIBRATION: dict[str, dict[str, Any]] = {
     "serving.engine_host": {"value": 3_200 * MiB, "unit": "bytes", "what": "committer process before the first instrumented run: python + torch + vLLM client + CUDA host context",

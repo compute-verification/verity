@@ -165,10 +165,10 @@ theorem pr_misses_le [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : 
     _ = Real.exp (θ * f - (1 - Real.exp (-θ)) * s) * (Fintype.card α : ℝ) ^ n := mul_comm _ _
 
 open Classical in
-/-- **The counting step** (the PoUS explorer note, §1). Indicators `X` of misses, each round's conditional miss
+/-- **The counting step.** Indicators `X` of misses, each round's conditional miss
 probability at least `q` given the history, and any `β > 0`: the misses are at most `f` and `Σ_j q_j` exceeds
 `G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)` with probability at most `β`. With `n` rounds,
-`G(f) = n·g(f)` for the explorer's `g(f) = min_{θ > 0} (θ·f + ln(1/β)) / ((1 − e^−θ)·n)`. -/
+`G(f) = n·g(f)` for `g(f) = min_{θ > 0} (θ·f + ln(1/β)) / ((1 − e^−θ)·n)`. -/
 theorem pr_misses_gt_le [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : List α → ℝ)
     (hq : ∀ h : List α, h.length < n → q h ≤ (pr (X h)).toReal) (f β : ℝ) (hβ : 0 < β) :
     pr (fun I : Fin n → α =>

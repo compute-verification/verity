@@ -1,4 +1,4 @@
-"""S3 acquisition of R(P_compiled, Q) under torch.compile + PIECEWISE CUDA graphs (DECISIONS-2 §7).
+"""S3 acquisition of R(P_compiled, Q) under torch.compile + PIECEWISE CUDA graphs.
 
 The Program of an `Execution=compiled` row is P_compiled at Inductor-kernel granularity (compiled_relations.py); its VU boundaries are
 the buffers the production implementation already materializes (every kernel argument).  This source acquires exactly those buffers
