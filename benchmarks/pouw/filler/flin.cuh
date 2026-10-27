@@ -151,9 +151,7 @@ __device__ __noinline__ void dfill_k_put(unsigned long long* rec, int* cnt, uint
   *rec = h;
   *cnt = steps;
 }
-static uint64_t pw_step_ref(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t step) {
-  pf_host_k();
-  uint32_t R[32][16];
+static uint64_t pw_step_ref(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t step) {  uint32_t R[32][16];
   uint64_t st[8];
   for (int l = 0; l < 32; l++) {
     pf_block_h(PW_DOM, c0, c1, tile, step << 5 | l, st);
