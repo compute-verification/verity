@@ -54,7 +54,8 @@
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.Verity.Subprotocols"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
