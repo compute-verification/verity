@@ -8,11 +8,106 @@ only on the requests (`PlayDevice.served` reads a release's answers, never its c
 exactly those the reduction reads as served, each with the requests before it (`servesNext`, `tagOfServed`):
 `served_play`. Each entry it serves names its request's family and root (`served_req`).
 
-What v2's acceptance runs of the challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's
+A group's releases, where the log releases its uses one run each and each family's roots are its uses', are the
+uses' runs in turn, each release its family and root (`Challenger.runs_blocks`). What v2's acceptance runs of the
+challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's
 (`OneStageZk.Session0`), the order and groups it asks of them, and every coin a record holds the challenger's.
 -/
 
 open Lean (Json)
+
+namespace SampledProofs.Challenger
+
+/-- Two lists of labelled values with one label sequence and, label by label, one value sequence are one list. -/
+theorem eq_of_labels {β : Type} : ∀ (P Q : List (String × β)), P.map (·.1) = Q.map (·.1) →
+    (∀ ℓ, (P.filter (·.1 == ℓ)).map (·.2) = (Q.filter (·.1 == ℓ)).map (·.2)) → P = Q
+  | [], [], _, _ => rfl
+  | [], _ :: _, h, _ => by simp at h
+  | _ :: _, [], h, _ => by simp at h
+  | (a, x) :: P, (b, y) :: Q, h, hl => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    obtain ⟨rfl, h⟩ := h
+    have hx := hl a
+    simp only [List.filter_cons, beq_self_eq_true, ↓reduceIte, List.map_cons, List.cons.injEq] at hx
+    obtain ⟨rfl, -⟩ := hx
+    congr 1
+    refine eq_of_labels P Q h fun ℓ => ?_
+    have := hl ℓ
+    by_cases hℓ : (a == ℓ) = true
+    · simp only [List.filter_cons, hℓ, ↓reduceIte, List.map_cons, List.cons.injEq] at this
+      exact this.2
+    · simp only [List.filter_cons, hℓ, Bool.false_eq_true, ↓reduceIte] at this
+      exact this
+
+/-- A use's run, each its family and root, read family by family. -/
+theorem flat_filter (ℓ : String) : ∀ vs : List Use,
+    ((vs.flatMap fun u => List.replicate u.coins (u.label, u.after)).filter (·.1 == ℓ)).map (·.2) =
+      (vs.filter (·.label == ℓ)).flatMap fun u => List.replicate u.coins u.after
+  | [] => rfl
+  | u :: vs => by
+    rw [List.flatMap_cons, List.filter_append, List.map_append, flat_filter ℓ vs, List.filter_cons]
+    by_cases h : (u.label == ℓ) = true
+    · simp [h]
+    · simp [h]
+
+variable {X : Type} (lab : X → String) (rt : X → ByteArray)
+
+/-- **A group's releases are its uses' runs**: where the log's releases `xs` of the group `g`'s families are the uses
+`vs` one run each (`Session.Runs`) and each family's roots are its uses' (`Use.roots`), the group's releases, each
+its family and root, are `vs`'s uses in turn, each its family and root once a coin. -/
+theorem runs_blocks (g : List String) (us vs : List Use) (xs : List X)
+    (hvs : ∀ ℓ, vs.filter (·.label == ℓ) = us.filter fun u => u.label == ℓ && g.contains ℓ && u.coins != 0)
+    (hruns : (xs.map lab).filter g.contains = vs.flatMap fun u => List.replicate u.coins u.label)
+    (hroots : ∀ ℓ ∈ g, (xs.filter (lab · == ℓ)).map rt = Use.roots us ℓ) :
+    (xs.filter fun x => g.contains (lab x)).map (fun x => (lab x, rt x)) =
+      vs.flatMap fun u => List.replicate u.coins (u.label, u.after) := by
+  apply eq_of_labels
+  · rw [List.map_map, List.map_flatMap]
+    have : (xs.map lab).filter g.contains = (xs.filter fun x => g.contains (lab x)).map lab := by
+      rw [List.filter_map]; rfl
+    have hc : ((fun x : String × ByteArray => x.1) ∘ fun x => (lab x, rt x)) = lab := rfl
+    rw [hc, ← this, hruns]
+    congr 1
+    funext u
+    simp
+  · intro ℓ
+    rw [flat_filter, List.filter_map, List.map_map]
+    have hl : ((fun x : String × ByteArray => x.1 == ℓ) ∘ fun x => (lab x, rt x)) = (lab · == ℓ) := rfl
+    have hr : ((fun x : String × ByteArray => x.2) ∘ fun x => (lab x, rt x)) = rt := rfl
+    rw [hl, hr, List.filter_filter, hvs]
+    by_cases hg : g.contains ℓ = true
+    · have h1 : (xs.filter fun x => (lab x == ℓ) && g.contains (lab x)) = xs.filter (lab · == ℓ) := by
+        apply List.filter_congr
+        intro x _
+        by_cases hx : (lab x == ℓ) = true
+        · rw [beq_iff_eq.1 hx, hg]; simp
+        · simp [hx]
+      rw [h1, hroots ℓ (by simpa using hg), Use.roots]
+      simp only [hg, Bool.and_true]
+      clear hvs hruns hroots h1
+      induction us with
+      | nil => rfl
+      | cons u us ih =>
+        by_cases h1 : (u.label == ℓ) = true
+        · by_cases h2 : u.coins = 0
+          · simp [h1, h2, ih]
+          · simp [h1, h2, ih]
+        · simp [h1, ih]
+    · have h1 : (xs.filter fun a => (lab a == ℓ) && g.contains (lab a)) = [] := by
+        rw [List.filter_eq_nil_iff]
+        intro x _ hx
+        simp only [Bool.and_eq_true, beq_iff_eq] at hx
+        rw [hx.1] at hx
+        exact hg hx.2
+      have h2 : (us.filter fun u => u.label == ℓ && g.contains ℓ && u.coins != 0) = [] := by
+        rw [List.filter_eq_nil_iff]
+        intro u _ hu
+        simp only [Bool.and_eq_true] at hu
+        exact hg hu.1.2
+      rw [h1, h2]
+      rfl
+
+end SampledProofs.Challenger
 
 namespace SampledProofs.OneStageZk
 
