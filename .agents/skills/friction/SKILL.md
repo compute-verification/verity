@@ -150,6 +150,9 @@ Landing:
 
 Protocols and claims:
 
+- (26 Oct, tentative) Credit and all reporting of computation are in circuit size, counted in AND gates. 𝓜's resources
+  appear only inside the exclusion argument, whose result converts back to AND gates. A credit guarantee is a statement
+  about values, and SAK is a premise of exclusion only. Whoever finds a reason this is wrong floats it at once.
 - (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
   under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
