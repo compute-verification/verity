@@ -125,8 +125,8 @@ def host(tmp_path) -> A.Host:
 def test_the_gates_run_starts_the_link_once_serve_listens_and_stops_it_once_serve_exits(host, tmp_path, monkeypatch):
     """`run` without an argv of its own serves the session through `coin_link_argv`'s link, from the open's port on its
     peer: the link starts after serve.py has signed its record and listens, gets SIGTERM only once serve.py's session
-    is closed, and its record and log are sealed in the end entry's files. A link that refuses to start ends the
-    session at once, saying so."""
+    is closed, and its record and log are sealed in the end entry's files. A link that refuses to start, or ends while
+    serve.py still waits for its client (its tunnel ended), ends the session at once, saying so."""
     from test_auditor import P, SECRET, T1, open_window
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
     signer = A.key_signer(host, P, workers=1)
@@ -167,3 +167,9 @@ def test_the_gates_run_starts_the_link_once_serve_listens_and_stops_it_once_serv
     end = A.run(host, session, signer=signer, pinned="c" * 40, now=lambda: T1, wait=client)
     assert not end["body"]["closed"] and "the coin link didn't start (exit 2" in end["body"]["ended"]
     assert "refused to start: no" in (host.sessions / session / "out" / "coin-link.log").read_text()
+
+    ends = "print('listening 127.0.0.1:1', flush=True)"
+    monkeypatch.setattr(A, "coin_link_argv", lambda h, s, b: [sys.executable, "-c", ends])
+    session = json.loads(open_window(host, signer, token="ef56", commit="ef" * 64)[1])["session"]
+    end = A.run(host, session, signer=signer, pinned="c" * 40, now=lambda: T1)
+    assert not end["body"]["closed"] and "the coin link ended first (exit 0" in end["body"]["ended"]

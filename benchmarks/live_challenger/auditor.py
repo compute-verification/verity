@@ -67,7 +67,8 @@ first coin.
   within 7811..7899), which carries it to the same port of the peer's loopback, where the prover's client connects; a
   reserve for a peer with no such line is refused. The certifier on this host owns that link and counts it
   (`coin_link.py`, `verity.core.protocols.certifier.coin_link`; NET-84): `run` starts it once serve.py listens and
-  stops it once serve.py exits (`coin_link_argv`, `stop_link`). It listens on another port of this host's loopback,
+  stops it once serve.py exits (`coin_link_argv`, `stop_link`), and a link that refuses to start or ends first (its
+  tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback,
   opens `ssh -N -R` from the peer's port to it, straight to the peer's own sshd, relays each connection to serve.py
   re-cut into cells and re-clocked on its grids, exempts only the coin openings that open against the session's
   committed coin root, counts everything else, and writes `coin-link.json`, which the `end` entry's `files` seals. The
@@ -251,8 +252,9 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1741,6 +1743,16 @@ def stop_link(proc: subprocess.Popen, seconds: float = LINK_STOP_SECONDS) -> int
         return proc.wait()
 
 
+def watch_link(link: subprocess.Popen, serve: subprocess.Popen, served: threading.Event, ended: list[str]) -> None:
+    """Wait for the coin link. Should it exit before `served` is set (its tunnel ended), stop serve.py, since no coin
+    can reach the peer any more, and say so in `ended`."""
+    rc = link.wait()
+    if not served.is_set():
+        ended.append(f"the coin link ended first (exit {rc}; coin-link.log), so no coin could reach the peer")
+        with suppress(ProcessLookupError):
+            os.killpg(serve.pid, signal.SIGTERM)
+
+
 def record_of(out: Path):
     """The challenger record the session signed in `out` (`remote.RECORD`), with its JSON; (None, None) until it has one."""
     from verity.core.protocols.sampled_proofs import challenger as C
@@ -1785,7 +1797,8 @@ def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
 def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], datetime], argv: list[str] | None = None,
         wait: Callable[[subprocess.Popen, float], int] | None = None, link: list[str] | None = None) -> dict:
     """Serve the admitted session (serve.py, which takes `sign.lock` for each of its signatures) through its coin link,
-    started once serve.py listens and stopped once it exits, then append its `end` entry and delete its secret. Its
+    started once serve.py listens and stopped once it exits (a link that refuses to start or ends first ends the
+    session: `watch_link`), then append its `end` entry and delete its secret. Its
     client closed it when serve.py exited 0 and its signed close (`challenger.json`) says so (`ended` null). The link is
     `coin_link_argv`'s; a caller that brings its own serve.py (`argv`: a local gate's, a test's) brings its own `link`,
     None for none, its client then reaching serve.py's port itself."""
@@ -1795,7 +1808,7 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
         raise Refused(f"session {session} has no open entry, or has ended: nothing to serve")
     body = s["open"]["body"]
     out = host.sessions / session / "out"
-    rc, why = 2, None
+    rc, why, link_ended = 2, None, []
     if body["pinned"] != pinned:
         why = f"admitted at {body['pinned']}, but this tree is {pinned}: the pin moved, so the session doesn't run"
     else:
@@ -1808,21 +1821,27 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
             first = proc.stdout.readline()
         with open(out / "stdout.log", "wb") as f:
             f.write(first)
-        linked = None
+        linked, watcher, served = None, None, threading.Event()
         if link is not None and first.startswith(b"listening "):
             with open(out / "coin-link.log", "wb") as log:
                 linked = subprocess.Popen(link, stdout=subprocess.PIPE, stderr=log, stdin=subprocess.DEVNULL,
                                           start_new_session=True)
                 listening = linked.stdout.readline()
                 log.write(listening)
-            if not listening.startswith(b"listening "):
+            if listening.startswith(b"listening "):
+                watcher = threading.Thread(target=watch_link, args=(linked, proc, served, link_ended), daemon=True)
+                watcher.start()
+            else:
                 why = f"the coin link didn't start (exit {linked.wait()}; coin-link.log), so no coin could reach the peer"
                 os.killpg(proc.pid, signal.SIGTERM)
         rc = (wait or _wait)(proc, body["minutes"] * 60) if why is None else proc.wait()
+        served.set()
         proc.stdout.close()
         if linked is not None:
             stop_link(linked)
             linked.stdout.close()
+        if watcher is not None:
+            watcher.join()
     (host.sessions / session / SECRET).unlink(missing_ok=True)
     summary = {}
     try:
@@ -1836,6 +1855,7 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
     hellos = (out / "hellos.jsonl").read_text().count("\n") if (out / "hellos.jsonl").is_file() else 0
     complete = released is not None and all(released.get(label) == n for label, n in body["families"])
     closed = rc == 0 and "ended" in summary and summary["ended"] is None
+    why = why or (None if closed else next(iter(link_ended), None))
     end = {"rc": rc, "closed": closed,
            "ended": why or summary.get("ended") or ("closed by the client" if closed else f"serve.py exited {rc}"),
            "files": files, "released": released,

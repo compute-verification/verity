@@ -25,7 +25,8 @@ runs the server's network certifier (`trusted-host`). A window's session takes t
    that file and `coin-link.log`.
 
 A link that refuses to start ends the session at once, and the `end` entry says why. The link refuses when the record
-is missing or unreadable, when its parameters are invalid, or when the peer's line routes through another host.
+is missing or unreadable, when its parameters are invalid, or when the peer's line routes through another host. A link
+that ends while `serve.py` still serves, because its tunnel ended, ends the session too.
 
 ### What it guarantees
 
