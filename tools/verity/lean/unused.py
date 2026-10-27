@@ -18,13 +18,17 @@ A module of PKG is kept, with the first reason that holds:
 - `root`, `runs`, `exempt`, `compile_time`: the lock lists it so (an exempt or `runs` module's imports are kept too);
 - `syntax`: it declares a notation, macro, syntax, elaborator, simproc or attribute (comments and `local` ones aside) whose
   atom or name a module importing it uses, or one whose atoms can't be read off its source;
-- `named`: a tracked file other than PKG's Lean sources names it, by its path (a directory's path names the directory's
-  module), its module name, or a constant's name one component under it (the move maps of `tools/move/` and `archive/`
-  aside); a test (under `tests/` or named `test_*`), a difftest or a Lean script (`.sh`, `.lean`) keeps what it imports too,
-  transitively, since it may build or import it;
+- `named`: a tracked file other than PKG's Lean sources names it, by its path (a path without `.lean` only where no
+  directory has it: a directory's path names no module), its module name, or a constant's name one component under it
+  (the move maps of `tools/move/`, `archive/` and the store's `moves.json` aside; a document's mention reads nothing, nor
+  does a Lean file's other than its `import`s, and both are listed as `docs`). A module named so must still build, and
+  what it needs for that is what its declarations use (`refs`, below), its imports being rewritten as `--delete` does; a
+  reader that writes Lean against it, a difftest, a shell script or any file holding `import M` (a Lean file's imports, a
+  test's Lean text), keeps what M imports too, transitively, since that Lean may use any of it;
 - `queued`: a PR in the merge queue (`--queued`: what `--fetch-queued` wrote from `research queue status` and each PR's
   diff) edits, renames or deletes its file, or adds an `import` of it or (in another file: a lock, a test) its name; what
-  it imports is kept too;
+  it imports is kept too, unless the PRs only edit it and it declares nothing (an edit of an import-only module is its
+  imports, which the diff shows). The modules only this keeps are listed apart (`held`), each with the PR that holds it;
 - `refs`: a kept module's declarations use its constants. A module is deleted whole, so every declaration of a kept module
   must still build, used or not;
 - `attribute`: it sets an attribute globally (`attribute [simp] f`), and a kept module imports it, whose elaboration may
@@ -33,7 +37,8 @@ A module of PKG is kept, with the first reason that holds:
 Every other module is unused. `--frozen PREFIX` lists the unused modules under PREFIX apart, not for deletion (a freeze).
 Each unused module carries its bytes, its area (`Proofs.Pouw.X`'s is `Pouw`), its owner (the owner most of the guarantees
 declared under its nearest enclosing namespace of modules have, in the locks; else the lane most of the branches merged
-into its directory's history name), and the maintained documents (`*.md`) that name its path, which its deletion edits.
+into its directory's history name), and the files that mention it without reading it (`docs`: documents, and Lean
+comments outside PKG), which its deletion edits.
 
 `--out DIR` writes `used.json` (Used.lean's document), `unused.json` (the list, the kept modules' reasons and the totals)
 and `unused.md` (the table, per area). `--delete AREA` removes the area's unused modules that `--list` holds (less those
@@ -77,7 +82,9 @@ ATTRIBUTE = re.compile(r"(?m)^[ \t]*attribute[ \t]*\[(?![ \t]*(?:local|scoped)\b
 QUALIFIED = re.compile(r"[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)+")
 STRING = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 #: tracked files whose mentions of a module don't read it: the layout moves' maps, and what `archive/` froze
-NOT_READERS = ("tools/move/", "archive/")
+NOT_READERS = ("tools/move/", "archive/", "tools/research/src/research/store/moves.json")
+#: a Lean `import` written in any file (a test's Lean text, a script's)
+LEAN_IMPORT = re.compile(r"(?<![\w.])import[ \t]+(?:all[ \t]+)?([^\W\d][\w'.]*[\w'])")
 CODE = (".py", ".sh", ".toml", ".lean", ".json", ".yaml", ".yml", ".cfg", ".txt")
 BRANCH_LANE = re.compile(r"cursor/([a-z][a-z0-9]*(?:-[a-z0-9]+)*?)-[a-z0-9]+-[0-9a-f]{4}\b|cursor/([a-z][a-z0-9]*)-")
 
@@ -161,13 +168,28 @@ def atoms(decl: str) -> set[str]:
 
 def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, list[tuple[str, bool]]]:
     """{module of PKG: [(file, whether it reads what the module imports)]}, for each tracked file outside PKG's tree (and
-    `NOT_READERS`) naming the module's file, its directory's aggregator, or its module name; and the maintained documents
-    (`docs`) naming its path, under the key `(docs, module)`."""
+    `NOT_READERS`) naming the module's file (a path without `.lean` names it only where no directory has that path), or its
+    module name or a constant one component under it; a Lean file outside PKG names only what it imports. The mentions that
+    read nothing (a document's, and a Lean comment's) are under the key `(docs, module)`: a deletion edits them."""
     by_path = {f"{pkg}/{r}": m for m, r in mods.items()}
     out: dict[str, list[tuple[str, bool]]] = collections.defaultdict(list)
     tops = sorted({m.split(".", 1)[0] for m in mods})
     named = re.compile(r"(?<![\w.])(?:" + "|".join(map(re.escape, tops)) + r")(?:\.[^\W\d][\w']*)+")
     paths = re.compile(re.escape(pkg) + r"/[\w./-]*\w")
+
+    def mentioned(text: str) -> set[str]:
+        hit: set[str] = set()
+        for p in paths.finditer(text):
+            x = p.group(0).rstrip(".")
+            if x in by_path:
+                hit.add(by_path[x])
+            elif x + ".lean" in by_path and text[p.end():p.end() + 1] != "/" and not (ROOT / x).is_dir():
+                hit.add(by_path[x + ".lean"])
+        for x in named.findall(text):
+            if x in mods or (x.rsplit(".", 1)[1][:1].islower() and (x := x.rsplit(".", 1)[0]) in mods):
+                hit.add(x)
+        return hit
+
     for f in files:
         if (f.startswith(pkg + "/") and f.endswith(".lean")) or f.startswith(NOT_READERS) or not f.endswith(CODE + (".md",)):
             continue
@@ -179,20 +201,17 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
             continue
         if pkg not in text and not any(t + "." in text for t in tops):
             continue
-        reads = ("/tests/" in f"/{f}" or Path(f).name.startswith("test_") or "difftest" in f or f.endswith((".sh", ".lean")))
-        hit: set[str] = set()
-        for x in paths.findall(text):
-            x = x.rstrip(".")
-            if x in by_path:
-                hit.add(by_path[x])
-            elif x + ".lean" in by_path:
-                hit.add(by_path[x + ".lean"])
-        if not f.endswith(".md"):
-            for x in named.findall(text):
-                if x in mods or (x := x.rsplit(".", 1)[0]) in mods:
-                    hit.add(x)
-        for m in hit:
-            out[("docs", m) if f.endswith(".md") else m].append((f, reads))
+        if f.endswith(".lean"):
+            imported = {i for i in source_imports(text) if i in mods}
+            for m in imported:
+                out[m].append((f, True))
+            for m in mentioned(text) - imported:
+                out[("docs", m)].append((f, False))
+            continue
+        writes = {i for i in LEAN_IMPORT.findall(text) if i in mods}
+        reads = "difftest" in f or f.endswith(".sh")
+        for m in mentioned(text) | writes:
+            out[("docs", m) if f.endswith(".md") else m].append((f, reads or m in writes))
     return out
 
 
@@ -230,16 +249,18 @@ def fetch_queued(path: Path) -> dict:
     return doc
 
 
-def queued_modules(queued: dict, pkg: str, mods: dict[str, str]) -> dict[str, list[str]]:
-    """{module of PKG: the PRs of ``queued`` (`fetch_queued`'s document) whose diff touches its file, or adds an import or
-    another mention of it}."""
+def queued_modules(queued: dict, pkg: str, mods: dict[str, str]) -> dict[str, tuple[list[str], bool]]:
+    """{module of PKG: (the PRs of ``queued`` (`fetch_queued`'s document) whose diff touches its file, or adds an import or
+    another mention of it; whether one of them imports or names it, rather than only touching its file)}."""
     by_path = {f"{pkg}/{r}": m for m, r in mods.items()}
     out: dict[str, set[str]] = collections.defaultdict(set)
+    named: set[str] = set()
     for n, pr in queued.items():
-        named = [i for i in [*pr.get("imports", []), *pr.get("names", [])] if i in mods]
-        for m in [by_path[f] for f in pr.get("files", []) if f in by_path] + named:
+        those = [i for i in [*pr.get("imports", []), *pr.get("names", [])] if i in mods]
+        named.update(those)
+        for m in [by_path[f] for f in pr.get("files", []) if f in by_path] + those:
             out[m].add(f"#{n}")
-    return {m: sorted(v, key=lambda s: int(s[1:])) for m, v in out.items()}
+    return {m: (sorted(v, key=lambda s: int(s[1:])), m in named) for m, v in out.items()}
 
 
 def owners(policies: dict[str, dict], pins: dict[str, str | None], files: list[str], pkg: str) -> dict[str, str]:
@@ -334,8 +355,10 @@ def decide(pkg: Path, policy: dict, used: dict, files: list[str], frozen: list[s
             if reads:
                 for i in sorted(closure({m}, graph, scope) - {m}):
                     keep(i, f"named: imported by {m}, which {f} reads")
-    for m, by in sorted(queued_modules(queued or {}, p, mods).items()):
+    for m, (by, imported) in sorted(queued_modules(queued or {}, p, mods).items()):
         keep(m, f"queued: {', '.join(by[:4])}" + (f" and {len(by) - 4} more" if len(by) > 4 else "") + " touch or import it")
+        if not imported and (facts.get(m) or {}).get("constants", 1) == 0:
+            continue
         for i in sorted(closure({m}, graph, scope) - {m}):
             keep(i, f"queued: imported by {m}, which {by[0]} touches or imports")
     changed = True
@@ -359,17 +382,20 @@ def decide(pkg: Path, policy: dict, used: dict, files: list[str], frozen: list[s
     for m in unbuilt:
         keep(m, "unbuilt: no .olean was read for it, so what it holds is not known")
     unused = sorted(scope - set(kept))
-    docs = {m: sorted({f for f, _ in refs.get(("docs", m), [])}) for m in unused}
+    docs = {m: sorted({f for f, _ in refs[("docs", m)]}) for m in scope if ("docs", m) in refs}
     return {"mods": mods, "kept": kept, "unused": unused, "docs": docs, "graph": graph,
             "frozen": [m for m in unused if any(m == f or m.startswith(f + ".") for f in frozen)]}
 
 
-def listing(pkg: Path, decided: dict, policies: dict[str, dict], used: dict, files: list[str]) -> dict:
+def listing(pkg: Path, decided: dict, policies: dict[str, dict], used: dict, files: list[str],
+            held: dict[str, str] | None = None) -> dict:
+    """The list: ``decided``'s unused modules, each with its bytes, area, owner and docs, totals per area and in all; and
+    ``held`` ({module: why}), the modules only a queued PR keeps, with the same columns."""
     p = rel(pkg)
     lead = owners(policies, used.get("pins", {}), files, p)
     history: dict[str, str | None] = {}
-    rows = []
-    for m in decided["unused"]:
+
+    def row(m: str) -> dict:
         parts = m.split(".")
         who = next((lead[".".join(parts[:i])] for i in range(len(parts) - 1, 1, -1) if ".".join(parts[:i]) in lead), None)
         how = "lock"
@@ -379,8 +405,11 @@ def listing(pkg: Path, decided: dict, policies: dict[str, dict], used: dict, fil
                 history[d] = lane_from_history(d)
             who, how = history[d], "git log"
         f = pkg / decided["mods"][m]
-        rows.append({"module": m, "path": f"{p}/{decided['mods'][m]}", "bytes": f.stat().st_size, "area": area_of(m),
-                     "owner": who, "owner_from": how, "frozen": m in decided["frozen"], "docs": decided["docs"].get(m, [])})
+        return {"module": m, "path": f"{p}/{decided['mods'][m]}", "bytes": f.stat().st_size, "area": area_of(m),
+                "owner": who, "owner_from": how, "frozen": m in decided["frozen"], "docs": decided["docs"].get(m, [])}
+
+    rows = [row(m) for m in decided["unused"]]
+    kept_rows = [{**row(m), "why": why} for m, why in sorted((held or {}).items())]
     areas: dict[str, dict] = {}
     for r in rows:
         a = areas.setdefault(r["area"], {"modules": 0, "bytes": 0, "frozen": 0, "frozen_bytes": 0, "owners": collections.Counter()})
@@ -393,9 +422,11 @@ def listing(pkg: Path, decided: dict, policies: dict[str, dict], used: dict, fil
     reasons = collections.Counter(why.split(":", 1)[0] for why in decided["kept"].values())
     total = {"modules": len(decided["mods"]), "kept": len(decided["kept"]), "unused": len(rows),
              "unused_bytes": sum(r["bytes"] for r in rows), "frozen": sum(r["frozen"] for r in rows),
+             "held": len(kept_rows), "held_bytes": sum(r["bytes"] for r in kept_rows),
              "package_bytes": sum((pkg / r).stat().st_size for r in decided["mods"].values()), "kept_by": dict(reasons)}
     missing = sorted(g for g, m in used.get("pins", {}).items() if m is None)
-    return {"package": p, "total": total, "areas": areas, "unused": rows, "kept": decided["kept"], "missing_guarantees": missing}
+    return {"package": p, "total": total, "areas": areas, "unused": rows, "held": kept_rows, "kept": decided["kept"],
+            "missing_guarantees": missing}
 
 
 def table(doc: dict) -> str:
@@ -411,6 +442,12 @@ def table(doc: dict) -> str:
     for r in sorted(doc["unused"], key=lambda r: (r["area"], r["module"])):
         out.append(f"| {r['module']} | {r['bytes']:,} | {r['area']} | {r['owner'] or '-'} ({r['owner_from']}) | "
                    f"{'frozen' if r['frozen'] else ''} | {', '.join(r['docs'])} |")
+    if doc.get("held"):
+        out += ["", f"## Held: unused but for a queued PR ({t['held']} modules, {t['held_bytes']:,} bytes)", "",
+                "| module | bytes | area | owner | why |", "|---|---|---|---|---|"]
+        for r in sorted(doc["held"], key=lambda r: (r["area"], r["module"])):
+            out.append(f"| {r['module']} | {r['bytes']:,} | {r['area']} | {r['owner'] or '-'} ({r['owner_from']}) | "
+                       f"{r['why']} |")
     return "\n".join(out) + "\n"
 
 
@@ -537,7 +574,10 @@ def main(argv: list[str] | None = None) -> int:
         roots = list(policy["roots"])
         used = run_used(pkg, roots, sorted(set(pins)), sorted(set(extra) - set(pins)), out / "used.json")
     decided = decide(pkg, policy, used, files, a.frozen, queued)
-    doc = listing(pkg, decided, policies, used, files)
+    held = {}
+    if queued:
+        held = {m: decided["kept"][m] for m in decide(pkg, policy, used, files, a.frozen)["unused"] if m in decided["kept"]}
+    doc = listing(pkg, decided, policies, used, files, held)
     doc["locks"] = sorted(policies)
     doc["queued_prs"] = len(queued or {})
     if a.out:
@@ -548,7 +588,8 @@ def main(argv: list[str] | None = None) -> int:
         (a.out / "unused.md").write_text(table(doc))
     t = doc["total"]
     print(f"unused: {t['unused']} of {t['modules']} modules of {p} ({t['unused_bytes']:,} of {t['package_bytes']:,} bytes, "
-          f"{t['frozen']} frozen); locks read: {', '.join(doc['locks'])}")
+          f"{t['frozen']} frozen; {t['held']} more, {t['held_bytes']:,} bytes, held by queued PRs); "
+          f"locks read: {', '.join(doc['locks'])}")
     for g in doc["missing_guarantees"][:10]:
         print(f"  a guarantee no module of the build declares: {g}")
     return 0

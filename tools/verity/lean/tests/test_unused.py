@@ -60,7 +60,7 @@ def stand_in(tmp_path):
             "imports": {}}
     test = tmp_path / "tests" / "test_named.py"
     test.parent.mkdir()
-    test.write_text('MODULE = "Prune.B.Named"\n')
+    test.write_text('MODULE = "Prune.B.Named"\nSOURCE = "import Prune.B.Named\\n#check named"\n')
     return pkg, policy, used, os.path.relpath(test, U.ROOT)
 
 
@@ -88,6 +88,12 @@ def test_what_a_queued_pr_touches_or_imports_is_kept(stand_in):
     got = U.decide(pkg, policy, used, [test], [], named)
     assert got["kept"]["Prune.B.Old"] == "queued: #5001 touch or import it"
     assert got["kept"]["Prune.B.Group"].startswith("aggregator: ") and got["unused"] == []
+    umbrella = {"5002": {"files": [f"{U.rel(pkg)}/Prune/B/Group.lean"], "imports": []}}
+    got = U.decide(pkg, policy, used, [test], [], umbrella)
+    assert got["kept"]["Prune.B.Group"].startswith("queued: ") and got["unused"] == ["Prune.A.Side", "Prune.B.Old"]
+    doc = U.listing(pkg, got, {U.rel(pkg): policy}, used, [test], {"Prune.B.Group": got["kept"]["Prune.B.Group"]})
+    assert [r["module"] for r in doc["held"]] == ["Prune.B.Group"] and doc["total"]["held"] == 1
+    assert "## Held: unused but for a queued PR (1 modules" in U.table(doc)
 
 
 def test_syntax_nobody_writes_and_a_local_one_keep_nothing(stand_in):
@@ -141,14 +147,21 @@ def test_references_name_paths_modules_and_constants(tmp_path):
     mods = {"Prune.A.Main": "Prune/A/Main.lean", "Prune.A": "Prune/A.lean", "Prune.B": "Prune/B.lean"}
     pkg = os.path.relpath(tmp_path / "prune", U.ROOT)
     files = {"tests/test_a.py": f'"{pkg}/Prune/A/Main.lean"\n', "b.sh": "lake env lean -e Prune.B.thm\n",
-             "c.toml": f'paths = ["{pkg}/Prune/A"]\n', "d.md": f"see `{pkg}/Prune/B.lean`\n", "e.py": "Prune.Bx\n"}
+             "c.toml": f'paths = ["{pkg}/Prune/A"]\n', "d.md": f"see `{pkg}/Prune/B.lean`\n",
+             "e.py": "Prune.Bx Prune.A.X Prune.A.Main.Y\n",
+             "f.lean": "import Prune.B\n\n/-! `Prune.A.Main` proves it. -/\n", "tests/test_g.py": f'"{pkg}/Prune/A/" "{pkg}/Prune/B"\n',
+             "tests/test_h.py": 'SOURCE = "import Prune.A\\n#check 1"\n'}
+    (tmp_path / "prune" / "Prune" / "B").mkdir(parents=True)
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
     got = U.references([os.path.relpath(tmp_path / f, U.ROOT) for f in files], pkg, mods)
     named = {k: sorted(Path(f).name for f, _ in v) for k, v in got.items()}
-    assert named == {"Prune.A.Main": ["test_a.py"], "Prune.B": ["b.sh"], "Prune.A": ["c.toml"], ("docs", "Prune.B"): ["d.md"]}
-    assert got["Prune.A.Main"][0][1] and got["Prune.B"][0][1] and not got["Prune.A"][0][1]
+    assert named == {"Prune.A.Main": ["test_a.py"], "Prune.B": ["b.sh", "f.lean"], "Prune.A": ["c.toml", "test_h.py"],
+                     ("docs", "Prune.B"): ["d.md"], ("docs", "Prune.A.Main"): ["f.lean"]}
+    reads = {(k, Path(f).name): r for k, v in got.items() for f, r in v}
+    assert not reads["Prune.A.Main", "test_a.py"] and reads["Prune.B", "b.sh"] and reads["Prune.B", "f.lean"]
+    assert not reads["Prune.A", "c.toml"] and reads["Prune.A", "test_h.py"]
 
 
 #: the controls with an unused module (`Extra`), an aggregator of it (`Group`), a notation the proofs write (`Syn`) and a
