@@ -95,14 +95,30 @@ knob_env() {
     "V31_R5NHW=$(knob "$1" r5nhw 0)" \
     "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0)"
 }
-# vbin VARIANT: its binary's suffix after $W/v31 (nreg, sha, sx and r5s each make a build of their own; empty: the default
-# build)
+# vbin VARIANT: its binary's suffix after $W/v31 (nreg, sha, sx, hcv and r5s each make a build of their own; empty: the
+# default build)
 vbin() {
   local n s x r c
   n=$(knob "$1" nreg ""); s=$(knob "$1" sha ""); x=$(knob "$1" sx ""); r=$(knob "$1" r5s ""); c=$(knob "$1" hcv "")
   echo "${n:+-n$n}${s:+-s$s}${x:+-x$x}${c:+-c}${r:+-r$r}"
 }
-export -f knob knob_env vbin
+# vflags VARIANT: its build's nvcc flags but sha512.cuh's; vsha VARIANT: those (empty: SHA_FLAGS)
+vflags() {
+  local n x r xv xr f=""
+  n=$(knob "$1" nreg ""); x=$(knob "$1" sx ""); r=$(knob "$1" r5s "")
+  [ -n "$n" ] && f+=" -DV31_MAXNREG=$n -DV31_WG_NREG=$n"
+  [ -n "$x" ] && IFS=. read -r xv xr <<< "$x" && f+=" -DV31_SX=${xr:-2} -DV31_SX_V=$xv"
+  [ -n "$r" ] && f+=" -DV31_R5_SPLITS=$r"
+  [ -n "$(knob "$1" hcv "")" ] && f+=" -DV31_HCV"
+  echo "$f"
+}
+vsha() {
+  local s sa sr sl
+  s=$(knob "$1" sha "")
+  [ -n "$s" ] && IFS=. read -r sa sr sl <<< "$s" && echo "-DSHA_ADD=$sa -DSHA_ROT=$sr -DSHA_ROLL=${sl:-1}"
+  return 0
+}
+export -f knob knob_env vbin vflags vsha
 
 # CUTLASS's int8 GEMMs, the second baseline: the harness's cutlass_2x.cu at the harness's CUTLASS pin, cloned once into
 # V31_CACHE and its object kept there under a hash of its inputs; CUTLASS=0 builds without it (cuBLASLt's baseline alone)
@@ -143,13 +159,8 @@ for v in $VARIANTS; do
   b=$(vbin "$v")
   { [ -z "$b" ] || [ -e "$W/.b$b" ]; } && continue
   : > "$W/.b$b"
-  n=$(knob "$v" nreg "") s=$(knob "$v" sha "") x=$(knob "$v" sx "") r=$(knob "$v" r5s "")
-  nf=(); [ -n "$n" ] && nf=(-DV31_MAXNREG="$n" -DV31_WG_NREG="$n")
-  [ -n "$x" ] && IFS=. read -r xv xr <<< "$x" && nf+=(-DV31_SX="${xr:-2}" -DV31_SX_V="$xv")
-  [ -n "$r" ] && nf+=(-DV31_R5_SPLITS="$r")
-  [ -n "$(knob "$v" hcv "")" ] && nf+=(-DV31_HCV)
-  sf=; [ -n "$s" ] && IFS=. read -r sa sr sl <<< "$s" && sf="-DSHA_ADD=$sa -DSHA_ROT=$sr -DSHA_ROLL=${sl:-1}"
-  { BSHA=$sf build "$W/v31$b" "$O/build$b.log" "${nf[@]}"; echo "build ${b#-} rc $?" >> "$O/rc.txt"; } &
+  # shellcheck disable=SC2046
+  { BSHA=$(vsha "$v") build "$W/v31$b" "$O/build$b.log" $(vflags "$v"); echo "build ${b#-} rc $?" >> "$O/rc.txt"; } &
   while [ "$(jobs -rp | wc -l)" -ge "${BUILD_JOBS:-6}" ]; do wait -n; done
 done
 wait
@@ -168,9 +179,12 @@ if [ "$MODE" = fill ]; then
   FILL_LS=${FILL_LS:-"768 2048"}
   FILL_SHAPES=${FILL_SHAPES:-"8B-qkv:16384:6144:4096 8B-o:16384:4096:4096 8B-up:16384:28672:4096 8B-down:16384:4096:14336"}
   export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY
-  # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1} -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
-    -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
+  # FILL_GATE_KNOBS=1: the lib is the first variant's build, as its knobs are the gates'
+  lv=; [ "${FILL_GATE_KNOBS:-0}" = 1 ] && lv=${VARIANTS%% *}
+  lsha=$(vsha "$lv")
+  # shellcheck disable=SC2086,SC2046
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${lsha:-${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1}} -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
+    $(vflags "$lv") -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
   echo "build lib rc $?" >> "$O/rc.txt"
   for v in $VARIANTS; do
     for L in $FILL_LS; do
@@ -190,7 +204,8 @@ if [ "$MODE" = fill ]; then
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
     v=${VARIANTS%% *} L=${FILL_LS%% *} s=${FILL_SHAPES%% *}
     # shellcheck disable=SC2046
-    env $(knob_env "$v") timeout 300 "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$O/canary.log" 2>&1
+    env $(knob_env "$v") timeout 300 "$W/v31$(vbin "$v")" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" \
+      > "$O/canary.log" 2>&1
     rc=$?
     echo "canary rc $rc" >> "$O/rc.txt"
     [ $rc = 0 ] || exit 3
@@ -226,7 +241,7 @@ if [ "$MODE" = fill ]; then
             f="$O/nsys-$tag-${s%%:*}"
             # shellcheck disable=SC2046
             env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" "$NSYS" profile -t cuda -s none --cpuctxsw none -f true -o "$f" \
-              "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+              "$W/v31$(vbin "$v")" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
             echo "nsys $tag ${s%%:*} rc $?" >> "$O/rc.txt"
           done
         done
