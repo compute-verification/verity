@@ -8,10 +8,10 @@ BF16 (`ve_reduce`), so a plain and an encoded linear over the same weight return
 decodes the layer into a scratch FP8 matrix for vLLM's CUTLASS GEMM: prefill is compute-bound and isn't what's timed.
 
 Kernels are pluggable: a `Lib` is any build of `ve.cu` (packing, k range), and a later fused kernel (a wider codec) is
-another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs ra-codec-wide's fused GEMM instead
+another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs the wide codec's fused GEMM instead
 (`benchmarks/word_codec/wide.cu`, a `WideLib` a field: Sloth over p = 2^127 − 1, 2^255 − 19, 2^521 − 1, 2^256 − 189 or
 2^512 − 569); its chunk sums have the same layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs
-ra-codec-tensor's (`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared memory ahead
+the tensor codec's (`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared memory ahead
 of one MMA warp), with the same chunk sums.
 """
 from __future__ import annotations
@@ -145,7 +145,7 @@ class WideLib:
 
 
 class TensorLib:
-    """One build of ra-codec-tensor's `wt.cu` (one field, `WT_FIELD`): its key and each launch's tweak steps."""
+    """One build of the tensor codec's `wt.cu` (one field, `WT_FIELD`): its key and each launch's tweak steps."""
 
     def __init__(self, path: str | Path) -> None:
         v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
@@ -189,7 +189,7 @@ class TensorLib:
         return key
 
     def configs(self) -> list[tuple[int, int]]:
-        """(decoders, stages) as ra-codec-tensor's `fused_cfgs("auto")` picks them: the most decoder warps the field's
+        """(decoders, stages) as codec_tensor's `fused_cfgs("auto")` picks them: the most decoder warps the field's
         registers allow at 4 and 6 stages fewer than fit at M = 32."""
         smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 32) // (self.sb + 40)
         dmax = self.fused_warps - 2

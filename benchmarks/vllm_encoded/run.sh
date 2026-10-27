@@ -10,8 +10,8 @@
 #
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
-# ra-codec-wide's fused GEMM as wide:BITS:K (BITS 127, 255, 521, 256 or 512, then a suffix of wide.cu's build flags as
-# the build loop below reads it, such as rcm; K = 0 its plain payloads), ra-codec-tensor's as tensor:FIELD:K (FIELD
+# the wide codec's fused GEMM as wide:BITS:K (BITS 127, 255, 521, 256 or 512, then a suffix of wide.cu's build flags
+# as the build loop below reads it, such as rcm; K = 0 its plain payloads), the tensor codec's as tensor:FIELD:K (FIELD
 # 255, 511, 512, 521, 767, 768, 1023, 1279, 1536 or 2048, codec_tensor/wt.cu built for each the arms name; K >= 1, 512,
 # 768, 1536 and 2048 being full-slot fields at K = 1), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
