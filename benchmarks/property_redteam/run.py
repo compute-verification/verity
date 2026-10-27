@@ -7,8 +7,8 @@ A check is ``FUNCTION(program) -> {"refused": bool, "charged": {class: units}}``
 ``refuse-all`` name the two trivial ones); a ``reasons`` entry, when it returns one, is copied into the report. The check's module is imported before the cases, so a Definition it registers is
 the one the cases call. Each case's outcome:
 
-  ok           the ruling's verdict, charged at least the case's charge (an attack) or within its allowance (an honest case)
-  sound        an attack refused where the ruling budgets it, or accepted at its full charge where the ruling refuses it
+  ok           the case's verdict, charged at least the case's charge (an attack) or within its allowance (an honest case)
+  sound        an attack refused where its verdict budgets it, or accepted at its full charge where its verdict refuses it
   misclassed   an attack accepted at its charge in total, but not in the class the case names
   unsound      an attack accepted at less than its charge, or at all where no charge makes it sound
   over-strict  an honest case refused

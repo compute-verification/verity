@@ -103,7 +103,7 @@ pin's BF16 base.
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
      (in `blocks`, one per engine lifetime, with its `cycle`), so an arm that judges every run it saw judges those too.
-2. **Resident interleaving, else alternating blocks.** When every arm's engine fits on the GPU at once (`resident`), each
+2. **Resident interleaving, else `blocks`.** When every arm's engine fits on the GPU at once (`resident`), each
    point is warmed per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
    and last slot (`interleave_order`). An arm that needs its own engine lifetime makes the whole run `blocks`: each arm
    gets its own engine for two cycles, the second in reverse arm order, with discarded warm-ups per point in each. The
@@ -117,7 +117,7 @@ pin's BF16 base.
 3. **Measured, not estimated.** A timed rep synchronizes the device around the run and reads the engine's own request
    and step timings (`engine.arrivals.run_requests_arrivals` with `request_timing` and `step_timing`).
 4. **An arm's run is its own.** Around every run (gate, warm-up or timed), the runner calls an experimental arm's
-   `begin_run(target)` before the clock starts and `end_run(target)` inside the timed window, so the work an arm finishes
+   `begin_run(target)` before the clock starts and `end_run(target)` inside the timed run, so the work an arm finishes
    at the end of a run (the Commit's hashing backlog, a commitment's last roots) is in the run's time. `target.phase`
    (`gate`, `warmup` or `measure`), `target.point` (the sweep point's id) and `target.tokens` (the prompt and output tokens
    it serves) describe the run `begin_run` opens. `extras(target)`, read after a timed run, reports that run.

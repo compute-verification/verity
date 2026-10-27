@@ -33,7 +33,7 @@ certifiers, so the export counts only the crossings to a reader off every block,
 choice is public advice of log2 of that number, and the audit refuses a declared occupancy that isn't one of them; with
 none registered the one profile is the placement's own. `Ledger.custody(registered_bits)` is the share of the
 registered weights that the ledger's epochs could have carried out: their covert budgets, their exports where charged,
-and a side channel of σ a server over each epoch (`DEDICATED_RACKS`, 1 kbit/s, Daniel's premise that no untrusted
+and a side channel of σ a server over each epoch (`DEDICATED_RACKS`, 1 kbit/s, on the premise that no untrusted
 machine shares a block's rack). Weight custody over a monitoring period needs that share well below 1.
 
 A result here is about a monitoring period: the stretch of time it covers, not one epoch, window or run. Present it
@@ -73,6 +73,5 @@ verity_vllm's serving Program the same way.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `Device` is `Accounting.Device`
 (the node's constants are its one Python mirror's, `verity.core.protocols.remote_bandwidth.timing`), `Block` is
-`Hardware.SpatialUnit` with `Covered`, `Placement` is `Accounting.Placed` (and `Accounting.Requirement.Placement`, in
-#2399) at the census's grain, a `Store` is `Accounting.Requirement.Store`, and an `Interval` is `Accounting.Window`.
-Design: `note:network-accounting/20261018T0615Z-draft-datacenter-network-simulation`.
+`Hardware.SpatialUnit` with `Covered`, `Placement` is `Accounting.Placed` (and `Accounting.Requirement.Placement`) at
+the census's grain, a `Store` is `Accounting.Requirement.Store`, and an `Interval` is `Accounting.Window`.

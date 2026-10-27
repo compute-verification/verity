@@ -106,7 +106,7 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
             "drop": "io:short of max_tokens without EOS"}
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
-ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]  # vllm's #3619
+ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 GATE_HOST = "vy-challenger-1"
 
 CLAIM = {
@@ -146,10 +146,9 @@ CLAIM = {
         "report doesn't take those verdicts yet.",
         "The proofs an adopted summary carries are of n2_zk's earlier row adapter around the unchanged "
         "NetworkHeadCheck_v2, not of N2's registered unit, so LinkWindows.proved, which refuses a proof of any Program "
-        "but the unit's (NET-43), doesn't take them. Lean holds each proof to the program and partition the driver "
-        "wrote.",
-        "The certificate's link to its head (README, NET-42): decided in the clear, each signed digest is checked "
-        "against its head and the certifier's salt on the host, over the opening (CertifiedRecord.verify).",
+        "but the unit's, doesn't take them. Lean holds each proof to the program and partition the driver wrote.",
+        "The certificate's link to its head (README, `CertifiedRecord.salt`): decided in the clear, each signed digest "
+        "is checked against its head and the certifier's salt on the host, over the opening (CertifiedRecord.verify).",
     ],
     "source": README,
 }
