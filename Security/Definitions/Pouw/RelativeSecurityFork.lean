@@ -3,7 +3,7 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # Relative security's collision finder, built from the adversary (trusted)
 
-One adversary class (top, 26 Oct; lean-proofs skill): a guarantee holds for every prover strategy, and its break term
+One adversary class (the lean-proofs skill): a guarantee holds for every prover strategy, and its break term
 is the probability that one explicit finder, built from that strategy and run in about its time, exhibits a SHA-512
 collision. Collision resistance is then applied to that finder alone, outside the theorem. The floors per prover of
 `Definitions.Pouw.Guarantees.RelativeSecurity` read their service premises at this finder, and conclude at its

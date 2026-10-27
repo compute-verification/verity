@@ -24,7 +24,7 @@ adversary that hard-codes a collision breaks binding in every round). Each has a
 proved (`StagedFloorKPerProver`, `StagedFloorKOneSidedPerProver`, `OverlapFloorKPerProver`,
 `OverlapFloorKOneSidedPerProver`): the same floor and the same luck, on the premises per prover, with each adversary's
 error its own (`breakPr`), read at the fork finders built from that adversary (`forkFinders`), and each value of its
-coins capped at 1 (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover; CMP-33). `ecr/sha-512` applies to
+coins capped at 1. `ecr/sha-512` applies to
 those finders outside the floors. Each floor per prover has an honest lemma (its premises hold together, with an honest
 answer accepted and a wrong one refused: `StagedFloorPerProverHonest`, `OverlapFloorPerProverHonest`,
 `StagedFloorJ10RPerProverHonest`, `OverlapFloorJ10RPerProverHonest`) and a nontrivial one (its conclusion fails at a
@@ -126,7 +126,7 @@ def OverlapFloorKOneSided : Prop :=
 Each restates one floor above on the service premise per prover (`ServiceSoundStagedPerProver`,
 `ServiceSoundOverlapPerProver`) and concludes it adversary by adversary (`ServiceFloorPerProver`): the same floor `F`
 and luck `2^{−40}`, every adversary in one class, with no budget on its time. The premise is read at one finder built
-from the adversary, the fork (`forkFinders`, one adversary class: top, 26 Oct): at `k = 1` for binding breaks, two runs
+from the adversary, the fork (`forkFinders`, one adversary class): at `k = 1` for binding breaks, two runs
 of the adversary from its commitment forked at the round, and at `kz` continuations for zero-knowledge breaks, the
 form of C-Flock's link finder. The service is a `HashedService`, so the finder reads the verifier's SHA-512 inputs in
 those runs and outputs their first collision. Each adversary's error is
