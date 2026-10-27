@@ -8,7 +8,8 @@ variant reaches 90% of BAR an SM-clock, and the best rate at each cap.
 beside: per kernel, the median over rounds of each arm. The co-issue: the GEMM's span (%globaltimer, first MMA to last
 epilogue) beside hash warpgroups that hash throughout (free) against the GEMM alone (mma), and the hash's rate beside the
 GEMM against alone; the handoff (the pipeline) against the larger of its GEMM and its hash alone, and against wgmma.linear's
-own shape (wgl_n256_s4, three warpgroups, n256, no O tile) alone. Nsight Compute's pipe shares for NCU_RUNS beside them.
+own shape (wgl_n256_s4, three warpgroups, n256, no O tile) alone. Nsight Compute's pipe shares for NCU_RUNS beside them,
+and its warp-stall counters: the hash warps' stalls beside the GEMM are the free arm's less the mma arm's.
 The served model: the served commit hashes each output's u32 word in 16 KiB tile-local rows, about 133 compressions a row
 (its row_v2 digest's 130, its commit string and tree leaf), so the GEMM at M x N owes 4 M N / 16384 x 133 compressions. A
 kernel's modeled call is its GEMM beside the hash (free) and then the rest at its hash-alone rate, against the GEMM alone in
@@ -119,6 +120,44 @@ def ncu_row(path: Path) -> dict[str, float]:
                 except ValueError:
                     continue
                 break
+    return out
+
+
+STALL = "smsp__warps_issue_stalled_"
+
+
+def ncu_stalls(path: Path) -> dict[str, float]:
+    """The last launch's warps a scheduler in each stall reason an active cycle (`smsp__warps_issue_stalled_*` and
+    `smsp__warps_active`, .avg.per_cycle_active), keyed by the reason ("active" for the warps resident)."""
+    rows = list(csv.reader(path.open()))
+    if len(rows) < 3:
+        return {}
+    head, last = rows[0], rows[-1]
+    out = {}
+    for i, col in enumerate(head):
+        name = col[len(STALL):] if col.startswith(STALL) else "active" if col.startswith("smsp__warps_active.") else None
+        if name is None or not col.endswith(".avg.per_cycle_active") or not last[i].strip():
+            continue
+        try:
+            out[name.split(".")[0]] = float(last[i].replace(",", ""))
+        except ValueError:
+            continue
+    return out
+
+
+def stall_verdicts(stalls: dict[str, dict[str, float]]) -> list[str]:
+    """For each kernel with mma, hash and free runs: the hash warps' stalls beside the GEMM, free less mma (the MMA
+    warpgroups' own stalls, taken as unchanged beside the hash), against the hash alone, the largest reasons first."""
+    out = []
+    for k in sorted({n.rsplit("-", 1)[0] for n in stalls}):
+        mma, alone, free = (stalls.get(f"{k}-{a}") for a in ("mma", "hash", "free"))
+        if not (mma and alone and free):
+            continue
+        beside = {r: free[r] - mma.get(r, 0.0) for r in free if r != "active"}
+        top = sorted(beside, key=lambda r: -max(beside[r], alone.get(r, 0.0)))[:5]
+        parts = ", ".join(f"{r} {beside[r]:.3f} (alone {alone.get(r, 0.0):.3f})" for r in top)
+        out.append(f"VERDICT beside stalls {k}: the hash warps beside the GEMM (free - mma), warps a scheduler an active "
+                   f"cycle: {parts}")
     return out
 
 
@@ -242,12 +281,24 @@ def beside(o: Path, summary: dict) -> list[str]:
     if ncu:
         lines += ["", "### Nsight Compute: % of peak sustained over elapsed cycles", "",
                   "| kernel:arm | " + " | ".join(label for label, _ in NCU_COLS) + " |", "|---" * (len(NCU_COLS) + 1) + "|"]
-        summary["ncu"] = {}
+        summary["ncu"], stalls = {}, {}
         for p in ncu:
             v = ncu_row(p)
             name = p.stem[len("ncu-"):]
             summary["ncu"][name] = v
             lines.append(f"| {name} | " + " | ".join(f"{v[label]:.1f}" if label in v else "" for label, _ in NCU_COLS) + " |")
+            if s := ncu_stalls(p):
+                stalls[name] = s
+        if stalls:
+            reasons = sorted({r for s in stalls.values() for r in s if r != "active"},
+                             key=lambda r: -max(s.get(r, 0.0) for s in stalls.values()))
+            reasons = [r for r in reasons if max(s.get(r, 0.0) for s in stalls.values()) >= 0.01]
+            lines += ["", "### Nsight Compute: warps a scheduler in each stall reason, an active cycle", "",
+                      "| kernel:arm | active | " + " | ".join(reasons) + " |", "|---" * (len(reasons) + 2) + "|"]
+            lines += [f"| {n} | {s.get('active', 0.0):.2f} | " + " | ".join(f"{s.get(r, 0.0):.3f}" for r in reasons) + " |"
+                      for n, s in stalls.items()]
+            summary["ncu_stalls"] = stalls
+            verdicts += stall_verdicts(stalls)
     return lines + [""] + verdicts
 
 

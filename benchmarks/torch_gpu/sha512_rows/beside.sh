@@ -6,8 +6,8 @@
 #            of `lowreg rates LAUNCHES TILES` (SHA-512's rate against the register cap, 1, 2 and 4 warpgroups an SM)
 #   beside   `beside gate SHAPE DIR KERNEL` a kernel and beside_check.py (y against the Definition, the handoff's row digests
 #            and the hash arm's against hashlib), then, for the kernels that passed, ROUNDS rounds of `beside time SHAPE
-#            LAUNCHES KERNEL` (its arms) and Nsight Compute (duty.metrics and the chip's tensor pipes, --clock-control none)
-#            on NCU_RUNS (KERNEL:ARM ...)
+#            LAUNCHES KERNEL` (its arms) and Nsight Compute (duty.metrics, the chip's tensor pipes and its warp-stall
+#            counters, --clock-control none) on NCU_RUNS (KERNEL:ARM ...)
 # Every GPU command is under `timeout STEP_S` (180 s), so a kernel that hangs costs its step and not the lease.
 # nvidia-smi samples every 200 ms beside them. BUILD_ONLY=1 stops after the builds (a CPU node with CUDA 13).
 #
@@ -117,11 +117,13 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
         tens=$(awk "{print \$1}" "$O/ncu-metrics.txt" |
           grep -E "^sm__(pipe_tensor[a-z0-9_]*_cycles_active|inst_executed_pipe_tensor[a-z0-9_]*)$" |
           sed "s/$/.avg.pct_of_peak_sustained_elapsed/" | paste -sd, -)
+        stall=$( (awk "{print \$1}" "$O/ncu-metrics.txt" | grep -E "^smsp__warps_issue_stalled_[a-z_]+$"
+          echo smsp__warps_active) | sed "s/$/.avg.per_cycle_active/" | paste -sd, -)
         base=$(tr -d " \n" < benchmarks/pouw/accel_v31/duty.metrics)
         for kr in $NCU_RUNS; do
           grep -qx "${kr%%:*}" <<< "$passed" || continue
           f="$O/ncu-${kr%%:*}-${kr##*:}"
-          for extra in "${tens:+,$tens}" ""; do
+          for extra in "${tens:+,$tens},$stall" "${tens:+,$tens}" ""; do
             # shellcheck disable=SC2086
             $T "$NCU" --clock-control none --launch-skip 1 --launch-count 1 --metrics "$base$extra" -f -o "$f" \
               "$W/beside" one $SHAPE "${kr%%:*}" "${kr##*:}" 1 > "$f.log" 2>&1

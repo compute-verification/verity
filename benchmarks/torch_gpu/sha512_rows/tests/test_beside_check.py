@@ -118,3 +118,20 @@ def test_summary_budget_names_every_hash_warpgroup(tmp_path: Path) -> None:
     out = "\n".join(beside_summary.beside(tmp_path, {}))
     assert "VERDICT beside co-issue m1h3_rs (P 24 + Y 256 + 3 x H 64 = 472 <= 480 registers" in out
     assert "the GEMM beside 3 hash warpgroup(s)" in out
+
+
+def test_stalls_beside_the_gemm_are_free_less_mma(tmp_path: Path) -> None:
+    cols = ["ID", "Kernel Name", "smsp__warps_active.avg.per_cycle_active",
+            "smsp__warps_issue_stalled_selected.avg.per_cycle_active",
+            "smsp__warps_issue_stalled_wait.avg.per_cycle_active",
+            "smsp__warps_issue_stalled_gmma.avg.per_cycle_active", "smsp__issue_active.avg.pct_of_peak_sustained_elapsed"]
+    arms = {"mma": ("3", "0.10", "0.20", "1.50", "12"), "hash": ("1", "0.40", "0.30", "0", "41"),
+            "free": ("4", "0.35", "0.75", "1.52", "42")}
+    for arm, v in arms.items():
+        (tmp_path / f"ncu-h72_r-{arm}.csv").write_text(
+            "\n".join(",".join(f'"{x}"' for x in r) for r in (cols, [""] * len(cols), ["0", "beside", *v])) + "\n")
+    stalls = {f"h72_r-{a}": beside_summary.ncu_stalls(tmp_path / f"ncu-h72_r-{a}.csv") for a in arms}
+    assert stalls["h72_r-free"] == {"active": 4.0, "selected": 0.35, "wait": 0.75, "gmma": 1.52}
+    (v,) = beside_summary.stall_verdicts(stalls)
+    assert v.startswith("VERDICT beside stalls h72_r: the hash warps beside the GEMM (free - mma)")
+    assert "wait 0.550 (alone 0.300), selected 0.250 (alone 0.400), gmma 0.020 (alone 0.000)" in v
