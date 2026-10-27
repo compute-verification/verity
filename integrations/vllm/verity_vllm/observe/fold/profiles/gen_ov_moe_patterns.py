@@ -51,7 +51,7 @@ from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_desc
                         triton_name, unsupported)
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.engine.profiles.gen_llama_patterns import GemmLaunchTuned
+from verity_vllm.observe.fold.profiles.gen_llama_patterns import GemmLaunchTuned
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 #: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).
