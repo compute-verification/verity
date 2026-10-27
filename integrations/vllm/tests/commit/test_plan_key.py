@@ -51,6 +51,14 @@ def test_new_and_cached_requests_both_count_and_a_prefill_step_keys_by_its_promp
     assert plan_key_of(other, 3537, 8)[0] != k0                                       # same ntok/nreq, different per-request lengths
 
 
+def test_the_step_keyed_sources_names_are_bound_and_none_leaves_the_geometry_key():
+    s = _sched([("r1", 46, 1)])
+    names = (("model.layers.0.mlp.down_proj/row_quant_25/0", 1), ("model.layers.0.mlp.down_proj/row_quant_25/1", 1))
+    assert plan_key_of(s, 1, 1, ()) == plan_key_of(s, 1, 1)
+    keyed, mode = plan_key_of(s, 1, 1, names)
+    assert mode == "geometry" and keyed != plan_key_of(s, 1, 1)[0] and 0 < keyed < 2**63
+
+
 def test_counts_fallback_is_named_when_the_scheduler_output_lacks_geometry():
     legacy = SimpleNamespace(num_scheduled_tokens={"a": 1, "b": 1}, total_num_scheduled_tokens=2)
     k, m = plan_key_of(legacy, 2, 2)

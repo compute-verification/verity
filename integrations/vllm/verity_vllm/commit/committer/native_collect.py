@@ -80,7 +80,7 @@ _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
+def plan_key_of(sched: Any, ntok: int, nreq: int, targets: tuple = ()) -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.
 
     [F-fp8-PLANKEY] The key used to be (ntok << 16) | nreq.  That is not the layout: the FA3 hidden M1 export
@@ -96,6 +96,13 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
     tensor is not bound -- v1 leaf headers bind the step length M only, and the plan is a sequence of (name, bytes) in hook order.
     Between the warm-up (learn) run and the record run of the same declared, batch-invariant, greedy workload the schedule is identical,
     so every record step hits the plan its warm-up twin learned; the plan cache holds one entry per distinct step (<= steps x pairs).
+
+    Some planes follow the engine step, not the geometry: the int8 source's Int8RowQuant_v1 sites and the call-boundary bodies are
+    the manifest's, per engine step, and a served window restarts its steps at 0.  A bench manifest of 32 engine steps stages the
+    quantizers' (x_q, s_a) at window steps 0..31 and none after, so a lone request after its batch-mates finish meets the same
+    geometry at window step 25 in one window and 64 in the next, and stages different bytes.  `targets`, the sorted (name, count)s
+    those sources commit at the step (`NativeCollectCommitter.step_targets`), is hashed in with the geometry; with none the key is the
+    geometry's alone.
     Returns (key, mode): mode "geometry" when the scheduler output exposes the per-request fields (vLLM V1 `SchedulerOutput`:
     scheduled_new_reqs[].num_computed_tokens, scheduled_cached_reqs.{req_ids,num_computed_tokens}, num_scheduled_tokens{}), else
     "counts" = the old key -- recorded on the run (`bounded_staging.plan_key_mode`) so a record never hides which one it used."""
@@ -112,7 +119,8 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
             raise ValueError(f"scheduler output geometry {len(geo)} reqs / {sum(g[1] for g in geo)} tok != ({nreq}, {ntok})")
         geo.sort()
         import hashlib
-        h = hashlib.blake2b(repr((int(ntok), int(nreq), geo)).encode(), digest_size=8).digest()
+        what = (int(ntok), int(nreq), geo, tuple(targets)) if targets else (int(ntok), int(nreq), geo)
+        h = hashlib.blake2b(repr(what).encode(), digest_size=8).digest()
         return int.from_bytes(h, "little") & 0x7FFF_FFFF_FFFF_FFFF, "geometry"
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return (int(ntok) << 16) | (int(nreq) & 0xFFFF), "counts"
@@ -396,7 +404,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             # sized by every request's KV length, so two decode steps with the same (ntok, nreq) differ in bytes (B8 mixed 1024/128 steps
             # 35 and 80: 78,892,288 vs 87,297,280 -- the bounded record run failed closed by name, 01:28Z).  The key binds the per-request
             # geometry (num_computed_tokens, num_scheduled_tokens) as a multiset; on the unbounded windowed path a miss still self-heals.
-            me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq))
+            # It binds too the names the step-keyed sources commit at the step about to begin (`step_targets`), which follow the window step.
+            me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq), me.step_targets(me._step_index))
             me._plan_shape = (int(ntok), int(nreq))
             if me.bounded and me._plan_key_mode != "geometry":
                 # fail closed at the FIRST step, not mid-run: without the per-request geometry a hit-plan step can meet another layout
@@ -738,6 +747,10 @@ class NativeCollectCommitter(NativeHostCommitter):
             rows.append((str(rid), lo, lo + k))
             lo += k
         self.step_rows[step] = rows
+
+    def step_targets(self, step: int) -> tuple[tuple[str, int], ...]:
+        """The sorted (name, count)s the sources that commit by engine step (`targets_at`) commit at `step`: part of its plan key."""
+        return tuple(sorted(kv for src in self.sources if hasattr(src, "targets_at") for kv in src.targets_at(step).items()))
 
     def _begin_step(self) -> None:
         job = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
