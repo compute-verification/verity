@@ -16,7 +16,7 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
 the challenger key the verifier pins (`SampledProofs.Challenger.ChallengerKey`), its own copy of main's first-parent
 history (newest first) and the name of the period it credits, a string; optionally the period's monitored capacity C
-in MACs, a positive integer (IDLE-COVERED, CMP-67). It carries no policy parameter: the period surfaces what its draw
+in MACs, a positive integer. It carries no policy parameter: the period surfaces what its draw
 established, and whoever reads it decides whether it was idle.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
