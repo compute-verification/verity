@@ -3,7 +3,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 ## The clock certificate (`certificate.CertifiedClock`)
 
 N2's advised floor reads each egress window's sync (δ, ρ), and a δ below the one the window's traffic was certified
-under loosens it (REDTEAM phase 11). So `advised.view` refuses a window whose declared sync isn't the one the certifier
+under loosens it (the phase-11 attack). So `advised.view` refuses a window whose declared sync isn't the one the certifier
 ran it under, which the verifier takes only from its own clock source (`advised.ClockSource`). The clock certificate
 makes that source the certifier's signed record.
 
@@ -20,8 +20,8 @@ makes that source the certifier's signed record.
   the link, `egress` and the window). `CertifiedClock` is the sync, the salt and that certificate. A rehearsal's
   certifier (`certifier_serve.ServedProxy`, which hands its `CertifierProcess` each egress record with its shaper's
   sync) writes one line of its `clocks.jsonl` a window, with the opening (`certifier_serve.read_clocks`).
-- **What is public.** What the certifier signs is witness (AGENTS.md, "Auditor-trusted devices", applied to the clock
-  certificate on 25 Oct): the sync and its salt never reach the auditor in the clear. Only the certificate is public, a signature over
+- **What is public.** What the certifier signs is witness (AGENTS.md, "Auditor-trusted devices"): the sync and its
+  salt never reach the auditor in the clear. Only the certificate is public, a signature over
   a hiding commitment: its key id, link, direction and window, the salted digest and the LMS signature. The reveal
   endpoint serves that alone (`CertifyingPublisher.public`), and the client keeps it in its `clocks.jsonl`
   (`certifier_serve.keep_certificates`), checked under the deployment's key and session; it holds no opening.

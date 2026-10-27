@@ -28,14 +28,14 @@ advice input is exactly ℓ_w gates wide, so the charge is ℓ_w.
 - The slice has no coder state, codeword or context counter: ChargeLink_v1 reads its contexts and estimates from ``cin``
   and the committed decisions. Its counts other than the decisions are coded as 0 (`arith_encode.ZERO_COUNTS`, the
   still-sent fields' stand-in).
-- **What a proof of the slice covers** (REDTEAM phase 18, INFO, on #3886): the compile slice's charge, the window's
+- **What a proof of the slice covers** (the phase-18 attack): the compile slice's charge, the window's
   decisions. The chain is `code_v1`'s whole charge only where a window's hits and order are 0 as well.
   - Hits are 0 on 8eb1, which serves without prefix caching: its trace header says so (``enable_prefix_caching``
     false, `test_served_window.py`).
   - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is the
     I/O tie's (`io_tie`, a draft), outside the slice's proof.
 
-**What binds the charge's inputs** (REDTEAM phase 14: `ChargeCount_v1` on its own is faithful, but its enables, its bits
+**What binds the charge's inputs** (the phase-14 attack: `ChargeCount_v1` on its own is faithful, but its enables, its bits
 and its carry are witness until the slice binds them):
 - *`en` is the scan's own asks.* It is ``count``'s, and the scan can't read past ``count``. `ReplayLoad` refuses
   committed bits past it, and `ReplayAdvance` refuses a step whose reads pass what is left. Advice that drops a
@@ -67,8 +67,8 @@ held to its request's slot through ``map``.
 - `compile_slice_zk` refuses a w212 fixture whose engine isn't the trace header's. `replay_vectors --slice` replays a
   window at the trace's own scheduler unless asked for the sync class (`--AS 0`).
 - The unit is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](served-shape.md)). Of them,
-  ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries from decision to decision (#3887;
-  [charge-chain.md](charge-chain.md)).
+  ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries from decision to decision
+  ([charge-chain.md](charge-chain.md)).
 - Without prefix caching the slice makes no CacheStep_v1 call and ``cache`` is 1. So a made-up cache table can't be
   expressed at 8eb1's class; the demonstration class (prefix caching, 59,341 ANDs) is where it is refused, by ``cache``
   alone.
@@ -85,7 +85,7 @@ held to its request's slot through ``map``.
   - Over all 339 windows the chain charges 5,500 bits, against 5,593 if every window restarted at the priors.
   - The sync replay (`slice_inputs` at AS = 0) asks the same decisions on 309 windows, asks others on 5 (30, 59, 118,
     147 and 235) and refuses 25. So the chain is the class's, each window's decisions as the AsyncScheduler asks them.
-- REDTEAM phase 10's passes (a pass at every ask, where the served window admitted requests 309 and 310 at the seventh
+- The phase-10 attack's passes (a pass at every ask, where the served window admitted requests 309 and 310 at the seventh
   and fourteenth: twenty-one at the class, at the asks of its 21 units, and twenty at the sync class) charge 23 bits.
   - With the served rows in ``srv``, they are refused by ``rows``.
   - With their own rows there, the unit accepts them, and the native ``srv`` b‖c check refuses them.
@@ -95,7 +95,7 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
 holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
 - The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `benchmarks/network_traces/leak_scan.py`). It
-  replaces REDTEAM's phase-18 rule (note:network-accounting/20261024T0558Z-finding-redteam-v3).
+  replaces the phase-18 attack's rule.
   - A find of a witness piece or carry row counts only if it lies inside one field: one read C-Flock's proof format
     makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message
     (`rounds[*].msg`, as `transcript_check.T` frames them). A match across two fields doesn't count, and neither does
@@ -112,4 +112,4 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   - Each witness row is cut whole (`leak_scan.public_pieces`). A row shorter than the 16-byte piece is found whole, as
     the carry rows are: at G < P, the ``srv`` rows of a few steps (10 bytes at the demo's G = 2).
   - Earlier runs cut with `n2_zk.public_pieces`, which skipped a row's bytes past its last 16-byte boundary and every
-    row shorter than 16 bytes. The demo's ``srv`` rows at G = 2 were first scanned in run r20261025-011520-c02c.
+    row shorter than 16 bytes.
