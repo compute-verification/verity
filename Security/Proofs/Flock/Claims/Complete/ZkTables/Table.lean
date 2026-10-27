@@ -680,7 +680,7 @@ theorem lgInnerAt_of (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hR : RepShape
 share, with error `δc H`, at any number of tables, under the JSON library's specification, from the four premises at
 each table: the rep proofs' shapes (`RepShapedT`), the masked prover's reps (`ProverRunsT`), the masked Ligerito
 (`LigeritoT`) and the inner proof (`InnerT`). -/
-theorem complete_jsonT (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (hR : RepShapedT H)
+theorem complete_jsonT (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec BEq.beq) (hR : RepShapedT H)
     (hPR : ProverRunsT H) (hLg : LigeritoT H) (hIn : InnerT H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
   completeRelS H S h64 (proverRunsAt_of hPR h64) (repShapedAt_of hR h64) (lgInnerAt_of S h64 hR hPR hLg hIn) hMR

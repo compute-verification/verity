@@ -179,7 +179,7 @@ theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt 
       liveReads := hlv
       canonical := by
         rw [hrec]
-        exact check_printJ S (good_recordObjZkJ hn _ hz ct hrbs _ streams o.proofs (good_draw hdraw))
+        exact check_printJ (good_recordObjZkJ hn _ hz ct hrbs _ streams o.proofs (good_draw hdraw))
       rootB := by rw [hlive, hlink]; exact list_bytes_beq_self _
       publicsLink := ?_
       points := by rw [hlive]; exact beq_self_eq_true _

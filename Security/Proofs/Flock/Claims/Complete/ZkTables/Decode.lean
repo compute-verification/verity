@@ -87,7 +87,7 @@ theorem decodeZk_ofFieldsJ (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : �
     (gR : ∀ {k v}, (k, v) ∈ recordList spec h rootB points streams proofs → R.getObjVal? k = .ok v) :
     Record.decodeWith (Hashes.ofSha512 h : Hashes V) spec (printJ R) =
       .ok (sessOf spec h rootB points streams proofs) := by
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
   have hkind : Record.str j "kind" = .ok "flock-live-session/v1" := str_same hs (gR (by simp [recordList]))
   have habort : Record.isNull j "aborted" = true := isNull_null hs (gR (by simp [recordList]))
   have hhello : Record.str j "hello" = .ok spec.hello := str_same hs (gR (by simp [recordList]))
@@ -305,7 +305,7 @@ theorem liveZk_ofFieldsJ (S : JsonSpec) {h : ByteArray → ByteArray} {spec : Se
     (gR : ∀ {k v}, (k, v) ∈ recordList spec h rootB points streams proofs → R.getObjVal? k = .ok v) :
     liveOf spec (printJ R) =
       .ok ⟨rootB, spec.tables.map fun _ => ByteArray.empty, points, streams.map (·.map liveRound)⟩ := by
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h rootB points) (by simp [recordList]))
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h rootB points → (linkObj spec h rootB points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
@@ -394,7 +394,7 @@ theorem recordDrawZk_ofFieldsJ (S : JsonSpec) {h : ByteArray → ByteArray} {spe
     | none => FlockSoundness.Discharge.Exec.recordDraw (printJ R) = none
     | some d => ∃ d', FlockSoundness.Discharge.Exec.recordDraw (printJ R) = some d' ∧
         FlockDeploy.JsonEquiv d' d := by
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
   obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitDraw.getD Json.null)
     (by simp [recordList]))
   unfold FlockSoundness.Discharge.Exec.recordDraw
@@ -433,7 +433,7 @@ theorem decode_recordObjZkJ (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : 
       .ok (sessOf spec h rootB points streams proofs) := by
   obtain ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩ := hH.obj
   have hgood := good_recordObjZkJ hn h hz ct hrbs points streams proofs (good_draw hdraw)
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
   have hh : Record.str j "hello" = .ok hz :=
     str_same hs (recordObjZk_fields spec h hz ct _ points streams proofs (v := Json.str hz)
       (by simp [recordList, specZ]))

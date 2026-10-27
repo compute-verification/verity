@@ -97,7 +97,7 @@ def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array Byt
 /-- **The honest record decodes** (S1–S14) as `sessOf`: one table `t`, no keyed coin tree, the statement's draw
 `DrawOk`, a non-empty `Σ` and `root_B`, the configured points, one recorded stream per rep stream, each with rounds of
 `1 ≤ n ≤ 65536` coins, and `h`'s outputs 64 bytes. -/
-theorem decode_recordObj (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) {h : ByteArray → ByteArray}
+theorem decode_recordObj (S : Claims.JsonSpec BEq.beq) {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
@@ -114,7 +114,7 @@ theorem decode_recordObj (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock
     cases spec.unitDraw with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1)
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
   have gR : ∀ {k v}, (k, v) ∈ recordList spec h #[rb] points streams proofs →
       (recordObj spec h #[rb] points streams proofs).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (recordList_distinct ..) hm

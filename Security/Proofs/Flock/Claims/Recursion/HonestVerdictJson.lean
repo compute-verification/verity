@@ -24,7 +24,7 @@ open Flock Transcript FlockComplete
 open Lean (Json JsonNumber)
 
 /-- **A value alike the honest record decodes as `sessOf`**: `decode_recordObj`, read at the value. -/
-theorem decodeJ_recordObj (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) {h : ByteArray → ByteArray}
+theorem decodeJ_recordObj (S : Claims.JsonSpec BEq.beq) {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)

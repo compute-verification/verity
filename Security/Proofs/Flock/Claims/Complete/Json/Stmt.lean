@@ -279,7 +279,7 @@ theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeM
 
 /-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
 `unit_draw`. -/
-theorem unitDraw_of (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) {tags : Tags} {c : Circuit} {pf : ByteArray}
+theorem unitDraw_of (S : Claims.JsonSpec BEq.beq) {tags : Tags} {c : Circuit} {pf : ByteArray}
     {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
   obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
@@ -312,10 +312,10 @@ theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
     exact .str _
 
 /-- A canonical object whose `coins` is absent or a string names no coin tree (`CoinTree.ofHello`). -/
-theorem ofHello_none_of (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) {L : List (String × Json)} (hd : Distinct L)
+theorem ofHello_none_of (S : Claims.JsonSpec BEq.beq) {L : List (String × Json)} (hd : Distinct L)
     (hg : ∀ p ∈ L, Good p.2) (hc : (L.map Prod.fst).contains "coins" = false ∨ ∃ x, ("coins", Json.str x) ∈ L)
     {s : String} (h : Flock.canon (Json.mkObj L) = .ok s) : CoinTree.ofHello s = none := by
-  obtain ⟨j', hp, hs⟩ := S.parse_canon _ _ (good_mkObj hd hg) h
+  obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_canon _ _ (good_mkObj hd hg) h
   unfold CoinTree.ofHello
   rcases hc with hc | ⟨x, hx⟩
   · obtain ⟨e, he⟩ := hs.getObjVal_none rfl (get?_mkObj_none hc)
@@ -333,7 +333,7 @@ theorem ofHello_none_of (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.
     rfl
 
 /-- **The plain verifier's hello names no coin tree**: at the OS's coins or a seed's, `CoinTree.ofHello` reads none. -/
-theorem ofHello_helloOf (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
+theorem ofHello_helloOf (S : Claims.JsonSpec BEq.beq) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
     {coins : Coins} {hello : String} (hc : coins = .os ∨ coins = .seed)
     (h : Flock.helloOf tags sigma mPts coins = .ok hello) : CoinTree.ofHello hello = none := by
   unfold Flock.helloOf at h
@@ -559,7 +559,7 @@ theorem _root_.FlockComplete.Case.one (c : Case H rel) :
 /-- **What the record needs of the statement holds at every good case** (`StmtOk`), under the JSON library's
 specification: the plain verifier's coins name no coin tree, Σ is a SHA-512 digest, the draw is printable and decodes to
 the statement's instances, and the session's draw is the statement's. -/
-theorem stmtOk (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) : StmtOk H rel := by
+theorem stmtOk (S : Claims.JsonSpec BEq.beq) : StmtOk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
   obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt h1

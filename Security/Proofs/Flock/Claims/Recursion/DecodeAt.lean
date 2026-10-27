@@ -106,7 +106,7 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
 tree, a non-empty Σ, a printable draw that decodes to its instances, two link points, at most 1024 regions and a
 `fast100` schedule. -/
-theorem dense_stmt (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon) {xo : Msg} {sto : Claims.Recursion.Stmt}
+theorem dense_stmt (S : Claims.JsonSpec BEq.beq) {xo : Msg} {sto : Claims.Recursion.Stmt}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : FlockDeploy.setupOf false (xIOf xo) = some (s, spec, sts)) :
     ∃ st t, sts = #[st] ∧ spec.tables = #[t] ∧ spec.coinTree = none ∧ 0 < spec.sigma.size ∧ DrawOk spec ∧
@@ -218,7 +218,7 @@ theorem repSchedAt_bounds {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).
 
 /-- **The record the verdict reads decodes** at a decision at a dense inner statement where the last step reads and
 the base checks hold, at the setup SHA-512 gives. -/
-theorem decode_jAt (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon) {rd : Msg → Option FinalP} {x : Msg}
+theorem decode_jAt (S : Claims.JsonSpec BEq.beq) {rd : Msg → Option FinalP} {x : Msg}
     {ms : List Msg} {cs : List Coin} {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hr : ReadOkR rd x ms cs)
     (hb : ∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) {d : FlockDeploy.DecR}
@@ -344,7 +344,7 @@ theorem decode_jAt (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.prin
 /-- **`TargetDecode`** (RECINT's, `At` unfolded): at a dense inner statement where the last step reads and the base
 checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives, under the JSON library's
 specification. -/
-theorem decode_at (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP)
+theorem decode_at (S : Claims.JsonSpec BEq.beq) (rd : Msg → Option FinalP)
     (P : Msg → List Msg → List Coin → Prop) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin),
       ((∃ (xo : Msg) (sto : Claims.Recursion.Stmt), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧

@@ -72,7 +72,7 @@ theorem hello_of_list (S : JsonSpec) {ct : CoinTree.Spec} {L : List (String × J
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hgj := good_mkObj hd hg
-  obtain ⟨j', hp, hs⟩ := S.parse_canon _ _ hgj hh
+  obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_canon _ _ hgj hh
   obtain ⟨m, rfl, hm, -⟩ := same_obj_wf hs
   obtain ⟨cv, hcv, hcs⟩ := hs.getObjVal (getObjVal?_mkObj hd hc)
   have hco : ∃ M : Std.TreeMap.Raw String Json compare, ct.coins "" = .obj M := ⟨_, rfl⟩

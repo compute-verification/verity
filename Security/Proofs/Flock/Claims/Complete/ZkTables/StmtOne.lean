@@ -386,7 +386,7 @@ theorem completeRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 
 prover (`(deployZk Readable.relation).P`, `honestPR`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
 at any number of tables: `completeRelS`, the oracle's 64-byte outputs (`Out64`) being `Claims.Complete`'s own
 antecedent. -/
-theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon)
+theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec BEq.beq)
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
@@ -406,7 +406,7 @@ theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64
 prover at the record's error, at any number of tables: `completeJRelS`, from the one-table premises and the same
 three at several tables (`ProverRunsJ`, `RepShapedJ`, `LgInnerJ`), with `Out64` `Claims.Complete`'s own
 antecedent. -/
-theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon)
+theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec BEq.beq)
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)

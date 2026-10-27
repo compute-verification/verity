@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Complete.Json.Spec
 /-!
 # The verifier's parser builds well-formed trees
 
-`Flock.JsonParse.parse` is total, so the field of `JsonSpec` about its trees is a theorem (`parse_wf`): an object is
+`Flock.JsonParse.parse` is total, so what completeness reads of its trees is a theorem (`parse_wf`): an object is
 `∅` with its members inserted one by one (`Std.TreeMap.Raw.WF.insert`), by induction on the parser's fuel through its
 three mutual readers (`wf_all`).
 -/

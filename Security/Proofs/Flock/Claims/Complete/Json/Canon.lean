@@ -7,9 +7,9 @@ import Proofs.Flock.Claims.Complete.Json.Spec
 `Flock.canon` is total, so what completeness reads of it alone is proved, not assumed (`JsonSpec` carries it no
 more): `canon` is the same on alike values (`canon_same`: alike values are equivalent, `same_jsonEquiv`, and `canon`
 prints equivalent values alike, `FlockDeploy.canon_jsonEquiv`), and returns on printable ones (`canon_ok`: every number
-an integer, so the one refusal never fires). `JsonSpec`'s fields are the round trips through the verifier's parser
-`Flock.JsonParse.parse` (the printer's and `canon`'s) and `Json`'s `==` (`beq_same`, `partial` in Lean's core); the
-parser's trees are well formed (`Parse.lean`).
+an integer, so the one refusal never fires). The round trips through the verifier's parser `Flock.JsonParse.parse`
+(the printer's and `canon`'s) are proved too (`RoundTrip.lean`), and the parser's trees are well formed
+(`Parse.lean`); `JsonSpec` keeps only `Json`'s `==` (`beq_same`, `partial` in Lean's core).
 -/
 
 namespace FlockComplete.JsonRT

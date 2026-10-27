@@ -3,11 +3,10 @@ import Mathlib
 /-!
 # The JSON library's specification: completeness's JSON assumption
 
-The honest prover sends its session record as JSON, and the verifier reads it back: the prover's printer (`print`)
-prints it, then the verifier's parser (`parse`) reads it, and what the verifier compares is `Json`'s `==` and the
-canonical printer's output (`canon`, the verifier's `Flock.canon`). `JsonSpec` states what completeness still assumes
-of them, over JSON values that are alike (`Json.Same`) and printable (`Json.Good`); the proofs read well-formed values
-(`Json.Wf`) too.
+The honest prover sends its session record as JSON, and the verifier reads it back: the prover's printer prints it,
+the verifier's parser reads it, and what the verifier compares is `Json`'s `==` and the canonical printer's output.
+`JsonSpec` states what completeness still assumes of them, over JSON values that are alike (`Json.Same`): that `==`
+holds of them. The proofs read printable (`Json.Good`) and well-formed (`Json.Wf`) values too.
 
 * **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
   one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
@@ -16,10 +15,10 @@ of them, over JSON values that are alike (`Json.Same`) and printable (`Json.Good
 * **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). The printer
   prints a number in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`.
 
-Mathlib only, as `Definitions/` is: the parser and the printers are parameters, which the completeness proofs
-instantiate at the verifier's `Flock.JsonParse.parse` (total: `Lean.Json.parse` with the same values and refusals),
-the honest prover's `FlockComplete.printJ` (a total printer of the bytes `Json.compress` prints, so proofs read its
-length) and `Flock.canon`.
+Mathlib only, as `Definitions/` is: the comparison is a parameter, which the completeness proofs instantiate at
+`BEq.beq`. What the verifier's parser (`Flock.JsonParse.parse`, total) reads back of the honest prover's printer
+(`FlockComplete.printJ`) and the canonical printer (`Flock.canon`) is proved, not assumed
+(`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`).
 -/
 
 namespace Claims
@@ -60,19 +59,16 @@ inductive Wf : Json → Prop
 
 end Json
 
-/-- **`JsonSpec`: the JSON library does what its source says**, at the verifier's parser `parse`, the prover's printer
-`print` and the canonical printer `canon`: `parse` reads back what `print` printed of a printable value, and what
-`canon` printed; `Json`'s `==` holds of alike values.
+/-- **`JsonSpec`: `Json`'s `==` holds of alike values**, at the comparison `beq` (instantiated at `BEq.beq`, Lean's
+`==` on `Json`).
 
 It affects completeness only, never soundness: it says that the honest prover's record reads back, and no soundness
-guarantee takes it. What the parser and `canon` do apart from each other is proved, not assumed: the parser builds
-well-formed trees (`FlockComplete.JsonRT.parse_wf`), and `canon` is the same on alike values and returns on printable
-ones (`FlockComplete.JsonRT.canon_same`, `canon_ok`). `Json`'s `==` is a `partial` definition, opaque to the kernel, so
-no proof unfolds it. -/
-structure JsonSpec (parse : String → Except String Json) (print : Json → String)
-    (canon : Json → Except String String) : Prop where
-  parse_print : ∀ j, Json.Good j → ∃ j', parse (print j) = .ok j' ∧ Json.Same j j'
-  parse_canon : ∀ j s, Json.Good j → canon j = .ok s → ∃ j', parse s = .ok j' ∧ Json.Same j j'
-  beq_same : ∀ a b, Json.Same a b → (a == b) = true
+guarantee takes it. `Json`'s `==` is a `partial` definition, opaque to the kernel, so no proof unfolds it. What the
+verifier's parser and printers do is proved, not assumed: the parser builds well-formed trees
+(`FlockComplete.JsonRT.parse_wf`) and reads back an alike value from the prover's printer and from `canon`
+(`FlockComplete.JsonRT.parse_print`, `parse_canon`), and `canon` is the same on alike values and returns on printable
+ones (`FlockComplete.JsonRT.canon_same`, `canon_ok`). -/
+structure JsonSpec (beq : Json → Json → Bool) : Prop where
+  beq_same : ∀ a b, Json.Same a b → beq a b = true
 
 end Claims

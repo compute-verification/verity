@@ -230,7 +230,7 @@ theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Coins} (t : 
 transcript's start, returns the decoded proof; the recorded stream is its rounds as the decoder reads them back, each
 of its rounds retains its bytes, and the rep's level-0 commitment is a `commitP` of the schedule's level `0`. -/
 theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {r : ℕ} (hr : r < 2) :
     ∃ (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
       (l : Array Claims.Msg) (t' : Transcript) (l' : Array Claims.Msg),
@@ -349,7 +349,7 @@ theorem _root_.FlockComplete.Run.tabs_size_one {H : Claims.Msg → Claims.Msg}
 rep's first send on and its own transcript's start, returns the decoded proof, and the recorded stream carries its
 rounds and holds as many. -/
 theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
     RepWalk o i r := by
   obtain rfl : i = 0 := by have := o.tabs_size_one; omega
@@ -366,7 +366,7 @@ theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : 
 the prover's, the statement's circuit fold returns, and the recorded stream carries the prover's rounds through each
 phase (`ZcAt`, `LcAt`, `RsAt`), and the model's Ligerito rounds, as many as it records (`LgAt`, `LgCount`). -/
 theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
     ZcAt o i r ∧ LcAt o i r ∧ RsAt o i r ∧ LgAt o i r ∧ LgCount o i r := by
   obtain ⟨tbl, cm0, -, salt, nonce, l, t', l', -, hl, hrun, hag, hsz⟩ := o.repWalk S h64 hP hi hr
@@ -398,7 +398,7 @@ record's error (`δc H`, `Complete.Ready`), from the named premises: the record'
 64-byte outputs (`Out64`), and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the
 prover's pieces (`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow
 from `Out64`, and the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
-theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H)
+theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H)
     (hfin : LgFinal H Readable.relation) :
     Claims.Flock.Complete H (deployPlain Readable.relation) := by
   have hP : JsonRT.ProverOk H Readable.relation := proverOk h64

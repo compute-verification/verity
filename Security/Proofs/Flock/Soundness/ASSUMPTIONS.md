@@ -267,9 +267,11 @@ which guarantees take it.
 ## Other named assumptions
 
 Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
-prove. Completeness's is `JsonSpec` (`Claims.JsonSpec`, `Definitions/Claims/Json.lean`): the verifier's parser (`Flock.JsonParse.parse`)
-reads back what the honest prover's printer (`printJ`, the bytes `Json.compress` prints) and `canon` print, and `Json`'s
-`==` holds of alike values (`==` is `partial`; the parser's well-formed trees and `canon`'s two facts are proved); only the completeness proofs read it (`Proofs/Flock/Claims/Complete/Json/`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
+prove. Completeness's is `JsonSpec` (`Claims.JsonSpec`, `Definitions/Claims/Json.lean`): `Json`'s
+`==` holds of alike values (`==` is `partial`). That the verifier's parser (`Flock.JsonParse.parse`) reads back what the
+honest prover's printer (`printJ`, the bytes `Json.compress` prints) and `canon` print is proved
+(`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`), as are the parser's well-formed trees and `canon`'s two facts;
+only the completeness proofs read it (`Proofs/Flock/Claims/Complete/Json/`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
 where the claims list it as a named assumption) and read in `Assumptions.lean` (`hm96Hiding_apply`), and
 `PadNonvanishing`, in `Assumptions.lean`; both are in `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
 hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), and `PadNonvanishing` is proved at

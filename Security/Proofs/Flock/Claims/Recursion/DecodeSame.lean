@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Json.Canon
 /-!
 # The honest record's checks at a value alike it
 
-`decode_recordObj` reads the printed honest record back through `JsonSpec`'s `parse_print`, which hands it a parsed
+`decode_recordObj` reads the printed honest record back through `FlockComplete.JsonRT.parse_print`, which hands it a parsed
 value alike the record (`Same`), and every check after that reads the parsed value only through `Same`. So the same
 checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse.
 
@@ -97,7 +97,7 @@ theorem keep_mkObj {l : List (String × Json)} (hd : Distinct l) {k : String} {v
 
 /-- **The honest record's checks pass at a value alike it** (S1–S14): what `decode_recordObj` proves after parsing,
 at any `j` alike the honest record. -/
-theorem decodeJ_same (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) {h : ByteArray → ByteArray}
+theorem decodeJ_same (S : Claims.JsonSpec BEq.beq) {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)

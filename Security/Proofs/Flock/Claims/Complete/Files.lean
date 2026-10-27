@@ -134,7 +134,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 /-- **Each rep's decoded proof is the honest one**: at the run's one table, with schedule `sch` and level-0
 commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's file
 decodes at the verifier's shape to a proof with `cm`'s cap and the table's PCS parameters. -/
-theorem Run.rep (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
+theorem Run.rep (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
     ∃ (st : Flock.Stmt) (sch : Schedule) (cm : Commit), o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = sch ∧
       o.sess.rootB = #[flat cm.cap] ∧
       o.proofs.size = 2 ∧ (∀ b ∈ o.proofs, b.size < 2 ^ 64) ∧ ∀ r < 2,
@@ -197,7 +197,7 @@ theorem Run.rep (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (
     exact ⟨hdec, hc, hpar⟩
 
 /-- **The rep's proof file decodes** at its shape: the goal `RepDecodes`. -/
-theorem repDecodes_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+theorem repDecodes_goal (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepDecodes H rel := by
   intro o i hi r hr
   obtain ⟨st, sch, cm, htabs, -, -, -, -, hrep⟩ := Run.rep S h64 hP o
@@ -206,7 +206,7 @@ theorem repDecodes_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.
   exact (hrep r hr).1
 
 /-- **The rep's PCS parameters are fast100's** (R7/F2): the goal `RepParams`. -/
-theorem repParams_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+theorem repParams_goal (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepParams H rel := by
   intro o i hi r hr
   obtain ⟨st, sch, cm, htabs, hsch0, -, -, -, hrep⟩ := Run.rep S h64 hP o
@@ -216,7 +216,7 @@ theorem repParams_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.c
   exact FlockVBridge.Family.pcs_bne_self _
 
 /-- **The rep's cap is the committed `root_B`** (S16): the goal `CapCommitted`. -/
-theorem capCommitted_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+theorem capCommitted_goal (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CapCommitted H rel := by
   intro o i hi r hr
   obtain ⟨st, sch, cm, htabs, -, hroot, -, -, hrep⟩ := Run.rep S h64 hP o
@@ -228,7 +228,7 @@ theorem capCommitted_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Floc
   rfl
 
 /-- **The last message's lengths fit their words**: the goal `FinalFits`. -/
-theorem finalFits_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+theorem finalFits_goal (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     FinalFits H rel := by
   intro o
   obtain ⟨st, sch, cm, -, -, -, hsz, hb, -⟩ := Run.rep S h64 hP o
