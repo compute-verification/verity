@@ -21,7 +21,7 @@ is `HonestPasses`.
 
 ## 0. Where each part runs
 
-No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026). The audit has two parts, and only one is trusted:
+No guarantee assumes trusted prover hardware. The audit has two parts, and only one is trusted:
 
 - **The verifier** holds the secret `source`, draws each window's nonce, derives its key, sends `σ`, runs the clock,
   draws the samples, checks the openings and keeps the store's state (§3). It is PoUS's memory challenger (§3), the
@@ -185,7 +185,7 @@ stopped; reopening records it closed, and no verifier can accept it. A file cann
 snapshot, nor a directory a copy of a state kept in another directory or on another host. Both rest on
 `trusted-host` for the verifier's machine: "the auditor's device runs its stated code, timing included, on a host the
 prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its
-earlier state" (Daniel, decision 2). The verifier's stated code keeps one state
+earlier state". The verifier's stated code keeps one state
 directory and never copies a state, and its host never brings an earlier copy back. A state kept on the GPU's node
 would rest on prover hardware, which no guarantee does (§0). PoUS's memory challenger cites the same assumption for
 its session-id log. The audit needs it for the two properties below.
@@ -312,8 +312,8 @@ The claims registry (`verity.core.claims`) names what a deployment rests on:
   node's word until the device's confidential-computing attestation is checked (§0, item 1).
 - **`trusted-host`** (assumption, core's): the verifier's machine is the auditor's, on a host that offers no
   attesting hardware: "the auditor's device runs its stated code, timing included, on a host the prover doesn't
-  control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"
-  (Daniel, decision 2). The audit cites it for one property: the verifier keeps one state directory, never copies a
+  control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state".
+  The audit cites it for one property: the verifier keeps one state directory, never copies a
   state and never gets an earlier copy back (§3), which one open window per store and additivity across windows need
   and a single window's bound does not. It covers no machine the prover controls: not the GPU's node, and not the
   device id the node reads from its driver (§2), which rests on nothing yet (§0, item 1).
@@ -326,8 +326,7 @@ The claims registry (`verity.core.claims`) names what a deployment rests on:
   of another device's store with its own pass, at its measured read rate (1,476 GB/s), covers
   `(T + RTT)` × 1,476 GB/s less its own `I`: about 500,000 blocks, 96% of `N`, at `T = 1.2 ms` (the red team counted
   92% at the earlier `I`). Charging that against `k` leaves nothing, so a per-device figure means something only for
-  a device no helper reaches. **`bandwidth-device` is therefore stated for a co-audited set** (Daniel, decision 4,
-  11 Oct 2026, 8:54 PM PDT):
+  a device no helper reaches. **`bandwidth-device` is therefore stated for a co-audited set**:
 
   - **Which devices count.** Whole GPUs whose only link is PCIe: no MIG slice (§2) and no NVLink. Every device
     that could hold a copy of a set's stores is in the set or isolated. An NVLink domain is certified as one set
@@ -347,7 +346,7 @@ The claims registry (`verity.core.claims`) names what a deployment rests on:
     `N`, so a device a peer can reach gets its figure only in a co-audited set. A device that is neither isolated nor
     in a co-audited set gets no figure.
 
-Host RAM is not part of the allowed hardware (Daniel, 3 Oct 2026); the RTX PRO 6000 Server has no NVLink, so its side
+Host RAM is not part of the allowed hardware; the RTX PRO 6000 Server has no NVLink, so its side
 paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
 
 ## 6. Parameters and measurements
@@ -360,7 +359,7 @@ fixed by the red team at `f18c1854a`.
 An accepted `ro-blake3/v1` window at `T = 1.2 ms` and `s = 1,849` certifies that the device's memory delivered at least
 741,353,308 bytes of `E` (68.8%) within `T + RTT`: 618 GB/s with `RTT = 0`, and 722,448,693 bytes (67.0%), 482 GB/s,
 with a 0.3 ms `RTT` allowance. The error is `2^-40.42`. The last table of this section is `audit.bound` at these
-parameters. Under Daniel's reading of `bandwidth-device` (§5), the rate is certified now for an isolated device, and
+parameters. Under `bandwidth-device` as §5 states it, the rate is certified now for an isolated device, and
 for a co-audited set it is each device's share of the set's total once AuditRO for `m` stores lands.
 
 The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition, under a
@@ -456,8 +455,8 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
    candidate, was not built: on the same device it hashes 4.95 bytes per SM per clock against BLAKE3's 5.88 (notes
    `kb/sm120/tried-techniques.md`, run `r20260930-061717-3e84`), a compute floor of 0.56 ms on this store against
    0.51 ms.
-3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so Daniel stated
-   `bandwidth-device` for a co-audited set of whole PCIe-only GPUs (decision 4). The set's figure needs AuditRO for `m`
+3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so
+   `bandwidth-device` is stated for a co-audited set of whole PCIe-only GPUs. The set's figure needs AuditRO for `m`
    stores (lane `ra-bandwidth-lean`); until then the per-device bound covers an isolated device.
 4. **The store's leaves are PoUS's, not P2 spec §4's.** `vk`'s leaf is the 99-byte little-endian leaf of
    `pous.verifier`; the P2 spec's is 107 bytes, big-endian (`benchmarks/pous/p2_v1/wire.py`). The audit uses what PoUS
@@ -468,8 +467,8 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
    them on the RTX PRO 6000 is open.
 6. **Openings disclose sampled blocks** of `C*` (an encoding of `W`) to the verifier; the memory challenger already
    holds `vk` and publishes only verdicts, so nothing leaves it.
-7. **The audit imports PoUS** (`pous.codec`, `pous.schemes.p2`, `pous.verifier`) for its store and setup. Daniel
-   allowed this import edge (decision 7, 11 Oct 2026), and `tests/test_boundaries.py` enforces it.
+7. **The audit imports PoUS** (`pous.codec`, `pous.schemes.p2`, `pous.verifier`) for its store and setup. This import
+   edge is allowed, and `tests/test_boundaries.py` enforces it.
 
 ## 8. Code
 
