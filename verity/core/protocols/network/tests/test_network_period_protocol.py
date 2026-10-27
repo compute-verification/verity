@@ -99,6 +99,7 @@ def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
 
 #: The rows form's refusals the period must make, each with what Lean's reason and the mirror's say.
 ROWS_REFUSALS = {
+    "rows-partition": ("not the scan's partition (its template instances", "not the scan's partition"),
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
     "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
@@ -110,7 +111,8 @@ ROWS_REFUSALS = {
 
 
 def test_the_rows_form_refuses_what_it_must(server):
-    """A link-window missing one of its records' certificates, one the warden left uncertified for refusing a
+    """A registration naming another partition than the scan's template instances, a link-window missing one of its
+    records' certificates, one the warden left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's
     answer for another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, and a
     scan answered over other than its 2T units: Lean and the mirror each refuse every one at that check."""
@@ -146,8 +148,9 @@ def test_each_fits_check_refuses_its_negative(server):
     """Each of the scan's checks of what `NetTiming.Layout.Fits` asks refuses, in Lean and in the mirror, a scan that
     passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
     an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
-    gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, and
-    one whose ingress template names a later root node."""
+    gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, one
+    whose ingress template names a later root node, and one whose bucket 0 passes its row's leaves through as its
+    `ok` word (`scanPartition`: a gate the scan checks would be no unit's own)."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         for name, (bad, fragment) in PC.scan_negatives(case["params"]).items():

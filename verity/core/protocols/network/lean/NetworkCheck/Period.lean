@@ -2,6 +2,7 @@ import NetworkCheck.Check
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
+import Flock.HmRow
 import NciCheck.Desc
 
 /-!
@@ -60,8 +61,10 @@ egress gate is an input (`NetTiming.Layout.Fits`), so `K` counts only what a Pro
 leaves free. The rest of what `NetTiming.Layout.Fits` asks is read off the description (`scanOf`): the Program laid out
 as the decoder lays one out and within its resolution's walk (`NciCheck.Desc`), every egress leaf returned by the root
 and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
-ingress row's. In the rows form the compute audits' layout terms and their units' bits are in no term; their Programs
-are checked as in the clock form.
+ingress row's. The scan's partition is its template instances (`scanPartition`: `Q_template_instances` v0 of the root's
+templates in order, each ingress template's `ok` word and state gates it computes), so each gate the scan checks is
+its instance's unit's own. In the rows form the compute audits' layout terms and their units' bits are in no term; their
+Programs are checked as in the clock form.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
 record of each compute audit and of each link-window, in order, each of format `verity/registration/v1` or `v2`. Its
@@ -108,7 +111,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   sign one digest); and the answer is one-stage's for that registration's digest,
   accepted with the profile of one unit drawn `subset:1`: the link-window was proved (N2's verifier of record,
   `LinkWindows.verify`, is the answer's verifier of record);
-* in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
+* in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program and its
+  partition (`scanPartition`'s digest, so a registration under another query is refused); its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
   (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
   certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
@@ -257,6 +261,8 @@ structure Params where
   key : ByteArray
   session : ByteArray
   program : String
+  /-- the rows form's scan partition digest (`scanPartition`), hex; empty in the clock form -/
+  partition : String
   form : Form
   windows : Nat
 
@@ -409,6 +415,20 @@ def ownReturns (P : Flock.Program.Prog) : Array Bool :=
         | some n => n.form != .scan && ((P.defs[n.fn]!).prim || (n.fn < d && a[n.fn]!))
         | none => false)) #[]
 
+/-- Whether Definition `d`'s return leaves `[lo, hi)` are gates it computes: each part of its return holding one names
+nodes of its body, none a scan, each calling a primitive or a Definition decoded before it that returns only gates it
+computes (`ownReturns`). Leaves outside `[lo, hi)` may pass a parameter's leaf through. -/
+def ownLeaves (P : Flock.Program.Prog) (d lo hi : Nat) : Bool :=
+  let defn := P.defs[d]!
+  let own := ownReturns P
+  !defn.prim && (List.range defn.body.ret.parts.size).all fun q =>
+    let at_ := defn.body.ret.starts[q]!
+    let part := defn.body.ret.parts[q]!
+    hi ≤ at_ || at_ + part.count ≤ lo || (partNames part).all fun (p, k) =>
+      !p && match defn.body.nodes[k]? with
+        | some n => n.form != .scan && ((P.defs[n.fn]!).prim || (n.fn < d && own[n.fn]!))
+        | none => false
+
 /-- The root's template nodes, in order: those calling a composite. -/
 def templateNodes (P : Flock.Program.Prog) : List Nat :=
   let nodes := (P.defs[P.root]!).body.nodes
@@ -531,6 +551,26 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
+/-- The scan's partition, as each link-window's registration must name it: the digest (`Flock.HmRow.partitionDigest`,
+hex) of the `verity/partition/v1` object over the registered Program (`program`) under `Q_template_instances` v0 of its
+root's templates in order (`templateNodes`, as `scan_zk` builds the query). Under it each template instance is one unit,
+and the sampled verifier's own evaluation of the query refuses a root node that is neither an input nor an instance
+(`Flock.TemplateQuery.evaluate`). Each ingress template's `ok` word and state (its return's first `outBits` and the
+later ingress template's `sin` leaves) are gates it computes (`ownLeaves`; the leaves after them may pass a parameter
+through), so with every template argument one input node's leaves (`scanOf`) each gate the scan checks is in its
+instance's unit and read only inside it. -/
+def scanPartition (j : Json) (program : String) : V String := do
+  let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
+  let root ← needSome prog.defs[prog.root]? "scan: no root"
+  let ks := (templateNodes prog).map fun k => root.body.nodes[k]!.fn
+  let state := ((ks[1]?.bind fun d => (prog.defs[d]!).params[1]?).map (·.2.leaves)).getD 0
+  need (ks.dropLast.all fun d => ownLeaves prog d 0 (outBits + state)) "scan: an ingress template returns an ok or \
+    state leaf it doesn't compute (a parameter's, passed through), so a gate the scan checks would be no unit's own"
+  let query := Json.mkObj [("name", "Q_template_instances"), ("version", toJson (0 : Nat)),
+    ("params", Json.mkObj [("templates", Json.arr (ks.map fun d => Json.str (prog.defs[d]!).key).toArray)])]
+  let obj := Json.mkObj [("format", Flock.HmRow.PARTITION_V1), ("program", program), ("query", query)]
+  pure (Flock.hexOf (← Flock.HmRow.partitionDigest obj))
+
 def paramsOf (j : Json) : V Params := do
   match j with
   | .obj _ =>
@@ -554,13 +594,15 @@ def paramsOf (j : Json) : V Params := do
   unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
   let program ← Flock.J.str j "program" "the object"
   unless isDigest program do throw "program: not a SHA-512 digest (128 lowercase hex digits)"
-  let form ← if keysOf j == paramsKeys then do pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")))
+  let (form, partition) ← if keysOf j == paramsKeys then do
+      pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")), "")
     else do
       let s ← scheduleOf (← Flock.J.get j "schedule" "the object")
-      pure (Form.rows s (← s.digest) (← scanOf (← Flock.J.get j "scan" "the object") program s))
+      let scan ← Flock.J.get j "scan" "the object"
+      pure (Form.rows s (← s.digest) (← scanOf scan program s), ← scanPartition scan program)
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
-  pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
+  pure { audits, cells, first, jitter, link, lms, key, session, program, partition, form, windows }
 
 /-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record), the record's own format the tag. -/
 def registrationOf (j : Json) (ctx : String) : V Registration := do
@@ -762,6 +804,8 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg 
   let what := s!"window {w}"
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
   unless reg.record.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
+  unless reg.record.getObjValD "partition" == .str p.partition do
+    refuse s!"{what}: registration: not the scan's partition (its template instances, each one unit)"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do
     refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \

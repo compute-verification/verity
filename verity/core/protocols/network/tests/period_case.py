@@ -54,7 +54,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
-from verity.ml.circuits import boolean as BL, codec, population
+from verity.ml.circuits import boolean as BL, codec, partition_object as PO, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
@@ -126,6 +126,8 @@ class Params:
     #: the rows form's schedule and the scan's terms, read off its Program; None in the clock form
     schedule: WardenParams | None = None
     scan: Scan | None = None
+    #: the rows form's scan partition digest (`scanPartition`), hex; empty in the clock form
+    partition: str = ""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -294,7 +296,42 @@ def _own_returns(j: dict):
             memo[fid] = all(computed(body["nodes"], s, k)
                             for q in _parts(body["ret"], body["nodes"]) for s, k in _part_names(q))
         return memo[fid]
+    own.computed = computed
     return own
+
+
+def _count(q: dict) -> int:
+    """`Part.count`: a part's leaves."""
+    return len(q["explicit"]) if "explicit" in q else (q.get("affine") or q["strided"])[-1]
+
+
+def _own_leaves(j: dict, fid: str, lo: int, hi: int) -> bool:
+    """`ownLeaves`: whether the leaves `[lo, hi)` a composite returns are gates it computes: each part of its return
+    holding one names nodes of its body, none a scan, each calling a primitive or a composite that returns only gates it
+    computes. Leaves outside `[lo, hi)` may pass a parameter's leaf through."""
+    body, computed = j["definitions"][fid]["body"], _own_returns(j).computed
+    at = 0
+    for q in _parts(body["ret"], body["nodes"]):
+        n = _count(q)
+        if not (hi <= at or at + n <= lo) and not all(computed(body["nodes"], s, k) for s, k in _part_names(q)):
+            return False
+        at += n
+    return True
+
+
+def scan_partition(j: dict, program: str) -> str:
+    """`scanPartition`: the digest of the `verity/partition/v1` object over the registered Program under
+    `Q_template_instances` v0 of the root's templates in order (`partition_object.template_instances_query`, as
+    `scan_zk` builds it), each ingress template's `ok` word and state (the later ingress template's `sin` leaves)
+    gates it computes (`_own_leaves`)."""
+    defs, callees = j["definitions"], j["callees"]
+    ts = [callees[x["fn"]] for x in defs[j["root"]]["body"]["nodes"] if defs[callees[x["fn"]]]["form"] != "primitive"]
+    later = defs[ts[1]]["body"]["params"] if len(ts) > 1 else []
+    state = leaves_of(later[1][1]) if len(later) > 1 else 0
+    if not all(_own_leaves(j, f, 0, OUT_BITS + state) for f in ts[:-1]):
+        raise D.Reject("scan: an ingress template returns an ok or state leaf it doesn't compute (a parameter's, "
+                       "passed through), so a gate the scan checks would be no unit's own")
+    return PO.digest({"format": PO.FORMAT, "program": program, "query": PO.template_instances_query(ts)})
 
 
 def _input_arg(arg: dict, nodes: list, j: dict) -> int | None:
@@ -467,15 +504,16 @@ def params(j) -> Params:
     if not DIGEST.fullmatch(program):
         raise D.Reject("program: not a SHA-512 digest")
     if "sync_set" in j:
-        sync_set, schedule, scan = _sync_set(j["sync_set"]), None, None
+        sync_set, schedule, scan, partition = _sync_set(j["sync_set"]), None, None, ""
     else:
         schedule = _schedule(j["schedule"])
         sync_set, scan = None, _scan(j["scan"], program, schedule)
+        partition = scan_partition(j["scan"], program)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
     return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
-                  schedule, scan)
+                  schedule, scan, partition)
 
 
 def registration_digest(record: dict) -> bytes:
@@ -646,6 +684,8 @@ def _rows_window_check(p: Params, w: int, reg: Registration, x: Window) -> Facts
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
     if reg.record.get("program") != p.program:
         raise Finding(REJECT, f"{what}: registration")
+    if reg.record.get("partition") != p.partition:
+        raise Finding(REJECT, f"{what}: registration: not the scan's partition")
     if not (len(x.certificates) == 3
             and all(_certifies_on(p, link, d, w, c) for c, (link, d) in zip(x.certificates, records(p.link)))):
         raise Finding(REJECT, f"{what}: certificates (none of a window in which the network certifier refused a "
@@ -804,7 +844,7 @@ EXPECT = {
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": ACCEPT,
-    "rows-program": REJECT,
+    "rows-program": REJECT, "rows-partition": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
     "rows-cert-key": REJECT, "rows-past-slots": REJECT,
@@ -1025,6 +1065,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         widths = (r.randint(1, 3), r.randint(1, 4), r.randint(1, 3), r.randint(1, 2))
         scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths))
         program = program_sha512(scan)
+        partition = scan_partition(scan, program)
         delta = r.choice(DELTAS)
     else:
         deltas = r.sample(range(4), r.randint(1, 3))
@@ -1135,10 +1176,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
             {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
         rec = {"format": r.choice(FORMATS), "law": law,
-               "partition": f"{link}/scan/{w}", "population": units, "program": program, "protocol": ONE_STAGE,
+               "partition": partition, "population": units, "program": program, "protocol": ONE_STAGE,
                r.choice(["roots", "registered"]): entries, "window": {"kind": "stand-in", "window": w}}
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
+        elif aimed and m == "partition":
+            rec["partition"] = r.choice([PO.digest(PO.build(scan, PO.query())), partition.upper(), f"{link}/scan/{w}"])
         digest = registration_digest(rec)
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
@@ -1404,8 +1447,10 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
     gates (an input node like it appended, keeping the input count); `argument`, egress member 0's first state leaf the
     last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
-    last ingress template's row input node (resized, the state's node resized to keep the count); and `topological`,
-    the last ingress template's row input node moved after the templates, so the template names a later node."""
+    last ingress template's row input node (resized, the state's node resized to keep the count); `topological`, the
+    last ingress template's row input node moved after the templates, so the template names a later node; and `owned`,
+    refused past `scanOf` by `scanPartition`, bucket 0's template returning its row's first 16 leaves as its `ok`
+    word, so its `ok` gate would be an input of no unit."""
     desc = p["scan"]
 
     def parts() -> tuple[dict, list, list[int]]:
@@ -1494,6 +1539,11 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     r["ret"] = moved(r["ret"])
     nodes.append(nodes.pop(kr))
     out["topological"] = own(d), "a body names a later node"
+
+    d, nodes, ts = parts()
+    first = d["definitions"][d["callees"][nodes[ts[0]]["fn"]]]["body"]
+    first["ret"] = {"concat": [{"affine": ["p", 0, 0, OUT_BITS]}, *_parts(first["ret"], first["nodes"])[1:]]}
+    out["owned"] = own(d), "returns an ok or state leaf it doesn't compute"
     return out
 
 

@@ -46,7 +46,11 @@ conjecture on the scan class's Program checked by enumeration at toy classes.
 **Adaptive windows.** Each window's prover may read every other window's coins (`WindowTape`), and so may its
 statement: window `i`'s registered statement is a function of its prover's tape, never of its own coins, with a fixed
 round count `kw i` (the window class fixes the scan's Program, and so the verifier's round count), and its error is
-averaged over that tape. The period's commitment and evidence are functions of all the coins.
+averaged over that tape. The period's commitment and evidence are functions of all the coins. The fixed round count
+(`hk`) is what makes the split a rearrangement: the period's coins are the prover's tape and each window's `kw i`
+coins, so window `i`'s tape and its own coins are the period's coins regrouped, its own uniform and independent of
+the rest. `Claims.Sampling.KS` holds at every tape, so a tape that also holds later windows' coins only strengthens a
+window's prover, and the windows' errors add by the union bound.
 
 **The answers.** `rowsWindowCheck` reads each link-window's answer from the evidence (`answered`) and does not run the
 sampled verifier itself, so `AnswersOfRecord` is what ties an accepted answer to that window's coins.
@@ -149,10 +153,14 @@ def ChecksCommitted (C : Prog) (ok : List ℕ) (links : List (ℕ × ℕ)) : Pro
   (∀ g ∈ ok, g ∈ C.outs) ∧ ∀ e ∈ links, e.2 ∈ C.outs ∧ C.gates[e.1]? = some .input
 
 /-- **The checked gates are their units' own**: each of the gates `gs` is a gate of a replay unit of the partition `P`
-that also holds every gate of `C` reading it. The generator form gives it: every template's argument is one input
-node's leaves (`NetworkCheck.Period.inputArg`), so the next bucket reads the state through its `sin` parameter, an
-input, and a bucket's `ok` and state leaves are read only inside its template instance, which the template query makes
-one unit. A constant checked gate is then one its unit commits, so a correct unit's committed value is the constant
+that also holds every gate of `C` reading it. The check of record refuses a scan or a registration that doesn't give
+it. Each window's registration must name the scan's partition (`NetworkCheck.Period.scanPartition`, which
+`rowsWindowCheck` pins): the template-instance query over the root's templates, under which each instance is one unit
+and the sampled verifier's own evaluation of the query refuses a root node that is neither an input nor an instance.
+Each ingress template's `ok` word and state are gates it computes (`NetworkCheck.Period.ownLeaves`), so each checked
+gate is in its instance's unit. Every template's argument is one input node's leaves (`NetworkCheck.Period.inputArg`),
+so the next bucket reads the state through its `sin` parameter, an input, and a checked gate is read only inside its
+instance. A constant checked gate is then one its unit commits, so a correct unit's committed value is the constant
 (`Prog.Correct`), and a faulty unit's checked gate reaches no other unit. -/
 def ChecksOwned (C : Prog) (P : Partition) (gs : List ℕ) : Prop :=
   ∀ g ∈ gs, ∃ r ∈ P.rus, g ∈ RU.gates r ∧ ∀ g' x, C.gates[g']? = some x → g ∈ x.reads → g' ∈ RU.gates r
@@ -207,8 +215,8 @@ def IngressDeclared {Coin Col T : Type} (H : Claims.Msg → Claims.Msg) (D : Dep
 
 /-- **A link-window's scan statement**: in the sampled audit's scope at the scan's layout and horizon (`ScopeAcc`), its
 checked gates committed, and at its partition each checked gate (every `ok` gate and every link's written end) its
-unit's own (`ChecksOwned`). `ScanScopeAcc` and the scan's shape (`scanOf`) give the first two, and the generator form
-under the template query the third. -/
+unit's own (`ChecksOwned`). `ScanScopeAcc` and the scan's shape (`scanOf`) give the first two, and the scan's
+partition, which every window's registration names (`NetworkCheck.Period.scanPartition`), the third. -/
 def ScanScope {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (D : Deploy Coin Col T) (s : Schedule) (x : Claims.Msg) : Prop :=
   ScopeAcc D (layOf s) (fun _ => s.window) x ∧
