@@ -118,21 +118,6 @@ def uniform(row_bytes: int, units: int) -> S.Layout:
     return S.Layout(f"commit-slots/step/uniform-{units}x{row_bytes}b/v1", (S.Group((units * row_bytes,), rows),))
 
 
-def load(path: Path) -> S.Layout:
-    """A layout in ``slots._layout_json``'s form. Groups with the same tensors and units become one object, as a layout's
-    repeated groups (its layers) are, so the plan lays each out once."""
-    doc = json.loads(path.read_text())
-    seen: dict[str, S.Group] = {}
-    groups = []
-    for g in doc["groups"]:
-        k = json.dumps(g, separators=(",", ":"))
-        if k not in seen:
-            seen[k] = S.Group(tuple(g["sources"]),
-                              tuple(tuple(S.Row(tuple(S.Part(*p) for p in r)) for r in u) for u in g["units"]))
-        groups.append(seen[k])
-    return S.Layout(doc["name"], tuple(groups))
-
-
 def describe(layout: S.Layout) -> dict[str, Any]:
     """Counts a slot: units, rows, bytes, and rows by size."""
     sizes = collections.Counter(r.nbytes for u in layout.units for r in u)
@@ -196,7 +181,7 @@ def count(a: argparse.Namespace) -> int:
     import slots_gpu as G
 
     t = time.perf_counter()
-    layout = load(a.layout) if a.layout else uniform(a.uniform, a.units)
+    layout = S.load(a.layout) if a.layout else uniform(a.uniform, a.units)
     plan = G.Plan(CTX, layout, "host")
     got = {}
     for slots in (1, 2):
@@ -308,7 +293,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
         print(json.dumps({"part": part, **{k: doc[k] for k in doc if k in (part, "ok")}}), flush=True)
 
     t = time.perf_counter()
-    layout = load(path)
+    layout = S.load(path)
     doc["layout"] = {"load_s": round(time.perf_counter() - t, 2), **describe(layout)}
     comp = {k: slots * v for k, v in compressions(layout).items()}
     doc["layout"]["compressions_a_slot"] = {k: v // slots for k, v in comp.items()}

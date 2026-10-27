@@ -19,9 +19,11 @@ A row's leaf, row g of slot s (rows numbered in the layout's order within a slot
 
 The layout (:class:`Layout`) is the step's public structure: groups (what one ``add`` commits, e.g. a layer), each of units,
 each of rows, each row the concatenation of byte ranges (:class:`Part`) of the slot's row of the group's tensors. Every slot
-has the same layout. A unit and a slot tree's domain don't name the slot or the step: the step tree's leaf index fixes the
-slot, and the step domain the step. :func:`commit` is the reference commitment; :func:`open_unit` opens one unit of one slot
-from that slot's rows alone (a replay of its request), and :func:`verify_unit` checks an opening against the step's root.
+has the same layout. Its parts, rows and groups, with their checks, are ``verity.ml.commitments.layout``'s, which also
+reads a layout file (:func:`load`) in the form :func:`_layout_json` writes. A unit and a slot tree's domain don't name the
+slot or the step: the step tree's leaf index fixes the slot, and the step domain the step. :func:`commit` is the reference
+commitment; :func:`open_unit` opens one unit of one slot from that slot's rows alone (a replay of its request), and
+:func:`verify_unit` checks an opening against the step's root.
 """
 from __future__ import annotations
 
@@ -38,16 +40,19 @@ from typing import Any
 import numpy as np
 
 from verity.ml.commitments import hm96
+from verity.ml.commitments import layout as L
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512, tagged_sha512_prefix
 from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.layout import UNIT_MAX_BITS, Group, Part, Row
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, domain_message
 from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.ml.crypto.chacha20 import keystream
 
-__all__ = ["Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot", "edge_layout", "fixture",
-           "fresh_salt_key", "h200_layout", "layout_digest", "open_unit", "random_outputs", "row_salts", "slot_domain",
-           "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids", "verify_unit"]
+__all__ = ["UNIT_MAX_BITS", "Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
+           "edge_layout", "fixture", "fresh_salt_key", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",
+           "row_salts", "slot_domain", "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids",
+           "verify_unit"]
 
 LAYOUT_TAG = "verity/commit-slots/layout/v1"
 UNIT_TAG = "verity/commit-slots/unit/v1"
@@ -59,79 +64,18 @@ KEY = INST.default_key
 SALT_BYTES = INST.salt_bytes
 STRING_BYTES = INST.proven_bytes
 DIGEST_BYTES = INST.digest_bytes
-#: a unit's outputs fit its size class, at most 262,144 bits (AGENTS.md, "Everything zero-knowledge")
-UNIT_MAX_BITS = 262_144
 
 
 # --- the layout --------------------------------------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
-class Part:
-    """``nbytes`` bytes at ``offset`` of a slot's row of the group's tensor ``source``."""
-
-    source: int
-    offset: int
-    nbytes: int
-
-
-@dataclass(frozen=True, slots=True)
-class Row:
-    """One committed row: its parts' bytes, concatenated."""
-
-    parts: tuple[Part, ...]
-
-    @property
-    def nbytes(self) -> int:
-        return sum(p.nbytes for p in self.parts)
-
-    @property
-    def bits(self) -> int:
-        return 8 * self.nbytes
-
-
-@dataclass(frozen=True, slots=True)
-class Group:
-    """What one ``add`` commits: ``sources[i]`` is the bytes a slot has in the group's tensor i (a tensor is (slots, ...),
-    each slot's bytes contiguous), and ``units`` the group's units, each its rows."""
-
-    sources: tuple[int, ...]
-    units: tuple[tuple[Row, ...], ...]
-
-    def __post_init__(self) -> None:
-        for unit in self.units:
-            if not unit:
-                raise ValueError("a unit has at least one row")
-            if sum(r.bits for r in unit) > UNIT_MAX_BITS:
-                raise ValueError(f"a unit's outputs are at most {UNIT_MAX_BITS} bits")
-            for row in unit:
-                if not row.parts or row.nbytes == 0:
-                    raise ValueError("a row has at least one byte")
-                for p in row.parts:
-                    if not 0 <= p.source < len(self.sources) or p.offset < 0 or p.nbytes < 1 \
-                            or p.offset + p.nbytes > self.sources[p.source]:
-                        raise ValueError(f"part {p} is outside the group's tensors {self.sources}")
-
-
-@dataclass(frozen=True)
-class Layout:
-    """A step's public structure: its groups in order, the same for every slot; ``name`` names it."""
-
-    name: str
-    groups: tuple[Group, ...]
+class Layout(L.Layout):
+    """A step's public structure, ``commitments.layout``'s (its groups in order, the same for every slot, a repeated group one
+    object; ``name`` names it), with the indices and the digest the slot's trees take."""
 
     @cached_property
     def units(self) -> tuple[tuple[Row, ...], ...]:
         """Every unit, in order: unit u's rows."""
         return tuple(u for g in self.groups for u in g.units)
-
-    @cached_property
-    def unit_base(self) -> tuple[int, ...]:
-        """Group i's first unit."""
-        out, n = [], 0
-        for g in self.groups:
-            out.append(n)
-            n += len(g.units)
-        return tuple(out)
 
     @cached_property
     def group_rows(self) -> tuple[int, ...]:
@@ -465,6 +409,13 @@ def _layout_json(layout: Layout) -> dict[str, Any]:
     return {"name": layout.name, "groups": [{"sources": list(g.sources), "units": [[[[p.source, p.offset, p.nbytes] for p in r.parts]
                                                                                    for r in u] for u in g.units]}
                                             for g in layout.groups]}
+
+
+def load(path: str | os.PathLike[str]) -> Layout:
+    """The layout in the file ``path`` (:func:`_layout_json`'s form), read and checked by ``commitments.layout.load``: equal
+    groups are one object, so a plan lays each out once."""
+    lay = L.load(path)
+    return Layout(lay.name, lay.groups)
 
 
 def fixture() -> dict[str, Any]:

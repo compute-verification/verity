@@ -39,7 +39,9 @@ plan = G.Plan(context, G.regroup(layout, 4))
 - `context`: 64 bytes naming the run (the model and serving instance); every domain binds it.
 - `layout`: the step's public structure (`S.Layout`): groups (what one `add` commits) of units of rows, each row the
   concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every slot has
-  the same layout; a unit holds at most 262,144 bits (its size class). The engine takes at most two parts a row.
+  the same layout; a unit holds at most 262,144 bits (its size class). The engine takes at most two parts a row. Parts,
+  rows, groups and their checks are `verity.ml.commitments.layout`'s; `S.load(path)` reads a layout file through it, in
+  the form `S._layout_json` writes.
   Groups are the prover's plumbing (one launch each): the layout's digest binds only its units' rows.
   A plan is linear in the layout's units: the layout digest is computed once (`Layout.digest`), every unit's domain id in
   one pass (`S.unit_domain_ids`, two SHA-512s a unit), and a group the layout repeats (its layers) is laid out once, so
@@ -232,7 +234,8 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
 
 ## Files
 
-- `slots.py`: the reference, `edge_layout()`, `h200_layout()`, and `python slots.py fixture` (writes the fixture).
+- `slots.py`: the reference, `edge_layout()`, `h200_layout()`, `load()` (a layout file, through `commitments.layout`), and
+  `python slots.py fixture` (writes the fixture).
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`, its builds
   cached under `~/.cache/verity/sha512_rows`). Its uploads go through pinned memory, so no call waits on the side stream.
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
@@ -244,7 +247,8 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   report's enqueue calls a step (how long each held the thread, and from which call they block); `gpu.sh`: these, with
   the tests, under one GPU lease (its header has the `research run` line; `STEP_WRAP` runs `step.py` under a profiler).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
-  refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
+  refusals, the edge layout and FAMILIES' 1 KiB layout written and loaded back to the same layout, digests and roots,
+  the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
   units, and (with a GPU) the device against the host twin.
