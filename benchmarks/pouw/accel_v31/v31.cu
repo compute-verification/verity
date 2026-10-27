@@ -1505,28 +1505,42 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
 // hashes from the first chunk whatever carries another epoch (rows no hash warp reached, a forged copy). A visit hashes at
 // most budget chunks on from the row's own flag (chunk, V31_HCHUNK: the hash warps' visits a row, 0 a row whole in one)
 constexpr u32 FUSED_EPOCHS = 1u << 22;
+// timing only (src 2): an O row's loads of D alone, by ld.ca, without O's other terms (wrong values)
+struct LiveDSrc {
+  ServedSrcT<true> s;
+  DEV uint4 ld16(u32 off) const {
+    return __ldca(reinterpret_cast<const uint4*>(s.w ? s.w + off : reinterpret_cast<const uint8_t*>(s.at(off))));
+  }
+  DEV void pf(u32 off) const { s.pf(off); }
+};
+// src (V31_R5SRC, timing only when nonzero): where a visit's row bytes come from: 0 the row itself, 1 registers (NoMemSrc),
+// 2 D's loads alone (LiveDSrc). Nonzero sources flag their rows under the shadow epoch (epoch ^ FUSED_SHADOW), so the leaf
+// phase hashes every row from its first chunk and the call stays exact
+constexpr u32 FUSED_SHADOW = 1u << 21;
 struct FusedLeaves {
   ServedRow row;
   u64* xd;
   u32* flag;
-  u32 epoch, lpo, chunk, off;
+  u32 epoch, lpo, chunk, off, src;
   DEV unsigned lpt() const { return lpo; }
   template <class Stop> DEV bool operator()(unsigned long long ct, unsigned j, const Stop& stop, unsigned budget) const {
     const u64 pos = ct * row.lpt + off + j;
-    const u32 nblk = row_blocks(row.row), f = __ldcg(flag + pos);
+    const u32 nblk = row_blocks(row.row), f = __ldcg(flag + pos), e = src ? epoch ^ FUSED_SHADOW : epoch;
     u32 b0 = 0;
     u64 x[8];
-    if (f >> 10 == epoch) {
+    if (f >> 10 == e) {
       b0 = f & 1023;
       if (b0 == nblk) return true;
       ld8cg(xd + 8 * pos, x);
     } else {
       cpy8(x, C.mid_P);
     }
-    const u32 b = hash_blocks(x, row.template src<true>(pos), row.row, b0, row.pf != 0, stop, budget);
+    const u32 b = src == 1   ? hash_blocks(x, NoMemSrc{(u32)pos}, row.row, b0, false, stop, budget)
+                  : src == 2 ? hash_blocks(x, LiveDSrc{row.template src<true>(pos)}, row.row, b0, row.pf != 0, stop, budget)
+                             : hash_blocks(x, row.template src<true>(pos), row.row, b0, row.pf != 0, stop, budget);
     if (b == b0) return false;
     st8(xd + 8 * pos, x);
-    flag[pos] = epoch << 10 | b;
+    flag[pos] = e << 10 | b;
     return b == nblk;
   }
 };
@@ -1949,6 +1963,7 @@ static std::string env_str(const char* name, const char* dflt) {
 // through shared memory with TMA, a hash warp issuing the stores); V31_HALL 1: every row there, past the
 // consumers' end, timing the hash warps alone, -1: none, timing the GEMM alone in that CTA; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
+// V31_R5SRC 1 or 2 (timing only): the hash warps' row bytes from registers, or from D's loads alone (FusedLeaves' src);
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
 // but room for a fifth CTA an SM); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued
@@ -2400,9 +2415,10 @@ struct Fill {
   // hashes its O rows in the GEMM's producer warpgroup (5: and a hash warpgroup, its registers r5h), digests to xd[copy]
   // flagged with the launch's epoch xep[copy]; wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM
   // too, in place of gemm_kernel<true>, with RP 5's hash warps unless r5w (V31_R5W) is 0; tst (V31_TST): RP 5's stores
-  // through shared memory with TMA, on the store maps tso[copy] (D) and tsw[copy] (words)
+  // through shared memory with TMA, on the store maps tso[copy] (D) and tsw[copy] (words); r5src (V31_R5SRC): FusedLeaves'
+  // src
   bool wg = false, wgw = false, r5w = false, tst = false;
-  int wbn = 0, wgrid = 0, hchunk = 0, r5h = 0;
+  int wbn = 0, wgrid = 0, hchunk = 0, r5h = 0, r5src = 0;
 #ifdef V31_WG
   CUtensorMap tso[2]{}, tsw[2]{};
 #endif
@@ -2600,6 +2616,8 @@ struct Fill {
         if (r5w && words[b]) tsw[b] = tmap_st(words[b], CU_TENSOR_MAP_DATA_TYPE_UINT16, 2, wgp::TW, (u64)tiles * Wn * wgp::TW);
       }
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
+    r5src = env_int("V31_R5SRC", 0);
+    if (r5src < 0 || r5src > 2) { fprintf(stderr, "V31_R5SRC is 0, 1 or 2\n"); exit(2); }
     if (wg && (kn.rp == 4 || kn.rp == 5))
       for (int b = 0; b < 2; b++) {
         xd[b] = dalloc<u64>(8 * (size_t)leaves);
@@ -2659,7 +2677,8 @@ struct Fill {
   // its O rows (the GEMM of D's hash warps), or every row (the GEMM of the prefix sums')
   FusedLeaves fused_leaves(int b, bool every = false) const {
     const ServedRow r = servedrow(b);
-    return FusedLeaves{r, xd[b], xf[b], xep[b], (u32)(every ? r.lpt : r.lpt - r.wrows), (u32)hchunk, (u32)(every ? 0 : r.wrows)};
+    return FusedLeaves{r, xd[b], xf[b], xep[b], (u32)(every ? r.lpt : r.lpt - r.wrows), (u32)hchunk, (u32)(every ? 0 : r.wrows),
+                       (u32)r5src};
   }
 #endif
   // a call's FusedLeaves epoch: it wraps below FUSED_EPOCHS, and clears both copies' flags then (a cleared flag only
@@ -3446,7 +3465,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
       unsigned long long* ne = dalloc<unsigned long long>(2);
       unsigned long long h[2] = {0, 0};
       CK(cudaMemset(ne, 0, 16));
-      fused_count_kernel<<<4 * f.nsm, 256>>>(f.xf[bl], f.leaves, f.xep[bl], nblk, ne);
+      fused_count_kernel<<<4 * f.nsm, 256>>>(f.xf[bl], f.leaves, f.r5src ? f.xep[bl] ^ FUSED_SHADOW : f.xep[bl], nblk, ne);
       CK(cudaMemcpy(h, ne, 16, cudaMemcpyDeviceToHost));
       cudaFree(ne);
       fused = (long long)h[0];
@@ -3478,14 +3497,15 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, "
+           "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"r5src\": %d, \"wgw\": %d, \"lminb\": %d, "
+           "\"sahead\": %d, "
            "\"fused_leaves\": %lld, "
            "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
-           f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.wgw ? 1 : 0,
+           f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.r5src, f.wgw ? 1 : 0,
            f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
