@@ -816,6 +816,46 @@ def test_anchor_that_names_another_directory_is_refused(tmp_path):
     assert f["path"] == "pkg/tests/protocols/bandwidth/test_remote.py" and "parents[4]" in f["hunk"]
 
 
+SH_BODY = "".join(f'echo "step {i} of the session, unchanged by the move"\n' for i in range(12))
+SH_OLD = ('#!/usr/bin/env bash\nSELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")\n'
+          'ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)\ncd "$(dirname "${BASH_SOURCE[0]}")/../../.."\n'
+          'bash "$(dirname "$0")/../../../pkg/app/store/host.py"\n' + SH_BODY)
+
+
+def _shell(tmp_path: Path, new: str) -> dict:
+    """A script three directories down moves to two (the streamed wipe's `demo.sh` to `examples/wipe/`)."""
+    repo, base = _repo(tmp_path, {**APP, "bench/pous/wipe/demo.sh": SH_OLD})
+    for old, new_dir in APP_MOVES:
+        _move(repo, old, new_dir)
+    _move(repo, "bench/pous/wipe/demo.sh", "examples/wipe/demo.sh")
+    _write(repo, {"examples/wipe/demo.sh": new})
+    return _check(repo, base)
+
+
+SH_NEW = ('#!/usr/bin/env bash\nSELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")\n'
+          'ROOT=$(cd "$(dirname "$SELF")/../.." && pwd)\ncd "$(dirname "${BASH_SOURCE[0]}")/../.."\n'
+          'bash "$(dirname "$0")/../../pkg/app/protocols/bandwidth/host.py"\n' + SH_BODY)
+
+
+def test_a_shell_scripts_paths_from_its_own_directory_recounted_are_certified(tmp_path):
+    r = _shell(tmp_path, SH_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_a_shell_path_from_its_own_directory_that_names_another_one_is_refused(tmp_path):
+    [f] = _shell(tmp_path, SH_NEW.replace('"$SELF")/../..', '"$SELF")/..'))["refusals"]
+    assert f["path"] == "examples/wipe/demo.sh" and '"$SELF")/.." &&' in f["hunk"]
+
+
+def test_a_shell_path_from_a_variable_that_is_not_the_scripts_own_path_is_refused(tmp_path):
+    other = SH_OLD.replace('SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")', 'SELF=$NVCC')
+    repo, base = _repo(tmp_path, {**APP, "bench/pous/wipe/demo.sh": other})
+    _move(repo, "bench/pous/wipe/demo.sh", "examples/wipe/demo.sh")
+    _write(repo, {"examples/wipe/demo.sh": other.replace('"$SELF")/../../..', '"$SELF")/../..')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "examples/wipe/demo.sh" and "SELF" in f["hunk"]
+
+
 def test_relative_import_rewritten_absolute_is_certified(tmp_path):
     body = "".join(f"\n\ndef f{i}():\n    return put({i})\n" for i in range(8))
     files = {"pkg/app/options/__init__.py": "", "pkg/app/options/pearl.py": "from .pearl_host import put\n" + body,
