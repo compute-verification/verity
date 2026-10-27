@@ -2,7 +2,9 @@
 
 * TINY's census rebuilt through `split` and `window_units` is class_rows' total in the census model, and its private bodies
   are the census's bytes and a salt a row;
-* a probe of one Program projected to a class is that class's own census, unit for unit and byte for byte;
+* a probe of one Program projected to a class is that class's own census, unit for unit and byte for byte, at more outputs
+  and fewer lanes too (a slot's units at their Definitions' rows there), and a probe's slot unit its Definition doesn't
+  give is refused;
 * the attention at key blocks of 4 over 6 positions is the hand count, and in 2-key groups (`L3a`) too;
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
   and the plan from ``L1 + L2`` on leaves no pad pass at any traffic;
@@ -62,11 +64,20 @@ def test_tinys_census_rebuilt_is_class_rows_total_and_its_private_bodies_its_byt
     assert sum(u.n * (u.ins + u.out) for u in us) == rows
 
 
-def test_a_probe_of_one_program_projected_to_a_class_is_that_class_census():
-    probe, exact = _census(WindowClass(1, 2, 2), 1), _census(WindowClass(2, 4, 2))
-    rest, heads, cls = W.project(probe, 2, 4, 2, "sm120")
+@pytest.mark.parametrize("to", [WindowClass(2, 4, 2), WindowClass(2, 4, 3), WindowClass(2, 4, 2, 1, 4)])
+def test_a_probe_of_one_program_projected_to_a_class_is_that_class_census(to):
+    probe, exact = _census(WindowClass(1, 2, 2), 1), _census(to)
+    rest, heads, cls = W.project(probe, to.slots, to.prompt, to.outputs, "sm120", to.lanes, to.every)
     rest2, heads2 = W.split(W.units_of(exact), exact["class"], "sm120")
     assert cls == exact["class"] and heads == heads2 and _shapes(rest) == _shapes(rest2)
+
+
+def test_a_probe_unit_its_definition_doesnt_give_is_refused():
+    probe = _census(WindowClass(1, 2, 2), 1)
+    scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v1{"))
+    probe["templates"][scan]["bytes"]["value"] += 2
+    with pytest.raises(ValueError, match=r"ScanSlots_v1\{.*\} is not its Definition's rows at the probe's class"):
+        W.project(probe, 2, 4, 2, "sm120")
 
 
 def _heads() -> W.Heads:

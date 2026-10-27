@@ -41,7 +41,7 @@
 # Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
 # memory; the source's, else one sent), or unbound with DITHER_NUMA=0 or without numactl, a node or numabind.py;
 # env/numa.json, the `numa:` line and summary.json's "numa" say which.
-# Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
+# Env: HB_WHO (the lease owner, default dither/ and the run's id), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later; HB_KEEP_SQLITE=1 keeps its sqlite, gzipped), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
 # POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the windows' coins off the node, sessions from
@@ -247,7 +247,7 @@ if [ ${#NUMA[@]} = 0 ]; then
   echo "numa: unbound (no numabind.py in the source or inputs)"
 fi
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- "${NUMA[@]}" bash -c '
+GPU_LEASE_WHO=${HB_WHO:-dither/${RESEARCH_RUN_ID:-local}} gpu-lease 1 --wait "${lease[@]}" -- "${NUMA[@]}" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
