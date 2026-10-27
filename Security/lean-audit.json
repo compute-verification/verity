@@ -10720,6 +10720,21 @@
   },
   "Verity.SecurityProofs.ToCircuitAnd": {
    "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.FixedMachine.BlockDescription": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.FixedMachine.GateCount": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.FixedMachine.Hard_notFixed": {
+   "owner": "@lean"
   }
  },
  "shape": {
@@ -11816,7 +11831,12 @@
    "Nci.SecurityProofs.ExpandComplies": "frozen (no-function): It is about an arbitrary multi-bit declaration that complies with the NCI policy (Nci.Complies, Security/Definitions/Nci.lean) and its bit-level expansion (Verity.Declaration.expand, Security/Definitions/Core/Expand.lean), not about the NCI check's code.",
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
-   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code."
+   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
+   "Accounting.SecurityProofs.FixedMachine.BlockDescription": "frozen (no-function): It is the working draft's Lemma 1 for an actual circuit that is a fixed machine run T steps, each proof block the region of one location over the run with its initial information within a budget (Accounting.FixedMachine, Accounting.InitialBudget, Accounting.BlockDescribed, Security/Definitions/Accounting/FixedMachine.lean), about an arbitrary step circuit, registration, decoder and extraction rule, not about a function's code.",
+   "Accounting.SecurityProofs.FixedMachine.GateCount": "frozen (no-function): It is about an arbitrary step circuit and an actual circuit that is it run T steps (Accounting.FixedMachine, Verity.Circuit.unroll, Security/Definitions/Core/Unroll.lean): its gate count is T times the step's; not about a function's code.",
+   "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest": "completeness: BlockDescription's honest witness (LEAN-66): its premises hold together at a constructed two-gate machine run two steps (Accounting.FixedMachine.H₀, Security/Definitions/Accounting/FixedMachine/Instances.lean); an instance, not a property of a function's code.",
+   "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial": "lemma: BlockDescription's nontrivial witness (LEAN-66): the hard-coding circuit's string is not described within its 0-bit budget and no ingress (Accounting.FixedMachine.Hard, Security/Definitions/Accounting/FixedMachine/Instances.lean); not about a function's code.",
+   "Accounting.SecurityProofs.FixedMachine.Hard_notFixed": "lemma: The hard-coding circuit is no fixed machine of H₀ at any number of steps, and its initial budget is 0 bits (Accounting.FixedMachine.Hard, Security/Definitions/Accounting/FixedMachine/Instances.lean): what makes BlockDescription_nontrivial a circuit that fails FixedMachine; not about a function's code."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -46427,5 +46447,12 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Accounting.SecurityProofs.FixedMachine.BlockDescription": {
+   "honest": ["Accounting.SecurityProofs.FixedMachine.BlockDescription_honest"],
+   "nontrivial": "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
+   "kind": "exclusion"
+  }
  }
 }
