@@ -4,10 +4,11 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 /-!
 # `SampledKSLiveV2` with a public error
 
-`SampledKSLiveV2` bounds `Pr[flock-verify accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run:
-`ksAvgStrictZ (planZHJ dj y₀) L k q_F q_S (reg σ)`, at the prover's registration, and
-`Q_s = Σ_c |Ω_c|/|Ω|` (`ΩcZ`), at its binding. Neither depends on the prover in value, and each is at most a number read
-off the public parameters:
+`SampledKSLiveV2` bounds `Pr[flock-verify accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run: its
+knowledge finders' collision probabilities (`ksAvgPrZ`) and its link finders' (`linkPrZC`). Under `cr/sha-512` and
+`ecr/sha-512` at those finders (`Assumptions.TableCRZAt`, `Assumptions.LinkCRZCAt`, this statement's two premises) they
+are at most `ksAvgStrictZ (planZHJ dj y₀) L k q_F q_S (reg σ)` and `Q_s = Σ_c |Ω_c|/|Ω|` (`ΩcZ`) times the closed link
+term. Neither of those depends on the prover in value, and each is at most a number read off the public parameters:
 
 * `ε_ks ≤ ksClosedM1 k qF qS / (1 − ρ)`: every table of `planZHJ` is at C-Flock ZK's parameters (`planZHJ_M1W`, from
   what `verify --zk` checks at setup, at every registration: `planZHJ` reads none), so `ksAvgStrictZ_planZHJ_le_closed`
@@ -116,15 +117,16 @@ def SampledKSLivePub : Prop :=
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) t' M Rw (Bridge.ioSum P) ρ)
 
-/-- **`SampledKSLiveV2`'s error is at most `deltaPub`**: its draw term is `deltaPub`'s first, its knowledge term at most
-the second (`ksAvgStrictZ_planZHJ_le_closed`), and its link term at most the third (`qs_le_io`). -/
+/-- **`SampledKSLiveV2`'s error is at most `deltaPub`**: its draw term is `deltaPub`'s first; under the two premises its
+knowledge term is at most the second (`ksAvgPrZ_le_strict`, `ksAvgStrictZ_planZHJ_le_closed`) and its link term at most
+the third (`linkPrZC_le_closed`, `qs_le_io`). -/
 theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
     hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' ht' K₀ hK₀ τ v q L P vb σ Xr δ Cc rows roots Cd κ hCR hLink
   have hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ := fun S R j =>
     (rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) k).trans hρk
   refine (h n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb
-    src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v q hCR hLink).trans ?_
+    src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ q).trans ?_
   have h1ρ : 0 < 1 - ρ := sub_pos.2 hρ
   have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw) := by
     have : 0 ≤ t' * (1 + k) := mul_nonneg ht' (by positivity)
@@ -133,19 +135,21 @@ theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
       ENNReal.ofReal (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) := by
     have hc : (0 : ℝ) < (n.choose kd : ℝ) := by exact_mod_cast Nat.choose_pos hkd
     rw [ENNReal.ofReal_div_of_pos hc, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
-  have hks : ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) ≤ ENNReal.ofReal (ksClosedM1 k (2 * (t' + v)) (t' + v) / (1 - ρ)) :=
-    (ksAvgStrictZ_planZHJ_le_closed dj y₀ L k (2 * (t' + v)) (t' + v) (reg σ) (hρk.trans_lt hρ)).trans
-      (ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_left (ksClosedM1_nonneg k (2 * (t' + v)) (t' + v)) h1ρ (by linarith)))
+  have hks : ksAvgPrZ execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) ≤
+      ENNReal.ofReal (ksClosedM1 k (2 * (t' + v)) (t' + v) / (1 - ρ)) :=
+    (ksAvgPrZ_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR).trans
+      ((ksAvgStrictZ_planZHJ_le_closed dj y₀ L k (2 * (t' + v)) (t' + v) (reg σ) (hρk.trans_lt hρ)).trans
+        (ENNReal.ofReal_le_ofReal
+          (div_le_div_of_nonneg_left (ksClosedM1_nonneg k (2 * (t' + v)) (t' + v)) h1ρ (by linarith))))
   have hQs : ∑ p : vb.Pos, (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) /
       Fintype.card L.Ω ≤ (Bridge.ioSum P : ℝ) :=
     qs_le_io execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L (Bridge.ioSum P) fun ω =>
       Finset.sum_le_sum_of_subset (Finset.subset_univ _)
-  have hlink : ENNReal.ofReal ((∑ p : vb.Pos,
-        (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
-      (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ≤
+  have hlink : linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ (reg σ) (cont σ) ≤
       ENNReal.ofReal ((Bridge.ioSum P : ℝ) *
         (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) :=
-    ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hQs hB) h1ρ.le)
+    (linkPrZC_le_closed execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb hρ ht' (reg σ) (cont σ) hLink).trans
+      (ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hQs hB) h1ρ.le))
   have hx : (0 : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by positivity
   have hy : 0 ≤ ksClosedM1 k (2 * (t' + v)) (t' + v) / (1 - ρ) := div_nonneg (ksClosedM1_nonneg k (2 * (t' + v)) (t' + v)) h1ρ.le
   have hz : 0 ≤ (Bridge.ioSum P : ℝ) *
