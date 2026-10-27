@@ -58,7 +58,7 @@ settings = of(__file__)
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
 F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
 # the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
-# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots (RT4-INT-13), both
+# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots, both
 # under the round recorded before the next coin
 ROUND_EXTRA: tuple = ()
 CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)

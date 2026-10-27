@@ -14,7 +14,7 @@ after it, beside a later step's forward; their receipts go under a later round. 
     between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (h1agate.py's
                      `batch`: a per-step A commitment, a scheme change CA has not ruled in, so a separate arm); the step's
                      A slots, scales, A roots, live rows and step into ring slot s mod D; the admit tables (under -pt on
-                     their own stream), the z/y leaf tables and the served y's tables (RT4-INT-11's run-time compare);
+                     their own stream), the z/y leaf tables and the served y's tables (their run-time compare);
                      round s over a-step, admit-step, z-step, y-step and receipt-step, whose leaf is the receipt-table
                      roots of step s - D + 1 (each table's domain names its own step; zeros before the window's first
                      D - 1 steps); round s's root sent (`coins.RoundPipe`), after which alone the challenger opens coin s.
@@ -41,7 +41,7 @@ fault, fault_y and fault_rr (here: round s + D - 1 recorded without step s's rec
 itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 1, a coin the prover held before round
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  $DITHER_SO_UNITS=j10r
-(`UNITS_ENV`; RT-ALGO-16's verifier form, at $DITHER_SO_J10R_M=slot on a slot T with every row tile computed:
+(`UNITS_ENV`; the verifier's form, at $DITHER_SO_J10R_M=slot on a slot T with every row tile computed:
 `forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the window's end on j10r_so's
 references in h1r v1's place, and the gate step's units held to J10R's Definition.
 
@@ -58,7 +58,7 @@ round s as built from the ring once forward s + 1 had started (a captured step's
 give how long the build ran beside it), and "fault_ring" overwrites a bit of step s's ring copy of call 0's z on the
 serving stream as forward s + 1 starts, before round s's tables: refused on round s's z-step leaf and root alone.
 
-A window's open and end (RT4-INT-37; served_h1's window close, since dither-a has none).  Every window opens with the salt
+A window's open and end (served_h1's window close, since dither-a has none).  Every window opens with the salt
 coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the session;
 in process the epoch root), then the epoch round (round 0) over the B tables' roots.  Without -we a window has no end: its
 last D - 1 steps' receipts lie under no round, and its last D - 2 steps' units never run.  With -we
@@ -122,7 +122,7 @@ from verity_config.settings import of
 settings = of(__file__)
 LIB_ENV = DA.LIB_ENV
 CG = None
-ORDER = "statement (RT4-INT-12): A, scales, z/y under round s before coin s; units after coin s; receipts under round s + D - 1"
+ORDER = "statement: A, scales, z/y under round s before coin s; units after coin s; receipts under round s + D - 1"
 OV_ORDER = ("-ov: round s built beside forward s + 1 from ring copies taken after forward s, its root sent before coin s; "
             "step s's units dispatched once coin s is back")
 # the faults of the order last: fault_zlate moves round s + 1's z/y leaves, so the step after it is no capture's
@@ -130,7 +130,7 @@ CAPTURES = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_rearly", "
 CAPTURES_OV = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_ring", "fault_rearly", "fault_zlate")
 END_ORDER = ("-we: at the window's end the tail's units after their coins, their receipt-tail roots under one final round "
              "sent after the last coin, the manifest root over every round root, then the draw coin after it")
-NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw coin opens (RT4-INT-37); rows pending"
+NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw coin opens; rows pending"
 END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph

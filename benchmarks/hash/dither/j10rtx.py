@@ -319,9 +319,9 @@ def main() -> int:
         by_t.setdefault(t, []).append(m)
     ca = JB.ca_tree()
     doc = {"schema": "kernels-j10/rtx/v1", "gpu": torch.cuda.get_device_name(dev), "label": JB.CA_LABEL if ca else JB.LABEL,
-           "noise_reference": (f"CA's banded_reference (#2866 @ {JB.CA_SHA}) on the gate's CPU units, required; every "
-                               "receipt against h1r_launch_band, the band workspace against j10b_ref (equal to CA's on "
-                               "its pinned vectors)") if ca else "none: no CA tree, so no banded arm passes its gate",
+           "noise_reference": (f"credit's banded_reference (at {JB.CA_SHA}) on the gate's CPU units, required; every "
+                               "receipt against h1r_launch_band, the band workspace against j10b_ref (equal to the "
+                               "reference on its pinned vectors)") if ca else "none: no CA tree, so no banded arm passes its gate",
            "arms": arms, "ms": ms,
            "shapes": HG.SHAPES, "sms": torch.cuda.get_device_properties(dev).multi_processor_count,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "windows": {}}

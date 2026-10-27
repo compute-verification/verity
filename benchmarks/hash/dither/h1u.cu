@@ -2767,7 +2767,7 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
-// J10-R (CA's RT-ALGO r3 at 3dc80591df; RT-ALGO-16's verifier form, whose credit derives a unit's call and
+// J10-R (J10R's Definition, `h1tile.j10r_reference`, in the verifier's form, whose credit derives a unit's call and
 // blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
 // scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
 // columns 32 cj .. of it.
