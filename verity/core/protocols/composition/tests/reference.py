@@ -100,6 +100,16 @@ def verdict(verdicts: list[str]) -> str:
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
 
 
+def component_verdicts(run) -> list[str]:
+    """The components' verdicts from ``run()``, the composition's run on a case: none when the case doesn't fit, so
+    `run` raises or says why."""
+    try:
+        answers = run()
+    except (Reject, KeyError, TypeError):
+        return []
+    return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+
+
 @dataclass(frozen=True)
 class Ported:
     """A component whose port has replaced its stub: its id and its Python's answer to a `serve` case. One that reads
@@ -336,12 +346,10 @@ class Product:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case that fits the composition, else none."""
-        try:
-            case, blobs = self.split(case)
-            answers = self.run(self.params(case["params"]), self.evidence(P.unhex(case["evidence"])), blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def run():
+            c, blobs = self.split(case)
+            return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
+        return component_verdicts(run)
 
 
 @dataclass(frozen=True)
@@ -411,14 +419,12 @@ class Registered:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case whose components fit the composition, else none."""
-        try:
-            case, blobs = Product.split(case)
-            _, ps = self.params(case["params"])
-            _, ev = self.evidence(P.unhex(case["evidence"]))
-            answers = self.product.run(ps, ev, blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def run():
+            c, blobs = Product.split(case)
+            _, ps = self.params(c["params"])
+            _, ev = self.evidence(P.unhex(c["evidence"]))
+            return self.product.run(ps, ev, blobs)
+        return component_verdicts(run)
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its
