@@ -9,9 +9,10 @@ to the run root of record; ``rows-sha512`` by default, ``vllm-v1`` an older reco
 the bundle in trees of their own (`ml.windows.rows`: a ``frame-v3-sha512`` tree per port, fresh salts), so their roots are a fresh
 commitment whose link to serving's is provenance (`stand_in`: ``of`` the record's commitment and run root, the bundle's manifest
 digest and this command, and ``link``).  A SHA-512 record does not make it ``served``: these roots are not the record's, whatever its
-hash.  A window is ``served`` when its roots are serving's own, made before any draw (the in-Commit hook's, `serving_rows.readers`); a
-deferred Commit's becomes ``served`` only once a circuit opens the record's own leaves (rows-sha512's ``hm96-sha512/row/v2`` stream
-rows, vllm-v1's SHA-256 leaves)."""
+hash.  A window is ``served`` when its roots are serving's own, made before any draw (the in-Commit hook's, `serving_rows.readers`,
+which a deferred Commit with ``--serving-rows`` runs at its C2 site before its bundle is sealed, `c2_replay.serving_rows`); a
+window from the bundle becomes ``served`` only once a circuit opens the record's own leaves (rows-sha512's ``hm96-sha512/row/v2``
+stream rows, vllm-v1's SHA-256 leaves)."""
 from __future__ import annotations
 
 import dataclasses
