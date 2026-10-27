@@ -5634,16 +5634,6 @@
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
-  "Definitions.Core.CreditSize": {
-   "digest": "b9c218a1f0522606c2492525556955626454d51f5079c4636c6d0fb5aa44bbc4",
-   "definitions": {
-    "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
-    "Verity.Circuit.IsAnd": "cde2e6a8622514f4f062846ba8ed7eb96f4d3ce2ad0c1c095dbe1f376dd4d10a",
-    "Verity.Circuit.andSize": "3b849ed3179d9c2b65811c48d03e2adcf55b4ef7d51aebf4132aa3f03824141a",
-    "Verity.Circuit.bitZ": "6e6df84b2a57ea4f505984ed58d1b5ddda2506cde0e6494be29dc3db1b6189da"
-   },
-   "guarantees": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues"]
-  },
   "Definitions.Core.Declaration": {
    "digest": "9f45e1cafa101fb3356541ed3a26ccbc43402b40081776d9f82ccd1141a132a7",
    "definitions": {
@@ -5667,6 +5657,16 @@
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
+  },
+  "Definitions.Core.Formalism": {
+   "digest": "b9c218a1f0522606c2492525556955626454d51f5079c4636c6d0fb5aa44bbc4",
+   "definitions": {
+    "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
+    "Verity.Circuit.IsAnd": "cde2e6a8622514f4f062846ba8ed7eb96f4d3ce2ad0c1c095dbe1f376dd4d10a",
+    "Verity.Circuit.andSize": "3b849ed3179d9c2b65811c48d03e2adcf55b4ef7d51aebf4132aa3f03824141a",
+    "Verity.Circuit.bitZ": "6e6df84b2a57ea4f505984ed58d1b5ddda2506cde0e6494be29dc3db1b6189da"
+   },
+   "guarantees": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues"]
   },
   "Definitions.Core.Fp32": {
    "digest": "41c8061ea8f55a86ca47a2f556c3adae1584e166307523434642dbeb121699a0",
