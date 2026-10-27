@@ -1,13 +1,13 @@
-// J10-R's unit, `PouwH1Tile_v5` (h1tile.j10r_reference), slow but exact on sm_90a (HASH-22's fallback): every value in
-// the Definition's own order, integers only, no tensor cores, the noise and the fold keys hashed by each unit itself.
+// J10-R's proof block, `PouwH1Tile_v5` (h1tile.j10r_reference), slow but exact on sm_90a (the fallback): every value in
+// the Definition's own order, integers only, no tensor cores, the noise and the fold keys hashed by each proof block's CTA itself.
 //
-//   jr_seeds   one thread a listed unit: sigma_R = seeds.receipt_seed(salt, base + u, roots); one more thread seed_c =
+//   jr_seeds   one thread a listed proof block: sigma_R = seeds.receipt_seed(salt, base + u, roots); one more thread seed_c =
 //              seeds.call_seed(salt, base, roots) (SHA-512 over 224 bytes, two compressions each)
-//   jr_units   one CTA a listed unit, one thread a (lane, chain) of h1tile.Layout(32, 32, K): lane l = tid / 8 holds the
+//   jr_units   one CTA a listed proof block, one thread a (lane, chain) of h1tile.Layout(32, 32, K): lane l = tid / 8 holds the
 //              tile's rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1) (g = l / 4, q = l % 4), and chain c = tid % 8
 //              absorbs the lane's entries e' = 4 t + (c % 4) for t = c / 4, + 2, + 4, + 6 (segment.row_slot / col_slot of
 //              each), so the thread keeps those four entries' sums T_s (dp4a over each segment's 32 products) and its
-//              chain's fx1 state (y_c, z_c), from its lane's key block (block l of sigma_R's stream). The unit's noise is
+//              chain's fx1 state (y_c, z_c), from its lane's key block (block l of sigma_R's stream). The proof block's noise is
 //              seed_c's call-scale stream at h1tile.j10r_blocks: row i's block t of a chunk of 16 segments at
 //              (32 ri + i) RB + t, column j's at M RB + (32 cj + j) CB + t, its tail (the rows' digit coins, the columns'
 //              U bytes) at t = K / 512. After each set the receipt's words 2 s and 2 s + 1 are the XOR over the CTA's
@@ -15,18 +15,16 @@
 //              then O' = T_last + A_0 (-U)^T and D_d = A_d U^T entry by entry, absorbed as sets KS .. KS + m - 1.
 //   jr_z       one thread an output word: z[i][j] = sum_k A[i][k] B[j][k] mod 2^32 (segment.seg_dot), v5's z
 //
-// A, B: s8 row-major [M, K] and [N, K]; units: u32 unit indices u = ri (N / 32) + cj; data: kh_seeds_j10r's words
+// A, B: s8 row-major [M, K] and [N, K]; units: u32 proof-block indices u = ri (N / 32) + cj; data: kh_seeds_j10r's words
 // (j10r_units.seed_words: CALL_SEED_TAG, RECEIPT_TAG, salt, root_a, root_b, big-endian 64-bit) and NOISE_TAG's 3 words
 // (33 in all); seed_c: 8 u64, sigma: n x 8 u64 (the digests' big-endian words); rec: n x jr_words(K) u32; z: n x 1024 u32.
 // Requires M % 32 == N % 32 == 0, K % 512 == 0 (16 segments a noise block) and n_digits(K / 32) <= 4.
 #include <cstdint>
 #include <cuda_runtime.h>
 
-namespace jr {
+#include "../sha512_rows/sha512x.cuh"
+
 typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace jr
-using jr::u64;
 typedef unsigned int u32;
 
 constexpr int TILE = 32, THREADS = 256, CHUNK = 16, MAXM = 4, WARPS = THREADS / 32;
@@ -55,9 +53,8 @@ __device__ void noise_block(const u64* tag, const u64* seed, u64 t, u32* out) {
   u64 w[16] = {tag[0], tag[1], tag[2], seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7], t,
                0x8000000000000000ULL, 0, 0, 96 * 8};
   u64 s[8];
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = jr::kSha512Iv[j];
-  jr::sha512_compress(s, w);
+  sx::iv(s);
+  sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
     out[2 * j] = (u32)(s[j] >> 32);
@@ -69,7 +66,7 @@ __global__ void __launch_bounds__(128) k_seeds(const u64* __restrict__ data, u64
                                                u32 n, u64* __restrict__ seedc, u64* __restrict__ sigma) {
   const u32 i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i > n) return;
-  const int kind = i == n ? 0 : 1;  // 0: seed_c at the call's first position, 1: the unit's sigma_R
+  const int kind = i == n ? 0 : 1;  // 0: seed_c at the call's first position, 1: the proof block's sigma_R
   const u64 pos = i == n ? base : base + units[i];
   u64 msg[32];
   msg[0] = pos;
@@ -78,9 +75,9 @@ __global__ void __launch_bounds__(128) k_seeds(const u64* __restrict__ data, u64
   msg[29] = msg[30] = 0;
   msg[31] = 224 * 8;
   u64 s[8];
-  for (int j = 0; j < 8; ++j) s[j] = jr::kSha512Iv[j];
-  jr::sha512_compress(s, msg);
-  jr::sha512_compress(s, msg + 16);
+  sx::iv(s);
+  sx::compress<0, 2>(s, msg);
+  sx::compress<0, 2>(s, msg + 16);
   u64* o = i == n ? seedc : sigma + 8 * (u64)i;
   for (int j = 0; j < 8; ++j) o[j] = s[j];
 }

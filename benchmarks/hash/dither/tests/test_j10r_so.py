@@ -32,7 +32,7 @@ def JS(monkeypatch):
 
 def test_receipts_take_a_host_capture_to_b_device(JS, monkeypatch):
     """B on another device than the host-memory capture (`meta` standing in for cuda:0): call_receipts gets A on B's
-    device, and a skipped dead row block's units the zero receipt."""
+    device, and a skipped dead row tile's units the zero receipt."""
     seen = []
 
     def call_receipts(a, b, salt, base, root_a, root_b, only):

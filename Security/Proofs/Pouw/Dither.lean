@@ -361,10 +361,10 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
 
 /-! ## The cap on oracle calls -/
 
-/-- **A run whose timed use fits, and whose selected answers run within the period, is within the cap `Q`**
-(RT-LEAN-2 L39, CMP-154, RT-POOL RP20): by (G3) the calls in the sampling blocks' commit phases and work use at least
-`calls · callUse_r` of a resource `r` a call uses, which fits within its capacity `cap_r ≤ Q callUse_r`, and a
-selected answer's calls use at most its use, which is at most `cap_r`. -/
+/-- **A run whose timed use fits, and whose selected answers run within the period, is within the cap `Q`**: by (G3) the
+calls in the sampling blocks' commit phases and work use at least `calls · callUse_r` of a resource `r` a call uses,
+which fits within its capacity `cap_r ≤ Q callUse_r`, and a selected answer's calls use at most its use, which is at
+most `cap_r`. -/
 theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) {Q : ℝ}
     (sel : P.Chk → Prop) (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r)
     (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) (o : P.Orc) (x : Fin k → P.Draw × P.Chk)

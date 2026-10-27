@@ -14,7 +14,7 @@ gate's no-write control (F_NW_TILES) the slot may go unwritten, so that one step
 reads xq); dither-1s arms' tokens are reported, not gated.
 
 The workspace (`kh_unit_ws`' noise, the largest linear's `kh_ws_bytes` at T rows) is allocated at the window's first
-call, vLLM's eager profile run; each call's J is set for the row blocks its M can hold live (M is fixed per captured
+call, vLLM's eager profile run; each call's J is set for the row tiles its M can hold live (M is fixed per captured
 graph). The library is h1u.cu built by job.sh on this lane's branch (`HB_H1U`), sent to the run with --send.
 
 `patch(path, peel=True)` is the `dither-1s-hbp` arm: `kh_one_peel` (CA's peel, 11:02Z) in kh_one's place, the same

@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
-# What the frame takes at the inner proof's rounds (Stage B, R3)
+# What the frame takes at the inner proof's rounds
 
 At the inner proof's rounds the frame fixes every frame and value it computes from its draws and the coins
 (`innerOwn`), so a round it takes there is the firewall's own (`ownRound`) at its configuration and state, whatever

@@ -34,6 +34,9 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
+from verity_config.settings import SHARED
+
 RESULT_SCHEMA = "research/result/v0.1"
 KIND = "native-peak/v1"
 DTYPES = ("bf16", "e4m3", "nvfp4")
@@ -451,7 +454,7 @@ def try_nvfp4_cublaslt_gemm(n: int, device: str, warmup: int, reps: int) -> dict
         variants.append(("_scaled_mm blockwise scales", lambda: torch._scaled_mm(a, b, scale_a=sa, scale_b=sb, out_dtype=torch.float32)))
         for name, cand in variants:
             try:
-                out = cand()
+                cand()
                 torch.cuda.synchronize()
                 fn, rec["variant"] = cand, name
                 break
@@ -544,7 +547,7 @@ def environment(device: int) -> dict:
 
 
 def source_commit() -> str | None:
-    env = os.environ.get("RESEARCH_SOURCE_COMMIT")
+    env = SHARED.RESEARCH_SOURCE_COMMIT
     if env:
         return env
     name = Path.cwd().name
@@ -655,9 +658,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-sass", action="store_true", help="do not attempt the ncu SASS capture even if ncu is present")
     a = ap.parse_args(argv)
     sizes = parse_sizes(a.sizes)
-    run_dir = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or "benchmarks/native_peak/out")
+    run_dir = Path(a.out or SHARED.RESEARCH_RUN_DIR or "benchmarks/native_peak/out")
     run_dir.mkdir(parents=True, exist_ok=True)
-    run_id = os.environ.get("RESEARCH_RUN_ID") or f"local-{int(time.time())}"
+    run_id = SHARED.RESEARCH_RUN_ID or f"local-{int(time.time())}"
     t0 = time.time()
 
     import torch
