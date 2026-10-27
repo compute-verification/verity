@@ -276,6 +276,30 @@ class Runtime:
         self.hosts: dict[str, Host] = {}
         self.sources: list[_Source] = []
         self.divergence: str | None = None
+        self.children: dict[str, tuple[subprocess.Popen[bytes], list[Pipe]]] = {}
+        """Each local process by its party, with the pipes this run listens on for it."""
+        self.printed: dict[str, bytearray] = {}
+        """What each local process has printed so far."""
+        self.ended: set[str] = set()
+
+    def _hear(self, name: str) -> None:
+        """Read what a local process printed, and reap it at its end."""
+        chunk = os.read(self.children[name][0].stdout.fileno(), 1 << 16)
+        if chunk:
+            self.printed.setdefault(name, bytearray()).extend(chunk)
+        else:
+            self._reap(name)
+
+    def _reap(self, name: str) -> None:
+        """A local process that ended: what it printed kept, and the pipes still waiting for it closed, so a process
+        that died before it connected fails the run instead of stalling it."""
+        child, pipes = self.children[name]
+        self.printed.setdefault(name, bytearray()).extend(child.stdout.read())
+        child.wait()
+        self.ended.add(name)
+        for p in pipes:
+            if isinstance(p, TcpListen) and p.pipe is None:
+                p.close()
 
     def transmit(self, ep: Endpoint, frame: bytes) -> None:
         try:
@@ -345,16 +369,20 @@ class Runtime:
         clocks = [s for s in self.sources if s.need == "clock" and s.owner in live and s.source.alarm() is not None]
         real = [s for s in clocks if not s.source.virtual]
         streams = [fd for p in pipes if (fd := p.fileno()) is not None]
+        kids = {self.children[n][0].stdout.fileno(): n for n in self.children if n not in self.ended} if streams else {}
         if streams or real:
             timeout = None if not real else max(0, min(s.source.alarm() - s.source.now() for s in real)) / 1e9
             if streams:
-                ready, _, _ = select.select(streams, [], [], timeout)
+                ready, _, _ = select.select(streams + list(kids), [], [], timeout)
             else:
                 ready = []
                 select.select([], [], [], timeout)
             if not ready:
                 for s in real:
                     self._fire(s)
+            for fd in ready:
+                if fd in kids:
+                    self._hear(kids[fd])
             if streams:
                 return True
             return bool(real)
@@ -605,21 +633,23 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
                            _endpoints(m, a, pipes[a], handshakes), rt.transmit, rt.finished)
     from .process import spawn  # noqa: PLC0415 - process imports this module
 
-    children = {b: spawn(dict(spec, config=dict(config), parties_here=[b], mode=mode,
-                              state_dir=None if tdir is None else str(tdir / f"process-{b}"),
-                              seed=None if seed is None else seed.hex(), clock_step_ns=clock_step_ns,
-                              dial=child_dial.get(b, {}), authenticate=authenticate))
-                for b, spec in sorted(processes.items())}
+    for b, spec in sorted(processes.items()):
+        child = spawn(dict(spec, config=dict(config), parties_here=[b], mode=mode,
+                           state_dir=None if tdir is None else str(tdir / f"process-{b}"),
+                           seed=None if seed is None else seed.hex(), clock_step_ns=clock_step_ns,
+                           dial=child_dial.get(b, {}), authenticate=authenticate))
+        rt.children[b] = (child, [pipes[a][b] for a in here if b in pipes[a]])
     try:
         rt.run()
     except BaseException:
-        for child in children.values():
+        for child, _ in rt.children.values():
             child.kill()
         raise
     outcomes = {n: _plain(h.finished) for n, h in sorted(rt.hosts.items())}
-    for b, child in children.items():
-        out = child.stdout.read()
-        child.wait()
+    for b, (child, _) in rt.children.items():
+        if b not in rt.ended:
+            rt._reap(b)
+        out = bytes(rt.printed[b])
         try:
             got = json.loads(out.decode().strip().splitlines()[-1])
             outcomes.update(got["outcomes"])

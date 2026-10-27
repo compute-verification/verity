@@ -63,6 +63,15 @@ def test_over_tcp_to_a_local_process(tmp_path):
     assert challenge == [e.data for e in sim.transcripts["challenger"].on("responder") if e.dir == "out"][0]
 
 
+def test_a_local_process_that_dies_before_it_connects_fails_the_run(tmp_path):
+    broken = dict(X.PROCESS, protocols={X.ID: "deploy_example:NO_SUCH_PROTOCOL"})
+    r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
+            verify=X.verify, seed=SEED, processes={"responder": broken})
+    assert r.status == "failed"
+    assert r.outcomes["responder"] == {"outcome": {"exit": 1}, "refused": "party-died"}
+    assert r.outcomes["challenger"]["refused"] == "closed"
+
+
 def test_a_new_responder_against_the_recorded_challenger(tmp_path):
     recorded = simulated(tmp_path / "first").transcripts["challenger"]
     r = run(X.config(), ["responder"], "mixed", tmp_path / "new", protocols={X.ID: X.protocol(responder=X.NewResponder)},

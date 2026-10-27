@@ -181,8 +181,11 @@ class TcpListen:
         self.pipe: TcpPipe | None = None
         self._held: list[bytes] = []
         self._bounds = (max_head, max_body)
+        self._shut = False
 
     def _accept(self) -> TcpPipe | None:
+        if self._shut:
+            return None
         if self.pipe is None:
             self.server.setblocking(False)
             try:
@@ -210,14 +213,19 @@ class TcpListen:
         return None
 
     def fileno(self) -> int | None:
+        if self._shut:
+            return None
         return self.server.fileno() if self.pipe is None else self.pipe.fileno()
 
     @property
     def closed(self) -> bool:
-        return self.pipe is not None and self.pipe.closed
+        return self._shut or (self.pipe is not None and self.pipe.closed)
 
     def close(self) -> None:
+        """Before its connection: stop listening, and nothing will arrive."""
         if self.pipe is None:
+            self._shut = True
+            self._held.clear()
             self.server.close()
         else:
             self.pipe.close()
