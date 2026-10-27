@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-import settings  # noqa: E402
+import settings
 
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}

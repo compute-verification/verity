@@ -82,7 +82,7 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-import settings  # noqa: E402
+import settings
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192

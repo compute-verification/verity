@@ -39,7 +39,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-import settings  # noqa: E402
+import settings
 
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 
