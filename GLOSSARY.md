@@ -128,7 +128,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "wrong unit", "incorrect unit", "faulty unit"; the Lean's `wrong`, the audit record's `wrong_units` | faulty proof block |
 | "transcript" for the values of a run's gates; `ExecutionTranscript` | trace |
 | "δ_link", "the link term"; the Lean's `LinkSound` and `δlink` | ε_bind, the binding error |
-| "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block |
+| "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block (C-Flock's statement layout keeps VU in its own sense: Narrower senses) |
 | "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | C-Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
 | "M1", "M2" (elsewhere in the code these also name unrelated things) | C-Flock ZK |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
@@ -228,6 +228,17 @@ Some words keep a different, narrower sense:
   runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value. Circuit hiding is
   recursion (C-Flock's `--hide`), not the universal unit.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
+- C-Flock's statement layout (`verity/ml/flock/verifier/PROTOCOL.md` §16) nests three levels inside one proof:
+  - a **unit copy** is one copy of the statement's unit circuit in one slot of the unit range (the spec's "unit",
+    `units_per_vu` ≥ 1 of them per VU);
+  - a **VU** is one instance's share of the witness: the slots that lay out one drawn proof block, with its rows' digests,
+    its unit copies and its outputs (a padding VU lays out none);
+  - an **R1CS block** is one diagonal block of the statement's block R1CS, 2^{k_log} witness bits holding
+    G = `vus_per_block` VUs, a power of two (the spec's "block"; a statement has 2^{nbl} of them).
+
+  So "at least one unit per VU and a power of two of VUs per block" reads "at least one unit copy per VU and a power of
+  two of VUs per R1CS block". An R1CS block is never a proof block, and the identifiers (`units_per_vu`,
+  `vus_per_block`, `blocks_real`) keep their names.
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not C-Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`); it is not a phase or a run.
