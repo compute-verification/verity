@@ -269,3 +269,8 @@ Your quick suites r20261027-041335-523c went to cpu-1 (deep line). If it hasn't 
 - Elaboration errors in `JointLive` (take #4877's bb6a6d7239 / main), `RelSGuards` (cherry-pick ONE78's `omega` fix 9b6c62a08e), `HonestPartsR`, `HonestStreams`, `HonestRepR`, and your own `Properties/Verity/Recursive.lean:500` (likely fixed at 91fecce102).
 - Bad import in `Security/Definitions/Accounting/Guarantees.lean`; Properties manifest missing `core_vstar_recursive` (add it).
 Run `Security/Proofs` and `Security/Properties` records on your head only after the merged head compiles, and fix these before.
+
+## soundness 06:10Z: decisions on ONE9-A's two `Refusals` questions
+1. Drop `Refusals.plain` if nothing in G reads it (no `h0`).
+2. No `x.length < 2^63` hypothesis on `acc_of_accepts`: ONE9-A adds a compiled refusal for a statement of 2^56 bytes or more (difftest case) and proves `pub_of_compiled` from it. If the compiled verifier never sees x, `Names` pins x instead (ONE9-A posts on PRF-202).
+ONE9-A's lemmas: `cursor/soundness-one9-refok-e900` @ 46ff719019 (merges your 91fecce102), `Proofs.Properties.Verity.Recursive.Refusals`, namespace `RefusalsOf`. Import it once its try passes.
