@@ -777,7 +777,7 @@ def test_malformed_word_reaches_the_boundary_as_inv_never_as_a_canonical_value()
     # and a ⊥ prompt word (also not a prescribed value) is rejected too, while the Program would treat it as inactivity
     with pytest.raises(L.BoundaryFailure, match="prescribed input must be Active"):
         L.check_boundary(32, BOT32, what="prompt[0]", prescribed=True)
-    # positive counterpart: with the (valid) fixture prompt no INV exists anywhere in the transcript
+    # positive counterpart: with the (valid) fixture prompt no INV exists anywhere in the trace
     p3, t3, _ = _lserve((17,))
     assert not any(v == L.inv(p3.circuit.gate(g).prim.ret.w - 1) for g, v in t3.items())
 
@@ -895,7 +895,7 @@ def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_w
     n_active_ev = sum(1 for x in out if x != BOT32)
     assert [r["reading"]["kind"] for r in rs if r["is_output"]] == ["active"] * n_active_ev + ["bot"] * (N_EVENTS - n_active_ev)
     assert all(r["width"] is not None and r["width"] >= 2 for r in rs if r["class"] in ("strict", "specified"))  # lifted widths w+1
-    assert all(r["word"] == t[r["gate"]] for r in rs)  # raw words, byte for byte the transcript's
+    assert all(r["word"] == t[r["gate"]] for r in rs)  # raw words, byte for byte the trace's
     s2 = D.dump(prog, t, tmp_path / "dump.jsonl")
     assert s2 == s and sum(1 for _ in open(tmp_path / "dump.jsonl")) == prog.gates
 

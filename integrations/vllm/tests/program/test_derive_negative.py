@@ -28,7 +28,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.ml.circuits import Program, bind, program_digest  # noqa: E402
-from verity_vllm.correspondence.capture_identities import LazyTranscript, Segments, check_call  # noqa: E402
+from verity_vllm.correspondence.capture_identities import LazyTrace, Segments, check_call  # noqa: E402
 from verity.ml.circuits.evaluation import evaluate_region  # noqa: E402
 from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
@@ -946,7 +946,7 @@ def _segments(d: dict[int, int]) -> Segments:
 
 
 def _tiny_program_with_truth():
-    """A root call of `BiasAdd{N=8}` over prescribed inputs, fully evaluated: (program, truth transcript, the call)."""
+    """A root call of `BiasAdd{N=8}` over prescribed inputs, fully evaluated: (program, truth trace, the call)."""
     from verity.ml.circuits.defs import CompositeDefinition
     W = CompositeDefinition("XferWrapBiasAdd", 1, (), lambda S: ((("y", Array(8, BF16)), ("b", Array(8, BF16))), Array(8, BF16)),
                             lambda B, S, y, b: B.call(bind(b1.BiasAdd, N=8), y, b, name="ba"), register=False)
@@ -963,7 +963,7 @@ def _tiny_program_with_truth():
 
 
 def _check(call, gates, source: dict[int, int], captured: np.ndarray) -> dict:
-    return check_call(call, gates, LazyTranscript(_segments(source)), captured)
+    return check_call(call, gates, LazyTrace(_segments(source)), captured)
 
 
 def test_correspondence_exact_on_true_values():

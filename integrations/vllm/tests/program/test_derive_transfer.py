@@ -308,7 +308,7 @@ def evaluate_against_torch(out: Outcome, module: nn.Module, inputs: tuple) -> di
     if imap is None:
         return {"evaluated": False, "why": "no input map (parameter count does not match inputs + weights)"}
     params, ret = P.fn.signature()
-    transcript: dict[int, int] = {}
+    trace: dict[int, int] = {}
     for pi, ((pname, ptype), (_, tensor)) in enumerate(zip(params, imap)):
         coll = P.input_coll(pi)
         leaves = _flatten_like(tensor, ptype)
@@ -318,9 +318,9 @@ def evaluate_against_torch(out: Outcome, module: nn.Module, inputs: tuple) -> di
             return {"evaluated": False, "why": f"parameter {pname}: {refs.count} gates vs {len(words)} tensor leaves"}
         for j in range(refs.count):
             _, _, g = refs[j]
-            transcript[g] = int(words[j])
+            trace[g] = int(words[j])
     try:
-        evaluate_region(C, C[0:C.size], transcript)
+        evaluate_region(C, C[0:C.size], trace)
     except MissingValue as e:
         return {"evaluated": False, "why": f"MissingValue: {e}"}
     except Exception as e:  # noqa: BLE001
@@ -334,7 +334,7 @@ def evaluate_against_torch(out: Outcome, module: nn.Module, inputs: tuple) -> di
     got = []
     for g, like in zip(outs, [want_flat.dtype] * len(outs)):
         w = C.gate(g).prim.ret.w
-        got.append(_decode(transcript[g], w, like))
+        got.append(_decode(trace[g], w, like))
     got_t = torch.tensor(got, dtype=torch.float64)
     want_d = want_flat.to(torch.float64)
     exact = int((got_t == want_d).sum())

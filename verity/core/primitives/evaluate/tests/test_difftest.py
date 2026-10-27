@@ -138,8 +138,8 @@ REGISTERED_TABLES = {
 }
 
 
-def _bind(D, inputs: list) -> reference._Transcript:
-    """The transcript of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
+def _bind(D, inputs: list) -> reference._Trace:
+    """The trace of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
     `{"table": name}` binding as many consecutive `RegisteredInput16_v1` gates as the table has leaves, read on demand."""
     body = D.root.body
     runs = [(body.offsets[k], n.gates, *input_id(n.fn.id)[::-1]) for k, n in enumerate(body.nodes)
@@ -153,7 +153,7 @@ def _bind(D, inputs: list) -> reference._Transcript:
     total = sum(n for _, n, _, _ in runs)
     if given != total:
         raise ValueError(f"expected {total} input words, got {given}")
-    t = reference._Transcript()
+    t = reference._Trace()
     ri = ro = 0
     for p in inputs:
         if isinstance(p, list):

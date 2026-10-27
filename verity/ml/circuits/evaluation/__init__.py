@@ -25,10 +25,10 @@ from .batch import (  # noqa: F401
     word_kernel,
 )
 from .reference import (  # noqa: F401
-    ExecutionTranscript,
     MissingValue,
     RegisteredTable,
     ScalarReference,
+    Trace,
     evaluate,
     evaluate_call,
     evaluate_region,

@@ -12,46 +12,46 @@ from typing import Iterable
 
 from .layout import FunctionCall, Circuit, GateSelection
 
-ExecutionTranscript = dict[int, int]
+Trace = dict[int, int]
 
 
 class MissingValue(KeyError):
     pass
 
 
-def evaluate_region(circuit: Circuit, sub: GateSelection, transcript: ExecutionTranscript, *, strict: bool = True) -> ExecutionTranscript:
-    """Evaluate every gate of `sub` in canonical order, writing into `transcript` (mutated and returned).
+def evaluate_region(circuit: Circuit, sub: GateSelection, trace: Trace, *, strict: bool = True) -> Trace:
+    """Evaluate every gate of `sub` in canonical order, writing into `trace` (mutated and returned).
     `Input` gates must be present already. With `strict=False`, gates whose operands are missing are skipped."""
     for gv in sub:
         prim = gv.prim
         if getattr(prim, "family", None) == "Input":
-            if gv.index not in transcript:
-                raise MissingValue(f"Input gate {gv.index} has no prescribed value in the transcript")
+            if gv.index not in trace:
+                raise MissingValue(f"Input gate {gv.index} has no prescribed value in the trace")
             continue
         lazy = getattr(prim, "evaluate_lazy", None)
         if lazy is not None:
             ops_seq = gv.operands
             try:
-                transcript[gv.index] = lazy(lambda j, _s=ops_seq: transcript[_s[j]])
+                trace[gv.index] = lazy(lambda j, _s=ops_seq: trace[_s[j]])
             except KeyError as e:
                 if strict:
-                    raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
+                    raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the trace") from None
             continue
         try:
-            ops = [transcript[o] for o in gv.operands]
+            ops = [trace[o] for o in gv.operands]
         except KeyError as e:
             if strict:
-                raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
+                raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the trace") from None
             continue
-        transcript[gv.index] = prim.evaluate(*ops)
-    return transcript
+        trace[gv.index] = prim.evaluate(*ops)
+    return trace
 
 
-def evaluate_call(circuit: Circuit, call: FunctionCall, args: Iterable[int], transcript: ExecutionTranscript | None = None) -> tuple[int, ...]:
+def evaluate_call(circuit: Circuit, call: FunctionCall, args: Iterable[int], trace: Trace | None = None) -> tuple[int, ...]:
     """Bind `args` (encodings, in `call.args` order) then evaluate the call's region; return the encodings
     of `call.returns`. Values of `call.args` that lie inside the call (impossible for a well-formed call)
     or repeated references are bound consistently or rejected."""
-    t: ExecutionTranscript = {} if transcript is None else transcript
+    t: Trace = {} if trace is None else trace
     arg_gates = call.args
     args = list(args)
     if len(args) != len(arg_gates):

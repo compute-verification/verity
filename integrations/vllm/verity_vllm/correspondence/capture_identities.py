@@ -217,8 +217,8 @@ class Segments:
         return {**self.locs[i], "word": k}
 
 
-class LazyTranscript(dict):
-    """`ExecutionTranscript` whose missing entries are read from value segments (weights + captured leaves).
+class LazyTrace(dict):
+    """`Trace` whose missing entries are read from value segments (weights + captured leaves).
     Values computed by `evaluate_region` are stored in the dict and take precedence."""
 
     def __init__(self, *sources: Segments) -> None:
@@ -507,7 +507,7 @@ def _shape_ok(call: FunctionCall, gates: tuple[int, ...], entry: dict) -> tuple[
     return True, "ok"
 
 
-_MISSING_OPERAND_RE = re.compile(r"operand (\d+) is not in the transcript")
+_MISSING_OPERAND_RE = re.compile(r"operand (\d+) is not in the trace")
 
 
 class Recomputer:
@@ -536,7 +536,7 @@ class Recomputer:
                 return c
             c = nxt
 
-    def fill(self, overlay: "LazyTranscript", missing_gate: int, log: list[dict], depth: int = 0) -> None:
+    def fill(self, overlay: "LazyTrace", missing_gate: int, log: list[dict], depth: int = 0) -> None:
         c = self.producing_call(missing_gate)
         if c is None:
             raise MissingValue(f"gate {missing_gate} has no producing composite call")
@@ -558,15 +558,15 @@ class Recomputer:
         log.append({"function": c.id, "call": value_identity(c, c.returns)["call"], "region": [c.lo, c.hi], "for_gate": missing_gate, "depth": depth})
 
 
-def check_call(call: FunctionCall, gates: tuple[int, ...], transcript: LazyTranscript, captured: np.ndarray,
+def check_call(call: FunctionCall, gates: tuple[int, ...], trace: LazyTrace, captured: np.ndarray,
                *, sub=None, recompute: Recomputer | None = None) -> dict:
-    """Evaluate `sub` (default: the whole call) gate by gate, reading outside operands from the transcript's
+    """Evaluate `sub` (default: the whole call) gate by gate, reading outside operands from the trace's
     sources, and compare the words at `gates` that lie inside `sub` with `captured`.  With `recompute`, an operand
     the capture never materialised is recomputed exactly from committed values (see `Recomputer`)."""
     region = call if sub is None else sub
     t0 = time.time()
     # evaluate into a fresh overlay so captured words of *this* call's own returns are never read as operands
-    overlay = LazyTranscript(*transcript.sources)
+    overlay = LazyTrace(*trace.sources)
     recomputed: list[dict] = []
     for _ in range(64):
         try:
@@ -774,7 +774,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
                     run_start = i
     print(f"[corr] captured leaves located: {len(located)} ({len(cap)} segments), {time.time() - t0:.1f}s", flush=True)
 
-    transcript = LazyTranscript(wb.segments, prompt_seg, cap)
+    trace = LazyTrace(wb.segments, prompt_seg, cap)
     rng = np.random.default_rng(seed)
     records: list[dict] = []
     summary = {"exact": 0, "mismatch": 0, "missing-operand": 0, "sampled": 0, "shape_mismatch": 0}
@@ -806,7 +806,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
             t1 = time.time()
             for i in pick:
                 sub = kids[i]
-                r = check_call(call, gates, transcript, captured, sub=sub, recompute=recomputer)
+                r = check_call(call, gates, trace, captured, sub=sub, recompute=recomputer)
                 checks.append({"coordinate": i, **{k: r[k] for k in ("status", "mismatches")}})
             statuses = {c["status"] for c in checks}
             rec["check"] = {"status": "exact" if statuses == {"exact"} else ("mismatch" if "mismatch" in statuses else "missing-operand"),
@@ -815,7 +815,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
                             "failed_coordinates": [c for c in checks if c["status"] != "exact"][:16], "seconds": round(time.time() - t1, 3)}
             summary["sampled"] += 1
         else:
-            rec["check"] = check_call(call, gates, transcript, captured, recompute=recomputer)
+            rec["check"] = check_call(call, gates, trace, captured, recompute=recomputer)
         summary[rec["check"]["status"]] = summary.get(rec["check"]["status"], 0) + 1
         records.append(rec)
         print(f"[corr] {rec['check']['status']:16s} {cid.split('/ph=')[0].split('/r=')[1][-8:]}/{cid.split('/', 4)[-1]:70s} {call.id[:48]:48s} {rec['check'].get('seconds', 0):8.2f}s", flush=True)

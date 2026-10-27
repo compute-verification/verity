@@ -302,13 +302,13 @@ def _run(body: Body, V: list, off: int) -> None:
                 try:
                     V[out + m] = lazy(get)
                 except KeyError as e:
-                    raise MissingValue(f"gate {off + goff + m} ({pid}) operand {e.args[0]} is not in the transcript") from None
+                    raise MissingValue(f"gate {off + goff + m} ({pid}) operand {e.args[0]} is not in the trace") from None
         elif op == _GATHER:
             _, ev, n, sa, out = st
             for m in range(n):
                 V[out + m] = ev(*[V[w] for w in _member(sa, m)])
         elif op == _INPUT:
-            raise MissingValue(f"Input gate {off + st[1]} has no prescribed value in the transcript")
+            raise MissingValue(f"Input gate {off + st[1]} has no prescribed value in the trace")
         else:  # pragma: no cover
             raise AssertionError(op)
 

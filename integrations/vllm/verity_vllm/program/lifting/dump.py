@@ -2,13 +2,13 @@
 evaluator should expose the complete small assignment, not only final outputs"; revb PADDED-ACCEPTANCE Stage 1 artefact: "a
 reference-evaluator dump that exposes the COMPLETE small assignment (every wire, not only outputs)").
 
-`rows(prog, transcript)` reads `serve3_reference.materialize`'s trace `{gate: word}` back against the circuit: for EVERY gate its
+`rows(prog, trace)` reads `serve3_reference.materialize`'s trace `{gate: word}` back against the circuit: for EVERY gate its
 index, scope path (the node names from the root body down), primitive id, lift class (`input` / `const` / `strict` / `specified` /
 `unlifted` for a primitive that is not a lifted one), the lifted width `w+1` of its output, the raw committed word, and the word's
 reading under LIFTING-SPEC A3 (`active` with its payload / `bot` / `inv` = noncanonical `1‖nonzero`).  Nothing is normalised: the
 `word` column is the raw integer; `reading` is the relation's verdict on it, beside it.
 
-`dump(prog, transcript, path)` writes one JSON object per line; `summary(rows)` counts the words per class and reading (the five
+`dump(prog, trace, path)` writes one JSON object per line; `summary(rows)` counts the words per class and reading (the five
 counts revb reads: gates, active, bot, inv, and the specified-class gates)."""
 
 from __future__ import annotations
@@ -48,14 +48,14 @@ def _reading(w1: int, word: int) -> dict[str, Any]:
     return {"kind": "inv", "raw_hex": hex(word)}  # noncanonical: reported raw, never rewritten
 
 
-def rows(prog: Any, transcript: Mapping[int, int]) -> Iterator[dict[str, Any]]:
+def rows(prog: Any, trace: Mapping[int, int]) -> Iterator[dict[str, Any]]:
     circ = prog.circuit
     outs = set(circ.root_outputs())
     for g in range(prog.gates):
         gate = circ.gate(g)
         ret = gate.prim.ret
         w1 = ret.w if isinstance(ret, Value) else None
-        word = transcript.get(g)
+        word = trace.get(g)
         lifted = L.is_lifted_prim(gate.prim)  # an ordinary word (G1) has no tag: read as the value it is, never through the lifted reading
         yield {
             "gate": g,
@@ -70,10 +70,10 @@ def rows(prog: Any, transcript: Mapping[int, int]) -> Iterator[dict[str, Any]]:
         }
 
 
-def dump(prog: Any, transcript: Mapping[int, int], path: str | Path) -> dict[str, Any]:
+def dump(prog: Any, trace: Mapping[int, int], path: str | Path) -> dict[str, Any]:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    rs = list(rows(prog, transcript))
+    rs = list(rows(prog, trace))
     with p.open("w") as f:
         for r in rs:
             f.write(json.dumps(r, separators=(",", ":")) + "\n")

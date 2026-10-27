@@ -96,7 +96,7 @@ def _registered(program, q=None, preds=None, family="test", grid_bits=V.GRID_BIT
     return adv, rs, reg, V.statement(family, preds, adv, reg.root)
 
 
-def _transcript(program, seed: int = 1) -> dict[int, int]:
+def _trace(program, seed: int = 1) -> dict[int, int]:
     C, rnd, t = program.circuit, random.Random(seed), {}
     for i in range(C.size):
         g = C.gate(i)
@@ -148,7 +148,7 @@ def test_template_mode_numbers_units_as_v1(label, name, q):
     assert V.check(st, rs, P).ok
     tp = PO.TemplatePartition(P, q)
     assert [V.locate(st, V.Reader(rs), i)[1:3] for i in range(adv.units)] == [tuple(tp.locate(i)) for i in range(adv.units)]
-    t = _transcript(P)
+    t = _trace(P)
     assert all(V.check_unit(st, V.Reader(rs), i, P, t).ok for i in range(st["units"]))
 
 
@@ -319,7 +319,7 @@ def test_the_local_predicates_from_the_opened_rows_alone(program):
     """Each unit's check reads only the rows `openings` names; each opens against the advice root, and the check from those
     rows alone agrees with the check from all of them."""
     adv, rs, reg, st = _registered(program)
-    t = _transcript(program)
+    t = _trace(program)
     root, count = bytes.fromhex(st["advice"]["root"]), st["advice"]["rows"]
     for i in range(st["units"]):
         opened = {}
@@ -334,7 +334,7 @@ def test_the_local_predicates_from_the_opened_rows_alone(program):
 
 def test_a_wrong_value_fails_its_unit(program):
     _adv, rs, _reg, st = _registered(program)
-    t = _transcript(program)
+    t = _trace(program)
     v = V.check_unit(st, V.Reader(rs), 8, program, t)
     assert v.detail["definition"] == "HFan_v1" and v.detail["outputs"] == [42] and v.detail["inputs"] == [39, 17]
     bad = dict(t)
@@ -348,7 +348,7 @@ def test_a_wrong_value_fails_its_unit(program):
 
 def test_local_refusals(program):
     adv, rs, _reg, st = _registered(program)
-    t = _transcript(program)
+    t = _trace(program)
     assert V.check_unit(st, V.Reader(rs), 11, program, t).codes == ("unit-outside",)
     assert V.check_unit(st, V.Reader([bytes(V.ROW_BYTES)] + rs[1:]), 0, program, t).codes == ("unit-locate",)
     other = V.rows(_mutate(adv, entry=(5, {"classes": ("0" * 128,) + adv.entries[5].classes[1:]})))
@@ -425,7 +425,7 @@ def test_owner_function_mode(program):
 def build() -> dict:
     P = _program()
     adv, rs, reg, st = _registered(P)
-    t = _transcript(P)
+    t = _trace(P)
     refusals = []
     for label, edit, pedit, code in REFUSALS:
         a = edit(P, V.build(P))

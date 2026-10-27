@@ -341,33 +341,33 @@ def program(scheme: str, m: int, k: int, n: int) -> Compiled:
     return Compiled(t, prog, PO.TemplatePartition(prog, t.query), wprog, PO.TemplatePartition(wprog, t.weight_query))
 
 
-def _transcript(prog: Any, args: Sequence[Sequence[int]]) -> dict[int, int]:
-    transcript: dict[int, int] = {}
+def _trace(prog: Any, args: Sequence[Sequence[int]]) -> dict[int, int]:
+    trace: dict[int, int] = {}
     for coll, vals in zip(prog.root.input_colls, args):
         gates = [g for (_space, _zero, g) in coll.refs]
         if len(gates) != len(vals):
             raise ValueError(f"an input group has {len(vals)} values, the Definition takes {len(gates)}")
-        transcript.update(zip(gates, vals))
-    evaluate_region(prog.circuit, prog.circuit.region(0, prog.circuit.size), transcript)
-    return transcript
+        trace.update(zip(gates, vals))
+    evaluate_region(prog.circuit, prog.circuit.region(0, prog.circuit.size), trace)
+    return trace
 
 
 def evaluate_ir(scheme: str, call: Call) -> tuple[Compiled, dict[int, int]]:
-    """The call's Program evaluated on its bound inputs: the compiled Programs and its transcript (gate -> encoding)."""
+    """The call's Program evaluated on its bound inputs: the compiled Programs and its trace (gate -> encoding)."""
     sh = call.shape
     c = program(scheme, sh.m, sh.k, sh.n)
-    return c, _transcript(c.program, call.args(c.traced.kind))
+    return c, _trace(c.program, call.args(c.traced.kind))
 
 
 def evaluate_weight_ir(scheme: str, call: Call) -> tuple[Compiled, dict[int, int]]:
     """The call's weight side's Program evaluated on its bound inputs."""
     sh = call.shape
     c = program(scheme, sh.m, sh.k, sh.n)
-    return c, _transcript(c.weight_program, call.weight_args())
+    return c, _trace(c.weight_program, call.weight_args())
 
 
 def commit_weight_ir(scheme: str, call: Call) -> WeightRecord:
-    """The call's weight side committed from its Program's transcript: each Y unit's leaf over the gates its partition names."""
+    """The call's weight side committed from its Program's trace: each Y unit's leaf over the gates its partition names."""
     c, tr = evaluate_weight_ir(scheme, call)
     tp = c.weight_partition
     outs = [np.array([tr[g] for g in tp.outputs(u)], np.uint32) for u in range(tp.population)]
@@ -384,7 +384,7 @@ def commit_weight_ir(scheme: str, call: Call) -> WeightRecord:
 
 
 def commit_call_ir(index: int, scheme: str, call: Call, side: WeightRecord | None = None) -> CallRecord:
-    """The call committed from its Program's transcript: each unit's leaf over the gates `TemplatePartition.outputs` names,
+    """The call committed from its Program's trace: each unit's leaf over the gates `TemplatePartition.outputs` names,
     its weight side ``side`` (`commit_weight_ir` when None)."""
     c, tr = evaluate_ir(scheme, call)
     sh, tp = call.shape, c.partition

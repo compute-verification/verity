@@ -48,14 +48,14 @@ taken out (`tabs` ascending). -/
     shift := shift + t.n
   return .inr (g - shift)
 
-/-- The value of gate `o`, or the refusal `evaluate_region` raises for a value not in the transcript. -/
+/-- The value of gate `o`, or the refusal `evaluate_region` raises for a value not in the trace. -/
 @[inline] private def operand (tabs : Array Bound) (vals : Array (Option Nat)) (g : Nat) (key : String) (o : Nat) :
     Flock.V Nat :=
   match slot tabs o with
   | .inl v => pure v
   | .inr i => match vals[i]? with
     | some (some v) => pure v
-    | _ => throw s!"gate {g} ({key}) operand {o} is not in the transcript"
+    | _ => throw s!"gate {g} ({key}) operand {o} is not in the trace"
 
 /-- Operand `j` of member `m` of a primitive node, as `operands` orders them, resolved alone. -/
 def operandAt (P : Prog) (sc : Scope) (node : Node) (m j : Nat) : Flock.V Nat := do

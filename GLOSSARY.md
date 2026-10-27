@@ -126,7 +126,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a) |
 | "proof unit", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of C-Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block |
 | "wrong unit", "incorrect unit", "faulty unit"; the Lean's `wrong`, the audit record's `wrong_units` | faulty proof block |
-| "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
+| "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript`, `evaluate_call`'s `transcript` argument, `LazyTranscript` | trace |
 | "verifier of record" | the verifier: the one whose verdict counts and that the guarantees are proved about. Other code that checks the same thing is named for what it is: the Rust cross-check, a Python mirror, or a Python verifier until its Lean verifier replaces it |
 | "δ_link", "the link term"; the Lean's `LinkSound` and `δlink` | ε_bind, the binding error |
 | "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block (C-Flock's statement layout keeps VU in its own sense: Narrower senses) |
@@ -256,9 +256,11 @@ Some words keep a different, narrower sense:
   - **Row**: a commitment row, the bits one leaf hashes (hm96 rows, the `*/row/*` leaf schemes, the row-form statements).
     A matrix's row (a slot is one row of a step's activations) stays plain English. A workload or a serving block is
     never a row (Older names).
-  - **Transcript**: the messages of a proof or a session, what its verifier sees (C-Flock's, PoUS's transcript hash).
-    The values of a run's gates are its trace; `evaluate_call`'s `transcript` argument and `ExecutionTranscript` keep
-    the old word until they are renamed.
+  - **Transcript**: only the messages a protocol's parties exchange (the developer, the challenger, the verifier, the
+    network certifier, the memory challenger): the registration, commitments, coins and the sample, proofs, verdicts.
+    A proof system's own messages are the proof's internal transcript (C-Flock's, PoUS's transcript hash). A circuit's
+    gate values, one per gate, are its trace (`verity.ml.circuits.evaluate.Trace`); PoUW's committed values (its
+    transcript tree, `transcript_values`, `HM96_TRANSCRIPT`) keep the old word until they are renamed.
   - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering, such as one level of a log shifter, is a
     level; a pipeline stage keeps its sense (above).

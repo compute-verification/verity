@@ -10,7 +10,8 @@ record or a digest (``ALLOWED``, one reason each; an entry that matches nothing 
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
-"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
+"block" is reserved for parts of circuits, the subprotocols go by their names, "leg" is retired, and a circuit's gate
+values are its trace, "transcript" naming only the messages a protocol's parties exchange). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -38,10 +39,14 @@ DOC_TERMS = {
     "thread block": "CTA",
     "KV block": "KV page",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "transcript for a circuit's gate values (an execution, committed, gate or circuit's transcript, a transcript of the "
+    "gates)": "trace",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
+_GATE_TRANSCRIPT = (rf"(?:execution|committed|gate(?:{_SPACE}level)?|circuit(?:['’]s)?){_SPACE}transcripts?"
+                    rf"|transcripts?{_SPACE}of{_SPACE}(?:(?:the|a|its){_SPACE})?(?:gates?|circuits?)")
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
-                       rf"|legs?)\b)|\bIUs?\b")
+                       rf"|{_GATE_TRANSCRIPT}|legs?)\b)|\bIUs?\b")
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -178,6 +183,8 @@ def test_the_doc_scan_reads_each_form():
         "b.md": 'The `legs/pous.py` file and `wipe_period.leg(dir)`; ``a `leg` key``; "leg" is retired.\n'
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
+        "d.md": "An execution transcript, the committed\ntranscript, a circuit's transcripts and the transcript of its gates.\n"
+                "The proof's internal transcript, a session transcript and `ExecutionTranscript` stay.\n",
         "benchmarks/numerical/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
@@ -185,4 +192,5 @@ def test_the_doc_scan_reads_each_form():
     assert doc_offenders(list(docs), read=docs.__getitem__) == [(GLOSSARY, 2, "leg"),
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
-        ("b.md", 8, "thread block")]
+        ("b.md", 8, "thread block"), ("d.md", 1, "execution transcript"), ("d.md", 1, "committed transcript"),
+        ("d.md", 2, "circuit's transcripts"), ("d.md", 2, "transcript of its gates")]

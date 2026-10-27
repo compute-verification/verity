@@ -19,7 +19,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.evaluate import ExecutionTranscript, MissingValue, evaluate_call, evaluate_region
+from verity.ml.circuits.evaluate import MissingValue, Trace, evaluate_call, evaluate_region
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.ports import forward, harness
 from verity.ml.circuits.program import Program
@@ -27,11 +27,11 @@ from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Type, Value
 
 __all__ = [
-    "ExecutionTranscript",
     "MissingValue",
     "RegisteredTable",
     "ScalarReference",
     "Target",
+    "Trace",
     "evaluate",
     "evaluate_call",
     "evaluate_region",
@@ -204,7 +204,7 @@ class _Operands:
         return part.read(i) if isinstance(part, RegisteredTable) else part[i]
 
 
-class _Transcript(dict):
+class _Trace(dict):
     """An execution trace whose registered tables' Input gates are read through the table, never stored.
 
     ``in`` doesn't see those gates, only ``[]`` does. `evaluate_region` asks ``in`` only of Input gates inside its selection,
@@ -248,7 +248,7 @@ def _evaluate_with_tables(t: Any, args: Sequence[Any]) -> tuple[int, ...]:
             raise TypeError(f"{t.id} has no evaluate_lazy: its evaluator takes every leaf of the registered table")
         return (lazy(_Operands(args).__getitem__),)
     prog, call = standalone_call(t)
-    tr = _Transcript()
+    tr = _Trace()
     for pi, a in enumerate(args):
         refs = prog.input_coll(pi).refs
         if isinstance(a, RegisteredTable):
