@@ -1,7 +1,8 @@
 """`verity.ml.definitions.registry.cublas_bf16`'s training bindings: `train_route` is the route table the capture fitted
 (`TRAIN_CAPTURE`) and refuses what it did not capture, `route_gemm` binds each route's Definition on bits, which equals that
-route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words, and `attention_bmm` is
-`BatchedGemm_v2` at each bmm's reduction and output lengths."""
+route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words, `aligned_bounds` makes the B 8 x S 512
+dW's grid.z slices, and `attention_bmm` is `BatchedGemm_v2` at each bmm's reduction and output lengths.  Each model's agreement
+with sm_120's words is the capture's (`cublas_bf16.TRAIN_CAPTURE`)."""
 from __future__ import annotations
 
 import numpy as np
@@ -30,8 +31,8 @@ def test_train_routes_are_the_capture() -> None:
             assert CB.train_linear(key[3], *key[:3]).id == f"{name}{{K={K},N={N},SPLIT_K={z},{HOP}}}"
         elif key in ALIGNED:
             assert route == {"kernel": "splitk", "SPLIT_K": ALIGNED[key], "partial": "bf16", "align": 8}
-            with pytest.raises(ValueError, match="rounded up to 8"):
-                CB.train_linear(key[3], *key[:3])
+            assert CB.train_linear(key[3], *key[:3]).id == (f"CublasSplitKGemmBf16PartialsAligned_v1{{K=4096,N={key[1]},"
+                                                            f"SPLIT_K={ALIGNED[key]},ALIGN=8,{HOP}}}")
         else:
             M, K, N, role = key
             k, n = {"fwd": (K, N), "dX": (N, K), "dW": (M, K)}[role]
@@ -50,6 +51,15 @@ def test_train_route_refuses_what_the_capture_does_not_cover() -> None:
         CB.route_gemm({"kernel": "gemv", "LANES": 32}, 64, 3)
     with pytest.raises(ValueError, match="SPLIT_K_in_2_to_K_over_16"):
         CB.route_gemm({"kernel": "serialk", "SPLIT_K": 5}, 64, 3)
+    with pytest.raises(ValueError, match="SPLIT_K_chunks_at_ALIGN"):
+        CB.route_gemm({"kernel": "splitk", "SPLIT_K": 5, "partial": "bf16", "align": 64}, 256, 3)
+
+
+def test_aligned_bounds_are_the_capture_slices() -> None:
+    assert [hi - lo for lo, hi in CB.aligned_bounds(4096, 7, 8)] == [592] * 6 + [544]
+    assert [hi - lo for lo, hi in CB.aligned_bounds(4096, 12, 8)] == [344] * 11 + [312]
+    assert [hi - lo for lo, hi in CB.aligned_bounds(4096, 3, 8)] == [1368, 1368, 1360]
+    assert CB.aligned_bounds(1536, 8, 64) == CB.split_bounds(1536, 8)
 
 
 def test_attention_bmm_is_batched_gemm_at_each_op() -> None:
@@ -66,10 +76,11 @@ def test_attention_bmm_is_batched_gemm_at_each_op() -> None:
             CB.attention_bmm(*args)
 
 
-ROUTES = [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 4}]
+ROUTES = [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 4},
+          {"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8}]
 
 
-@pytest.mark.parametrize("route", ROUTES, ids=["nosplit", "splitk-bf16", "serialk"])
+@pytest.mark.parametrize("route", ROUTES, ids=["nosplit", "splitk-bf16", "serialk", "splitk-bf16-align8"])
 def test_route_gemm_on_bits_is_the_route_model(route) -> None:
     rng = np.random.default_rng(117)
     target = CB.route_gemm(route, 64, 3)

@@ -27,7 +27,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
 def _boolean_roots() -> list[Any]:
     """On bits: the f32-out GEMM at K = 32, N = 3 and the batched GEMM at two members, K = 32, N = 3 (`mla.MlaBmm`'s check
-    statics); both default split-K output types, the bf16-workspace and the serial split-K at K = 64, N = 3, four splits."""
+    statics); both default split-K output types, the bf16-workspace and the serial split-K at K = 64, N = 3, four splits; and
+    the 8-aligned grid.z split-K at K = 64, N = 3, three slices of 24, 24 and 16 words (two padded to a whole k16 step)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import cublas_bf16 as CB
@@ -40,4 +41,5 @@ def _boolean_roots() -> list[Any]:
         bind(CB.CublasSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP),
         bind(CB.CublasSplitKGemmBf16Partials, K=64, N=3, SPLIT_K=4, DOT=HOP),
         bind(CB.CublasSerialSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP),
+        bind(CB.CublasSplitKGemmBf16PartialsAligned, K=64, N=3, SPLIT_K=3, ALIGN=8, DOT=HOP),
     ]
