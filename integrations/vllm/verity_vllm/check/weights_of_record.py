@@ -57,6 +57,7 @@ from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, row
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
+PARAM = "weights"                                   # the Program parameter (a struct) the record is of, and the window circuit's registered value
 
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
@@ -310,7 +311,7 @@ def rank_composer(*, checkpoint_dir: str, checkpoints_manifest: str | None = Non
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
     """(field, shape, value bits) for every field of the Program's `weights` struct parameter, in declaration order."""
     from verity_vllm.check.replay.index import parse_struct
-    wparam = next((t for n, t in inst.get("params", []) if n == "weights"), None)
+    wparam = next((t for n, t in inst.get("params", []) if n == PARAM), None)
     if not wparam or not str(wparam).startswith("{"):
         return []
     return [(name, shape, bits) for name, _count, shape, bits in parse_struct(str(wparam))]
