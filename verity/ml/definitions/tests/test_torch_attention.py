@@ -149,7 +149,7 @@ def test_rope_matches_torch_word_for_word() -> None:
 
 def test_repeat_kv_backward_matches_torch_word_for_word() -> None:
     """HF's `repeat_kv` at smollm2-135m's three KV heads of three query heads each."""
-    torch = _torch()
+    _torch()
     rng = np.random.default_rng(12)
     B, KVH, NREP, T, D = 2, 3, 3, 16, 8
     k = _tbf16(rng.normal(0, 1, (B, KVH, T, D))).requires_grad_(True)

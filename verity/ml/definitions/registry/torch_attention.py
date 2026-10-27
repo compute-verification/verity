@@ -302,9 +302,11 @@ def _repeat_kv_sig(S):
 _POSITION = Ports(params={"n": In(kind="position")})
 #: sm_120's words (an RTX PRO 6000, torch 2.14.0+cu130) from a 2-layer smollm2-135m training step at S = 256 and from the
 #: training run's shapes; `tests/test_torch_training_sm120.py` keeps a cut of each
-SM120_STEP = "the 2-layer smollm2-135m step r20261027-031630-ce8e (difftest r20261027-035245-3d66)"
+SM120_RUN = "the 2-layer smollm2-135m step r20261027-031630-ce8e"
+SM120_STEP = f"{SM120_RUN} (difftest r20261027-035245-3d66)"
 SM120_SHAPES = "the training shapes r20261027-040221-0e4d (difftest r20261027-040917-a3ba)"
-SM120 = "sm_120 (RTX PRO 6000, torch 2.14.0+cu130), 0 mismatches; tests/test_torch_training_sm120.py"
+SM120_GPU = "sm_120 (RTX PRO 6000, torch 2.14.0+cu130)"
+SM120 = f"{SM120_GPU}, 0 mismatches; tests/test_torch_training_sm120.py"
 _HEADS = f"exact-model-tested; every q and k head (D = 64) of both layers of {SM120_STEP}: {SM120}"
 _ROWS = f"every row (N = 256) of both layers' 9 heads of {SM120_STEP} and rows of 512 and 1,024 keys of {SM120_SHAPES}"
 
