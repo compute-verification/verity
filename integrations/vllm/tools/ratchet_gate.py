@@ -317,7 +317,7 @@ def is_pure_move(c: Change, base: str) -> bool:
         script = git("show", f"{base}:{MOVE_CHECK}")
     except GitError:
         return False
-    with tempfile.TemporaryDirectory(prefix="ratchet-gate-") as d:
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
         p = Path(d) / "move_check.py"
         p.write_text(script)
         return subprocess.run([sys.executable, str(p), c.lo, c.hi], capture_output=True).returncode == 0
@@ -615,7 +615,7 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
         return [], []
     python = python_for(ruff_pin(c.lo), None if None in selection.values() else [s for v in selection.values() for s in v])
     runs = []
-    with tempfile.TemporaryDirectory(prefix="ratchet-gate-") as d:
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
         tree = Path(d) / "tree"
         git("worktree", "add", "-q", "--detach", str(tree), c.hi)
         try:
