@@ -21,11 +21,8 @@ from __future__ import annotations
 from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, shr, sub
 from verity.ml.circuits.silicon import fp
 
-__all__ = ["F64_DEFAULT_NAN", "f32_mul_wide", "f32_rint", "f32_to_s8_rzi", "f64_mul", "f64_to_u32_rni_sat", "lut_index",
-           "s8_to_f32"]
+__all__ = ["f32_mul_wide", "f32_rint", "f32_to_s8_rzi", "f64_mul", "f64_to_u32_rni_sat", "lut_index", "s8_to_f32"]
 
-#: x86-64's default NaN of an invalid f64 operation (0 * inf)
-F64_DEFAULT_NAN = 0xFFF8000000000000
 #: f32 1.0's exponent field, bits 23..30
 _ONE_EXP = 0x3F800000 >> 23
 

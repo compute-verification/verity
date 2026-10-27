@@ -20,8 +20,13 @@ at a time, in four records:
 4. **On a draw, the openings**: a drawn member's private rows and salts as C-Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the firewall.
 
-An integration may label each run of units it records with one opaque JSON value (``label``): the window's
-``index.json``, whose SHA-512 the registration binds. Verity never reads a label.
+An integration may label each run of units it records (``label``): the window's ``index.json``, whose SHA-512 the
+registration binds. A label is class structure, never a value. In a circuit with blocks, a labelled run starts and ends
+where its template's units change inference block (their (slot, step), the inference entries'), and its label names at
+most the run's ``step`` and ``slot`` and its ``form``, one of the window's ``forms`` (`LABEL_KEYS`, `Window.record`); the
+index writes an unlabelled stretch of runs as one run, so every bound it shows is such a change, a member's or a
+template's. A circuit without blocks states no inference blocks, and its labels are opaque JSON. Verity reads a label
+only to refuse it.
 
 The verifier's window comes from the records alone (`of_records`: ``circuit.json`` held to the registration's digest),
 never from the integration's code. A unit's rows are its Definition's bit rows: one row per parameter, the little-endian
@@ -70,6 +75,7 @@ the integration's own check before it commits).
 """
 from __future__ import annotations
 
+import bisect
 import functools
 import hashlib
 import importlib
@@ -99,6 +105,8 @@ from . import rows as CS
 PACKED = (8, 16, 32, 64)
 CIRCUIT = "verity/window-circuit/v1"
 LABELS = "verity/window-labels/v1"
+#: what a label in a circuit with blocks may name: its run's step and slot, and its form (`Window.record`)
+LABEL_KEYS = ("step", "slot", "form")
 BLOCKS = "verity/blocks/v1"
 #: what an inference entry's digit is: the unit's slot, its step past the entry's ``step``, or neither
 AXES = ("slot", "step", "-")
@@ -187,7 +195,7 @@ def resolve(tid: str, *, template: bool = True) -> Any:
         if m[2] is not None:
             fn = bind(base, **{k: _static(v) for k, v in _bindings(m[2]).items()})
         else:
-            fn = bind(base) if template and isinstance(base, CompositeDefinition) else base
+            fn = bind(base) if isinstance(base, CompositeDefinition) else base
     except (TypeError, ValueError, json.JSONDecodeError) as e:
         raise ValueError(f"{tid}: {type(e).__name__}: {e}") from e
     if descriptor_id(fn) != tid:
@@ -747,6 +755,13 @@ class InferenceEntry:
         """The radix of the entry's ``axis`` digit, 1 when it has none."""
         return self.radix[self.axes.index(axis)] if axis in self.axes else 1
 
+    def digit(self, axis: str, i: np.ndarray) -> np.ndarray:
+        """Units ``at + i``'s ``axis`` digits, 0 when the entry has none."""
+        if axis not in self.axes:
+            return np.zeros_like(i)
+        k = self.axes.index(axis)
+        return i // math.prod(self.radix[k + 1:]) % self.radix[k]
+
     def doc(self) -> dict[str, Any]:
         return {"template": self.template, "at": self.at, "radix": list(self.radix), "axes": list(self.axes), "step": self.step}
 
@@ -814,6 +829,27 @@ class Blocks:
                 raise ValueError(f"{tid}: inference entries tile units [0, {at}) of its {n}; they tile each template's units "
                                  "exactly once")
         return server_ends(self.network, units)
+
+    @functools.cached_property
+    def _by_template(self) -> dict[str, tuple[list[int], list[InferenceEntry]]]:
+        by: dict[str, list[InferenceEntry]] = {}
+        for e in sorted(self.inference, key=lambda e: e.at):
+            by.setdefault(e.template, []).append(e)
+        return {t: ([e.at for e in es], es) for t, es in by.items()}
+
+    def slots_steps(self, template: str, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
+        """Template ``template``'s units ``[lo, hi)`` (which `check`'s tiling covers): each one's inference block, its slot
+        and its step."""
+        starts, es = self._by_template.get(template, ([], []))
+        slot, step = np.empty(hi - lo, dtype=np.int64), np.empty(hi - lo, dtype=np.int64)
+        k = max(bisect.bisect_right(starts, lo) - 1, 0)
+        while k < len(es) and es[k].at < hi:
+            e = es[k]
+            a, b = max(lo, e.at), min(hi, e.at + e.units)
+            i = np.arange(a - e.at, b - e.at, dtype=np.int64)
+            slot[a - lo:b - lo], step[a - lo:b - lo] = e.digit("slot", i), e.step + e.digit("step", i)
+            k += 1
+        return slot, step
 
     def doc(self, units: int, partition: str) -> dict[str, Any]:
         """The record's ``blocks`` for a circuit of ``units`` units under the partition digest ``partition``."""
@@ -1435,8 +1471,9 @@ class Window:
     compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
     registered reads read (`committed_reads`), by parameter: each committed once, before the run, as core's
     ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
-    opening's row format), which the verifier pinned by its entry, and its tables' supplied values (`supply`). Each
-    template's units are `record`ed in order, then `close` commits them and `write` writes and registers the window."""
+    opening's row format), which the verifier pinned by its entry, and its tables' supplied values (`supply`); ``forms``,
+    the forms of unit the integration's lowering has, which a label's ``form`` names (`record`). Each template's units are
+    `record`ed in order, then `close` commits them and `write` writes and registers the window."""
     circuit: Circuit
     run: str
     law: Mapping[str, Any]
@@ -1444,12 +1481,16 @@ class Window:
     advice: Mapping[str, Any] | None = None
     registered: Mapping[str, Any] | None = None
     work_table: Mapping[str, Any] | None = None
+    forms: tuple[str, ...] = ()
     window: CS.Window = field(init=False)
     _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         _committable(self.circuit.registered, self.circuit.ingress, self.circuit.name)
+        self.forms = tuple(self.forms)
+        if not all(isinstance(f, str) for f in self.forms):
+            raise ValueError(f"a window's forms are names, not {self.forms!r}")
         params = self.circuit.registered.params if self.circuit.registered is not None else {}
         for r in self.circuit.reads:
             v = (self.registered or {}).get(r.param)
@@ -1478,9 +1519,12 @@ class Window:
 
     def record(self, template: Any, inputs: Sequence[Any], outputs: Sequence[Any], label: Any = None) -> range:
         """``template``'s next units: ``inputs`` one array per parameter, ``outputs`` one per return field (module docstring),
-        all of one unit count, under the integration's opaque ``label`` (JSON). -> their indices among the template's units.
+        all of one unit count, under the integration's ``label`` (JSON). -> their indices among the template's units.
         An input may be None, the same for all of a template's units: its rows are committed by reference (`close`), so a
-        parameter every row of which is wired or a registered read is never held."""
+        parameter every row of which is wired or a registered read is never held. In a circuit with blocks, a label is
+        refused (ValueError) unless the run starts and ends where the template's units change inference block
+        (`Blocks.slots_steps`) and the label names only `LABEL_KEYS`: the ``step`` and ``slot`` of all its units, ints,
+        and its ``form``, one of the window's ``forms``."""
         tid = descriptor_id(template)
         fn, total = self.circuit.template(tid), dict(zip(self.circuit.ids, (n for _, n in self.circuit.templates)))[tid]
         lay = layout(fn)
@@ -1491,10 +1535,33 @@ class Window:
         if n < 1 or at + n > total:
             raise ValueError(f"{tid}: {n} units at {at}, past its {total}")
         json.dumps(label)
+        if label is not None and self.circuit.blocks is not None:
+            self._structural(tid, at, n, total, label)
         values = [None if a is None else np.ascontiguousarray(a) for a in [*inputs, *outputs]]
         ws = [None if a is None else words(a, w, n, c) for a, w, (_, c) in zip(values, lay.widths, lay.rows + lay.outs)]
         self._recorded.setdefault(tid, []).append(_Recorded(values[:len(inputs)], values[len(inputs):], ws, label, n))
         return range(at, at + n)
+
+    def _structural(self, tid: str, at: int, n: int, total: int, label: Any) -> None:
+        """Refuse (ValueError) ``label`` on ``tid``'s units ``[at, at + n)`` unless it is class structure (`record`)."""
+        what = f"{tid} units [{at}, {at + n}) labelled {label!r}"
+        if (not isinstance(label, Mapping) or not set(label) <= set(LABEL_KEYS)
+                or not all(_ints(label[k]) for k in ("step", "slot") if k in label)
+                or ("form" in label and not (isinstance(label["form"], str) and label["form"] in self.forms))):
+            raise ValueError(f"{what}: a label is class structure, never a value: at most {list(LABEL_KEYS)}, the run's step "
+                             f"and slot as ints and its form one of the window's forms {list(self.forms)}")
+        lo, hi = max(at - 1, 0), min(at + n + 1, total)
+        slot, step = self.circuit.blocks.slots_steps(tid, lo, hi)
+        block = slot * self.circuit.blocks.steps + step
+        first, last = at - lo, at - lo + n - 1
+        if (at > 0 and block[first - 1] == block[first]) or (at + n < total and block[last + 1] == block[last]):
+            raise ValueError(f"{what}: a labelled run starts and ends where its template's units change inference block, "
+                             "(slot, step) (the circuit's inference entries); record each such stretch, or several whole, "
+                             "as a run")
+        for key, got in (("step", step), ("slot", slot)):
+            seen = np.unique(got[first:last + 1]).tolist()
+            if key in label and seen != [label[key]]:
+                raise ValueError(f"{what}: its units are at {key} {seen}, not its label's {label[key]}")
 
     def mismatches(self, kernel: str = "reference") -> dict[str, list[int]]:
         """Per template, the units whose recorded outputs are not its Definition's outputs on their recorded inputs
@@ -1646,11 +1713,16 @@ class Window:
         return {t: b for _k, t, b, _n in CS.template_partition(self.window.program, self.window.query).ranges}
 
     def labels(self) -> dict[str, Any]:
-        """``index.json``: per member, each recorded run of its units with its label, ``[lo, hi, label]`` over global indices."""
+        """``index.json``: per member, each recorded run of its units with its label, ``[lo, hi, label]`` over global indices,
+        an unlabelled stretch of runs one run (module docstring)."""
         spans: dict[str, list[tuple[int, int, Any]]] = {}
         for tid, lo in self._bases().items():
             for b in self._recorded.get(tid, ()):
-                spans.setdefault(tid, []).append((lo, lo + b.n, b.label))
+                runs = spans.setdefault(tid, [])
+                if b.label is None and runs and runs[-1][2] is None:
+                    runs[-1] = (runs[-1][0], lo + b.n, None)
+                else:
+                    runs.append((lo, lo + b.n, b.label))
                 lo += b.n
         return {"format": LABELS, "run": self.run,
                 "members": [{"name": m.key, "labels": [[max(a, m.base), min(b, m.base + m.n), x]

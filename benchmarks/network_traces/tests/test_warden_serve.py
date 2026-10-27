@@ -79,9 +79,10 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
     assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
     assert ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
     window_s = args.window * args.bucket_ms / 1000
+    most = ws.varied_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+    assert ws.varied_traffic(400, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED) == most[:400]
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
-        last = ws.varied_traffic(n, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)[-1]["at"]
-        took = math.ceil((last + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
+        took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
         assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
@@ -136,17 +137,22 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
 def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_least_minutes_cover_its_traffic(
         tmp_path, capsys):
     """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
-    --warden-run` refuses any other of), which the scan's class serves, on the gate's arrivals at the gate's sampling;
-    for every request count the gate takes, at its lowest height, `warden_minutes` covers the id traffic's last arrival,
-    its tail, the rest of the window it ends in, the origin's delay and 30 s for the key and the check."""
+    --warden-run` refuses any other of), which the scan's class serves: ASK-122's EVERY 16 buckets, 4 Program slots a
+    boundary, 8 a link-window and D 2.7 s, the schedule of NET-83's sessions. Its id traffic's prompts and outputs are
+    within the scan's KI and KO, on the gate's arrivals at the gate's sampling; for every request count the gate takes,
+    at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
+    ends in, the origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     import scan_zk as sz
     req = {"device": "warden", "requests": 7, "scan": True, "temperature": 0.6, "top_p": 0.9}
     args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
-    assert args.ids and not args.fake and ws._params(args) == sz.PARAMS
-    sz.CLASS.serves(ws._params(args))
+    p = ws._params(args)
+    assert args.ids and not args.fake and p == sz.PARAMS
+    sz.CLASS.serves(p)
+    assert (p.every, p.program_slots, p.window_programs, p.delay) == (16, 4, 8, 27)
+    assert args.prompt_max <= sz.CLASS.KI and min(args.max_tokens, p.egress_cells - 1) == sz.CLASS.KO
     assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
     assert sz.main(["schedule"]) == 0 and capsys.readouterr().out.split() == list(A.SCAN_SCHEDULE)
     traffic = ws.traffic_of(args, "m")
@@ -212,7 +218,8 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
 
 def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_groups_only_with_what_they_need(tmp_path):
     """`read_prompts` takes a JSON array of non-empty arrays of ids below 2^17 whose id requests the schedule's ingress
-    bound holds, the gate's longest (`WARDEN_PROMPT_IDS` ids of 17 bits, 62-byte names) among them at the scan's;
+    bound holds, the gate's longest (`WARDEN_PROMPT_IDS` ids of 17 bits, 62-byte names) among them at the scan's, and
+    the gate's most prompt ids and tokens the scan's KI and KO;
     `rehearse` takes `--prompts` only with `--ids` and `--window-per-group` only with `--prompts`, and a group is at most
     `lanes` prompts."""
     sys.path.insert(0, str(HERE))
@@ -221,9 +228,10 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     import scan_zk as sz
     longest = [[(1 << A.WARDEN_PROMPT_ID_BITS) - 1] * A.WARDEN_PROMPT_IDS[1]]
     assert A.WARDEN_PROMPT_ID_BITS == ws.PROMPT_ID_BITS
+    assert (A.WARDEN_PROMPT_IDS[1], A.WARDEN_PROMPT_TOKENS[1]) == (sz.CLASS.KI, sz.CLASS.KO)
     assert ws.read_prompts(json.dumps(longest).encode(), sz.PARAMS) == longest
     with pytest.raises(SystemExit, match=f"takes 48 ingress cells, past the schedule's {sz.PARAMS.ingress_cells}"):
-        ws.read_prompts(json.dumps([[0] * (A.WARDEN_PROMPT_IDS[1] + 50)]).encode(), sz.PARAMS)
+        ws.read_prompts(json.dumps([[0] * 2098]).encode(), sz.PARAMS)
     for bad in (b"x", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b"[[true]]", b'[["1"]]', b"{}"):
         with pytest.raises(SystemExit, match="--prompts: "):
             ws.read_prompts(bad, sz.PARAMS)
