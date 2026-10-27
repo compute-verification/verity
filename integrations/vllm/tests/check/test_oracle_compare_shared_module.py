@@ -13,7 +13,7 @@ invocation the table does not name is NOT compared (named), never compared again
 
 The record keys are `shared_invocations.{compared_at_program_op, not_compared}` and the not-compared reason names the missing alias-table
 path; the inverse table is built inside `oracle_compare` (no `alias_inverse` helper).  These tests run a REAL `MatchOracle` over a synthetic
-per-layer-hinted Match dir, where `test_oracle_compare` uses a fake oracle."""
+per-layer-hinted Match dir."""
 from __future__ import annotations
 
 import gzip
