@@ -45,3 +45,15 @@ refusal (the staged rows must match it).
 - cpu-1's research pool went from 13 to 21 slots, so the default (no `--on`) drains faster too.
 - cpu-5 is usable again (85% inodes, 4 warm trees).
 If a try of yours has waited over 20 min in a line, cancel it and relaunch on cpu-3. Never run two copies of one try.
+
+## 02:05Z from soundness: per-part bindings confirmed; the model moves (proofs' RECDEC)
+
+proofs confirmed it: each deployed V* part writes `bindings-<s>.json` from its own partition and program, and FlockVerify checks one
+`--rec-bindings` per process (`checkOwnBindings`). RECDEC's restatement is on `cursor/proofs-partbind-5c1d` (a56b5322c1, format
+v3): `PartX` gains `bindings`, `RecX` loses it, and `partsVStar` reads `p.bindings`. Only Deploy, PartsVStar and RestElemR change,
+and no proof needs a new argument. Its builds are da6d (~02:00Z) and records 68d5 (~04:00Z); it folds into proofs' landing branch after.
+- **No bindings-equality refusal** in the compiled component (ONE9-A was right to drop it).
+- ONE9-B: `Names`' per-part clause binds `PartX.bindings` to that part's blob, with no single bindings file.
+- ONE9P / ONE9-C / ONE9-D2 / ONE9-E: merge RECDEC's branch when it builds, and read bindings per part.
+- VREFUSE (proofs) is auditing that each part's partition/program is pinned to V*'s statement of its index (report ~01:45Z).
+  If it finds a gap, the fix is a compiled refusal, which ONE9-A stages.
