@@ -164,7 +164,7 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
         lout.mkdir(parents=True, exist_ok=True)
         try:
             rows[e.name] = row_of(e, fn(period_dir, node, lout), lout)
-        except Exception as x:  # noqa: BLE001: a leg's failure is its row's error, and the other legs still run
+        except Exception as x:  # noqa: BLE001 -- a leg's failure is its row's error, and the other legs still run
             (lout / "error.txt").write_text(traceback.format_exc())
             rows[e.name] = {"verdict": "error", "owner": e.owner, "reason": f"{type(x).__name__}: {x}"[:2000]}
         else:
@@ -461,7 +461,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 loop: tuple[Path, dict] | Exception = loop_window(w, run, a, Path(scratch), out / f"w{w}")
                 loop[1]["_loop_s"] = round(time.monotonic() - t, 1)
-            except Exception as x:  # noqa: BLE001: a failed loop is the window's error, and the next window still runs
+            except Exception as x:  # noqa: BLE001 -- a failed loop is the window's error, and the next window still runs
                 loop = x
             jobs.append(pool.submit(lambda w=w, loop=loop: finish(window(w, run, a, Path(scratch), out, loop))))
         for j in jobs:
