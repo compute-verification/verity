@@ -95,7 +95,8 @@ def test_the_pin_is_armed_at_import_by_every_rank_and_by_the_driver_before_it_bu
     import ast
     import inspect
 
-    from verity_vllm.engine import build, rank_worker
+    from verity_vllm.engine import build
+    from verity_vllm.pipeline.tp import rank_worker
 
     top = ast.parse(inspect.getsource(topp_pin)).body
     assert any(isinstance(n, ast.Expr) and ast.unparse(n) == "arm()" for n in top)
