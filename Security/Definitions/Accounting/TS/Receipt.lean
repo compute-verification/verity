@@ -5,7 +5,7 @@ import Definitions.Pouw.Receipt.Li
 /-!
 # The ideal game split at the receipt (trusted)
 
-LEDGER §1.3 (note:20261017T1723Z-draft-ledger): with every absorbed word pinned in the proof, a round's ideal check
+LEDGER §1.3: with every absorbed word pinned in the proof, a round's ideal check
 recomputes the honest committed value from committed data and passes only if the committed value equals it. A round
 then carries two more events on its coins:
 
@@ -83,7 +83,7 @@ def Fx1Units.same {Ω U : Type} {n L : ℕ} (D : Fx1Units Ω U n L) (ω : Ω) : 
 of the half step's pair (`0`: `d₀`, XORed into the state; `1`: `d₁`, added). -/
 abbrev LiPlace (W C H : ℕ) : Type := Fin W × Fin C × Fin H × Fin 2
 
-/-- **Case (a)'s committed units for li, a checkpoint a segment** (LI-CP-W, note:20261017T1848Z-draft-li-alt): unit `u`
+/-- **Case (a)'s committed units for li, a checkpoint a segment** (LI-CP-W): unit `u`
 is a warp's window. Each of its `W` lanes runs `C` chains of li's half steps (`Pouw.Receipt.liHalf`). In segment `s`,
 chain `c` of lane `ℓ` absorbs `H` half steps, half step `j` with XOR key `k ω u s (ℓ, c, j)` and odd multiplier
 `a ω u s (ℓ, c, j)`, from the state it ended segment `s − 1` in; segment 0 starts from `start ω u`, which the proof
@@ -147,8 +147,8 @@ def xorAll {n m : ℕ} (f : Fin m → BitVec n) : BitVec n := (List.ofFn f).fold
 chain's run. -/
 abbrev CPPlace (W C H : ℕ) : Type := Fin W × Fin C × Fin H
 
-/-- **Case (a)'s committed units for duo, a full-state checkpoint a segment** (DUO-CP-W,
-note:20261018T0203Z-draft-proj): unit `u` is a warp's window. Each of its `W` lanes runs `C` duo chains. In segment
+/-- **Case (a)'s committed units for duo, a full-state checkpoint a segment** (DUO-CP-W):
+unit `u` is a warp's window. Each of its `W` lanes runs `C` duo chains. In segment
 `s`, chain `c` of lane `ℓ` absorbs `H` words, word `j` with XOR key `k ω u s (ℓ, c, j)`, odd multiplier
 `a ω u s (ℓ, c, j)` and rotation `r ω u s (ℓ, c, j)`, from the state it ended segment `s − 1` in; segment 0 starts from
 `start ω u`, which the proof pins. At the end of each segment every lane XORs its chains' states `(y, z)` and the warp

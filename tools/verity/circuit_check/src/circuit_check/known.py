@@ -2,7 +2,7 @@
 else, and on an entry that no longer fails (a fixed one is dropped here).
 
 Each is a file of its own (`entries`) under ``known/``, with its ``key`` and ``reason``: ``known/failures/`` holds a failure by
-``"<check>/<code> <Definition family>"`` (`key`), ``known/pieces/`` a piece of the C-Flock lowering that differs from its IR
+``"<check>/<code> <Definition family>"`` (`key`), ``known/pieces/`` a piece of the C-Flock lowering that differs from its
 primitive, by its id (a Definition lowered through one inherits it).  An entry's file is ``entries.name(key) + ".toml"``.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ def load(directory: Path) -> dict[str, str]:
     return dict(sorted(out.items()))
 
 
-#: pieces of the C-Flock lowering that differ from their IR primitive, and why; a Definition lowered through one inherits it
+#: pieces of the C-Flock lowering that differ from their primitive, and why; a Definition lowered through one inherits it
 KNOWN_PIECES: dict[str, str] = load(DIR / "pieces")
 #: other failures main has, by "<check>/<code> <Definition family>", and why
 KNOWN: dict[str, str] = load(DIR / "failures")

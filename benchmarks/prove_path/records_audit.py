@@ -262,7 +262,7 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
 
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
     """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
-    ``other_inputs`` is #(otherInputs \\ registered): #4044's ``otherInputs`` (``SampledCharge.lean``), the circuit's input
+    ``other_inputs`` is #(otherInputs \\ registered): ``otherInputs`` (``SampledCharge.lean``), the circuit's input
     gates no step lists as ingress, less the inputs the registration fixes. The circuit's input gates are each of the
     verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
@@ -392,6 +392,15 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     except (KeyError, TypeError, AttributeError) as e:
         raise ValueError(f"a pin is {{program, values: {{param: entry}}}}, or a list of them: {type(e).__name__}: {e}") from e
     return {str(v): dict(e) for v, e in values.items()}
+
+
+def pin_roots(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+    """The pins `interface.input_count` holds to a window's roots (`window_roots`), ``{param: root}``, of pinned entries
+    (`pinned`, `window_pins`'): each entry's root alone, its domain and shape staying with the entries that
+    `interface.registered_reads` opens against. Refused (ValueError) where a root isn't hex digits."""
+    pins = {v: e["root"] for v, e in entries.items()}
+    IF.held_params(pins, {})
+    return pins
 
 
 def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Callable[[str], Any] = IF.resolve) -> set[str]:
@@ -693,11 +702,11 @@ def audit(a: argparse.Namespace) -> int:
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
-    pin_roots = {v: e["root"] for v, e in pins.items()}
-    row["leak"] = (declared_count(doc, bits, resolve, pin_roots, roots, untied)
+    counted = pin_roots(pins)
+    row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
-        row["registered"] = {"pins": pin_roots, "roots": roots, "members": len(reads)}
+        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
