@@ -124,6 +124,8 @@ fixtures/lean-vectors
 fixtures/redteam-v2/gkr
 verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
+integrations/vllm/data/logs/m1.jsonl.gz
+integrations/vllm/data/logs/m6/log.jsonl.gz
 integrations/vllm/tests/regression/files.toml
 integrations/vllm/tests/program/data/topp_split_fixture/fixture.npz
 integrations/vllm/tests/program/data/topp_split_fixture/fstoch01_rows.npz
