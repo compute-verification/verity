@@ -97,7 +97,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   audit's drawn members' proof sessions too (`--jobs` and `--session-jobs` take only 1). Only what never goes through
   the firewall overlaps: the next window's loop serves while a window is audited.
   `--start I` numbers another machine's windows apart. `--tamper W,...` makes those windows' loop record outputs that
-  aren't its model's. `--registered` has the loop read its weights as registered values, committed once a run.
+  aren't its model's. `--registration-tamper W,...` hands those windows' registration check a registration other than
+  the loop's (one root changed), which NCI accepts and onsite must refuse on its digest (`Core.Composition.mismatch`).
+  `--registered` has the loop read its weights as registered values, committed once a run.
   `--wired` serves the loop's wired circuit (`serve --wired`).
   `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits it with
   `verity_torch_loop.pouw_audit` before the legs.

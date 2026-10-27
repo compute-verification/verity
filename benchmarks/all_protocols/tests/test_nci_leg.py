@@ -6,7 +6,9 @@
   reads in the profile;
 * its policy report states what it measured (2,112 bits over 9 gates a unit, about 235 a gate, and its share of Γ), the
   placeholder label, and that the same declaration doesn't comply at the GLM-5.3 demo's α = 2^-25;
-* a window whose circuit record is not the one the verifier registered is refused before any case is built.
+* a window whose circuit record is not the one the verifier registered is refused before any case is built;
+* a window the runner's ``--registration-tamper`` names is checked on a record other than its own, one root changed:
+  NCI accepts it, under a digest that isn't the window's registration's (onsite's mismatch).
 """
 from __future__ import annotations
 
@@ -71,14 +73,38 @@ def test_the_declaration_does_not_comply_at_the_glm_demos_policy(served):
     assert a["verdict"] == "reject" and a["reason"].startswith("the division does not comply: isolation unit 0")
 
 
-@pytest.mark.slow
-def test_a_circuit_the_verifier_did_not_register_is_refused(served, tmp_path):
-    d = tmp_path / "w0"
+def window_with(served: Path, d: Path, **period) -> Path:
+    """A copy of the served window in ``d``, its ``period.json`` updated with ``period``."""
     d.mkdir()
     for f in served.iterdir():
         if f.is_file():
             (d / f.name).write_bytes(f.read_bytes())
     p = json.loads((d / "period.json").read_text())
-    (d / "period.json").write_text(json.dumps({**p, "circuit": "00" * 64}))
+    (d / "period.json").write_text(json.dumps({**p, **period}))
+    return d
+
+
+@pytest.mark.slow
+def test_a_circuit_the_verifier_did_not_register_is_refused(served, tmp_path):
+    d = window_with(served, tmp_path / "w0", circuit="00" * 64)
     with pytest.raises(ValueError, match="not the circuit record the verifier registered"):
         NCI.leg(d, "test-node", tmp_path / "out")
+
+
+@pytest.mark.slow
+def test_a_tampered_registration_is_accepted_under_a_digest_that_is_not_the_windows(served, tmp_path):
+    d = window_with(served, tmp_path / "w0", registration_tamper=True)
+    a = NCI.leg(d, "test-node", tmp_path / "out")
+    reg = json.loads((served / "registration.json").read_text())
+    other = NCI.tampered(reg)
+    assert [k for k in reg if reg[k] != other[k]] == ["roots"] and other["roots"][1:] == reg["roots"][1:]
+    assert a["verdict"] == "accept" and a["commitment"] == R.digest(other) != R.digest(reg)
+    assert bytes.fromhex(json.loads((tmp_path / "out" / "nci.case.json").read_text())["commitment"]) \
+        == codec.canonical_json(other)
+    assert json.loads((tmp_path / "out" / "nci.json").read_text())["tampered"] is True
+
+
+def test_a_registration_tamper_is_in_the_runs_mode(tmp_path, capsys):
+    assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--check", "--windows", "2",
+                    "--registration-tamper", "1"]) == 0
+    assert json.loads(capsys.readouterr().out)["flags"]["registration_tamper"] == [1]

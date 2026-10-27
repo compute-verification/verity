@@ -23,6 +23,11 @@ writes ``out/nci.case.json`` (onsite's registration case), ``out/policy.json`` (
 carries) and ``out/nci.json``. NCI reads no coins, so a tampered window's declaration is its honest one's, and the
 integrity leg is what refuses it.
 
+**A tampered registration** (the runner's ``--registration-tamper``, ``period.json``'s ``registration_tamper``): the
+case is on `tampered`'s record, not the window's, as a prover would show the registration check while its proofs open the
+window's own roots. NCI reads no root (θ empty), so it accepts that record, and onsite refuses its digest, which is not
+the one sampled proofs commit to (`Core.Composition.mismatch`).
+
 **The policy.** A protocol carries no policy parameter, so the check reports what it measured: a unit of the loop is one
 ``ScaledMmS8Coordinate_v1{K=128}``, 9 gates of the canonical layout reading 2,112 bits, every one of them a run input,
 so the window's one IU reads 2112/9 ≈ 235 novel bits a gate whatever the window's size, and uses its gates' share of
@@ -74,6 +79,15 @@ def declaration(period_dir: Path) -> tuple[dict[str, Any], Any]:
     if codec.program_digest(window.program) != rec["program"]:
         raise ValueError("the verifier's program is not the one the window's registration names")
     return rec, window.program
+
+
+def tampered(rec: dict[str, Any]) -> dict[str, Any]:
+    """A registration other than ``rec`` under the same program (module docstring): ``rec`` with its first root's last hex
+    digit changed."""
+    roots = [dict(r) for r in rec["roots"]]
+    h = roots[0]["root"]
+    roots[0]["root"] = h[:-1] + ("1" if h[-1] == "0" else "0")
+    return {**rec, "roots": roots}
 
 
 def case_of(rec: dict[str, Any], program: Any) -> dict[str, Any]:
@@ -146,10 +160,11 @@ def serve(exe: str, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The registration check of ``benchmarks/all_protocols`` (module docstring)."""
     period_dir = Path(period_dir)
-    tools = json.loads((period_dir / "period.json").read_text()).get("tools") or {}
+    p = json.loads((period_dir / "period.json").read_text())
+    tools, tamper = p.get("tools") or {}, bool(p.get("registration_tamper"))
     t = time.monotonic()
     rec, program = declaration(period_dir)
-    case = case_of(rec, program)
+    case = case_of(tampered(rec) if tamper else rec, program)
     got, lean = answer(case), None
     if "nci" in tools:
         lean = serve(tools["nci"], [case])[0]
@@ -160,10 +175,10 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     out.mkdir(parents=True, exist_ok=True)
     (out / "nci.case.json").write_text(json.dumps(case, sort_keys=True))
     (out / "policy.json").write_text(json.dumps(at, sort_keys=True, indent=1))
-    (out / "nci.json").write_text(json.dumps({"answer": got, "lean": lean, "policy": at,
+    (out / "nci.json").write_text(json.dumps({"answer": got, "lean": lean, "policy": at, "tampered": tamper,
                                               "seconds": round(time.monotonic() - t, 2)}, sort_keys=True, indent=1))
     return got
 
 
 __all__ = ["ALPHA", "GAMMA", "GLM_ALPHA", "LABEL", "PROTOCOL", "answer", "at_alpha", "baseline", "case_of",
-           "declaration", "leg", "policy", "reference", "serve"]
+           "declaration", "leg", "policy", "reference", "serve", "tampered"]

@@ -4,7 +4,7 @@ result over each monitoring period of a datacenter.
     python -m verity_all_protocols.runner --out DIR --tools FILE [--windows N] [--start I] [--window-s S] [--jobs 1]
         [--session-jobs 1] [--node NAME] [--tamper W,...] [--law L] [--delta D] [--cap N] [--requests 3,7] [--steps 2] [--pouw h1]
         [--deployment ID] [--onsite EXE] [--scratch DIR] [--registered] [--wired | --tie [--tie-tamper W,...]] [--of-record]
-        [--check]
+        [--registration-tamper W,...] [--check]
 
 A window is one stretch of one machine's serving and its audits, and a monitoring period is the many windows on every
 machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per window W (``--start`` on): the verifier
@@ -35,7 +35,9 @@ its verdict is at when its leg states one (the registration check's), and the wh
 ``m0-pythonpath``, ``pous-run-protocol``, ``pous-setup``, ``remote-audit-protocol``, ``wipe-protocol``, ``nci``).
 ``--tamper W,...``: those windows'
 loop records outputs that are not its model's (`serve --tamper`) and its prover skips its self-check, so a drawn unit's
-proof is of a false witness. ``--pouw h1`` (until ALLP-H1LOOP's ``serve --pouw h1`` lands): the loop also writes PoUW's
+proof is of a false witness. ``--registration-tamper W,...``: those windows' registration check is handed a
+registration other than the one the loop registered (``period.json``'s ``registration_tamper``, `legs/nci.py`'s
+``tampered``), which NCI accepts and onsite refuses on its digest (`compose.mismatch`). ``--pouw h1`` (until ALLP-H1LOOP's ``serve --pouw h1`` lands): the loop also writes PoUW's
 window (its linears as the pinned H1 tile) to ``<window>/pouw``, and ``verity_torch_loop.pouw_audit`` audits it into
 ``<window>/pouw/answer.json`` before the legs run. Only the window's public files are kept in ``DIR`` (never a prover's
 file: its rows and salts). ``--registered``: the loop reads its weights as registered values (`serve --registered`),
@@ -171,6 +173,7 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
     report = {"format": FORMAT, "window": p["window"], "node": node, "run": os.environ.get("RESEARCH_RUN_ID"),
               "loop": {"circuit": p["circuit"], "run_root": p["run_root"], "law": p["law"], "cap": p["cap"],
                        "delta": p.get("delta"), "tampered": bool(p.get("prover_env")), "pouw": p.get("pouw"),
+                       "registration_tampered": bool(p.get("registration_tamper")),
                        **({"tie": {k: p["tie"][k] for k in ("strategy", "window", "stratum", "root")}}
                           if p.get("tie") else {})},
               "mode": p.get("mode"), "registration": reg, "protocols": rows, "seconds": seconds,
@@ -234,6 +237,7 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
         "mode": getattr(a, "mode", None),
+        **({"registration_tamper": True} if index in getattr(a, "registration_tamper", ()) else {}),
         **({"registered": str(pins)} if pins else {}), **({"tie": tie} if tie else {})}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
@@ -330,7 +334,8 @@ def mode_of(a: argparse.Namespace, argv: Sequence[str]) -> dict[str, Any]:
     return {"of_record": bool(a.of_record), "argv": list(argv),
             "flags": {"tie": a.tie, "pouw": a.pouw, "law": a.law, "jobs": a.jobs, "session_jobs": a.session_jobs,
                       "windows": a.windows, "start": a.start, "tamper": sorted(a.tamper),
-                      "tie_tamper": sorted(a.tie_tamper), "registered": a.registered, "wired": a.wired,
+                      "tie_tamper": sorted(a.tie_tamper), "registration_tamper": sorted(a.registration_tamper),
+                      "registered": a.registered, "wired": a.wired,
                       "requests": a.requests, "steps": a.steps, "cap": a.cap, "delta": a.delta,
                       "certifier_tamper": os.environ.get("CERTIFIER_TAMPER")},
             **({"gap": WIRING_GAP, "companion": COMPANION} if a.of_record else {})}
@@ -366,6 +371,8 @@ def main(argv: list[str] | None = None) -> int:
                     "relayed in the window's link-window, committed and signed by it and pinned from its record (`tie`)")
     ap.add_argument("--tie-tamper", default="", help="with --tie: windows whose output is the CERTIFIER_TAMPER=byte "
                     "relay's, one egress byte changed, e.g. 0")
+    ap.add_argument("--registration-tamper", default="", help="windows whose registration check is handed a registration "
+                    "other than the loop's (legs/nci.py's tampered), which onsite must refuse on its digest, e.g. 1")
     ap.add_argument("--wired", action="store_true", help="the loop's wired circuit (`serve --wired`: each linear and each "
                     "quantize one unit, every activation a tie; with --registered the weights one row a linear)")
     ap.add_argument("--of-record", action="store_true", help="S1's run of record: --tie --pouw h1 --registered --law "
@@ -376,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     a.tamper = {int(x) for x in a.tamper.split(",") if x.strip()}
     a.tie_tamper = {int(x) for x in a.tie_tamper.split(",") if x.strip()}
+    a.registration_tamper = {int(x) for x in a.registration_tamper.split(",") if x.strip()}
     if a.of_record and (refused := of_record(a)):
         ap.error(f"--of-record: {refused}")
     if a.of_record and (unmet := of_record_unmet(a)):
@@ -461,6 +469,7 @@ def summary_line(report: dict[str, Any]) -> dict[str, Any]:
     mode, reg = report.get("mode") or {}, report.get("registration") or {}
     return {"window": report["window"], "of_record": bool(mode.get("of_record")),
             **({"gap": mode["gap"]} if mode.get("gap") else {}), "tampered": report["loop"]["tampered"],
+            **({"registration_tampered": True} if report["loop"].get("registration_tampered") else {}),
             **({"tie": report["loop"]["tie"]["strategy"]} if report["loop"].get("tie") else {}),
             "registration": {"verdict": reg.get("verdict"), **({"reason": reg["reason"][:300]} if reg.get("reason") else {})},
             "protocols": {n: {"verdict": r["verdict"],
