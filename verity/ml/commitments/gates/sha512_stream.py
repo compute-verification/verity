@@ -1,5 +1,5 @@
 """SHA-512 continued over a byte stream as Boolean Definitions: a file's digest taken one row of 16-bit words at a time, so a
-unit holds one row and the chain's state, never the file (VLLM-131's checkpoint tie: a registered weight's rows hashed in a
+unit holds one row and the chain's state, never the file (a checkpoint tie: a registered weight's rows hashed in a
 safetensors shard's byte order to the shard's SHA-512).
 
     Sha512StreamRow_v1{H, W}

@@ -1,10 +1,10 @@
-"""verity_vllm.program.predict.weights_tie at TINY (VLLM-131): the verifier's tie of the pinned checkpoint X is X's public bytes
-(each shard's header state and SHA-512, each other width's field SHA-512) and reads every row of every rooted weight
-parameter once, and making it commits no weight; the honest committer's registration is `weights_registration`'s, its units
-are their Definitions' and its ends' digests are the verifier's, so the audit's pins hold and the verifier pins the roots;
-a committer serving another checkpoint's words as X's ends at another digest, and forging the end's digest makes the end
-unit's outputs not its Definition's; the verifier pins nothing on an audit that didn't accept the verifier's own tie; and a
-shard the tie can't read is refused by name."""
+"""verity_vllm.program.predict.weights_tie at TINY: the verifier's tie of the pinned checkpoint X is X's public bytes (each
+shard's header state and SHA-512, each other width's field SHA-512, the embedding table's after its tag) and reads every row
+of every rooted weight parameter once, the table's as row-seg rows, and making it commits no weight; the honest committer's
+registration is `weights_registration`'s, its units are their Definitions' and its ends' digests are the verifier's, so
+the audit's pins hold and the verifier pins the roots; a committer serving another checkpoint's words as X's ends at
+another digest, and forging the end's digest makes the end unit's outputs not its Definition's; the verifier pins nothing
+on an audit that didn't accept the verifier's own tie; and a shard the tie can't read is refused by name."""
 from __future__ import annotations
 
 import hashlib
@@ -86,12 +86,13 @@ def x(tmp_path):
 
 def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkeypatch):
     """One chain for the shard, from the verifier's own state after its header (its pending bytes the header's length mod
-    128) through every tensor's rows in file order to its SHA-512, and one for the embedding's other width (TINY's tied LM
-    head reads it @512, the table @64: @512 is the shard's, sorted first), from the IV over the tensor's bytes to their
-    SHA-512; each rooted parameter's every row read once, the rotary table (no root) none. Its templates: the shard's rows
-    at its one phase (each row whole blocks), its end, the field's rows and end. The verifier makes the tie, its circuit's
-    digest and its audit inputs without committing a weight (`weight_value` and the H1 committer refuse here), and its
-    shape entries are the weights record's, which names no root."""
+    128) through every tensor's rows in file order to its SHA-512, one for the embedding's other width (TINY's tied LM
+    head reads it @512 and ``x0`` @64: @512 is the shard's, sorted first), from the IV over the tensor's bytes to their
+    SHA-512, and one for its table @64, from the IV over the tag and the tensor's bytes; each rooted parameter's every row
+    read once, the rotary table (no root) none. Its templates: the shard's rows at its one phase (each row whole blocks),
+    its end, the field's rows and end, and the table's rows (one byte pending) and end, whose ``data`` alone is a row-seg
+    port. The verifier makes the tie, its circuit's digest and its audit inputs without committing a weight (`weight_value`
+    and the H1 committer refuse here), and its shape entries are the weights record's, which names no root."""
     reg, (d, man) = S._registered(), x
     registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     record = WW.weights_record(reg, d, man, grain=GRAIN)
@@ -106,9 +107,11 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     base = 8 + struct.unpack("<Q", shard[:8])[0]
     embed = WR.CheckpointIndex(d, verify_shards=False).array(EMBED).tobytes()
     cv, pend = SS.state(shard[:base])
+    tagged = WT.TABLE_TAG + embed
     assert [(c.name, c.cv, c.pending, c.length, c.digest) for c in t.chains] == [
         ("tie/model.safetensors", tuple(cv), pend, len(shard), hashlib.sha512(shard).digest()),
-        (f"tie/weights/{EMBED}@64", tuple(IV), b"", len(embed), hashlib.sha512(embed).digest())]
+        (f"tie/weights/{EMBED}@64", tuple(IV), b"", len(embed), hashlib.sha512(embed).digest()),
+        (f"tie/weights/{EMBED}@64/table", tuple(IV), WT.TABLE_TAG, len(tagged), hashlib.sha512(tagged).digest())]
     assert t.entries == record["registered_entries"] and not [e for e in t.entries.values() if "root" in e]
     read = Counter(r for c in t.chains for r in c.rows)
     assert read == Counter((p, j) for p, e in t.entries.items() for j in range(e["leaves"]))
@@ -116,9 +119,11 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     h = base % 128
     assert [(descriptor_id(fn), n) for fn, n in t.circuit().templates] == [
         (descriptor_id(fn), n) for fn, n in ((SS.row(h, 512), 176), (SS.row(h, 64), 5), (SS.end(len(shard)), 1),
-                                             (SS.row(0, 64), 256), (SS.end(len(embed)), 1))]
+                                             (SS.row(0, 64), 256), (SS.end(len(embed)), 1),
+                                             (SS.row(len(WT.TABLE_TAG), 64), 256), (SS.end(len(tagged)), 1))]
+    assert IF.seg_ports(t.circuit().registered) == {descriptor_id(SS.row(len(WT.TABLE_TAG), 64)): {"data"}}
     got = WT.audit_inputs(registration, record, t, LAW, CAP)
-    assert got["outputs"] == [[0, 439]] and got["units"] == 439 and got["run"] == t.run
+    assert got["outputs"] == [[0, 696]] and got["units"] == 696 and got["run"] == t.run
     assert got["registered"][0] == {"program": registration["program"], "values": registration["values"]}
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(LAW, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(LAW, CAP)

@@ -1,7 +1,7 @@
-"""The checkpoint tie of the committer's weights registration (VLLM-131): a zero-knowledge proof, once per model and key, that
-the rows committed under each registered weight root (`window_weights.weights_registration`: hm96 rows under the
-committer's secret salts, a hiding commitment) are checkpoint X's, which the verifier checks before it pins those roots
-(`checked_pins`). It never commits a weight: what it computes from X is X's public digests.
+"""The checkpoint tie of the committer's weights registration: a zero-knowledge proof, once per model and key, that the rows
+committed under each registered weight root (`window_weights.weights_registration`: hm96 rows under the committer's secret
+salts, a hiding commitment) are checkpoint X's, which the verifier checks before it pins those roots (`checked_pins`). It
+never commits a weight: what it computes from X is X's public digests.
 
 The tie is a window of the one proof service (`interface.Window`), one SHA-512 chain per safetensors shard of X in the
 shard's byte order (`gates.sha512_stream`). The shard's header is public, so the chain starts at the verifier's own state
@@ -9,16 +9,20 @@ after it (a supplied value: its chaining value and its pending bytes). Each tens
 parameter, and each row is a `Sha512StreamRow_v1` unit whose ``data`` port is a registered read of that row (opened against
 the registered root at its public position, in-circuit, by the Lean verifier's registered reads) and whose state is wired
 from the unit before. The shard's `Sha512StreamEnd_v1` unit's digest is a registered read of the verifier's own SHA-512 of
-the shard file, whose SHA-256 the checkpoints manifest pins. A field read at several widths (the tied embedding's table and
-LM head) is one tensor of the shard: its first parameter (sorted) is the shard's, and each other one is a chain of its own,
-from SHA-512's IV over the field's bytes to the verifier's SHA-512 of them. Under a ``work`` law with every unit in the
-output class (`Tie.outputs`), every unit is proved.
+the shard file, whose SHA-256 the checkpoints manifest pins. A field read at several widths (the tied embedding's table, LM
+head and ``x0`` rows) is one tensor of the shard: its first parameter is the shard's (by name, an embedding's table after
+every other), and each other one is a chain of its own, from SHA-512's IV over the field's bytes to the verifier's SHA-512
+of them. An embedding's table (`window_builder.table_param`) is a declared table (`interface.Table`), its rows
+``hm96-sha512/row-seg/v1`` leaves its reads open as such (`interface.seg_ports`); a template's port has one row schema, so
+a table's own chain hashes `TABLE_TAG` before the field's bytes, and its rows pend an odd count of bytes where a shard's
+(after a header safetensors aligns to 8 bytes) and every other chain's pend an even count: they are templates of their own.
+Under a ``work`` law with every unit in the output class (`Tie.outputs`), every unit is proved.
 
 Public: the layout (the shards, their headers and tensor offsets, each parameter's rows and width), the digests and the
 registered roots. Private: the rows, their salts and every state but the first. Refused by name: a cast or a composition
 whose rows aren't its source tensors' bytes in order (1:1, fused along dim 0 and tied are), a row straddling two tensors, a
 tensor two parameters split, bytes between or after the tensors, a tensor no registered parameter holds, a checkpoint not of
-record or of another model.
+record or of another model, and a template whose port would read a table's rows and another parameter's.
 
     python -m verity_vllm.program.predict.weights_tie commit --phi PHI --checkpoint-dir X [--manifest M] --key-file K \\
         --registration-out REG --out DIR [--law work:1] [--cap 16] [--run-id ID] [--grain 512,9,64] \\
@@ -51,26 +55,31 @@ import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as G, registration as R
 from verity.ml.commitments.gates import sha512_stream as SS
-from verity.ml.commitments.gates.sha512 import IV
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import read_safetensors_header
 from verity_vllm.records.weights_registration import WeightsRegistration
 
 from . import window_weights as WW
-from .window_builder import WEIGHTS, Grain
+from .window_builder import Grain
 
 TIE = "verity-vllm/weights-tie/v1"
 NAME = "verity-vllm/weights-tie"
 #: the composition rules (`check.weights_of_record.compose`) whose field is its source tensors' bytes in order, besides a
 #: fused one along dim 0 (``fused … (dim 0)``)
 WHOLE = ("1:1", "tied lm_head <- model.embed_tokens.weight")
+#: what a table's own chain hashes before the field's bytes (module docstring)
+TABLE_TAG = b"t"
 _GRAIN = Grain()
 _CHUNK = 1 << 24
 
 
 def _field(param: str) -> str:
-    return param.removeprefix(f"{WEIGHTS}/").rpartition("@")[0]
+    return WW._param(param)[0]
+
+
+def _table(param: str) -> bool:
+    return WW._param(param)[2]
 
 
 def _whole(rule: Any) -> bool:
@@ -151,7 +160,8 @@ class Tie:
     def circuit(self) -> IF.Circuit:
         """The tie's circuit: each chain's first unit reads its start state, every other unit's state is wired from the unit
         before (``cv`` from ``o0``, ``carry`` from ``o1``), each row unit's ``data`` reads its row of its parameter, and the
-        end's ``o0`` reads the chain's digest; the patterns coalesced to their runs."""
+        end's ``o0`` reads the chain's digest; the patterns coalesced to their runs. An embedding's table is declared a table
+        of its parameter's every row, so its reads are row-seg rows (`interface.seg_ports`)."""
         templates, plan = self._plan()
         wires, reads = [], []
         for c, steps in zip(self.chains, plan):
@@ -172,8 +182,9 @@ class Tie:
                 prev = (tid, i)
         params = {**{p: e["leaves"] * e["words"] for p, e in self.entries.items()},
                   **{n: len(row) for c in self.chains for n, row in c.supplied().items()}}
+        tables = tuple(IF.Table(p, p, 0, e["words"], e["leaves"]) for p, e in self.entries.items() if _table(p))
         return IF.Circuit(NAME, tuple(templates), wires=tuple(IF.coalesce(wires)),
-                          registered=IF.Registered(params, reads=tuple(IF.coalesce(reads))))
+                          registered=IF.Registered(params, tables, reads=tuple(IF.coalesce(reads))))
 
     def window(self, law: dict[str, Any], cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
         """The tie's window under ``law`` in members of at most ``cap`` units, ``values`` the committed weights (the
@@ -246,7 +257,7 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
     entries, fields = rec["registered_entries"], {f["field"]: f for f in rec["fields"]}
     claimed: dict[str, tuple[str, int]] = {}
     alone: list[tuple[str, list[str]]] = []
-    for p in sorted(entries):
+    for p in sorted(entries, key=lambda p: (_table(p), p)):
         e, f = entries[p], fields[_field(p)]
         srcs, row, at, span = list(f.get("sources") or ()), 2 * e["words"], 0, []
         if f.get("cast") or f.get("shard") or not srcs or not _whole(f.get("rule")):
@@ -290,8 +301,10 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
         shards[fn] = sha256
         chains.append(Chain(f"tie/{fn}", tuple(cv), pend, tuple(rows), at, sha512))
     for p, srcs in alone:
-        data = b"".join(ck.array(s).tobytes() for s in srcs)
-        chains.append(Chain(f"tie/{p}", tuple(IV), b"", tuple((p, j) for j in range(entries[p]["leaves"])), len(data),
+        tag = TABLE_TAG if _table(p) else b""
+        data = tag + b"".join(ck.array(s).tobytes() for s in srcs)
+        cv, pend = SS.state(tag)
+        chains.append(Chain(f"tie/{p}", tuple(cv), pend, tuple((p, j) for j in range(entries[p]["leaves"])), len(data),
                             hashlib.sha512(data).digest()))
     return Tie(rec["program_digest"], {"repo": model["repo"], "revision": model["revision"]}, dict(rec["grain"]), shards,
                {p: dict(e) for p, e in sorted(entries.items())}, dict(rec["unrooted"]), tuple(chains), run_id)

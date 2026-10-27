@@ -1,4 +1,4 @@
-"""What an integration hands Verity (Daniel, 24 Oct: integrations are frontends, and Verity is agnostic to them), one window
+"""What an integration hands Verity (integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
 1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
@@ -30,12 +30,12 @@ bit concatenation of its leaves, then one output row ``o<j>`` per return field, 
 port's leaves (one bit each) are read as their `boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
-a5's wiring check holds on the drawn units (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several writers' words
-(RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused until circuits and proofs
-choose its row form, except in the form they chose, WIRES' cut (``cuts``, `SampledProofs.Wires`): a port read from
-several writers is cut ``k`` ways, parameter ``p`` is ``k`` rows ``p#j``, row ``j`` its outer elements
-``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows (`Wire.cut`). A unit that reads one row gathered from
-several writers' outputs reads it through a gather unit (``AllGather_v1``) whose ``parts`` are cut.
+the wiring check holds on the drawn units (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
+writers' words (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused except in one
+form, the wire cut (``cuts``, `SampledProofs.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
+is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
+(`Wire.cut`). A unit that reads one row gathered from several writers' outputs reads it through a gather unit
+(``AllGather_v1``) whose ``parts`` are cut.
 
 The circuit also declares what fills its other inputs (`Registered`, `Ingress`): rows of a registered parameter read at
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
@@ -48,7 +48,7 @@ units read a registered value is a shared-row member, each read port a table of 
 committed under the registered value's salts (core's ``one_stage.registered``), so each row's public string is the
 registered one, and its header names each row's position and path to the value's root; the verifier's ``--registered``
 file of the member comes from the record and the roots it pinned alone (`registered_reads`), and Lean's registered reads
-open each row against them. A table is a registered parameter of its own, every row of it (CMP-164's default); a table
+open each row against them. A table is a registered parameter of its own, every row of it; a table
 read takes a supplied value (`supplied`), one row the verifier fills from its pin of the table's parameter, the root or
 the domain id, under public salts; an opening's verdict reads the table's supplied 1, so a verdict of 0 opens no root,
 and the opening's row, salt and path are its units' own values, which the verdict holds to the pinned root inside the
@@ -91,7 +91,7 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import advice as AC
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS
 
@@ -189,7 +189,7 @@ def resolve(tid: str, *, template: bool = True) -> Any:
         if m[2] is not None:
             fn = bind(base, **{k: _static(v) for k, v in _bindings(m[2]).items()})
         else:
-            fn = bind(base) if template and isinstance(base, CompositeDefinition) else base
+            fn = bind(base) if isinstance(base, CompositeDefinition) else base
     except (TypeError, ValueError, json.JSONDecodeError) as e:
         raise ValueError(f"{tid}: {type(e).__name__}: {e}") from e
     if descriptor_id(fn) != tid:
@@ -267,12 +267,13 @@ def layout(fn: Any) -> Layout:
     return Layout(rows, outs, widths, tuple(ty.n if isinstance(ty, Array) else 1 for _, ty in params))
 
 
-def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None) -> tuple[list[tuple[str, str, int, list[str]]],
-                                                                         list[tuple[str, tuple[int, ...]]]]:
+def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None, seg: Sequence[str] = ()
+              ) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """``fn``'s rows as C-Flock's `UnitStager` takes them, ``(in_rows, out_rows)``: one ``hm96-sha512/row/v2`` row per parameter,
-    or per row of a cut one (`Layout.cut`), then one per return field."""
+    or per row of a cut one (`Layout.cut`), then one per return field; a parameter in ``seg`` (`seg_ports`) is one
+    ``hm96-sha512/row-seg/v1`` row."""
     lay = layout(fn)
-    return [(p, V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
+    return [(p, SEG if p in seg else V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
 
 
 def words(a: Any, width: int, n: int, count: int) -> np.ndarray:
@@ -363,8 +364,8 @@ def _of(cls: Any, d: Any, fields: Sequence[str], what: str) -> Any:
 @dataclass(frozen=True, init=False)
 class Wire(_Pattern):
     """A wiring pattern (`_Pattern`): each reader row it covers is the ``out`` row of unit ``base + sum(d[k] * step[k])`` of
-    template ``writer``, each index counting its own template's units (WIRES' form, `SampledProofs.Wires`). With no cut it
-    reads the port's one row, #4111's whole-port wire."""
+    template ``writer``, each index counting its own template's units (the wire cut's form, `SampledProofs.Wires`). With no cut
+    it reads the port's one row, a whole-port wire."""
     writer: str
     out: str
     key_fields: ClassVar[tuple[str, ...]] = ("writer", "out")
@@ -694,6 +695,26 @@ def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
     return tuple(out)
 
 
+def seg_ports(registered: Registered | None) -> dict[str, frozenset[str]]:
+    """By template, the ports its registered reads (`Read`) fill with a declared table's parameter's rows, which are
+    ``hm96-sha512/row-seg/v1`` leaves (`gates.embedding`), so the port is a row of that schema (`unit_rows`) where every
+    other is ``hm96-sha512/row/v2``. Refused (ValueError) where one port reads a table's rows and another parameter's: a
+    template's port has one row schema."""
+    reg = registered or Registered({})
+    tables = {t.param for t in reg.tables}
+    by: dict[tuple[str, str], set[bool]] = {}
+    for r in reg.reads:
+        by.setdefault((r.reader, r.port), set()).add(r.param in tables)
+    if bad := sorted(k for k, v in by.items() if len(v) > 1):
+        raise ValueError(f"{bad}: a template's port reads a table's row-seg rows and another parameter's row/v2 rows; a port "
+                         "has one row schema")
+    out: dict[str, set[str]] = {}
+    for (tid, p), v in by.items():
+        if True in v:
+            out.setdefault(tid, set()).add(p)
+    return {tid: frozenset(ps) for tid, ps in out.items()}
+
+
 def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
              module: Any) -> dict[str, Any]:
     """The values a window's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
@@ -993,7 +1014,7 @@ def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
     and each port a registered read fills a table of the rows it reads (`committed_reads`)."""
     program, query = circuit.program()
     return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, circuit.server_ends(),
-                    committed_reads(circuit.registered))
+                    committed_reads(circuit.registered), seg_ports(circuit.registered))
 
 
 def _reads_of(tid: str, lo: int, n: int, reads: Sequence[Read], rows: Mapping[str, int]) -> dict[str, tuple[str, list[int], np.ndarray]]:
@@ -1020,13 +1041,15 @@ def _reads_of(tid: str, lo: int, n: int, reads: Sequence[Read], rows: Mapping[st
 
 def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
              wires: Sequence[Wire], cuts: Mapping[str, Mapping[str, int]] | None = None,
-             servers: Mapping[str, Sequence[int]] | None = None, reads: Sequence[Read] = ()) -> tuple[CS.Member, ...]:
+             servers: Mapping[str, Sequence[int]] | None = None, reads: Sequence[Read] = (),
+             seg: Mapping[str, frozenset[str]] | None = None) -> tuple[CS.Member, ...]:
     """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A member's row
     is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first, and
     a member's units are one server's, so they are cut at ``servers``' ends too (by template, `server_ends`). A registered
     read covers whole members (`_reads_of`), so they are cut at every read's ends, and a member it covers is a shared-row
     member: each read port's table the
-    registered rows its units read, each other input row's its units' own rows."""
+    registered rows its units read, each other input row's its units' own rows. ``seg``: by template, its row-seg ports
+    (`seg_ports`)."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     cuts = cuts or {}
@@ -1041,7 +1064,7 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     for _k, tid, lo, n in ranges:
         lay, kv = lays[tid][0], cuts.get(tid, {})
         rows = tuple((p, w) for p, w, _ in lay.cut(kv))
-        schemas = tuple((p, V2) for p, _ in rows + lay.outs)
+        schemas = tuple((p, SEG if p in (seg or {}).get(tid, ()) else V2) for p, _ in rows + lay.outs)
         mine = sorted(by.get(tid, ()), key=lambda w: w.at)
         ends = sorted({0, n, *(x for w in mine for x in (w.at, w.at + w.reader_units)), *(servers or {}).get(tid, ()),
                        *(x for r in reads if r.reader == tid for x in (r.at, r.at + r.reader_units))})
@@ -1204,9 +1227,9 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     program, query = circuit.program()
     part = PO.build(program, query)
-    sts = {}
+    sts, seg = {}, seg_ports(circuit.registered)
     for fn, tid in zip((f for f, _ in circuit.templates), circuit.ids):
-        i, o = unit_rows(fn, circuit.cuts.get(tid))
+        i, o = unit_rows(fn, circuit.cuts.get(tid), seg.get(tid, ()))
         sts[tid] = {"in_rows": i, "out_rows": o, "reads": "inline"}
     doc = {**_record(circuit.name, list(zip(circuit.ids, (n for _, n in circuit.templates))), sts, circuit.external, query,
                      part["program"], PO.digest(part), "", "", None, ()),
@@ -1390,7 +1413,7 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         check_inputs(lays, cuts, wires, registered, ingress)
         servers = Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])[1] if "blocks" in doc else {}
         ms = _members(defs, program, query, doc["cap"], wires, cuts, servers,
-                      committed_reads(registered))
+                      committed_reads(registered), seg_ports(registered))
     else:
         ms = tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                              tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
@@ -1432,9 +1455,9 @@ def _word_bits(a: Any, n: int, leaves: int) -> np.ndarray:
 
 @dataclass(frozen=True)
 class _Recorded:
-    inputs: list[np.ndarray]
+    inputs: list[np.ndarray | None]   # None: by reference (`Window.record`)
     outputs: list[np.ndarray]
-    words: list[np.ndarray]      # every port's (n, words) u16, parameters then return fields
+    words: list[np.ndarray | None]    # every port's (n, words) u16, parameters then return fields
     label: Any
     n: int
 
@@ -1489,18 +1512,21 @@ class Window:
 
     def record(self, template: Any, inputs: Sequence[Any], outputs: Sequence[Any], label: Any = None) -> range:
         """``template``'s next units: ``inputs`` one array per parameter, ``outputs`` one per return field (module docstring),
-        all of one unit count, under the integration's opaque ``label`` (JSON). -> their indices among the template's units."""
+        all of one unit count, under the integration's opaque ``label`` (JSON). -> their indices among the template's units.
+        An input may be None, the same for all of a template's units: its rows are committed by reference (`close`), so a
+        parameter every row of which is wired or a registered read is never held."""
         tid = descriptor_id(template)
         fn, total = self.circuit.template(tid), dict(zip(self.circuit.ids, (n for _, n in self.circuit.templates)))[tid]
         lay = layout(fn)
-        if len(inputs) != len(lay.rows) or len(outputs) != len(lay.outs):
-            raise ValueError(f"{tid}: {len(inputs)} inputs and {len(outputs)} outputs, not {len(lay.rows)} and {len(lay.outs)}")
-        n, at = len(inputs[0]), self.count(tid)
+        if len(inputs) != len(lay.rows) or len(outputs) != len(lay.outs) or any(o is None for o in outputs):
+            raise ValueError(f"{tid}: {len(inputs)} inputs and {len(outputs)} outputs (each an array), not {len(lay.rows)} and "
+                             f"{len(lay.outs)}")
+        n, at = len(outputs[0]), self.count(tid)
         if n < 1 or at + n > total:
             raise ValueError(f"{tid}: {n} units at {at}, past its {total}")
         json.dumps(label)
-        values = [np.ascontiguousarray(a) for a in [*inputs, *outputs]]
-        ws = [words(a, w, n, c) for a, w, (_, c) in zip(values, lay.widths, lay.rows + lay.outs)]
+        values = [None if a is None else np.ascontiguousarray(a) for a in [*inputs, *outputs]]
+        ws = [None if a is None else words(a, w, n, c) for a, w, (_, c) in zip(values, lay.widths, lay.rows + lay.outs)]
         self._recorded.setdefault(tid, []).append(_Recorded(values[:len(inputs)], values[len(inputs):], ws, label, n))
         return range(at, at + n)
 
@@ -1513,11 +1539,17 @@ class Window:
             tid, bad, at = descriptor_id(fn), [], 0
             params, ret = fn.signature()
             leaves = [len(f.leaf_widths()) for f in _fields(ret)]
-            boolean = B.is_boolean(fn)
+            widths, boolean = layout(fn).widths, B.is_boolean(fn)
             for b in self._recorded.get(tid, ()):
-                ins = [_word_bits(a, b.n, ty.leaves) for a, (_, ty) in zip(b.inputs, params)] if boolean else b.inputs
-                outs = [_word_bits(o, b.n, ty.leaves) for o, ty in zip(b.outputs, _fields(ret))] if boolean else b.outputs
-                want = np.asarray(evaluate_batch(fn, *ins, kernel=kernel)).reshape(b.n, -1).astype(np.uint64)
+                given = self.input_words(tid, at, b.n) if any(x is None for x in b.inputs) else None
+                inputs = [x if x is not None else
+                          np.ascontiguousarray(given[g].astype("<u2")).view(f"<u{widths[g] // 8}").reshape(b.n, -1)
+                          for g, x in enumerate(b.inputs)]
+                outs = b.outputs
+                if boolean:
+                    inputs = [_word_bits(a, b.n, ty.leaves) for a, (_, ty) in zip(inputs, params)]
+                    outs = [_word_bits(o, b.n, ty.leaves) for o, ty in zip(outs, _fields(ret))]
+                want = np.asarray(evaluate_batch(fn, *inputs, kernel=kernel)).reshape(b.n, -1).astype(np.uint64)
                 got = np.concatenate([o.view(f"u{o.dtype.itemsize}").reshape(b.n, -1).astype(np.uint64) for o in outs], axis=1)
                 if got.shape != want.shape or want.shape[1] != sum(leaves):
                     raise ValueError(f"{tid}: outputs of {got.shape[1]} leaves a unit, its Definition's {want.shape[1]}")
@@ -1529,7 +1561,9 @@ class Window:
 
     def close(self, *, workers: int = 1, salt_key: bytes | None = None) -> CS.Committed:
         """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salt_key``:
-        tests only (`rows.commit`)."""
+        tests only (`rows.commit`). A parameter recorded by reference (`record`) is committed as what it reads: a registered
+        read's rows as its value's (`rows.ValueRows`), a wired row as its writer's output row (`rows.WIRED`); refused for a
+        row that is neither."""
         missing = {tid: (self.count(tid), n) for tid, (_, n) in zip(self.circuit.ids, self.circuit.templates)
                    if self.count(tid) != n}
         if missing:
@@ -1540,15 +1574,14 @@ class Window:
         for m in self.window.members:
             lay = layout(self.circuit.template(m.template))
             if m.template not in cat:
-                got = self._recorded[m.template]
-                cat[m.template] = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
+                cat[m.template] = self._words(m.template)
             ports, lo, kv = cat[m.template], m.base - base[m.template], self.circuit.cuts.get(m.template, {})
             d = {"rows": {}, "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
             for g, (p, w) in enumerate(lay.rows):
                 k = int(kv.get(p, 1))
                 for j in range(k):
                     # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`Layout.cut`)
-                    d["rows"][row_name(p, j, k)] = (ports[g][lo:lo + m.n] if k == 1 else
+                    d["rows"][row_name(p, j, k)] = (None if ports[g] is None else ports[g][lo:lo + m.n] if k == 1 else
                                                     np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
             reads = _reads_of(m.template, m.base - base[m.template], m.n, committed, dict(m.rows + m.outs))
             if reads:
@@ -1567,6 +1600,10 @@ class Window:
                         salts_of[m.port(p)] = b"".join(salts)
                         self._entries.setdefault(m.key, {})[p] = entry
                         continue
+                    if d["rows"][p] is None:
+                        d["rows"][p] = CS.ValueRows(v, tuple(int(x) for x in positions))
+                        self._entries.setdefault(m.key, {})[p] = v.statement(positions)[2]
+                        continue
                     first = [int(np.flatnonzero(refs == j)[0]) for j in range(len(positions))]
                     rows = d["rows"][p][first]
                     if not np.array_equal(rows[refs], d["rows"][p]):
@@ -1575,8 +1612,75 @@ class Window:
                     d["rows"][p] = rows
                     salts_of[m.port(p)] = b"".join(salts)
                     self._entries.setdefault(m.key, {})[p] = entry
+            wired = {q for q, _o, _ws in m.wired}
+            for r, x in d["rows"].items():
+                if x is None:
+                    if r not in wired:
+                        raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
+                    d["rows"][r] = CS.WIRED
             data.append(d)
         return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of)
+
+    def _words(self, tid: str) -> list[np.ndarray | None]:
+        """Template ``tid``'s recorded words by port over all its units, None for a parameter recorded by reference."""
+        got, out = self._recorded[tid], []
+        for g in range(len(got[0].words)):
+            ws = [b.words[g] for b in got]
+            if any(w is None for w in ws) and not all(w is None for w in ws):
+                raise ValueError(f"{tid}: parameter {g} recorded by reference for some units and in full for others")
+            out.append(None if ws[0] is None else np.concatenate(ws))
+        return out
+
+    def input_words(self, tid: str, lo: int, n: int,
+                    outputs: Callable[[str], Sequence[np.ndarray]] | None = None) -> list[np.ndarray]:
+        """Template ``tid``'s units ``[lo, lo + n)`` (its own indices): each parameter's ``(n, words)`` u16 words as the window
+        commits them (`close`): recorded in full, or by reference a registered read's value rows and a wired row its writer's
+        output row, each writer's output words over all its template's units from ``outputs`` (by template), else as recorded."""
+        lay, base = layout(self.circuit.template(tid)), self._bases()
+        mine, kv = self._words(tid) if self._recorded.get(tid) else [None] * len(lay.rows), self.circuit.cuts.get(tid, {})
+        committed, cache = committed_reads(self.circuit.registered), {}
+        starts = sorted((b, t) for t, b in base.items())
+        firsts = np.array([b for b, _ in starts], dtype=np.int64)
+
+        def out(t: str, port: str) -> np.ndarray:
+            if (t, port) not in cache:
+                lt = layout(self.circuit.template(t))
+                j = [p for p, _ in lt.outs].index(port)
+                cache[(t, port)] = (outputs(t) if outputs is not None else self._words(t)[len(lt.rows):])[j]
+            return cache[(t, port)]
+
+        res = []
+        for g, (p, w) in enumerate(lay.rows):
+            if mine[g] is not None:
+                res.append(mine[g][lo:lo + n])
+                continue
+            k, a = int(kv.get(p, 1)), np.empty((n, w), dtype=np.uint16)
+            for m in self.window.members:
+                mlo = m.base - base[tid]
+                if m.template != tid or mlo >= lo + n or mlo + m.n <= lo:
+                    continue
+                s, e = max(lo, mlo), min(lo + n, mlo + m.n)
+                reads = _reads_of(tid, mlo, m.n, committed, dict(m.rows + m.outs))
+                if p in reads:
+                    param, positions, refs = reads[p]
+                    v = self.registered[param]
+                    rows = np.asarray(v.rows[np.asarray(positions)[refs[s - mlo:e - mlo]]] if isinstance(v.rows, np.ndarray)
+                                      else [v.rows[positions[int(i)]] for i in refs[s - mlo:e - mlo]], dtype=np.uint16)
+                    a[s - lo:e - lo] = rows.reshape(e - s, w)
+                    continue
+                wires = {q: (o, ws) for q, o, ws in m.wired}
+                for j in range(k):
+                    r = row_name(p, j, k)
+                    if r not in wires:
+                        raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
+                    o, ws = wires[r]
+                    x = np.asarray(ws[s - mlo:e - mlo], dtype=np.int64)
+                    at = np.searchsorted(firsts, x, side="right") - 1
+                    for i in np.unique(at):
+                        b, t = starts[int(i)]
+                        a[np.flatnonzero(at == i) + (s - lo), j * w // k:(j + 1) * w // k] = out(t, o)[x[at == i] - b]
+            res.append(a)
+        return res
 
     def _bases(self) -> dict[str, int]:
         return {t: b for _k, t, b, _n in CS.template_partition(self.window.program, self.window.query).ranges}
@@ -1595,10 +1699,10 @@ class Window:
 
     def circuit_record(self) -> dict[str, Any]:
         """The window's ``circuit.json`` (`circuit_record`), its members stated by its cap and the circuit's wires, each
-        template's statement its bit rows under its cuts (`unit_rows`)."""
-        sts = {}
+        template's statement its bit rows under its cuts and row-seg ports (`unit_rows`)."""
+        sts, seg = {}, seg_ports(self.circuit.registered)
         for fn, tid in zip((f for f, _ in self.circuit.templates), self.circuit.ids):
-            i, o = unit_rows(fn, self.circuit.cuts.get(tid))
+            i, o = unit_rows(fn, self.circuit.cuts.get(tid), seg.get(tid, ()))
             sts[tid] = {"in_rows": i, "out_rows": o, "reads": "inline"}
         blocks = self.circuit.blocks
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),

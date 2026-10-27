@@ -1,4 +1,4 @@
-"""TINY's checkpoint tie inputs for `benchmarks/prove_path/run.sh`'s ``PP_WEIGHTS_TIE`` arm (VLLM-131): checkpoint X
+"""TINY's checkpoint tie inputs for `benchmarks/prove_path/run.sh`'s ``PP_WEIGHTS_TIE`` arm: checkpoint X
 (`test_window_circuit._checkpoint`, seed 3) and the manifest pinning it in ``DIR/x``, checkpoint Y (seed 4, another
 checkpoint's words) in ``DIR/y``, and the registered φ (`test_steps._registered`'s, default seed 7) in ``DIR/phi.json``,
 with the window grain `test_window_circuit.GRAIN` printed for ``weights_tie --grain``.

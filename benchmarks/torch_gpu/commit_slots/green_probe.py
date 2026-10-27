@@ -8,8 +8,7 @@ Together is uncoupled (no dependency between the streams) or coupled as today's 
 (`e2e_h200.commit`): a group's GEMMs stand for its forward, then the group is added (the side stream waits for the GEMMs'
 stream), and the GEMMs' stream waits until the side stream has read the group `LAG` before. Two streams on disjoint SMs
 that run at once take max(commit, GEMMs) together; streams that take turns take their sum. ``overlap`` is
-(commit + GEMMs - together) / min(commit, GEMMs): 1 at once, 0 in turns. The partitions stay open to the end: the
-stand-in tables are held for every plan's stream.
+(commit + GEMMs - together) / min(commit, GEMMs): 1 at once, 0 in turns. The partitions stay open to the end.
 """
 from __future__ import annotations
 
@@ -70,7 +69,7 @@ def timed(work: dict[str, tuple[Any, Any]]) -> dict[str, float]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON (CIR-113)")
+    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON")
     ap.add_argument("--sms", type=int, nargs="+", default=[32, 64])
     ap.add_argument("--batch", type=int, default=4096)
     ap.add_argument("--gemm-n", type=int, default=8192)
