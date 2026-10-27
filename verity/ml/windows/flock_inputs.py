@@ -14,14 +14,14 @@ from typing import Any
 
 from verity.ml.windows.rows import SCHEME
 
-#: M0's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
+#: C-Flock's circuit prover's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
 M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")
 
 
 @dataclass(frozen=True)
 class FlockCircuit:
-    """What a member's M0 header reads off the circuit it is staged under (`flock_circuit`): its META, its SHA-512 pin and its
-    class."""
+    """What a member's circuit-prover header reads off the circuit it is staged under (`flock_circuit`): its META, its SHA-512
+    pin and its class."""
     meta: dict[str, Any]
     pin: str
     cls: str
@@ -43,7 +43,7 @@ def flock_circuit(circuit: str | bytes) -> FlockCircuit:
 def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircuit, out_dir: str | Path, *,
                       write: Sequence[str] = ("pub", "inst"), files: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None
                       ) -> dict[str, Any]:
-    """Member ``k``'s M0 ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``, under the header
+    """Member ``k``'s circuit-prover ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``, under the header
     ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's statement, subcircuit, block shape
     and class, the member's global unit indices, and its ``frame_v3``.  The bodies are the window's bytes.  ``circuit`` is the
     circuit's text or its `flock_circuit`, ``write`` the files to write (a member's ``inst`` is the prover's, wanted only once
@@ -79,7 +79,9 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     got = {"circuit_sha512": c.pin, "class": c.cls}
     if "pub" in write:
         got["pub"] = str(o / f"m{k}-pub-{n}.bin")
-        Path(got["pub"]).write_bytes(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + pub)
+        # `verity_flock.circuit.public_file`'s header line, so the file's SHA-512 is the prover's record's public_file_sha512
+        line = json.dumps(dict(head, rows=False), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        Path(got["pub"]).write_bytes(line.encode() + b"\n" + pub)
     if "inst" in write:
         got["inst"] = str(o / f"m{k}-inst-{n}.bin")
         fd = os.open(got["inst"], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

@@ -5,10 +5,10 @@ import Proofs.Population.Leakage
 # The population theorems for a program, with its padding's public cones
 
 `Oblivious` pads a time-ordered program over a set `C` of assignments (`padOver C`) to a checked population with the
-program's wrong units on `C`. This file carries every population theorem across, so that each holds for the program
-with the cones and upstreams of the padding, which are public when `C` is (the assignments holding the public values,
-`{σ | ∀ t ∈ Pub, σ t = a t}`; or every assignment, the static superset). For an oblivious program those cones are its
-own dataflow's (`population_of_addressedBy`).
+program's faulty proof blocks on `C`. This file carries every population theorem across, so that each holds for the
+program with the cones and upstreams of the padding, which are public when `C` is (the assignments holding the public
+values, `{σ | ∀ t ∈ Pub, σ t = a t}`; or every assignment, the static superset). For an oblivious program those cones
+are its own dataflow's (`population_of_addressedBy`).
 
 * `egress_eq_pad`: on `C`, the program and its padding show the same egress.
 * `eq_honest_off_padDown` (T1), `card_egress_le_pad` (T2), `card_leak_le_coneEgress_pad` and
@@ -49,7 +49,7 @@ theorem egress_eq_pad [Fintype U] [Fintype S] [Fintype V] [Inhabited V] {C : Set
     exact h2
 
 /-- **T1 for a program**: a run in `C` equals the honest run (in `C`) on every unit outside the padding's cone of its
-wrong units. -/
+faulty proof blocks. -/
 theorem eq_honest_off_padDown [Fintype U] [Fintype S] [Inhabited V] (hsa : D.SingleAssignment) {step : U → ℕ}
     (ht : D.TimeOrdered step) {C : Set (S → V)} (a : S → V) {honest σ : S → V} (hhC : honest ∈ C) (hσC : σ ∈ C)
     (hh : ∀ s ∈ D.input, honest s = a s) (hc : ∀ u, D.Correct honest u) (hσ : ∀ s ∈ D.input, σ s = a s) :
@@ -68,8 +68,8 @@ theorem card_egress_le_pad [Fintype U] [Fintype S] [Fintype V] [Inhabited V] (hs
   have hch := D.padOver_checked C hsa ht
   exact (D.padOver C).card_egress_le ((D.padOver C).covered_of_singleAssignment hch.1) hch.2 _ a hX
 
-/-- **T3 for a program, Daniel's form**: at most `m` wrong units and every unit's padded cone egress at most `E` give
-`#honest · C(|U|, m) · |V| ^ (m E)` egress values. -/
+/-- **T3 for a program, the uniform form**: at most `m` faulty proof blocks and every unit's padded cone egress at most
+`E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values. -/
 theorem card_leak_le_coneEgress_pad [Fintype U] [Fintype S] [Fintype V] [DecidableEq V] [Inhabited V]
     (hsa : D.SingleAssignment) {step : U → ℕ} (ht : D.TimeOrdered step) {C : Set (S → V)} (O : Finset S)
     {m E : ℕ} (hmU : m ≤ Fintype.card U) (hE : ∀ u, ((D.padOver C).coneEgress O {u}).card ≤ E) {ι : Type}

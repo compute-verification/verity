@@ -1,4 +1,4 @@
-"""The weights' store and its decode call: the stand-in for CMP-95 item 2 (memory-accounting's layout and decode call) on
+"""The weights' store and its decode call: the stand-in for memory-accounting's layout and decode call, on
 the conventions kernels' decode-to-staging kernel already reads (`benchmarks/torch_gpu/s8_dec_linear`, KP2-DEC).
 
 **Layout.** W is ALLP-IFACE's weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
@@ -17,7 +17,7 @@ Stores:
   gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
 * `GeneratorStore`: no store; ``stage`` regenerates the tensor from the seed. The FIXTURE for running the frozen shape's
   compute before C* is on the card; the record says so.
-* `FileStore`: W itself, the file network's load sink writes (NET-76), read in place. Before it serves, every tensor's
+* `FileStore`: W itself, the file network's load sink writes, read in place. Before it serves, every tensor's
   bytes are checked against the manifest's sha256 (``verity/seeded-weights/manifest/v1``, `SW.manifest`), and it refuses
   (`Mismatch`) a file whose size, model, tensors or any tensor's sha256 isn't the manifest's.
 """
