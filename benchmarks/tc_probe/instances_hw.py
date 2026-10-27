@@ -289,13 +289,13 @@ BF16_HOPPER_SYNTHETIC = Synthetic(
     target=BF16_HOPPER_TARGET, instruction=BF16_HOPPER_INSTRUCTION, model=S.HOPPER_BF16_M16N8K16,
     operands=bf16_random_finite_operands, dtype=np.uint16, epilogue=EPILOGUE_BF16,
     recipe="a, b = random_finite_bf16 (exponent fields [96, 160), 1/10 signed zeros, 1/10 subnormals); accs = tc_dot(HOPPER_BF16_M16N8K16) "
-           "chained from +0 (archive.direct.ligero.relchain.instances, relation bf16-hopper, lane b-hopper dc3c141)")
+           "chained from +0 (archive.direct.ligero.relchain.instances, relation bf16-hopper)")
 FP8_HOPPER_SYNTHETIC = Synthetic(
     dataset_id="bench-instances-fp8-hopper/v1", dataset="bench-instances-fp8-hopper/v1", tier="vu-k1536-fp8-hopper", relation="fp8-hopper",
     target=T.FP8_HOPPER_WGMMA.name, instruction=T.FP8_HOPPER_WGMMA.instruction, model=S.HOPPER_E4M3_K32,
     operands=fp8_random_finite_operands, dtype=np.uint8, epilogue=None,
     recipe="a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); accs = tc_dot(HOPPER_E4M3_K32) chained from +0 "
-           "(archive.direct.ligero.relchain.instances, relation fp8-hopper, lane b-hopper dc3c141)")
+           "(archive.direct.ligero.relchain.instances, relation fp8-hopper)")
 SYNTHETIC = {s.spec: s for s in (FP8_ADA_SYNTHETIC, BF16_HOPPER_SYNTHETIC, FP8_HOPPER_SYNTHETIC)}
 
 
@@ -364,8 +364,8 @@ DATASETS = {
     f"{BENCH_INSTANCES}/tu-k16": "FIRST: 4,096 single transitions with arbitrary finite c",
     f"{BENCH_INSTANCES}/vu-k1536-neg": "FIRST: 52 claimed-wrong / out-of-domain inputs (the harness must detect all)",
     FP8_ADA_SYNTHETIC.spec: "FP8_ADA_MMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
-    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 inputs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue (lane b-hopper)",
-    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word (lane b-hopper)",
+    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 inputs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue",
+    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
 }
 
 
