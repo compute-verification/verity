@@ -1,4 +1,4 @@
-"""Acceptance test: the IR specification's running example, exactly."""
+"""Acceptance test: the circuit format's running example, exactly."""
 
 from __future__ import annotations
 

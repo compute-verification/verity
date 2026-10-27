@@ -39,7 +39,6 @@ class Preset:
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
     model_digest: str | None = None
-    unavailable_reason: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -215,10 +214,10 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
 
 
 def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
-    """The preset as its engines are built, and whether they run eagerly: when asked, or when the preset requires it
-    (`enforce_eager`), and with CUDA graphs exactly when not."""
+    """The preset as its engines are built, and whether they run eagerly: when asked, and with CUDA graphs exactly when
+    not."""
 
-    eager = bool(eager or preset.engine_settings.get("enforce_eager", False))
+    eager = bool(eager)
     settings = {**preset.engine_settings, "cuda_graphs": not eager, "enforce_eager": eager}
     return replace(preset, engine_settings=settings), eager
 
@@ -226,7 +225,7 @@ def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
 def checkpoint_files(root: Path) -> list[Path]:
     """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
     ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (vy-nebius-2's
-    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` on 19 Oct with every weight unchanged)."""
+    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
 
     return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
 
@@ -255,7 +254,6 @@ def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
         revision=None,
         case=None,
         model_digest=digest.hexdigest(),
-        unavailable_reason=None,
     )
 
 

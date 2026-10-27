@@ -99,9 +99,8 @@ theorem witnessCertifier_jitter_varies :
 
 /-! ## A reacting operator
 
-Adopted from the red team's statement review (`internal/network-transparency/statement-review-witnesses.lean`,
-bc-440a5670): an operator that reacts to what it observes. With no timing advice, exactly one secret is accepted despite
-the feedback. -/
+An operator that reacts to what it observes. With no timing advice, exactly one secret is accepted despite the
+feedback. -/
 
 /-- A reacting operator: its ingress is the previous step's occupancy count. -/
 def rOp (_ : ℕ) (o : List (Obs 1 1 2)) : Fin 3 :=

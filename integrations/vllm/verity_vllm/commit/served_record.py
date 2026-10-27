@@ -111,7 +111,7 @@ class SamplerInputsSource:
     def on_step_begin(self) -> None:
         pass
 
-    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:  # noqa: ARG002
+    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:
         return {"per_seq_bytes": 8 * len(SAMPLER_INPUTS), "tensors_per_step": len(SAMPLER_INPUTS)}
 
     def on_sample(self, ib: Any, n_sampled: int, job: Any) -> None:
@@ -168,7 +168,7 @@ class StepInputPort:
     def on_step_begin(self) -> None:
         pass
 
-    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:  # noqa: ARG002
+    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:
         return {"per_step_bytes": self.T * (self.IB + self.PB), "tensors_per_step": len(PORT_NAMES)}
 
     def _pre(self, _m: Any, args: tuple, kwargs: dict) -> None:

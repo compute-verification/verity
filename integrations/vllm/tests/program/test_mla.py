@@ -1,6 +1,6 @@
 """`registry.mla`: Triton's one-split MLA decode, the absorb bmm and the shared-expert combine on bits are Boolean; agree with
 `mla_check`'s numpy models of the kernels (equal to the sm_120 captures of `mla_capture` word for word, 12,420 decode rows, 3,028
-bmm rows and 84 combine rows of art run r20261004-060203-ba52) on random words and on words that reach every branch: the exp's
+bmm rows and 84 combine rows of one run) on random words and on words that reach every branch: the exp's
 small-argument path, masked columns, signed zeros, subnormals, infinities and NaNs; reduce stage 2's one-split merge to the
 gate and `TritonMlaOut` exactly; reproduce captured hardware outputs at GLM-4.7-Flash's statics (by digest); and are pinned by
 gate count and program digest."""
@@ -167,7 +167,7 @@ def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> 
         _agree_decode(T, kind, SCALE=0x41000000)
 
 
-#: captured `o` of one-split requests of `decode-v1` (run r20261004-060203-ba52; `mla_capture.case_inputs` rebuilds their inputs
+#: captured `o` of one-split requests of `decode-v1` (`mla_capture.case_inputs` rebuilds their inputs
 #: from the case): (case index, request, sha256 of its 20 x 512 output words, little-endian)
 CAPTURED = [
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 0, "1b7483a67b1bb456"),

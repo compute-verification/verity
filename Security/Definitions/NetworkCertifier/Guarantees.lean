@@ -256,8 +256,8 @@ def EncardIngressObsDecodableLeContentsPerWindow : Prop :=
 ## The schedule's declared bound and the coins
 
 This section fixes the two terms of the charge that the capacity bounds leave open: the content advice `A_c` and the
-coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration (`art:962e249a`,
-`calibrations/llama8b-node1.json`): T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
+coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration
+(`calibrations/llama8b-node1.json`): T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
 link (`requests`) at r_in = 34 and τ_in = 100 ms, Σ_sync of 16 × 8 values, and J (D = 1).
 
 ### What `A_c` counts
