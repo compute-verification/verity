@@ -80,7 +80,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for row U's entry of that
   slot, its read bit cleared (no Program reads the request): every registered read holds, since the read bit enters
   the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens to 0, so
-  the link-window is refused. Every unit (the one) is drawn.
+  the link-window is refused. Every unit (the one) is drawn. A prover that sets the bit with n 0 and no outputs
+  passes: until the entry is a wire from its Program's `SlotEntry_v1` unit the read bit is the prover's word, and the
+  period check refuses every rows-form period (`NetworkCheck.Period`'s `unwired`).
 * **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
   rehearsal's live coins), each template's stratum its share and at least one unit; only the drawn units are proved
   and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except

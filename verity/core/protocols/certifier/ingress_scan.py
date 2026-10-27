@@ -56,7 +56,11 @@ and never reach the egress. An occupied slot whose entry is absent (`read` 0) is
 would reach the server with no Program's outputs counting it. It is the form the Programs' outputs are tied to: a
 Program gives all its outputs at its anchor, and the slot holds them in `out` through its last egress bucket, past the
 link-window's end where that is later (a group's scan carries its state across its link-windows). Here a registered
-row the prover commits, standing in for the anchored Programs' outputs.
+row the prover commits, standing in for the anchored Programs' outputs. Until each due, occupied slot's entry is a
+wire from its Program's `SlotEntry_v1` unit, its `read` bit is the prover's word: an entry of `read` 1, n 0 and no
+outputs for a request no Program reads passes these gates (o0's ok 1), and in a link-window an unwired row is a free
+input the prover commits, not a zero. So the refusal of an absent entry holds against an honest prover only, and the
+period check refuses every rows-form period until it reads that wiring (`NetworkCheck.Period`'s `unwired`).
 
 **The egress view** (`view`) of S_t is `egress.EgressBucket`'s state at b = t: b, then each slot's live, q, admitted,
 n and its KO output ids at `egress`'s offsets (`egress.Shape(B, lanes·r, r, NR, KO, IDB, D)`): egress bucket t reads
