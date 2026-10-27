@@ -156,8 +156,11 @@ MEASURED: dict[str, tuple[int, int, str]] = {
     "Gemm_v2{K=2048,N=1}": (1_053_595, 24, "r20261025-072834-bd85"),
     "RoPEHead_v1{D=64}": (191_872, 22, COMPOSED + ", x cut 4"),
     "SiluMul_v2{I=8192}": (8192 * 1380, 26, "8,192 × SiluMulBf16_v4's 1,380 (circuits-bool-silu)"),
-    "TokenSelectChunk_v2{C=768}": (91_823, 22, COMPOSED),
-    "TokenSelectCombine_v2{V=128256,C=768}": (27_355, 27, COMPOSED + ", idx cut 167"),
+    "TokenSelectGroups_v1{C=2672,G=16}": (292_083, 27, ("C-Flock's lowering (ir_lower) in r20261027-194654-01bb; k_log an "
+                                                         "estimate, not composed: its 169 rows' (rows_k), x cut 167")),
+    "TokenSelectCombine_v2{V=128256,C=16}": (1_346_657, 26, ("C-Flock's lowering (ir_lower) in r20261027-194654-01bb; k_log an "
+                                                             "estimate, not composed: its 98 rows' (rows_k), best and idx cut "
+                                                             "48")),
     "AttnHeadEnd_v1{D=64}": (169_842, 22, "#4263, r20261025-123346-091b"),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, "#4263, r20261025-123346-091b"),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, "CHECK=false's (#4263, r20261025-123346-091b), "
