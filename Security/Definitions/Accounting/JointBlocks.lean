@@ -16,8 +16,8 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
   streamed wipe's: at most the published foreign bits survive, plus the state the fill leaves out
   (`BlockWipe.unfilled`, the on-chip state and the device memory the fill doesn't reach). `verity/wipe/v0` publishes
   `foreign_bits = ⌈fill/19⌉ + E` at `2^-128` with 2152 reads, `E` the egress the network certifier counted
-  (`Pous.Guarantees.StreamedWipeMeetsFamily`, #4490), and at `k` reads the fill's share
-  `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` of `n` labels plus `E` (`StreamedWipeMeetsReads`, #4707), each an instance
+  (`Pous.Guarantees.StreamedWipeMeetsFamily`), and at `k` reads the fill's share
+  `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` of `n` labels plus `E` (`StreamedWipeMeetsReads`), each an instance
   of `Pous.Guarantees.StreamedWipe`.
 * **The memory term of block `b`** (`BlocksRun.MemoryTerm`), PoUS over the weights alone at a share of `0.07` (Daniel's
   ruling, ASK-132): at each of the block's PoUS challenge times, the block's undeclared memory, the bits of its `U`

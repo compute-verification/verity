@@ -6,15 +6,15 @@ import Definitions.Accounting.JointLive.Honest
 # The honest and nontrivial lemmas of `JointHorizonBlocksLive` and `Bridge.BandwidthOfRemoteLineLive` (trusted)
 
 Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial one
-(its conclusion fails for a verifier that accepts everything); failing either, it says nothing (#4825). These are
+(its conclusion fails for a verifier that accepts everything); failing either, it says nothing. These are
 `JointHorizonBlocksLive`'s and `Bridge.BandwidthOfRemoteLineLive`'s, at `Accounting.Honest`'s instances: the honest
 deployed horizon on one H200 of `vy-dc-h200-2` and the honest remote bandwidth session, and an idle node under verdicts
 that accept everything. Each instance is one in any causal game, since neither node's world reads the strategy or the
 run.
 
-Each per-period hypothesis is stated as its event having probability 0 at every strategy, which is
-`PeriodLive.Sound` at every error. Each conclusion that fails is stated as its event's probability exceeding every
-bound below 1, so the conclusion fails at every error below 1.
+Each hypothesis is stated as written in its guarantee, at error 0: `PeriodLive.Sound` at `fun _ => 0`, and each other
+bound at `0`. Each conclusion that fails is stated as its event's probability exceeding every bound below 1, so the
+conclusion fails at every error below 1.
 
 Proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.JointLive.Honest`).
 -/
@@ -27,24 +27,22 @@ open scoped ENNReal
 /-- **`JointHorizonBlocksLive`'s honest lemma: its hypotheses hold at the honest deployed horizon, at error 0.** At
 `Accounting.Honest.honestBlocks` (one H200 of `vy-dc-h200-2`, the honest wipe of `r20261026-003454-bfd2`, P2's deployed
 store and read deadline, in any causal game; any op and link rates, circuit, partition, inputs, number of blocks, block
-length and bits moved), every verdict accepts on every run, and at every strategy each subprotocol of each block
-accepts while its claim fails at the honest node's certificates (`Accounting.Honest.certs`), each wipe is accepted
+length and bits moved), every verdict accepts on every run; each subprotocol of each block has its per-period guarantee
+at the honest node's certificates (`Accounting.Honest.certs`) at error 0; and at every strategy each wipe is accepted
 while more than the foreign bits it publishes plus the unfilled state survive, and each block's PoUS accepts while its
-memory term fails, each with probability 0. Proof: `Accounting.SecurityProofs.JointHorizonBlocksLive_honest`. -/
+memory term fails, each with probability at most 0. Proof: `Accounting.SecurityProofs.JointHorizonBlocksLive_honest`. -/
 def JointHorizonBlocksLive_honest : Prop :=
   ∀ (rate : Op → ℕ) (cap : Unit → ℕ) (C : Verity.Circuit) (n : ℕ) (P : Verity.Partition C n) (v : C.Transcript)
     (O : Type) (G : Verity.Game O) (B L E : ℕ),
     (∀ o, (∀ b a, ((Honest.honestBlocks rate cap P v G B L E).block b).accepts a o) ∧
       ∀ b, ((Honest.honestBlocks rate cap P v G B L E).wipe b).accepts o) ∧
-    (∀ b a (s : Verity.Game.Strategy G), Verity.Game.prob (fun o =>
-      ((Honest.honestBlocks rate cap P v G B L E).block b).accepts a o ∧
-        ¬ ((Honest.honestBlocks rate cap P v G B L E).block b).Holds (Honest.certs C L E) s a o) G s = 0) ∧
+    (∀ b a, ((Honest.honestBlocks rate cap P v G B L E).block b).Sound (Honest.certs C L E) a (fun _ => 0)) ∧
     (∀ b (s : Verity.Game.Strategy G), Verity.Game.prob (fun o =>
       ((Honest.honestBlocks rate cap P v G B L E).wipe b).accepts o ∧
-        ¬ ((Honest.honestBlocks rate cap P v G B L E).wipe b).Survives o) G s = 0) ∧
+        ¬ ((Honest.honestBlocks rate cap P v G B L E).wipe b).Survives o) G s ≤ 0) ∧
     (∀ b (s : Verity.Game.Strategy G), Verity.Game.prob (fun o =>
       ((Honest.honestBlocks rate cap P v G B L E).block b).accepts .pous o ∧
-        ¬ (Honest.honestBlocks rate cap P v G B L E).MemoryTerm s b o) G s = 0)
+        ¬ (Honest.honestBlocks rate cap P v G B L E).MemoryTerm s b o) G s ≤ 0)
 
 /-- **`JointHorizonBlocksLive`'s nontrivial lemma: its conclusion fails for verdicts that accept everything.** At
 `Accounting.Honest.idleBlocks`, a node that does nothing on the deployed device under verdicts that accept everything,
@@ -79,7 +77,7 @@ def BandwidthOfRemoteLineLive_honest : Prop :=
       (Honest.sessionCerts C E) (fun _ => True) (fun _ => (Honest.sessionBits : ℝ))
       (fun _ _ => (Honest.sessionBits : ℝ)) ∧
     ∀ s : Verity.Game.Strategy G,
-      Verity.Game.prob (fun _ => True ∧ (Honest.sessionBits : ℝ) < Honest.sessionBits) G s = 0
+      Verity.Game.prob (fun _ => True ∧ (Honest.sessionBits : ℝ) < Honest.sessionBits) G s ≤ 0
 
 /-- **`BandwidthOfRemoteLineLive`'s nontrivial lemma: its conclusion fails for a PoUB verdict that accepts
 everything.** At each block of positive length of the idle node (`Accounting.Honest.idlePeriod`), which reads nothing
