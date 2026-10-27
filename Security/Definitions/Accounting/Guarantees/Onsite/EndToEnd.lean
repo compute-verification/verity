@@ -23,7 +23,11 @@ The end-to-end overhead proof's onsite spine (note:training-20261027T0134Z-draft
   `Accounting.Assumptions.WipeState` and `Accounting.Assumptions.IntegrityContains`. None has an error as stated, so the
   spine's `δ_bridge` is `0`.
 
-The proofs are `Accounting.SecurityProofs.OnsiteTimeLowerBound` and `OnsiteEndToEnd`.
+Each has an honest statement (`_honest`: its hypotheses hold at a constructed instance where its conclusion says
+something) and a nontrivial one (`_nontrivial`: without one of its premises it is false at a constructed instance; for
+`OnsiteEndToEnd`, at a verifier that accepts everything), the top's rule of 26 Oct (LEAN-66).
+
+The proofs are `Accounting.SecurityProofs.OnsiteTimeLowerBound` and `OnsiteEndToEnd`, and their witnesses'.
 -/
 
 namespace Accounting.Guarantees
@@ -40,6 +44,23 @@ def OnsiteTimeLowerBound : Prop :=
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t M N : ℕ),
     P.Valid → OnsiteClass A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β link P.n P.X θ hθ t P.ω P.R P.F P.α P.c →
     Nci.Assumptions.WeightsIncompressible P.c P.T P.Γ P.K P.b_w P.b_a → M ≤ P.T.M.card → N ≤ M →
+      P.tMin N ≤ t ∧ (A.region (univ.biUnion P.X) (Set.Iio t)).card ≤ P.computeTotal * t
+
+/-- **`OnsiteTimeLowerBound`'s hypotheses hold where its conclusion says something**: some actual circuit is in the
+onsite class at valid parameters whose weights are incompressible, with `N ≤ M ≤ |T.M|` counted multiplications and a
+positive floor `t_min N`. -/
+def OnsiteTimeLowerBound_honest : Prop :=
+  ∃ (L E : Type) (_ : Fintype E) (_ : DecidableEq L) (P : Onsite L E) (A : Placed L) (link : Fin A.N → Fin A.N → E)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t M N : ℕ),
+    P.Valid ∧ OnsiteClass A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β link P.n P.X θ hθ t P.ω P.R P.F P.α P.c ∧
+    Nci.Assumptions.WeightsIncompressible P.c P.T P.Γ P.K P.b_w P.b_a ∧ M ≤ P.T.M.card ∧ N ≤ M ∧ 0 < P.tMin N
+
+/-- **`OnsiteTimeLowerBound` needs `WeightsIncompressible`**: without it, the time floor is false. -/
+def OnsiteTimeLowerBound_nontrivial : Prop :=
+  ¬ ∀ {L E : Type} [Fintype E] [DecidableEq L] (P : Onsite L E) (A : Placed L) (link : Fin A.N → Fin A.N → E)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t M N : ℕ),
+    P.Valid → OnsiteClass A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β link P.n P.X θ hθ t P.ω P.R P.F P.α P.c →
+    M ≤ P.T.M.card → N ≤ M →
       P.tMin N ≤ t ∧ (A.region (univ.biUnion P.X) (Set.Iio t)).card ≤ P.computeTotal * t
 
 /-- **The onsite end-to-end guarantee** (steps 3 to 7). On any device and any period read off the run of a causal game
@@ -73,5 +94,87 @@ def OnsiteEndToEnd : Prop :=
       Verity.Game.prob (fun o => ((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ success o ∧ (t : ℝ) < P.tMin N ∧
           ¬ r.Break G s o) G s ≤
         ∑ a, ENNReal.ofReal (δ a) + ∑ k, ENNReal.ofReal (εWipe k) + ENNReal.ofReal η
+
+/-- **`OnsiteEndToEnd`'s hypotheses hold where its conclusion says something**: at some period, valid parameters and
+world, every hypothesis holds at errors `0`, every subprotocol and every wipe accepts and the run succeeds with no break
+with probability 1 at every strategy, and the floor `t_min N` is positive. -/
+def OnsiteEndToEnd_honest : Prop :=
+  ∃ (ι Acc : Type) (_ : Fintype Acc) (d : Device ι) (C : Verity.Circuit) (Cm O : Type) (r : PeriodLive d Acc C Cm O)
+    (G : Verity.Game O) (c : Certificates) (p : Price) (m : ℕ) (w : Fin m → WipeLive d O) (f : ℝ)
+    (L E : Type) (_ : Fintype E) (_ : DecidableEq L) (P : Onsite L E) (S : O → Actual.Run L)
+    (link : ∀ o, Fin (S o).A.N → Fin (S o).A.N → E) (θ : ∀ o, Finset (Fin (S o).A.N))
+    (hθ : ∀ o, ∀ a ∈ θ o, (S o).A.isInput a = true) (t : ℕ) (M : O → ℕ) (success : O → Prop) (N : ℕ),
+    P.Valid ∧ Nci.Assumptions.WeightsIncompressible P.c P.T P.Γ P.K P.b_w P.b_a ∧ (∀ o, M o ≤ P.T.M.card) ∧
+    (∀ a, r.Sound G c p a 0) ∧
+    (∀ k (s : Verity.Game.Strategy G), Verity.Game.prob (fun o => (w k).accepts o ∧ ¬ (w k).Survives f o) G s = 0) ∧
+    (∀ o, (S o).A.Causal P.hw.ℓ) ∧ (∀ o, (S o).A.ComputeRate (Set.range P.X) (fun _ => 1) P.hw.compute) ∧
+    CertifierLinks S P.hw.ends P.hw.β link P.n P.X P.α P.F ∧ Assumptions.WipeState S w f P.X t P.ω P.R ∧
+    Assumptions.Coverage G
+      (fun o => OnsiteClass (S o).A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β (link o) P.n P.X (θ o) (hθ o) t P.ω P.R P.F
+        P.α P.c) success M N 0 ∧
+    (∀ s : Verity.Game.Strategy G, Assumptions.IntegrityContains r G s c p S P.X t θ hθ P.c) ∧
+    (∀ s : Verity.Game.Strategy G,
+      Verity.Game.prob (fun o => ((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ success o ∧ ¬ r.Break G s o) G s =
+        1) ∧
+    0 < P.tMin N
+
+/-- **`OnsiteEndToEnd` needs `IntegrityContains`, coverage and `WeightsIncompressible`, at a verifier that accepts
+everything**: with any one of the three dropped, the statement is false even for periods whose every subprotocol and
+every wipe accepts every run. -/
+def OnsiteEndToEnd_nontrivial : Prop :=
+  (¬ ∀ {ι Acc : Type} [Fintype Acc] (d : Device ι) (C : Verity.Circuit) (Cm O : Type) (r : PeriodLive d Acc C Cm O)
+      (G : Verity.Game O) (c : Certificates) (p : Price) (δ : Audit → ℝ) (m : ℕ) (w : Fin m → WipeLive d O) (f : ℝ)
+      (εWipe : Fin m → ℝ) {L E : Type} [Fintype E] [DecidableEq L] (P : Onsite L E) (S : O → Actual.Run L)
+      (link : ∀ o, Fin (S o).A.N → Fin (S o).A.N → E) (θ : ∀ o, Finset (Fin (S o).A.N))
+      (hθ : ∀ o, ∀ a ∈ θ o, (S o).A.isInput a = true) (t : ℕ) (M : O → ℕ) (success : O → Prop) (N : ℕ) (η : ℝ),
+      (∀ a o, r.accepts a o) → (∀ k o, (w k).accepts o) →
+      P.Valid → Nci.Assumptions.WeightsIncompressible P.c P.T P.Γ P.K P.b_w P.b_a → (∀ o, M o ≤ P.T.M.card) →
+      (∀ a, r.Sound G c p a (δ a)) →
+      (∀ k (s : Verity.Game.Strategy G),
+        Verity.Game.prob (fun o => (w k).accepts o ∧ ¬ (w k).Survives f o) G s ≤ ENNReal.ofReal (εWipe k)) →
+      (∀ o, (S o).A.Causal P.hw.ℓ) → (∀ o, (S o).A.ComputeRate (Set.range P.X) (fun _ => 1) P.hw.compute) →
+      CertifierLinks S P.hw.ends P.hw.β link P.n P.X P.α P.F → Assumptions.WipeState S w f P.X t P.ω P.R →
+      Assumptions.Coverage G
+        (fun o => OnsiteClass (S o).A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β (link o) P.n P.X (θ o) (hθ o) t P.ω P.R
+          P.F P.α P.c) success M N η →
+      ∀ s : Verity.Game.Strategy G,
+        Verity.Game.prob (fun o => ((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ success o ∧
+            (t : ℝ) < P.tMin N ∧ ¬ r.Break G s o) G s ≤
+          ∑ a, ENNReal.ofReal (δ a) + ∑ k, ENNReal.ofReal (εWipe k) + ENNReal.ofReal η) ∧
+  (¬ ∀ {ι Acc : Type} [Fintype Acc] (d : Device ι) (C : Verity.Circuit) (Cm O : Type) (r : PeriodLive d Acc C Cm O)
+      (G : Verity.Game O) (c : Certificates) (p : Price) (δ : Audit → ℝ) (m : ℕ) (w : Fin m → WipeLive d O) (f : ℝ)
+      (εWipe : Fin m → ℝ) {L E : Type} [Fintype E] [DecidableEq L] (P : Onsite L E) (S : O → Actual.Run L)
+      (link : ∀ o, Fin (S o).A.N → Fin (S o).A.N → E) (θ : ∀ o, Finset (Fin (S o).A.N))
+      (hθ : ∀ o, ∀ a ∈ θ o, (S o).A.isInput a = true) (t : ℕ) (M : O → ℕ) (success : O → Prop) (N : ℕ) (η : ℝ),
+      (∀ a o, r.accepts a o) → (∀ k o, (w k).accepts o) →
+      P.Valid → Nci.Assumptions.WeightsIncompressible P.c P.T P.Γ P.K P.b_w P.b_a → (∀ o, M o ≤ P.T.M.card) →
+      (∀ a, r.Sound G c p a (δ a)) →
+      (∀ k (s : Verity.Game.Strategy G),
+        Verity.Game.prob (fun o => (w k).accepts o ∧ ¬ (w k).Survives f o) G s ≤ ENNReal.ofReal (εWipe k)) →
+      (∀ o, (S o).A.Causal P.hw.ℓ) → (∀ o, (S o).A.ComputeRate (Set.range P.X) (fun _ => 1) P.hw.compute) →
+      CertifierLinks S P.hw.ends P.hw.β link P.n P.X P.α P.F → Assumptions.WipeState S w f P.X t P.ω P.R →
+      ∀ s : Verity.Game.Strategy G, Assumptions.IntegrityContains r G s c p S P.X t θ hθ P.c →
+        Verity.Game.prob (fun o => ((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ success o ∧
+            (t : ℝ) < P.tMin N ∧ ¬ r.Break G s o) G s ≤
+          ∑ a, ENNReal.ofReal (δ a) + ∑ k, ENNReal.ofReal (εWipe k) + ENNReal.ofReal η) ∧
+  (¬ ∀ {ι Acc : Type} [Fintype Acc] (d : Device ι) (C : Verity.Circuit) (Cm O : Type) (r : PeriodLive d Acc C Cm O)
+      (G : Verity.Game O) (c : Certificates) (p : Price) (δ : Audit → ℝ) (m : ℕ) (w : Fin m → WipeLive d O) (f : ℝ)
+      (εWipe : Fin m → ℝ) {L E : Type} [Fintype E] [DecidableEq L] (P : Onsite L E) (S : O → Actual.Run L)
+      (link : ∀ o, Fin (S o).A.N → Fin (S o).A.N → E) (θ : ∀ o, Finset (Fin (S o).A.N))
+      (hθ : ∀ o, ∀ a ∈ θ o, (S o).A.isInput a = true) (t : ℕ) (M : O → ℕ) (success : O → Prop) (N : ℕ) (η : ℝ),
+      (∀ a o, r.accepts a o) → (∀ k o, (w k).accepts o) →
+      P.Valid → (∀ o, M o ≤ P.T.M.card) →
+      (∀ a, r.Sound G c p a (δ a)) →
+      (∀ k (s : Verity.Game.Strategy G),
+        Verity.Game.prob (fun o => (w k).accepts o ∧ ¬ (w k).Survives f o) G s ≤ ENNReal.ofReal (εWipe k)) →
+      (∀ o, (S o).A.Causal P.hw.ℓ) → (∀ o, (S o).A.ComputeRate (Set.range P.X) (fun _ => 1) P.hw.compute) →
+      CertifierLinks S P.hw.ends P.hw.β link P.n P.X P.α P.F → Assumptions.WipeState S w f P.X t P.ω P.R →
+      Assumptions.Coverage G
+        (fun o => OnsiteClass (S o).A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β (link o) P.n P.X (θ o) (hθ o) t P.ω P.R
+          P.F P.α P.c) success M N η →
+      ∀ s : Verity.Game.Strategy G, Assumptions.IntegrityContains r G s c p S P.X t θ hθ P.c →
+        Verity.Game.prob (fun o => ((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ success o ∧
+            (t : ℝ) < P.tMin N ∧ ¬ r.Break G s o) G s ≤
+          ∑ a, ENNReal.ofReal (δ a) + ∑ k, ENNReal.ofReal (εWipe k) + ENNReal.ofReal η)
 
 end Accounting.Guarantees

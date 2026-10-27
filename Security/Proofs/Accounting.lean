@@ -17,6 +17,7 @@ import Proofs.Accounting.JointPeriod
 import Proofs.Accounting.JointLive
 import Proofs.Accounting.Onsite
 import Proofs.Accounting.Onsite.EndToEnd
+import Proofs.Accounting.Onsite.Witnesses
 import Proofs.Accounting.JointBridge.WorkOfCreditedWords
 import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
 import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod

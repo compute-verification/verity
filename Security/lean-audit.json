@@ -3799,7 +3799,19 @@
   "Accounting.SecurityProofs.OnsiteEndToEnd": {
    "owner": "@training"
   },
+  "Accounting.SecurityProofs.OnsiteEndToEnd_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial": {
+   "owner": "@training"
+  },
   "Accounting.SecurityProofs.OnsiteTimeLowerBound": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial": {
    "owner": "@training"
   },
   "Accounting.SecurityProofs.Overhead.EndToEnd": {
@@ -12342,7 +12354,11 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Accounting.SecurityProofs.OnsiteTimeLowerBound": "frozen (no-function,world-unlisted): It is DampenerWindowsCap inverted over an arbitrary actual circuit (Accounting.Placed) in the onsite class (Accounting.OnsiteClass, the physical constraints Causal, ComputeRate and Links among them) at valid parameters (Accounting.Onsite.Valid) under the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest": "frozen (no-function): OnsiteTimeLowerBound's honest witness (LEAN-66): a constructed actual circuit (a weight, an activation and their product on one leaf) is in the onsite class at valid parameters whose weights are incompressible, with N = M = 1 and a positive floor; an existential over actual circuits and parameters, not a function's acceptance.",
+   "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial": "frozen (no-function): OnsiteTimeLowerBound's nontrivial witness (LEAN-66): without WeightsIncompressible it is false at the constructed circuit with the weight price above the weight's width, where the floor is 100 ticks at horizon 2; a negated statement over arbitrary actual circuits, not a function's acceptance.",
    "Accounting.SecurityProofs.OnsiteEndToEnd": "frozen (no-function): Like JointPeriodLive, each audit's per-period guarantee and each wipe's survivor bound is a hypothesis over an abstract live period whose verdicts are fields of the run, not Lean functions, and it bounds a Verity.Game.prob event, which shape.events does not list; the device model per run, the bridges (Accounting.CertifierLinks, Accounting.Assumptions.WipeState, Accounting.Assumptions.IntegrityContains) and the task model (Accounting.Assumptions.Coverage) are premises over the run's world (Accounting.Actual.Run per run), until the bridges are proved.",
+   "Accounting.SecurityProofs.OnsiteEndToEnd_honest": "frozen (no-function): OnsiteEndToEnd's honest witness (LEAN-66): at a constructed period (the game with one run, every subprotocol and its one wipe accepting) and the constructed actual circuit, every hypothesis holds at errors 0, the run is accepted and succeeds with no break with probability 1, and the floor is positive; an existential over periods and worlds, not a function's acceptance.",
+   "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial": "frozen (no-function): OnsiteEndToEnd's nontrivial witness (LEAN-66): at a constructed period whose every subprotocol and wipe accepts every run, dropping IntegrityContains, coverage or WeightsIncompressible makes it false; a negated statement over arbitrary periods, not a function's acceptance.",
    "Accounting.SecurityProofs.Overhead.EndToEnd": "frozen (no-function): The end-to-end overhead guarantee's event decomposition (Step 1), over an arbitrary causal game (Verity.Game) at every strategy with its events and errors as parameters: the joint guarantee's, the bridges' and the coverage exception's bounds and the pointwise cost bound are hypotheses over the experiment, not a function's acceptance; the onsite and remote end-to-end guarantees instantiate it.",
    "Accounting.SecurityProofs.Overhead.EndToEnd_honest": "frozen (no-function): EndToEnd's honest witness (LEAN-66): at a constructed experiment (the game with one run) whose verifier accepts and whose computation succeeds with probability 1, its hypotheses hold at errors 0; an existential over games, not a function's acceptance.",
    "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial": "frozen (no-function): EndToEnd's nontrivial witness (LEAN-66): at a constructed experiment whose verifier accepts every run, dropping any one of its four premises makes it false; a negated statement over arbitrary games, not a function's acceptance.",

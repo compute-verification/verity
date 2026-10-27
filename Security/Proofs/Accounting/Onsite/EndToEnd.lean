@@ -1,8 +1,8 @@
-import Definitions.Accounting.Guarantees.Onsite
 import Definitions.Accounting.Guarantees.Onsite.EndToEnd
-import Definitions.Accounting.Guarantees.Overhead
 import Proofs.Accounting.Actual.Dampener
 import Proofs.Accounting.JointLive
+import Proofs.Accounting.Onsite
+import Proofs.Accounting.Overhead
 
 /-!
 # The onsite end-to-end overhead guarantee
@@ -15,45 +15,11 @@ and every wipe's acceptance with no break, the claims every subprotocol's claim 
 class `OnsiteClass` and the cost the horizon `t` against `t_min`. Its four hypotheses are `JointPeriodLive` with the
 wipes' errors, the bridges (`Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass`, at the strategies where
 `IntegrityContains` holds, and the trivial bound `⊤` at the others), `OnsiteTimeLowerBound` and coverage.
-
-`endToEnd_local` and `claimsImplyOnsiteClass_local` prove the overhead core's `EndToEnd` and the bridges'
-`ClaimsImplyOnsiteClass` here. Each is replaced by its own branch's proof when that lands.
 -/
 
 namespace Accounting.SecurityProofs
 
 open Verity Verity.Game Finset
-
-/-- **The spine's step 1, the event decomposition** (`Accounting.Guarantees.Overhead.EndToEnd`). A local proof, until
-the overhead core's lands. -/
-theorem endToEnd_local : Accounting.Guarantees.Overhead.EndToEnd := by
-  intro O G Accept Claims InClass Success M S N sMin δ δb η hA hB hS hη s
-  calc prob (fun o => Accept s o ∧ Success s o ∧ S s o < sMin) G s
-      ≤ prob (fun o => (Accept s o ∧ ¬ Claims s o) ∨ (Claims s o ∧ ¬ InClass s o) ∨
-          (InClass s o ∧ Success s o ∧ M s o < N)) G s :=
-        prob_mono (fun o ⟨ha, hs, hc⟩ => by
-          by_cases hcl : Claims s o
-          · by_cases hk : InClass s o
-            · refine Or.inr (Or.inr ⟨hk, hs, ?_⟩)
-              by_contra hM
-              exact absurd (hS s o hk (not_lt.1 hM)) (not_le.2 hc)
-            · exact Or.inr (Or.inl ⟨hcl, hk⟩)
-          · exact Or.inl ⟨ha, hcl⟩) G s
-    _ ≤ prob (fun o => Accept s o ∧ ¬ Claims s o) G s +
-          (prob (fun o => Claims s o ∧ ¬ InClass s o) G s +
-            prob (fun o => InClass s o ∧ Success s o ∧ M s o < N) G s) :=
-        (prob_or_le _ _ G s).trans (add_le_add le_rfl (prob_or_le _ _ G s))
-    _ ≤ δ s + (δb s + η s) := add_le_add (hA s) (add_le_add (hB s) (hη s))
-    _ = δ s + δb s + η s := (add_assoc _ _ _).symm
-
-/-- **The claims imply the onsite class** (`Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass`): on a run where every
-claim holds and every wipe meets its survivor bound, the device model and the bridges give each of `OnsiteClass`'s
-conjuncts, so the event is empty. A local proof, until the bridges' lands. -/
-theorem claimsImplyOnsiteClass_local : Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass := by
-  intro ι Acc _ d C Cm O r G c p m w f L E _ _ S ℓ Φ ends β link n X θ hθ t ω R F α ref s hC hΦ hL hW hI
-  exact le_antisymm ((prob_mono (fun o ⟨⟨hh, hs⟩, hn⟩ =>
-    hn ⟨hC o, hΦ o, (hL o).1, (hL o).2, hW o hs, hI o (hh .sampled) (hh .pouw)⟩) G s).trans (prob_false G s).le)
-    bot_le
 
 namespace OnsiteTime
 
@@ -143,15 +109,15 @@ theorem OnsiteTimeLowerBound : Accounting.Guarantees.OnsiteTimeLowerBound := by
   simpa [Onsite.K, Onsite.Λ] using h
 
 /-- **The onsite end-to-end guarantee** (`Accounting.Guarantees.OnsiteEndToEnd`): step 1's decomposition
-(`endToEnd_local`) at every subprotocol and every wipe accepting with no break, every claim and survivor bound holding
+(`Overhead.EndToEnd`) at every subprotocol and every wipe accepting with no break, every claim and survivor bound holding
 and the onsite class. Its terms are at most `∑ δ + ∑ ε_wipe` (`JointPeriodLive` and the wipes' bounds, by the union
-bound), `0` (`claimsImplyOnsiteClass_local` at `s`, where `IntegrityContains` holds) and `η` (coverage, with
+bound), `0` (`Onsite.ClaimsImplyOnsiteClass` at `s`, where `IntegrityContains` holds) and `η` (coverage, with
 `OnsiteTimeLowerBound` putting the horizon at `t_min` or above in the class once `M ≥ N`). -/
 theorem OnsiteEndToEnd : Accounting.Guarantees.OnsiteEndToEnd := by
   classical
   intro ι Acc _ d C Cm O r G c p δ m w f εWipe L E _ _ P S link θ hθ t M success N η hV hWI hM hδ hε hC hΦ hL hWS
     hCov s hI
-  have h := endToEnd_local O G
+  have h := Overhead.EndToEnd O G
     (fun s o => ((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ ¬ r.Break G s o)
     (fun s o => (∀ a, r.Holds c p G s a o) ∧ ∀ k, (w k).Survives f o)
     (fun _ o => OnsiteClass (S o).A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β (link o) P.n P.X (θ o) (hθ o) t P.ω P.R P.F
@@ -180,7 +146,7 @@ theorem OnsiteEndToEnd : Accounting.Guarantees.OnsiteEndToEnd := by
       _ ≤ _ := add_le_add le_rfl (sum_le_sum fun k _ => hε k s')
   · intro s'
     split_ifs with hI'
-    · exact (claimsImplyOnsiteClass_local d C Cm O r G c p m w f S P.hw.ℓ P.hw.compute P.hw.ends P.hw.β link P.n P.X
+    · exact (Onsite.ClaimsImplyOnsiteClass d C Cm O r G c p m w f S P.hw.ℓ P.hw.compute P.hw.ends P.hw.β link P.n P.X
         θ hθ t P.ω P.R P.F P.α P.c s' hC hΦ hL hWS hI').le
     · exact le_top
   · intro _ o hk hNM
