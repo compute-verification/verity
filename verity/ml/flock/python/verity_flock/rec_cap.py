@@ -1,4 +1,4 @@
-"""V*'s hold of each Ligerito level's committed tops (`RecCap`, lane rec-v0): at level 0 one statement over the ``2^cap₀``
+"""V*'s hold of each Ligerito level's committed tops (`RecCap`): at level 0 one statement over the ``2^cap₀``
 nodes of ``root_B``, instance ``i`` reading node ``i`` of ``rec-top-L0`` (`rec_outer.TopValue` at level 0) as its row
 ``top``, whatever the coins draw; at each later level ``l`` one over both reps' ``2 · 2^cap_l`` nodes of ``rec-top-L<l>``
 (rep 0's level-``l`` top, then rep 1's), instance ``i`` reading row ``i``.

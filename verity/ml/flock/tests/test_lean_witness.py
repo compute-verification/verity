@@ -383,7 +383,7 @@ def test_f1_the_session_meets(f1, part):
 @pytest.mark.parametrize("part", F1_PARTS)
 def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
     """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier of record's
-    `--zk` identity with #1677's OS masks, which the gate's prover had."""
+    `--zk` identity with the OS masks, which the gate's prover had."""
     w = f1[part, STATEMENT]
     for check in ("accepts_zkr", "accepts_zkv"):
         assert w[check]["ok"], (check, w[check].get("why"))

@@ -1,4 +1,4 @@
-//! `verity/flock-circuit` (lane flock-circuit): any lowered IR template, its serving rows committed in the circuit, and
+//! `verity/flock-circuit`: any lowered IR template, its serving rows committed in the circuit, and
 //! nothing public but the frame-v3-sha512 roots, each row's hm96 commit string `b || c` and the pinned layout. The rows are
 //! the input rows, then one output row per output port (its words zero-padded to whole SHA-512 blocks): an output is a
 //! hidden value like an input. `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance
