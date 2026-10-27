@@ -1,4 +1,4 @@
-"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.core.protocols.certifier.advice`) for a served run, from its
+"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.core.protocols.network_certifier.advice`) for a served run, from its
 scheduler step trace and its Commit record.
 
 The precommitted compiler turns advice into each step's circuit; the advice says everything serving decided that nothing
@@ -65,7 +65,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST

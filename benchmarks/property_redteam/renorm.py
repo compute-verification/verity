@@ -38,7 +38,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 S32_MIN, S32_MAX = -(2 ** 31), 2 ** 31 - 1
-P1024 = 2 ** 1024 - 105  # p1024 (verity.core.protocols.remote_bandwidth.codec, Field("p1024", 1024, 105))
+P1024 = 2 ** 1024 - 105  # p1024 (verity.core.protocols.poub.codec, Field("p1024", 1024, 105))
 
 
 # ---- the model: Model.lean's gates, values, window and interval analysis -------------------------------------------------

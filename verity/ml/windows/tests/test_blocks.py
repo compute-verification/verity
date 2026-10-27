@@ -14,7 +14,7 @@ from dataclasses import replace
 import pytest
 import test_interface as TI
 
-from verity.core.protocols.certifier import blocks as BK
+from verity.core.protocols.network_certifier import blocks as BK
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G

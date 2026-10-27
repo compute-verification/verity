@@ -26,10 +26,10 @@ from xml.etree import ElementTree
 import numpy as np
 import pytest
 
-from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
-from verity_vllm.protocols.remote_bandwidth import memory_map as store_map, remote
-from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, Store
+from verity.core.protocols.poub import audit, codec as rcodec, memory_map, receipts as rb
+from verity_vllm.protocols.poub import memory_map as store_map, remote
+from verity_vllm.protocols.poub.interface import Append, PageLayout
+from verity_vllm.protocols.poub.registry import ArrayBacking, Store
 
 from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT

@@ -21,8 +21,8 @@ from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as RUN
 from verity.core.protocols.pous.schemes import p2 as P2
-from verity.core.protocols.remote_bandwidth import audit, codec
-from verity.core.protocols.remote_bandwidth import period as bandwidth
+from verity.core.protocols.poub import audit, codec
+from verity.core.protocols.poub import period as bandwidth
 from verity.ml.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[5]

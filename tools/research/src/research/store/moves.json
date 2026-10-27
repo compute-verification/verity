@@ -1516,6 +1516,16 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/certifier/": "verity/core/protocols/network_certifier/",
+        "verity/core/protocols/remote_bandwidth/": "verity/core/protocols/poub/",
+        "integrations/vllm/verity_vllm/protocols/remote_bandwidth/": "integrations/vllm/verity_vllm/protocols/poub/",
+        "verity/core/protocols/network/nci/": "verity/core/protocols/inference_only/",
+        "benchmarks/rho/": "benchmarks/overhead/",
+        "benchmarks/rho/rho/": "benchmarks/overhead/overhead/"
+      }
     }
   ]
 }

@@ -42,7 +42,7 @@ TRACES = HERE.parent / "network_traces"
 sys.path.insert(0, str(TRACES))
 
 import warden_serve as ws  # noqa: E402
-from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
+from verity.core.protocols.network_certifier.warden import WardenParams  # noqa: E402
 
 
 def served_requests(run: str | Path, window: int) -> list[dict]:

@@ -6,8 +6,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from verity_vllm.protocols.remote_bandwidth.decode_at_use import DecodeAtUse, EncodedWeight, encoded_weights
-from verity_vllm.protocols.remote_bandwidth.interface import Layout, RegionInfo
+from verity_vllm.protocols.poub.decode_at_use import DecodeAtUse, EncodedWeight, encoded_weights
+from verity_vllm.protocols.poub.interface import Layout, RegionInfo
 
 BLOCK, WORD = 4096, 128
 

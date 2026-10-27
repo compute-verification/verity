@@ -48,7 +48,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
+from verity.core.protocols.poub import audit, timing  # noqa: E402
 from verity.core.protocols.sampled_proofs import costfit  # noqa: E402
 
 import wire  # noqa: E402

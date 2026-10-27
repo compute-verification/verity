@@ -116,17 +116,17 @@ from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
-from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.core.protocols.network_certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W  # noqa: E402
+from verity.core.protocols.network_certifier import warden_rows as WR  # noqa: E402
+from verity.core.protocols.network_certifier.active import DATA, id_request  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG, registration as RG  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k  # noqa: E402
 
-_TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/scan_traffic.py"
+_TRAFFIC = HERE.parents[1] / "verity/core/protocols/network_certifier/tests/scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
 traffic = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)

@@ -1,6 +1,6 @@
 """ENC-CODE: the advice coded as tightly as the leak accounting allows.
 
-The advice (I1 v0, `verity/core/protocols/certifier/advice.py` once ADV-SPEC lands it) is everything serving made
+The advice (I1 v0, `verity/core/protocols/network_certifier/advice.py` once ADV-SPEC lands it) is everything serving made
 unpredictable, and its length is the leak, charged as `A_c` in the certifier's accepted-runs bound
 (`SecurityProofs.EncardAccSeqsLeConstantRate`: at most `#Ac · #Σ_sync^W · D^n` observation sequences). This module codes
 three subjects, each with four codes, all prefix-free and all fixed before the run by a registered `Codebook`:
@@ -506,7 +506,7 @@ class StepAdvice:
 
 @dataclass(frozen=True, slots=True)
 class Advice:
-    """I1 v0 (ADV-SPEC, `verity/core/protocols/certifier/advice.py`): `release` holds one egress bucket per kept output,
+    """I1 v0 (ADV-SPEC, `verity/core/protocols/network_certifier/advice.py`): `release` holds one egress bucket per kept output,
     in step then row order. ADV-SPEC's classes, read by attribute name, work in its place (`as_advice`)."""
 
     requests: tuple[RequestAdvice, ...]

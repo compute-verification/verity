@@ -36,7 +36,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.core.protocols.remote_bandwidth import receipts as rb
+from verity.core.protocols.poub import receipts as rb
 from verity.ml.randomness import derive, frame
 
 KIND = "sketch-sha512"

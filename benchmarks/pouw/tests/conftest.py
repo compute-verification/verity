@@ -2,7 +2,7 @@ import asyncio
 import threading
 
 import pytest
-from verity.core.protocols.certifier import active
+from verity.core.protocols.network_certifier import active
 
 
 @pytest.fixture(autouse=True)

@@ -45,12 +45,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests")]
+sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "core" / "protocols" / "poub" / "tests")]
 
 import paged as P  # noqa: E402
 from paged import K, KB  # noqa: E402
 import remote_bandwidth_vectors as RV  # noqa: E402
-from verity.core.protocols.remote_bandwidth import codec as RC  # noqa: E402
+from verity.core.protocols.poub import codec as RC  # noqa: E402
 
 BLOCKS, BS, LAYERS = 96, 16, 2
 SB = 77

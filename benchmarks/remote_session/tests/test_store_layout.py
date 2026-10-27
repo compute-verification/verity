@@ -26,7 +26,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.poub import store as rstore  # noqa: E402
 
 import engine  # noqa: E402
 import prover  # noqa: E402
