@@ -1,8 +1,8 @@
-"""padrev — adversarial tests for pad's MoE stage (`Lifted[TinyMoeFfn]` over the registered fused-MoE block; lane/r16-pad 8c2d7d628), from
+"""Adversarial tests for the lifted MoE stage (`Lifted[TinyMoeFfn]` over the registered fused-MoE block), from
 LIFTING-REVIEW §3 A19 (per-expert batch composition), A20 (router argmax on encoded words), A7/R5 (Active numerics unchanged, incl. the
 special f32/bf16 values the router compares), the INV-laundering rule (a garbage token must not look legitimately inactive), and the
 LIFTING-STATUS §4 (i) closure claim (P3's specified list does not grow for MoE).  Padded baseline (experimental).  The circuit and the
-fixture data are pad's (`test_lifted_moe`); the properties, vectors and expected values are padrev's."""
+fixture data are `test_lifted_moe`'s; the properties, vectors and expected values are this file's own."""
 
 from __future__ import annotations
 
@@ -147,7 +147,7 @@ def _call_range(prog, name):
 
 
 def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_whatever_its_batch_mate_is(data):
-    """pad's TWO test: token 0 ⊥, token 1 Active.  The reviewer runs every composition — (⊥, A), (A, ⊥), (A, A'), (⊥, ⊥) — and compares
+    """`test_lifted_moe`'s TWO test: token 0 ⊥, token 1 Active.  The reviewer runs every composition — (⊥, A), (A, ⊥), (A, A'), (⊥, ⊥) — and compares
     the Active token's ENTIRE call (every gate under `tok0`/`tok1`, not the outputs alone) with its single-token unlifted run; a per-expert
     count, a routed-sum denominator or a block-schedule value that depended on the batch-mate would show as a differing gate."""
     x, wr, w13, w2 = data
@@ -186,8 +186,8 @@ def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_w
 
 
 # ---------------------------------------------------------------------------------------------------------
-# The renormalising router (Qwen3-MoE / Mixtral `norm_topk_prob`, R13 MOE-04) — the moe lane's Qwen3-30B-A3B row uses it; pad tested the
-# raw router only.  Under ⊥ the epilogue's `denom = acc > 0 ? acc : 1` must not resurrect an Active weight (a `SelectF32(⊥, ·, 1.f)` that
+# The renormalising router (Qwen3-MoE / Mixtral `norm_topk_prob`, MOE-04) — the Qwen3-30B-A3B row uses it; `test_lifted_moe` tests
+# the raw router only.  Under ⊥ the epilogue's `denom = acc > 0 ? acc : 1` must not resurrect an Active weight (a `SelectF32(⊥, ·, 1.f)` that
 # picked the constant 1.f would give an Active normalised weight on a ⊥ route).
 # ---------------------------------------------------------------------------------------------------------
 
