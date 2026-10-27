@@ -1,6 +1,6 @@
 """CPU tests of the FP8 registry (`verity/ml/definitions/registry/fp8.py`, lane QZ) on saved H100 operands.
 
-Data (`tests/program/data/`, pod `qz-h100`, 2026-09-08):
+Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
   K=1536/N=1536, K=8960/N=1536): the sampled weight rows, the activation rows + scales, the kernel's bf16 outputs
   (`gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm`);
@@ -23,12 +23,12 @@ import pytest
 if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity_vllm.correspondence.capture_identities import _coll_range  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
-from verity.ml.definitions.registry import fp8 as F  # noqa: E402
-from verity.ml.definitions.numerics import fp8_twins  # noqa: E402
-from verity.ml.definitions.registry import prims as P  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity_vllm.correspondence.capture_identities import _coll_range
+from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.definitions.registry import fp8 as F
+from verity.ml.definitions.numerics import fp8_twins
+from verity.ml.definitions.registry import prims as P
 
 DATA = Path(__file__).parent / "data"
 
@@ -160,7 +160,7 @@ def test_hopper_e4m3_step_is_not_ieee() -> None:
 
 # ------------------------------------------------------------------------------------------------------------
 # [R15 fp8] the BLOCK-SCALED linear (Qwen3-4B-Instruct-2507-FP8 on Hopper): `_C.per_token_group_fp8_quant` + blockwise
-# `_C.cutlass_scaled_mm`, on complete operand sets recorded on the H100 (out/gen/sweep/evidence/fp8/mini_probe.py, 2026-09-19):
+# `_C.cutlass_scaled_mm`, on complete operand sets recorded on the H100:
 # "p" = (M=1, K=256, N=256) -> the swap_ab Pingpong variant, "c" = (M=4, K=384, N=256) -> the Cooperative variant.
 # ------------------------------------------------------------------------------------------------------------
 

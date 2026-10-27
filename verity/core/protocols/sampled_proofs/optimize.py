@@ -1,32 +1,31 @@
 """A planner for the sampling scheme: from a Program's partition candidates, a proof system's cost model and an objective,
-the plans on the Pareto frontier of expected cost against certified harm, over every budget
-(note:proofs/20261018T0335Z-draft-sampling-optimizer-design).
+the plans on the Pareto frontier of expected cost against certified harm, over every budget.
 
-Nothing trusts it.  A plan is a stratified law, `k_s` units of each subcircuit, which registers as `work:1` over a work
+Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks of each subcircuit, which registers as `work:1` over a work
 table carrying the credited work and floors equal to the sizes (`work_law`: `one_stage.draw.work_k(1, w, n, W, f)` is
 `min(n, f)`).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
 objective's harm and for credited work, and `density_bound`, the closed form that `work_escape_le`'s proof extends to any
 sizes (the note's gap G1).
 
-**Cuts.**  An op type is cut into units one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
+**Cuts.**  An op type is cut into proof blocks one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
 op is a partition of it; a shared piece is either its own subcircuit, committed once and read by the others, or
-recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), and the planner picks per density.  A unit
-whose wrong output can forfeit downstream work (a noise or form unit every dot of its row reads) carries that work as
+recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), and the planner picks per density.  A proof block
+whose wrong output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
 `influence`, which its harm counts.
 
-**Cost.**  Per touched statement plus per proved unit, as C-Flock does: subcircuit `s` cut into statements of `c` units costs
+**Cost.**  Per touched statement plus per proved proof block, as C-Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
-committed at serve time whatever the draw (Daniel, 18 Oct, ASK-25): every unit's outputs (`commit_bits`, `commit_rows`),
+committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
-at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn unit's
-witness is built by re-executing its replay unit from the last committed state (`ReplayDomain`), which commits nothing.
+at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
+witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
-rows a proved unit opens (`row_ands`).
+rows a proved proof block opens (`row_ands`).
 
 **Sweep.**  The note's Lagrangian: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
 weight of the subcircuit's weight class, 1 unless the plan weighs classes), some subcircuits at their floor only, some proved
-whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a unit
+whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a proof block
 cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
 `weigh` chooses the kinds' weights at a target, under the same stratified certificate.
 """
@@ -55,13 +54,13 @@ def row_ands(nbytes: int) -> int:
 
 @dataclass(frozen=True)
 class Candidate:
-    """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into units, derived from the IR,
+    """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
     `out_gates` boundary gates, its committed bits, which fit a public size class (`one_stage.partition.unit_class`, at
-    most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider unit), and `influence`, the credited work a wrong
-    one can forfeit downstream.  A proved unit costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
-    `commit_bits` in `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units
-    (m = k_log + nbl <= 35); `per_replay` units of it lie in each replay unit of domain `replay`; and `kind` is its weight
+    most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
+    one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
+    `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
+    (m = k_log + nbl <= 35); `per_replay` proof blocks of it lie in each replay block of domain `replay`; and `kind` is its weight
     class for the draw's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
 
     op: str
@@ -101,7 +100,7 @@ class Candidate:
 @dataclass(frozen=True)
 class TemplateCost:
     """One subcircuit's measured costs under one proof-system version, in the caller's currency: `statement_fixed` (a0) and
-    `statement_per_unit` (a1, per staged unit) per touched statement, `unit` (b) per proved unit, `replay` per drawn unit,
+    `statement_per_unit` (a1, per staged proof block) per touched statement, `unit` (b) per proved proof block, `replay` per drawn proof block,
     and `sigma`, their relative uncertainty.  A field left None is derived from the model's rates."""
 
     statement_fixed: float | None = None
@@ -113,8 +112,8 @@ class TemplateCost:
 
 @dataclass(frozen=True)
 class ReplayDomain:
-    """`units` replay units (one layer of one step each, say), each re-executed from the last committed state at `cost`
-    to build the witnesses of the drawn units in it, when the draw meets any.  Replay commits nothing: every value it
+    """`units` replay blocks (one layer of one step each, say), each re-executed from the last committed state at `cost`
+    to build the witnesses of the drawn proof blocks in it, when the draw meets any.  Replay commits nothing: every value it
     recomputes was committed at serve time."""
 
     units: int
@@ -146,12 +145,12 @@ class Commitment:
 
 @dataclass(frozen=True)
 class CostModel:
-    """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a unit's ANDs with its
+    """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a proof block's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
-    ands` (the session and the verifier's parse), per staged unit `staged_per_and * ands + staged_per_unit`, and per
-    proved unit `per_and * ands`.  When `shared`, a template's statements hold only its drawn units (`IntegrityPeriod`'s
-    hidden window: one session, its k drawn units split evenly over `ceil(k / cap)` statements), so only they are staged;
-    otherwise its units are cut in order into statements and every touched statement is staged whole.  Serving commits each unit's outputs at `commit_per_bit` and `commit_per_row`, and
+    ands` (the session and the verifier's parse), per staged proof block `staged_per_and * ands + staged_per_unit`, and per
+    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its drawn proof blocks (`IntegrityPeriod`'s
+    hidden window: one session, its k drawn proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
+    otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay domains that build
     witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id."""
 
@@ -210,8 +209,8 @@ class CostModel:
 
 @dataclass(frozen=True)
 class Objective:
-    """The harm a wrong unit does: `work` times its credited work and influence plus `bits` times its output bits.  No
-    target: targets and budgets are queries on the frontier.  Every subcircuit draws at least `floor` units."""
+    """The harm a faulty proof block does: `work` times its credited work and influence plus `bits` times its output bits.  No
+    target: targets and budgets are queries on the frontier.  Every subcircuit draws at least `floor` proof blocks."""
 
     delta: float
     work: float = 1.0
@@ -228,7 +227,7 @@ class Objective:
 
 @dataclass(frozen=True)
 class Certificate:
-    """What a plan's law certifies at `delta`, from its sizes alone: `harm` (core's `harm_bound` of the objective's harm),
+    """What a plan's sampling design certifies at `delta`, from its sizes alone: `harm` (core's `harm_bound` of the objective's harm),
     `density` (`density_bound` of it), `free_compute` (core's `harm_bound` of credited work and influence) and, when the
     objective weighs bits, `leak` (`consumers.exfiltration_bound`: `harm_bound` of output bits plus `location_bits`).  When
     not `exact`, every field is `density_bound`'s and there is no leak."""
@@ -259,8 +258,8 @@ class Plan:
 
 
 def _log_miss(n: int, m: int, k: int) -> float:
-    """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given units: the product
-    prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), summed when t is small, by `lgamma` up to 2^25 units
+    """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given proof blocks: the product
+    prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), summed when t is small, by `lgamma` up to 2^25 proof blocks
     and past that, where `lgamma`'s differences lose their digits, by its midpoint (either within about 1e-7 relative)."""
     if k > n - m:
         return -inf
@@ -284,8 +283,8 @@ def _hit(n: int, m: int, k: int) -> float:
 
 
 def touched(n: int, c: int, k: int) -> float:
-    """The expected number of statements a uniform k-subset of n units meets, the units cut in order into statements of
-    c units (the last one shorter)."""
+    """The expected number of statements a uniform k-subset of n proof blocks meets, the proof blocks cut in order into statements of
+    c proof blocks (the last one shorter)."""
     if k <= 0:
         return 0.0
     whole, rest = divmod(n, c)
@@ -303,7 +302,7 @@ def _statement_sizes(cap: int, units: int) -> list[int]:
 
 
 def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, dict[str, float]]:
-    """Drawing k of the candidate's units: its expected proving cost at the cheapest statement size, that size (the larger
+    """Drawing k of the candidate's proof blocks: its expected proving cost at the cheapest statement size, that size (the larger
     one on a tie, for fewer roots), and the cost's parts.  Serving's commitments and the replay domains are the plan's."""
     a0, a1 = costs.statement(c)
     units = k * (costs.unit(c) + costs.of(c).replay)
@@ -320,8 +319,8 @@ def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, d
 
 
 def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: CostModel) -> float:
-    """The expected cost of building the drawn units' witnesses, by replaying each replay unit the draw meets: a domain's
-    replay unit escapes when every subcircuit's draw misses its share of it, independently across strata."""
+    """The expected cost of building the drawn proof blocks' witnesses, by replaying each replay block the draw meets: a domain's
+    replay block is missed when every subcircuit's draw misses its share of it, independently across strata."""
     total = 0.0
     for name in sorted({c.replay for c in chosen if c.replay}):
         if name not in costs.replay:
@@ -367,9 +366,9 @@ def ln_upper(delta: Fraction | float) -> Fraction:
 
 
 def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Fraction) -> float | Fraction:
-    """The fractional knapsack's value at a risk budget: a stratum of n units with k drawn and harm h per unit counts
-    whole when k = 0 and not at all when k = n; the rest go in decreasing harm per unit of risk h n / k, each whole
-    (n - k units at risk k / n each) until the budget runs out, the last one fractionally.  Exact on Fractions, where
+    """The fractional knapsack's value at a risk budget: a stratum of n proof blocks with k drawn and harm h per proof block counts
+    whole when k = 0 and not at all when k = n; the rest go in decreasing harm per proof block of risk h n / k, each whole
+    (n - k proof blocks at risk k / n each) until the budget runs out, the last one fractionally.  Exact on Fractions, where
     Lean's `SampledProofs.Bound.fill` is its definition."""
     out, items = 0, []
     for n, k, h in rows:
@@ -389,8 +388,8 @@ def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Frac
 
 
 def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
-    """The most harm a wrong set escaping with probability at least `delta` holds, when a stratum of n units with k drawn
-    and harm h per unit, holding x of the set, escapes with at most (1 - x/n)^k <= exp(-k x / n), and never once
+    """The most harm a faulty set accepted with probability at least `delta` holds, when a stratum of n proof blocks with k drawn
+    and harm h per proof block, holding x of the set, is accepted with probability at most (1 - x/n)^k <= exp(-k x / n), and never once
     x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value (`fill`).  In
     floats, the budget and the value raised by `HARM_MARGIN` (the budget also by 2^-60, for delta near 1), so it is at
     least `density_exact`, its definition."""
@@ -434,7 +433,7 @@ def ln_bound(a: int, b: int, up: bool) -> Fraction:
     return Fraction(ceil(v * q) if up else floor(v * q), q)
 
 
-def escape_parts(n: int, k: int, x: int) -> tuple[int, int]:
+def acceptance_parts(n: int, k: int, x: int) -> tuple[int, int]:
     """prod_{i < t} (n - s - i) and prod_{i < t} (n - i), t = min(x, k), s = max(x, k), whose ratio is
     C(n - x, k) / C(n, k) = C(n - k, x) / C(n, x), for x <= n - k."""
     a = b = 1
@@ -446,9 +445,9 @@ def escape_parts(n: int, k: int, x: int) -> tuple[int, int]:
 
 def max_harm_check(rows: Iterable[tuple[int, int, float | Fraction, int, int, int]], delta: float | Fraction,
                    lam: float | Fraction) -> tuple[Fraction, Fraction]:
-    """(lower, upper) around the most harm a wrong set escaping with probability at least `delta` holds,
+    """(lower, upper) around the most harm a faulty set accepted with probability at least `delta` holds,
     `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate: rows (n, k, h, take, lo, hi) and
-    a multiplier `lam > 0`.  `lower` is the harm of the counts `take`, whose exact escape is at least `delta`; `upper`
+    a multiplier `lam > 0`.  `lower` is the harm of the counts `take`, whose exact acceptance probability is at least `delta`; `upper`
     the dual bound `lam ln(1/delta) + sum_s max_x (h_s x - lam c_s(x))`, `c(x) = -ln(C(n - x, k)/C(n, k))`, whose
     maximizer the row's lo <= hi place: the increments `d(j) = ln((n - j)/(n - j - k))` before `lo` cost at most `h`,
     those from `hi` on at least `h`.  Raises ValueError where the certificate fails.  Lean's
@@ -466,14 +465,14 @@ def max_harm_check(rows: Iterable[tuple[int, int, float | Fraction, int, int, in
             raise ValueError("a row takes more than size - k")
         if not lo <= hi <= top:
             raise ValueError("a row needs lo <= hi <= size - k")
-        a, b = escape_parts(n, k, take)
+        a, b = acceptance_parts(n, k, take)
         num, den = num * a, den * b
         lower += take * h
         if lo > 0 and h < lam * ln_bound(n - lo + 1, top - lo + 1, True):
             raise ValueError("an increment before a row's lo may cost more than its harm")
         if hi < top and lam * ln_bound(n - hi, top - hi, False) < h:
             raise ValueError("an increment from a row's hi on may cost less than its harm")
-        a, b = escape_parts(n, k, lo)
+        a, b = acceptance_parts(n, k, lo)
         gain = max(Fraction(0), h - lam * ln_bound(n - lo, top - lo, False)) if lo < hi else Fraction(0)
         upper += lo * h - lam * ln_bound(b, a, False) + (hi - lo) * gain
     if num * delta.denominator < delta.numerator * den:
@@ -497,7 +496,7 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
     """`max_harm_check`'s bracket around `StratifiedBlock.maxHarm` for rows (n, k, h) at delta, with the certificate
     found: (lower, upper, lam, [(take, lo, hi)]).  The multiplier is searched in floats, where each stratum's maximizer is
     in closed form, so `upper` is the linear relaxation over the exact risk to the search's precision; `take` is the
-    maximizers at the least multiplier found whose counts escape exactly; `lo` and `hi` are widened until they hold."""
+    maximizers at the least multiplier found whose counts' exact acceptance probability is at least `delta`; `lo` and `hi` are widened until they hold."""
     rows = [(n, k, Fraction(h)) for n, k, h in rows]
     floats = [(n, k, float(h)) for n, k, h in rows]
     budget, d = -log(float(delta)), Fraction(delta)
@@ -508,10 +507,10 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
     def used(lam: float) -> float:
         return fsum(-_log_miss(n, x, k) for (n, k, _), x in zip(floats, counts(lam)))
 
-    def escapes(xs: list[int]) -> bool:
+    def accepted(xs: list[int]) -> bool:
         num = den = 1
         for (n, k, _), x in zip(rows, xs):
-            a, b = escape_parts(n, k, x)
+            a, b = acceptance_parts(n, k, x)
             num, den = num * a, den * b
         return num * d.denominator >= d.numerator * den
 
@@ -522,7 +521,7 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
         mid = (lo + hi) / 2
         lo, hi = (lo, mid) if used(2.0 ** mid) <= budget else (mid, hi)
     lam, scale, step = 2.0 ** hi, 1.0, 2.0 ** -40
-    while not escapes(takes := counts(lam * scale)):
+    while not accepted(takes := counts(lam * scale)):
         scale, step = scale * (1 + step), step * 4
     cert, exact = [], Fraction(lam)
     for (n, k, h), x, take in zip(rows, counts(lam), takes):
@@ -597,7 +596,7 @@ def _by_op(candidates: Sequence[Candidate]) -> dict[str, dict[str, list[Candidat
 def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel, objective: Objective, lam: float,
               promote: float, weights: Mapping[str, float]) -> list[Plan]:
     """The plans the Lagrangian allows at one density: per op type its cheapest cut, then each prefix of the subcircuits
-    ranked by cost saved per unit of harm conceded at their floor, each with and without promoting to full the subcircuits
+    ranked by cost saved per proof block of harm conceded at their floor, each with and without promoting to full the subcircuits
     whose whole proof costs at most `promote` of the plan more."""
     def k(c: Candidate) -> int:
         return _k(c, objective, lam, weights.get(c.block, 1.0))
@@ -807,9 +806,9 @@ def structure(p: Plan) -> tuple:
 
 
 def perturb(costs: CostModel, what: str, factor: float, candidates: Sequence[Candidate] = ()) -> CostModel:
-    """The model with one group of costs scaled by `factor`: "prove" (per proved unit), "statement" (per touched
-    statement), "commit" (serving's, the units' and the fixed serve-time commitments'), "replay" (the domains' and per
-    drawn unit), or one subcircuit's (its derived costs pinned from `candidates` first)."""
+    """The model with one group of costs scaled by `factor`: "prove" (per proved proof block), "statement" (per touched
+    statement), "commit" (serving's, the proof blocks' and the fixed serve-time commitments'), "replay" (the domains' and per
+    drawn proof block), or one subcircuit's (its derived costs pinned from `candidates` first)."""
     t = dict(costs.templates)
     if what == "prove":
         t = {k: replace(v, unit=None if v.unit is None else v.unit * factor) for k, v in t.items()}
@@ -887,7 +886,7 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
 
 
 __all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "density_exact",
-           "escape_parts", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
+           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
+           "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
            "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
            "template_cost", "touched", "weigh", "work_law"]

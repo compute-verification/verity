@@ -1,6 +1,6 @@
 """The k16 tensor-core step as a minimal algebraic relation: witness columns, predicates, and their census.
 
-This module is the *census input* for the FLOP-proof backend decision.  It restates `tc_dot_total` -- one accumulator
+This module is the *census input* for choosing a proof system.  It restates `tc_dot_total` -- one accumulator
 transition of `mma.sync.m16n8k16` (Ampere: two groups of eight products) or one k16 slice of `wgmma` (Hopper: one group of
 sixteen) -- as a fixed set of predicates over integer witness columns, of exactly three kinds:
 
@@ -10,15 +10,14 @@ sixteen) -- as a fixed set of predicates over integer witness columns, of exactl
              a w-bit range check is ceil(w/16) lookups into 16-bit range tables (plus one `lin` split when w > 16)
 
 Every *honest* witness value is a non-negative integer below 2^40 (the largest: the K-bit remainder scale, K = W + 10).
-That does **not** make the predicates sound over a 40-bit field (WP2 checker lane, 2026-09-21, z3 at real widths --
-`verity_numerical.checker.search`, run r20260921-232849-093c): the remainder columns `r`, `r_s` are never range-checked
+That does **not** make the predicates sound over a 40-bit field (z3 at real widths,
+`verity_numerical.checker.search`): the remainder columns `r`, `r_s` are never range-checked
 themselves, only their scaled products `rinv = r * invpow`, `rsinv = r_s * invpow_s`, so over F_p with p ~ 2^40 a
 dishonest `r >= 2^d` whose product wraps below p into [0, 2^A) is accepted (`align_state` over F_p40 as stated: SAT;
 over Goldilocks with `r` range-checked: UNSAT), and `aligned` carries no tight quotient bound ``q < 2^(A-d)``, which a
 31-bit field needs even with ideal remainder checks (M = 0, d >= W, q = 63, r = 2^25 - 1 gives 2^31 - 1 = 0 in
-Mersenne31: SAT).  The red-team lane (same day, `verity_numerical.redteam`, report
-`backends/numerical/reports/redteam_relation.json`) found a forgery that is **field-independent**: `magW` (the split
-of `normB` into a W-bit magnitude and the remainder `r_n`) is never range-checked, so `magW' = magW + k * 2^W (mod p)`
+Mersenne31: SAT).  A red-team check (`verity_numerical.redteam`) found a forgery that is **field-independent**: `magW`
+(the split of `normB` into a W-bit magnitude and the remainder `r_n`) is never range-checked, so `magW' = magW + k * 2^W (mod p)`
 with a fitting `r_n'` yields an accepted wrong output word over every prime tried, Goldilocks included (388 of 870
 Ampere groups; forged `0x3f7ffffe` for the honest `0x3f800000` on the all-zero group); RANGE(magW, W) makes every
 whole-group z3 query UNSAT.  The wrap thresholds for the other products are p >= 2^52 (`aligned * pow`), 2^59
@@ -26,8 +25,8 @@ whole-group z3 query UNSAT.  The wrap thresholds for the other products are p >=
 ``prod_i (E* - e_i) = 0`` is a *field* identity (a product vanishes iff a factor does) whose intermediates are not
 range-checked either.  Anyone embedding this relation in a field must add RANGE(magW, W), a direct range check on every
 remainder and the tight quotient bound, and choose p above the wrap thresholds; the census below counts none of that,
-nor the decode of an arbitrary transition-unit accumulator (the VU starts from the constant zero state; the backend
-transition unit does not).  The gadget contracts in `verity_numerical.checker` (WP2) carry the bounds and are UNSAT
+nor the decode of an arbitrary transition-unit accumulator (the proof block starts from the constant zero state; the proof
+system's transition unit does not).  The gadget contracts in `verity_numerical.checker` carry the bounds and are UNSAT
 under z3 at real widths; build from those, not from this module.  The relation is *total* and *unconditional*:
 NaN/Inf/zero operands
 take the same predicates as finite ones (their finite-path magnitude is 0, so the finite path is always well defined on
