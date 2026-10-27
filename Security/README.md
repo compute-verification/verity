@@ -68,8 +68,10 @@ Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite
 site. It composes two subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both
 accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
 
-- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement for the remote
-  deployment is not on `main` yet.
+- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. On `main`, remote's sampled-proofs component is
+  one-stage v1, which takes the sessions' verdicts as evidence; the verifier's run of `flock-verify --zk` produces
+  them, and the link from remote's acceptance to that run's comes with v2. The composed statement for the
+  remote deployment is not on `main` yet.
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZ`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
