@@ -421,7 +421,8 @@ def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypa
 
     monkeypatch.setattr(G.tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(G.shutil, "rmtree", stubborn)
-    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn)
+    # 3.12's TemporaryDirectory cleans up through shutil.rmtree; a module-level tempfile._rmtree exists only on later Pythons
+    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn, raising=False)
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
 
