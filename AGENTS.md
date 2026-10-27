@@ -63,8 +63,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
-  reason: protocol structure, the protocol's outputs, the verifier's coins and draws, and hiding commitments. Partitions
-  are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
+  reason: protocol structure, the protocol's outputs, the verifier's coins and the sample, and hiding commitments.
+  Partitions are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
   from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
   16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
@@ -166,9 +166,9 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   one run's verifier for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration
   (zero-knowledge, plain, recursive) and each protocol instantiates those theorems, and a proof that redoes a layer is
   refactored onto the shared one.
-- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
-  probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
-  area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
+- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and the
+  sample, probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`,
+  which every area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
