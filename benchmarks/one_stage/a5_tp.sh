@@ -97,7 +97,7 @@ store() {  # NAME: $W/NAME's circuit.txt files and lookup tables by SHA-512, one
 print(json.dumps({"name": f"a5-circuits/{n}", "run": run, "source": src, "layout": "sha512/<hex>, the Lean verifier --archive",
                   "files": dict(reversed(x.split(" ", 1)) for x in open(keys).read().splitlines())}, sort_keys=True))' \
     $1 "${RESEARCH_RUN_ID:-}" "$(git rev-parse HEAD)" $O/store/$1.sha512 > $O/store/meta-$1.json
-  EV=$O/store VV=$VV LABEL_KEY=circuits bash $REPO/integrations/vllm/verity_vllm/ops/store_trees.sh $W/store $1 > $O/store/$1.log 2>&1
+  EV=$O/store VV=$VV LABEL_KEY=circuits LABEL_BY=proofs bash $REPO/integrations/vllm/verity_vllm/ops/store_trees.sh $W/store $1 > $O/store/$1.log 2>&1
   rc=$?
   grep -E '^(STORED|PRESERVED-CHECK|LABEL|no custody)' $O/store/$1.log
   rm -rf $t; rmdir $W/store 2>/dev/null

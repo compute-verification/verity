@@ -2,13 +2,15 @@
 # store_trees.sh STAGE KIND...: each tree STAGE/KIND as a fixture/v1 artifact under the meta $EV/meta-KIND.json, `research data put
 # --preserve` with this run's own custody key (research run --custody-r2 stages it under requests/<run id>/custody/; the job holds no
 # other credential), then `research data preserved` on every tree it stored. With LABEL_KEY set, the run is labelled LABEL_KEY = each
-# stored tree's art id (`research data label`, by LABEL_BY, default proofs). Run by epoch_store.sh and one_stage's a5_tp.sh.
+# stored tree's art id (`research data label --by LABEL_BY`, the caller's asserter, required). Run by epoch_store.sh and one_stage's
+# a5_tp.sh.
 # Prints `STORED <kind> art:<id> <PRESERVED|FAILED>` per tree and `PRESERVED-CHECK <ok|FAILED> <arts>`; exit 0 only when every tree
 # asked for is PRESERVED, the check agrees and every label is written; exit 4 when the run has no custody key.
 set -u
 S=${1:?stage dir}; shift
 EV=${EV:?the evidence dir: the meta-KIND.json of each tree, and the put records}
 VV=${VV:?the verity-vllm CLI}
+[ -z "${LABEL_KEY:-}" ] || : "${LABEL_BY:?with LABEL_KEY: the asserter of the labels (research data label --by)}"
 R=${RESEARCH_CLI:-python3 -m research}
 C=${CUSTODY_DIR:-$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/${RESEARCH_RUN_ID:?}/custody}
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
@@ -33,7 +35,7 @@ else
   echo "PRESERVED-CHECK FAILED$arts (preserved.log)"; rc=1
 fi
 for art in $arts; do
-  [ -z "${LABEL_KEY:-}" ] || $R data label "$RESEARCH_RUN_ID" "$LABEL_KEY" "$art" --by "${LABEL_BY:-proofs}" >> "$EV/label.log" 2>&1 \
+  [ -z "${LABEL_KEY:-}" ] || $R data label "$RESEARCH_RUN_ID" "$LABEL_KEY" "$art" --by "$LABEL_BY" >> "$EV/label.log" 2>&1 \
     || { echo "LABEL FAILED $RESEARCH_RUN_ID $LABEL_KEY $art (label.log)"; rc=1; }
 done
 exit $rc
