@@ -124,9 +124,10 @@ theorem break_le_of (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V
         ENNReal.ofReal (Flock.Bridge.lossPub A.k (Flock.Bridge.ioSum A.P) A.ρ (A.lossArg τ)) ≤
       V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ) := by
   have hx0 : 0 ≤ (V.finder .sampled θ F c σ).Pr sha512Msg := Claims.Pr_nonneg _
-  have hJ : 1 ≤ A.J ^ 2 := Nat.one_le_pow _ _ (FlockSoundness.Discharge.Composed.nTab_pos _)
-  have hKN : A.K ≤ kMax := A.K_le.trans ((Nat.le_mul_of_pos_left _ hJ).trans hkm)
-  have hJKN : A.J ^ 2 * A.K ≤ kMax := (Nat.mul_le_mul_left _ A.K_le).trans hkm
+  have hJ : 1 ≤ A.J ^ 2 :=
+    Nat.one_le_iff_ne_zero.mpr (pow_ne_zero 2 (FlockSoundness.Discharge.Composed.nTab_pos A.I).ne')
+  have hKN : A.K ≤ kMax := A.K_le.trans ((le_mul_of_one_le_left (Nat.zero_le _) hJ).trans hkm)
+  have hJKN : A.J ^ 2 * A.K ≤ kMax := (Nat.mul_le_mul le_rfl A.K_le).trans hkm
   have hK : (A.K : ℝ) ≤ kMax := by exact_mod_cast hKN
   have hJK : (A.J : ℝ) ^ 2 * A.K ≤ kMax := by exact_mod_cast hJKN
   have hcol : Game.prob (ColEvent col) (V.game θ F c) σ ≤
