@@ -14,6 +14,21 @@ Python reference held to it.
 | `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `length`, `drawn`, `root_W` |
 | `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N units drawn subset:K′ at the window's δ, and the draw is subset:K′ over N |
 
+A second `Core.Protocol`, `PouwCheck.Period.protocol`, id `verity/pouw/period/v1` (`pouw-period`), is a period's credit
+and onsite's work component (`Core.Onsite.components`), with `verity/core/protocols/pouw/period_check.py` its Python
+(`tests/test_period_difftest.py`). It credits a period all or nothing: `Credit.periodCredit` accepts only when every
+window of the period's close is credited.
+
+| field | here |
+| --- | --- |
+| `Params` | the verifier's own `{key, main, name}`: the challenger key it pins, its copy of main's first-parent history, the period's name; optionally `capacity`, the period's monitored capacity C in MACs (IDLE-COVERED, CMP-67); no policy parameter, so whoever reads the period decides whether it was idle |
+| `Commitment` | the auditor's ledger, the lines the challenger signed, as canonical JSON: its period's open commits the circuit, K, T, the weights and the fixed length before any of the period's coins |
+| `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
+| `Evidence` | `{pins, windows}`: the challenger host's pins log, and each window's evidence in the close's order (`Credit.PERIOD_KEYS`, each drawn unit's and each round's proof outcome the verifier of record's verdict); or `{fills, pins, windows}`, with each filler window's evidence of the fill period `<name>:fill` in its close's order (`Fill.FILL_KEYS`) |
+| `check` | `Credit.periodCredit`, then, given `fills`, `Fill.periodFill`, reported and read by no decision; a refusal is `code: why`, and it never leaves a period undecided |
+| `Public` | `Credit.PeriodCredit.toJson`: each window's credited calls and credited served work, K, δ and each window's ε; given `fills`, with `fill` beside them, `Fill.FillCredit.toJson` (each filler window's work, the fill period's K, δ and each filler window's ε) or `{refused: "code: why"}`, and `gaps` (`GAPS`: no guarantee covers the fill yet); given a capacity, `utilization` (`{capacity, certified, share}`: C, the served work alone, and its share of C; nothing named certified holds the fill); `work`'s rule unchanged, and a guarantee over a period reads it (`Credited.served`) |
+| `Profile` | `{period, windows}`: the period's name and its number of windows; given a credited fill, `fills` its number of filler windows |
+
 | module | `core_check.py` |
 | --- | --- |
 | `PouwCheck.Json` | `sorted(dict)`, `_nat`, `_canon` |
@@ -21,6 +36,9 @@ Python reference held to it.
 | `PouwCheck.Inputs` | `params`, `commitment`, `digest`, `unit_draw`, `evidence`, with their refusals (`answer_of` and `integrity` are the interface's decoders) |
 | `PouwCheck.Check` | `expected_items` and `check` |
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
+| `PouwCheck.Period` | `period_check.py`: the period's `Core.Protocol` value over `Credit.periodCredit` and `Fill.periodFill`, its decoders and its digest |
+| `PouwCheck.Fill` | `fill.py`'s `period_fill`: a period's filler windows credited as its `fill` (CMP-172, CMP-67), each window Dither calls whose A is the per-call pad, its proof blocks `PouwDitherBlock_v1`'s, its own live salt coin, a call coin a call and a draw coin, every call's value root fixed before the draw coin, all or nothing over the fill period `<name>:fill`. Not yet under `H1J10RCheckedCreditPeriod`, which reads `work` alone |
+| `PouwCheck.PeriodMain` | `pouw-period`'s entry point |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its salt epoch's root (`epochOpenRoot` of its weights' root and its `pass_index`) and ended complete |
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |

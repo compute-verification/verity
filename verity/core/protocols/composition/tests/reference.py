@@ -1,7 +1,7 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
 `Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
-(`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
+(`verity/pouw/v1`, remote's work) and `period_check.case` (`verity/pouw/period/v1`, onsite's work), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
 mirror over the certifier's certificates and one-stage's answers,
 `verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit
 (`verity/sampled-proofs/one-stage/v1`) `one_stage` behind the protocol's decoders, its difftest's `answer`
@@ -30,6 +30,7 @@ in the balance. The port follows the composition's rule, `verdict`, which change
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib.util
 import json
@@ -42,7 +43,7 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
-from verity.core.protocols.pouw import core_check
+from verity.core.protocols.pouw import core_check, period_check
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -67,6 +68,8 @@ def module(name: str, path: Path) -> ModuleType:
 ONE_STAGE = module("one_stage_difftest", CORE / "service/sampled_proofs/tests/test_difftest.py")
 #: PoUW's check difftest's cases: honest windows and one mutation each.
 POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/pouw_check_cases.py")
+#: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
+POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
@@ -117,6 +120,16 @@ class Recorded:
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
+
+
+@functools.cache
+def _period_answer(case: str) -> str:
+    return canonical(period_check.case(json.loads(case)))
+
+
+#: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
+#: component's twice, so it is made once a case.
+POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
@@ -226,4 +239,4 @@ class Product:
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))
+ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS))
