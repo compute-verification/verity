@@ -96,7 +96,7 @@ are D7's, under which each grid's timing charge is 600 bits a link-window:
 - each link-window's status on both grids;
 - the coins' frames and bytes, and each counted name's frames and bytes;
 - the requests' frames and bytes, and the cells each grid released;
-- each connection's end;
+- each connection's end, with the error type, if any, that ended either side's stream;
 - the late ticks;
 - `charge_bits`: each grid's timing, (ticks)·log2(r + 1), and its content, 8 bits a counted byte.
 

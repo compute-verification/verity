@@ -39,6 +39,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import time
 from collections import Counter, deque
 from collections.abc import Awaitable, Callable
@@ -64,6 +65,8 @@ COUNTED = ("commitment", "closed", "refused", "other", "malformed", "unrequested
            "replayed", "out-of-order")
 #: the most a side of the link may leave untaken before the link fails closed
 BACKLOG = 1 << 20
+#: an open's `after` the classifier reads: lowercase hex of whole bytes
+_HEX = re.compile(r"(?:[0-9a-f]{2})*")
 
 
 @dataclass(frozen=True)
@@ -137,12 +140,13 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return dict(pairs)
 
 
-def _object(raw: bytes) -> dict | None:
+def _object(raw: bytes) -> dict | str:
+    """`raw` as a JSON object with a string `type`, or why it isn't one."""
     try:
         head = json.loads(raw, object_pairs_hook=_pairs)
-    except (ValueError, RecursionError):
-        return None
-    return head if type(head) is dict and type(head.get("type")) is str else None
+    except (ValueError, RecursionError) as e:
+        return f"not JSON: {type(e).__name__}"
+    return head if type(head) is dict and type(head.get("type")) is str else "not an object with a string type"
 
 
 class Classifier:
@@ -160,19 +164,16 @@ class Classifier:
 
     def ask(self, raw: bytes) -> None:
         head, asked = _object(raw), None
-        if head is not None and head["type"] == "open" and sorted(head) == ["after", "index", "label", "type"]:
+        if type(head) is dict and head["type"] == "open" and sorted(head) == ["after", "index", "label", "type"]:
             label, index, after = head["label"], head["index"], head["after"]
-            if type(label) is str and type(index) is int and type(after) is str and after == after.lower():
-                try:
-                    asked = (label, index, bytes.fromhex(after))
-                except ValueError:
-                    pass
+            if type(label) is str and type(index) is int and type(after) is str and _HEX.fullmatch(after):
+                asked = (label, index, bytes.fromhex(after))
         self._asked.append(asked)
 
     def answer(self, raw: bytes) -> str:
         asked = self._asked.popleft() if self._asked else None
         head = _object(raw)
-        if head is None:
+        if type(head) is not dict:
             return "malformed"
         if head["type"] in ("commitment", "closed", "refused"):
             return head["type"]
@@ -214,6 +215,7 @@ class _Connection:
     down_ended: bool = False  # the challenger's end, sent on to the prover
     requests: int = 0
     answers: int = 0
+    errors: dict[str, str] = field(default_factory=dict)  # the OSError that ended a side's stream, by side
     tasks: list[asyncio.Task] = field(default_factory=list)
 
 
@@ -322,8 +324,8 @@ class CoinLink:
                 self._changed.set()
         except ValueError:
             self.requests.fault(Reason.MALFORMED)
-        except OSError:
-            pass
+        except OSError as e:
+            c.errors["prover"] = type(e).__name__
         finally:
             c.prover_ended = True
             self._changed.set()
@@ -342,8 +344,8 @@ class CoinLink:
                 self._changed.set()
         except ValueError:
             self.coins.fault(Reason.MALFORMED)
-        except OSError:
-            pass
+        except OSError as e:
+            c.errors["challenger"] = type(e).__name__
         finally:
             c.challenger_ended = True
             self._changed.set()
@@ -408,7 +410,7 @@ class CoinLink:
             c.done.set_result(None)
         self.current = None
         self.log.append({"ordinal": c.ordinal, "requests": c.requests, "answers": c.answers, "cut": cut,
-                         "unreachable": c.unreachable, "dropped": dropped})
+                         "unreachable": c.unreachable, "errors": dict(c.errors), "dropped": dropped})
         self._changed.set()
 
     def summary(self) -> dict:

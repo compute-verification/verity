@@ -55,18 +55,16 @@ def opening_frame(opening: LiveOpening) -> bytes:
     return frame({"type": "opening", "opening": opening.to_json()})
 
 
-def wire_heads(data: bytes) -> list[dict]:
-    """Every head `remote`'s own reader takes from `data`, to the end of the stream."""
+def wire_heads(data: bytes, n: int | None = None) -> list[dict]:
+    """The first `n` heads `remote`'s own reader takes from `data`, or every one, when `data` ends between frames."""
     a, b = socket.socketpair()
     with a, b:
         a.sendall(data)
         a.shutdown(socket.SHUT_WR)
         wire, out = R._Wire(b), []
-        while True:
-            try:
-                out.append(wire.recv())
-            except CoinError:
-                return out
+        while (n is None or len(out) < n) and b.recv(1, socket.MSG_PEEK):
+            out.append(wire.recv())
+        return out
 
 
 @types.coroutine
@@ -82,26 +80,29 @@ async def settle(turns: int = 200) -> None:
 
 class Prover:
     """The prover's side of one connection: `frames` fed to the link, each at its clock time in `at` (default: at once),
-    then its end of stream unless `eof` is False; every write the link makes, with the tick it was made at. `backlog` is
-    what it leaves untaken, and `gone` a prover that hung up."""
+    then its end of stream unless `eof` is False, or a connection reset at `reset_at`; every write the link makes, with
+    the tick it was made at. `backlog` is what it leaves untaken, and `gone` a prover that hung up."""
 
     def __init__(self, link: CoinLink, clock: VirtualClock, frames: list[bytes], *, at: list[float] | None = None,
-                 eof: bool = True, backlog: int = 0, gone: bool = False) -> None:
+                 eof: bool = True, reset_at: float | None = None, backlog: int = 0, gone: bool = False) -> None:
         self.link, self.clock, self.backlog, self.gone = link, clock, backlog, gone
         self.reader = asyncio.StreamReader()
         self.writes: list[tuple[int, bytes]] = []
         self.eof_at: int | None = None
         self.closed_at: int | None = None
         self.transport = self
-        self.feeder = asyncio.create_task(self._feed(frames, at, eof))
+        self.feeder = asyncio.create_task(self._feed(frames, at, eof, reset_at))
         self.task = asyncio.create_task(link.handle(self.reader, self))
 
-    async def _feed(self, frames: list[bytes], at: list[float] | None, eof: bool) -> None:
+    async def _feed(self, frames: list[bytes], at: list[float] | None, eof: bool, reset_at: float | None) -> None:
         for i, f in enumerate(frames):
             if at is not None:
                 await self.clock.sleep(at[i] - self.clock())
             self.reader.feed_data(f)
-        if eof:
+        if reset_at is not None:
+            await self.clock.sleep(reset_at - self.clock())
+            self.reader.set_exception(ConnectionResetError("reset by peer"))
+        elif eof:
             self.reader.feed_eof()
 
     def write(self, data: bytes) -> None:
@@ -306,7 +307,7 @@ def test_an_honest_session_passes_with_its_coins_exempt_and_every_other_frame_co
     assert s["charge_bits"][COINS]["content"] == 8 * (len(frame(heads[0])) + len(frame(heads[4])))
     assert s["requests"] == {"frames": 5, "bytes": sum(len(f) for f in honest_frames(ASKS))}
     assert s["buckets"] == PARAMS.window and s["charge_bits"][COINS]["timing"] == PARAMS.window * math.log2(3)
-    assert [e["cut"] for e in s["connections"]] == [False] and s["late"]["ticks"] == 0
+    assert [(e["cut"], e["errors"]) for e in s["connections"]] == [(False, {})] and s["late"]["ticks"] == 0
     for writes, r, grid in ((prover.writes, PARAMS.coin_cells, COINS), (conn.writes, PARAMS.request_cells, REQUESTS)):
         sizes = by_tick(writes)
         assert all(n % B == 0 and n <= r * B for n in sizes.values()) and len(sizes) == len(writes)
@@ -377,7 +378,7 @@ def test_a_frame_of_another_kind_or_form_is_counted_by_name():
     counts = {k: v["frames"] for k, v in link.summary()["counted"].items()}
     assert counts == {"commitment": 1, "non-canonical": 1, "other": 1, "unverified": 1, "malformed": 1, "closed": 1}
     assert link.summary()["coins"]["frames"] == 0 and set(counts) <= set(COUNTED)
-    assert [h.get("type") for h in wire_heads(prover.received())[:4]] == ["commitment", "opening", "note", "opening"]
+    assert [h.get("type") for h in wire_heads(prover.received(), 4)] == ["commitment", "opening", "note", "opening"]
 
     link, _, _ = session([{"frames": [frame(HELLO)], "eof": False}], stop_at=6,
                          answers={(0, 0): [frame({"type": "commitment", "commitment": coins.commitment.to_json()}),
@@ -470,6 +471,15 @@ def test_a_late_tick_faults_the_window_and_an_unreachable_challenger_sends_nothi
     link, (prover,), ch = session([{"frames": honest_frames(ASKS)}], refuse=True)
     assert prover.writes == [] and prover.closed_at is not None and ch.conns == []
     assert link.log[0]["unreachable"].startswith("ConnectionRefusedError") and link.summary()["complete"]
+
+
+def test_a_connection_reset_ends_its_side_and_its_entry_names_it():
+    """A prover whose connection resets once its frames are in ends its side as an end of stream would: the challenger
+    still gets every frame and the end, the prover every answer, and the connection's entry names the error."""
+    link, (prover,), ch = session([{"frames": honest_frames(ASKS), "reset_at": 0.5}])
+    assert [h["type"] for h in wire_heads(prover.received())] == ["commitment", "opening", "opening", "opening", "closed"]
+    assert ch.conns[0].got_eof and link.summary()["complete"]
+    assert link.log[0]["errors"] == {"prover": "ConnectionResetError"} and not link.log[0]["cut"]
 
 
 def test_the_parameters_are_d7s_by_default_and_bound_by_their_digest():
