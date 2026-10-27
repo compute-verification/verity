@@ -11,14 +11,17 @@ is at the finders only where the registrant's leaves are the registered ones (`r
 `SampledKSLiveV2` states it under `verify --zk --registered F` (`ZkReg.LiveAcceptsZKR`), with `SampledKSLivePub`'s
 claims' values: at each registered read the registrant's row's bit, where the registrant's leaves are the registered
 ones (`¬ rd.Off`) or the verifier owns the registered reads at the outcome's draw (`ZkReg.OwnReadsHJ`), and elsewhere
-the evaluation on the extracted plurality's inputs. At an accepted outcome every port of each table's circuit is one of
-F's registered ports (`ZkReg.complete_of_R`, `verify`'s `checkComplete`). Its bound is `SampledKSLiveV2Z`'s, its rows
-term read where `¬ rd.Off`, plus the registered reads' finder's probability of outputting a SHA-512 collision
-(`Registered.ReadsX.pick` through the registered check's paths, at one play of the audit). `sampledKSLiveV2_of` proves it
-from `Bridge.SampledKSLiveXr` and `SampledKSLiveV2Z`, as `sampledKSLivePub_of` does: the registered reads' leaves are the
-public file's at every registration, so `rd.Off` is one proposition. Where it holds, an accepted outcome whose reads the
-verifier owns gives a collision at an off read (`checked_of_acceptsHJ`, `Registered.ReadsX.offAt_conflict`), and the
-claims at every other outcome are `Bridge.SampledKSLiveXr`'s; where it fails, the claims are `SampledKSLiveV2Z`'s.
+the evaluation on the extracted plurality's inputs. At an accepted outcome every port of each table's circuit is one
+of F's registered ports (`ZkReg.complete_of_R`, `verify`'s `checkComplete`); which rows the claims read at the
+registrant's is `rd.isRead`, which the statement ranges over. Its bound is `SampledKSLiveV2Z`'s, its rows term read
+where `¬ rd.Off`, plus the registered reads' finder's probability of outputting a SHA-512 collision
+(`Registered.ReadsX.pick` through the registered check's paths, at one play of the audit).
+
+`sampledKSLiveV2_of` proves it from `Bridge.SampledKSLiveXr` and `SampledKSLiveV2Z`, as `sampledKSLivePub_of` does: the
+registered reads' leaves are the public file's at every registration, so `rd.Off` is one proposition. Where it holds,
+an accepted outcome whose reads the verifier owns gives a collision at an off read (`checked_of_acceptsHJ`,
+`Registered.ReadsX.offAt_conflict`), and the claims at every other outcome are `Bridge.SampledKSLiveXr`'s; where it
+fails, the claims are `SampledKSLiveV2Z`'s. `sampledKSLiveV2_le_pub`: V2's bound is at most `SampledKSLivePub`'s.
 
 `SampledKSLiveV3` reads V2's file hypotheses off acceptance (`Bridge.LiveAcceptsKSR`, `Bridge.RunPopOk`), as
 `Refused` describes.
@@ -135,8 +138,8 @@ def SampledKSLiveV2 : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω *
             (linkFinderPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) p k Rw M +
               1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ)) +
-        rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun c => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ
-          (reg σ) (cont σ) +
+        rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+          (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ (reg σ) (cont σ) +
         ENNReal.ofReal (BR.Pr Claims.Sampling.sha512Msg)
 
 open Classical FlockSoundness.Discharge.ZkReg in
@@ -204,7 +207,7 @@ theorem sampledKSLiveV2_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2Z)
       have hB : prob (fun o => StrictCR.IsColl H512 (pk o)) G τ = ENNReal.ofReal (BR.Pr Claims.Sampling.sha512Msg) := by
         rw [← heq, ENNReal.ofReal_toReal hfin']
       exact hle.trans hB.le
-    have hnr : (fun c => ¬ rd.Off (reg σ) ∧ rd.isRead c) = fun _ => False :=
+    have hnr : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = fun _ => False :=
       funext fun c => propext ⟨fun h => h.1 hoff, False.elim⟩
     rw [hnr, rowsPrZC_noReads, add_zero]
     exact (prob_mono hsub G τ).trans ((prob_or_le _ _ G τ).trans (add_le_add (hXr.trans le_rfl) hreg))
@@ -229,7 +232,7 @@ theorem sampledKSLiveV2_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2Z)
         · exact (if_pos (And.intro (Or.inl (hno o)) h)).trans (if_pos h).symm
         · exact (if_neg (not_and_of_not_right _ h)).trans (if_neg h).symm
     rwa [hv] at hrel
-  have hon : (fun c => ¬ rd.Off (reg σ) ∧ rd.isRead c) = rd.isRead :=
+  have hon : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = rd.isRead :=
     funext fun c => propext ⟨And.right, fun h => ⟨hoff, h⟩⟩
   rw [hon]
   exact (prob_mono hsub G τ).trans (hVi.trans le_self_add)
@@ -320,8 +323,8 @@ def SampledKSLiveV3 : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω *
             (linkFinderPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) p k Rw M +
               1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ)) +
-        rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun c => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ
-          (reg σ) (cont σ) +
+        rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+          (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ (reg σ) (cont σ) +
         ENNReal.ofReal (BR.Pr Claims.Sampling.sha512Msg)
 
 /-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at files that pass the verifiers' checks they give V2's hypotheses
@@ -343,6 +346,146 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
         ρ hρ hr K₀ hK₀ τ qR q)
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨ho.1.1.2, ho.1.2⟩) _ τ).trans
       ((prob_false _ τ).le.trans zero_le)
+
+open Classical FlockSoundness.Discharge.ZkReg in
+/-- **`SampledKSLiveV2`'s bound is at most `SampledKSLivePub`'s**, at a rate cap `ρ < 1` with `rateM1 k ≤ ρ`, with no
+hash premise: at `p = K·Pr[B^τ]` every member of `B^τ` succeeds with probability at most `p` (`pubFamR_le`), so V2's
+first three terms are at most `δ + f(J²p)` (`Bridge.boundPr_le_pub_of`), its registered reads' finder, one of `B^τ`'s
+members, at most `p`, and its rows term `0` where `rd.Off` and at most `W·(p + k/(eR_w))/(1 − ρ)` where not
+(`rowsPrZC_le_pr`, `rowsFinderPrZC_le_mix`, `qs_le_io`). It reads none of V2's hypotheses on the files. -/
+theorem sampledKSLiveV2_le_pub :
+  ∀ (n : ℕ) (Reg : Type) (own : Array Flock.Registered.Port)
+    (I : Inputs) (ht : I.tags.typed = false)
+    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
+    (hscope : Discharge.Layout.scopeOkH D.unroll = true)
+    (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (rd : FlockSoundness.Registered.ReadsX
+      (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
+      (Discharge.ZkReg.rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub))
+    (wr : (S : Finset (Fin n)) → (R : Reg) →
+      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
+    (hTags : TagsOkZHJ I)
+    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
+    (k Rw M : ℕ) (_hRw : 1 ≤ Rw) (ρ : ℝ) (_hρ : ρ < 1) (_hρk : rateM1 k ≤ ρ) (t' : ℝ) (K₀ : ℕ)
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (v qR : ℝ),
+    let L := Law.execOS (n := n) src (.subset kd) n
+    let G := auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)
+    let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
+    let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
+      (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let wo : vb.Pos → vb.Opening := fun p => ((p, rd.wv p, rd.ws p) : vb.Opening)
+    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+        (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
+          hCust.1
+          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+    let BR := Bridge.strictComp (StrictCR.oneRun G τ fun o =>
+        rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR
+    let B := Bridge.pubFinderR dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) BR
+    ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
+        ksAvgPrZ execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) +
+        ENNReal.ofReal ((∑ p : vb.Pos,
+            (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω *
+            (linkFinderPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) p k Rw M +
+              1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ)) +
+        rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+          (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ (reg σ) (cont σ) +
+        ENNReal.ofReal (BR.Pr Claims.Sampling.sha512Msg) ≤
+      ENNReal.ofReal (Bridge.deltaPubR n kd K₀ k M Rw (Bridge.ioSum P) ρ +
+        Bridge.lossPubR k (Bridge.ioSum P) ρ
+          ((nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIxR dj y₀ P vb L) * B.Pr Claims.Sampling.sha512Msg)) := by
+  intro n Reg own I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M
+    hRw ρ hρ hρk t' K₀ τ v qR L G P vb wo σ BR B
+  have h1ρ : 0 < 1 - ρ := sub_pos.2 hρ
+  rw [mul_assoc ((nTab I : ℝ) ^ 2)]
+  have hfamR : ∀ i, (Bridge.pubFamR dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) BR i).Pr
+      Claims.Sampling.sha512Msg ≤ (Fintype.card (Bridge.PubIxR dj y₀ P vb L) : ℝ) * B.Pr Claims.Sampling.sha512Msg :=
+    Bridge.pubFamR_le dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) _
+  have hp0 : (0 : ℝ) ≤ Fintype.card (Bridge.PubIxR dj y₀ P vb L) * B.Pr Claims.Sampling.sha512Msg :=
+    mul_nonneg (Nat.cast_nonneg _) (Claims.Pr_nonneg _)
+  generalize (Fintype.card (Bridge.PubIxR dj y₀ P vb L) : ℝ) * B.Pr Claims.Sampling.sha512Msg = p at hfamR hp0 ⊢
+  have hbase := Bridge.boundPr_le_pub_of (K₀ := K₀) dj y₀ P vb hkd hρ hρk (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)
+    hp0 (Bridge.pubFam_le_R dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) _ hfamR)
+  have hJ1 : (1 : ℝ) ≤ nTab I := by exact_mod_cast nTab_pos I
+  have hJ0 : (0 : ℝ) ≤ nTab I := by linarith
+  have hpJ : p ≤ (nTab I : ℝ) ^ 2 * p := by
+    calc p = 1 * (1 * p) := by ring
+      _ ≤ (nTab I : ℝ) * ((nTab I : ℝ) * p) :=
+          mul_le_mul hJ1 (mul_le_mul_of_nonneg_right hJ1 hp0) (by linarith) hJ0
+      _ = (nTab I : ℝ) ^ 2 * p := by ring
+  set x := (nTab I : ℝ) ^ 2 * p with hx
+  have hx0 : 0 ≤ x := hp0.trans hpJ
+  have hA0 : 0 ≤ Bridge.deltaPub n kd K₀ k M Rw (Bridge.ioSum P) ρ + Bridge.lossPub k (Bridge.ioSum P) ρ x :=
+    add_nonneg (Bridge.deltaPub_nonneg _ _ _ _ _ _ _ hρ) (Bridge.lossPub_nonneg _ _ hρ hx0)
+  have hWk : 0 ≤ (Bridge.ioSum P : ℝ) * (k / (Real.exp 1 * Rw)) / (1 - ρ) :=
+    div_nonneg (mul_nonneg (Nat.cast_nonneg _) (by positivity)) h1ρ.le
+  have hWx : 0 ≤ (Bridge.ioSum P : ℝ) * x / (1 - ρ) := div_nonneg (mul_nonneg (Nat.cast_nonneg _) hx0) h1ρ.le
+  have hfin : ∀ y : ℝ, 0 ≤ y →
+      y ≤ (Bridge.ioSum P : ℝ) * (k / (Real.exp 1 * Rw)) / (1 - ρ) + (Bridge.ioSum P : ℝ) * x / (1 - ρ) + x →
+      ENNReal.ofReal (Bridge.deltaPub n kd K₀ k M Rw (Bridge.ioSum P) ρ + Bridge.lossPub k (Bridge.ioSum P) ρ x) +
+          ENNReal.ofReal y ≤
+        ENNReal.ofReal (Bridge.deltaPubR n kd K₀ k M Rw (Bridge.ioSum P) ρ +
+          Bridge.lossPubR k (Bridge.ioSum P) ρ x) := by
+    intro y hy hle
+    rw [← ENNReal.ofReal_add hA0 hy]
+    refine ENNReal.ofReal_le_ofReal ?_
+    unfold Bridge.deltaPubR Bridge.lossPubR
+    linarith
+  have hBR : ENNReal.ofReal (BR.Pr Claims.Sampling.sha512Msg) ≤ ENNReal.ofReal x :=
+    ENNReal.ofReal_le_ofReal ((hfamR (some (.inr (.inr (.inr ()))))).trans hpJ)
+  by_cases hoff : rd.Off (reg σ)
+  · have hnr : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = fun _ => False :=
+      funext fun c => propext ⟨fun h => h.1 hoff, False.elim⟩
+    rw [hnr, rowsPrZC_noReads, add_zero]
+    exact (add_le_add hbase hBR).trans (hfin x hx0 (by linarith))
+  have hon : ∀ c, rd.isRead c → vb.com (wo c) = vb.cs (reg σ) c := by
+    intro c hc
+    have hl : (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub)).regLeaf (reg σ) c =
+        rd.leaf c := by
+      by_contra h
+      exact hoff ⟨c, hc, h⟩
+    refine Prod.ext rfl ?_
+    show FlockSoundness.Binding.ExplicitLeaf.leaf (FlockSoundness.Discharge.ZkBind.HmRowsZX.scheme
+      (rsZHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub) c) (rd.wv c) (rd.ws c) = _
+    unfold FlockSoundness.Discharge.ZkBind.HmRowsZX.scheme
+    split_ifs with hrow
+    · exact hl.symm
+    · exact absurd (rd.read_row c hc) hrow
+  have hQs : ∑ c : vb.Pos, (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L c) : ℝ) /
+      Fintype.card L.Ω ≤ (Bridge.ioSum P : ℝ) :=
+    qs_le_io execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L (Bridge.ioSum P) fun ω =>
+      Finset.sum_le_sum_of_subset (Finset.subset_univ _)
+  have hkR : (0 : ℝ) ≤ k / (Real.exp 1 * Rw) := by positivity
+  have hrowsB : rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo k ρ (reg σ) (cont σ) ≤
+      ENNReal.ofReal ((Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ)) := by
+    refine (rowsPrZC_le_pr execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo (reg σ) (cont σ) hRw hρ
+      hon).trans ?_
+    refine ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right ?_ h1ρ.le)
+    refine le_trans ?_ (mul_le_mul_of_nonneg_right hQs (add_nonneg hx0 hkR))
+    rw [Finset.sum_mul]
+    exact Finset.sum_le_sum fun c _ => mul_le_mul_of_nonneg_left
+      (by linarith [Bridge.rowsFinderPrZC_le_mix dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) _ hp0
+            hfamR c]) (by positivity)
+  have hiso : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = rd.isRead :=
+    funext fun c => propext ⟨And.right, fun h => ⟨hoff, h⟩⟩
+  rw [hiso]
+  have hy1 : 0 ≤ (Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ) :=
+    div_nonneg (mul_nonneg (Nat.cast_nonneg _) (add_nonneg hx0 hkR)) h1ρ.le
+  have hsum : ENNReal.ofReal ((Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ)) + ENNReal.ofReal x =
+      ENNReal.ofReal ((Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ) + x) :=
+    (ENNReal.ofReal_add hy1 hx0).symm
+  have e : (Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ) + x =
+      (Bridge.ioSum P : ℝ) * (k / (Real.exp 1 * Rw)) / (1 - ρ) + (Bridge.ioSum P : ℝ) * x / (1 - ρ) + x := by ring
+  refine ((add_le_add (add_le_add hbase hrowsB) hBR).trans_eq (add_assoc _ _ _)).trans ?_
+  rw [hsum]
+  exact hfin _ (add_nonneg hy1 hx0) e.le
 
 end Flock.Guarantees
 
