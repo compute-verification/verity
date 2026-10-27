@@ -177,8 +177,9 @@ namespace Deployment
 variable {V : Vocab d α} {In L Srv ιP Act : Type} [Fintype Srv] {B : ℕ} (D : Deployment V In L Srv ιP Act B)
 
 theorem inWindow_subset (x : In) (ws : List (Window V × Outcome)) (i : Fin B) :
-    D.inWindow x ws i ⊆ (D.prods x ws).J :=
-  fun _ hp => (Finset.mem_filter.1 hp).1
+    D.inWindow x ws i ⊆ (D.prods x ws).J := by
+  classical
+  exact fun _ hp => (Finset.mem_filter.1 hp).1
 
 /-- A window that opens at or after its server's busy time ends materializes nothing. -/
 theorem inWindow_eq_empty (x : In) (ws : List (Window V × Outcome)) (i : Fin B)
