@@ -91,8 +91,8 @@ class BandParams:
     def call_ns(self) -> int:
         """The fastest whole call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
         (`primitives.pi2_keccak_f`).  The ideal-permutation model's unit of time; at the reference Feistel-SHAKE256
-        `Π₂` an adversary answers without completing a call, from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026,
-        art:7617c8017e80)."""
+        `Π₂` an adversary answers without completing a call, from 1.53% of `C` in 481 Keccak-f (the red team's
+        resume attack)."""
         return pi2_call_ns(SECURE_FIRST.m)
 
     def parents(self, v: int) -> range:
@@ -114,7 +114,7 @@ SECURE_FIRST = BandParams(512, 524_288, 12)
 `D = 5` calls of at least 241.5 µs with `k = 111` (`Pous.SecurityProofs.BandChainMeets64D12`, with no hypothesis), so
 in the ideal-permutation model `Δ + RTT < 1.449` ms.  The cliff is at an effective `D` of 13: 13 call-times, 3.1395 ms,
 must exceed `Δ + RTT`.  Neither bounds an adversary at the reference Feistel-SHAKE256 `Π₂`, which rebuilds a label from
-1.53% of `C` in 481 Keccak-f, about 24 µs (red team, 4 Oct 2026, art:7617c8017e80)."""
+1.53% of `C` in 481 Keccak-f, about 24 µs (the red team's resume attack)."""
 
 
 def _checked(d: int, fn):
