@@ -136,12 +136,17 @@ structure WipeLive {ι : Type} (d : Device ι) (O : Type) where
   fill_le : fill ≤ d.mem
   /-- the memory challenger's verdict on the wipe -/
   accepts : O → Prop
+  /-- the foreign bits the wipe's verdict publishes: the streamed wipe's `foreign_bits`, the fill's share plus the
+  egress the network certifier counted -/
+  foreignBits : O → ℕ
   /-- the bits of foreign content beyond the committed carried state that survive the wipe into the block -/
   kept : O → ℕ
 
-/-- **The wipe's survivor bound** at fraction `f`, on the run `o`: `BlockWipe.Survives`' bound. -/
-def WipeLive.Survives {ι : Type} {d : Device ι} {O : Type} (w : WipeLive d O) (f : ℝ) (o : O) : Prop :=
-  (w.kept o : ℝ) ≤ f * w.fill + 2 * 128 + (d.chip + (d.mem - w.fill))
+/-- **The wipe's survivor bound** on the run `o`, `BlockWipe.Survives`' bound: at most the foreign bits the verdict
+publishes survive, plus the state the fill leaves out (the on-chip state and the device memory the fill doesn't
+reach). -/
+def WipeLive.Survives {ι : Type} {d : Device ι} {O : Type} (w : WipeLive d O) (o : O) : Prop :=
+  w.kept o ≤ w.foreignBits o + (d.chip + (d.mem - w.fill))
 
 /-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
 the wipe that opens it, the bits of weights its PoUS store holds, its PoUS challenge times on the run, and the read
