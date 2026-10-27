@@ -1,5 +1,5 @@
 import Definitions.Pouw.Assumptions.Dimension.H100W
-import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
+import Proofs.Pouw.Defs.Assumptions.Dimension.H100LoopFree
 
 /-!
 # `MH100`'s floor table, and the distinct-writes bound for citing the hardware (trusted statements; draft semantics)

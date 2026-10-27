@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Dense
+import Proofs.Pouw.Defs.Assumptions.Dimension.H100Dense
 import Proofs.Pouw.Dimension.H100WProofs
 
 /-!

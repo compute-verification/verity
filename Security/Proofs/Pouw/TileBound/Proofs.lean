@@ -1,4 +1,4 @@
-import Definitions.Pouw.TileBound.Defs
+import Proofs.Pouw.Defs.TileBound.Defs
 
 /-!
 # The FP4-tile model: the block-support count and what it bounds (proofs)

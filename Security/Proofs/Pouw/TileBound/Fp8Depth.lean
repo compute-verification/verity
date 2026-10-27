@@ -1,6 +1,6 @@
-import Definitions.Pouw.TileBound.Defs
+import Proofs.Pouw.Defs.TileBound.Defs
 import Mathlib.Tactic.IntervalCases
-import Definitions.Pouw.TileBound.Fp8Defs
+import Proofs.Pouw.Defs.TileBound.Fp8Defs
 
 /-!
 # When a ⟨2,2,2⟩ recursion could pay at E4M3, and the output region it needs (the TT_OUT restatements lane)

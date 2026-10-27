@@ -1,8 +1,7 @@
-import Definitions.Pouw.NCP.Pinned
+import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 import Definitions.Pouw.NCP.Protocol
 import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
-import Definitions.Pouw.Assumptions.NCP.RouteUGame
 import Definitions.Pouw.Assumptions.NCP.RouteUWord
 
 /-!

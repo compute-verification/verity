@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Floor
+import Proofs.Pouw.Defs.Assumptions.Dimension.H100Floor
 
 /-!
 # A citation with no measurement at `tc` (trusted statements; draft semantics)

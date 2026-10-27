@@ -1,5 +1,5 @@
 import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
+import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutChainOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 import Proofs.Pouw.PearlC.TTOutW1

@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Dense
+import Proofs.Pouw.Defs.Assumptions.Dimension.H100Dense
 
 /-!
 # Computed fragments in the k8 lemma (trusted statements; draft semantics)

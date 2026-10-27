@@ -1,5 +1,5 @@
 import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
-import Definitions.Pouw.Assumptions.Dimension.RouteU
+import Proofs.Pouw.Defs.Assumptions.Dimension.RouteU
 
 /-!
 # The closed pipe's named assumptions on route U

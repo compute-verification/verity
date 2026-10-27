@@ -1,6 +1,6 @@
 import Definitions.Pouw.Assumptions.Dimension.Pipe
-import Definitions.Pouw.Assumptions.Dimension.RouteU
-import Definitions.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
+import Proofs.Pouw.Defs.Assumptions.Dimension.RouteU
+import Proofs.Pouw.Defs.Assumptions.Dimension.RouteUPipeAssumptions
 
 /-!
 # `A1_cost` in the closed scalar pipe on route U (trusted statements)

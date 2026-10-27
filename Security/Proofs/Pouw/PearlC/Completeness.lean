@@ -1,6 +1,6 @@
-import Definitions.Pouw.PearlC.Completeness
+import Proofs.Pouw.Defs.PearlC.Completeness
 import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.Assumptions.PearlC.HonestCap
+import Proofs.Pouw.Defs.Assumptions.PearlC.HonestCap
 import Proofs.Pouw.PearlC.HonestWords
 import Proofs.Pouw.Copy
 

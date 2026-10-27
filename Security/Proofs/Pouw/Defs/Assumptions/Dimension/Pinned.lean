@@ -1,6 +1,6 @@
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Assumptions.Dimension.Assumptions
-import Definitions.Pouw.Assumptions.NCP.Chain
+import Proofs.Pouw.Defs.Assumptions.NCP.Chain
 
 /-!
 # Theorem D's residue: pinned statements (trusted)

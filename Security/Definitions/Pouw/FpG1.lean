@@ -1,5 +1,5 @@
 import Definitions.Pouw.FpG1.Encoding
-import Definitions.Pouw.FpG1.Gemm
+import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.FpG1.H1
 
 /-! FPX-DESIGN's FP8-g1 and W4A8-g1 (note:20261019T0817Z-report-fpx-design): the operand encodings on E4M3's and

@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Dimension.RouteUPipe
+import Proofs.Pouw.Defs.Assumptions.Dimension.RouteUPipe
 import Proofs.Pouw.Dimension.PipeProofs
 import Proofs.Pouw.Dimension.ForestProofs
 import Proofs.Pouw.Dimension.RouteUProofs

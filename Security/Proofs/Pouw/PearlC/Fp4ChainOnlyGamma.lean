@@ -1,5 +1,5 @@
 import Proofs.Pouw.PearlC.Fp4IssueGamma
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
+import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutFp4ChainOnly
 import Definitions.Pouw.Guarantees.PearlC
 
 /-!

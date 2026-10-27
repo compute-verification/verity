@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutFp4
 import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 
 /-!

@@ -1,5 +1,5 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Frag
-import Definitions.Pouw.Assumptions.Dimension.H100Measured
+import Proofs.Pouw.Defs.Assumptions.Dimension.H100Frag
+import Proofs.Pouw.Defs.Assumptions.Dimension.H100Measured
 
 /-!
 # How the H100 pins are cited (trusted statements; draft semantics)

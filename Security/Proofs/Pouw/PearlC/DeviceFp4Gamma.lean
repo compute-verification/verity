@@ -1,5 +1,5 @@
 import Proofs.Pouw.PearlC.TileGamma
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutFp4
 
 /-!
 # γ at an FP4 record, and Pearl-C4's headline on sm_120 (the FP8 Lean lane's file; staged, nothing pinned)

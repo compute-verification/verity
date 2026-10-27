@@ -1,4 +1,4 @@
-import Definitions.Pouw.Dimension.Causal
+import Proofs.Pouw.Defs.Dimension.Causal
 import Proofs.Pouw.Dimension.Proofs
 
 /-!

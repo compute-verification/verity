@@ -1,6 +1,6 @@
 import Definitions.Pouw.Assumptions.Dimension.Assumptions
 import Definitions.Pouw.Assumptions.Dimension.Mixing
-import Definitions.Pouw.Dimension.Causal
+import Proofs.Pouw.Defs.Dimension.Causal
 import Definitions.Pouw.Assumptions.NCP.RouteUWord
 
 /-!

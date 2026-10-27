@@ -1,4 +1,4 @@
-import Definitions.Pouw.NCP.Pinned
+import Proofs.Pouw.Defs.NCP.Pinned
 import Proofs.Pouw.Exact
 import Definitions.Pouw.Guarantees.NCP
 

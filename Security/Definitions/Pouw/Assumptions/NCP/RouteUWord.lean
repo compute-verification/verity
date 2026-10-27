@@ -1,4 +1,5 @@
-import Definitions.Pouw.Assumptions.NCP.Chain
+import Definitions.Pouw.NCP.Relation
+import Definitions.Pouw.Assumptions.NCP.GamePinned
 import Definitions.Pouw.NCP.RouteU
 
 /-!

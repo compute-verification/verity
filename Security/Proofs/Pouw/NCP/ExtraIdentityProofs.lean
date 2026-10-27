@@ -1,4 +1,4 @@
-import Definitions.Pouw.NCP.ExtraIdentity
+import Proofs.Pouw.Defs.NCP.ExtraIdentity
 import Proofs.Pouw.NCP.GameProofs
 
 /-!

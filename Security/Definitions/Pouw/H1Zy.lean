@@ -4,7 +4,6 @@ import Definitions.Pouw.H1Zy.CombineBits
 import Definitions.Pouw.H1Zy.Dequant
 import Definitions.Pouw.H1Zy.Lane
 import Definitions.Pouw.H1Zy.LaneBits
-import Definitions.Pouw.H1Zy.Stream
 import Definitions.Pouw.H1Zy.Tile
 import Definitions.Pouw.H1Zy.LaneChunk
 

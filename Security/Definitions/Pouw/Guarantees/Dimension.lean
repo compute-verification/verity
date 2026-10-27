@@ -1,7 +1,5 @@
 import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
-import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
-import Definitions.Pouw.Assumptions.Dimension.H100Measured
 
 /-!
 # The dimension argument's guarantee (trusted)

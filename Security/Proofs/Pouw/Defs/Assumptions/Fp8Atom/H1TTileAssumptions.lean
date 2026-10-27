@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TTile
+import Proofs.Pouw.Defs.Assumptions.Fp8Atom.H1TTile
 
 /-!
 # H-1T's per-tile count statement (a named assumption)

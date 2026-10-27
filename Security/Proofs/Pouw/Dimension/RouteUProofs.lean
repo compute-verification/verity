@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Dimension.RouteU
+import Proofs.Pouw.Defs.Assumptions.Dimension.RouteU
 import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.CausalProofs

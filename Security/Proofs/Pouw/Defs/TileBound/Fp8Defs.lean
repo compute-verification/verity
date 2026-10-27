@@ -1,4 +1,4 @@
-import Definitions.Pouw.TileBound.Defs
+import Proofs.Pouw.Defs.TileBound.Defs
 
 /-!
 # The FP8-tile model at sm_120's E4M3 atom (trusted definitions)

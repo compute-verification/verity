@@ -1,4 +1,4 @@
-import Definitions.Pouw.H1Zy.Stream
+import Proofs.Pouw.Defs.H1Zy.Stream
 import Proofs.Pouw.H1Zy.Tile
 
 /-!

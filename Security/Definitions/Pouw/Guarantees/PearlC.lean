@@ -28,16 +28,13 @@ import Definitions.Pouw.PearlC.Skip
 import Definitions.Pouw.PearlC.SkipP
 import Definitions.Pouw.PearlC.Sm120
 import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
 import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.PearlC.DeviceChainOnly
 import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 import Definitions.Pouw.PearlC.DevicePrices
 import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 
 /-!

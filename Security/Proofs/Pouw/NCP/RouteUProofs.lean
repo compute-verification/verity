@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.NCP.RouteUGame
+import Proofs.Pouw.Defs.Assumptions.NCP.RouteUGame
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.NCP.ChainProofs
