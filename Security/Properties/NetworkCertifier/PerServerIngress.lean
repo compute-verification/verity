@@ -31,8 +31,8 @@ every prover:
 `max_tokens` and `seed` 32 each, `temperature` and `top_p` 24 each, `model` and `user` 406 each), and its prompt ids
 (`K0 + (C − 1)·K` of `IDB` bits); `bucketBits` is each lane's block, absent or `d ≤ r` data cells then padding. A faulty
 ingress unit's `ok` is the prover's: its bucket's whole row enters, and its forged state lets each lane carry two
-requests more (`faultyIngressBits`). At w63 (T = 32, D = 27) a request is 36,382 bits, a bucket 12, a window 291,440,
-and a faulty ingress unit 356,592.
+requests more (`faultyIngressBits`). At `W63` of `benchmarks/network_traces/scan_zk.py` (T = 32, D = 27) a request is
+36,382 bits, a bucket 12, a window 291,440, and a faulty ingress unit 356,592.
 
 **What it reads.** The soundness reads the check of record through `AnswersOfRecord` (an accepted window's answer is
 the sampled verifier's acceptance of that window's statement on that window's coins), and each window's statement
@@ -43,9 +43,9 @@ openings), and `ScanCountsRequests`, the count of one window's frame streams the
 class's Program checked by enumeration at toy classes. Each window's prover may read every other window's coins
 (`WindowTape`), so the period's provers may be adaptive.
 
-**The form.** The rows form accepts a window only on a `verity/registration/v2` answer. Until v2's members form lands
-(PRF-224), the rows form's acceptance is unreachable on #4873's head, so `PerServerIngress` holds there vacuously;
-`PerServerIngressHonest` reads acceptance through `HonestWindowsAccepted`, which v2 answers give once PRF-224 lands.
+**The form.** The rows form accepts a window only on a `verity/registration/v2` answer, and until `rowsWindowCheck`
+accepts v2's members form no answer reaches it, so `PerServerIngress` holds vacuously; `PerServerIngressHonest` reads
+acceptance through `HonestWindowsAccepted`, which v2 answers give once it does.
 -/
 
 namespace Properties.NetworkCertifier
@@ -107,8 +107,8 @@ def faultyIngressBits (s : Schedule) (cls : ScanClass) : ℕ :=
   8 * s.cellBytes * s.allocation + 2 * s.lanes * requestBits s cls
 
 open Classical in
-/-- **The faulty set's ingress units**: `F`'s units that hold a gate the scan checks or a gate of its rows. A faulty unit
-that holds neither (an egress unit) frees no ingress. -/
+/-- **The faulty set's ingress units**: `F`'s units that hold a gate the scan checks or a gate of its rows. A faulty
+unit that holds neither (an egress unit) frees no ingress. -/
 noncomputable def faultyIngress {S : ℕ} (P : Partition) (lay : Layout 1 S) (k : ℕ) (ok : List ℕ) (F : Finset ℕ) :
     ℕ :=
   (F.filter fun v => ∃ g ∈ RU.gates (P.rus.getD v []), g ∈ ok ∨ ∃ t < k, g ∈ lay.ingress t).card
@@ -154,13 +154,12 @@ def ScanDeclared {S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : Layout
     (∀ e ∈ links, a e.1 = valOver C (lay.inputOf k ins a) free e.2) ∧
     ∀ g ∈ ok, valOver C (lay.inputOf k ins a) free g = true}
 
-/-- **The openings the verifier holds pass** (named assumption, sampled proofs): each of `ops` passes under the
-statement's roots. -/
+/-- **The openings the verifier holds pass** (named assumption): each of `ops` passes under the statement's roots. -/
 def OpensPass (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
   ∀ q ∈ ops, Cm.Opens H st.roots q = true
 
-/-- **The warden registers the window's rows** (named assumption, network accounting; `trusted-nebius-host`, as
-`TapOpens`): the window is `T` rows, and every ingress gate of its steps has an opening in `ops`, whose value is that
+/-- **The warden registers the window's rows** (named assumption; `trusted-nebius-host`, as `TapOpens`): the window
+is `T` rows, and every ingress gate of its steps has an opening in `ops`, whose value is that
 bit of the rows `ins`. -/
 def WardenRowsOpen (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) (ins : List (List Bool)) : Prop :=
   ins.length = s.window ∧
@@ -168,16 +167,16 @@ def WardenRowsOpen (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) (ins :
       ∀ j g, ((layOf s st).ingress t)[j]? = some g →
         (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = (ins.getD t []).getD j false
 
-/-- **Every bucket's `ok` opens to 1** (named assumption, sampled proofs: the verifier opens each unit's `o0` and
-requires 1): every `ok` gate has an opening in `ops`, of value 1, and is no constant 0 (as `TapOpens` reads a constant
-gate's opening). -/
+/-- **Every bucket's `ok` opens to 1** (named assumption: the sampled verifier opens each unit's `o0` and requires
+1): every `ok` gate has an opening in `ops`, of value 1, and is no constant 0 (as `TapOpens` reads a constant gate's
+opening). -/
 def OkOpens (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
   ∀ g ∈ (checksOf s st).1, (∀ b, st.prog.gates[g]? = some (.const b) → b = true) ∧ (∃ q ∈ ops, q.pos = g) ∧
     tapVal ops g = true
 
-/-- **The state chain opens as one value** (named assumption, sampled proofs: the registered read of the previous
-bucket's state, which the Claims model has no form for): both ends of every state link have an opening in `ops`, of one
-value, and a written end that is a constant opens to it (as `TapOpens` reads a constant gate's opening). -/
+/-- **The state chain opens as one value** (named assumption: the registered read of the previous bucket's state,
+which the Claims model has no form for): both ends of every state link have an opening in `ops`, of one value, and a
+written end that is a constant opens to it (as `TapOpens` reads a constant gate's opening). -/
 def ChainOpens (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
   ∀ e ∈ (checksOf s st).2, (∃ q ∈ ops, q.pos = e.1) ∧ (∃ q ∈ ops, q.pos = e.2) ∧ tapVal ops e.1 = tapVal ops e.2 ∧
     ∀ b, st.prog.gates[e.2]? = some (.const b) → tapVal ops e.2 = b
@@ -221,7 +220,7 @@ def cellsOf (s : Schedule) (bits : List Bool) : List (List Bool) :=
 def frameStream (s : Schedule) (ins : List (List Bool)) : List (List Bool) :=
   ins.flatMap fun row => (cellsOf s row).filter fun c => c.any id
 
-/-- **The warden's record holds cells** (named assumption, network accounting): every frame it releases on the requests'
+/-- **The warden's record holds cells** (named assumption): every frame it releases on the requests'
 link is one cell, `8B` bits, and not all zero, so padding is the zero cell. -/
 def RecordsCells {K S : ℕ} (s : Schedule) (o : List (Obs 1 K S)) : Prop :=
   ∀ y ∈ o, ∀ σ c, y.rows 0 σ = some c → c.length = 8 * s.cellBytes ∧ c.any id = true
@@ -232,7 +231,13 @@ noncomputable def scanBound (s : Schedule) (cls : ScanClass) (st : Stmt) (P : Pa
   ∑ F ∈ faultySets st.design P δ,
     2 ^ (faultyIngress P (layOf s st) s.window (checksOf s st).1 F * faultyIngressBits s cls + windowBits s cls)
 
-/-- **The scan counts requests** (named assumption, network accounting): the frame streams of the windows the scan's
+/-- **The draw takes every ingress unit**: every unit of the partition `P` that holds a gate the scan checks or a gate
+of its rows is in a class its design draws `all` (`allSlots`), so no faulty set holds one. -/
+def IngressDrawn (s : Schedule) (st : Stmt) (P : Partition) : Prop :=
+  ∀ v < P.rus.length, (∃ g ∈ RU.gates (P.rus.getD v []), g ∈ (checksOf s st).1 ∨ ∃ t < s.window,
+    g ∈ (layOf s st).ingress t) → v ∈ allSlots st.design P
+
+/-- **The scan counts requests** (named assumption): the frame streams of the windows the scan's
 Program accepts at the statement `st` are at most `scanBound`. A conjecture on the scan's Program, which
 `verity/core/protocols/certifier/tests/test_network_certifier_scan_counts.py` tries to falsify against the scan's
 reference: each term's field checks at their edges, and every window of rows over a cell alphabet at toy classes, from
@@ -266,7 +271,7 @@ def tapeOf {Coin Col T : Type} {D : Deploy Coin Col T} {n : ℕ} {x : Fin n → 
     (ω : PeriodCoins D x Ω) (i : Fin n) : WindowTape D x Ω i :=
   (ω.1, fun j => ω.2 j.1)
 
-/-- **The answers are of record** (named assumption, sampled proofs): the evidence `ev ω` is the provers' on the
+/-- **The answers are of record** (named assumption): the evidence `ev ω` is the provers' on the
 period's coins `ω`, and where its window `i` is answered (`WindowAnswered`), the sampled verifier's run on that window's
 statement `x i`, with window `i`'s prover `P i` at its tape (`tapeOf`) and on that window's coins, accepted: the
 answer is the verifier's own. -/
@@ -349,15 +354,15 @@ def PerServerIngressBy (chk : Params → NetworkCheck.Period.Commitment → Evid
                 windowBits s cls)) *
             ((∏ ℓ, (r ℓ + 1)) ^ (p.windows * s.window) * Dj ^ (p.windows * s.window)) : ℕ) : ℕ∞)
 
-/-- **The server's ingress over a rows-form period** (NET-92): `PerServerIngressBy` at the check of record,
+/-- **The server's ingress over a rows-form period**: `PerServerIngressBy` at the check of record,
 `NetworkCheck.Period.check`. -/
 def PerServerIngress : Prop := PerServerIngressBy check
 
 /-! ## Its honest and nontrivial statements -/
 
-/-- **Every window's and audit's answer is accepted, at one δ** (named assumption, sampled proofs; v2's members form,
-PRF-224): the counts are the parameters', every link-window's rows-form check accepts with its scan's facts at one `δ`,
-and every audit's check accepts. An honest prover's period gives it once the rows form accepts v2 answers. -/
+/-- **Every window's and audit's answer is accepted, at one δ** (named assumption; v2's members form): the counts
+are the parameters', every link-window's rows-form check accepts with its scan's facts at one `δ`, and every audit's
+check accepts. An honest prover's period gives it once the rows form accepts v2 answers. -/
 def HonestWindowsAccepted (p : Params) (s : Schedule) (sd : ByteArray) (c : NetworkCheck.Period.Commitment)
     (e : Evidence) : Prop :=
   c.windows.size = p.windows ∧ c.audits.size = p.audits.size ∧ e.windows.size = p.windows ∧
