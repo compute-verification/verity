@@ -361,7 +361,7 @@ def cutlass_swizzles(tile: tuple[int, int], shape: Shape, swap: int) -> list[int
 
 
 def registry_source(name: str) -> str:
-    """A registry kernel's source: ``verity`` for nvf4_plain.cu's (#543's NVFP4, #570's FP8), else ``cutlass``."""
+    """A registry kernel's source: ``verity`` for nvf4_plain.cu's (NVFP4 and FP8), else ``cutlass``."""
     return "verity" if name.startswith("verity_") else "cutlass"
 
 

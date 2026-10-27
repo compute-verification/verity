@@ -68,7 +68,7 @@ def timed(work: dict[str, tuple[Any, Any]]) -> dict[str, float]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON (CIR-113)")
+    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON")
     ap.add_argument("--sms", type=int, nargs="+", default=[32, 64])
     ap.add_argument("--batch", type=int, default=4096)
     ap.add_argument("--gemm-n", type=int, default=8192)
@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     shape = O.SHAPES["h200"]
-    layout = O.load_layout(a.shared)
+    layout = S.load(a.shared)
     ctx, _ = CM.fixture_secrets(a.run_id)
     salt = CM.fixture_salt(a.run_id)(0)
     tabs = O.stand_in(shape, a.batch, dev, 20261026)

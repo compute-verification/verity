@@ -13,10 +13,10 @@ activations an IU uses, and for the weights it uses and the partial sums it rece
 declaration and one chain it runs, taken as a hypothesis by the guarantees that need it.
 
 Which declaration matters. On a declared circuit, whose wiring the prover controls, both are false, an analysis
-simplification (Daniel, 9 Oct 2026, 02:46Z), and the guarantees that apply them there (`UpdatedMatMul`,
-`UpdatedMatMulReads`, `Training`) are falsified. That ruling covers declared circuits only (card 7d82eba8, 19 Oct 2026):
+simplification, and the guarantees that apply them there (`UpdatedMatMul`,
+`UpdatedMatMulReads`, `Training`) are falsified. That covers declared circuits only:
 on a reference training circuit, the one a declared circuit contains, both stand, and with `WeightsIncompressible` they
-are `TrainingIncompressible`, NCI's one adopted premise (card 90f5557c).
+are `TrainingIncompressible`, NCI's one adopted premise.
 
 Both are assumed only for chains whose weights and first inputs `x^{(0)}` depend on more than `Γ` work of training since
 the commitment (the draft, "Frontier training currently requires updated matrix multiplications"). Starting from a
@@ -55,8 +55,8 @@ sum of that output entry; these are distinct for distinct input entries, since t
 least `b_a` wide. No IU of at most `Γ` gates can reconstruct entries of `W_ℓ`, or entries of the chain's input and output
 vectors, from fewer bits of novel information than their width.
 
-False when `D` is a declared circuit (Daniel, 9 Oct 2026, 02:46Z); it stands when `D` is a reference training circuit
-(card 7d82eba8), as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s counterexample does not
+False when `D` is a declared circuit; it stands when `D` is a reference training circuit,
+as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s counterexample does not
 apply to it: an E2M1 product takes at most 37 values, but an IU that holds the product gate reads its weight and input
 wires whole, at least `b_w + b_a` bits. -/
 def ActivationsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
@@ -79,8 +79,7 @@ Every value of `R` is a function of the values on `in(R)`, so `support(T) ≤ 2^
 this assumption gives `ActivationsIncompressible` at cap `K` (`activationsIncompressible_of_support`). It needs no
 bound on `R`'s size: the support form says what the values are, not what an IU can compute.
 
-**Falsified** (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
-art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32) at FP4, for every updated chain too: when a product
+**Falsified** at FP4, for every updated chain too: when a product
 gate of the first multiplication holds an E2M1 × E2M1 product, `T` that one gate is charged `b_w + b_a` and takes at
 most 37 values, so the assumption fails at every cap of at least `b_w + b_a` once `b_w + b_a > log₂ 37 ≈ 5.21` (the
 calculator's 2.5 + 4 = 6.5). At FP8 (E4M3, 2011 products) this counterexample does not apply. -/
@@ -101,8 +100,8 @@ partial sums passed between IUs can be charged to the IUs that receive them, `s 
 This is the draft's statement with `s u` the number of partial sums IU `u` receives: the partial sums are not gates the
 chain names, since `D` may add up each entry in any order.
 
-False when `D` is a declared circuit (Daniel, 9 Oct 2026, 02:46Z); it stands when `D` is a reference training circuit
-(card 7d82eba8), as the partial sums' half of `TrainingIncompressible`. `PartialSumsSupport`'s counterexample does not
+False when `D` is a declared circuit; it stands when `D` is a reference training circuit,
+as the partial sums' half of `TrainingIncompressible`. `PartialSumsSupport`'s counterexample does not
 apply to it: an adder IU over a `k × k × k` block holds values determined by `2k²` entries, but it reads its `k³`
 products' wires to form them. -/
 def PartialSumsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
@@ -124,8 +123,7 @@ circuit, the one a declared circuit contains (`Nci.Guarantees.ContainedMatMul`),
 compressible training is. An IU's values are functions of the values on its novel reads, so it gives
 `PartialSumsIncompressible` at the same caps (`partialSumsIncompressible_of_support`).
 
-**Falsified** (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
-art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32) for one honest matrix multiplication, with binary
+**Falsified** for one honest matrix multiplication, with binary
 additions and inside the caps: divide it into product IUs that fix a column over a block of rows and positions, and IUs
 that hold the adder tree over `k × k × k` blocks. Each entry's products then lie in `d` IUs, while each IU's values are
 functions of the few weight and input entries it depends on. In the exact 1-bit toy (`d = e = N = 8`, `b_w = b_a = 1`)

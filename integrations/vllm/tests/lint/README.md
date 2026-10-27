@@ -25,7 +25,9 @@ failure message carries its fix.
  - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
  counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
- through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name.
+ through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name. A hash's
+ domain-separation tag reads like one but names no record: a module-level constant named `*_TAG` or `*_DOMAIN` holds it as
+ a plain literal, which the rule skips.
 - **Recorded outcomes** (`test_silent_excepts.py`, allowlist `allowlists/silent_excepts.json`): in `verity_vllm/check/` and
  `verity_vllm/commit/`, a caught exception is raised or recorded (an `error` result, a reason, an `unreadable: …` entry in
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
@@ -50,7 +52,7 @@ like source: the base's lint code, run on the PR's tree, must find nothing the P
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
-tracked file outside this lint's and `archive/`), except that it counts findings per (file, rule), an entry
+tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
 PRs queued on `next` that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
 longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
@@ -58,7 +60,7 @@ PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/veri
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 It lints the PR's own Python too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run): ruff, under `main`'s
-root `ruff.toml`, on each `*.py` file the PR adds or modifies outside this lint's files and `archive/`, before and after, and
+root `ruff.toml`, on each `*.py` file the PR adds or modifies outside this lint's files, before and after, and
 a PR whose (file, rule) count grows is refused, naming each new finding `file:line RULE message`. Fix the code; the list
 never takes a new finding. (file, rule) is the repository lint's key too, so a finding moved to another function passes both.
 A renamed file keeps its findings, but the repository lint reads no history, so its entries move with it
@@ -68,7 +70,7 @@ gate, the gate can't judge, and the sync leaves the PR out.
 It holds direct environment reads the same way (the vLLM coordinator, 27 Oct 01:30Z: configuration in one place).
 `tests/lint/test_repo_env_reads.py` counts each tracked `*.py` file's reads (`os.environ[...]`, `.get`, `.setdefault`, a
 `.pop` whose value is used, an `in` test, `os.getenv`, through any alias) outside `integrations/vllm/` (P07 is its settings
-rule) and `archive/`, against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
+rule), against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
 over `main`, `next` and the admitted PRs), and fails only when a file reads more than its entry allows. A settings registry
 is exempt: a module named `settings.py`, or one the list marks `{"file", "registry": true}`. The gate refuses a PR that adds
 a read to a file it changes, naming each, with the fix: read it through the area's settings registry (the template is
@@ -81,7 +83,11 @@ a string or `False`, a name other than the caught exception's, an empty containe
 `tests/lint/allowlists/repo_silent_excepts.json`, built like the env-read list. The gate refuses a PR that adds one to a file it
 changes, naming each, with the fix: re-raise; or record the outcome in the area's typed record or log; or test for the
 expected case and let the rest raise (a narrower handler that still swallows still counts). A rename moves its entry
-(`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`).
+(`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`). A repository list (ruff's or a counted lint's) may
+raise a key, in any file, up to what its lint, as the PR's base has it, finds there in the base's tree: a list that records
+its base's findings adds none, so one left behind by PRs that were on `next` before its lint landed catches up, while growth
+past the base's findings is refused as before (27 Oct 06:20Z, CI-198). A lint that comes to count more lands in two steps,
+since its base's lint bounds the catch-up: first the gate's count, then the list.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more

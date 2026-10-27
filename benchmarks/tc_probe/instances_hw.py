@@ -22,7 +22,7 @@ to run the same words through another architecture's instruction of the same sha
                                                                        by ADA_E4M3_M16N8K32, no epilogue (the bare FP32 word)
     bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper   BF16_HOPPER (sm90.mma.m16n8k16.bf16)  4,096 inputs x 96 steps of random_finite_bf16
                                                                        words from seed 20260922, HOPPER_BF16_M16N8K16 accumulators,
-                                                                       f32_to_bf16 epilogue (relchain.instances, lane b-hopper)
+                                                                       f32_to_bf16 epilogue (relchain.instances)
     bench-instances-fp8-hopper/v1/vu-k1536-fp8-hopper     FP8_HOPPER_WGMMA (sm90.wgmma.m64n8k32.e4m3)  4,096 inputs x 48 E4M3 steps from
                                                                        seed 20260922, HOPPER_E4M3_K32 accumulators, bare FP32 word
 
@@ -214,7 +214,7 @@ def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
     """Finite BF16 words with exponent fields in [96, 160), one in ten a signed zero, one in ten a subnormal
-    (``archive.direct.ligero.relations.random_finite_bf16`` of lane b-hopper, verbatim)."""
+    (``archive.direct.ligero.relations.random_finite_bf16``, verbatim)."""
 
     sign = rng.integers(0, 2, size=shape, dtype=np.int64) << 15
     t = rng.integers(96, 160, size=shape, dtype=np.int64)
@@ -272,7 +272,7 @@ class Synthetic:
         return a, b, accs
 
 
-# lane b-hopper's BF16_HOPPER target (dc3c141) is not in every tree this script runs from: its name and instruction as pinned there
+# The BF16_HOPPER target is not in every tree this script runs from: its name and instruction as pinned there
 _BF16_HOPPER = getattr(T, "BF16_HOPPER", None)
 BF16_HOPPER_TARGET = _BF16_HOPPER.name if _BF16_HOPPER else "bf16-hopper-mma-draft/2026-09-22"
 BF16_HOPPER_INSTRUCTION = _BF16_HOPPER.instruction if _BF16_HOPPER else "sm90.mma.m16n8k16.bf16"

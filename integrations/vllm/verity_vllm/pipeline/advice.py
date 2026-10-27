@@ -31,7 +31,8 @@ the advice's length go public, as the binding a window's registration carries (`
                           registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
                           and the compiler it wraps (``compiler``), the bits
                           I1 charges each egress window of `--T` buckets (``bits_by_window``), and with `--weights-of-record`
-                          the root of each parameter the window circuit registers (``registered_roots``: `registered_weights`)
+                          the committer's hiding root of each weight parameter the window circuit registers, as its weights
+                          registration records it (``registered_roots``: `registered_weights`)
     private/advice.bin    the prover's: the advice, I1's canonical encoding
     private/advice.json   the same advice, I1's `to_json`
     private/opening.json  the advice's opening (`advice_windows.opening`: its encoding and every row's salt)
@@ -388,27 +389,23 @@ def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def registered_weights(record: dict[str, Any], serve: dict[str, Any] | None = None) -> dict[str, str]:
-    """What a window's registration records of the weights it served (``registered_roots``): the window circuit's registered
-    parameter (`weights_of_record.PARAM`, `window_circuit.WEIGHTS`) and ``record``'s root of record (`check.weights_of_record`), the root the verifier
-    pins before the run from the checkpoint's pinned shards. It holds no weight read yet: the window circuit reads each
-    weight as its own parameter, ``weights/<label>@<words>``, which `interface.input_count` holds only by its own pin, and
-    nothing yet ties a weight's committed root to this one (VLLM-125). Refused unless the record is of record under the
-    current schema (every field composed from the pinned shards) and, given the run's ``serve.json``, of its model at its
-    revision."""
+def registered_weights(registration: dict[str, Any], serve: dict[str, Any] | None = None) -> dict[str, str]:
+    """What a window's registration records of the weights it served (``registered_roots``): the committer's weights
+    registration's hiding root for each weight parameter its window circuit registers (`records.weights_registration`,
+    ``weights/<label>@<words>`` -> its entry, `window_weights.weights_registration`), written once per model and key
+    before the first window's coins, the roots the verifier pins, which `interface.input_count` holds each weight's reads
+    to. Refused (ValueError) unless it is such a registration, every value a weight parameter's, and, given the run's
+    ``serve.json``, of its model at its revision."""
     from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.records.weights_registration import WeightsRegistration
 
-    root = record.get("root_of_record")
-    if record.get("schema") != WR.SCHEMA or record.get("of_record") is not True or not isinstance(root, str):
-        raise ValueError(f"the weights record is {record.get('schema')!r}, of record {record.get('of_record')!r}: a window "
-                         f"registers the root of a record of record under {WR.SCHEMA}")
-    pin = record.get("checkpoint")
-    entry = pin.get("entry") if isinstance(pin, dict) else None
-    model = (entry.get("repo"), entry.get("revision")) if isinstance(entry, dict) else None
-    if serve is not None and model != (serve.get("model"), serve.get("revision")):
-        raise ValueError(f"the weights record is of checkpoint {model}, and the run served "
+    r = WeightsRegistration.of(registration, "the weights registration")
+    if other := sorted(p for p in r.values if not p.startswith(f"{WR.PARAM}/")):
+        raise ValueError(f"the weights registration registers {other}, not weight parameters {WR.PARAM}/<label>@<words>")
+    if serve is not None and (r.repo, r.revision) != (serve.get("model"), serve.get("revision")):
+        raise ValueError(f"the weights registration is of {r.repo}@{r.revision}, and the run served "
                          f"{serve.get('model')}@{serve.get('revision')}")
-    return {WR.PARAM: root}
+    return r.roots
 
 
 def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int,
@@ -626,8 +623,9 @@ class Options:
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON",
-                                           help="the served weights' record (check.weights_of_record), whose root of record each "
-                                                "window's registration records for the circuit's weights (default: none recorded)")
+                                           help="the committer's weights registration (window_weights.weights_registration), "
+                                                "whose hiding root for each weight parameter each window's registration "
+                                                "records (default: none recorded)")
 
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:

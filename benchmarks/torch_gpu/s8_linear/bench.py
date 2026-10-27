@@ -8,8 +8,8 @@ around every item), each gated in this run before it is timed:
                   (`configs.CONFIGS` or --configs, else its default; bf16 out, the Definition's epilogue): y into 0xA5 equal
                   to `run.reference` (run.py's gate holds that to the Definition's twin on every cell)
     exact_triton  on sm_90, int8_fused (Triton) the same way: the second exact kernel
-    simple        KS8-SIMPLE's simple path (HASH-11): torch._int_mm's s32 sums, then the epilogue as four eager kernels, one
-                  rounding each in the Definition's order; gated like exact: the path the exact kernel must beat
+    simple        int_mm.py's `linear` (run.py's `--kernel int_mm`, KS8-SIMPLE's path, HASH-11): torch._int_mm's s32 sums,
+                  then the fused epilogue; gated like exact: the path the exact kernel must beat
     lt            cuBLASLt int8, s32 out, autotuned: its top 32 heuristic algorithms (`lt.Plan`), each gated (z equal to
                   torch._int_mm's) and timed in a pre-pass of 3 interleaved items, the fastest kept
     cutlass       vLLM's CUTLASS int8 GEMM (`torch.ops._C.cutlass_scaled_mm`, bf16 out; its epilogue applies s_w first,
@@ -31,7 +31,7 @@ crossing.json, per arm and model (layer set) and per linear:
     at_ridge              the arm's time, TOPS and fraction of peak at the card's ridge and at its own (log-log interpolation)
 
     python bench.py --out OUT [--models mqa16k52] [--ms 1,8,...] [--reps 9] [--arms exact,exact_triton,simple,lt,cutlass,cutlass_swap]
-                    [--kernel wgmma|triton] [--configs BEST_JSON] [--no-head]
+                    [--kernel wgmma|triton|int_mm] [--configs BEST_JSON] [--no-head]
 """
 from __future__ import annotations
 
@@ -49,11 +49,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
 import fixture as FX  # noqa: E402
+import int_mm as IM  # noqa: E402
 import kbench  # noqa: E402
 import lt as LT  # noqa: E402
 import roofline as RF  # noqa: E402
 import run as R  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192, 16384,
@@ -102,7 +102,7 @@ class Linear:
         self.ws = [R.Weights(n, k, seed=2000 + i, special=False) for i in range(self.copies)]
         self.x = R.codes(m, k, 11 + m, FX.STRUCT_ROWS)
         self.sa = torch.from_numpy(FX.act_scales(m, 11 + m, special=False)).cuda()
-        self.z_first = E.int_mm(self.x, self.ws[0].w)
+        self.z_first = IM.int_mm(self.x, self.ws[0].w)
         self.ref_first = R.reference(self.z_first, self.sa, self.ws[0].sw)
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
         self.yt = torch.empty((n, m), dtype=torch.bfloat16, device="cuda")
@@ -124,17 +124,6 @@ class Linear:
             for wt in self.ws:
                 kern.call(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
         return f
-
-    def simple(self):
-        def call(wt):
-            y = E.int_mm(self.x, wt.w).to(torch.float32)
-            y.mul_(self.sa[:, None])
-            y.mul_(wt.sw[None, :])
-            return y.to(torch.bfloat16)
-        d = R.diff(call(self.ws[0]), self.ref_first)
-        torch.cuda.synchronize()
-        self.gates["simple"] = {"mismatches": d}
-        return None if d else (lambda: [call(wt) for wt in self.ws])
 
     def lt(self, clock) -> object:
         plan = LT.Plan(self.m, self.n, self.k)
@@ -219,6 +208,8 @@ def main() -> int:
     arms = tuple(arm for arm in a.arms.split(",") if arm != "exact_triton" or kerns["exact"].name != "triton")
     if "exact_triton" in arms:
         kerns["exact_triton"] = R.kernel("triton")
+    if "simple" in arms:
+        kerns["simple"] = R.kernel("int_mm")
     readings = PEAKS.get(X.arch(), {})
     peak = a.peak_tops or readings["measured"]
     clock = kbench.nvml()
@@ -235,7 +226,7 @@ def main() -> int:
             lin = Linear(n, k, m, kerns)
             fns = {}
             for arm in arms:
-                f = (lin.exact(arm) if arm in kerns else lin.simple() if arm == "simple" else lin.lt(clock) if arm == "lt"
+                f = (lin.exact(arm) if arm in kerns else lin.lt(clock) if arm == "lt"
                      else lin.cutlass(swap=arm == "cutlass_swap"))
                 if f is not None:
                     fns[arm] = f
