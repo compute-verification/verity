@@ -124,7 +124,9 @@ class Pacer:
             try:
                 t, ended, arrived, start, end, written = REPORT.unpack(
                     await self.process.stdout.readexactly(REPORT.size))
-            except asyncio.IncompleteReadError:
+            except asyncio.IncompleteReadError as e:
+                if e.partial:
+                    raise RuntimeError(f"the egress pacer's output ended within a report ({len(e.partial)} bytes)") from e
                 return
             expected = self.waiting.popleft()[0] if ended else self.unreleased.popleft()
             if t != expected:
@@ -202,12 +204,10 @@ class _Links:
 
     def flush(self, key: int) -> None:
         fd, pending = self.fds[key], self.pending[key]
-        while pending:
+        while pending and _ready(fd):
             part = pending[0]
             try:
                 n = os.write(fd, part[0])
-            except BlockingIOError:
-                return
             except OSError:
                 self.close(key)
                 return
@@ -231,6 +231,14 @@ class _Links:
     def waiting(self) -> dict[int, int]:
         """The fd of each link with bytes pending, to its key."""
         return {self.fds[key]: key for key, pending in self.pending.items() if pending}
+
+
+def _ready(fd: int) -> bool:
+    """Whether a write to `fd` won't wait: the socket has room, or an error or a hangup the write raises. Only the pacer
+    writes to its links, so a socket with room keeps it until the write, which then takes at least a byte."""
+    poller = select.poll()
+    poller.register(fd, select.POLLOUT)
+    return bool(poller.poll(0))
 
 
 def _done(bucket: _Bucket) -> None:
