@@ -81,9 +81,9 @@ open scoped ENNReal
 theorem JointHorizonBlocksLive_honest : Accounting.Guarantees.JointHorizonBlocksLive_honest := by
   intro rate cap C n P v O G B L E
   refine ⟨fun _ => ⟨fun _ _ => trivial, fun _ => trivial⟩, fun b a s => ?_, fun b s => ?_, fun b s => ?_⟩
-  · exact Honest.prob_eq_zero_of_none (fun o h => h.2 (Honest.period_holds rate cap P v G L E b s a o)) G s
-  · exact Honest.prob_eq_zero_of_none (fun o h => h.2 (Nat.zero_le _)) G s
-  · exact Honest.prob_eq_zero_of_none (fun o h => h.2 (Honest.memory rate cap P v G B L E s b o)) G s
+  · exact (Honest.prob_eq_zero_of_none (fun o h => h.2 (Honest.period_holds rate cap P v G L E b s a o)) G s).le
+  · exact (Honest.prob_eq_zero_of_none (fun o h => h.2 (Nat.zero_le _)) G s).le
+  · exact (Honest.prob_eq_zero_of_none (fun o h => h.2 (Honest.memory rate cap P v G B L E s b o)) G s).le
 
 theorem JointHorizonBlocksLive_nontrivial : Accounting.Guarantees.JointHorizonBlocksLive_nontrivial := by
   intro rate cap C n P v O G B L E s e hB hL he hle
@@ -97,7 +97,7 @@ namespace Bridge
 theorem BandwidthOfRemoteLineLive_honest : Accounting.Guarantees.Bridge.BandwidthOfRemoteLineLive_honest := by
   intro rate cap C n P v O G E b
   refine ⟨⟨fun _ => Iff.rfl, fun _ _ => le_rfl, fun s o => ?_⟩,
-    fun s => Honest.prob_eq_zero_of_none (fun _ h => lt_irrefl _ h.2) G s⟩
+    fun s => (Honest.prob_eq_zero_of_none (fun _ h => lt_irrefl _ h.2) G s).le⟩
   show ((Honest.sessionBits : ℕ) : ℝ) ≤ ((Schedule.read (fun _ => Honest.step (Honest.h200 rate cap))
     ⟨b * Honest.sessionSpan, Honest.sessionSpan⟩ 1 : ℕ) : ℝ)
   rw [Honest.read_const]
