@@ -63,10 +63,11 @@ def test_over_tcp_to_a_local_process(tmp_path):
     assert challenge == [e.data for e in sim.transcripts["challenger"].on("responder") if e.dir == "out"][0]
 
 
-def test_a_local_process_that_dies_before_it_connects_fails_the_run(tmp_path):
+@pytest.mark.parametrize("adversaries", [None, {("challenger", "responder"): {"seed": 0}}], ids=["plain", "adversary"])
+def test_a_local_process_that_dies_before_it_connects_fails_the_run(tmp_path, adversaries):
     broken = dict(X.PROCESS, protocols={X.ID: "deploy_example:NO_SUCH_PROTOCOL"})
     r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
-            verify=X.verify, seed=SEED, processes={"responder": broken})
+            verify=X.verify, seed=SEED, processes={"responder": broken}, adversaries=adversaries)
     assert r.status == "failed"
     assert r.outcomes["responder"] == {"outcome": {"exit": 1}, "refused": "party-died"}
     assert r.outcomes["challenger"]["refused"] == "closed"

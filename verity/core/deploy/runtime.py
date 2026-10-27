@@ -298,8 +298,9 @@ class Runtime:
         child.wait()
         self.ended.add(name)
         for p in pipes:
-            if isinstance(p, TcpListen) and p.pipe is None:
-                p.close()
+            p = p.pipe if isinstance(p, Adversary) else p
+            if isinstance(p, TcpListen):
+                p.peer_gone()
 
     def transmit(self, ep: Endpoint, frame: bytes) -> None:
         try:

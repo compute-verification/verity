@@ -221,6 +221,16 @@ class TcpListen:
     def closed(self) -> bool:
         return self._shut or (self.pipe is not None and self.pipe.closed)
 
+    def peer_gone(self) -> None:
+        """The process that was to connect has ended: what it left in the backlog is still read, and with nothing
+        there the listener closes."""
+        try:
+            self._accept()
+        except OSError:
+            pass
+        if self.pipe is None:
+            self.close()
+
     def close(self) -> None:
         """Before its connection: stop listening, and nothing will arrive."""
         if self.pipe is None:
