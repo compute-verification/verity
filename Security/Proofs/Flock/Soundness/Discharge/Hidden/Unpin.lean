@@ -116,16 +116,17 @@ theorem pinRows_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
     Pinned.PinRows (stmtOf st hwf regs) (stmtOf (unpin st) (unpin_wf hwf) regs).A₀
       (stmtOf (unpin st) (unpin_wf hwf) regs).B₀ zero (fun r => ((pinnedCols st.c).count r.val : ZMod 2)) := by
   intro r j
+  let z : Fin (2 ^ (stmtOf st hwf regs).kLog) := zero
   have h1 : (if j.val = r.val then 1 else 0 : ℕ) = if j = r then 1 else 0 := by
     by_cases h : j = r
     · rw [if_pos h, if_pos (congrArg Fin.val h)]
     · rw [if_neg h, if_neg (fun e => h (Fin.ext e))]
-  have h2 : (if j.val = Hm.zeroCol st.c then 1 else 0 : ℕ) = if j = zero then 1 else 0 := by
-    by_cases h : j = zero
+  have h2 : (if j.val = Hm.zeroCol st.c then 1 else 0 : ℕ) = if j = z then 1 else 0 := by
+    by_cases h : j = z
     · rw [if_pos h, if_pos (by rw [← hzero]; exact congrArg Fin.val h)]
     · rw [if_neg h, if_neg (fun e => h (Fin.ext (e.trans hzero.symm)))]
   have hc : (pinCnt st.c r.val j.val : ZMod 2) =
-      ((pinnedCols st.c).count r.val : ZMod 2) * ((if j = r then 1 else 0) + (if j = zero then 1 else 0)) := by
+      ((pinnedCols st.c).count r.val : ZMod 2) * ((if j = r then 1 else 0) + (if j = z then 1 else 0)) := by
     unfold pinCnt
     rw [h1, h2, Nat.cast_mul, Nat.cast_add, Nat.cast_ite, Nat.cast_ite, Nat.cast_one, Nat.cast_zero]
   exact ⟨(matA_unpin hda r.val j.val).trans (congrArg (matA (unpin st) r.val j.val + ·) hc),
