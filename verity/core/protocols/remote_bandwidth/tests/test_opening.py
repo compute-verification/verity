@@ -68,7 +68,7 @@ def window(store: O.Store) -> SimpleNamespace:
     clock = Clock()
     s = O.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
                   clock=clock)
-    prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, passes = s.start(), reg.digest, {}
     for i in range(N // L):
         runs = ((L * i, L),)
