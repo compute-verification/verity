@@ -40,7 +40,7 @@ ONSITE = ROOT / "verity" / "core" / "protocols" / "onsite" / "CoreOnsite.lean"
 PROTOCOL = "verity/onsite/v0"
 #: the network certifier's period check, whose public carries K and eps
 CERTIFIER = "verity/certifier/v0"
-#: a proof unit's outputs are at most 16 bits (`NetworkCheck.Period`'s faulty bits, `16 · b`)
+#: a proof block's outputs are at most 16 bits (`NetworkCheck.Period`'s faulty bits, `16 · b`)
 OUT_BITS = 16
 #: what `horizon_leak`'s K rests on until its two per-window inputs are discharged
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -188,7 +188,7 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
 def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: int | None = None) -> dict[str, Any]:
     """The network certifier's K over a monitoring period of ``count`` periods like ``periods`` (accepted
     ``verity/certifier/v0`` publics; by default those periods alone), its windows one sequence, each on its own live
-    coins (`NetTiming.Guarantees.HorizonLeakAccepted`, #4367, on `HorizonWrongUnitsLe`, #4355): the faulty units are
+    coins (`NetTiming.Guarantees.HorizonLeakAccepted`, #4367, on `HorizonWrongUnitsLe`, #4355): the faulty proof blocks are
     paid for once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its audits, so
     ``K = log2 #Ss + Σ_c log2(cap_c + 1) + Fmax·(16 + log2(N + 1)) + Σ_i (free_i + k_i·log2 Dj)``, ``N = Σ_i n_i``,
     except with probability ``δ + Σ_i (e_i + e'_i)``: δ once, and each window's soundness and leak errors, which have no

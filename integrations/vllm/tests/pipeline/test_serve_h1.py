@@ -148,6 +148,8 @@ def test_commit_windows_open_the_arm_on_the_installed_committer_and_close_it_fir
 
 
 def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp_path):
+    """Among them a token budget the rows-sha512 Commit's step-input port can't take (whole 512-id rows), with H1 or
+    without, so H1's own 32-row rule is met by every T the Commit takes."""
     (man := tmp_path / "manifest.json").write_text("{}")
 
     def refusal(*more: str) -> str | None:
@@ -166,10 +168,24 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert refusal(*h1, "--protocols-config", str(cfg)) is None
     assert "PoUW H1) only" in refusal("--protocols", "pouw:ncp-v2")
     assert "--commit, --scheme rows-sha512" in refusal(*h1, "--no-commit")
-    assert "multiple of 32" in refusal(*h1, "--max-num-batched-tokens", "2050")
+    for t in ("2050", "2016"):
+        assert refusal(*h1, "--max-num-batched-tokens", t) == refusal("--max-num-batched-tokens", t), t
+        assert f"--max-num-batched-tokens a multiple of 512, not {t}" in refusal("--max-num-batched-tokens", t)
+    assert refusal(*h1, "--max-num-batched-tokens", "1536") is None
+    assert "multiple of 32" in SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest",
+                                                                     str(man), *h1, "--max-num-batched-tokens", "2050"], environ={}))
     assert refusal("--protocols-config", "{}") == "--protocols-config without --protocols"
     assert "the server's own" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"rows": 64}}))
     assert "one gate session a window" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"challenger": "h:1"}}))
     assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
     assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
     assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")
+
+
+def test_the_window_program_holds_a_tile_unit_for_each_32_rows_of_slot_and_32_columns_of_each_linear_at_each_step():
+    """Llama-3.2-1B's int8 linears (16 layers of qkv, o, gate_up and down) at T 2048 and S 1: 64 row tiles of 11,776
+    column tiles. A T between powers of two takes the next one's slot, and S multiplies through."""
+    llama = [(3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)] * 16
+    assert SH.units(llama, 2048, 1) == 64 * 11_776 == 753_664
+    assert SH.units(llama, 1536, 1) == SH.units(llama, 2048, 1)
+    assert SH.units(llama, 512, 16) == 16 * 16 * 11_776
