@@ -115,7 +115,7 @@ Two kinds of committed run:
   root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
-  any other's reads are free; the slot rows a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
+  any other's reads are free; a stand-in scan state a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
   class's, a function of the class alone, so the verifier's own ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
@@ -1339,8 +1339,9 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
-    ``--registration`` (`weights-registration`, before the first window's coins) committed them, the slot rows the window's
-    own value. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
+    ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
+    slots' rows and ``max_tokens`` give (`window_rows.standin_state`) the window's own value, a stand-in for the network
+    certifier's, whose reads are free. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
     population and members, the registered weights whose root the window's is (``held``) and those it isn't, whose reads
     are free (``free``), and the seconds each part took."""
     import numpy as np
@@ -1349,6 +1350,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.check.replay.opening import CommittedStore
     from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
     from verity_vllm.program.predict import window_weights as WW
@@ -1399,14 +1401,15 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     for k in range(cls.slots):
         u = units[k] if k < len(units) else None
         if u is None:
-            row, served_ = [0] * (cls.prompt + 2), None
+            row, max_tokens, served_ = [0] * (cls.prompt + 2), 0, None
         else:
-            ids = [int(x) for x in compiler.inner.ingress[u.id]["prompt"]]
+            body = compiler.inner.ingress[u.id]
+            ids, max_tokens = [int(x) for x in body["prompt"]], int(body["max_tokens"])
             row = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
             pi = ProgramIndex(p.progs[u.id], program_dir=p.dirs[u.id])
             served_ = WRS.Served.of_record(pi, store, u.id, p.arrivals[u.id])
         slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
-        rows.append(row)
+        rows.append((row, max_tokens))
     lap("slots")
     reg = WW.WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
     if (reg.repo, reg.revision) != (model["repo"], model["revision"]):
@@ -1414,7 +1417,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              WC.SLOT_ROWS: WRS.slot_rows_value(WC.NAME, rows, key, int(a.window), window=run)}
+              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run)}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
     filled = WRS.Rows(low, slots, values)
@@ -1427,7 +1430,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window),
                                "requests": [u.id for u in units]},
-            "activations": {"program": WC.NAME, "values": {WC.SLOT_ROWS: values[WC.SLOT_ROWS].entry()}}}
+            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}

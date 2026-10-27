@@ -203,6 +203,19 @@ def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
         WR.Rows(low, slots, {p: v for p, v in values.items() if p != SS.SCAN_STATE})
 
 
+def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
+    """Where no scan ran (`prove_path`'s window commit), `standin_state` is the scan state rows that give each slot its row
+    and ``max_tokens`` at its anchor and lane, every other field zero: bucket 0's row is `STATE`'s, which holds the slots'
+    lanes alone. It is committed under the committer's key at `STATE_NONCE` plus the window's index, a per-window value in
+    its reading port's rows, and `Rows` takes it as the scan state."""
+    low, _f, values, _w, slots = window
+    v = WR.standin_state(PROGRAM, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 1, window=RUN)
+    assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
+    assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
+    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and WR.STATE_NONCE > max(WW.weight_nonces(values).values())
+    WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
+
+
 def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
     """`TokenSelectChunk_v2`'s scan from (-inf, 0): a NaN is never taken (not even first), equal maxima keep the first, and a
     chunk of no number above -inf is (-inf, 0)."""

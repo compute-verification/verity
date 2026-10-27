@@ -42,6 +42,8 @@ from typing import Any
 
 import numpy as np
 
+from verity.core.protocols.certifier import ingress_scan as IS
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import runs
@@ -50,9 +52,11 @@ from verity.ml.definitions.numerics.rows import ROWS
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.b1 import NEG_INF_BF16
 from verity.ml.windows import interface as IF
+from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
+from . import window_weights as WW
 from .window_builder import WEIGHTS
 from .window_circuit import Lowered, WindowClass, _spans
 
@@ -67,6 +71,9 @@ FORMS = ("node", "evaluated")
 
 #: a weight's elements [lo, hi) in its leaves' unsigned width: ``weights(label, lo, hi)``
 Weights = Callable[[str, int, int], np.ndarray]
+#: the salt nonce of window 0's stand-in scan state under the committer's key (`standin_state`), each next window's the
+#: next: above every weight parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
+STATE_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
 
 
 def positions(fn: Any) -> list[int]:
@@ -590,4 +597,26 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     return [_lanes(P, state)[P.lane] for P in lowered.programs]
 
 
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots"]
+def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
+                  window: str) -> G.Registered:
+    """`scan_state.SCAN_STATE` where no scan ran: the rows (``row/v2``, a row a bucket of the window) that give slot k its
+    row (occupancy, prompt length, ids) and ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every
+    other field zero, committed under the committer's secret ``key`` at salt nonce `STATE_NONCE` plus the window's
+    ``index``, a per-window value under the window's root ``window``. No verifier pins its root at a scan's, so the audit
+    counts its reads free."""
+    if not 0 <= index < 1 << 32:
+        raise ValueError(f"window {index}: a window's index is a u32")
+    scan = cls.scan
+    states = [IS.empty(scan) for _ in range(cls.buckets)]
+    for k, (row, max_tokens) in enumerate(slots):
+        s = states[cls.anchor(k)].slots[cls.lane(k)]
+        s.occ, s.fields, s.max_tokens = int(row[0]), int(row[1]), int(max_tokens)
+        for p, v in enumerate(row[2:]):
+            s.ids[IS.position(scan, p)] = int(v)
+    bits = np.array([IS.encode(scan, st) for st in states], dtype=np.uint16).reshape(len(states), -1, 16)
+    words = (bits << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
+    return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
+
+
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served", "Slot", "positions",
+           "scan_slots", "standin_state"]
