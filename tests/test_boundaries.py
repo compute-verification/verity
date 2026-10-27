@@ -672,7 +672,7 @@ def test_a_benchmarks_import_is_found() -> None:
     found; a path into another directory, a mere mention of ``benchmarks/``, and ``benchmarks/``'s own files are not."""
     texts = {
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
-                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.pouw.tool:main'\n"),
+                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.pouw.tool:POUW_VLLM'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
         "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
