@@ -23,7 +23,7 @@ their subprotocols (PoUS, the bandwidth audit, network certification). The share
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge; C-Flock behind the firewall replaces it (`verity/ml/flock/`,
 `verity/core/service/flock/`). The verdict is the composition's Python mirror
-(`verity/core/protocols/composition/tests/reference.py`), not the Lean `remote check` (`Core.Onsite.remote`), over the
+(`verity/core/protocols/composition/tests/reference.py`), not the Lean `remote check` (`Core.Remote.protocol`), over the
 example's per-declaration stand-ins for `SampledProofs.OneStage.protocol` and `PouwCheck.protocol`. So the example
 exercises the lifecycle and the composition rule, not the verifier. Everything else is the repository's own code, as (b) says.
 
