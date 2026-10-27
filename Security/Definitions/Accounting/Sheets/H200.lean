@@ -12,11 +12,10 @@ four SMSPs.
 
 Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or NVSwitch and sends back (whole
 tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU's SMs compute, not which GPU computed a
-tile, and `Device.lean`'s side channels don't list NVLink peer offload (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
+tile, and `Device.lean`'s side channels don't list NVLink peer offload.
 
 `uv run machine-model --device sm_90 sheet --lean` prints this file from
-`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, and the machine model's tests hold it to that output. The
-grades, and where the sm_120 sheet's structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.
+`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, and the machine model's tests hold it to that output.
 -/
 
 namespace Accounting.TS.Sheets.H200
@@ -112,7 +111,7 @@ inductive Ty
 /-- A1, f_max: 1980 MHz. Grade: whitepaper (H100 SXM5), and measured. Source: H100 Tensor Core GPU Architecture
 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980
 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's
-maximum on vy-dc-h200 is 1980 MHz (EPS1 DC, note:20261017T0452Z-draft-eps1-dc). -/
+maximum on vy-dc-h200 is 1980 MHz (EPS1 DC). -/
 def fmaxMHz : ℝ := 1980
 
 /-- The SMs A3's per-SM peaks multiply: 132. Grade: whitepaper (H100 SXM5), and measured. Source: H100 whitepaper V1.04,
@@ -171,8 +170,7 @@ def peakTf32 : ℝ := 1024
 tensor boost clock, 1980 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived (figure over
 SMs and the FP64 clock) and measured. Source: H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity
 footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t +
-s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced90.cu,
-r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa). -/
+s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (unpriced90.cu). -/
 def peakF64 : ℝ := 128
 
 /-- A3: each type's dense MACs an SM clock. -/
@@ -203,9 +201,8 @@ def widthShfl : ℝ := 32
 /-- A4, the uniform pipe: 65.2693 results an SM clock, 1.96111 SMSP-cycles a warp instruction. Grade: measured only (no
 vendor document states the uniform datapath's rate). Source: Nsight Compute §2.3.6 defines the uniform pipe ('a scalar
 unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at
-0.4999 uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.96110716 SMSP-cycles each (r20261017-095350-02ff,
-r20261017-103944-a0bf, r20261017-112709-e43e, r20261017-113207-6aa4, r20261017-113541-675b); the width counts a uniform
-instruction as a warp instruction's 32 results, as the pipe row reads a width. -/
+0.4999 uniform instructions a SMSP-cycle, at a 2% margin 1.96110716 SMSP-cycles each (five runs); the width counts a
+uniform instruction as a warp instruction's 32 results, as the pipe row reads a width. -/
 def widthUniform : ℝ := 3200000000 / 49027679
 
 /-- A4: each pipe's results an SM clock. -/
@@ -678,9 +675,8 @@ at every instruction issue time, each scheduler issues one instruction for one o
 instruction, `UNI`, takes that slot too). Grade: measured only (no vendor document states it). Source: no vendor
 document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA
 Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma:
-each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (RT-H200-EMP,
-dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6, note:20261019T0533Z-draft-rt-h200-emp), and 0.984 of a slot
-beside a saturated lane stream (the census's UNI issue line, DC-90). -/
+each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (dc/probes/sm90_emp.cu
+emp_pack3), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90). -/
 theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by
   simp [Sheet.machine, census]
 
