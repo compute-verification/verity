@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import (CLASS, GRAIN, OTHER, PINS, WINDOW, _blocks, _bytes, _label, _labels,
-                                                       _source, _unit_rows)
+from tests.program.predict.test_window_circuit import (CLASS, GRAIN, OTHER, WINDOW, _blocks, _bytes, _label, _labels,
+                                                       _source, _unit_rows, held)
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
@@ -72,7 +72,7 @@ def test_an_fa3_head_is_v20s_calls_over_its_kv_groups_gathers():
     assert [_source(circuit, gather5, "parts", 2, r) for r in range(5)] == [(rope, 24 * p + 10, "o0") for p in range(5)]
     assert {_source(circuit, gather5, "parts", 4, r)[0] for r in range(5)} == {pair}
     assert [_source(circuit, end, p, 64 + 5) for p in ("l", "o")] == [(first, 5, "o1"), (first, 5, "o2")]
-    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins=PINS)["free"] == 0
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
     _wired_in_slot_and_step(circuit)
 
 
@@ -97,7 +97,7 @@ def test_past_one_key_block_an_fa3_head_reads_its_full_blocks_gather_made_once()
     assert _source(circuit, full, "k", 0) == _source(circuit, full, "k", 1) == _source(circuit, filled, "k", 0) == (ids[gather], 0, "o0")
     assert [_source(circuit, full, p, 0) for p in ("m_prev", "l_prev", "o_prev")] == [(first, 8, o) for o in ("o0", "o1", "o2")]
     assert [_source(circuit, end, p, 8 * 128) for p in ("l", "o")] == [(full, 0, "o1"), (full, 0, "o2")]
-    assert max(_unit_rows(circuit).values()) == 129 and IF.input_count(circuit.description(), pins=PINS)["free"] == 0
+    assert max(_unit_rows(circuit).values()) == 129 and IF.input_count(circuit.description(), **held(circuit))["free"] == 0
 
 
 #: FA3 declared to guard every block: `Attention_v2`, which has no per-key-block cut
@@ -121,7 +121,7 @@ def test_an_attention_with_no_cut_is_its_heads_each_reading_its_kv_groups_gather
     assert [_source(circuit, head, "q", u) for u in range(8)] == [(rope, 96 + u, "o0") for u in range(8)]
     assert [_source(circuit, head, "k", u) for u in range(8)] == [(gather5, u // 2, "o0") for u in range(8)]
     assert [_source(circuit, head, "v", u) for u in range(8)] == [(gather5, 4 + u // 2, "o0") for u in range(8)]
-    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins=PINS)["free"] == 0
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
     _wired_in_slot_and_step(circuit)
 
 
@@ -146,7 +146,7 @@ def test_int8_llama_3_2_1b_lowers_on_sm_90(cls):
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     circuit = class_circuit(_registered({**H200, "int8_exact": "linears"}, config), cls)
     rows = max(sum(map(len, IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn))))) for fn, _ in circuit.templates)
-    free = IF.input_count(circuit.description(), pins=PINS)["free"]
+    free = IF.input_count(circuit.description(), **held(circuit))["free"]
     heads = Counter()
     for fn, k in circuit.templates:
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):

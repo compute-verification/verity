@@ -245,6 +245,37 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
 
 
+def test_the_registration_records_the_weights_roots_of_record_it_is_given_and_refuses_one_not_of_record(tmp_path):
+    """``--weights-of-record``: the registration records the record's root of record for each weight parameter of the window
+    circuit (``registered_roots``, what `interface.input_count` holds the verifier's pins to); without it, none. A record
+    not of record, with no weight parameter's root, or of another model than the run's ``serve.json`` names, is a usage
+    error."""
+    from verity.ml.windows import interface as IF
+    from verity_vllm.check import weights_of_record as WR
+
+    _served(tmp_path, n=4)
+    roots = {"weights/model.norm.weight@64": "cd" * 64, "weights/model.embed_tokens.weight@64": "ef" * 64}
+    record = {"schema": WR.SCHEMA, "of_record": True, "root_of_record": "cd" * 32, "registered_roots": roots,
+              "checkpoint": {"entry": {"repo": "org/m", "revision": "r"}}}
+    (tmp_path / "wr.json").write_text(json.dumps(record))
+    assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "a"), compiler_digest="ab" * 64,
+                                weights_of_record=str(tmp_path / "wr.json"))) == 0
+    reg = json.loads((tmp_path / "a" / "registration.json").read_text())
+    assert reg["registered_roots"] == IF.registered_roots(reg) == roots
+    assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "b"), compiler_digest="ab" * 64)) == 0
+    assert "registered_roots" not in json.loads((tmp_path / "b" / "registration.json").read_text())
+    for bad, serve, why in [({**record, "of_record": False}, None, "of record False"),
+                            ({k: v for k, v in record.items() if k != "registered_roots"}, None, "no registered_roots"),
+                            ({**record, "registered_roots": {"weights": "cd" * 32}}, None, "no registered_roots"),
+                            (record, {"model": "org/other", "revision": "r"}, "the run served org/other@r")]:
+        (tmp_path / "wr.json").write_text(json.dumps(bad))
+        if serve:
+            (tmp_path / "serve.json").write_text(json.dumps(serve))
+        with pytest.raises(UsageError, match=why):
+            ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "c"), compiler_digest="ab" * 64,
+                                 weights_of_record=str(tmp_path / "wr.json")))
+
+
 def test_the_command_reports_a_disagreeing_run_as_a_usage_error(tmp_path):
     _served(tmp_path, n=4)
     (tmp_path / "requests.jsonl").write_text("")

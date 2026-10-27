@@ -21,6 +21,12 @@ from verity.ml.windows import interface as I, rows as CS
 GID, RUN = TI.GID, TI.RUN
 
 
+def held(*params: str) -> dict[str, dict[str, str]]:
+    """`interface.input_count`'s pins and the window's roots holding ``params``: each pinned at the root the window records."""
+    pins = {p: "ab" * 64 for p in params}
+    return {"pins": pins, "roots": pins}
+
+
 def chain_blocks(**edit) -> I.Blocks:
     """`TI.chain`'s blocks: its (layer, step, request) order is one entry, a layer digit, a step digit and the slot."""
     return I.Blocks(**{"slots": TI.REQUESTS, "steps": TI.STEPS,
@@ -134,8 +140,8 @@ def test_an_output_row_read_names_a_values_leaves_and_fills_no_input_row():
     reg = TI.declared().registered
     out = I.Read(TI.G8ID, "o0", "resp", at=0, radix=(6,), base=0, step=(8,))
     c = TI.declared(registered=replace(reg, params={**reg.params, "resp": 48}, reads=(*reg.reads, out)))
-    assert I.input_count(c.description(), pins={"weights", "resp"}) == \
-        I.input_count(TI.declared().description(), pins={"weights"})
+    assert I.input_count(c.description(), **held("weights", "resp")) == \
+        I.input_count(TI.declared().description(), **held("weights"))
     with pytest.raises(ValueError, match="both fill rows"):
         TI.declared(registered=replace(reg, params={**reg.params, "resp": 48, "wire": 48},
                                        reads=(*reg.reads, out, replace(out, param="wire"))))
@@ -240,9 +246,9 @@ def test_cmp92s_class_circuit_on_one_server_and_on_two_has_one_inference_and_not
     assert one.units == two.units and list(one.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S]
     assert {"template": KID, "at": S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
         [e.doc() for e in one.blocks.inference]
-    pins = {1: {"weights", "request"}, 2: {"weights0", "weights1", "request", "x1", "response"}}
+    pins = {1: held("weights", "request"), 2: held("weights0", "weights1", "request", "x1", "response")}
     for n, c in circuits.items():
-        count = I.input_count(json.loads(json.dumps(c.description())), pins=pins[n])
+        count = I.input_count(json.loads(json.dumps(c.description())), **pins[n])
         assert count["free"] == 0 and count["ingress"] == 0, count
     r1, r2 = one.blocks_record(), two.blocks_record()
     assert {k: v for k, v in r1.items() if k not in I.NETWORK} == {k: v for k, v in r2.items() if k not in I.NETWORK}

@@ -64,8 +64,8 @@ the units, their feeds, gathers and weight reads, and wires them):
 
 The weights record is never one registered parameter: each weight a port reads is its own at the port's row width
 (`window_builder.weight_param`: ``weights/<label>@<words>``, a tied embedding twice, once as its table's rows and once as the
-LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows and the window's
-members take its rows as registered rows (`interface.members`). A pin of `WEIGHTS` pins them all.
+LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows, by its own name,
+and the window's members take its rows as registered rows (`interface.members`).
 
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
 divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
@@ -88,14 +88,27 @@ peers), a request a Commit window carries in or out, byte ingress, a family this
 keys of an attention version with no per-key-block cut, a weight whose leaves aren't whole u16 words, a row form the cut
 rule can't state and a unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran
 is held by the units' proofs on their committed rows, never by this lowering.
+
+Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
+verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
+registration records for it; anywhere else they are free. The verifier's pins are the weights record's roots of record
+(`weights_record`, from the checkpoint's pinned shards): each weight parameter's value (`weight_value`, its rows under
+public salts, so the root is a function of the weight's words alone), which `verity-vllm advice --weights-of-record`
+records as the window's and the committer must register as `weight_value` of the words it serves (VLLM-125). The rotary
+table has no root of record (its words are the engine's libm's, held to the analytic table only within a bound), so its
+reads stay free. The scan state reads count registered likewise only where the verifier pinned `scan_state.SCAN_STATE`
+at the root of the scan's rows the window reads (`ingress_scan.window_state`), which no weights record gives.
 """
 from __future__ import annotations
 
 import bisect
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
+import numpy as np
+
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Refs, runs
@@ -105,11 +118,13 @@ from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19
 from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.protocols.pouw.h1 import registered as H1R
 
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, _step
+from .window_builder import WEIGHTS, Grain, Row, _Builder, _step, weight_param
 
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
@@ -176,6 +191,8 @@ class WindowClass:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
+#: the class `weights_record` reads the weights record and the weight parameters of: every class's are the model's, at a grain
+WEIGHTS_CLASS = WindowClass(1, 2, 2)
 
 
 _GRAIN = Grain()
@@ -752,5 +769,68 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, name)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "WindowClass", "class_circuit",
-           "class_program", "stop_ids", "window_circuit"]
+def weight_value(program: str, param: str, words: Any) -> G.Registered:
+    """Weight parameter ``param``'s registered value (`window_builder.weight_param`, ``weights/<label>@<w>``): ``words``, the
+    weight's elements in the weights record's order, as their little-endian bytes' u16 words (`interface.words`) in rows of
+    w, committed as core's `registered.Registered` commits ``hm96-sha512/row/v2`` rows (`pouw.h1.registered.commit`, on the
+    GPU where this process has one) under ``program``, the weights record's program digest, at a supplied value's public
+    salts (`registered.supplied_salts` of ``program``, ``param`` and the row). So its root is a function of the words alone,
+    and the verifier's, from the checkpoint of record (`weights_record`), is the committer's, from the words it serves,
+    exactly when the words are: the salts hide nothing the verifier's pin doesn't fix."""
+    label, _, w = param.removeprefix(f"{WEIGHTS}/").rpartition("@")
+    if not w.isdigit() or int(w) < 1 or weight_param(label, int(w)) != param:
+        raise ValueError(f"{param!r} is no weight parameter, {WEIGHTS}/<label>@<words>")
+    a = np.ascontiguousarray(words)
+    data = np.ascontiguousarray(a, a.dtype.newbyteorder("<")).reshape(-1).view(np.uint8)
+    if not data.size or data.size % (2 * int(w)):
+        raise ValueError(f"{param}: {data.size} bytes are no whole rows of {w} u16 words")
+    rows = data.view("<u2").reshape(-1, int(w))
+    return H1R.commit(program, param, rows, b"", 0, row_salts=b"".join(G.supplied_salts(program, param, len(rows))))
+
+
+def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
+                   kv_cache_dtype: str = "auto", grain: Grain = _GRAIN) -> dict[str, Any]:
+    """The weights of record of the circuit's registered weights (`check.weights_of_record`): each field of the class
+    Program's weights record, in its order, composed from the checkpoint's pinned shards (``checkpoints_manifest``, default
+    the repository's ``manifests/checkpoints.json``) at ``registered``'s model and revision, and each weight parameter the
+    class circuit registers at ``grain`` (``weights/<label>@<words>``, one a weight and row width) its value's entry
+    (`weight_value`): ``registered_roots``, the roots the verifier pins before the run, which a window's registration must
+    record (`verity-vllm advice --weights-of-record`), and ``registered_entries``, as `interface.registered_reads` takes
+    them. A parameter whose field has no byte digest (the rotary table, held to the analytic table within a bound) has no
+    root, ``unrooted`` with why, and its reads stay free. The weights record is the model's, one at every class; its
+    parameters are the grain's, which the record names."""
+    from verity_vllm.config import CHECKPOINTS
+
+    from .common import _arr_shape
+
+    r = class_program(registered, WEIGHTS_CLASS)
+    fields = [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
+    params = {p: n for p, n in class_circuit(registered, WEIGHTS_CLASS, None, grain).registered.params.items()
+              if p.startswith(f"{WEIGHTS}/")}
+    of: dict[str, list[str]] = {}
+    for p in params:
+        of.setdefault(p.removeprefix(f"{WEIGHTS}/").rpartition("@")[0], []).append(p)
+    entries: dict[str, dict[str, Any]] = {}
+
+    def root(name: str, words: np.ndarray) -> None:
+        for p in of.get(name, ()):
+            v = weight_value(r.digest, p, words)
+            if v.words * v.leaves != params[p]:
+                raise ValueError(f"{p}: {v.words * v.leaves} words of record, and the circuit registers {params[p]}")
+            entries[p] = v.entry()
+
+    model = registered.phi.model
+    ck = WR.CheckpointIndex(checkpoint_dir, checkpoints_manifest=str(checkpoints_manifest or CHECKPOINTS), model=model["repo"],
+                            revision=model["revision"])
+    rec = WR.weights_of_record({"instances": {}, "result": {"program_digest": r.digest}, "dir": None}, ck, prefix="",
+                               kv_cache_dtype=kv_cache_dtype, fields=fields, on_field=root)
+    why = {f["field"]: f.get("why") or ("held to the analytic table within a bound, no byte digest" if f.get("pinned") == "analytic"
+                                        else "no byte digest") for f in rec["fields"] if not f.get("digest")}
+    return {**rec, "grain": asdict(grain), "registered_roots": {p: e["root"] for p, e in sorted(entries.items())},
+            "registered_entries": dict(sorted(entries.items())),
+            "unrooted": {p: why.get(label, "no field of the weights record") for label, ps in sorted(of.items()) for p in ps
+                         if p not in entries}}
+
+
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "WEIGHTS_CLASS", "WindowClass",
+           "class_circuit", "class_program", "stop_ids", "weight_value", "weights_record", "window_circuit"]

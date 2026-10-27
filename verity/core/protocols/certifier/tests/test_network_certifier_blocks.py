@@ -3,7 +3,8 @@ row of NP + 1 = 16 words, and O = 2 output steps. `AmpereBF16TcDot16_v3`'s unit 
 ``a``, the circuit's external input), the loaded weights' row k (``b``) and the loaded bias (``acc``); `F32ToBf16Rn_v2`'s
 unit u is wired to its output, and its ``o0`` is response row u (the circuit's external output). The network certifier on
 the server's uplink commits and signs the load, the request and the response (`transfer_rows`), and the verifier's pins
-come from its certificates alone (`blocks.pins`): with them the circuit's free inputs are 0. The demo's own request and
+come from its certificates alone (`blocks.pins`): with them, held to the window's roots its registrations record, the
+circuit's free inputs are 0. The demo's own request and
 response rows (`transfer_rows.request_rows`, `response_rows`) bind at the frozen shape on stand-in units (`demo`)."""
 
 from __future__ import annotations
@@ -45,6 +46,11 @@ def circuit(wired: bool = True, reads: tuple = (), params: dict | None = None, *
 
 def record(c: IF.Circuit) -> dict:
     return IF.descriptor_record(c, cap=S * O)
+
+
+def roots(regs: list[dict]) -> dict[str, str]:
+    """The window's roots, by value, as its registrations record them (`interface.input_count` holds a pin to them)."""
+    return {r["value"]: r["root"] for r in regs}
 
 
 def layouts(c: IF.Circuit) -> dict:
@@ -143,7 +149,7 @@ def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tm
                               [[lo | hi << 16] for lo, hi in values()["bias"]], word_bits=32)
     regs.append(TR.registration(wide.head, certs.issuers[UPLINK].sign(UPLINK, Direction.INGRESS, 0, wide.head.digest())))
     pins = BK.pins(doc, b, lays, regs, certs.keys(), {"bias": (32, TR.SCHEMA)})
-    assert pins["bias"] == wide.root.hex() and IF.input_count(doc, pins=pins)["free"] == 0
+    assert pins["bias"] == wide.root.hex() and IF.input_count(doc, pins=pins, roots=roots(regs))["free"] == 0
     with pytest.raises(ValueError, match="transfer 'bias' .*registration's words is 1, and the verifier's 2"):
         BK.pins(doc, b, lays, regs, certs.keys())
     with pytest.raises(ValueError, match=r"formats of \['x'\], which no transfer names"):
@@ -156,13 +162,14 @@ def test_free_is_zero_only_with_certified_pins(tiny, tmp_path):
     c, doc, lays = tiny
     certs = Certifiers(tmp_path)
     b = blocks()
-    pins = BK.pins(doc, b, lays, certs.register(doc, b), certs.keys())
+    regs = certs.register(doc, b)
+    pins = BK.pins(doc, b, lays, regs, certs.keys())
     assert sorted(pins) == ["bias", "request", "w"]
-    got = IF.input_count(doc, pins=pins)
+    got = IF.input_count(doc, pins=pins, roots=roots(regs))
     assert got["free"] == 0 and got["registered"] == got["inputs"] - got["wired"] > 0 and got["ingress"] == 0
-    assert IF.input_count(doc)["free"] == got["registered"]
+    assert IF.input_count(doc)["free"] == IF.input_count(doc, pins=pins)["free"] == got["registered"]
     for v in pins:
-        assert IF.input_count(doc, pins=set(pins) - {v})["free"] > 0
+        assert IF.input_count(doc, pins={p: r for p, r in pins.items() if p != v}, roots=roots(regs))["free"] > 0
     checked = BK.check(doc, b, lays)
     assert [(t.value, t.words, t.rows) for t in checked.transfers] == [("w", 16, O), ("bias", 2, 1), ("request", NP + 1, S),
                                                                         ("response", 1, S * O)]
@@ -204,8 +211,8 @@ def test_the_demos_request_and_response_rows_bind_at_the_frozen_shape(tmp_path):
     certs = Certifiers(tmp_path)
     regs = certs.register(doc, b, data)
     pins = BK.pins(doc, b, lays, regs, certs.keys())
-    assert sorted(pins) == ["k", "request"] and IF.input_count(doc, pins=pins)["free"] == 0
-    assert IF.input_count(doc, pins={"k"})["free"] == 16 * 2 * R * TR.GENERATED
+    assert sorted(pins) == ["k", "request"] and IF.input_count(doc, pins=pins, roots=roots(regs))["free"] == 0
+    assert IF.input_count(doc, pins={"k": pins["k"]}, roots=roots(regs))["free"] == 16 * 2 * R * TR.GENERATED
     heads = BK.certified(doc, b, lays, regs, certs.keys())
     req, resp = heads["request", Direction.INGRESS], heads["response", Direction.EGRESS]
     assert (req.rows, resp.rows, resp.words) == (16, 48, 2)
@@ -222,7 +229,7 @@ def test_two_servers_pin_each_transfer_from_its_own_uplinks_certifier(tmp_path):
     certs = Certifiers(tmp_path)
     regs = certs.register(doc, b)
     pins = BK.pins(doc, b, lays, regs, certs.keys())
-    assert sorted(pins) == ["bias", "h", "request", "w"] and IF.input_count(doc, pins=pins)["free"] == 0
+    assert sorted(pins) == ["bias", "h", "request", "w"] and IF.input_count(doc, pins=pins, roots=roots(regs))["free"] == 0
     heads = BK.certified(doc, b, lays, regs, certs.keys())
     sent, got = heads["h", Direction.EGRESS], heads["h", Direction.INGRESS]
     assert (sent.link, got.link, heads["response", Direction.EGRESS].link) == (UPLINK, UPLINK1, UPLINK1)

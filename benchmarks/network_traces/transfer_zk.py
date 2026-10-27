@@ -284,13 +284,14 @@ def layouts(doc: dict) -> dict:
 
 def verifier(at: SimpleNamespace, regs: list[dict]) -> SimpleNamespace:
     """The verifier's read of the registrations it is handed: the blocks checked and every transfer's head from its
-    certificate alone (`blocks.certified`), the pins, the free inputs with and without them, and its own port of each
-    value at the certified root."""
+    certificate alone (`blocks.certified`), the pins, the free inputs with and without them (the window's roots its
+    registrations', `interface.input_count`), and its own port of each value at the certified root."""
     certifiers = {UPLINK: (at.cert.key, at.cert.session)}
     heads = BK.certified(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
     pins = BK.pins(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
     ports = {p: TR.port(head(heads, at.block, p), at.reads[p]) for p in PORTS}
-    return SimpleNamespace(heads=heads, pins=pins, ports=ports, free=IF.input_count(at.doc, pins=pins)["free"],
+    roots = {r["value"]: r["root"] for r in regs}
+    return SimpleNamespace(heads=heads, pins=pins, ports=ports, free=IF.input_count(at.doc, pins=pins, roots=roots)["free"],
                            free_unpinned=IF.input_count(at.doc)["free"])
 
 
