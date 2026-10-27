@@ -19,11 +19,10 @@ so far (`Given.answer`), and then the evidence from the device's log (`Given.evi
 `benchmarks/prove_path/records_audit.py` and `serve.py`, as a function of the coins. That prover runs C-Flock and reads
 files through `partial` parses, so its outputs are taken as `Given` fields and the toy's bytes are never exhibited.
 
-**The honest lemma's statement (`SoundnessHonest`).** `Vocab.HonestHolds a` holds the honest prover to `a`'s claim at
-every commitment `c`, and sampled proofs' claim reads `c` (`Vocab.Opens`), so at a commitment that opens nothing it
-fails on every play (`Verity.Vocab.not_honestHolds_sampled_of_unopened`, in the proofs). The toy's statement is at the
-honest deployed instance instead: at registered files, the commitment the honest prover sends (`Given.commit`), then
-the honest strategy (`HonestHoldsAt`, the restatement proposed to ONETHM on PRF-193). It takes two named premises
+**The honest lemma's statement (`SoundnessHonest`).** Each decided claim's `Vocab.HonestHolds` at the commitment the
+honest prover sends (`Given.commit`): never an arbitrary one, since sampled proofs' claim reads the commitment
+(`Vocab.Opens`) and at one that opens nothing it fails on every play
+(`Verity.Vocab.not_honestHolds_sampled_of_unopened`, in the proofs). It takes two named premises
 until their owners define the fields they read: `SampledHonest` (the extractor's transcript at the honest strategy is
 correct and the honest commitment opens it: ONE-8's extractor, ONE-7's positions) and `NetworkHonest`
 (network-accounting's `Verity.networkComponentBound_honest`, stated exactly as named on PRF-193 until it lands).
@@ -82,6 +81,8 @@ def inertFinder : Claims.Finder where
 * `extract`: the extractor applied to a strategy (ONE-8, `XplurZC`).
 * `finder`, `callsMul`, `callsAdd`, `finder_calls`: each decided claim's collision finder and its SHA-512 calls in
   those of the strategy (ONE-8 for sampled proofs, network-accounting for the network certifier).
+* `forger`, `forgery`: each decided claim's LMS forger on the play's outcome, and what a forgery is there (ONE-4, with
+  ONE-8 and network-accounting for their claims' forgers).
 * `cost`: the strategy's SHA-512 calls, declared, as `Vocab.cost` is (`Verity.Game` has no call model; ONETHM).
 * `world`: the world each play realizes (ONE-12, the network certifier's realized run, `commWithin`).
 * `certOf`, `crBound`, `delta`, `loss`: what the product publishes, from the parameters alone (ONE-19; its `deltaPub`
@@ -97,6 +98,8 @@ structure Given {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   coinsRead : Index → Sent → List Release
   extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
   finder : Index → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
+  forger : Index → ByteArray → Outcome → Option (ByteArray × ByteArray)
+  forgery : ByteArray → Outcome → ByteArray → ByteArray → Prop
   cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
   callsMul : ByteArray → Index → ℕ
   callsAdd : ByteArray → Index → ℕ
@@ -148,6 +151,10 @@ noncomputable def vocab {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G 
   finder a θ F c σ := match ofAudit a with
     | some k => G.finder k θ F c σ
     | none => inertFinder
+  forger a θ o := match ofAudit a with
+    | some k => G.forger k θ o
+    | none => none
+  forgery := G.forgery
   cost := G.cost
   callsMul θ a := match ofAudit a with
     | some k => G.callsMul θ k
@@ -176,15 +183,6 @@ noncomputable def vocab {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G 
     | some k => G.loss k θ p
     | none => ⊤
 
-/-- **Claim `a`'s honest lemma at the honest deployed instance**: at registered files, the honest prover, after
-sending its commitment `commit θ F`, meets `a`'s claim on almost every play. `Vocab.HonestHolds` with the commitment
-the honest prover sends in place of every commitment. -/
-def HonestHoldsAt {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
-    (commit : ByteArray → ByteArray → ByteArray) (a : Audit) : Prop :=
-  ∀ θ F : ByteArray, V.Registered θ F →
-    Game.prob (fun o => ¬ V.Holds θ F (commit θ F) (V.honest θ F (commit θ F)) a o) (V.game θ F (commit θ F))
-      (V.honest θ F (commit θ F)) = 0
-
 /-- **The honest prover's sampled proofs case** (premise; owners: ONE-8 for the extractor, ONE-7 for the positions):
 at registered files and the honest commitment, the extractor's transcript at the honest strategy is correct on every
 unit, the commitment opens every gate to it (a registered constant to its constant), and the published share `ε` is
@@ -198,16 +196,16 @@ def SampledHonest {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G : Give
 
 /-- **The network certifier's honest lemma at the toy** (premise; owner network-accounting, ONE-12):
 `Verity.networkComponentBound_honest` (`Properties.Verity.Network`) as named on PRF-193, `Vocab.HonestHolds` at the
-network certifier's claim: on every play of the honest strategy at a registered file, what the network certifiers saw
-the node move is within the published `K`. Its use here becomes a citation once it lands. -/
+network certifier's claim at the honest commitment: on every play of the honest strategy at a registered file, what the
+network certifiers saw the node move is within the published `K`. Its use here becomes a citation once it lands. -/
 def NetworkHonest {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G : Given d α) : Prop :=
-  (vocab G).HonestHolds (audit .network)
+  (vocab G).HonestHolds G.commit (audit .network)
 
 /-- **The toy's honest lemma**: on any device, at any `Given`, where the honest prover's sampled proofs case and the
 network certifier's honest lemma hold, every claim the toy deployment decides holds on almost every play of the honest
 prover at registered files and the honest commitment. -/
 def SoundnessHonest : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (G : Given d α), SampledHonest G → NetworkHonest G →
-    ∀ a, deployment.Decides a → HonestHoldsAt (vocab G) G.commit a
+    ∀ a, deployment.Decides a → (vocab G).HonestHolds G.commit a
 
 end Verity.Toy
