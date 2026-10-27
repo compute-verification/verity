@@ -60,8 +60,9 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   top, top-salt, coef, dirs, filler), staged by vstage and proved by oprove one session each. A forgery is refused when
   one of its statements is, whether the firewall stopped it before release (`FIREWALL-REFUSED`) or Lean refused it, and
   a statement it leaves as the honest one is accepted (forged-message's alg-p1). This is `lean_verdicts.py`'s rule. Its
-  rows are left out of the outer totals. `--max-min` sizes each forged session as its honest statement's
-  (`FORGED_AS`). With coef, dirs or message among them, the **`forge-after`** step runs after lean (unless
+  rows are left out of the outer totals. `--max-min` counts every statement a forgery stages (`FORGED`: message, comb
+  and filler every algebra part, sum those and L0 and L3), each sized as its honest statement's session. With coef, dirs
+  or message among them, the **`forge-after`** step runs after lean (unless
   `--no-forge-after`; `--steps ...,forge-after` asks for it alone). The firewall stops those three before Lean sees them,
   so `forge_after.py` makes each one after proving instead, on copies of the honest L0 and alg-p0 statements: row 0 of
   the port one bit off, as its `b || c` alone, as `pub.bin`'s consistent table, and as the whole registration. Lean

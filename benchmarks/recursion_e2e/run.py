@@ -52,11 +52,12 @@ OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "orepl
 #: the forgeries the firewall stops before release (FIREWALL-REFUSED, no session for Lean), which forge-after makes on the
 #: honest sessions after proving instead (forge_after.CASES)
 FORGE_AFTER = ("coef", "dirs", "message")
-FORGERIES = ("message", "sum", "comb", "top", "top-salt", "coef", "dirs", "filler")  # rec_vstage.FORGERIES
-#: the honest statement each forgery's one session is sized as (rec_vstage's docstring: the level or part it forges); the
-#: firewall stops a forged session no later than its release, so this bounds it
-FORGED_AS = {"message": "alg-p0", "sum": "alg-p0", "comb": "alg-p0", "top": "L3", "top-salt": "L0", "coef": "L0", "dirs": "L0",
-             "filler": "alg-p0"}
+#: rec_vstage.FORGERIES, each with the V* statements it stages under forged-<kind>/ and oprove proves one session each, named
+#: as LEVELS names them (`statements`): the levels it forges (L3 is the last at K = 4096; sum's openings either side of the
+#: reps' seam), and with the algebra every part, those it leaves as the honest one too (forged-message's alg-p1). Each is
+#: sized as its honest statement's firewalled session, which bounds the forged one
+FORGED = {"message": "alg", "sum": "L0,L3,alg", "comb": "alg", "top": "L3", "top-salt": "L0", "coef": "L0", "dirs": "L0",
+          "filler": "alg"}
 
 # Where a run goes. 85's CPU prover needs no GPU, so a firewalled run (and --cpu) goes straight to a CPU node that takes
 # plain runs, pinned to CORES (infra, 24 Oct 13:08Z); vy-nebius-1/2/3 and vy-nebius-cpu-1 take runs only through slots.
@@ -105,8 +106,8 @@ def max_min(a) -> int:
     """The job's limit: its statements' firewalled sessions (with MARGIN) plus each other step's minutes per repeat."""
     sessions = a.oprove_warm + a.oprove_runs
     fw = "firewall" in a.modes.split(",")
-    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[FORGED_AS[k]] for k in forge(a))) / 60 \
-        if fw else 15
+    forged = [s for k in forge(a) for s in statements(FORGED[k])]
+    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[s] for s in forged)) / 60 if fw else 15
     rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
     # 85's CPU prover built once (oprove under the firewall, OPROVE_GPU=0), and its proofs: a minute a statement
@@ -156,9 +157,9 @@ def preset(a: argparse.Namespace) -> argparse.Namespace:
 
 def forge(a) -> list[str]:
     kinds = a.forge.replace(",", " ").split()
-    bad = [k for k in kinds if k not in FORGERIES]
+    bad = [k for k in kinds if k not in FORGED]
     if bad:
-        raise SystemExit(f"--forge: {', '.join(bad)} not among {', '.join(FORGERIES)}")
+        raise SystemExit(f"--forge: {', '.join(bad)} not among {', '.join(FORGED)}")
     return kinds
 
 
@@ -324,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--lease-min", type=int, default=0, help="each prove's GPU lease, minutes (85's GPU_MAX_MIN; default "
                        "sized from the firewall's L3 session: lease_min)")
         p.add_argument("--neg", default="challenge,query", help="inner coins the negative flips, space or comma separated ('' for none)")
-        p.add_argument("--forge", default="", help=f"85's forgeries vstage stages and oprove proves (of {', '.join(FORGERIES)}; "
+        p.add_argument("--forge", default="", help=f"85's forgeries vstage stages and oprove proves (of {', '.join(FORGED)}; "
                        "default none); with any of coef, dirs, message the forge-after step runs after lean")
         p.add_argument("--no-forge-after", action="store_true", help="--forge without the forge-after step")
         p.add_argument("--cpu", action="store_true", help="GPU=0: the CPU prover end to end, no lease (a small K and N)")
