@@ -39,6 +39,8 @@
 #   --node NAME          the prover's node, the wiped server's id (default: hostname)
 #   --limit-ns N         the deadline a read (default 20 ms)
 #   --no-lean            judge in Python alone; judge out/wipe.case.json with wipe-protocol later on a CPU node
+#   --wipe-protocol EXE  the Lean judge built elsewhere (served_wipe.sh builds it outside this tree's .lake, which
+#                        served_verdicts.sh's own Lean builds write meanwhile), in place of building it here
 #
 # Under gpu-lease when the node has it (outside the lease: uv sync, the Lean build, the streamer's build check).
 # Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, lake-build.log, period.json, wipe.json,
@@ -57,7 +59,7 @@ if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
-  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS=
+  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= WIPE_PROTOCOL=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -79,6 +81,7 @@ else
       --node) NODE=$2; shift ;;
       --limit-ns) LIMIT=$2; shift ;;
       --no-lean) LEAN=0 ;;
+      --wipe-protocol) WIPE_PROTOCOL=$2; shift ;;
       *) echo "demo.sh: unknown option $1 (see the header)"; exit 2 ;;
     esac
     shift
@@ -102,7 +105,10 @@ else
   uv sync -q --all-packages --extra torch-cpu
   [ -n "$CH" ] || cc -O3 -pthread verity/core/protocols/pous/wipe_stream.c -o "$S/wipe_stream-check"
   TOOLS={}
-  if [ "$LEAN" = 1 ]; then
+  if [ "$LEAN" = 1 ] && [ -n "$WIPE_PROTOCOL" ]; then
+    [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
+    TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"
+  elif [ "$LEAN" = 1 ]; then
     L=verity/core/devices/memory_challenger/lean
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash tools/verity/lean/setup.sh "$L" > "$O/lake-setup.log" 2>&1
