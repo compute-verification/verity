@@ -78,8 +78,9 @@ a read to a file it changes, naming each, with the fix: read it through the area
 it exempts, and a rename moves the file's entry (`python3 tests/lint/test_repo_env_reads.py --move OLD NEW`), as for ruff.
 It holds except handlers that swallow what they catch the same way (27 Oct 02:05Z: recorded outcomes).
 `tests/lint/test_repo_silent_excepts.py` counts, in the same files, each handler, typed or broad, whose every statement is
-`pass`, `continue`, `break`, a bare constant, or a `return` or assignment of a default (nothing, `None`, a constant other than
-a string or `False`, a name other than the caught exception's, an empty container), against
+`pass`, `continue`, `break`, a bare constant, a call to a function that does nothing, or a `return` or assignment of a default
+(nothing, `None`, a constant other than a string or `False`, a name other than the caught exception's, an empty container),
+and each `contextlib.suppress(E, ...)`, which is `except E: pass` (27 Oct 05:10Z, VLLM-134), against
 `tests/lint/allowlists/repo_silent_excepts.json`, built like the env-read list. The gate refuses a PR that adds one to a file it
 changes, naming each, with the fix: re-raise; or record the outcome in the area's typed record or log; or test for the
 expected case and let the rest raise (a narrower handler that still swallows still counts). A rename moves its entry
