@@ -4,14 +4,15 @@ from dataclasses import dataclass, replace
 
 import pytest
 from rho import instances, lean, pofc
-from rho.classes import Outside
+from rho.classes import FlopBudget, Outside
 from rho.params import Registry
 from rho.profile import Profile
 from rho.scenario import build, evaluate
-from rho.theorem import Budget
 
 REG = Registry.load()
 RULES = pofc.rules(REG)
+#: the page's toll tables price a weight at 16 bits in 4-bit activation slots
+PAGE_RULES = replace(RULES, weight_bits=16)
 N_MAX = (1e4, 1e5, 1e6)
 
 #: Daniel's Notion page "Proof of forward computation": one layer's boundary positions, and the toll in % at n_max 1e4,
@@ -33,8 +34,8 @@ def sig(x: float, n: int) -> float:
 def test_one_layer_costs_the_pages_positions(name):
     """784,738 positions a Llama-405B layer (the page's ~800k) and 25.4M a Kimi K3 layer (~25M)."""
     m = pofc.stack(REG, name)
-    assert RULES.weight_bits == 16 and RULES.act_bits == 4 and RULES.s(m) == m.d_model * 4
-    assert math.isclose(pofc.positions(m, RULES.weight_bits, RULES.act_bits), PER_LAYER[name], rel_tol=0.025)
+    assert PAGE_RULES.act_bits == 4 and PAGE_RULES.s(m) == m.d_model * 4
+    assert math.isclose(pofc.positions(m, PAGE_RULES.weight_bits, PAGE_RULES.act_bits), PER_LAYER[name], rel_tol=0.025)
 
 
 @pytest.mark.parametrize("name", PAGE)
@@ -42,15 +43,15 @@ def test_the_toll_tables_are_the_pages_to_every_cell(name):
     """The page multiplies its per-layer positions by the depth over `n_max`, to two figures; the exact toll is within
     that rounding, and Kimi K3's top 64 is its whole model."""
     m = pofc.stack(REG, name)
-    s = RULES.s(m)
-    exact = pofc.tolls(m, PAGE[name], N_MAX, RULES)
+    s = PAGE_RULES.s(m)
+    exact = pofc.tolls(m, PAGE[name], N_MAX, PAGE_RULES)
     for depth, row in PAGE[name].items():
         for n, cell in zip(N_MAX, row, strict=True):
             assert sig(100 * pofc.toll(depth * PER_LAYER[name] * s, n, s), 2) == cell
             assert math.isclose(100 * exact[depth, n], cell, rel_tol=0.05)
     if name == "kimi-k3":
         assert all(sig(100 * exact[64, n], 2) == cell for n, cell in zip(N_MAX, PAGE[name][64], strict=True))
-        assert math.isclose(exact[64, 1e4], pofc.toll(m.n_total * RULES.weight_bits, 1e4, s))
+        assert math.isclose(exact[64, 1e4], pofc.toll(m.n_total * PAGE_RULES.weight_bits, 1e4, s))
 
 
 def test_the_toll_is_the_weights_over_an_episodes_boundary():
@@ -66,37 +67,39 @@ def reference():
 
 def test_the_wrapper_gives_episodes_the_forward_cut_and_leaves_nci_blocks_without_one():
     s, inner = reference()
-    (r0,), (r,) = inner.regions, pofc.wrap(s.regime, RULES, s.model).partition(s.context).regions
+    (r0,), (r,) = inner.serving, pofc.wrap(s.regime, RULES, s.model).partition(s.context).serving
     cuts = {c.name: c for c in r.cuts}
-    assert set(cuts) == {"declared", "physical", "declared+pofc"}
+    assert set(cuts) == {"inference", "serving", "inference+pofc"}
     assert r.cuts[:2] == r0.cuts and all(math.isinf(b.budget.cut) for c in r0.cuts for b in c.blocks)
-    (ep,), (decl,) = cuts["declared+pofc"].blocks, cuts["declared"].blocks
+    (ep,), (decl,) = cuts["inference+pofc"].blocks, cuts["inference"].blocks
     assert ep.kind == "episode" and ep.budget.cut == RULES.n_max * s.model.d_model * RULES.act_bits
-    assert ep.budget.inputs == RULES.x and cuts["declared+pofc"].free == cuts["declared"].free
-    assert pofc.RULES in cuts["declared+pofc"].cites and set(cuts["declared"].cites) <= set(cuts["declared+pofc"].cites)
-    # at the reference n_max an episode is the 1M-token session the NCI policy declares, with its cut
-    assert math.isclose(ep.budget.compute, decl.budget.compute) and math.isclose(ep.budget.inputs, decl.budget.inputs)
+    assert ep.budget.inputs == RULES.x and cuts["inference+pofc"].uncertified == cuts["inference"].uncertified
+    assert pofc.RULES in cuts["inference+pofc"].cites
+    assert set(cuts["inference"].cites) <= set(cuts["inference+pofc"].cites)
+    # at the reference n_max an episode is the 1M-token session the NCI policy declares, with its cut, in gates
+    assert math.isclose(ep.budget.gates, decl.budget.gates) and math.isclose(ep.budget.inputs, decl.budget.inputs)
     assert math.isclose(ep.count, decl.count)
     layout = {b.kind: b.budget for b in r.layout.blocks}
     assert set(layout) == {"episode", "uncertified"} and math.isinf(layout["uncertified"].cut)
 
 
-def test_a_shorter_episode_recuts_the_declared_compute_without_changing_it():
+def test_a_shorter_episode_recuts_the_declared_gates_without_changing_them():
     s, inner = reference()
-    r = pofc.wrap(s.regime, replace(RULES, n_max=1e4), s.model).partition(s.context).regions[0]
-    (decl,), (ep,) = inner.regions[0].cuts[0].blocks, next(c for c in r.cuts if c.name == "declared+pofc").blocks
-    assert math.isclose(ep.count * ep.budget.compute, decl.count * decl.budget.compute)
+    r = pofc.wrap(s.regime, replace(RULES, n_max=1e4), s.model).partition(s.context).serving[0]
+    (decl,), (ep,) = inner.serving[0].cuts[0].blocks, next(c for c in r.cuts if c.name == "inference+pofc").blocks
+    assert math.isclose(ep.count * ep.budget.gates, decl.count * decl.budget.gates)
     assert math.isclose(ep.count, 100 * decl.count) and ep.budget.inputs == 1e4 * RULES.input_bits
 
 
 def test_the_physical_instantiation_gives_the_window_the_links_bits():
     s, _ = reference()
     bw = pofc.link(REG, s.context.location.name)
-    r = pofc.wrap(s.regime, RULES, s.model, bw).partition(s.context).regions[0]
+    r = pofc.wrap(s.regime, RULES, s.model, bw).partition(s.context).serving[0]
     cuts = {c.name: c for c in r.cuts}
-    (phys,) = cuts["physical+pofc"].blocks
-    assert math.isclose(phys.budget.cut, bw * s.regime.wipe_s) and pofc.PHYSICAL in cuts["physical+pofc"].cites
-    assert all(math.isinf(b.budget.cut) for b in cuts["physical"].blocks)
+    (phys,) = cuts["serving+pofc"].blocks
+    assert math.isclose(phys.budget.cut, bw * s.regime.wipe.wipe_s, rel_tol=1e-12)
+    assert pofc.PHYSICAL in cuts["serving+pofc"].cites
+    assert all(math.isinf(b.budget.cut) for b in cuts["serving"].blocks)
     assert math.isinf({b.kind: b.budget for b in r.layout.blocks}["uncertified"].cut)
     # the window's link carries many episodes' cuts: a matched link is three orders slower than NVLink's forward half
     assert 1e3 < bw / pofc.matched_link(RULES, s.model, s.context) < 1e4
@@ -106,7 +109,7 @@ def test_the_useful_share_is_the_pages_when_a_token_costs_a_position():
     t = pofc.Trained("x", kappa=0.5, depth=2, layer_params=1e3, weight_bits=16, held=0, spare=0.0, position_bits=8,
                      token_flops=10)
     n = 1e4
-    budget = Budget(compute=t.token_flops * n, inputs=0.0, cut=n * t.position_bits)
+    budget = FlopBudget(compute=t.token_flops * n, inputs=0.0, cut=n * t.position_bits)
     assert math.isclose(t.toll(budget), 0.4)
     assert math.isclose(t.within(budget), (1 - 0.4) * t.kappa * budget.compute / 2)
     assert t.within(replace(budget, cut=t.behind())) == 0.0
@@ -122,10 +125,11 @@ def test_backprop_caps_only_under_a_forward_cut_below_a_toll_of_one():
     s, _ = reference()
     a = pofc.Backprop(s.model, RULES).allowance(profile())
     ep = pofc.episode(RULES, s.model)
-    assert math.isinf(a(ep)) and math.isinf(a(Budget(ep.compute, ep.inputs)))
-    wide = pofc.episode(replace(RULES, n_max=1e9), s.model)
+    assert math.isinf(a(ep)) and math.isinf(a(FlopBudget(ep.compute, ep.inputs)))
+    wide = pofc.episode(replace(RULES, n_max=5e8), s.model)
     t = pofc.trained(profile(), s.model, RULES)
-    assert 0 < t.toll(wide) < 1 and math.isclose(a(wide), t.within(wide)) and a(wide) < 0.6 * wide.compute / 2
+    # above a toll of 2/3 the free positions hold fewer training tokens (3 forwards each) than the compute pays for
+    assert 2 / 3 < t.toll(wide) < 1 and math.isclose(a(wide), t.within(wide)) and a(wide) < 0.6 * wide.compute / 2
     signal = pofc.Backprop(s.model, RULES, signal=True).allowance(profile())
     assert math.isclose(signal(ep), t.tokens(ep.inputs)) and signal(ep) < 0.6 * ep.compute / 2
 
@@ -143,26 +147,61 @@ def test_the_profiles_depth_is_read_when_the_argument_gives_none():
 
 
 def test_the_constructions_open_where_the_page_says():
+    """In bits, at the committed precision the loss operator holds its own layer (attack b) and the palindrome needs
+    `P ≥ 2×` (attack c); at the page's 16-bit weights it needs `p ≥ 2×` for both, and `P ≥ 3×` besides."""
     s, _ = reference()
     m, p = s.model, profile()
     with pytest.raises(Outside):
-        pofc.LastLayers(m, RULES, 1).allowance(p)
-    wide_p = replace(RULES, per_operator=2.0)
-    assert pofc.trained(p, m, wide_p).held == 1
-    ep = pofc.episode(wide_p, m)
-    assert pofc.LastLayers(m, wide_p, 1).allowance(p)(ep) == 0.6 * ep.compute / 2
-    assert pofc.LastLayers(m, wide_p, 1).allowance(p)(Budget(ep.compute, ep.inputs)) == 0.0
-    for rules in (RULES, replace(RULES, commit=3.0)):
+        pofc.LastLayers(m, PAGE_RULES, 1).allowance(p)
+    assert pofc.trained(p, m, RULES).held == pofc.trained(p, m, replace(PAGE_RULES, per_operator=2.0)).held == 1
+    ep = pofc.episode(RULES, m)
+    assert pofc.LastLayers(m, RULES, 1).allowance(p)(ep) == 0.6 * ep.compute / 2
+    assert pofc.LastLayers(m, RULES, 1).allowance(p)(FlopBudget(ep.compute, ep.inputs)) == 0.0
+    for rules in (RULES, replace(PAGE_RULES, commit=3.0)):
         with pytest.raises(Outside):
             pofc.Palindrome(m, rules).allowance(p)
-    assert pofc.Palindrome(m, replace(RULES, commit=3.0, per_operator=2.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
+    assert pofc.Palindrome(m, replace(RULES, commit=2.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
+    assert pofc.Palindrome(m, replace(PAGE_RULES, commit=3.0, per_operator=2.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
     big = pofc.episode(replace(RULES, n_max=1e8), m)
-    t = pofc.trained(p, m, RULES, 1)
-    full, served = (pofc.WeightsAsActivations(m, RULES, 1, b).allowance(p)(big) for b in (None, RULES.act_bits))
+    t = pofc.trained(p, m, RULES, 4)
+    full, served = (pofc.WeightsAsActivations(m, RULES, 4, b).allowance(p)(big) for b in (None, RULES.act_bits))
     assert math.isclose(full, t.within(big)) and math.isclose(served, t.within(big, RULES.act_bits)) and served > full
     assert pofc.WeightsAsActivations(m, RULES).allowance(p)(pofc.episode(RULES, m)) == 0.0
     assert pofc.junk_share(RULES, m, s.context) == 1.0
     assert pofc.junk_share(replace(RULES, episodes_per_day=1.0), m, s.context) < 1e-3
+
+
+def test_an_update_leaves_an_episode_only_through_its_outputs():
+    """Registration happens once (Daniel, 25 Oct) and every declared episode reads the committed `θ`, so what a
+    construction trains inside an episode reaches the next only through `Y` and back in through `X` (Daniel, 26 Oct);
+    under `recommit` it persists by new parameters, as the page's charge to `P` reads."""
+    s, _ = reference()
+    m, ep = s.model, pofc.episode(RULES, s.model)
+    assert RULES.persist == "outputs" and REG["pofc.rules.reference.persist"] == "outputs"
+    outputs = replace(RULES, commit=2.0)
+    recommit = replace(outputs, persist="recommit")
+    big = replace(profile(), state_bits=2 * RULES.y)
+    for make in (lambda r: pofc.LastLayers(m, r, 1), lambda r: pofc.Palindrome(m, r),
+                 lambda r: pofc.WeightsAsActivations(m, r, 1), lambda r: pofc.JunkEpisodes(m, r, 1.0, 1)):
+        with pytest.raises(Outside, match="only through Y"):
+            make(outputs).allowance(big)
+        assert make(recommit).allowance(big)(ep) == make(outputs).allowance(profile())(ep)
+    with pytest.raises(ValueError, match="persist"):
+        replace(RULES, persist="sometimes")
+
+
+def test_in_episode_training_no_longer_sets_the_upper_end_where_its_update_cant_leave():
+    """At `n_max = 1e8` training the top layer inside an episode reached the unencumbered `ρ = 1/MFU₀` (the construction
+    at the training MFU, padded to capacity) when its update persisted for free; under `outputs` its 2e11-bit state
+    can't leave through `Y`, so the upper end is the scenario's own attacks'."""
+    s = build(REG, "reference-onsite-h200")
+    f = s.context.fleet
+    unencumbered = 1 / (f.eps_dark * f.dark_mfu + (1 - f.eps_dark) * f.mfu_train)
+    (top1,) = (q for q in pofc.versus(REG, n_maxes=(1e8,), depths=(1,)))
+    assert top1.hi > 1.5 * unencumbered
+    (free,) = (q for q in pofc.versus(REG.override({"pofc.rules.reference.persist": "recommit"}), n_maxes=(1e8,),
+                                         depths=(1,)))
+    assert free.hi == pytest.approx(unencumbered)
 
 
 def test_every_pofc_number_says_where_it_comes_from_and_how_sure_it_is():

@@ -31,11 +31,10 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
 from verity_vllm.engine.profiles import profile_module_for_case
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
-from verity_vllm.engine.collectives.embedding_shard import EmbeddingShardCuda
 
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
-from verity_vllm.observe.fold.patterns.collectives import TpCollective
+from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
 from verity_vllm.observe.fold.patterns.gemm import GemmLaunch
 from verity_vllm.observe.fold.patterns.target import gemm_target_of, pinned_num_sms
 from verity_vllm.observe.fold.tree import step_events

@@ -16,7 +16,7 @@ from verity_e2e_demo import report as D
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
-SECTIONS = ["# Demo A: one H200, one block", "## 1. Ran and proved, on one H200, one block",
+SECTIONS = ["# Demo A: one H200, one block", "## 1. Ran and proved, on one H200, one block", "### Visible failures",
             "## 2. Measured on the demo: the inputs to the scaling claim",
             "## 3. Computed from the same theorem and the measured costs, not run", "## What the demo didn't show",
             "## Sources"]
@@ -139,6 +139,46 @@ def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
         D.render([rec], {**_m(), "fixed": {"salt": "run r1"}})
 
 
+def test_the_three_landed_fixes_drop_their_caveats_cleanly() -> None:
+    rec = _load("block-record-r2-period0")
+    landed = {"certifier-output-tie": "#4575, e2e r20261026-063606-3381",
+              "torch-loop-wiring": "#4558 (25e140abcd), e2e r20261026-070934-56b3",
+              "pouw-salt-order": "#4573, carried by #4594"}
+    caveats = D.render([rec], {**_m(), "fixed": landed}).split("## What the demo didn't show")[1].split("## Sources")[0]
+    assert "(NET-80)" not in caveats and "ReLU and per-row" not in caveats and "(RT-LEAN L22)" not in caveats
+    assert "(#4405, #4426)" in caveats and "\n\n\n" not in caveats
+    assert all(line.startswith(("- ", "  ")) for line in caveats.strip().splitlines())
+
+
+def _failure(unit: int, **kw) -> dict:
+    return {"subcircuit": "PouwH1Tile_v1", "unit": unit, "step": 12, "slot": 7,
+            "why": "a PoUW tile lane: no proving Definition", "source": "r20261026-120000-aaaa", **kw}
+
+
+def test_a_visible_failure_is_named_beside_the_verdict_and_fails_the_block() -> None:
+    rec = _load("block-record-r2-period0")
+    out = D.render([rec], {**_m(), "visible_failures": [_failure(4093), _failure(77, slot=3)]})
+    part1 = out.split("## 2.")[0]
+    assert "**fail (2 drawn units not proved: visible failures, no redraw)**" in part1
+    assert ("| PouwH1Tile_v1 | 4,093 | 12 | 7 | a PoUW tile lane: no proving Definition | r20261026-120000-aaaa |"
+            in part1)
+    assert "| fail (2 drawn units not proved: visible failures, no redraw) |" in out.split("## 1.")[0]
+    assert "| ⟨VISIBLE_FAILURES⟩ | 2 | r20261026-120000-aaaa |" in out
+    none = D.render([rec], {**_m(), "visible_failures": []})
+    assert "None: every drawn unit was proved." in none and "network accounting: **accept**." in none
+    unsaid = D.render([rec])
+    assert "\n⟨VISIBLE_FAILURES⟩\n" in unsaid and "| ⟨VISIBLE_FAILURES⟩ | unfilled |" in unsaid
+    with pytest.raises(ValueError, match="needs subcircuit, unit, step, slot, why, source"):
+        D.render([rec], {**_m(), "visible_failures": [_failure(1, source="")]})
+
+
+@pytest.mark.parametrize("name", ["AllGather_v1", "Gather_v1{N=8}"])
+def test_a_gather_is_no_subcircuit(name: str) -> None:
+    doc = {**_m(), "subcircuits": [{"name": name, "units": 64, "source": "test"}]}
+    with pytest.raises(ValueError, match="plain wire reference"):
+        D.render([_load("block-record-r2-period0")], doc)
+
+
 def test_the_bound_cites_the_joint_statement_only_when_locked() -> None:
     rec = _load("block-record-r2-period0")
     locked = D.render([rec], _m(JOINT_LOCKED=True)).split("## Sources")[0]
@@ -172,11 +212,15 @@ def test_the_pytorch_dry_run_renders_labelled() -> None:
     assert "sampled proofs, PoUW and network accounting: **accept**." in out.replace("\n", " ")
     assert "k = 64 units, drawn uniformly over the whole partition (1,024 units across 1 subcircuits" in out.replace(
         "\n", " ")
-    assert "in 53 sessions\n(r20261025-230005-b71a)" in out
+    assert "53 sessions (r20261025-230005-b71a)" in out
     assert "This block drew k = 64, not M3's handful of 8 (PRF-171)." in out
     assert "at most 68 of its" in out and "at most K = 1,449 bits leaked" in out
     assert "Commit on the H200: 225 *(H200 bench HASH-7, not the demo block)* GB/s" in out
     assert "(15.7% *(HASH-20 bench, not the demo block)*)" in out
+    assert ("13.9 *(M3 bench r20261026-085143-da39)* s a step at batch 512 (4.445 *(M3 bench r20261026-085143-da39)* "
+            "ns per\nrow-slot)") in out
+    assert "21.7 *(M3 bench r20261026-093524-01df)* s at batch 1,024" in out
+    assert "512 to 9 *(kernels #4666 bench)* s." in out
     assert "PoUW backing: this block's PoUW ran the v1 subset's tiles (PouwH1Tile_v1)" in out
     assert ("| ⟨DRAWN_UNITS⟩ | 64 | block record r20261025-230005-b71a › integrity › quantity.drawn "
             "*(PyTorch dry run)* |") in out

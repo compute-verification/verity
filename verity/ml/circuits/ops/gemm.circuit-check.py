@@ -17,6 +17,7 @@ def _core_roots() -> list[Any]:
         bind(G.GemmCoordinate, K=64, DOT=H),
         bind(G.GemmCoordinatePad, T=17, K=32, DOT=H),
         *(bind(G.PvRow, T=T, K=32, D=64, DOT=H) for T in (1, 8, 32)),
+        bind(G.PvRowPad, T=32, K=32, D=64, DOT=H),
         bind(G.Gemm, K=32, N=3, DOT=A),
         bind(G.GemmCoordinateE4m3, K=64, **G.GEMM_SM120_E4M3),
         bind(G.GemmCoordinateNvf4, K=128, **G.GEMM_SM120_NVF4),

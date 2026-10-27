@@ -23,6 +23,8 @@ or `N` as an argument. This module states both at every point and block count, f
   `pr (PassesAt N …) ≤ c + ε`. The sampler's term is `0` at every `N`, by `DrawAtMost`.
 * `EndToEndRingOfRoundSecure`: from `P2RingRoundSecure` (`2^19 ≤ N ≤ 2^25`), the deployed budget `1% + 2^-128` at every
   `N` in that range, as `EndToEndRing` gives it at `2^19`.
+* `EndToEndRingOfRoundSecureWide`, `EndToEndRingDemo`: the same from `P2RingRoundSecureWide` (`2^19 ≤ N ≤ 2^27`), and
+  its instance at Demo B's `N = 1038·2^16`, with the state bound `⌊ρ·|C|⌋ = 1,060,008,348,186` bits.
 
 The claims that carry the game to the deployed system are `Pous.EndToEnd`'s four (`pous-ring-device`,
 `pous-ring-speed`, `pous-ring-instantiation`, `prf/sha-512`), read at `N`; none of them names a block count.
@@ -192,6 +194,34 @@ def EndToEndRingOfRoundSecure : Prop :=
       ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 25 →
         Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
         ∀ (session binding : ByteArray) (W : Bits (schAt N).n) (A : ServerAt N (SAt N) D Q L),
+          pr (PassesAt N session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
+
+/-- **`EndToEndRing`'s budget to `2^27` blocks, from the widened per-round floor.** `EndToEndRingOfRoundSecure` with
+`P2RingRoundSecureWide` in place of `P2RingRoundSecure`: at every `N` from `2^19` to `2^27` at which the coin
+commitments hide the indices up to `2^-131`, every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded server passes the session with
+probability at most `1% + 2^-128`. Rests on the open conjecture `P2RingRoundSecureWide`, unchecked in `N` above
+`2^25`. -/
+def EndToEndRingOfRoundSecureWide : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
+    (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
+    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+      ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
+        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
+        ∀ (session binding : ByteArray) (W : Bits (schAt N).n) (A : ServerAt N (SAt N) D Q L),
+          pr (PassesAt N session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
+
+/-- **The demo's ring game**: `EndToEndRingOfRoundSecureWide` at Demo B's store, `N = 1038·2^16` blocks of 16,448
+bits (139.7 GB of payload), whose state bound `⌊ρ·|C|⌋` is 1,060,008,348,186 bits. If the coin commitments at that
+`N` hide the indices up to `2^-131`, every server holding at most that many bits between rounds, within `(D, Q, L)`,
+passes the session with probability at most `1% + 2^-128`. Rests on `P2RingRoundSecureWide`, unchecked in `N` above
+`2^25`. -/
+def EndToEndRingDemo : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
+    (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
+    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+      ∀ (N : ℕ) [NeZero N], N = 1038 * 2 ^ 16 →
+        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
+        ∀ (session binding : ByteArray) (W : Bits (schAt N).n) (A : ServerAt N 1060008348186 D Q L),
           pr (PassesAt N session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
 
 end Pous.EndToEnd

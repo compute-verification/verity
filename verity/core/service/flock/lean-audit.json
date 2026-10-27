@@ -4,6 +4,7 @@
   "FlockVerify",
   "Flock.Test.Full",
   "Flock.Test.Labels",
+  "Flock.Test.PortRoots",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
   "Flock.Test.Sha512",
@@ -22,8 +23,10 @@
   "Flock.Test.MsgNames",
   "Flock.Test.Parsed",
   "Flock.Test.Part",
+  "Flock.Test.Holo",
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
+  "Flock.Test.RecCompose",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
@@ -58,6 +61,7 @@
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
+  "Flock.Test.RequireLink",
   "VStar"
  ],
  "exempt": {

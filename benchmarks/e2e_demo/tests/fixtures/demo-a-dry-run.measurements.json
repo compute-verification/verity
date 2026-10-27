@@ -29,6 +29,31 @@
       "value": 6.35,
       "source": "HASH-20, as CMP-98 cites it: one step at M = 16,384",
       "label": "HASH-20 bench, not the demo block"
+    },
+    "STEP_S_B512": {
+      "value": 13.9,
+      "source": "r20261026-085143-da39 stdout.log: forward + attention a step at active 512, steps 20 to 31 (vy-dc-h200-2)",
+      "label": "M3 bench r20261026-085143-da39"
+    },
+    "ROW_SLOT_NS_B512": {
+      "value": 4.445,
+      "source": "r20261026-085143-da39: the step over its row-slots",
+      "label": "M3 bench r20261026-085143-da39"
+    },
+    "STEP_S_B1024": {
+      "value": 21.7,
+      "source": "r20261026-093524-01df stdout.log: forward + attention a step at active 1,024, steps 20 to 31 (vy-dc-h200-2)",
+      "label": "M3 bench r20261026-093524-01df"
+    },
+    "ROW_SLOT_NS_B1024": {
+      "value": 3.466,
+      "source": "r20261026-093524-01df: the step over its row-slots",
+      "label": "M3 bench r20261026-093524-01df"
+    },
+    "STEP_S_KERNELS": {
+      "value": 9,
+      "source": "kernels' #4666: about 9 s a step at batch 512",
+      "label": "kernels #4666 bench"
     }
   },
   "subcircuits": [

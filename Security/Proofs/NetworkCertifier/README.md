@@ -52,7 +52,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
 ../../Definitions/NetworkCertifier/Guarantees/Warden.lean  trusted: the warden's channel bound (the client's view factors through
                                the fail cells, its count, and the whole run's bound with the advice string and content)
-../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty units add under a sampled audit: their
+../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
                                committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
                                sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
                                audit gives that count (AdviceIn, freeInputs, AsReg, RLeak)
@@ -283,14 +283,14 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
   `EncardWardenDecodableLe`, under `trusted-host` (`Verity.Assumptions.TrustedHost`).
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
-  `RAcc δ` on the statements whose layout fits the program: no faulty unit is drawn `all`, and the advice holding the
-  faulty units' committed gates at the trace's values makes `Accepted` every run the trace carries.
+  `RAcc δ` on the statements whose layout fits the program: no faulty proof block is drawn `all`, and the advice holding the
+  faulty proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
   `SampledAuditInstance.lean` discharges its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`'s `KS`
   conjunct: `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain`
   at the masked and plain records.
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
   `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible faulty set: the inputs other than the
-  ingress, the faulty units' committed bits and the choice of faulty set. `SampledLeakAccepted` is what an accepted
+  ingress, the faulty proof blocks' committed bits and the choice of faulty set. `SampledLeakAccepted` is what an accepted
   sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Claims.Sampling.KS` at the deployment,
   the carried sequences of length `k` are among those the count bounds except with probability `δ + ε_ks + ε_bind`
   (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
@@ -418,7 +418,7 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
    interaction.
 4. **Jitter** is a free per-step class below D. The operator reads it, since it reads the whole observation.
-5. **The integrity term** (wrong proof units) is not modelled: this is the exact binding.
+5. **The integrity term** (faulty proof blocks) is not modelled: this is the exact binding.
 6. **Statuses** cover every boundary link, ingress included, since an ingress status is an egress channel.
 7. **Counts** are `Set.encard` in `ℕ∞`, so a bound also says the set is finite.
 

@@ -36,6 +36,11 @@ component's `answer` on its case, then decides, reject first:
 On acceptance the product makes public each component's public outputs and keeps each one's profile, both as JSON objects
 keyed by the component's id. On rejection or undecided nothing is public.
 
+`Properties.Composition` (`Security/Properties/Composition.lean`, proved in `Security/Proofs/Properties/Composition.lean`)
+states the accept row against this code. `answerAccepts` covers every `Core.Protocol`: what `answer` accepts decodes,
+and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
+component accepts its own case, and the commitment is `bind` of the components' digests.
+
 ## Components
 
 | component | onsite | remote | `Core.Protocol` | id |

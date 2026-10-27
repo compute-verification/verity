@@ -138,36 +138,39 @@ PERIOD_DIGEST = """
 import json, resource, sys, time
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity_vllm.protocols.pouw.h1 import served as SV
-shapes, modules, rows, steps, j10r = json.loads(sys.argv[1])
+shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
 if j10r:
     from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
-    unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
+    unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 t = time.monotonic()
 digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps,
-                                      unit=unit))
+                                      unit=unit, arch=arch))
 print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
                   "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}))
 """
 
 
-def period_unit(j10r: bool) -> Any:
+def period_unit(j10r: bool, arch: str | None = None) -> Any:
     """The window Program's tile unit at each K (`pouw_h1_served.declared`'s ``unit``, as `PERIOD_DIGEST` builds it): None,
-    v1's (`h1window.tile_unit`'s default), or with ``j10r`` J10-R's, `h1tile.PouwH1Tile5` under `h1zy` (``--j10r``)."""
+    v1's (`h1window.tile_unit`'s on ``arch``, `declared`'s), or with ``j10r`` J10-R's, `h1tile.PouwH1Tile5` under `h1zy`
+    on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
     from verity.core.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.pouw.circuit import h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
-    return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
+    return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
 
-def period_program(model: Any, rows: int, steps: int, j10r: bool = False) -> tuple[Any, str, dict[str, Any]]:
+def period_program(model: Any, rows: int, steps: int, j10r: bool = False,
+                   arch: str | None = None) -> tuple[Any, str, dict[str, Any]]:
     """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run,
-    over `period_unit`'s tile unit), its digest (the period's ``--circuit``) and what declaring them cost, once before
-    any window, as a period declares them. The digest is taken in a child process, since at FILL it alone takes minutes
-    and tens of GB, which no window pays, so this process's RSS is the windows' own."""
+    over `period_unit`'s tile unit on the serving card's ``arch``, which refuses a K outside its H1 record's domain), its
+    digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares them.
+    The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window pays, so
+    this process's RSS is the windows' own."""
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import served as SV
@@ -175,10 +178,10 @@ def period_program(model: Any, rows: int, steps: int, j10r: bool = False) -> tup
     layers = PHK.layers(model, pouw.linear_types())
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
-    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps, j10r])],
+    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps, j10r, arch])],
                              stdout=subprocess.PIPE, text=True)
     t = time.monotonic()
-    program = SV.declared(shapes, modules, rows, steps, unit=period_unit(j10r))
+    program = SV.declared(shapes, modules, rows, steps, unit=period_unit(j10r, arch), arch=arch)
     declare_s = round(time.monotonic() - t, 1)
     out, _ = child.communicate()
     if child.returncode:
@@ -631,10 +634,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     except ValueError as e:
         doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
-    period = period_program(eng.model, decl.rows, decl.steps, a.j10r) if a.served else None
+    arch = doc["arch"] = a.arch or (SV.card_arch() if a.served else None)
+    period = period_program(eng.model, decl.rows, decl.steps, a.j10r, arch) if a.served else None
     if period is not None:
         doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {
-            "circuit": period[1], "noise": "j10r" if a.j10r else "v1"}
+            "circuit": period[1], "noise": "j10r" if a.j10r else "v1", "arch": arch}
         print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     gpu_peak()
     t0 = time.monotonic()
@@ -664,11 +668,12 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         # in-process coins open no session, so a local window's key is its own (`Served.key`)
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
-            shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period)
+            shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period, arch)
             doc["b_registered"] = {"s": round(time.monotonic() - t0, 1), "path": SV.NR.path()}
             print(f"[fill] B registered under a local key {doc['b_registered']}", flush=True)
         served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
-                            window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1])
+                            window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1],
+                            arch=arch)
                   if a.served and name not in ("solo", "baseline") else None)
         registered_s: dict[int, float] = {}
         hashed_s: dict[int, float] = {}
@@ -1038,16 +1043,16 @@ def declared_of(a: argparse.Namespace) -> Any:
     return PH.Static((1,) * slots, cap, rows, steps)
 
 
-def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: Any = None) -> Any:
+def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: Any = None, arch: str | None = None) -> Any:
     """The served model's ``b/<K>`` registered once under a fresh local key and the Program install declares
-    (`pouw._install_h1`'s shapes and names; ``period``'s, from `period_program`, when given), for a window with no
-    auditor's registration (no ``--model``)."""
+    (`pouw._install_h1`'s shapes and names, on the serving card's ``arch``; ``period``'s, from `period_program`, when
+    given), for a window with no auditor's registration (no ``--model``)."""
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw.h1 import served as SV
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
     given = {} if period is None else {"program": period[0], "program_digest": period[1]}
-    circuit = SV.Served(**given).declare(shapes, modules, rows, steps)
+    circuit = SV.Served(arch=arch, **given).declare(shapes, modules, rows, steps)
     return SV.register_weights(circuit, shapes, SV.weights_of(layers), os.urandom(32))
 
 
@@ -1534,6 +1539,9 @@ def main(argv: list[str] | None = None) -> int:
                          "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
                          "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
                          "(served_h1/noise.cu's) takes receipts.py's torch chain over its noise")
+    ap.add_argument("--arch", help="fill with --served: the H1 device record (h1device.DEVICES: sm_90, the H200; sm_120, "
+                                   "the RTX PRO 6000) whose domain bounds each K's tile unit (default: the serving card's, "
+                                   "pouw_h1_served.card_arch)")
     ap.add_argument("--j10r", action="store_true",
                     help="fill with --served: declare the period's window Program over J10-R's tile unit "
                          "(h1tile.PouwH1Tile5: one noise stream a call, seeded by its roots and first position), so its "

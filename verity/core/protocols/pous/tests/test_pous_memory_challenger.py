@@ -1,9 +1,10 @@
 """The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
 verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
-and the session log that refuses a used id.  Every clock is injected."""
+no garbage collection inside the rounds, and the session log that refuses a used id.  Every clock is injected."""
 from __future__ import annotations
 
 import dataclasses
+import gc
 import hashlib
 import os
 import tempfile
@@ -197,6 +198,18 @@ def test_a_late_round_ends_the_session_with_no_retry():
     assert v.reasons == (f"the session ended late after 5 of {K} rounds", f"1 answers are past Δ + RTT = {LIMIT} ns")
     on_time = session(spend=lambda j: LIMIT)
     assert judge(*on_time).accepted
+
+
+def test_no_collection_runs_inside_the_rounds() -> None:
+    seen: list[bool] = []
+    c, signed, signer = session(respond=lambda i: (seen.append(gc.isenabled()), block(i))[1])
+    assert len(seen) == K and not any(seen) and gc.isenabled() and judge(c, signed, signer).accepted
+    gc.disable()
+    try:
+        session()
+        assert not gc.isenabled()
+    finally:
+        gc.enable()
 
 
 def test_a_clock_that_runs_backwards_ends_the_session_late_as_the_verdict_judges_it():

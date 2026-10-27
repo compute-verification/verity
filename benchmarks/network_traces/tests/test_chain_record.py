@@ -294,8 +294,9 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     schema = json.loads(BLOCK_SCHEMA.read_text())
     jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
                                      "$ref": "#/$defs/leg"}).validate(entry)
-    assert (f"K = {answer['public']['K']} bits over 1 link-windows, error {answer['public']['eps']} (quantity.eps); "
-            "at δ = 1/100: not established") in cr.markdown(got)
+    K, eps = answer["public"]["K"], answer["public"]["eps"]
+    at = f"K = {K}" if Fraction(eps) <= Fraction(1, 100) else "not established"
+    assert f"K = {K} bits over 1 link-windows, error {eps} (quantity.eps); at δ = 1/100: {at}" in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
                     "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.warden_run,
@@ -468,6 +469,15 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
                "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
     assert cr.free_inputs(circuit) == 4 * 8
     (tmp_path / "circuit.json").write_text(json.dumps(circuit))
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
+    strata = [{"k": 1, "template": "s0", "units": [[0, 1]]}, {"k": 1, "template": "s1", "units": [[1, 4]]}]
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "stratified", "k": 2,
+                                                                                     "strata": strata}}))
+    assert (cr.audit_of(tmp_path)["drawn"], cr.audit_of(tmp_path)["q"]) == (2, "1/3")
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "stratified", "k": 1,
+                                                                                     "strata": [{**strata[0], "k": 0}, strata[1]]}}))
+    with pytest.raises(SystemExit, match="each drawn"):
+        cr.audit_of(tmp_path)
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
     assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 32, 0)

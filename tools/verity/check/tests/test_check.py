@@ -240,8 +240,10 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
-                                                       "!PROTOCOL.md"]}
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
+                                                           "!PROTOCOL.md"]
+    assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
+    assert {"verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
     pin = __import__("json").loads((ROOT / "verity" / "ml" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "verity" / "ml" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
@@ -793,6 +795,18 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
                             [("a", ok, tmp_path), ("b", ok, tmp_path)]])
     passed, done = CHECK.run(tmp_path, 2, keep_going=True)
     assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
+
+
+def test_a_step_killed_by_a_sigterm_the_check_did_not_send_is_stopped_not_failed(tmp_path, monkeypatch):
+    """r20261026-062546-11fc: drive's `research cancel` signalled the run's whole process group, lean-agreement died of it before
+    check's own handler marked it stopped, and it was recorded failed with an empty log, a failure the agreement never found."""
+    ok = _py("pass")
+    _fake_run(monkeypatch, [[("cancelled", _py("import os, signal\nos.kill(os.getpid(), signal.SIGTERM)"), tmp_path)],
+                            [("a", ok, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["a"]["status"] == "passed"
+    assert by["cancelled"]["status"] == "stopped" and by["cancelled"]["rc"] == -15 and "did not send" in by["cancelled"]["detail"]
 
 
 def _gone(pid: int) -> None:

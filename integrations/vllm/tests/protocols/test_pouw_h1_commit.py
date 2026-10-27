@@ -173,8 +173,30 @@ class _Laid(dict):
         return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
 
 
+#: the server's step-input port's T (`served_record.StepInputPort`: whole 4096-byte chunks of i64 ids)
+PORT_T = 512
+#: the positions a CUDA graph pads each step's model input with past its scheduled tokens
+GRAPH_PAD = 3
+
+
+def _manifest_sites(steps=range(FIRST, FIRST + STEPS), modules=("model.layers.0", "model.layers.1")):
+    """The bench row's manifest's Int8RowQuant_v1 sites (`int8_source.quant_sites`): (engine step, linear) -> its op path
+    ``<module>/<fx node>``, the fx nodes counted on through the run."""
+    return {(e, m): f"{m}/row_quant_{i}" for i, (e, m) in enumerate((e, m) for e in steps for m in modules)}
+
+
+def _served_commit(com, model, quant=None):
+    """serve-openai's committer as H1 sees it (`pipeline.serve_seal.committer`): the step-input port and the int8 source
+    of the bench row's manifest, ``com.sources``."""
+    from verity_vllm.acquire.sources.int8_source import Int8Source
+    from verity_vllm.commit.served_record import StepInputPort
+    port, src = StepInputPort(com, PORT_T), Int8Source(com, model, _manifest_sites() if quant is None else quant, [])
+    com.sources = [port, src]
+    return port, src
+
+
 def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None,
-            order=None, coins=None, key=hashlib.sha512(b"w").digest()):
+            order=None, coins=None, key=hashlib.sha512(b"w").digest(), served_commit=False):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
@@ -182,13 +204,19 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`); ``order`` the model's layers in the
     order the forward calls them (module order unless given). ``coins(eng, kw)`` is the window's settings as the GPU
     harness makes them (`pouw_h1_gpu.h1_settings` with `kw`), else one session of `_host`'s; ``key`` the window's key
-    (`Served.window`), None for one keyed by its window-open root, as the harness's under a challenger."""
+    (`Served.window`), None for one keyed by its window-open root, as the harness's under a challenger. With
+    ``served_commit`` the Commit is the server's (`_served_commit`, H1's tap on it `h1_commit.tap`): the ids are its
+    port's, each step's model input padded by `GRAPH_PAD` positions past its scheduled tokens."""
     if coins is None:
         _host(tmp_path, monkeypatch, rounds=STEPS)
-    model, com, tap = model or Model(edit), com or Committer(), CT.CommitTap(EMBED)
+    model, com = model or Model(edit), com or Committer()
     layers = PHK.layers(model, (Linear,))
-    src = HC.source(com, model, layers)
-    tap.tap(com)
+    if served_commit:
+        port, src = _served_commit(com, model)
+        tap = HC.tap(com, model, layers, range(FIRST, FIRST + STEPS))
+    else:
+        port, src, tap = None, HC.source(com, model, layers), CT.CommitTap(EMBED)
+        tap.tap(com)
     src.install()
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
@@ -208,7 +236,12 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
             runner.execute_model(so)
             com._cur = SimpleNamespace(step=FIRST + s)
             src.on_step_begin()
-            com._acquire(f"{EMBED}/in", torch.tensor(ids(s, _ids(run, s))), com._cur)
+            got = ids(s, _ids(run, s))
+            if port is None:
+                com._acquire(f"{EMBED}/in", torch.tensor(got), com._cur)
+            else:
+                com._plan_shape, n = (len(got), len(set(run.owners[s]))), len(got) + GRAPH_PAD
+                port._pre(None, (torch.tensor([*got, *[0] * GRAPH_PAD]), torch.arange(n)), {})
             for layer in (model.model.layers if order is None else [model.model.layers[w] for w in order]):
                 k = layer.weight.shape[1] if isinstance(layer, Linear) else K
                 layer((torch.randn(len(run.owners[s]), k, generator=g) * 3).bfloat16())
@@ -444,6 +477,78 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
     from tests.protocols import pouw_h1_gpu as G
     assert G.negatives_of(layers) == (*G.NEGATIVES, G.EXPERT_NEGATIVE)
     assert G.negatives_of(list(model.model.layers)) == G.NEGATIVES
+
+
+def test_on_the_servers_commit_each_a_table_is_its_int8_sources_rows_and_each_rounds_ids_its_ports(tmp_path, monkeypatch):
+    """serve-openai's rows-sha512 collector in the engine (`_served_commit`), H1's tap on it (`h1_commit.tap`) and no
+    Commit of H1's own: the tap reads each linear's x_q and s_a where the bench row's int8 source acquires them, under
+    the manifest's op paths, as the linear's site, and each step's ids at the port, its scheduled tokens only, so the
+    graph's padded positions are neither ids nor cut from them again. The window ties as on H1's own Commit, core's
+    ROOTS1 steps pass and every served call is credited; one whose served A is all zero, with the same honest Commit,
+    credits nothing."""
+    com = Committer()
+    record, run, tap = _window(tmp_path, monkeypatch, com=com, served_commit=True)
+    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 4, "own_trees": 0,
+                                     "steps": {"0": FIRST, "1": FIRST + 1}}
+    assert tap.round_ids[0] == [8, 9, 5, 6, 7] and tap.round_ids[1] == _ids(run, 1)
+    for s in range(STEPS):
+        assert tap.where[CR.commit_rows(s, K)]["sites"] == [CT.site(f"model.layers.{w}") for w in range(2)]
+        assert tap.where[CR.commit_rows(s, K)]["steps"] == [FIRST + s] * 2
+    assert sorted(n for j, n in com.got if j == FIRST) == sorted(
+        ["step.input/ids", "step.input/positions", *(f"model.layers.{w}/row_quant_{w}/{p}" for w in range(2) for p in "01")])
+    assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
+    assert all(v["credit"] for v in run.gated().values())
+    (tmp_path / "zero").mkdir()
+    _record, run, tap = _window(tmp_path / "zero", monkeypatch, _zero, served_commit=True)
+    assert run.details["roots1"]["reason"].startswith(UNTIED_A) and tap.own == STEPS
+    assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
+
+
+def test_the_ports_ids_are_the_steps_scheduled_tokens_and_keep_no_graph_pad():
+    """The port's T ids, zero past the step's N scheduled tokens: the tap keeps the first N, which hold no CUDA graph's
+    padding, so round r's ids are those N whatever the call's ``pad``; port ids with no count of the step's tokens are
+    refused. The embedding's input (H1's own Commit) still drops its last ``pad``."""
+    tap = CT.CommitTap(port="step.input/ids")
+    tap.take("step.input/ids", np.array([5, 6, 7] + [0] * (PORT_T - 3)), FIRST, 3)
+    tap._steps[0] = FIRST
+    assert tap.ids_at(0, pad=GRAPH_PAD) == [5, 6, 7] and tap.refused == []
+    tap.take("step.input/ids", np.zeros(PORT_T, np.int64), FIRST + 1)
+    assert tap.refused == [f"engine step {FIRST + 1}: the port's input ids with no count of the step's scheduled tokens"]
+    own = CT.CommitTap(EMBED)
+    own.take(f"{EMBED}/in", np.array([5, 6, 7, 0, 0]), FIRST)
+    own._steps[0] = FIRST
+    assert own.ids_at(0, pad=2) == [5, 6, 7]
+
+
+def test_h1_taps_the_servers_commit_only_where_it_acquires_every_linear_at_every_step():
+    """`h1_commit.tap` puts no source on the server's Commit: it needs the Commit's step-input port and int8 source, and
+    refuses a window step at which the manifest names no site of one of H1's linears, and H1's routed experts, whose
+    sites only H1's own source acquires; a tap it refuses is never put on."""
+    model = Model()
+    layers = PHK.layers(model, (Linear,))
+    steps = range(FIRST, FIRST + STEPS)
+    com = Committer()
+    with pytest.raises(ValueError, match="no step-input port"):
+        HC.tap(com, model, layers, steps)
+    _served_commit(com, model)
+    com.sources = com.sources[:1]
+    with pytest.raises(ValueError, match="no int8 source"):
+        HC.tap(com, model, layers, steps)
+    _served_commit(com, model, _manifest_sites(steps=[FIRST]))
+    with pytest.raises(ValueError, match=rf"acquires 2 of H1's .* sites nowhere, \[\({FIRST + 1}, 'model.layers.0'\)"):
+        HC.tap(com, model, layers, steps)
+    assert "_acquire" not in vars(com)
+    moe = MoEModel()
+    _served_commit(com, moe, _manifest_sites(modules=("model.layers.0",)))
+    with pytest.raises(ValueError, match="routed experts"):
+        HC.tap(com, moe, PHK.layers(moe, (Linear,)), steps)
+    _served_commit(com, model)
+    tap = HC.tap(com, model, layers, steps)
+    assert (tap.port, tap.embed) == ("step.input/ids", None)
+    assert tap.ops == {f"model.layers.{w}/row_quant_{2 * i + w}": CT.site(f"model.layers.{w}")
+                       for i in range(STEPS) for w in range(2)}
+    tap.untap()
+    assert "_acquire" not in vars(com)
 
 
 class FusedEmbed(nn.Module):

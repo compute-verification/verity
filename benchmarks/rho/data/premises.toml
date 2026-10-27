@@ -140,3 +140,13 @@ standing = "assumed"
 beyond = "contested"
 evidence = ["note:training-20261024T2310Z-draft-tvi-e1-sections", "note:training-20261024T2336Z-report-tvi-findings"]
 credible_bits = { value = 7.2e6, unit = "bit", source = "E1 Proposition 6b: k* = 0.9-23 MB at FP8 (beta_w 0.06-0.19, F_in 2.7-6.2 kbit, beta_v^R 0.18-0.63), the low end; recipe-kept tiles at NVFP4 reach 0.39-0.97 of the beta_v count (findings note)", status = "derived" }
+
+# The elementary uncertified cap's premise (rho/classes.py Structure): q_U(U) = omega_max U / s_times counts an
+# uncertified or dark gate's operations at s_times gates each only if no counted operation has gates on both sides of
+# the certified boundary. Not in Lean; an operation split across it is counted by neither side's cap.
+[premise.no-straddle]
+lean = "draft:no-straddle"
+standing = "assumed"
+beyond = "assumed"
+evidence = []
+credible_bits = { value = inf, unit = "bit", source = "a property of the circuit's operations, not of a block's bits", status = "derived" }

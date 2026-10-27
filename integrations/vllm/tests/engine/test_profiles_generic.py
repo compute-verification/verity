@@ -17,8 +17,7 @@ from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import generic as G
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
-from verity_vllm.observe.fold.patterns.collectives import TpCollective
-from verity_vllm.engine.collectives.embedding_shard import EmbeddingShardCuda
+from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
 
 SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("*.config.json"))
 #: the tensor-parallel worlds with recorded runs (the retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half)
@@ -39,6 +38,20 @@ def test_shipped_config_sha_is_the_manifest_bytes():
         assert source == "package:hf_configs", (role, source)
         if entry and entry.get("config_sha256"):
             assert hashlib.sha256(path.read_bytes()).hexdigest() == entry["config_sha256"], role
+
+
+def test_a_pin_reads_its_config_of_record_and_an_unpinned_model_none(monkeypatch):
+    """`pinned_hf_config`, the one config.json a served pin's φ reads on the prover's side (`advice_compile`) and the verifier's
+    (`prove_path.phi_of_serve`): the int8 pin's is its own, with its quantization config, never the bf16 one's."""
+    int8 = dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800")
+    assert int8 == dg.HF_CONFIG_DIR / "LLAMA32_1B_INT8.config.json"
+    assert json.loads(int8.read_text())["quantization_config"]["quant_method"] == "verity_int8"
+    assert dg.pinned_hf_config("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da") == dg.HF_CONFIG_DIR / "LLAMA32_1B.config.json"
+    assert dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "0" * 40) is None
+    assert dg.pinned_hf_config("m/x", "r") is None
+    monkeypatch.setattr(dg, "_sha256", lambda p: "0" * 64)
+    with pytest.raises(ValueError, match="config_sha256"):
+        dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800")
 
 
 # ------------------------------------------------------------------------------------------------------------ names, roles, the finder

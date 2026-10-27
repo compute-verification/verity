@@ -3,7 +3,7 @@
 Three FRESH processes on the same engine build (κ, `vllm_adapter.build_engine`) and the same workload, launched
 sequentially by this module's orchestrator (`subprocess`), then a torch-free comparison:
 
-  (a) `--variant observer`   the full observer (`vllm_adapter.Capture`: dispatch mode + re-entry + Triton hook + module
+  (a) `--variant observer`   the full observer (`observe.capture.Capture`: dispatch mode + re-entry + Triton hook + module
                              naming hooks) with snapshots of EVERY step, **hash-only** (`HashOnlyCapture`: the snapshot
                              machinery runs unchanged — pinned D2H copies stream-ordered after every recorded call /
                              launch, one `torch.cuda.synchronize()` per snapshot step — but `_flush_snapshots` records the
@@ -108,8 +108,9 @@ def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_t
     import torch  # noqa: F401
 
     from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
 
-    class HashOnlyCapture(va.Capture):
+    class HashOnlyCapture(Capture):
         """`Capture` whose snapshot flush hashes the pinned copies and writes no value files."""
 
         def _flush_snapshots(self, st) -> None:  # type: ignore[override]
@@ -141,10 +142,10 @@ def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_t
     except Exception:  # noqa: BLE001
         revision = "unknown"
     snap = frozenset(range(256))          # every step of the run (membership test only)
-    header = va.make_header(eng, wl, adapter_revision=revision, extra_notes={"argv": sys.argv, "snapshot_steps": "all (hash-only)",
-                                                                              "variant": "noninterference (a) observer"})
-    cfg = va.ObserverConfig(mode="record", reenter=True, triton=True, module_hooks=True, write_log=True, snapshot_steps=snap,
-                            snapshot_dir=out)
+    header = make_header(eng, wl, adapter_revision=revision, extra_notes={"argv": sys.argv, "snapshot_steps": "all (hash-only)",
+                                                                           "variant": "noninterference (a) observer"})
+    cfg = ObserverConfig(mode="record", reenter=True, triton=True, module_hooks=True, write_log=True, snapshot_steps=snap,
+                         snapshot_dir=out)
     cap = HashOnlyCapture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
     cap.install()
     t0 = time.perf_counter()

@@ -1,6 +1,7 @@
 """The Commit in H1's serving engine (ROOTS1, VLLM-73), installed: the committer, the int8 source at each linear H1 records
 and the tap that keeps what the Commit acquired for H1 (`protocol_options.pouw_h1_commit.CommitTap`). Here in ``acquire``
 because it builds the int8 source; `pouw_h1_commit` holds the tap and the values and imports nothing from ``acquire``.
+On a server that commits already (serve-openai's rows-sha512 collector), `tap` puts H1's tap on that Commit instead.
 
 A MoE layer's routed experts (`engine.int8_experts.ExpertSite`, VLLM-80) are no modules: each expert projection's site is
 named as H1 names it (`pouw_h1_hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
@@ -57,10 +58,9 @@ class H1Source(Int8Source):
         return apply
 
 
-def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
-    """The int8 source (`H1Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
-    linears, `pouw_h1_hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
-    and a routed expert by its H1 name (`pouw_h1_hooks.expert_names`)."""
+def _linears(model: Any, layers: Sequence[Any]) -> tuple[list[str], dict[str, Any]]:
+    """H1's ``layers``: the modules' names in ``model`` and the routed experts by their H1 names. ValueError on a module
+    the model doesn't name."""
     from verity_vllm.protocols.pouw.h1.hooks import expert_names
     names = expert_names(list(layers))
     experts = {n: layers[w] for w, n in names.items()}
@@ -68,7 +68,47 @@ def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     modules = [name for name, m in model.named_modules() if id(m) in ids]
     if len(modules) != len(ids):
         raise ValueError(f"{len(ids) - len(modules)} of H1's linears are not named modules of the model")
+    return modules, experts
+
+
+def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
+    """The int8 source (`H1Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
+    linears, `pouw_h1_hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
+    and a routed expert by its H1 name (`pouw_h1_hooks.expert_names`)."""
+    modules, experts = _linears(model, layers)
     return H1Source(com, model, modules, experts)
+
+
+def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: CommitTap | None = None) -> CommitTap:
+    """H1's tap (``tap``, else a new `CommitTap`) on the Commit already serving ``model`` (serve-openai's rows-sha512
+    collector, `pipeline.serve_seal.committer`), in place of a Commit of its own (`attach`): the step's input ids are its
+    step-input port's (`served_record.StepInputPort`) and each of H1's ``layers``' x_q and s_a are its int8 source's
+    (`Int8Source`, the bench row's manifest's sites, under their op paths), so H1's A tables are tied to the values the
+    served window commits. ValueError when the Commit has no port or no int8 source, when ``layers`` hold a routed
+    expert (only H1's own source acquires those), or when the source doesn't acquire some linear at each engine step of
+    ``steps``, the window's. ``tap.untap()`` removes it."""
+    from verity_vllm.acquire.sources.int8_source import Int8Source
+    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+
+    sources = list(getattr(com, "sources", ()))
+    src = next((s for s in sources if isinstance(s, Int8Source) and not isinstance(s, H1Source)), None)
+    if not any(isinstance(s, StepInputPort) for s in sources):
+        raise ValueError(f"the Commit {getattr(com, 'name', com)} has no step-input port: no step's input ids for H1")
+    if src is None:
+        raise ValueError(f"the Commit {getattr(com, 'name', com)} has no int8 source: no linear's x_q and s_a for H1")
+    modules, experts = _linears(model, layers)
+    if experts:
+        raise ValueError(f"H1's linears hold {len(experts)} routed experts, {sorted(experts)[:2]}: the served Commit's int8 "
+                         "source acquires no expert's site")
+    if missing := [(e, m) for e in steps for m in modules if (e, m) not in src.quant]:
+        raise ValueError(f"the Commit's int8 source acquires {len(missing)} of H1's (engine step, linear) sites nowhere, "
+                         f"{missing[:3]}: its manifest names no Int8RowQuant_v1 site there")
+    tap = tap if tap is not None else CommitTap()
+    names = set(modules)
+    tap.embed, tap.port = None, PORT_NAMES[0]
+    tap.ops = {op: site(m) for (_e, m), op in src.quant.items() if m in names}
+    tap.tap(com)
+    return tap
 
 
 def fused_embed(com: Any, model: Any, embed: str) -> Any:
@@ -153,4 +193,4 @@ class RankCommit(RankExtension):
         return {"lo": run.lo, "committer": com.name, "embed": tap.embed}
 
 
-__all__ = ["H1Source", "RankCommit", "attach", "fused_embed", "source"]
+__all__ = ["H1Source", "RankCommit", "attach", "fused_embed", "source", "tap"]

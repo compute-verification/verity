@@ -45,7 +45,7 @@ from verity_vllm.engine import engine_profile as prof, env as engine_env
 prof.apply_env()
 
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.engine.rank_worker import EXTENSION
+from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 from verity_vllm.pipeline.tp import target as TT
 
 

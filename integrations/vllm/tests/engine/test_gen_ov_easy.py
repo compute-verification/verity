@@ -71,10 +71,11 @@ def test_config_json_copy_is_the_pinned_hub_file():
 
 
 def test_case_b7_is_the_contracts_pinned_7b_role_no_manifest_change():
-    """`verity_vllm.engine.engine_profile.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
+    """`verity_vllm.engine.profiles.cases.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
     sys.path.insert(0, str(REPO / "vllm-poc"))
     from verity_vllm.engine import engine_profile as adapter_profile
-    assert adapter_profile.CASES["B7"] == {"repo": B7.REPO_ID}
+    from verity_vllm.engine.profiles.cases import CASES
+    assert CASES["B7"] == {"repo": B7.REPO_ID}
     entry = adapter_profile.load_checkpoints(MANIFEST)[B7.REPO_ID]
     assert entry["revision"] == B7.REVISION and entry["downloaded"]
 

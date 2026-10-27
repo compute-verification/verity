@@ -877,6 +877,22 @@ def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_exec
     assert PP.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
 
 
+def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
+    """A pinned served model's φ reads the pin's config.json of record (`pinned_hf_config`, advice_compile's too), so an int8
+    serve compiles on both sides with its quantization config beside the target's int8 scope, never the bf16 fixture's."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    rev = "15b0976d400d796ee589e7737d03a919526bf800"
+    serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": rev, "execution": "bi-eager",
+             "target": {**TARGET, "int8_exact": "linears"}}
+    phi = PP.phi_of_serve(serve)
+    assert phi.model["hf_config"] == json.loads(pinned_hf_config(serve["model"], rev).read_text())
+    assert phi.model["hf_config"]["quantization_config"]["quant_method"] == "verity_int8" and phi.target["int8_exact"] == "linears"
+    assert phi.digest() != PP.phi_of_serve(serve, hf_config=str(PP.LLAMA32_1B_CONFIG)).digest()
+    bf16 = {**serve, "model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "target": TARGET}
+    assert PP.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
+
+
 def test_a_served_windows_compiler_is_the_servers_whatever_phi_it_compiles_under(monkeypatch):
     """The registration names the server's compiler (`verity-vllm advice`'s, over its tree's code identity), so the verifier's I2
     carries that name and digest, and φ (the target, the seed) moves what I2 compiles, not the name it is registered under."""
@@ -952,43 +968,67 @@ def _tiny_checkpoint(d: Path, model: str, revision: str) -> Path:
     return man
 
 
-def test_a_served_runs_weights_of_record_is_the_pin_its_registrations_record(tmp_path, capsys):
-    """``weights-record``: the served run's weights of record (`window_circuit.weights_record` under the φ its window circuit
-    lowers under), composed from the checkpoint's pinned shards, written to ``--out``, with its pin ``weights=ROOT``, the
-    root `verity-vllm advice --weights-of-record` records in each window's registration. A checkpoint the manifest pins as
-    another model than the run served, or a shard other than the one it pins, is refused by name, its record still written."""
-    from verity_vllm.pipeline import advice as ADV
-    from verity_vllm.program.predict import window_circuit as WC
+def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
+    """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
+    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
+    file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
+    against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
+    advice --weights-of-record` records and ``window-circuit --pins`` takes, and what the verifier holds to its own weights
+    record's shapes (`registration_pins`) without computing a root. Another key gives other roots for every weight; a key
+    file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
+    one the manifest pins, is refused by name, nothing registered."""
+    import functools
 
-    run, hf = tmp_path / "serve", tmp_path / "tiny.json"
+    from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.window_builder import Grain
+
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
     serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": 7,
              "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
-    man = _tiny_checkpoint(tmp_path / "ck" / "snap", serve["model"], serve["revision"])
-    out = tmp_path / "weights_of_record.json"
-    argv = ["weights-record", "--serve-run", str(run), "--checkpoint-dir", str(tmp_path / "ck" / "snap"), "--checkpoints",
-            str(man), "--hf-config", str(hf), "--out", str(out)]
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
+    out, key = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key"
+
+    def register(key_file: Path) -> int:
+        return PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints",
+                        str(man), "--hf-config", str(hf), "--key", str(key_file), "--out", str(out)])
+
     capsys.readouterr()
-    assert PP.main(argv) == 0
-    rec, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
-    assert (rec["of_record"], rec["n_fields"], said["fields"]) == (True, 23, 23)
-    assert said["pin"] == f"{WC.WEIGHTS}={rec['root_of_record']}"
-    assert ADV.registered_weights(rec, serve) == {WC.WEIGHTS: rec["root_of_record"]}
+    assert register(key) == 0
+    reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
+    assert len(key.read_bytes()) == 32 and key.stat().st_mode & 0o777 == 0o600
+    assert key.read_bytes().hex() not in out.read_text()
+    pins = ADV.registered_weights(reg, serve)
+    assert said["roots"] == len(pins) == 15 and PP.pins_of((), [str(out)]) == pins
+    assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
-    assert WC.weights_record(registered, str(tmp_path / "ck" / "snap"), str(man))["root_of_record"] == rec["root_of_record"]
+    assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
+    assert register(key) == 0 and json.loads(out.read_text()) == reg
+    capsys.readouterr()
+    assert register(tmp_path / "other.key") == 0
+    other = ADV.registered_weights(json.loads(out.read_text()), serve)
+    assert sorted(other) == sorted(pins) and all(other[p] != pins[p] for p in pins)
+    (tmp_path / "short.key").write_bytes(bytes(16))
+    capsys.readouterr()
+    assert register(tmp_path / "short.key") == PP.REFUSED
+    assert "a committer's salt key is 32 bytes, not 16" in capsys.readouterr().err
+    out.unlink()
     (run / "serve.json").write_text(json.dumps({**serve, "model": "org/other"}))
-    assert PP.main(argv) == PP.REFUSED
-    assert "and the run served org/other@" in capsys.readouterr().err
+    assert register(key) == PP.REFUSED
+    assert f"manifest entry is {serve['model']}@{serve['revision']}, not the registered model org/other@" in capsys.readouterr().err
+    assert not out.exists()
     (run / "serve.json").write_text(json.dumps(serve))
-    shard = tmp_path / "ck" / "snap" / "model.safetensors"
+    shard = ck / "model.safetensors"
     body = bytearray(shard.read_bytes())
     body[-1] ^= 1
     shard.write_bytes(bytes(body))
-    assert PP.main(argv) == PP.REFUSED
-    assert re.search(r"of record False: .* \(shards pinned: False\); the record is ", capsys.readouterr().err)
-    assert json.loads(out.read_text())["root_of_record"] != rec["root_of_record"]
+    assert register(key) == PP.REFUSED
+    assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
 
 
 def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():

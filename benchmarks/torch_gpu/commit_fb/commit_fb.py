@@ -282,7 +282,7 @@ def shape_h(d: int = 16384, heads: int = 256, head_dim: int = 64, kv_heads: int 
     return {"layer": layer, "head": head}
 
 
-#: the units compute-accounting's "fused cuts" leave uncommitted (their outputs feed the next unit inside one proof unit)
+#: the units compute-accounting's "fused cuts" leave uncommitted (their outputs feed the next unit inside one proof block)
 FUSED_OUT = ("input_layernorm", "post_attention_layernorm", "mlp.relu", "self_attn.qk")
 ELEMENT_BYTES = {"s8": 1, "bf16": 2, "i32": 4}
 

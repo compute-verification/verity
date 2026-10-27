@@ -3,12 +3,12 @@
 The GPU serving loop of the one-H200 demo (CMP-96): steps of the frozen MQA shape (`shape.FROZEN`, ALLP-IFACE's `H200`) on
 the plain INT8 weights, loaded once into the card's memory and resident across steps (Demo A, M1-M3; `--weights staged` keeps
 M4's decode-to-staging path from the store), every op's output committed through the per-step commit call, drawn slots
-opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each leg run against the
+opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each subprotocol run against the
 step or named, and a replay bundle and block record written. `verity bench e2e_h200 --out OUT [...]` runs it
 (`run.py --help`).
 
 It lives here, not in `integrations/`, because it is a run harness that composes pieces from several owners (memory's
-store and decode call, kernels' GEMMs, attention and commit call, circuits' Definitions, the legs) for one recorded run, as
+store and decode call, kernels' GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run, as
 `benchmarks/` holds; `integrations/torch_loop` stays the CPU loop of `verity.ml.windows.interface`. When the real pieces land
 they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
 
@@ -32,6 +32,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | Piece | Here now | Replaced by |
 |---|---|---|
 | Weights | ALLP-IFACE's generator and weights stream (`verity_torch_loop.weights`, CMP-95 item 1), every linear generated once into the device's memory (`driver.Params`, over `--workers` processes); the record carries the registration digest under the test salt key for small shapes | the prover's salt key's digest |
+| Weights registration (CMP-160) | `weights_commit.py`: every tensor committed as the registered value the served Program reads (`registered.domain` under its digest, its widths from the Program's parameter types, never its gate lists), streamed a chunk a worker under the operating system's salts into a 0600 witness; `open` opens a ScaledMm proof block's `wrow`/`sw` reads against it (`verify_read`) | — |
 | Store and decode call (M4) | `--weights staged`: `store.py`'s P2 v4 (`p2-16448/v4`) rows over the weights stream, the P2 reference decode on the CPU, or kernels' `Stage.decode` with `--stage-lib`, a layer a step | memory-accounting's layout and decode call (CMP-95 item 2), MEM-69's store on the card |
 | W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (an exact f64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
 | Row ops | `ops.py`: the plan's row functions; sums sequential (on the host), division and sqrt correctly rounded through f64 | circuits' row-op kernels |
@@ -40,10 +41,10 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | Commit | `commit.py`: kernels' per-slot tree (`--commit slots`, #4469, `benchmarks/torch_gpu/commit_slots`: row/v2 leaves, step → slot → unit → rows), a group at a time on a side stream, salt keys fresh a step; or the by-table `verity_vllm.commit.row_tables` (`reference`, `host`, `device`), which keeps every step's tables | — |
 | Opening | `opening.py`: `--open K` slots drawn by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each drawn unit's one commit unit opened against the step's root (`slots.verify_unit`), its rows the unit's outputs, and the reference's slot root compared with the engine's | PRF-170's plan's live coins |
 | Replay | `e2e_h200/units.py`: one family a unit kind of the map, each through compositions of `replay.py`'s templates (main's Definitions where they exist) until the replay lane adds the map's; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | the replay lane's templates for the map; PRF-170's plan through `replay.draw` |
-| PoUW | `--subcircuit e2e_h200.percall:kraq` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraq build (#4540), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its three blockers are named in the record (`percall.CREDIT`) | h1zy's J10-R lane Definitions, Credit.window over the tile stratum (CMP-127) and the sm_90a SASS pin; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
+| PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (#4538; `percall:kraq` is #4540's), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | h1zy's J10-R lane Definitions (#4654) and Credit.window over the tile stratum (CMP-127); window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`, NET-77): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | IFACE-B's `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (CMP-95 items 5 and 6, PR #4454) |
-| Legs | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the M4 path's P2 store; bandwidth not run (M4); integrity is the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
+| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the M4 path's P2 store; bandwidth not run (M4); sampled proofs are the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
 
 `replay.py` and `cpu_step.py` are the replay lane's (#4460): the CPU replay of drawn units in the 16-bit forms, and an
 independent CPU decode step; the suite holds the driver's rows equal to `cpu_step`'s.
@@ -59,7 +60,16 @@ uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --de
     --prompt-bytes 8 --micro-batch 1024 --workers "$(nproc)" --open 2 --draw 1     # the skeleton at batch 4,096 (ATTN_REF_CUBIN set)
 bash benchmarks/e2e_h200/percall_job.sh                                         # the skeleton at f = 1 on the H200 (its header: the research run)
 PYTHONPATH=benchmarks/e2e_h200 python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:tiny
+uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --device cuda \
+    --weights-file W --weights-manifest M --workers "$(nproc)"                   # serve the loaded W (NET-76's sink), checked first
+E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE=W E2E_H200_WEIGHTS_MANIFEST=M PYTHONPATH=benchmarks/e2e_h200 \
+    python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:frozen   # the endpoint on it
+PYTHONPATH=benchmarks/e2e_h200:integrations/torch_loop python -m e2e_h200.weights_commit commit --shape h200 --seed demo \
+    --program DIGEST --state STATE --out OUT/registration.json        # the H200 weights registration (STATE private)
+PYTHONPATH=benchmarks/e2e_h200:integrations/torch_loop python -m e2e_h200.weights_commit open --state STATE --seed demo \
+    --op l0.wup --coordinate N                                        # a ScaledMm proof block's reads opened: OPEN or REFUSED
 ~~~
 
 Exit 0: every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's own
-check holds; 3: one doesn't; 4: a leg's fixture check fails.
+check holds; 3: one doesn't; 4: a leg's fixture check fails; 5: ``--weights-file`` isn't its manifest's W (a tensor's
+sha256, its size or its model), refused before the first step.

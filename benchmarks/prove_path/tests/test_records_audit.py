@@ -269,8 +269,8 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
     inputs are the advice's bits, the charge; a port left free adds its rows and the bound is vacuous, and so does every
     registered read when the verifier pins no root, or when the window's root is another than the pin or none.
     ``records_audit.py count`` prints the same from the record's and the registration's files (core's, its window's
-    ``registered_roots`` or its committed values' entries, PoUW's operands and weights among them, or an integration's own,
-    whose ``window`` is its index), and refuses a pin with no root."""
+    ``registered_roots`` or its committed values' entries, or an integration's own, whose ``window`` is its index), and
+    refuses a pin with no root."""
     doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
     assert RA.declared_count(doc, 1687, pins=PIN_A, roots=PIN_A) == {
         "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
@@ -290,14 +290,14 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
     pouw = {"context": RUN, "kind": "served", "public": {}}
     regs = {"core": {"window": {"run": RUN, "registered_roots": PIN_A}}, "own": {"window": 63, "registered_roots": PIN_A},
             "other": {"window": {"run": RUN, "registered_roots": {"a": "cd" * 64}}}, "none": {"window": 63},
-            "operands": {"window": {**pouw, "activations": group("ab" * 64)}},
-            "weights": {"window": {**pouw, "activations": group("AB" * 64), "registered": group("ab" * 64)}}}
+            "activations": {"window": {**pouw, "activations": group("ab" * 64)}},
+            "registered": {"window": {**pouw, "activations": group("AB" * 64), "registered": group("ab" * 64)}}}
     for name, reg in regs.items():
         (tmp_path / f"{name}.json").write_text(json.dumps(reg))
     for pins, reg, roots in [((), None, {}), ((), "core", PIN_A), (("a=" + "ab" * 64,), "core", PIN_A),
                              (("a=" + "AB" * 64,), "own", PIN_A), (("a=" + "ab" * 64,), "other", {"a": "cd" * 64}),
                              (("a=" + "ab" * 64,), "none", {}), (("a=" + "ab" * 64,), None, {}),
-                             (("a=" + "ab" * 64,), "operands", PIN_A), (("a=" + "ab" * 64,), "weights", PIN_A)]:
+                             (("a=" + "ab" * 64,), "activations", PIN_A), (("a=" + "ab" * 64,), "registered", PIN_A)]:
         capsys.readouterr()
         argv = ["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins),
                 *(["--registration", str(tmp_path / f"{reg}.json")] if reg else [])]
@@ -305,7 +305,22 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
         got = json.loads(capsys.readouterr().out)
         assert got == RA.declared_count(doc, 1687, pins=dict(RA.pin_arg(p) for p in pins), roots=roots)
         assert got["free"] == (0 if pins and roots == PIN_A else inputs), (pins, reg)
-    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64]):
+    entry = {"value": "a", "root": PIN_A["a"], "leaves": 1, "words": 4, "domain": REG.domain("p", "a", 4, 1).domain_id.hex()}
+    (tmp_path / "pins.json").write_text(json.dumps(PIN_A))
+    (tmp_path / "registration.json").write_text(json.dumps({"program": "p", "values": {"a": entry}}))
+    (tmp_path / "other-domain.json").write_text(json.dumps({"program": "q", "values": {"a": entry}}))
+    shape = {k: v for k, v in entry.items() if k != "root"}
+    (tmp_path / "record.json").write_text(json.dumps({"of_record": True, "registered_entries": {"a": shape}}))
+    for f in ("pins.json", "registration.json"):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", "--pins", str(tmp_path / f),
+                        "--registration", str(tmp_path / "core.json")]) == 0
+        assert json.loads(capsys.readouterr().out)["free"] == 0
+    with pytest.raises(ValueError, match="a weights record states each weight's shape, not its root"):
+        RA.pins_of((), [str(tmp_path / "record.json")])
+    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64],
+                ["--pin", "a=" + "ab" * 64, "--pins", str(tmp_path / "pins.json")], ["--pins", str(tmp_path / "record.json")],
+                ["--pins", str(tmp_path / "other-domain.json")]):
         with pytest.raises(SystemExit):
             RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
     with pytest.raises(ValueError, match="counted from its members"):
@@ -314,9 +329,9 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
 
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
     """`window_roots`: the roots a window's registration records for its parameters are its ``registered_roots`` and each
-    entry's root of the committed values it names, ``{program, values}`` (one-stage's and PoUW's ``activations``, PoUW's
-    ``registered`` weights), one root a parameter; a group that isn't one, an entry with no root of hex digits, or two
-    roots for one parameter are refused."""
+    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
+    PoUW's operands among them, and pinned ``registered``, PoUW's weights), one root a parameter; a group that isn't one,
+    an entry with no root of hex digits, or two roots for one parameter are refused."""
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 

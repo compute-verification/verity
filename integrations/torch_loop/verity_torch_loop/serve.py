@@ -29,8 +29,10 @@ circuit reads the weights as registered values (`loop.TorchLoop`'s ``registered`
 ``--tamper-weights``: served from other weights under that opening's salts. ``--tie`` (with ``--out`` or
 ``--circuit-only``): each output unit's ``o0`` reads the output value the network certifier relayed (`loop.TorchLoop`'s
 ``tie``), served from ``--out-opening OPENING`` (`loop.out_opening`: the rows and the certifier's salts). ``--circuit-only``
-also prints the circuit's program digest, which the output value's domain binds, and the loop's output units
-(`TorchLoop.output_units`), which a work law proves whole beside its draw (`TorchLoop.work_table`). ``--wired``: the wired circuit
+also prints the circuit's program digest, which the output value's domain binds, the loop's output units
+(`TorchLoop.output_units`), which a work law proves whole beside its draw (`TorchLoop.work_table`), and with ``--tie`` the
+output value's shape (``out_shape``: `interface.read_shape` of the circuit and its program digest, `out_commit.OutShape`'s
+fields), the one the network certifier commits it at and the verifier pins it at. ``--wired``: the wired circuit
 (`loop.TorchLoop`'s ``wired``, with ``--commit-weights`` the weights one row a linear); ``--tamper-activations``: its quantize
 units' codes tampered."""
 from __future__ import annotations
@@ -105,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap, work_table=loop.work_table(law))
         shown = {"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest(),
                  "program": empty.window.partition["program"], "outputs": loop.output_units()}
+        if a.tie:
+            shown["out_shape"] = {**IF.read_shape(empty.circuit, L.OUT[0]), "program": shown["program"]}
         if a.pouw:
             h1 = PW.H1Loop(loop)
             h1w = IF.Window(h1.circuit(), loop.run_root, h1.law, PW.CAP)
