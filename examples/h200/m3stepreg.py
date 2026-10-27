@@ -5,10 +5,10 @@
 
 ``--roots``: m3draw commit's ``roots.json`` (every step's root and slot roots). Each step root is derived again from its slot
 roots under the run's context and the layout (`commit.layout`), and the layout's digest must be the file's. ``--weights``:
-the weights registration's ``registration.json`` (its ``registered`` list, every weight's root under ``--program``, which must be its
-program). The registration names the last step, every step 0 .. s's root (``steps``), every slot root of step s, the
-population ``slots x units_per_slot`` and the law ``subset:K``; ``DIR/step-registration.json`` and its digest
-(`replay_bundle.step_digest`, the coin's session root) are written.
+the weights registration's ``registration.json`` (its ``registered`` list, every weight's root under ``--program``,
+which must be its program). The registration names the last step, every step 0 .. s's root (``steps``), every slot root
+of step s, the population ``slots x units_per_slot`` and the law ``subset:K``; ``DIR/step-registration.json`` and its
+digest (`replay_bundle.step_digest`, the coin's session root) are written.
 """
 from __future__ import annotations
 

@@ -20,12 +20,12 @@ ROOT = HERE.parents[2]
 KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
 
 def test_the_gpus_read_the_accel_models_card_table():
-    """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits H1's SM120 record's f_max: so the clock term is 0, the server's peak is 8 cards at
-    the table's FP8 rate (7.485e15 FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
-    lean = (ROOT / "Security/Definitions/Core/Accel/Sm120.lean").read_text()
-    sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
-    mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
-    assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
+    """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits
+    H1's SM120 record's f_max: so the clock term is 0, the server's peak is 8 cards at the table's FP8 rate (7.485e15
+    FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it.""" lean = (ROOT /
+    "Security/Definitions/Core/Accel/Sm120.lean").read_text() sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \*
+    (\d+)", lean).groups()) mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+)
+    MHz", lean) assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
     h1 = (ROOT / "verity/core/protocols/pouw/circuit/h1device.py").read_text()
     sm120 = h1[h1.index("SM120 = Device("):h1.index("SM90 = Device(")]
     assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6

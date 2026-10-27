@@ -1,6 +1,6 @@
-"""The block record: the recorded fixtures (two all-protocols runs and a wipe run) fit their schema and check clean, every derived field is refused when it is not its legs', and a
-period whose six legs all accept on one server composes to accept."""
-from __future__ import annotations
+"""The block record: the recorded fixtures (two all-protocols runs and a wipe run) fit their schema and check clean,
+every derived field is refused when it is not its legs', and a period whose six legs all accept on one server composes
+to accept.""" from __future__ import annotations
 
 import copy
 import json

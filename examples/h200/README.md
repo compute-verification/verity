@@ -8,9 +8,10 @@ step or named, and a replay bundle and block record written. `verity example h20
 (`run.py --help`).
 
 Its protocol is the composite `onsite` in skeleton form (`e2e_h200/legs.py`): sampled proofs are the replay and the
-opening, PoUW is the per-call tiles (`e2e_h200/percall.py`) as a `--subcircuit`, PoUS is spot reads and the wipe and reload on the M4
-path's store, the network certifier's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
-interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
+opening, PoUW is the per-call tiles (`e2e_h200/percall.py`) as a `--subcircuit`, PoUS is spot reads and the wipe and
+reload on the M4 path's store, the network certifier's digests are a fixture, and the bandwidth audit isn't run.
+`interfaces/` holds the interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite
+of its own (its README).
 
 It is an example, not an integration: it composes pieces from several components (PoUS's store and decode call, the
 kernels' GEMMs, attention and commit call, the circuits' Definitions, the subprotocols) for one recorded run. When the real pieces land
