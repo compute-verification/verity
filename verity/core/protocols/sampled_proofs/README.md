@@ -102,8 +102,13 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
   rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
-  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
-  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
+  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`. Its group
+  form (`"members"`) proves a population of several templates, such as the scan's `first`, `ingress-w` and
+  `egress-w`: each member brings its own circuit digest and registered file in the parameters and its public file and
+  sessions in the evidence, the registration's `leaf_layer` binds the members' public files, all members' sessions
+  run on one run (coin freshness across the group), and their proved units are each proved once and together
+  `proved_units`. One member's output is another's input only through a registered read (`checkGroup`'s docstring has
+  the premise). `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. It is onsite's and remote's integrity component (`Core.Onsite`, `Core.Remote`, through
   `Core.Composition.productB`), and v1 is no longer one.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
