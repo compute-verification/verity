@@ -26,8 +26,7 @@ schedule, so every other table's coins are part of its strategy.
   the coarse partition plus `2^-205`.
 
 Mutual correlated agreement is proved (`mcaError_le_bchks25`), so there is no other hypothesis.
-Of `Audit/`, only this file and the compiled instances (`FlockCompiled.lean`, `FlockBatched.lean`)
-import the Flock theorems.
+Of `Audit/`, only this file and the compiled instance (`FlockBatched.lean`) import the Flock theorems.
 -/
 
 namespace FlockSoundness.Audit

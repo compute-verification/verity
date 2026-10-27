@@ -6,10 +6,10 @@ import Proofs.Flock.Recursive.ForkInnerC
 /-!
 # The recursive audit at public units: its proof
 
-`Flock.SecurityProofs.PublicAudit : Flock.Guarantees.PublicAudit`, `RecursiveAudit`'s proof
-(`Proofs.Flock.Recursive.Audit`) at a public inner unit, and `RecursiveFirewallPrivate`.
+`Flock.SecurityProofs.PublicAudit : Flock.Guarantees.PublicAudit`, `RecursiveAudit` at a public inner unit, and
+`RecursiveFirewallPrivate`.
 
-In (i), from the statement and the premises, as in `RecursiveAudit`'s:
+In (i), from the statement and the premises:
 * where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
   index loads it (`loads_of_verifiesV`, at the obligations `VStarParses` and `TagsFound`) and so types
   (`typable_of_accepts`), so at that index none verifies (`prob_sessionsR_untypable`);
@@ -21,7 +21,7 @@ In (i), from the statement and the premises, as in `RecursiveAudit`'s:
   registered rows enter, and the raw event is bounded by the typed sessions' at the transported prover
   (`prob_recT_le`, `verifies_zsOf`).
 
-(ii) is `RecursiveFirewallPrivate`, as in `RecursiveAudit`'s proof.
+(ii) is `RecursiveFirewallPrivate`.
 
 The inner model is the executable's (`Recursion.innerAt_leaf`): `innerAt` runs the compiled table at `Refine.leafPlain`,
 and an accepted statement commits its rows with the scheme `RecVStar.innerTags` names, whose leaf that is.

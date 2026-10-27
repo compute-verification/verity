@@ -29,8 +29,7 @@ private circuit registered by hm96 leaves. It is a conjunction:
   transcript and the owed outputs, at the pinned key's hiding gap with no premise, and what it takes of the code each an
   obligation.
 
-Its premises are the list in `Proofs.Flock.Recursive.Premises`. Its proof (`Flock.SecurityProofs.RecursiveAudit`,
-`Proofs.Flock.Recursive.Audit`) names what else it takes.
+Its premises are the list in `Proofs.Flock.Recursive.Premises`.
 
 The class is a total function of the statement (`Recursion.execClassAt`, `Proofs.Flock.Recursive.ExecClass`): when
 the executable's checks of the statement's shape pass, `HClass.ofStmt` at no hidden entries (the universal unit's one

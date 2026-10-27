@@ -576,7 +576,7 @@ theorem ligSteps_of_plays {u : C3Run (holoAt st hp)} {ms : List FlockSoundness.G
   FlockC3.Reps.Woven.steps ⟨hu, FlockC3.Reps.tapeAlong_of_plays
     (FlockSoundness.Discharge.Exec.ligeritoC_spine (D := Dig) FlockSoundness.execArith 2 _ T₀ b) h⟩
 
-/-- **R's Ligerito steps at the reps' tied source over `ligOfVals`** are its weave (`MapsLeft`'s, where `ms` and `cs`
+/-- **R's Ligerito steps at the reps' tied source over `ligOfVals`** are its weave (where `ms` and `cs`
 are R's proof's messages and `stacked/rep0`'s rounds from the ring switches' `k₂`): no tie changes the steps. -/
 theorem lg_tied_repsOfVals_ligOfVals
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))

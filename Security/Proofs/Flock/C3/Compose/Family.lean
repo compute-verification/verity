@@ -9,8 +9,7 @@ import Proofs.Flock.C3.Compose.Tape
 the sessions' `Outer` and their value layers): V*'s statements over the verifier's own list (`RecVStar.statements`, gap
 4(c)), their sessions, R's registration, and the inner run as V*'s layers hold it, stage by stage (`C3Run`, a decoder
 as `VStarFamily.files` and `rep₀` are). Each stage's obligation is its piece's statement, in its piece's directory:
-`HPubRows` and `HTape` (g), `HReps` (c), `HSparse` (d), `HOpening` (e), `HRegLevels` (f); `vbridge_c3`
-(`Compose/Bridge.lean`) composes them into VBridge.
+`HPubRows` and `HTape` (g), `HReps` (c), `HSparse` (d), `HOpening` (e), `HRegLevels` (f).
 -/
 
 namespace FlockC3.Compose
