@@ -51,8 +51,7 @@ theorem outRowPorts_of_hidden {r : Read} {sts : Array Stmt} (hs : r.tablesOf = s
   unfold HiddenExec.setupOne at hd
   rw [Flock.Readable.tagsAt_hiddenOutputs, hh] at hd
   simp only [↓reduceIte] at hd
-  obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' (Hidden.setupHidden_spec' hd).parse
-  exact (Hidden.out_rows_v1 hpa hcr hv1).2.1
+  exact ((Hidden.committed_of_commit (Hidden.setupHidden_spec' hd).parse).outRows ht' hv1).2.1
 
 end Hidden
 

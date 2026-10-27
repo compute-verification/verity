@@ -54,13 +54,13 @@ theorem twin_of_eq {T : Model.Statement} {st : Stmt} {hwf : StmtWF st}
 theorem twin_sat_of_linear {tags : Tags} {T : Model.Statement} {st : Stmt} {hwf : StmtWF st}
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} (hT : T = stmtOf st hwf regs)
     (L : FlockSoundness.Layout (Hidden.unpin st)) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
-    (hleaf : st.leaf = default) (hda : st.da = (HmOut.delta st.c st.pin).1)
+    (hW : Integrate.NetWidths st.c) (hleaf : st.leaf = default) (hda : st.da = (HmOut.delta st.c st.pin).1)
     (hdb : st.db = (HmOut.delta st.c st.pin).2) (hlin : ∀ y ∈ Hidden.pinnedCols st.c, LinearBit st.c y)
     {z : Model.Witness T.m} (hz : T.Satisfies z) :
     (twin T (fun r j => matA (Hidden.unpin st) r.val j.val) (fun r j => matB (Hidden.unpin st) r.val j.val)).Satisfies
       z := by
   subst hT
-  exact sat_pinned L F hleaf hda hdb hwf hlin regs hz
+  exact sat_pinned L F hW hleaf hda hdb hwf hlin regs hz
 
 namespace TableH
 
@@ -112,7 +112,8 @@ theorem satS (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S 
   have sc := Hidden.setupHidden_specCC x.h
   have hpin := sc.committed.unpinned_of_rep ht
     (outRowsS_of_unrolled ht sc.committed (by rw [x.unrolled_eq ht hcS]; exact hv1.1)).1
-  twin_sat_of_linear x.hT (sc.unpinLayout ht) (sc.unitFacts ht) sc.self.leaf sc.self.da sc.self.db
+  twin_sat_of_linear x.hT (sc.unpinLayout ht) (sc.unitFacts ht) (sc.committed.netWidths ht) sc.self.leaf sc.self.da
+    sc.self.db
     (fun y hy => by rw [Hidden.pinnedCols_nil hpin] at hy; cases hy) hz
 
 /-- **A drawn table's acceptance** at a flat session's circuit (`accS` at `HmOut.parse`'s). -/
