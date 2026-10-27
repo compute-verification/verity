@@ -113,7 +113,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   prover holds none of it while the session runs, and no guarantee takes a hiding premise on it (`PROTOCOL.md` §4).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
-- `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
+- `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup
+  and the node whose store the registration log registers (`stored`),
   receipts of units of four 2,056-byte blocks that the decode kernel sketches as it decodes (`Sketcher`, its CPU
   reference), and openings checked on PoUS's `vk`. Its Lean is `lean/RemoteAudit/P2.lean`, held to it by
   `lean/tests/test_p2.py`, and its session's is `lean/RemoteAudit/P2Session.lean`, of record.

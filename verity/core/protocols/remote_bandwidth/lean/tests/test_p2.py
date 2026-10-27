@@ -21,6 +21,7 @@ from hypothesis import strategies as st
 
 import ra_cases as M
 import verity_difftest as D
+from verity.core.protocols import registration as log
 from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
 from verity.core.protocols.remote_bandwidth.codec import P2_EXPANDER, P2_POINT, P2Codec
@@ -140,6 +141,32 @@ def test_p2_registration_digest(server) -> None:
     stats = D.run(port("p2_registration_digest", registration_digest, registration_inputs()), examples=200,
                   server=server)
     assert stats.outputs > 80, stats
+
+
+def stored(v) -> str:
+    """`p2StoredFn`: the node whose P2 store of `blocks` blocks the registration log registers as `store`."""
+    with M.decoding():
+        view, store, blocks = M.logged_view(v), M._str(v, "store"), M.nat(v, "blocks")
+    return p2.stored(view, store, blocks).hex()
+
+
+@st.composite
+def stored_inputs(draw) -> dict:
+    """A log of a host and a memory leaf in it, and a store of some blocks: now and then a leaf of other bytes, a node
+    id past 64 bytes, a store the log doesn't name or that is the host, or a log another composite's."""
+    node = draw(st.sampled_from(["p2-node", "p2-node", "n", "x" * 64, "x" * 65]))
+    blocks = draw(st.sampled_from([1, 4, 12]))
+    size = blocks * p2.BLOCK_BYTES + draw(st.sampled_from([0] * 6 + [p2.BLOCK_BYTES, 1]))
+    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(node, "host", "site"),
+                              log.Loc("c-star", "memory", node, tier="disk", bytes=size)))
+    return {"params": log.params("onsite" if fault(draw, 6) == 1 else "remote", log.Auditor()),
+            "log": {"composite": "remote", "entries": [e.to_json() for e in log.chain("remote", [site])]},
+            "store": draw(st.sampled_from(["c-star"] * 8 + [node, "other"])), "blocks": blocks}
+
+
+def test_p2_stored(server) -> None:
+    stats = D.run(port("p2_stored", stored, stored_inputs()), examples=150, server=server)
+    assert stats.outputs > 50, stats
 
 
 # --- a unit's sketch ---------------------------------------------------------------------------------------------------

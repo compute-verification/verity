@@ -1,3 +1,4 @@
+import CoreProtocol.Registration
 import PousCheck.Merkle
 import RemoteAudit.Window
 
@@ -67,6 +68,19 @@ def Registration.make? (node : ByteArray) (w c0 : Nat) (expander : String) (bloc
   pure { node, blocksPerSegment, segments, commitment, salt, root, rows }
 
 /-- N, the store's blocks. -/
+/-- `p2.stored`: the node whose P2 store of `blocks` blocks the registration log registers as `store`, read from an
+accepted log's view: the memory leaf of that id, in a host, whose id is the node, holding the blocks' bytes. The log
+holds a P2 store's hardware alone: its `W` is PoUS's setup's, committed by a plain hash the verifier reads `W` to check,
+not a value of θ. -/
+def stored? (v : Core.Registration.View) (store : String) (blocks : Nat) : Except String ByteArray := do
+  let some x := (v.site.loc? store).filter (·.kind == .memory)
+    | throw s!"the registration log registers no memory leaf {store}"
+  let some host := v.site.host? x | throw s!"the store {store} is in no host"
+  if x.bytes ≠ blocks * BLOCK_BYTES then throw s!"the store {store} is not {blocks} blocks of {BLOCK_BYTES} bytes"
+  let node := host.toUTF8
+  if !(1 ≤ node.size && node.size ≤ 64) then throw "a node's id is 1 to 64 bytes"
+  pure node
+
 def Registration.blocks (r : Registration) : Nat := r.blocksPerSegment * r.segments
 
 /-- U, the store's units: what its plans range over. -/

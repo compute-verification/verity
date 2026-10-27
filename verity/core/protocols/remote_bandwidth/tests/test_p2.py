@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols import registration as log
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as pous_p2
 from verity.core.protocols.pous.schemes.p2 import P2Params
@@ -69,6 +70,21 @@ def vk(fixture):
 def store(fixture, vk) -> p2.Store:
     reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk)
     return p2.Store(reg, fixture["blocks"])
+
+
+def test_a_p2_store_drawn_from_the_registration_log_is_the_registration_of_its_node(fixture, vk, store) -> None:
+    """The node `register_stored` reads from the log is the one whose memory leaf holds vk's blocks: its registration is
+    `register`'s of that node, byte for byte.  A leaf of other bytes, or no such leaf, draws nothing."""
+    def logged(store_bytes: int) -> log.View:
+        site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(NODE.decode(), "host", "site"),
+                                  log.Loc("c-star", "memory", NODE.decode(), tier="disk", bytes=store_bytes)))
+        return log.check(log.Auditor(), "remote", log.chain("remote", [site])).view()
+
+    reg, size = store.registration, store.registration.codec.blocks * p2.BLOCK_BYTES
+    assert p2.register_stored(SOURCE, logged(size), "c-star", reg.commitment, vk) == reg
+    for view, name in ((logged(size + p2.BLOCK_BYTES), "c-star"), (logged(size), "elsewhere"), (logged(size), "site")):
+        with pytest.raises(ValueError):
+            p2.register_stored(SOURCE, view, name, reg.commitment, vk)
 
 
 def params(reg: p2.Registration, **kw) -> audit.Params:

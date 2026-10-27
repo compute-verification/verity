@@ -9,7 +9,8 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
               drawn after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
-              the committed W (`setup.verifier_key_from_encoding`)
+              the committed W (`setup.verifier_key_from_encoding`); the node the one whose store the deployment's
+              registration log registers (`stored`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
               u32be k_s),  REGISTRATION_DOMAIN = "verity/remote-bandwidth/p2-registration/v0\\0"
@@ -50,6 +51,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from verity.core.protocols import registration as log
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.params import SALT_BITS
 from verity.core.protocols.pous.schemes.p2 import P2Params
@@ -149,6 +151,30 @@ def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
         raise ValueError("vk is the verifier's own, built at PoUS's setup under the salt it drew after the commitment")
     rows = receipts.sketch_rows(receipts.SKETCH_SHA512, rows)
     return Registration(node, codec_of(vk.params), commitment, salt, vk.root, rows)
+
+
+def stored(view: log.View, store: str, blocks: int) -> bytes:
+    """The node whose P2 store of `blocks` blocks the registration log registers as `store`, read from an accepted
+    log's view: the memory leaf of that id, in a host, whose id is the node, holding the blocks' bytes.  The log holds
+    a P2 store's hardware alone: its W is PoUS's setup's, committed by a plain hash the verifier reads W to check, not
+    a value of θ."""
+    x = view.site.loc(store)
+    if x is None or x.kind != "memory":
+        raise ValueError(f"the registration log registers no memory leaf {store}")
+    host = view.site.host(x)
+    if host is None:
+        raise ValueError(f"the store {store} is in no host")
+    if x.bytes != blocks * BLOCK_BYTES:
+        raise ValueError(f"the store {store} is not {blocks} blocks of {BLOCK_BYTES} bytes")
+    return audit._node(host.encode())
+
+
+def register_stored(source: bytes, view: log.View, store: str, commitment: bytes, vk: VerifierKey, *,
+                    rows: int | None = None) -> Registration:
+    """`register` of the node whose P2 store, of vk's blocks, the registration log registers as `store` (`stored`)."""
+    if type(vk) is not VerifierKey:
+        raise ValueError("vk is the verifier's own, built at PoUS's setup")
+    return register(source, stored(view, store, codec_of(vk.params).blocks), commitment, vk, rows=rows)
 
 
 class Sketcher(receipts.SketchReceipter):

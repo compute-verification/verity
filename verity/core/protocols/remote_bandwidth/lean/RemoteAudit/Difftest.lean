@@ -22,7 +22,8 @@ line (`line` of groups and windows given, `line_record` read off an accepted ses
 rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
 reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
-`p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
+`p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), the node whose store a
+registration log registers (`p2_stored`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
 `p2_party.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
 `remote-audit-difftest` serves them.
@@ -724,6 +725,10 @@ def p2RegistrationOf (j : Json) : V P2.Registration := do
 /-- `p2.Registration.digest`. -/
 def p2RegistrationDigestFn (j : Json) : V Json := do pure (hexJ (← p2RegistrationOf j).digest)
 
+/-- `p2.stored` on an accepted registration log: `{"params", "log", "store", "blocks"}` to the node. -/
+def p2StoredFn (j : Json) : V Json := do
+  pure (hexJ (← P2.stored? (← loggedView j) (← J.str j "store" "input") (← nat j "blocks")))
+
 private def p2Seed (j : Json) : V ByteArray := do
   let s ← hex j "seed"
   if s.size ≠ DIGEST_BYTES then throw "a pass seed is 64 bytes"
@@ -809,7 +814,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),
-  ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
+  ("p2_registration_digest", p2RegistrationDigestFn), ("p2_stored", p2StoredFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
   ("p2_session", p2SessionFn)]
 
 end RemoteAudit.Difftest
