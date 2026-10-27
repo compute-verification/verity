@@ -101,6 +101,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  tree would not hold
     tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
                  built earlier in the run changed during it; the Lean files are run from a copy taken before the first build
+    stale        (without `--build`) Lake would rebuild a module of the package's default targets or its roots, its
+                 required packages' included (`lake build --no-build`): the `.olean` files the audit reads are not
+                 its sources', so it refuses before reading them and names the modules (`out_of_date`)
 
 A spec package's guarantees may be proved in other packages, which `require` it by path: its policy's `proved_in` lists
 them (paths relative to it), each with a policy of its own that records no guarantee (its roots, layers and the rest).
@@ -645,6 +648,8 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
 HEARTBEATS = re.compile(r"\bset_option[ \t]+((?:[\w.]+\.)?maxHeartbeats)[ \t]+(\d+)")
 #: a module `lake build` built, and how long it took (`✔ [3/118] Built Flock.Field (456ms)`; `:c.o` and the like are not modules)
 BUILT = re.compile(r"\bBuilt ([^\s:]+) \((?:(\d+)m ?)?([\d.]+)(ms|s)\)")
+#: a module `lake build --no-build` would rebuild (`✖ [2/5] Building Control.Defs`)
+UNBUILT = re.compile(r"\bBuilding ([^\s:]+)")
 
 
 def build_seconds(logs: list[Path]) -> dict[str, float]:
@@ -3211,6 +3216,23 @@ def template(pkg: Path) -> dict:
     return {"roots": libs or [pkg.name], "guarantees": {}}
 
 
+def out_of_date(pkg: Path, policy: dict, work: Path) -> Failure | None:
+    """The failure when Lake would rebuild a module of ``pkg``'s default targets or its roots, a required package's
+    included (`lake build --no-build` exits 3 then, naming each module it would build), else None. An audit without
+    `--build` reads the `.olean` files a build left, which after an edit, a merge or a half-finished build are not the
+    sources'."""
+    roots = [f"+{r}" for r in policy.get("roots", [])]
+    for step, targets in (("up-to-date", []), *([("up-to-date-roots", roots)] if roots else [])):
+        rc, text = run(["lake", "build", "--no-build", *targets], pkg, work / f"{step}.log")
+        if rc:
+            stale = ", ".join(dict.fromkeys(UNBUILT.findall(text))) or f"`lake build --no-build` exit {rc}"
+            return Failure("stale.build", None,
+                           f"stale: {pkg}'s build is not up to date with its sources ({stale}), so the audit would read "
+                           f"`.olean` files of other sources. Build first: rerun with `--build`, or take the records with "
+                           f"`lean_changed.py --records PKG --update`, which builds on a tree of its own\n{text[-2000:]}")
+    return None
+
+
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
@@ -3268,6 +3290,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if rc:
                 rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
                 return reported(rep)
+    elif stale := out_of_date(pkg, policy, work):
+        rep["failures"].append(stale)
+        return reported(rep)
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
