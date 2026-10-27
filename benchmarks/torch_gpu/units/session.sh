@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The units' session on one H200 or RTX PRO 6000, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
+# The units' run on one H200 or RTX PRO 6000, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/units-ship.tar .
 #   research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \

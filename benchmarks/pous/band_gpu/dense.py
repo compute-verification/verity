@@ -102,7 +102,7 @@ CHAIN_PAIRS = [False]
 the squeezing and absorbing sponges of a row on two lanes, a warp per scheduler taking (rows, call) tasks, the lanes
 bit-interleaved, and `X` read from an interleaved copy of `C` (1 GB more device memory for the 0.5B weight set's 30
 segments).  `band_chain_kernel`'s 15,360 threads fill 480 of the RTX PRO 6000's 752 schedulers; this fills them all, and
-decodes at 2.80 against 1.60 GB/s there (untimed screens, art:4354a29314cf against art:468c10537551).  It runs from
+decodes at 2.80 against 1.60 GB/s there (untimed screens).  It runs from
 `CHUNKED_MIN_ROWS` rows (two segments), so a gates-only run on two segments exercises it."""
 
 DECODE_PATHS: list[tuple[str, int]] = []

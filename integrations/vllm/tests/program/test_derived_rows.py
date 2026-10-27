@@ -496,7 +496,7 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
     """[R17 dense, BRIEF §4] `attention_rows` (FA2 defaults) == `Attention_v3{T, NH, KVH, D, BN}` evaluated gate for gate: GQA (head h reads
     KV head h // (NH/KVH)), one query over T keys, ceil(T/BN) blocks last -> first, Fa2InvSum epilogue -- on random N(0,1) words."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     from verity.ml.definitions.numerics import derived_rows as D
     NH, KVH, Dh, BN = 4, 2, 64, 128
@@ -522,7 +522,7 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     from verity.ml.definitions.numerics import fa2_relation, fa3_model
 
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1, hopper
     from verity.ml.definitions.numerics import derived_rows as D
     from verity.ml.definitions.registry import prims as P
@@ -616,7 +616,7 @@ def test_silu_mid_factorises_the_prim():
 def test_rmsnorm_triton_rows_vs_gates(N, eps):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     prog, call = _standalone(bind(b1.RMSNormTriton, N=N, EPS=eps))
     sqrt = _prim_calls(call, "MufuSqrtFtz")[0]
@@ -640,7 +640,7 @@ def test_rmsnorm_triton_rows_vs_gates(N, eps):
 def test_rmsnorm_fused_v2_rows_vs_gates():
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     N, eps = 576, 1e-5
     prog, call = _standalone(bind(b1.RMSNormFusedCuda, N=N, EPS=eps))
@@ -664,7 +664,7 @@ def test_rmsnorm_fused_v2_rows_vs_gates():
 def test_attn_block_vs_gates(D_, NVIS, FIRST):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     BN = b1.BN
     prog, call = _standalone(bind(b1.AttnBlock, D=D_, NVIS=NVIS, FIRST=FIRST))
@@ -692,7 +692,7 @@ def test_attn_block_vs_gates(D_, NVIS, FIRST):
 def test_attention_head_states_vs_gates(T, D_):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     prog, call = _standalone(bind(b1.AttentionHead, T=T, D=D_))
     blocks = [c for c in call.children() if not c.is_primitive and c.name == "AttnBlock"]
@@ -730,7 +730,7 @@ def test_attention_head_states_vs_gates(T, D_):
 def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     BN = b1.fa2_kblock_n(D_)  # the geometry E6 pins for this head dim; here bound explicitly as the declared static
     assert BN == (128 if D_ <= 64 else 64)
@@ -759,7 +759,7 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
 def test_attention_head_v3_states_vs_gates(T, D_):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     BN = b1.fa2_kblock_n(D_)
     prog, call = _standalone(bind(b1.AttentionHeadV3, T=T, D=D_, BN=BN))
@@ -819,7 +819,7 @@ def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
     one `Const16[0]` gate more, same output word -- so the 128×64 record's positions 0..63 agree in VALUE, as D54 saw, while
     the gate layout already shifts by one)."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     rng = np.random.default_rng(6400 + T)
     q = _rand_bf16(rng, 64)
@@ -841,7 +841,7 @@ def test_attention_head_v3_at_bn_64_is_attention_head_v1_gate_for_gate():
     """The legacy geometry as a declared static: `AttentionHead_v3{T, D, BN=64}` == `AttentionHead_v1{T, D}` on every gate, at a
     two-block T -- the D57 default relation (`Serve_v4{..., BN=64}` is `Serve_v1`'s arithmetic under a new identity)."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     T = 100
     rng = np.random.default_rng(64100)
