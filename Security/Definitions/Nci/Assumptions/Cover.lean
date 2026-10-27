@@ -8,8 +8,8 @@ import Mathlib.Data.Finset.Union
 `UpdateHardness` is the cover theorem's one assumption about the world: a block that computes whole products must be
 handed `b` bits for each distinct updated parameter they use. On a declaration's gates it is Daniel's parameter-hardness
 at cost `b` (`Nci.Assumptions.ParameterHardAt`; `Proofs.Nci.Cover.Gates`). `ConditionalUpdateHardness`, a stronger
-premise that the structural fan-out tier rests on, pays those bits outside a given set of regions. Both are statements
-about the training circuit `C` and its products, at block size `s`.
+premise, pays those bits outside a given set of regions. Both are statements about the training circuit `C` and its
+products, at block size `s`.
 -/
 
 namespace Nci.Cover.Assumptions
