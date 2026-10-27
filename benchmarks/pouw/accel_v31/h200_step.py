@@ -166,7 +166,6 @@ def power(serial_j: float | None, limit: float | None) -> str:
     if not serial_j or not limit:
         return ""
     return f"; the serial split {serial_j:.0f} J a step, {serial_j / limit:.3f} s at the {limit:.0f} W limit"
-    return out
 
 
 def split_steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], int] = CALLS
