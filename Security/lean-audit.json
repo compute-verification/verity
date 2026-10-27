@@ -998,6 +998,10 @@
    "owner": "@proofs",
    "digest": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30"
   },
+  "FlockSoundness.Assumptions.LinkCRZCAt": {
+   "owner": "@proofs",
+   "digest": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8"
+  },
   "FlockSoundness.Assumptions.RecordCustodyExec": {
    "owner": "@proofs",
    "digest": "405348e1e24e9f6ddc54ab19668d5bf3309ed47d3300bc438ffc37d5b5d1a560"
@@ -6024,6 +6028,12 @@
    "signature": ["Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated"],
    "assumptions": [],
    "type_hash": "f6d2860cab7c3a1fa7ef9c5606fb73022c00cb5014777733e04e9bf2cad48007"
+  },
+  "Flock.SecurityProofs.DeltaPubDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed"],
+   "assumptions": [],
+   "type_hash": "a813a423e9fcecd92d7162f686abe1533dde2a5b1b1e1a17c659b78b3a361e5c"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -12311,7 +12321,8 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs, proved by V2's assembly at keyProgP; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each unit's public input bits), under RecordCustodyZKJP, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec."
+   "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -40559,13 +40570,21 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
   },
   "Proofs.Flock.Bridge.Public": {
-   "digest": "2222caefa9831e922420543730f3e9843c679ef3f1155eb6e75c1df403997527",
+   "digest": "429321642e2ff438e50db5a3c952d6967509a21ea893729a29a2abcc8f01abac",
    "definitions": {
     "Flock.Bridge.deltaPub": "f7328b16312ac1aaa5d79be966c13bea34c51842c6a59d08d4a497c4e71812f9",
     "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
-    "Flock.Guarantees.SampledKSLivePub": "d3f967c477902566490163001fb7605945785000bf19a79330f51ba829118bf1"
+    "Flock.Guarantees.SampledKSLivePub": "136451daf3f94f645c1947f41614e11451573e9cd6f285ba1897a6dcd5405731"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
+  },
+  "Proofs.Flock.Bridge.PublicDeployed": {
+   "digest": "e4b6cfafd1f5821f942705dad52ab7983429b3661f3b7ef75a64e7acc6d04fbe",
+   "definitions": {
+    "Flock.Bridge.kDep": "42de2a83a7ada5b7648cc8ae849f80addd01693605d8f38a0b276a1788c50800",
+    "Flock.Guarantees.DeltaPubDeployed": "6963609c14b3b2a7b4caed6e6c63a8d4b4fced8a369d4b060f74e8b7af9354d4"
+   },
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
   },
   "Proofs.Flock.Bridge.Refused": {
    "digest": "82c31f824ab4b0e9b5be2d35a7d4a9db89299848dc1c18fae435b105ed49f158",
@@ -42552,13 +42571,17 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.Finders": {
-   "digest": "79d069c3d25dedd1e28979f6494d94dd9bcf41791e7bbcbc961d6de555dd73c4",
+   "digest": "a73a71bb7ecc2049cb6dc4747b16c702107d9b26af3b3c0b62812f67bfa3717b",
    "definitions": {
     "FlockSoundness.Assumptions.LinkCRAt": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30",
+    "FlockSoundness.Assumptions.LinkCRZCAt": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8",
     "FlockSoundness.Assumptions.TableCRAt": "59144eca1337195cff560732b0893d04b932ff1e49776abb46964fa283596148",
     "FlockSoundness.Assumptions.TableCRZAt": "406013c1a29772f3fdb909233b6aae28f7b15c544dfd7be1e6cc47d09c18cca5"
    },
    "guarantees": [
+    "Flock.SecurityProofs.SampledKSLivePub",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44879,7 +44902,7 @@
     "FlockSoundness.Discharge.ZkLink.ksClosedM1": "7c15d0f99d5d1410d07f04db7c4641abfb062e0106f6de11c87d5538801dc20a",
     "FlockSoundness.Discharge.ZkLink.rateM1": "f5dd0e040b4db220db97929c7a4504a5573b97c7335d216000a0212eea49f545"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered": {
    "digest": "5f05d9c0d438af3248be184b3f3c16ff38a4f45bf9e78cdbbd38ee44776978d8",
