@@ -1,8 +1,8 @@
-import Properties.Pouw.ServedSize
+import Properties.Pouw.ServedValues
 import Proofs.Pouw.PeriodJ10R
 
 /-!
-# Proof of `ServedSizeCredit`
+# Proof of `ServedValues`
 
 `H1J10RCheckedCreditPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
 words are the blocks not skipped whole. There `UnitFixed` holds with equality, so H1 bounds the right blocks' words
@@ -12,9 +12,9 @@ live in a credited window (`good_live`, through `credited_iff`), so the size the
 `(1 − ε_skip)₊·S` right size (`creditFloor_le`).
 -/
 
-namespace Properties.Pouw.ServedSize.SecurityProofs
+namespace Properties.Pouw.ServedValues.SecurityProofs
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedSize
+open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 open Classical in
@@ -138,9 +138,9 @@ theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 
   split_ifs at hp with hc
   exact ⟨(credited_iff σ k hk sT unitOf hKd ws opened rel right x w).1 hc.1, hc.2⟩
 
-theorem servedSizeCredit : ServedSizeCredit := by
-  intro ι K T L U C Ξ V _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr hM hKd D lower M ws opened enc place tile
-    Wp Pl ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
+theorem servedValues : ServedValues := by
+  intro ι K T L U C Ξ V _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr hM hKd D lower M ledger ws opened enc
+    place tile Wp Pl ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
   classical
   let pf := tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile) (j10rAtCoin hr enc place tile)
   let mode := periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
@@ -162,9 +162,9 @@ theorem servedSizeCredit : ServedSizeCredit := by
   rw [mul_comm, div_mul_cancel₀ _ hn']
   by_contra hge
   refine absurd hx.2 (not_lt.mpr (creditFloor_le (creditLive_nonneg Sc Cd Wp ws x)
-    (creditedSize_nonneg Sc Cd Wp ws M.size x) (sizePerWord_nonneg Sc Cd _ M.size)
-    (rightSize_nonneg Sc Cd M.size _) ?_ (not_lt.mp hge)))
-  exact creditedSize_sub_le Sc Cd Wp ws M.size x _ fun w t hg =>
+    (creditedSize_nonneg Sc Cd Wp ws (M.size ledger) x) (sizePerWord_nonneg Sc Cd _ (M.size ledger))
+    (rightSize_nonneg Sc Cd (M.size ledger) _) ?_ (not_lt.mp hge)))
+  exact creditedSize_sub_le Sc Cd Wp ws (M.size ledger) x _ fun w t hg =>
     good_live Cd hr σ k hk sT unitOf hKd ws opened _ _ Wp x w t hg
 
-end Properties.Pouw.ServedSize.SecurityProofs
+end Properties.Pouw.ServedValues.SecurityProofs

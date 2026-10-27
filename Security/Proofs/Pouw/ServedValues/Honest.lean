@@ -1,29 +1,29 @@
 import Definitions.Core.Boolean
-import Proofs.Pouw.ServedSize
+import Proofs.Pouw.ServedValues
 import Proofs.Pouw.PeriodJ10R.Honest
 
 /-!
-# `ServedSizeCredit` at an honest period, and against a verifier that accepts everything
+# `ServedValues` at an honest period, and against a verifier that accepts everything
 
-LEAN-66's two witnesses of `Properties.Pouw.ServedSize.ServedSizeCredit`, on `Proofs.Pouw.PeriodJ10R.Honest`'s J10-R
+LEAN-66's two witnesses of `Properties.Pouw.ServedValues.ServedValues`, on `Proofs.Pouw.PeriodJ10R.Honest`'s J10-R
 period. Its declared circuit has `N = N_p` committed words of no operands, one a block. The honest registered
 declaration (`andDecl N`) is a Boolean circuit of two input gates and `N` output gates, each the AND of the two
 (`andCircuit N`), and its lowering is itself (`Verity.Declaration.D`). The honest map (`blocks N`) has block `t` AND
-gate `t + 2` and word `t` its one bit, so each block's credit size is `1` (`isAnd_of_and`: C-Flock's `and a b` of two
-distinct gates is an AND gate).
+gate `t + 2` and word `t` its one bit. No other protocol credits a gate (the ledger is empty), so each block's credit
+size is `1` (`isAnd_of_and`: C-Flock's `and a b` of two distinct gates is an AND gate).
 
-* `served_size_honest`: the honest period meets every premise of `ServedSizeCredit`, `j10r_meets`' without
+* `served_values_honest`: the honest period meets every premise of `ServedValues`, `j10r_meets`' without
   `UnitFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
   windows' inputs, as `j10r_meets` is (`hacc`, `hsalt`, `hdraw`).
-* `served_size_nontrivial`: the conclusion fails when the verifier accepts everything. With every window credited
+* `served_values_nontrivial`: the conclusion fails when the verifier accepts everything. With every window credited
   (`hacc`), every block live and the play accepted, a prover that skips every block whole has no right block, while
   the right values must cover `(1 − ε(n))₊·N_p·n > 0` AND gates once `Λ·ln(1/δ_s) < n`. So the conclusion's event
   holds on every path, and its probability `1` exceeds `δ_s < 1`.
 -/
-namespace Properties.Pouw.ServedSize.SecurityProofs.HonestSize
+namespace Properties.Pouw.ServedValues.SecurityProofs.HonestValues
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedSize
-open Properties.Pouw.ServedSize.SecurityProofs Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
+open Properties.Pouw.ServedValues.SecurityProofs Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposePeriod
 open Verity.Circuit (bitZ)
@@ -169,9 +169,11 @@ def blocks (N : ℕ) : BlockMap (circuit N) N Verity.Declaration.D (andDecl N) w
     subst hg
     exact Finset.mem_filter.mpr ⟨Finset.mem_singleton_self _, Or.inl (gateOf_output t)⟩
 
-/-- **Every block's credit size is `1`**: its one gate is an AND gate. -/
-theorem size_blocks {N : ℕ} (t : Fin N) : (blocks N).size t = 1 :=
-  creditSize_gateOf t
+/-- **Every block's credit size is `1`** with no gate credited elsewhere: its one gate is an AND gate. -/
+theorem size_blocks {N : ℕ} (t : Fin N) : (blocks N).size ∅ t = 1 := by
+  unfold BlockMap.size
+  rw [Finset.sdiff_empty]
+  exact creditSize_gateOf t
 
 /-! ## The honest witness -/
 
@@ -181,16 +183,16 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
   (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
-/-- **`ServedSizeCredit`'s bound at the honest J10-R period**: `j10r_meets` gives every
+/-- **`ServedValues`'s bound at the honest J10-R period**: `j10r_meets` gives every
 premise but `UnitFixed`, which the guarantee doesn't take, at `N_p` one-word blocks, one round, `ρ = 1`, any
 `δ_s > 0` and `δ_bind = δ_ks = 0`. -/
-theorem served_size_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem served_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧
-      rightSize Honest.scheme (circuit (tileCount σ sT)) (blocks (tileCount σ sT)).size (fun w t =>
+      rightSize Honest.scheme (circuit (tileCount σ sT)) ((blocks (tileCount σ sT)).size ∅) (fun w t =>
         (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
           (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
           (periodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
@@ -202,15 +204,14 @@ theorem served_size_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (r
           (creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
             (windows σ sT regOf evOf n) x)
           (creditedSize Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) (blocks (tileCount σ sT)).size x)
-          (blocks (tileCount σ sT)).size 1 1 (j10rRate (k sT) 1) δs) ≤ δs + n * (0 + 0) := by
+            (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x)
+          ((blocks (tileCount σ sT)).size ∅) 1 1 (j10rRate (k sT) 1) δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, -, -, -, -⟩ :=
     j10r_meets σ k hk sT unitOf regOf evOf enc hKd hacc hsalt hdraw n hn hδs
-  exact servedSizeCredit σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
-    (andDecl (tileCount σ sT)) Verity.Declaration.D (blocks (tileCount σ sT)) (windows σ sT regOf evOf n) opened enc
-    place tile
-    (period (Ω1 σ sT) (tileCount σ sT) n) (play Unit (tileCount σ sT) (k sT) n) 1 δs 0 0 hS one_pos le_rfl
-    hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
+  exact servedValues σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
+    (andDecl (tileCount σ sT)) Verity.Declaration.D (blocks (tileCount σ sT)) ∅ (windows σ sT regOf evOf n) opened
+    enc place tile (period (Ω1 σ sT) (tileCount σ sT) n) (play Unit (tileCount σ sT) (k sT) n) 1 δs 0 0 hS one_pos
+    le_rfl hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
 
 end Witnesses
 
@@ -259,7 +260,7 @@ theorem zeroCone_eq (N : ℕ) : zeroCone Honest.scheme (circuit N) N = 0 :=
   Finset.sum_eq_zero fun t _ => if_neg (by rw [tileWords_eq]; exact one_ne_zero)
 
 theorem sizePerWord_blocks {N : ℕ} (hN : 0 < N) :
-    sizePerWord Honest.scheme (circuit N) N (blocks N).size = 1 := by
+    sizePerWord Honest.scheme (circuit N) N ((blocks N).size ∅) = 1 := by
   have : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
   unfold sizePerWord
   simp only [tileWords_eq, size_blocks, one_ne_zero, if_false, Nat.cast_one, div_one, ciSup_const]
@@ -303,7 +304,7 @@ theorem creditLive_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (
 /-- **The skipping period's credited size is `N·n` AND gates** when every window is credited. -/
 theorem creditedSize_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
     creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
-      (windows σ sT regOf evOf n) (blocks (tileCount σ sT)).size x =
+      (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x =
         tileCount σ sT * n := by
   unfold creditedSize
   calc _ = ∑ _w : Fin n, (tileCount σ sT : ℝ) := Finset.sum_congr rfl fun w _ => by
@@ -312,16 +313,16 @@ theorem creditedSize_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
           simp [liveSize, liveWords_true, tileWords_eq, size_blocks]
     _ = tileCount σ sT * n := by simp [mul_comm]
 
-/-- **`ServedSizeCredit`'s conclusion fails against a verifier that accepts everything.** Every window is credited
+/-- **`ServedValues`'s conclusion fails against a verifier that accepts everything.** Every window is credited
 (`hacc`), every block is live and the play accepts every path, but the prover skips every block whole
 (`skipPeriod`), so no block is right. The right values must cover `(1 − ε(n))₊·N_p·n` AND gates, positive once
 `Λ·ln(1/δ_s) < n` at `Λ = j10rRate (k s_T) 1`. So the conclusion's event holds on every path: its probability is `1`,
 above `δ_s + n·(0 + 0)` for `δ_s < 1`. -/
-theorem served_size_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem served_values_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs1 : δs < 1) (hΛ : j10rRate (k sT) 1 * Real.log (1 / δs) < n) :
     ¬ prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧
       rightSize Honest.scheme (circuit (tileCount σ sT))
-        (blocks (tileCount σ sT)).size (fun w t =>
+        ((blocks (tileCount σ sT)).size ∅) (fun w t =>
         (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
           (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
           (periodMode (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
@@ -333,8 +334,8 @@ theorem served_size_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccept
           (creditLive Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
             (windows σ sT regOf evOf n) x)
           (creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) (blocks (tileCount σ sT)).size x)
-          (blocks (tileCount σ sT)).size 1 1 (j10rRate (k sT) 1) δs) ≤
+            (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x)
+          ((blocks (tileCount σ sT)).size ∅) 1 1 (j10rRate (k sT) 1) δs) ≤
       δs + n * (0 + 0) := by
   have hN : 0 < tileCount σ sT := Nat.lt_of_lt_of_le hKd (hk sT)
   have hNn : (0 : ℝ) < tileCount σ sT * n := mul_pos (Nat.cast_pos.mpr hN) (Nat.cast_pos.mpr hn)
@@ -358,4 +359,4 @@ theorem served_size_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccept
 
 end Witnesses
 
-end Properties.Pouw.ServedSize.SecurityProofs.HonestSize
+end Properties.Pouw.ServedValues.SecurityProofs.HonestValues
