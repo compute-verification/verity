@@ -374,7 +374,7 @@ openings coin, draws and openings; then the outcome; then the commitment and eve
 prover checks (the remote session's `end`, `ended`, `coins`). The challenger can't choose a coin after seeing a root,
 and the prover holds nothing of a coin before it is released: not its leaf, and not the commitment's root, a function
 of every coin, the windows' to come among them, which it is sent only when no root of the session can follow
-(soundness's ruling of 27 Oct: no hiding premise on the root). This is the construction of PoUW's epoch coins, from
+(so no hiding premise on the root). This is the construction of PoUW's epoch coins, from
 the same challenger. Each coin leaves once, after the root the verifier
 recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
 The verifier holds that log to its own record (`Session.released_reason`): the commitment it used, the same roots in
