@@ -50,7 +50,7 @@ Every other premise is `DampenerRemote`'s: the model's accounting of the four so
 capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`
 are fixed over the period: nothing here models or rests on re-registration.
 
-The statement is not proved: `DampenerRemotePeriodStated` holds its text for the lock.
+`Nci.SecurityProofs.DampenerRemotePeriod` proves it.
 -/
 
 namespace Nci.Guarantees
@@ -140,11 +140,5 @@ def DampenerRemotePeriod : Prop :=
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
                   declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
               hardwareMultiple mfu κ (M ξ) C U)
-
-/-- **The remote dampener over a monitoring period is stated**: `DampenerRemotePeriod`, equal to itself, so the lock
-records its text and every definition it reads until it is proved. -/
-def DampenerRemotePeriodStated : Prop :=
-  let s := DampenerRemotePeriod
-  s = s
 
 end Nci.Guarantees

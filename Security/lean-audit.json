@@ -8457,11 +8457,8 @@
    "assumptions": [],
    "type_hash": "9feae5d9e2ff364afe60468502cf1a03c68b15c84d81616e07a03ee4b35a3f5d"
   },
-  "Nci.SecurityProofs.DampenerRemotePeriodStated": {
-   "owner": "@training",
-   "signature": ["Nci.SecurityProofs.DampenerRemotePeriodStated : Nci.Guarantees.DampenerRemotePeriodStated"],
-   "assumptions": [],
-   "type_hash": "6e83c71de57b9b8745a86cb8820ae8d2d31164b3c06ce5fc269a9e995689a825"
+  "Nci.SecurityProofs.DampenerRemotePeriod": {
+   "owner": "@training"
   },
   "Nci.SecurityProofs.DampenerThreaded": {
    "owner": "@lean",
@@ -12248,8 +12245,7 @@
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
-   "Nci.SecurityProofs.DampenerRemotePeriodStated": "frozen (no-function): It states no property: it reads Nci.Guarantees.DampenerRemotePeriod, so the lock records its text, and it leaves when DampenerRemotePeriod's own theorem is proved and listed.",
-   "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet.",
+   "Nci.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's compute dampener over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (Security/Definitions/Nci/Assumptions/Remote.lean), with each protocol's per-window bound (CircuitCredit's conclusion, HiddenWindow.drawMiss_le and EndToEndHiddenDrawn's, NciCheck.Properties.Throttled's) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
    "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
    "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv (CMP-136, RT-LEAN-2 L39).",
