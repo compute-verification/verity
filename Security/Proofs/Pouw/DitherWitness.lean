@@ -3,7 +3,7 @@ import Proofs.Pouw.Dither
 import Proofs.Pouw.ShaRealize
 
 /-!
-# `WorkSound`'s premises hold together (RT-LEAN L7, RT-LEAN-2 L38)
+# `WorkSound`'s premises hold together
 
 The headline isn't vacuous: on `Definitions.Pouw.Witness`'s machine `tw`, protocol `twRound` and period `twPd`, every
 premise of `Definitions.Pouw.Guarantees.Dither.WorkSound` holds at once, at `k = 2` sampling blocks and the non-uniform
@@ -17,7 +17,7 @@ every prover (`witness`). `witness_freed` is the headline's conclusion there, fr
 * The verdict reads every block's answer within the period, so `AnswersFit` holds with every check coin selected
   (`twAnswersFit`), and the answers' calls are under the cap.
 
-**The rate and free guesses (L38).** A words program charged for `j` varying words costs at least `2 j` at `μ`, falls
+**The rate and free guesses.** A words program charged for `j` varying words costs at least `2 j` at `μ`, falls
 short of `pub_mm = 4` by at most `4 − 2 j`, and passes the check with probability at most `(j + (2 − j) p)/2`. At rate
 `η_mm` a unit of priced cost its moment is at most 1 for every `j` iff `e^{2 η_mm} (1 + p)/2 ≤ 1` (`j = 1`) and
 `e^{4 η_mm} p ≤ 1` (`j = 0`), so `η_mm ≤ ln(2/(1 + p))/2`: about `0.316` at `p = 1/16`, and `ln(4/3)/2` for one-bit
@@ -32,7 +32,7 @@ at `δ = 1/2`.
   the advice but not with the dither is charged too. The moment bounds use only that an uncharged cell is constant in
   the dither at fixed advice.
 * No dither is degenerate (`κ_dmm = κ_dsha = 0` at every advice size): the noise is the whole word, so no advice
-  predicts it (W2's degenerate set is empty here).
+  predicts it (the degenerate set is empty here).
 * `ExtractAdv` holds at `ξ = 0`, `κ_x = 0` and advice of `|Adv|` bits for every prover because the commitment is
   transparent; that is not `ShaRealize` on a random oracle.
 * No program exchanges bits (`ext = 0`), so `β = K = 0`, and the verdict implies the checks (`κ_S = 0`).
@@ -493,7 +493,7 @@ theorem twε_lt (A : Prover tw twRound 2) : twε A < 1 := by
 theorem twκ_lt (A : Prover tw twRound 2) : twκ A < 1 := by
   norm_num [twκ, twδ]
 
-/-- **The witness statement** (RT-LEAN L7, RT-LEAN-2 L38): every premise of `WorkSound`, in its order, at the witness
+/-- **The witness statement**: every premise of `WorkSound`, in its order, at the witness
 machine `tw`, protocol `twRound` and period `twPd`, with `k = 2` sampling blocks, every instance registrable for each
 (`twReg`), `μ = (2, 1, 1)`, `H_mm = pub_mm = 4`, `H_sha = pub_sha = 2`, `H_o = 1` a block, `η = 1/7`, `δ = 1/2`,
 `β = K = κ_S = 0`, the cap `Q = 8`, every check coin selected (`twSel`), `κ_dmm = κ_dsha = 0`, and for every prover

@@ -1,7 +1,7 @@
 import Proofs.Pouw.DitherWitness
 
 /-!
-# `WorkSound`, `WorkMoment` and `FleetSound` say something (LEAN-66; CMP-152, CMP-154)
+# `WorkSound`, `WorkMoment` and `FleetSound` say something
 
 Each guarantee's honest and nontrivial witnesses, at `Definitions.Pouw.Witness`'s machine `tw`, protocol `twRound`
 and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2` sampling blocks:
@@ -132,7 +132,7 @@ namespace Pouw.SecurityProofs.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Witness Pouw.SecurityProofs.DitherWitness Finset
 
-/-- **`WorkMoment`'s honest witness** (LEAN-66): at `Definitions.Pouw.Witness`'s machine, protocol and period, every
+/-- **`WorkMoment`'s honest witness**: at `Definitions.Pouw.Witness`'s machine, protocol and period, every
 premise of `WorkMoment` that is no named assumption holds (the dual price, the cost split, the cap on calls, G1–G3, P1
 and P2), the named assumptions hold too, and the verdict accepts the honest prover on every oracle and coins. -/
 theorem WorkMoment_honest :
@@ -153,7 +153,7 @@ theorem WorkMoment_honest :
   exact ⟨hdual, hC, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
     fun o x => (hhon o x).1⟩
 
-/-- **`WorkMoment`'s nontrivial witness** (LEAN-66): its conclusion at the witness (`witness_moment`'s period and
+/-- **`WorkMoment`'s nontrivial witness**: its conclusion at the witness (`witness_moment`'s period and
 parameters, `ε = 1/7`, `C = 14`, `η = 1/7`, `κ = 0`) is false at the verifier that accepts everything. -/
 theorem WorkMoment_nontrivial :
     ¬ MomentSound tw twRound 2 (fun _ _ _ _ => True) twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) := by
@@ -167,7 +167,7 @@ theorem WorkMoment_nontrivial :
   have hpos : 0 < twη * D ox := mul_pos (by norm_num [twη]) (by linarith)
   linarith [Real.one_lt_exp_iff.2 hpos]
 
-/-- **`WorkSound`'s honest witness** (LEAN-66, CMP-154): at `Definitions.Pouw.Witness`'s machine, protocol and period,
+/-- **`WorkSound`'s honest witness**: at `Definitions.Pouw.Witness`'s machine, protocol and period,
 every premise of `WorkSound` that is no named assumption holds (the dual price, the costs and their split, the rate
 and confidence, the cap on calls, G1–G3, P1 and P2), the named assumptions hold too, `AnswersFit` among them, and the
 verdict accepts the honest prover on every oracle and coins, with its sampling blocks' timed use the period's honest
@@ -193,7 +193,7 @@ theorem WorkSound_honest :
   exact ⟨hdual, fun w => ⟨(hinst w).1, (hinst w).2.1, (hinst w).2.2.1⟩, hC, hη, hδ, hδ1, hcap, hG1, hG2, hG3, hP1,
     hP2, hsak, hsha, hout, hsvc, himp, hans, hext, hhon⟩
 
-/-- **`WorkSound`'s nontrivial witness** (LEAN-66, CMP-154): its conclusion at the witness (`witness_freed`'s period
+/-- **`WorkSound`'s nontrivial witness**: its conclusion at the witness (`witness_freed`'s period
 and bounds, `ε_A = 1/7 + ln 2 / 2`, `C = 14`, `κ_A = 1/2`) is false at the verifier that accepts everything. The
 idle prover is accepted on every oracle and coins and leaves the period to other work worth 46, against at most
 `32 + ε_A C < 46` for any honest strategy (`value_le`), so the event has probability 1. -/

@@ -1,13 +1,13 @@
 import Proofs.Pouw.Dither
 
 /-!
-# Pooling a fleet's replicas by convexity (CMP-152, tier A)
+# Pooling a fleet's replicas by convexity (tier A)
 
-A fleet's sampling blocks are not one sequence (RT-PROTO-2 P16): a block's work can read the dither of a block on
+A fleet's sampling blocks are not one sequence: a block's work can read the dither of a block on
 another replica that the challenger issues after it, so `WorkMoment` holds per replica. The union bound over replicas
 paid `ln(N/δ_coin)` of luck a replica; convexity pays `ln(N/(s δ_coin))` on `s` accepted replicas' credit.
 
-* **Pooling the accepted replicas** (`prob_convex_pool_accepted`; RT-POOL RP1, RP24): each replica's moment, of
+* **Pooling the accepted replicas** (`prob_convex_pool_accepted`): each replica's moment, of
   average at most 1, with no independence between replicas. The weights `1/η` put the shortfalls' exponential below
   the replicas' mixture of moments (Jensen), and one Markov bound on the mixture covers every set `S` of accepted
   replicas at once, at `Λ_S (ln (Λ / Λ_S) + t)`, `Λ_S = Σ_{u ∈ S} 1/η_u`. A failed replica voids only its own period.
@@ -31,7 +31,7 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.SecurityProofs.Dither Finset
 
 /-! ## Pooling the accepted replicas by convexity -/
 
-/-- **Pooling the accepted replicas by convexity** (RT-POOL RP1, RP24): if replica `u`'s shortfall `D u`, scaled by
+/-- **Pooling the accepted replicas by convexity**: if replica `u`'s shortfall `D u`, scaled by
 its rate `η u`, has its exponential below a nonnegative moment `M u` of average at most 1 wherever `u` is accepted
 (`acc u`), then with probability at least `1 − e^{-t}` every nonempty set `S` of accepted replicas has
 `Σ_{u ∈ S} D u < Λ_S (ln (Λ / Λ_S) + t)`, where `Λ_S = Σ_{u ∈ S} 1 / η u` and `Λ = Σ_u 1 / η u`. The replicas'
@@ -121,7 +121,7 @@ theorem expect_replica_rounds {Ω Adv : Type} [Fintype Ω] {N k : ℕ}
   simp only [hu] at hr ⊢
   exact hr
 
-/-- **The fleet's luck on its accepted replicas, at the sampling blocks** (RT-POOL RP24):
+/-- **The fleet's luck on its accepted replicas, at the sampling blocks**:
 `prob_convex_pool_accepted` at each replica's blocks' product (`expect_replica_rounds`), with each replica's moment
 bound read only where it is accepted. -/
 theorem fleet_convex_luck_accepted {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
@@ -309,11 +309,11 @@ theorem expect_parity_prod (m : ℕ) :
   rw [this, expect_mul_left, ← prob_eq_expect, prob_parity, pow_succ]
   ring
 
-/-- **Average moments don't pool** (P16's gap, at its smallest): two sampling blocks whose factors are nonnegative and
-average at most 1 over their own coin at every value of the other's, but whose product averages 2. So
-`SecurityProofs.Dither.expect_prod_adapted` fails without its adaptedness hypothesis, and a moment averaged over the
-block's dither (`SAKMatmul`'s form) does not bound blocks whose work reads each other's dithers: replicas pool by
-convexity (`prob_convex_pool_accepted`), not by a product. -/
+/-- **Average moments don't pool** (a fleet's blocks aren't one sequence, at its smallest): two sampling blocks whose
+factors are nonnegative and average at most 1 over their own coin at every value of the other's, but whose product
+averages 2. So `SecurityProofs.Dither.expect_prod_adapted` fails without its adaptedness hypothesis, and a moment
+averaged over the block's dither (`SAKMatmul`'s form) does not bound blocks whose work reads each other's dithers:
+replicas pool by convexity (`prob_convex_pool_accepted`), not by a product. -/
 theorem not_pool_of_average_moments :
     ¬ ∀ (n : ℕ) (Y : Fin n → (Fin n → ZMod 2) → ℝ), (∀ i x, 0 ≤ Y i x) →
       (∀ i x, expect (fun ω => Y i (Function.update x i ω)) ≤ 1) → expect (fun x => ∏ i, Y i x) ≤ 1 := by

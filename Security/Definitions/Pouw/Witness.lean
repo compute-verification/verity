@@ -1,10 +1,10 @@
 import Definitions.Pouw.Dither
 
 /-!
-# The witness machine, protocol and period that `WorkSound`'s witnesses are stated at (trusted; LEAN-66)
+# The witness machine, protocol and period that `WorkSound`'s witnesses are stated at (trusted)
 
 `Proofs.Pouw.PoolWitness` states the honest and nontrivial witnesses of `WorkSound`, `WorkMoment` and `FleetSound`
-(RT-LEAN L7, RT-LEAN-2 L38) over these definitions, and `Proofs.Pouw.DitherWitness` proves every premise of
+over these definitions, and `Proofs.Pouw.DitherWitness` proves every premise of
 `Definitions.Pouw.Guarantees.Dither.WorkSound` at them, at `k = 2` sampling blocks and the non-uniform prices
 `μ = (2, 1, 1)`.
 
@@ -13,7 +13,7 @@ import Definitions.Pouw.Dither
   The machine's laws (`TAlg`) charge it a MAC unit for each word cell it outputs that varies over its inputs, a hash
   unit for each root cell that varies, and a sampling block's work (dither in, state and root out) both for each root
   cell that varies. A cell that is constant over every input is free: a program can guess a word or a root cell at no
-  cost (L38). No law reads an answer's output, so answers are free.
+  cost (a free guess). No law reads an answer's output, so answers are free.
 * `twNF`, `twRound`: the witness protocol, a no-fold round with two words (`n = 2`, `n' = nb = L = 1`). The noise is
   the word: word `i` is the dither's `d i`, one of 16 values, so a guessed word passes its check with probability
   `p = 1/16`. The check draws one of the two words (`s = 1`). The root is transparent: root cell `i` is word `i`
