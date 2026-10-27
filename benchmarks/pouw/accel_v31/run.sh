@@ -39,7 +39,8 @@
 # after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
 # timeline`'s .timeline.md. FILL_PROF=1, after the bench, runs Nsight Compute's pipe utilization on `v31 fill-once`
 # (OVL_CALLS overlapped calls, default 4) for the first variant on each shape and L, and h200_pipes.py's duty of each pipe
-# over the overlapped call (pipes.md).
+# over the overlapped call (pipes.md). FILL_ONE_LEASE=1 runs the gates, nsys, bench and prof under one LEASE after the
+# builds, in place of a lease each (the GPU's queue between them can be hours long).
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
@@ -145,6 +146,7 @@ if [ "$MODE" = fill ]; then
       echo "fill-params $(knob "$v" row 1024)${sv[*]} L$L rc $?" >> "$O/rc.txt"
     done
   done
+  fill_leases() {
   # shellcheck disable=SC2016
   $LEASE bash -c '
     nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv \
@@ -243,6 +245,15 @@ if [ "$MODE" = fill ]; then
     echo "lease fill prof rc $?" >> "$O/rc.txt"
     $PY $D/h200_pipes.py "$O" > "$O/pipes.md" 2> "$O/pipes.err"
     echo "pipes rc $?" >> "$O/rc.txt"
+  fi
+  }
+  if [ "${FILL_ONE_LEASE:-0}" = 1 ]; then
+    export -f fill_leases
+    # shellcheck disable=SC2016
+    $LEASE bash -c 'LEASE= fill_leases'
+    echo "lease fill rc $?" >> "$O/rc.txt"
+  else
+    fill_leases
   fi
   for s in "$W"/fbench/*/samples/*/; do
     [ -d "$s" ] || continue
