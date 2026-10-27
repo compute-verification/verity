@@ -2,7 +2,7 @@
 # port (`difftest-example`) that the harness's own tests drive, and C-Flock's JSON parser's port (`flock-json-difftest`:
 # C-Flock's package has no dependencies, so its port lives here). Code, not analysis: Lean core and C-Flock.
 name = "verity_difftest"
-defaultTargets = ["Difftest", "difftest-example", "flock-json-difftest"]
+defaultTargets = ["Difftest", "FlockJsonDifftest", "difftest-example", "flock-json-difftest"]
 
 [leanOptions]
 autoImplicit = false
