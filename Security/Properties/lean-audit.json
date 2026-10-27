@@ -700,6 +700,9 @@
    "assumptions": [],
    "type_hash": "01950969f54875465e0aee46dc84f3ac02d53c4f0ec7ecad8307ae34d599426f"
   },
+  "Pous.Component.SecurityProofs.runAccepts_meets": {
+   "owner": "@memory-accounting"
+  },
   "Pous.Component.SecurityProofs.runBinds": {
    "owner": "@memory-accounting",
    "signature": ["Pous.Component.SecurityProofs.runBinds : Pous.Component.RunBinds"],
@@ -742,6 +745,9 @@
    ],
    "assumptions": [],
    "type_hash": "a859641de48e9964059f341fffb59ef357e85595aea2c1e18ce8e70527328030"
+  },
+  "Pous.Component.SecurityProofs.runBinds_meets": {
+   "owner": "@memory-accounting"
   },
   "Pous.Component.SecurityProofs.runDigest": {
    "owner": "@memory-accounting",
@@ -3533,9 +3539,11 @@
    "Pous.Component.SecurityProofs.runBinds_fails": "lemma: RunBinds' nontrivial lemma: at a check that accepts everything RunBindsBy is false, on two evidences with different commitments and no hashed strings",
    "Pous.Component.SecurityProofs.runBinds_break_fails": "lemma: RunBinds' break is not always true: with no blocks and empty stores forkStrings is empty, so no SHA-512 collision among them exists",
    "Pous.Component.SecurityProofs.wipeAccepts_fails": "lemma: WipeAccepts' nontrivial lemma: at a check that accepts everything WipeAcceptsBy is false, on a session signed by a key the run doesn't trust",
-   "Pous.Component.SecurityProofs.runAccepts_complete": "completeness: RunAccepts' and RunBinds' honest lemma: evidence AcceptedAt describes makes the compiled run check accept, so neither guarantee's acceptance is out of reach; a concrete accepting run waits on setup's completeness (AcceptsComplete)",
+   "Pous.Component.SecurityProofs.runAccepts_complete": "completeness: RunAccepts' and RunBinds' honest lemma: evidence AcceptedAt describes makes the compiled run check accept, so neither guarantee's acceptance is out of reach; runAccepts_meets is a concrete one",
    "Pous.Component.SecurityProofs.wipeAccepts_complete": "completeness: WipeAccepts' honest lemma: a session WipeChecked describes makes the compiled wipe check accept",
-   "Pous.Component.SecurityProofs.wipeAccepts_meets": "completeness: WipeAccepts' honest instance: a key of the deployed LMS parameters signs a one-batch session that the compiled wipe check accepts"
+   "Pous.Component.SecurityProofs.wipeAccepts_meets": "completeness: WipeAccepts' honest instance: a key of the deployed LMS parameters signs a one-batch session that the compiled wipe check accepts",
+   "Pous.Component.SecurityProofs.runAccepts_meets": "completeness: RunAccepts' honest instance: a key of the deployed LMS parameters signs a one-round session over setup's accepted two-block store that the compiled run check accepts",
+   "Pous.Component.SecurityProofs.runBinds_meets": "completeness: RunBinds' honest instance: runAccepts_meets' run, accepted twice under one setup"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -13490,12 +13498,12 @@
   "witnesses": {
    "Pous.Component.SecurityProofs.runAccepts": {
     "fails": "Pous.Component.SecurityProofs.runAccepts_fails",
-    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete"],
+    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete", "Pous.Component.SecurityProofs.runAccepts_meets"],
     "by": "Pous.Component.SecurityProofs.runAccepts_by"
    },
    "Pous.Component.SecurityProofs.runBinds": {
     "fails": "Pous.Component.SecurityProofs.runBinds_fails",
-    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete"],
+    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete", "Pous.Component.SecurityProofs.runBinds_meets"],
     "break": "Pous.Component.SecurityProofs.runBinds_break_fails",
     "by": "Pous.Component.SecurityProofs.runBinds_by"
    },
