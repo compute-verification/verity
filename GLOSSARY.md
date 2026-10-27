@@ -158,3 +158,42 @@ Some words keep a different, narrower sense:
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend in `archive/vole`, not C-Flock.
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).
+
+## Terms of one area
+
+Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so that it holds the shared terms:
+
+- **Wire**: an edge from a gate to a gate that reads it; it carries its source gate's value and has none of its own.
+- **Port** and **element**: a port is a named array of fixed-width elements on a circuit definition's boundary, one of its
+  parameters or results, bound by each call to gates of the caller; under `Q_call`, a Call whose result ports fit in X bits
+  is one proof block. An element is one member, such as 16 bits. A leaf serializes whole elements, but a partition counts
+  bits, so a proof block may commit some of an element's bits and not others.
+- **Format**: a label on a port's elements (BF16, FP32, E4M3, int32, token id) saying how their bits encode a number or a
+  symbol; metadata, outside the content digest (`verity.ml.circuits.annotations`).
+- **Boolean Definition** and **word view**: a Boolean Definition's gates are only gates (`verity.ml.circuits.boolean.is_boolean`),
+  so its meaning is its gates; a *word Definition*'s gates output w-bit words whose meaning is registry code, and the word
+  library migrates to Boolean Definitions under new versions of the same names. The word view reads each element's bits as
+  one integer (`boolean.word_type`): under it, `GemmCoordinate_v3` takes and returns what `GemmCoordinate_v2` does.
+- **Subcircuit template** and **subcircuit**: a template is named, with typed parameters for shape and numeric (silicon)
+  semantics, such as `gemm_coordinate(K, semantics)`, a semantics value being an instruction id of
+  `verity.ml.circuits.silicon.instructions.INSTRUCTIONS`; a subcircuit binds every parameter, such as
+  `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits.
+- **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the output the chip produced
+  beside it; an input set is a batch of them for one subcircuit, with their provenance (captured or synthetic).
+- **Cell**: one benchmark result: a proof system (an archived one's backend id included) × statement × input set × prover
+  hardware.
+- **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
+  clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`WardenParams.grid`), proved as its own proof
+  block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`) (Daniel, 26 Oct). The code's link-window is a sampling block of
+  2T transfer blocks, T buckets each way under one registration (`WardenParams.window`), its Program the T ingress then the
+  T egress proof blocks chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
+  one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link, its
+  32-byte id, is one key and schedule on that link across many periods.
+- **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
+  and they change freely while every guarantee proves the same statement.
+- **Spec**: a Lean package's trusted text, all a reader must trust to read its guarantees: its definitions, assumptions and
+  guarantees, importing only one another, the `Core` spec and Mathlib (`layers` in `lean-audit.json`). Every line is
+  trusted, so it is kept short and the machinery goes in `SecurityProofs`.
+- **Lock**: a package's guarantee records in its `lean-audit.json` (`AGENTS.md`, "Lean"): each guarantee's statement and
+  every definition it reads. A changed record means a guarantee now says something else. It protects only the guarantees
+  and what their statements read, though today it lists many lemmas too.
