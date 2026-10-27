@@ -103,6 +103,7 @@ omit [Fintype V] [DecidableEq V] in
 theorem sRd_mixG : sRd (mixG T) (mixStrat T s) (rdSig rd) = (∑ i, sRd (T i) (s i) (rd i)) / Fintype.card ι :=
   expect_mixG T s _
 
+omit [DecidableEq V] in
 /-- **The mixture's binding error is the average of the trials'**, at any `X`. -/
 theorem errAt_mixG (X : V) :
     errAt (mixG T) (mixStrat T s) (rdSig rd) X = (∑ i, errAt (T i) (s i) (rd i) X) / Fintype.card ι := by
