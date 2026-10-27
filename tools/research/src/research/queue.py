@@ -856,6 +856,11 @@ class Queue:
         self._registry = None
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
         self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
+        # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
+        # drivers (27 Oct: an agent VM's clone, checked out at 21 Oct, refused #4835 over a lean-audit.json conflict main's
+        # merge.py resolves).  Drive's checkout, `next`'s tip, contains `main` and stays
+        if _git(self.workdir, "merge-base", "--is-ancestor", "refs/remotes/origin/main", "HEAD", check=False).returncode:
+            _git(self.workdir, "checkout", "-q", "--detach", "--force", "refs/remotes/origin/main")
         # exit 2: no such branch; any other failure is the remote's, never an empty queue
         if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{self.branch}", ok=(0, 2)).returncode == 0:
             self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")

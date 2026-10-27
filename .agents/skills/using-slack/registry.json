@@ -579,6 +579,7 @@
       "owns": [
         "integrations/vllm/",
         "examples/vllm/",
+        "ruff.toml",
         "benchmarks/one_stage/served_verdicts.sh",
         "benchmarks/one_stage/served_verdicts.py",
         "benchmarks/one_stage/tests/test_served_verdicts.py",
