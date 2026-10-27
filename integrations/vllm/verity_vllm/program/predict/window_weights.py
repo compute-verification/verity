@@ -56,8 +56,8 @@ def _param(param: str) -> tuple[str, int, bool]:
 
 
 def weight_params(params: Any) -> list[str]:
-    """The weight parameters among a circuit's registered ``params``, sorted: every one but a per-window value's (the slot
-    rows)."""
+    """The weight parameters among a circuit's registered ``params``, sorted: every one but a per-window value's (the scan
+    state rows)."""
     return sorted(p for p in params if p.startswith(f"{WEIGHTS}/"))
 
 

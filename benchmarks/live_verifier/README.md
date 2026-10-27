@@ -12,7 +12,7 @@ the gate, what runs, a run, a bound run, a replay and the store. The host's depl
 ~~~text
 vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
                      | --sessions N [--windows W] [--window-ms MS] [--samples S])
-                     [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] [--verdict lean|both]
+                     [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L]
                      [--model ROLE [--engines E] --arena-blocks A]
 ~~~
 

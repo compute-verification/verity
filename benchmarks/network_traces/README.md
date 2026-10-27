@@ -29,11 +29,34 @@ The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the
 Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over its
 session [t0, t1) comes after, from a warden session that spans it: `wipe_gate.sh` runs that session through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
-when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
+when asked, and fetches the run's bundle: with `witness/` (the lane's own) into a 0700 directory outside the run dir,
+and to the run's `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
 `wipe-egress/v1` record from what the gate published. Each link-window meeting [t0 − 1 s, t1 + 1 s) counts at the
 schedule's capacity, 2,621,440 bits a link-window, with K that count and δ 0. The record is covered only when every one
 of those windows is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered record and
 keeps the wipe uncounted otherwise.
+
+## The served session
+
+`served_session.py` is the runbook of NET-83's session of record, the network certifier in front of a served model.
+`plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
+the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
+vy-dc-h200-2's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (the
+class's 1,024 reach the warden late, NET-107), each answered greedily with at most 64 ids, ending at the base model's
+EOS id 128001. It runs at a given UTC time when asked. vllm starts the endpoint by hand (serve-openai directly with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, and posts its
+records as an art without `requests.jsonl`, whose prompt ids stay on the served node, and with `request_users.jsonl`,
+each engine request's `engine_id` and its warden user in `requests.jsonl`'s order (#5303). `chain` rebuilds `requests.jsonl` from that map and the kept warden run's
+certified I/O in a 0700 directory beside the kept fetch, so the endpoint step checks the endpoint's trace against the
+certified I/O. The lane's fetch, with `witness/`, stays in a 0700
+directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs
+the chain's warden path on the kept fetch, and only from a tree with the record's leak guard. `session --gate local`
+is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins
+gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain runs on (vy-nebius-cpu-2),
+which the challenger's coin link reaches through that node's own line of `/etc/vy/coin-ports`. It refuses the served
+node as the draw's peer, since the gate key and the warden run's witness never go on the prover's machine.
+vy-nebius-cpu-2 has its line (ports 7821-7830) since 27 Oct; without the gate's coins the chain draws on the
+verifier's (`--coins verifier`, the default).
 
 ## The chain's run of record
 
@@ -276,7 +299,9 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  which the certifier doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
+  not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
+  warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
@@ -326,8 +351,8 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
-- The jitter term is 0 at D_j = 1, assumed (J), which the certifier doesn't meet: an offset the prover chooses within
-  a bucket reaches the client.
+- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
+  receiver no more than an idle one.
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
@@ -358,8 +383,10 @@ and the secrets of a covert sender whose every window meets `WindowGood` number 
 
 K = log2 #S_s + Σ_c log2(cap_c + 1) + Σ_i [#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 D_j].
 
-The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, which the certifier
-doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
+The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, not met at D_j = 1 until a
+run shows the written buckets tell a receiver no more than an idle one. The warden and the served proxy each hand every
+bucket to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`,
+`warden_serve.py --paced-ms`; `active.Proxy(paced=…)`, `certifier_serve.py --paced-ms`).
 
 `NetTiming.periodLeak_le_sum` (#4324) sums the windows' failures by a union bound:
 

@@ -45,7 +45,7 @@ from .prims import BF16, F32, S8
 __all__ = ["F32_127", "F32_INF", "F32_ONE", "QuantChunkS8", "QuantRowS8", "RowAbsMax", "refuse"]
 
 F32_ONE, F32_127, F32_INF = 0x3F800000, 0x42FE0000, 0x7F800000
-CONFORMANCE = "exact-model-tested; the torch loop's quantize on CPU torch (integrations/torch_loop/tests/test_quant.py)"
+CONFORMANCE = "exact-model-tested; numpy float32, the same IEEE operations as torch's quantize (verity/ml/circuits/ops/tests/test_quant.py)"
 
 
 def refuse(b: dict) -> str | None:

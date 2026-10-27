@@ -48,7 +48,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from verity.ml.circuits.silicon import models as _models
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS, Instruction
@@ -1502,7 +1502,7 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
         invalidation_triggers=[dict(t) for t in INVALIDATION_TRIGGERS], relitigation_procedure=list(RELITIGATION_PROCEDURE),
         constants={"N_MIN": N_MIN, "HONEST_MIN": HONEST_MIN, "NEGATIVES_MIN": NEGATIVES_MIN, "canonical_families": {k: list(v) for k, v in CANONICAL_FAMILIES.items()},
                    "full_contract_proof_classes": list(FULL_CONTRACT_PROOF_CLASSES)},
-        generated_utc=_dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_utc=_dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         previous_dossiers=[d["id"] for d in ev.dossiers if d.get("target") in subject.names], notes=notes,
         canaries=[{"id": r.id, "run_id": r.run_id, "passed": r.agrees(names), "elements": r.elements, "mismatches": r.mismatches_for(names),
                    "driver": r.driver, "nvcc": (r.nvcc or "")[:60] or None} for r in canaries],
