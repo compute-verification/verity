@@ -4,7 +4,7 @@ A GPU keeps an encoding `C` of model weights `W` in its memory and decodes `W` f
 certify that the GPU still holds more than a `ρ` fraction of `C`. In the ideal-permutation model, answering a random
 block within the deadline requires the block itself, because rebuilding it from a smaller state takes more sequential
 oracle rounds than the deadline allows. At the reference Feistel-SHAKE256 `Π₂` this does not hold: a prover rebuilds a
-label from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026, art:7617c8017e80; "Main caveat"). This directory
+label from 1.53% of `C` in 481 Keccak-f (red team; "Main caveat"). This directory
 holds the reference implementation, `verity.core.protocols.pous` ("Codecs" through "Tests" below), and the Lean formalization,
 `lean/` (from "In Lean" on): the definitions, the guarantees and the proofs so far.
 
@@ -25,7 +25,7 @@ for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the g
 was taken as a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
 `docs/band-vs-dense.md`.
 
-**The reference `Π₂` breaks the same way (red team, 4 Oct 2026, art:7617c8017e80).** The overwrite chain fixes the
+**The reference `Π₂` breaks the same way, as the red team showed.** The overwrite chain fixes the
 narrow-state attack only over an ideal `Π₂`; the reference Feistel-SHAKE256 `Π₂` has the weakness inside it. Each
 round function `F_i` is a long SHAKE256 squeeze from a 200-byte post-absorb state, and a chain key, the first `m`
 bits of the pad call's output, is the first `m` bits of `pad ⊕ F_1 ⊕ F_3 ⊕ F_5 ⊕ F_7 ⊕ F_9` (each `F_i` at its
@@ -217,7 +217,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 ## Public outputs
 
-Under the proof service (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, "PoUS"), an
+Under the proof service, an
 audit makes public its verdict and nothing about a single round:
 
 - the verdict;
@@ -267,7 +267,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   counts are gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode.
   - It follows the P2 spec (`p2/PROTOCOL.md`, v4: the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-    v1, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, with SHA-512 for every hash) in its maps and values:
+    v1, with SHA-512 for every hash) in its maps and values:
     - the payload is 2,054 bytes per block, which is the spec's profile `p2-2054B`, and the manifest names it;
     - every block, payload and key is a fixed-width, unsigned, big-endian integer;
     - the tweak is rejection-sampled below p, never reduced.
@@ -299,18 +299,16 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
       Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448).
     - A root is 16,446 squarings plus about 20 multiplications (40 squaring-equivalents), so
-      16,486 × 361.55 ns = 5,960.5 µs. The note's 5.97 ms rounds τ_F to 362 ns first.
-    - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet
-      (run `r20260929-060834-0ec4`, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).
+      16,486 × 361.55 ns = 5,960.5 µs. The red team's 5.97 ms rounds τ_F to 362 ns first.
+    - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet.
     - The cooperating root is 5,960.5 / 3.490 = 1,708.1 µs, and half of it is 854,029.18 ns, rounded down to
       `ROOT_CALL_NS`. The cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`: 500 + 354 = 854 µs. The
       memory challenger accepts it and refuses 355 µs and v1's 1 ms, and the margin at the cap is 2.0001×.
     - **Caveats** (§12): the 3.490× was measured on an untuned Zen 4 kernel and is applied to a modelled floor. The red
       team's sync model (t_sync = 20–40 ns per squaring, `coop.log`) gives 4.24× and 5.55× at 8 cores, and under it
       the margin at the cap is 1.64× and 1.26×. The cap rests on the measured speedup.
-    - **Sources:** `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs in
-      art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57. The review that found v1's cap unsafe is
-      art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c.
+    - **Sources:** the timing red team's scripts and logs (`regate.py`, `coop.log`), and the P2 assumption review,
+      which found v1's cap unsafe.
   - `Scheme.experimental` carries the remaining reasons: the SMS-to-M1 instantiation is not accepted, and the
     XOR-then-reduce compression attack on it is open. The memory challenger audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
@@ -366,7 +364,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 `continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the memory challenger
 of the continuous audit's model, `Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
-`Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
+`Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, drawn as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). It is one
 `audit.UnsignedRounds` over the stream with a hard deadline, and it enforces the three requirements that
@@ -392,10 +390,10 @@ stream, so the stream is never stopped or extended on misses, though it may reje
 Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `UnsignedRounds` with `late_deadline_ns`. Its
 `respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
 `j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
-the send time, so the audit would credit storage the responder does not hold (#954's red team).
+the send time, so the audit would credit storage the responder does not hold, as the red team found.
 
 **The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
-window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory challenger to enforce (#953).
+window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory challenger to enforce.
 `UnsignedRounds(..., audit_cap=...)` and `ContinuousMemoryChallenger(..., audit_cap=...)` enforce it on the memory
 challenger's clock, counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5
 µs ≈ 363.5 ms.
@@ -426,7 +424,7 @@ requirement.
 
 A proof of secure erasure for a memory wipe, in place of the permutation-based retention
 for wipes: C8, the ideal-permutation premise, is false at the reference Feistel10-SHAKE256 `Π₂`, where 1.53% of the fill
-rebuilds any label (verity#1122, art:7617c8017e80). Here the labels need no permutation and no graph. They are the
+rebuilds any label ("Main caveat"). Here the labels need no permutation and no graph. They are the
 auditor's own PRF outputs, so a label the server didn't keep is a label it can't answer, and a server that kept its
 prior content through the wipe had no room for the labels. The reference is `streamed_wipe.py`, its tests
 `tests/test_pous_streamed_wipe.py`, its verdict's Lean port `MemoryChallenger.StreamedWipe`
@@ -953,9 +951,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
   behind `ROOT_CALL_NS` (SeqRoot, under P2 in "The generic protocol"), a model cut by a measurement: the timing red
-  team's modelled single-core floor, `note:20261004T2102Z-report-relay-p2-redteam-timing`
-  (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation speedup measured
-  in run `r20260929-060834-0ec4` (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); its margin is
+  team's modelled single-core floor and the 8-core cooperation speedup measured on one Zen 4 chiplet; its margin is
   1.995×, and 1.64× and 1.25× under the red team's sync model;
 - `pous-ring-instantiation`: P2 with the identity labeling and SHA-512-CTR keys is no easier than `p2ring` with
   uniform ω;
@@ -1021,8 +1017,8 @@ the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
 `Security/Proofs/Pous/Chain/Flat.lean`. Pending:
 
 - P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
-- A GPU codec for the dense scheme (#172's is P3's).
+- A GPU codec for the dense scheme (the GPU codec there is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
 - In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
-  `p3-meets` (P3 with a random-oracle `H`) come in later PRs.
+  `p3-meets` (P3 with a random-oracle `H`).
