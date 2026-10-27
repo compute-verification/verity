@@ -12,10 +12,12 @@
 # - covered: dominated, and the rate the inequality reads is a document's or a run's, for this opcode or its pipe;
 # - coarse: dominated by the argument stated, on a bound shared with other opcodes (a port, the issue slot, a tree of L
 #   units), with no rate of its own;
-# - hole: no argument yet that an envelope op dominates it; `severity` says how much it could matter;
+# - hole: no argument yet that an envelope op dominates it, or a run shows none does; `severity` says how much it could
+#   matter;
 # - absent: the opcode is in NVIDIA's family table, and the card can't execute it.
 #
-# The lowering probe is benchmarks/pouw/sass_census/lowering.sh (ptxas 13.0, sm_90a and sm_120a; no GPU).
+# The lowering probe is benchmarks/pouw/sass_census/lowering.sh (ptxas 13.0, sm_90a and sm_120a; no GPU), and a row's
+# "lowering probe" is its run r20261027-002822-0a69: 'verdict: 30/30 cases lower as expected'.
 
 # ---- tensor cores -----------------------------------------------------------------------------------------------------
 
