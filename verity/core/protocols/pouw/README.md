@@ -11,10 +11,10 @@ The verifier is Lean: `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`)
 whose verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python modules of the same names are their
 references, held to them by the difftests.
 
-**Where its coins are kept.** `WorkSound` holds only while no machine outside the replica's boundary holds a coin
-before it enters (`CoinsConfidential`). Onsite, the challenger runs on the network certifier's device at that
-boundary. The remote composite has no auditor device at the datacenter, so where PoUW's coins are kept confidential in
-the remote setting is open, and until it is settled PoUW's remote guarantee is the size credit alone.
+**Where its challenger sits.** `WorkSound` holds only while no machine outside the replica's boundary holds a coin
+before it enters (`CoinsConfidential`). Onsite, Dither's challenger can sit inside the datacenter, as at the MVP, on
+the network certifier's device at that boundary. For the remote protocol it sits outside the datacenter, and it can
+simply be the network certifier.
 
 ## Where things are
 

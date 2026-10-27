@@ -375,9 +375,8 @@ k_exfil. Dither needs these of the challenger and the certifier:
   - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
-  - **Remotely it is open.** The remote composite has no network certifier, so no auditor device sits at the replica's
-    boundary to make the coins or count what crosses it. Where PoUW's coins are kept confidential in the remote setting
-    is not settled, and until it is, PoUW's remote guarantee is the size credit alone, without `WorkSound`'s bound.
+  - **Inside or outside the datacenter.** Onsite, the challenger can sit inside the datacenter. For the remote
+    protocol it sits outside the datacenter, and it can simply be the network certifier.
 - **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the drawing server's coins are made
   on its certifier's device and are never imports there. Every other server's certifier, and any certifier whose
   challenger has a device of its own, excludes them only so:
@@ -507,8 +506,6 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
 - **The challenger's and the certifier's specs**: the challenger on the certifier's device (the MVP), the exact
   exclusion, re-clocking, one clock and the multi-node private links, as implemented.
-- **The remote setting**: where PoUW's coins are kept confidential with no certifier at the boundary (see "The
-  boundary").
 - **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
   keys set at provisioning), and whether ML-KEM may bend the one-hash rule.
 - **The firewall** (with C-Flock's ZK server):
