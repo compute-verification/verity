@@ -11,7 +11,7 @@ drawn units); `check`, every unit's, is the reference.  A member may be wired an
 rows, and a unit's string is the row its ref names (`_strings`), the one its statement reads."""
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -47,11 +47,14 @@ def validate(members: Sequence[Any]) -> None:
                                      f"rows ({dict(wm.out_rows).get(o)} words, {wm.schema(o)})")
 
 
-def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, bytes]) -> None:
+def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, bytes], skip: Collection[str] = ()) -> None:
     """Give each wired row its writer's salt (``ys`` by ``<member>/<port>``, each row's 192 bytes); refused when a wired row's words
-    are not its writer's output row's (``rows``, the committed rows)."""
+    are not its writer's output row's (``rows``, the committed rows). ``skip``: ports given by reference, their writers' rows
+    (`rows.commit`)."""
     for m in members:
         for p, o, ws in m.wired:
+            if m.port(p) in skip:
+                continue
             y = np.empty((m.n, SALT_BYTES), dtype=np.uint8)
             for wm, mine, theirs in _writers(members, ws):
                 if not np.array_equal(rows[m.port(p)][mine], rows[wm.port(o)][theirs]):
@@ -63,10 +66,10 @@ def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, 
 def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | None:
     """Each of member ``m``'s units' ``b || c`` of its row ``port``, from its public body (`rows.Committed.public_body`): a
     shared-row member's, the row of the port's table its ref names, the row its statement reads. None for a body that is
-    not the member's."""
+    not the member's or a port it lacks."""
     names = [q for q, _ in m.all_rows]
     body = publics.get(m.key)
-    if body is None:
+    if body is None or port not in names:
         return None
     if not m.tables:
         if len(body) != m.n * len(names) * BC_BYTES:

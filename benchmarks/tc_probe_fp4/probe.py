@@ -1,7 +1,7 @@
-"""Blackwell FP4 tensor-core probe (lanes fp4-5090, fp4-re): one ``mma.sync`` per tile on an RTX 5090, raw bits captured and
+"""Blackwell FP4 tensor-core probe: one ``mma.sync`` per tile on sm_120 (RTX 5090, RTX PRO 6000), raw bits captured and
 compared bit for bit against ``verity.ml.circuits.silicon.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
 the validation gate) and against ``model5.py`` (autoproof's five-way align-add, kept as the control whose D16/D17/D18 mismatches
-the verity rule must remove).  Families under ``families_fp4_re`` are lane fp4-re's accumulator families; ``specials`` is
+the verity rule must remove).  Families under ``families_fp4_re`` are the accumulator families of discrepancy-log entries D16-D18; ``specials`` is
 record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted), and so
 are mxf4's ``families_mxf4_edges`` (the UE8M0 NaN scale, overflowing blocks that cancel, the RZ edge at 2^128, infinite
 accumulators against overflows): what a total mxf4 step must decide.
@@ -33,33 +33,15 @@ scale codes in 0x78..0x7E, the other groups on subnormal scales with bits at 2^-
 one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below
 E1-41: the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
 
-MEASURED 2026-09-22 on vy-5090 (RTX 5090, driver 570.153.02, nvcc 12.8.93; runs r20260922-182011-88f8 nvf4,
-r20260922-182132-d6db f8f6f4, r20260922-182548-e654 mxf4, r20260922-182911-1f10 bf16):
-  * autoproof replay: probe3 1601/1601 (K=64/128/256) and probe2 1400/1400 dots reproduced bit for bit -- model5 IS the silicon
-    for zero-initialised ascending-K chains, on a different RTX 5090 and a different kernel.
-  * nvf4 sweep, 1,736,704 elements, 263,781 hot firings: every family with a +0 accumulator agrees with model5 (0 mismatches over
-    hot_clip_regime 131,072 / random_zero_acc 262,144 / scale sweeps / acc_window / tiny_acc).  Two regimes autoproof never probed
-    (its accumulators were always +0 or the running sum, i.e. the largest addend) disagree: (1) a -0 accumulator with all-zero
-    products returns +0 on silicon, model5 keeps -0 (16,328/16,328 such elements); (2) an incoming accumulator of the OPPOSITE
-    sign to the result whose msb lies 37..42 binades below E1 -- at the alignment window's edge -- comes out 1 ulp (up to 8 in the
-    cancellation family) larger in magnitude than model5's truncated-toward-zero sum (12,790 of 1,507,328 nonzero-acc elements,
-    100% opposite-sign).  Neither a narrower accumulator window nor an anchor computed from scale exponents explains all of them;
-    the accumulator's alignment path is the open question, not the 42/36-bit windows, the RZ normalisation or the hot clip.
-  * mxf4 (ue8m0, .2X): accepted by ptxas on sm_120a (SASS OMMA.SF...E8); model5 with 4 groups of 16 under a per-32 shift is the
-    better structure (2 groups of 32: 32,691/32,768 wrong in large_cancellation vs 126) but not exact: 798/131,072 zero-acc
-    mismatches.  Capture only; hypothesis open.
-  * bf16 m16n8k16 on the RTX 5090: HOPPER_BF16_M16N8K16 reproduces 204,800/204,800 words; AMPERE_BF16_M16N8K16 fails 48,569.
-    The consumer Blackwell part keeps the Hopper BF16 pipeline (one 16-wide group, 26-bit alignment).
-
 Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay and per-family counts, first mismatches),
 ``capture_sample.json`` (records sampled per family: acc, a/b codes, scales, d as hex), ``tiles_<family>.npz`` (the full capture),
 ``result.json`` (``kind: tc-evidence/v1``; meta per store README §11: instruction, arch, sku, driver, nvcc, families, counts,
 model, model_agrees, first_mismatches (<= 20), seed, n; validation passes iff every replay and model mismatch count is zero).
 
-PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
+The K=32 E2M1 rows, the gates, and the other instructions and modes:
   * ``f8f6f4_e2m1_e4m3`` / ``f8f6f4_e4m3_e2m1`` (unscaled mixed), ``mxf8f6f4_e2m1`` / ``_e2m1_e4m3`` / ``_e4m3_e2m1`` (UE8M0
-    ``.scale_vec::1X``) run through ``mma_fp4.cu``'s ``row_tiles_kernel<kind>``; they and ``f8f6f4`` (now swept with the K=32
-    families of ``k32.py``, which also fixes ``--sweep`` for it: it used to generate K=64 operands) are captures whose finding is
+    ``.scale_vec::1X``) run through ``mma_fp4.cu``'s ``row_tiles_kernel<kind>``; they and ``f8f6f4`` (swept with the K=32
+    families of ``k32.py``) are captures whose finding is
     which of ``k32.candidates`` reproduce every word (``candidate_finding``); ``--expect-model NAME`` makes one the gate (a
     fresh-seed confirmation).  All of them lower to QMMA (SASS), where E4M3 x E4M3 is ``GroupSum`` (32,)/26/-133.
   * ``--chain L``: every family's tiles regrouped into chains of L dependent MMAs kept in registers (the generic kernel), against
@@ -84,7 +66,7 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
     nibbles; ``twins`` counts the words the pair's members differ in, and any difference on the device means no model that
     reads only the exact products and the accumulator (no ``GroupSum``) computes the instruction.
 
-Lane tcgen05 -- the datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
+The datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
 ``--instruction tcgen05_nvf4`` = ``tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X`` (UE4M3, registry id
 ``sm100.tcgen05.mma.e2m1.nvf4``), ``tcgen05_mxf4`` = the same mnemonic with ``.scale_vec::2X`` and the UE8M0 instruction
 descriptor (``sm100.tcgen05.mma.e2m1.mxf4``), ``tcgen05_mxf4kind`` = ``kind::mxf4.block_scale.scale_vec::2X`` (CUTLASS's mnemonic
@@ -137,7 +119,7 @@ PTX = {
     "mxf4": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0",
     "f8f6f4": "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32",
     "bf16": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
-    # sm_100 (lane tcgen05): the mnemonic plus the instruction descriptor it is issued with (types, scale format, M, N, K-major)
+    # sm_100: the mnemonic plus the instruction descriptor it is issued with (types, scale format, M, N, K-major)
     "tcgen05_nvf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X [idesc: e2m1 x e2m1 -> f32, scale ue4m3, M128 N8 K64, K-major]",
     "tcgen05_mxf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
     "tcgen05_mxf4kind": "tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
@@ -615,7 +597,8 @@ def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def acc_random(n, lo=-30, hi=40):
         return f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random
     yield "random_random_scales", codes((n, 16, k)), codes((n, 8, k)), scales((n, 16, nblk)), scales((n, 8, nblk)), acc_random(n)
@@ -717,7 +700,7 @@ def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     yield from families_fp4_re(rng, n_random, scale_kind, fixed_mult)
 
 
-# --- lane fp4-re: the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
+# --- the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
 
 
 def _scale_value(codes: np.ndarray, scale_kind: str) -> np.ndarray:
@@ -763,7 +746,8 @@ def families_fp4_re(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def pm_zero(shape):
         return np.where(rng.random(shape) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
     # (c) +-0 against +-0 operands, (d) every product -0 x -0, (e) pairs cancelling exactly inside every group, (f) group 0
@@ -1163,7 +1147,8 @@ def twin_summary(D, models: dict) -> dict:
 
 def families_bf16(rng, n_random: int):
     k = 16
-    cast = lambda x: to_bf16_bits(x.astype(np.float32))
+    def cast(x):
+        return to_bf16_bits(x.astype(np.float32))
     n = n_random
     yield "randn_random_acc", cast(rng.standard_normal((n, 16, k))), cast(rng.standard_normal((n, 8, k))), None, None, \
         f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-20, 21, (n, 16, 8)))).astype(np.float32))

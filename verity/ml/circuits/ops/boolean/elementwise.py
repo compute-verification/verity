@@ -12,7 +12,7 @@ on bits.
     I32Add_v2                         (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: I32Add_v1
 
 Each is traced from the builder C-Flock's lowering runs for its word primitive (`trace.definition`), so its And gates are that
-builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the IR's NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
+builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the word primitives' NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
 same four with every NaN the GPU's 0x7FFFFFFF for the `_v4`s (the `_v2` words, as C-Flock's `tail_pieces` lowers them), the
 f32 add or multiply of the widened operands rounded by `fp.f32_to_bf16` to the word's NaN (0x7FC0 for `Bf16Add_v1`, F2FP's
 0x7FFF for the others), and `forms.add` at 32 bits. None is flushed: a
@@ -162,7 +162,7 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
     def split() -> list[Traced]:
         if not parts:
-            parts.extend(_split(trace(build, types, ret), types, shared))
+            parts.extend(_split(trace(build, types, ret, key=("/".join(names), version, {})), types, shared))
         return parts
 
     name, t = params[shared]
@@ -195,7 +195,7 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
     def traced(S) -> Traced:
         key = tuple(getattr(S, k) for k in statics)
         if key not in made:
-            made[key] = trace(build(S), *types(S))
+            made[key] = trace(build(S), *types(S), key=(name, version, dict(zip(statics, key))))
         return made[key]
 
     d = CompositeDefinition(name, version, tuple(statics), signature,
@@ -223,7 +223,8 @@ def shared_specialized(names: tuple[str, str], version: int, statics: Sequence[s
         if key not in made:
             params, ret = signature(S)
             types = [t for _, t in params]
-            made[key] = _split(trace(build(S), types, ret), types, shared, by_element)
+            made[key] = _split(trace(build(S), types, ret, key=("/".join(names), version, dict(zip(statics, key)))), types,
+                               shared, by_element)
         return made[key]
 
     def own_sig(S):
