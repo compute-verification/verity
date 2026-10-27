@@ -224,13 +224,26 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   forward alone 4.182 s) a step takes 6.984 s with 92 such retries in 3 steps, and at 8 SMs 23.288 s with 69. At 64,
   with none, it takes 5.297 s, the forward alone's time and 0.10 s. The forward's host waiting on the side stream's reads
   before it allocates (`--host-lag`, run r20261026-182023-2b8d) leaves 84 to 100 retries (6.878 s at 40 SMs): a table
-  `record_stream`'d to the side stream is released at that stream's tail when the forward frees it, not at its read, so
-  only freeing it after the read (or reusing a ring of buffers) avoids them. The partitions themselves run at once
+  `record_stream`'d to the side stream was released at that stream's tail when the forward freed it, not at its read
+  (the plan now drops it at its read: the next item). The partitions themselves run at once
   (`green_probe.py`, runs r20261026-174052-c188 and r20261026-180440-47aa): the commit on 40 or 64 SMs and int8 GEMMs
   on the others overlap 0.91 to 0.93 (1 at once, 0 in turns), 0.88 to 0.90 coupled as today's loop couples them, and
   0.08 sharing every SM in one context. A plan on N SMs runs on graphs too: a graph captured on its green context's
   stream keeps to those SMs when replayed, rekeyed with that context current (`SmPartition.current`; run
   r20261026-181335-1b14, a `%smid` probe on 16 SMs).
+- **Tables dropped at their read** (no `record_stream`: `Plan.hold` and `Plan.release`, `LAG`; run
+  r20261027-004614-d98c, vy-dc-h200-3, `record_stream`'s module alternating with this one in one lease). The plan holds
+  each add's tables until the side stream has read them, a thread of its own dropping them as soon as the read passes,
+  and at the next add the producer's stream waits for the read of any still unread. A table the forward has freed so
+  goes back to its stream at the read. With the forward on 92 SMs (`low:shared:3:40r`, CIR-113's 256 B rows) a step
+  takes 4.947 s, +1.688 s (1.78 times CMP-149's 0.95 s), with no retry, against 6.939 s and 85 retries for
+  `record_stream` (run r20261026-202804-5282). Circuits' 1 KiB rows had no retries before, and the overheads stay:
+  today's loop +0.420 and +0.422 s (0.44) against +0.423 and +0.424 s, the commit at high priority on 88 SMs +0.331 and
+  +0.328 s (0.35) against +0.337 and +0.335 s, the device's memory the same at today's loop (147.94 GB) and 0.9 GB less
+  on 88 SMs. Every root equals `record_stream`'s. Holding tables to the next add without the thread kept a freed group
+  from the forward's allocations in between, 1.76 GB more on the device at today's loop (run r20261026-202804-5282);
+  holding them two adds ran out of HBM at 256 B; and a thread started anew each add, which blocks the forward's host
+  thread, cost 0.03 s a step on 88 SMs (run r20261026-205702-f655).
 
 ## Files
 
@@ -251,7 +264,8 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
-  units, and (with a GPU) the device against the host twin.
+  units, the order a plan drops added tables in, and (with a GPU) the device against the host twin, at a near-full HBM
+  no allocator retry while the side stream lags its reads, and a freed table's memory back at its read.
 - `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
   loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
   commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other

@@ -107,6 +107,8 @@ ML_IMPORTS_CORE = {
     "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.core.claims`",
     "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
                                                 "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
+    "ml/windows/tests/test_blocks.py": "holds CMP-92's class circuit to network accounting's check of its servers "
+                                       "(`certifier.blocks.server_blocks`), which refuses its two-server split (NET-92)",
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
@@ -154,6 +156,14 @@ TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
                          "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
+}
+
+#: Modules of ``verity.ml`` that only a prover's or developer's build turns on, which nothing in ``verity/core`` names (an
+#: import, an attribute or a string), each with the module and why a verifier must not read it.
+PROVER_ONLY = {
+    "trace_cache": ("verity/ml/circuits/ops/boolean/trace_cache.py",
+                    "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
+                    "entry for a Definition's gates"),
 }
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
@@ -421,6 +431,20 @@ def test_a_use_past_a_guard_is_found() -> None:
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
     assert _is_test("verity/ml/circuits/tests/test_partition_v2.py") and not _is_test("verity/ml/circuits/partition_v2.py")
+
+
+def test_core_never_names_a_prover_only_module() -> None:
+    """No file of ``verity/core`` (its tests included) names a module of ``PROVER_ONLY``, and each still exists."""
+    offenders = []
+    for path in sorted((SRC / "core").rglob("*.py")):
+        if {".lake", "__pycache__"} & set(path.relative_to(SRC).parts):
+            continue
+        hits = _uses(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)), set(PROVER_ONLY))
+        hits += [(name, line) for name, line, _ in _imports(path) if set(name.split(".")) & set(PROVER_ONLY)]
+        offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line in hits]
+    assert not offenders, "a verifier reads no prover-only module (PROVER_ONLY):\n" + "\n".join(offenders)
+    missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
+    assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
 
 
 def _docstrings(tree: ast.AST) -> set[int]:

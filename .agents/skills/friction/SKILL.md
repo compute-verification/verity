@@ -1,14 +1,12 @@
 ---
 name: friction
 description: >
-  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask the owner or your
-  coordinator when you can't tell, take only keys, access and claims to Daniel (spend is its lead's call), record a ruling as a
-  rule where the next agent will read it, or leave a short friction note when you can't fix it now. Holds the standing
-  rulings that AGENTS.md and the other skills don't state (what an agent may change without asking, and protocol and
-  claim rulings), and the `kind: friction` note format with its `severity: incident` flag. Use when you worked around
-  something, a step bit you twice, a step you repeat keeps you waiting, you see a better abstraction, you're unsure
-  whether a change is yours to make, you just got a ruling from Daniel, you're the coordinator reading friction notes, or
-  a command fails for missing credentials.
+  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
+  coordinator when you can't tell, take only keys, access and claims to Daniel, record a ruling where the next agent reads
+  it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
+  change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
+  a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
+  ruling from Daniel, you read friction notes, or a command fails for missing credentials.
 ---
 
 # Friction
@@ -16,10 +14,10 @@ description: >
 When something gets in your way (a wrong command, a clumsy step, a check that fails late, a missing abstraction), take the
 first of these that applies.
 
-Two gotchas first. If `research data`, `research queue` or node ssh fail for missing credentials, rerun from a fresh tmux
-login shell: a long-lived tool shell on a cloud VM can lose the injected secrets. If `git push` fails because the VM's
-GitHub token lapsed, hand the branch over as a bundle (`git bundle create B origin/BASE..BRANCH`, then `research data put
---kind evidence/v1 --file B --preserve`) and send the art id, the branch and its head sha.
+Two gotchas. A `research` command or node ssh that fails for missing credentials: rerun it from a fresh tmux login shell,
+since a long-lived tool shell can lose the injected secrets. A `git push` refused for a lapsed GitHub token: hand over a
+bundle (`git bundle create B origin/BASE..BRANCH`, `research data put --kind evidence/v1 --file B --preserve`) with the
+art id, the branch and its head sha.
 
 Friction in shared infrastructure (Linear, Slack and `research msg`, `research run`, the queue, notes, the store) is usually
 everyone's: ask in the workflow thread first, `research msg reply --thread 1792037552.043289`, one question per post,
@@ -43,12 +41,12 @@ Say what you fixed in the PR description. It needs no note.
 ## 2. Ask, when you can't tell
 
 A change is near the line when it changes what other agents must do or what a gate accepts, touches another lane's
-in-flight files, or deletes others' work. Check `AGENTS.md`, the owning skill and the standing rulings below first, and
-follow one if it covers the case. Otherwise ask the owner of what the change touches, or your coordinator when owners
-disagree or you can't tell who owns it (a handle holder: `research msg send --to @HANDLE`; a worker: its report to the
-coordinator that launched it). Give the case, the change and your recommendation in a few lines, and prepare the change
-meanwhile. Only keys and access, and claims (what a guarantee says or rests on) go on to Daniel, through
-`.agents/skills/asking-daniel/SKILL.md`. Spend, a short budget line included, is the call of the lead whose line pays (13 Oct).
+in-flight files, or deletes others' work. If `AGENTS.md`, the owning skill or a standing ruling below covers the case,
+follow it. Otherwise ask the owner of what the change touches, or your coordinator when owners disagree or you can't tell
+(a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
+recommendation in a few lines, and prepare the change meanwhile. Only keys and access, and claims (what a guarantee says
+or rests on), go on to Daniel (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call
+of the lead whose line pays (13 Oct).
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
@@ -62,16 +60,15 @@ Record a ruling as the rule it sets, where the next agent at the same spot will 
 
 Write it for its class of case, in one line, in the present tense. Its date, its source and how it came about go in
 Daniel's decisions log in Notion, not here. When a later ruling replaces it, rewrite the line; when code enforces it,
-delete the line. Then roll it out in the same PR: `rg` for the old way's terms and paths, and rewrite every place that
-still states it (`AGENTS.md`, `README.md`, the skills, docstrings, docs).
+delete the line. Then roll it out in the same PR (AGENTS.md, "A decision rolls out in the change that records it").
 
 ## 4. Note it, when you can't fix it now
 
-Write a friction note when the fix isn't yours or can't happen now, and the friction cost something: a failed run or check,
-about half an hour, the second time you hit it, or a wait of more than about 10 minutes that you repeat, even when nothing
-fails (give its minutes a wait and waits a day). Not for what you fixed, and not for one-off slips. Search the notes
-first: if one covers it, write a two-line note naming it under `recurs:`, because repeats are what get fixed. A note is a
-file, never a message, so it pings nobody; a blocker still goes to your coordinator as a message.
+Write a friction note when the fix isn't yours or can't happen now and the friction cost something: a failed run or check,
+about half an hour, a second hit, or a repeated wait over about 10 minutes even when nothing fails (give its minutes a
+wait and waits a day). Not for what you fixed or one-off slips. Search the notes first: if one covers it, write a
+two-line note naming it under `recurs:`, since repeats are what get fixed. A note pings nobody; a blocker still goes to
+your coordinator as a message.
 
 ~~~markdown
 ---
@@ -91,9 +88,9 @@ What happened, with ids (run, PR, commit), and what it cost. What you did instea
 Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A worker that can't push the notes puts the
 note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
-The admin (`@top`) reads new friction notes once a day (`research notes mcp`, `search_notes` with `kind: friction` and
-`since`) and turns a repeat or a repeated wait into a fix assigned to its owner with an ETA, then checks that the fix
-landed and held; only a repeat whose fix needs keys or a claim goes to Daniel.
+The admin (`@top`) reads new friction notes daily (`research notes mcp`'s `search_notes`, `kind: friction`, `since`),
+files each repeat or repeated wait as a dated issue in its owner's team, and checks that the fix landed and held; only one
+whose fix needs keys or a claim goes to Daniel.
 
 ## Standing rulings
 
@@ -127,29 +124,35 @@ Keys and access:
 
 - (25 Oct) The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
   so stopping a machine never waits on an agent VM. A key that could also start, create or delete is a new ask.
-- (25 Oct) Workers open and edit their own lane's PRs with `research pr open|edit`, through a GitHub App on the control
-  pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head branch
-  isn't the caller's lane's. Drive's App stays the only one that can move `main`.
+- (25 Oct) Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
+  control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
+  branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
 - (25 Oct, TOP-84) A lane's development gate key on an auditor's gate (vy-challenger-1, vy-auditor-2) is no ask: the lane
   makes an ed25519 key, sends infra only the public half, and infra registers it under that lane. Only the per-lane Cursor
   secret that credit-bearing windows need is Daniel's.
 
 Landing:
 
-- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the
-  whole check before a landing. A PR that changes a `lean-audit.json` lock, or Lean that runs as code (outside
-  `Security/`), keeps its Lean check first; Lean proofs alone land on the verdict and are checked after landing, a
-  failure reverting them (25 Oct 11:19 PM PDT). Reviewers are agents ci staffs, never the PR's owner. Drive does it with
-  `land = "review"` (AGENTS.md "Checking and merging").
 - (25 Oct 09:40Z, delegated to the vLLM coordinator) The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
   cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
 - (25 Oct 11:20Z, the vLLM coordinator under that delegation) A `# noqa` is an exception too: in `integrations/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
+- (26-27 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask repo-wide) Outside `integrations/vllm/` and
+  `archive/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python, as drive lands
+  before the suites run (22:45Z): fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a list may
+  catch up to what its base's lint finds in its tree, no further (06:20Z). Ruff: the root `ruff.toml`, per (file, rule),
+  `noqa` uncounted (23:47Z). No new direct environment read: use the area's settings registry (a `settings.py`, or a
+  list mark at the PR's base) (01:30Z). No new swallowing handler: re-raise, record, or test first (02:05Z).
 
 Protocols and claims:
 
+- (26 Oct, tentative) Credit and every report of computation are in AND gates. 𝓜's resources appear only inside
+  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
+  finds a reason this is wrong floats it at once.
+- (26 Oct) A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
+  every scale; workloads compose, and "row" never names one.
 - (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
   under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
@@ -160,6 +163,9 @@ Protocols and claims:
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
   the protocol's properties from `Models/` to `Properties/`. Where it leads (18 Oct): Lean is the definition and the
   verifier of record, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+- (26 Oct) An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
+  soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
+  premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
 - (17 Oct) The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.

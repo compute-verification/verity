@@ -42,6 +42,11 @@ broken before them); a run the machine killed runs again once.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
+What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
+`stale_days` and `stale_close_days`: `_stale`): a PR unmarked at its head and idle `stale_days` rings its owner once a day, and
+at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
+a landed PR's head hears once that its base landed and to merge `main` (`_stacked`; TOP-90 row 23).
+
 `--per-pr-shadow N` (drive.toml's `per_pr_shadow`, 0 is off) runs the per-PR landing (parallel landing's step 3) in shadow beside
 the trains, to measure it: it lands, ejects and posts nothing, and never touches `next`, `main` or the trains' records.  Each
 ready PR, oldest mark first, while fewer than N of its checks run, gets one check (`train.sh`, as an ordinary quiet job,
@@ -152,6 +157,8 @@ CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
 CIRCUIT_KILLED = "circuit-check/killed"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
+#: how often drive applies the stale rule (`Driver._stale`), which reads the labels of every idle PR: its rings are daily
+STALE_EVERY_S = 3600
 #: what `Driver.culprit` says of a failure that names no file and was a kill
 KILLED = "it was killed (a signal or 128+N) and names no file: a machine's fault"
 #: what it says of one whose files, and the declared inputs of what failed, no PR's change touches: a machine's fault too
@@ -892,10 +899,13 @@ class Driver:
                  regenerate_locks: bool = False, per_pr_shadow: int = 0,
                  slots: Callable[[Path, str], dict[str, int]] = free_slots, land: str = "check",
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
-                 ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2):
+                 ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
+                 stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = ()):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
         self.max_lean_checks = max_lean_checks
+        #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
+        self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
         #: `land = "review"` (Daniel, 24 Oct 06:05Z): each member lands on a reviewer's verdict, a Lean change once a Lean check
         #: passed, and the full check runs after landing (`_review`), reusing no pass with ``after_landing_no_cache``
         self.review, self.after_landing_no_cache = land == "review", after_landing_no_cache
@@ -1594,6 +1604,8 @@ class Driver:
         red, tip = pl.setdefault("red", {}), run["tip"]
         if (old := red.get(key)) and (old["tip"] == tip or (pl.get("bisect") or {}).get("key") == key
                                       or (old.get("culprit") and not old.get("reverted") and not self._undone(old["culprit"][3]))):
+            if old["tip"] != tip:
+                old["seen"] = tip                       # red again here: a fix that landed below this tip didn't fix it (`_fix`)
             return
         step = rec.get("step") or ""
         r = {"tip": tip, "ids": run["ids"], "first": first_error(d, rec), "step": step, "culprit": None,
@@ -1696,7 +1708,10 @@ class Driver:
         """A marked fix of red ``key``: an open PR marked ready at its head that is a new head of the culprit, or whose body names
         the culprit (`#N`) or says `fixes suite NAME` (case aside), or whose diff touches a path the failure named (`r["paths"]`,
         those the culprit was named by).  A body that merely mentions the suite doesn't count: `research` or `check` is in
-        almost any body, and would hold the revert for good.  None when there is none."""
+        almost any body, and would hold the revert for good.  A fix that landed on `main` after the last tip a run found it red
+        at (`seen`, else the record's tip) counts too, by its merge's title or its change: once landed it is no open PR, and
+        drive told memory-accounting to revert #4798 by hand 19 min after its fix #4902 landed (27 Oct 02:07Z).  None when
+        there is none."""
         pr, head = r["culprit"][0], r["culprit"][1]
         name = key.split(" ", 1)[1]
         if self._prs is None:
@@ -1711,6 +1726,16 @@ class Driver:
                 return f"#{p.number} at {p.head[:8]}"
             if r.get("paths") and (hit := touches(self._pr_files(p), set(r["paths"]))):
                 return f"#{p.number} at {p.head[:8]}, whose change touches {', '.join(sorted(hit)[:3])}"
+        main, since = "refs/remotes/origin/main", r.get("seen") or r["tip"]
+        if not self._ancestor(since, main):
+            return None
+        for m in self.landed_since(since, main):
+            if m.pr == pr:
+                continue
+            if says.search(_out(self.repo, "log", "-1", "--format=%s", m.commit)):
+                return f"#{m.pr}, landed at {m.commit[:8]}"
+            if r.get("paths") and (hit := touches(changed(self.repo, f"{m.commit}^1", m.commit), set(r["paths"]))):
+                return f"#{m.pr}, landed at {m.commit[:8]}, whose change touches {', '.join(sorted(hit)[:3])}"
         return None
 
     def _pr_files(self, p) -> set[str]:
@@ -1950,7 +1975,8 @@ class Driver:
                 shutil.copyfile(src, self.repo / dst)
                 files.append(dst)
             _git(self.repo, "add", "--", *files)
-            ran = (((drive.get("lean") or {}).get(m.commit) or {}).get("carried") or {}).get("from")
+            rec = (drive.get("lean") or {}).get(m.commit) or {}
+            ran = (rec.get("carried") or {}).get("from") if rec.get("run") == rid else None
             _git(self.repo, "commit", "-q", "--allow-empty", "-m",
                  f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of {(ran or m.commit)[:12]}, passed by "
                  f"regenerating them)\nRegenerated: {', '.join(files)}\n", env=IDENTITY)
@@ -1968,6 +1994,7 @@ class Driver:
         tip = _out(self.repo, "rev-parse", "HEAD")
         q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})"
               + (f", with the locks it regenerated for {', '.join(sorted(locks))}" if locks else ""))
+        self._stacked(drive, members, tip)
         if v.why.startswith(DEFERRED):
             self._hand_over(drive, m, prs, tip, main, v)
         elif v.why.startswith(REVIEWED):
@@ -2011,6 +2038,28 @@ class Driver:
             self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
         else:
             self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+
+    def tell_unmarked(self, drive: dict, entries: dict) -> None:
+        """Tell the owner of each open PR that a PR marked ready waits for because it isn't marked at its head (the marked one
+        contains its head, or its commits at an older head: `Queue.entries`), once per pair of heads (TOP-90: #4412 waited on
+        #4382's unmarked commits and no one told #4382's owner).  A PR that isn't marked, or waits for a reason of its own (a
+        hold, a warming check), tells no one; one it waits for that is marked but waits itself tells its own blockers' owners."""
+        q = self.q
+        hold = q.rules().hold_label
+        for n, e in entries.items():
+            if e.state != "waiting" or not e.why.startswith("contains ") or not q.ready(n, e.pr.head):
+                continue
+            for b in (entries[a] for a in e.after):
+                if b.state != "waiting" or b.pr.owner is None or hold in b.pr.labels or q.ready(b.pr.number, b.pr.head):
+                    continue
+                if (key := f"unmarked:{n}@{e.pr.head}:{b.pr.number}@{b.pr.head}") in drive["told"]:
+                    continue
+                by = self.ready_by(n, e.pr.head) or q.handle(e.pr) or e.pr.owner
+                at = _out(q.workdir, "merge-base", e.pr.head, b.pr.head)
+                self.refuse(drive, key,
+                            f"#{n} (marked by {by}) waits for your mark of #{b.pr.number}, which it contains (at {at[:12]}): "
+                            f"mark #{b.pr.number} ready at {b.pr.head[:8]}, or withdraw it (`research queue eject "
+                            f"{b.pr.number} --reason ...`) and #{n} carries it", q.handle(b.pr))
 
     def _tell_out(self, drive: dict, state: dict) -> None:
         """Tell each PR the last sync left off `next` once per head: one that didn't merge (`conflicts`), and one that contains
@@ -2935,10 +2984,11 @@ class Driver:
     # -- the review landing (`land = "review"`, the module's "Review landing").  `drive["lean"]`: {the commit of `next` a Lean
     #    check ran on: {"ids" ([] with "launch", `detach`'s record, while its train.sh runs detached: `_resolve`), "at",
     #    "members": [[PR, head], ...] up to it, "tree", "stacked" or "hand" and "by" (`hand_lean`) when it is either,
-    #    "state": None while it runs, else "passed" (with
-    #    "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.  `drive["postland"]`
-    #    also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's `research queue baseline`)
-    #    and "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
+    #    "rekeyed_from" (`_rekey_lean`) or "carried" (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
+    #    this one's differ in, "ok" once `_carried_ok` judged it}) when it moved there, "state": None while it runs, else
+    #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
+    #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
+    #    `research queue baseline`) and "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing: sync `next` (held on its base while a Lean check of it runs, drive's or a hand one:
@@ -2969,15 +3019,17 @@ class Driver:
             chain = q.chain()
             q.hold = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
             q.frozen = {m.pr for m in chain[:q.hold]}
-            q.sync(dry_run)
+            entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self._tell_out(drive, state)
+            self.tell_unmarked(drive, entries)
         landed, why = None, self._unbaselined(drive)
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
             self._stack_lean(drive, dry_run)
         what.insert(0, f"landed #{landed.pr}" if landed else why)
         self._sweep(drive, dry_run)
+        self._stale(drive, dry_run)
         self.start_postland(drive)
         self._behind(drive)
         if not dry_run:
@@ -3153,8 +3205,8 @@ class Driver:
     def land_reviewed(self, drive: dict, dry_run: bool) -> tuple[Member | None, str]:
         """Land `next`'s longest prefix whose every member has a land verdict at its head and no hold (`queue.unreviewed`, by none
         of `_owners`), cut below a Lean change no passed Lean check holds (`_lean_gate`) and below a member whose Python doesn't
-        compile (`_compiles`), the gate then run again on what is left below that cut: a fast-forward of `main` to its top,
-        through `_land`.  (the member landed or None, what the tick did)"""
+        compile (`_compiles`), the gate run again on what is left below any cut, until it lands what it ran on: a fast-forward
+        of `main` to its top, through `_land`.  (the member landed or None, what the tick did)"""
         q = self.q
         base, chain = self._chain()
         if not chain:
@@ -3167,14 +3219,18 @@ class Driver:
         stop = f"#{chain[k].pr} at {chain[k].head[:8]}: {why}" if k < len(chain) else ""
         if not k:
             return None, f"nothing reviewed lands: {stop}"
-        t, rid = self._lean_gate(drive, chain, k, dry_run)
+        g, ok = k, -1
+        t, rid = self._lean_gate(drive, chain, g, dry_run)
         t = self._past_failed(drive, chain, t)
-        while t >= 0 and (cut := self._compiles(drive, chain, base, t)) < t:
-            # the gate's cover read the trees of `chain[:k]`: a Lean check above the cut covers what lands only while no Lean
-            # change lies between them (CI-191: #1 landed alone on a check of #1 + #2, both changing one lock)
-            t, rid = self._lean_gate(drive, chain, cut + 1, dry_run) if cut >= 0 else (-1, "")
+        while t >= 0 and (cut := t if t == ok else self._compiles(drive, chain, base, t)) < g - 1:
+            # the gate's cover read the trees of `chain[:g]`: a Lean check above what lands covers it only while no Lean change
+            # lies between them, so whatever cut the landing below `g` runs the gate again on what lands (CI-191: a compile cut
+            # landed #1 alone on a check of #1 + #2, both changing one lock; CI-194: a failed Lean check)
+            ok, below = (-1, True) if cut < t else (cut, False)
+            t, rid = self._lean_gate(drive, chain, g := cut + 1, dry_run, k) if cut >= 0 else (-1, "")
             t = self._past_failed(drive, chain, t)
-            self._drop_passed_above(drive, chain, cut)
+            if below:
+                self._drop_passed_above(drive, chain, cut)
         if t < 0:
             return None, f"nothing lands: #{chain[0].pr} at {chain[0].head[:8]} waits (see above)"
         m, members = chain[t], chain[: t + 1]
@@ -3246,13 +3302,14 @@ class Driver:
             self._lean_of[m.commit] = lean_change(self.repo, m.commit)
         return self._lean_of[m.commit]
 
-    def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool) -> tuple[int, str]:
+    def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool, reviewed: int | None = None) -> tuple[int, str]:
         """(the highest index of ``chain[:k]`` that may land, the Lean check whose regenerated locks land with it or another that
         holds its Lean changes, or ""): every Lean change below it (`queue.lean_change`) has a passed lean-audit of a commit of
-        `next` at or above it (`_cover`); one whose check regenerated locks lands exactly at that commit, its locks on top
-        (`_land`).  For the lowest Lean change without one, a Lean check is launched, or waited for (`_lean_check`).  Nothing at
-        or above a commit whose Lean check failed lands, but for one below a passed check of ``chain[:k]``, which checked the tree
-        that lands (`_past_failed`), and when no Lean change's own commit is that one, `CI` is told."""
+        `next` at or above it (`_cover`) whose Lean is the Lean of what may land; one whose check regenerated locks lands exactly
+        at that commit, its locks on top (`_land`).  For the lowest Lean change without one, a Lean check is launched, or waited
+        for (`_lean_check`).  Nothing at or above a commit whose Lean check failed lands, but for one below a passed check of
+        ``chain[:k]``, which checked the tree that lands (`_past_failed`), and when no Lean change's own commit is that one, `CI`
+        is told.  ``reviewed``: the reviewed prefix's length, when a cut below it (`land_reviewed`) runs the gate on ``k``."""
         lean = drive["lean"]
         self._rekey_lean(drive, chain)
         pos = {m.commit: i for i, m in enumerate(chain)}
@@ -3261,13 +3318,16 @@ class Driver:
         over = max((pos[c] for c, rec in lean.items() if rec.get("state") == "passed" and pos.get(c, k) < k), default=-1)
         bad = min((pos[c] for c, rec in lean.items() if rec.get("state") == "failed" and over < pos.get(c, -1)), default=k)
         t, rid = min(k, bad) - 1, ""
+        # nothing at or above `bad` lands, so a check above it covers only across no Lean change from `bad` up (CI-194: #1 landed
+        # on a pass of #1..#4, #3 changing its lock, though the check of #1 + #2, #1's Lean, failed)
+        top, cut = min(k, bad), min(k, bad) < (reviewed or k)
         for i in range(k):
             if i > bad:
                 break
             if not self._lean_change(chain[i]):
                 continue
-            if (got := self._cover(drive, chain, i, k)) is None:
-                self._lean_check(drive, chain, k, i, dry_run)
+            if (got := self._cover(drive, chain, i, top)) is None:
+                self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
             commit, run = got
             if (regen := self._regenerated(drive, run)) is None:
@@ -3276,17 +3336,17 @@ class Driver:
                 if ok is None:
                     return min(i - 1, t), rid
                 del lean[commit]                    # what it checked and what lands differ by records it didn't regenerate
-                self._lean_check(drive, chain, k, i, dry_run)
+                self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
             if regen and lean.get(commit, {}).get("rekeyed_from"):
                 # `_land` builds the locks on ``commit``, and its lock gate takes only a run of that very commit
                 del lean[commit]
-                self._lean_check(drive, chain, k, i, dry_run)
+                self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
             if regen:
                 if pos[commit] > t:
                     if bad == k:
-                        self._lean_check(drive, chain, k, i, dry_run)
+                        self._lean_check(drive, chain, k, i, dry_run, cut)
                     return min(i - 1, t), rid
                 return pos[commit], run
             rid = run
@@ -3299,7 +3359,7 @@ class Driver:
                                                      f"(#{chain[bad].pr}'s merge, which changes no Lean) failed ({rec.get('why')}), "
                                                      "and each Lean change below it passed a Lean check below it: drive drops it, "
                                                      "and the after-landing run checks the rest")
-                return self._lean_gate(drive, chain, k, dry_run)
+                return self._lean_gate(drive, chain, k, dry_run, reviewed)
             self.refuse(drive, f"lean-next:{c}", f"the Lean check {_ids(rec)} of `{self.q.branch}` {c[:12]} (#{chain[bad].pr}"
                                                  f"'s merge, which changes no Lean) failed ({rec.get('why')}), and each Lean change "
                                                  "below it has a passed Lean check: it and every PR above it wait until it leaves "
@@ -3308,9 +3368,10 @@ class Driver:
         return t, rid
 
     def _cover(self, drive: dict, chain: list[Member], i: int, k: int) -> tuple[str, str] | None:
-        """(a commit of `next` at or above ``chain[i]``, its passed lean-audit's run): drive's own Lean checks first (one of
-        ``chain[:k]``, the highest), then any recorded run in the store whose lean-audit passed on a commit of ``chain[i:k]`` (a
-        full check, or a hand `train.sh COMMIT MACHINES --deferred lean-audit`).  A store that can't be read covers nothing."""
+        """(a commit of `next` at or above ``chain[i]``, its passed lean-audit's run), for a landing within ``chain[:k]``: drive's
+        own Lean checks first (one of ``chain[:k]``, the highest, else the lowest above it with no Lean change from ``chain[k]``
+        up to it), then any recorded run in the store whose lean-audit passed on a commit of ``chain[i:k]`` (a full check, or a
+        hand `train.sh COMMIT MACHINES --deferred lean-audit`).  A store that can't be read covers nothing."""
         pos = {m.commit: j for j, m in enumerate(chain)}
         ok = sorted(((pos[c], c, rec["run"]) for c, rec in drive["lean"].items() if rec.get("state") == "passed" and pos.get(c, -1) >= i
                      and not any(self._lean_change(m) for m in chain[k:pos[c] + 1])),      # what lands is the tree it checked
@@ -3397,20 +3458,22 @@ class Driver:
             q.log(f"research queue drive: pushing `{q.branch}` rebuilt on the lock commit {lock[:12]} was refused "
                   f"({p.stderr.strip()[-200:]}); the next sync rebuilds it")
             return
-        moved = []
-        for c, new in images.items():
+        moved, above = [], [[x.pr, x.head] for x in chain[t + 1:]]
+        for n, (c, new) in enumerate(images.items(), 1):
             if (rec := lean.pop(c, None)) is None or rec.get("state") == "failed":
                 continue
             ran = (rec.get("carried") or {}).get("from", c)
-            lean[new] = {**rec, "tree": self._tree(new), "carried": {"from": ran, "files": sorted(changed(self.repo, ran, new))}}
+            lean[new] = {**rec, "members": above[:n], "tree": self._tree(new),
+                         "carried": {"from": ran, "files": sorted(changed(self.repo, ran, new))}}
             moved.append(f"{c[:12]} to {new[:12]}")
         q.log(f"research queue drive: `{q.branch}` rebuilt on the lock commit {lock[:12]}: {len(images)} member(s) above it "
               "kept, each with its merge's tree and the records no merge above changed"
               + (f"; Lean checks moved: {', '.join(moved)}" if moved else ""))
 
-    def _lean_check(self, drive: dict, chain: list[Member], k: int, i: int, dry_run: bool) -> None:
+    def _lean_check(self, drive: dict, chain: list[Member], k: int, i: int, dry_run: bool, cut: bool = False) -> None:
         """A Lean check for ``chain[i]``, the lowest Lean change no passed one holds: wait for a running one of a commit at or
-        above it; after a failed one of its own commit, tell `CI` and the owner, and wait for that commit to leave `next` (a new
+        above it (after a ``cut`` below the reviewed prefix's top, only one whose pass `_cover` would take for ``chain[:k]``);
+        after a failed one of its own commit, tell `CI` and the owner, and wait for that commit to leave `next` (a new
         head, a hold, an ejection); after a failed one above it, check its own commit, so a PR is blamed only on its own
         check; else launch one of the reviewed prefix's top, ``chain[k - 1]``, capped below the lowest member above ``chain[i]``
         that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`, and cut
@@ -3418,7 +3481,8 @@ class Driver:
         stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
         q, m, lean = self.q, chain[i], drive["lean"]
         pos = {x.commit: j for j, x in enumerate(chain)}
-        mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i}
+        mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i and not (
+            cut and rec.get("state") is None and any(self._lean_change(x) for x in chain[k:pos[c] + 1]))}
         if c := next((c for c, rec in mine.items() if rec.get("state") is None), None):
             q.log(f"research queue drive: #{m.pr}'s Lean change waits for the Lean check {_ids(lean[c])} of {c[:12]}")
             return
@@ -3660,6 +3724,7 @@ class Driver:
             return self._review(state, drive, dry_run)
         landed = self.land(drive, dry_run)
         self._sweep(drive, dry_run)
+        self._stale(drive, dry_run)
         if landed is None and (why := self.held(drive)):
             self.per_pr(drive)
             if not dry_run:
@@ -3691,6 +3756,7 @@ class Driver:
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
         self._tell_out(drive, state)
+        self.tell_unmarked(drive, entries)
         on_chain = {m.commit for m in members}
         following = {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
         if not dry_run:
@@ -3816,12 +3882,127 @@ class Driver:
     def _sweep(self, drive: dict, dry_run: bool) -> None:
         q = self.q
         if not dry_run and not q.shadow and self.now() - drive.get("branches_swept", 0) > BRANCH_SWEEP_S:
-            from .merge import sweep_branches
+            from .merge import SWEEP_LIMIT, sweep_branches
 
             with authed(q.auth):
-                deleted, archived = sweep_branches(self.repo, "origin", log=q.log)
-            drive["branches_swept"] = self.now()
-            q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)")
+                deleted, archived = sweep_branches(self.repo, "origin", log=q.log, keep=drive.get("stale_closed", {}))
+            more = SWEEP_LIMIT in (deleted, archived)
+            if not more:
+                drive["branches_swept"] = self.now()
+            q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)"
+                  + (f"; at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" if more else ""))
+
+    # -- what only a PR's owner acts on: a stale PR (TOP-90 row 36), a stacked PR whose base landed (row 23)
+
+    def _open(self) -> dict[int, PR]:
+        if self._prs is None:
+            self._prs = {p.number: p for p in self.q.github.open_prs()}
+        return self._prs
+
+    def tell(self, drive: dict, keys: list[str], text: str, handle: str | None) -> None:
+        """Tell ``handle``, a PR's owning lane (`CI` when no handle owns it), unless every one of ``keys`` was told; unlike
+        `refuse`, not `CI` beside it.  With --shadow or --dry-run, only log it."""
+        if keys and all(k in drive["told"] for k in keys):
+            return
+        to = (f"@{handle}",) if handle else (CI,)
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would tell {to[0]}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+            return
+        if self.post(f"{to[0]} queue: {text}", to):
+            drive["told"].extend(k for k in keys if k not in drive["told"])
+            self.q.log(f"research queue drive: told {to[0]}: {text}")
+        else:
+            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {to[0]}: {text}")
+
+    def _stale(self, drive: dict, dry_run: bool) -> None:
+        """The stale rule (`research.stale`): ring each stale PR's owner once a UTC day (`idle:N@DAY`), one post per owner, and
+        close each PR `stale_close_days` idle with `stale.close_comment`, but not one on `next` or a draft that says "keep open"
+        (`stale.keep_open`); a closed PR's branch is kept (`stale_closed`, which `_sweep` never archives).  Ring keys of other
+        days, and the stacked-PR keys (`_stacked`) of PRs no longer open, leave `told`.  At most once in `STALE_EVERY_S`."""
+        q, now = self.q, self.now()
+        if not self.stale_days or now - drive.get("stale_judged", 0) < STALE_EVERY_S:
+            return
+        from .stale import DAY_S, close_comment, keep_open, stale_prs
+
+        day = time.strftime("%Y-%m-%d", time.gmtime(now))
+        try:
+            prs = self._open()
+            idle = stale_prs(q, prs.values(), now, self.stale_days, lambda n, h: [lab.ts for lab in self.reviews(n, h)],
+                             keep=self.stale_keep)
+        except QueueError as e:
+            q.log(f"research queue drive: stale PRs not judged this tick: {e}")
+            return
+        drive["told"] = [k for k in drive["told"] if not (k.startswith("idle:") and not k.endswith(f"@{day}"))
+                         and not (k.startswith("stacked:") and int(k[len("stacked:"):].partition("<")[0]) not in prs)]
+        if not (dry_run or q.shadow):
+            drive["stale_judged"] = now
+        on_next = {m.pr for m in q.chain()}
+        ring: dict[str | None, list[str]] = {}
+        keys: dict[str | None, list[str]] = {}
+        closed: dict[str | None, list[str]] = {}
+        for n, since in sorted(idle.items()):
+            p, days = prs[n], int((now - since) // DAY_S)
+            if n in on_next or keep_open(p):
+                continue
+            who = self._handle(n)
+            if self.stale_close_days and now - since >= self.stale_close_days * DAY_S:
+                if dry_run or q.shadow:
+                    q.log(f"research queue drive: would close #{n}: {days} days unmarked and idle")
+                    continue
+                try:
+                    q.github.close(n, close_comment(self.stale_close_days))
+                except QueueError as e:
+                    q.log(f"research queue drive: closing #{n} ({days} days unmarked and idle) failed; the next tick tries again: {e}")
+                    continue
+                if p.branch:
+                    drive.setdefault("stale_closed", {})[p.branch] = n
+                q.log(f"research queue drive: closed #{n}: {days} days unmarked and idle")
+                closed.setdefault(who, []).append(f"#{n}")
+            elif f"idle:{n}@{day}" not in drive["told"]:
+                ring.setdefault(who, []).append(f"#{n} ({days} d)")
+                keys.setdefault(who, []).append(f"idle:{n}@{day}")
+        for who in dict.fromkeys([*ring, *closed]):
+            said = []
+            if ring.get(who):
+                said.append(f"stale, not marked ready at their heads and idle {self.stale_days}+ days: {', '.join(ring[who])}. Push, "
+                            "mark ready or close each" + (f"; drive closes one {self.stale_close_days} days idle, its branch kept"
+                                                          if self.stale_close_days else ""))
+            if closed.get(who):
+                said.append(f"closed after {self.stale_close_days} days unmarked and idle, branches kept (reopen one to go on): "
+                            f"{', '.join(closed[who])}")
+            self.tell(drive, keys.get(who, []), "; ".join(said), who)
+
+    def _stacked(self, drive: dict, members: list[Member], tip: str) -> None:
+        """After a landing at ``tip``, tell the owner of each open PR whose head contains a landed member's head (a PR stacked
+        on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one marked ready at its head, which lands from
+        `next` as it is, and whose merge of `main` would need a new mark."""
+        from .stale import pull_refs
+
+        q = self.q
+        landed = {x.pr for x in members}
+        try:
+            rest = {n: p for n, p in self._open().items() if n not in landed}
+            refs = pull_refs(q, rest.values())
+        except QueueError as e:
+            q.log(f"research queue drive: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
+            return
+        bases: dict[int, list[int]] = {}
+        for x in members:
+            out = _git(self.repo, "for-each-ref", "--contains", x.head, "--format=%(refname:lstrip=3)", "refs/queue/pr/").stdout
+            for n in (int(s) for s in out.split() if s.isdigit()):
+                if n in rest and refs.get(n) == rest[n].head and f"stacked:{n}<{x.pr}" not in drive["told"]:
+                    bases.setdefault(n, []).append(x.pr)
+        for n, below in sorted(bases.items()):
+            try:
+                if q.ready(n, rest[n].head):
+                    continue
+            except QueueError as e:
+                q.log(f"research queue drive: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
+                continue
+            names = ", ".join(f"#{b}" for b in below)
+            self.tell(drive, [f"stacked:{n}<{b}" for b in below],
+                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}; merge main into #{n}",
+                      self._handle(n))
 
     def _run_after(self) -> None:
         pending, self._after = self._after, None
