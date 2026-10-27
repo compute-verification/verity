@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from verity.core.protocols.pous.period import records
+from verity.core.protocols import answer as A
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled, receipts
@@ -83,17 +84,16 @@ def answer(session: audit.Session) -> dict[str, Any]:
     """The session's answer in the core interface's canonical form, as `RemoteAudit.Protocol.check` gives it. Like the
     check (`RemoteAudit.Protocol.sessionOf`), it refuses the one form no property of the Lean covers, a session paced at
     one window in flight."""
-    out = {"commitment": session.registration.digest.hex(), "profile": None, "protocol": PROTOCOL, "public": None,
-           "reason": None}
+    d = session.registration.digest
     if session.params.pace is not None and session.params.pace.in_flight == 1:
-        return out | {"reason": "in_flight is 2: no property covers one window in flight", "verdict": "reject"}
+        return A.Answer.reject(PROTOCOL, "in_flight is 2: no property covers one window in flight", d).to_json()
     outcome = session.outcome
     if outcome == "accepted":
         public, profile = certified(session.record())
-        return out | {"profile": profile, "public": public, "verdict": "accept"}
+        return A.Answer.accept(PROTOCOL, d, public, profile).to_json()
     if outcome is not None:
-        return out | {"reason": f"the session was rejected: {outcome}", "verdict": "reject"}
-    return out | {"reason": "the session has a window not yet verified", "verdict": "undecided"}
+        return A.Answer.reject(PROTOCOL, f"the session was rejected: {outcome}", d).to_json()
+    return A.Answer.undecided(PROTOCOL, "the session has a window not yet verified", d).to_json()
 
 
 def registration_json(r: audit.Registration) -> dict[str, Any]:

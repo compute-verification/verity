@@ -50,6 +50,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols import answer as A
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import memory_challenger as mc
@@ -186,9 +187,9 @@ def answer(server: bytes, session: bytes, trusted: Collection[bytes], commitment
            protocol: str = PROTOCOL) -> dict[str, Any]:
     """The wipe protocol's answer (`Core.Answer.canonical`) on decoded inputs."""
     verdict, *rest = outcome(server, session, trusted, commitment, signed, schemes)
-    public, prof, reason = (*rest, None) if verdict == "accept" else (None, None, rest[0])
-    return {"commitment": digest(commitment).hex(), "profile": prof, "protocol": protocol, "public": public,
-            "reason": reason, "verdict": verdict}
+    if verdict == "accept":
+        return A.Answer.accept(protocol, digest(commitment), *rest).to_json()
+    return A.Answer(protocol, A.Verdict(verdict), rest[0], digest(commitment)).to_json()
 
 
 class Keeping(sw.Prover):

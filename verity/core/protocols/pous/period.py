@@ -53,6 +53,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols import answer as A
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
@@ -168,15 +169,13 @@ def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection
            setup_inputs: SetupInputs) -> dict[str, Any]:
     """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, then
     `run.check_at`, then `certify`."""
-    digest = hashlib.sha512(canonical_json_bytes(published.to_json())).hexdigest()
+    digest = hashlib.sha512(canonical_json_bytes(published.to_json())).digest()
     try:
         tie(point, published, setup_inputs)
         R.check_at(point, schemes, trusted, published, digests, session, session_id)
     except R.Refused as e:
-        return {"commitment": digest, "profile": None, "protocol": protocol, "public": None, "reason": str(e),
-                "verdict": "reject"}
-    return {"commitment": digest, "profile": profile(point), "protocol": protocol, "public": certify(point),
-            "reason": None, "verdict": "accept"}
+        return A.Answer.reject(protocol, str(e), digest).to_json()
+    return A.Answer.accept(protocol, digest, certify(point), profile(point)).to_json()
 
 
 def setup_case(q: P2.P2Params, commitment: bytes, salt: bytes, encoded: Sequence[Sequence[bytes]]) -> dict[str, Any]:
