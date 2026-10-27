@@ -46,3 +46,6 @@ Run r20261027-182146-a4ec, the full check at #5330's 3f043281ab, failed in lean-
 - benchmarks/network_traces: test_scan_zk.py's rows_forms case fails. Fix it if #5330 caused it.
 - integrations/vllm: test_attention_boundaries[fa3_check_inf] and test_lint::test_query_package_exists fail. These are probably red on main too; confirm, and leave them if so.
 Rerun only those suites, at `--cwd clone`, on one node. Mark #5330 once they're green apart from failures main shares, by Wed 03:00Z.
+
+## 20:55Z
+Before you open a PR for b624's refusal (v2 limited to one registered public file per window), check network-accounting's #4873, which runs one-stage v2 on each link-window's proof, and every other caller of `check_v2`/`verdicts_v2`. Confirm each registers one member's public file a window, or would after a one-line change. If any needs several members, make `window.public_file` a list keyed by member instead, before the refusal lands. Note what you found on PRF-205.
