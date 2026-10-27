@@ -1,6 +1,5 @@
-"""Red-team phase 5's cases (note:network-accounting/20261024T0558Z-finding-redteam-v3, branch
-cursor/redteam-phase5-e2e-061a @ c5d32c142b), turned into regressions of what the end-to-end report (`e2e.py`) marks
-OK on the advice profile, each a pure call into the real `report`/`negative`:
+"""Adversarial cases, turned into regressions of what the end-to-end report (`e2e.py`) marks OK on the advice
+profile, each a pure call into the real `report`/`negative`:
 
 1. A negative is refused by the rehearsal's own check only for its own violation (`e2e.OWN_CODE`): a drop the check
    refused for a coverage fault is not drop's refusal.
@@ -70,7 +69,8 @@ def _advised(stages: dict, codes: str = "own") -> dict:
     n2 = {s: {"windows": [], "network": None} for s in runs}
     meta = {"profile": chain.ADVICE, "from": ["x"], "commit": "c", "model": "m", "upstream": "u",
             "where": "off the prover's node", "windows": 8}
-    return e2e.report(runs, n2, {"ran": False, "why": "N2-ADVICE hasn't landed"}, meta, {"tie": TIED} | stages)
+    return e2e.report(runs, n2, {"ran": False, "why": "N2's advised counts aren't run here"}, meta,
+                      {"tie": TIED} | stages)
 
 
 UNBOUND = {
@@ -92,9 +92,9 @@ def test_the_advised_report_isnt_ok_on_an_unbound_advice_and_its_title_says_what
     assert r["negatives"]["late"]["refused"] is True
     md = e2e.markdown(r)
     assert md.splitlines()[0] == (
-        "# Network accounting end to end: NOT OK on the rehearsal's own check and the I/O tie (IO-TIE's reference in "
+        "# Network accounting end to end: NOT OK on the rehearsal's own check and the I/O tie (`io_tie`'s reference in "
         "the clear, on stand-ins) (not run: N2's verdicts of record, the proofs (n2_zk, held by Lean), the advice, "
-        "these runs' and rebuilt from their certified I/O, the prove path, of these runs, NEG's registry)")
+        "these runs' and rebuilt from their certified I/O, the prove path, of these runs, the negatives registry)")
     assert "**drop**: NOT refused by nothing (not proved); the rehearsal's own check refused it for " \
            "audit.status:coverage-never-established, not its own violation io:short of max_tokens without EOS" in md
     bound = UNBOUND | {"bits": UNBOUND["bits"] | {"bound": True, "rebuilt": True}}

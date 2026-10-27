@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# ENC-REPLAY's table (replay.py's `main`) on a CPU node, from the shipped tree's root: over a TRACE-CORPUS artifact (store
-# kind vllm-trace-corpus/v1, fetched with the run's read-only key) or over trace paths in the tree, with ADV-SPEC's
-# advice.py sent along for I1 v0's charge (without it, v0 is `v0_widths`):
+# The scheduler replay's table (replay.py's `main`) on a CPU node, from the shipped tree's root: over a trace-corpus
+# artifact (store kind vllm-trace-corpus/v1, fetched with the run's read-only key) or over trace paths in the tree, with
+# advice.py (the advice module) sent along for I1 v0's charge (without it, v0 is `v0_widths`):
 #   research run --on vy-nebius-cpu-2 --mem-gb 8 --mem-wait 3600 --project verity --campaign glm-e2e-demo --cwd source \
 #     --store-read [--send advice.py] -- bash benchmarks/network_e2e/encodings/run_corpus.sh art:...|TRACE...
 # It writes OUT/table-<egress>-<ingress>.json (an artifact's four times: outputs released at their step's time or at

@@ -5,7 +5,7 @@
 #     bash benchmarks/network_e2e/traces/join.sh art:RUN_RECORD [art:CORPUS[:TRACE,...]...]
 # art:RUN_RECORD is the GPU run's record (`research data custody RUN --json`): each of its out/corpus/* is summarized into
 # OUT/corpus/ (a warden trace's `warden_serve.py check` first), and compared request by request into OUT/compare/ with each
-# art:CORPUS, a summarized vllm-trace-corpus/v1 (of the same plan and sampling), on the traces named. With ENC-REPLAY's
+# art:CORPUS, a summarized vllm-trace-corpus/v1 (of the same plan and sampling), on the traces named. With the replay's
 # benchmarks/network_e2e/encodings/replay.py in the tree, OUT/replay/ has its table over every trace and warden view
 # (`summary.warden_views`), outputs released at their engine step and at the client's read (table-engine.json,
 # table-client.json, table.md). OUT/corpus/<model>-<variant> goes in as vllm-trace-corpus/v1 and OUT/replay as
