@@ -172,6 +172,7 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
           try rfl
         unfold accRead at hR
         simp [hA, Except.toOption, hu] at hR
+        dsimp only
         omega
       · unfold accRead at hR
         simp [hnm] at hR
