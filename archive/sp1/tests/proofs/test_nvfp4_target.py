@@ -45,7 +45,7 @@ def test_the_target_is_a_draft_over_the_pinned_nvfp4_instruction() -> None:
 
 
 def test_the_anchor_is_the_rtx_5090() -> None:
-    assert NVFP4_SM120.anchor_device == "NVIDIA GeForce RTX 5090"
+    assert NVFP4_SM120.anchor_device == "rtx-5090"
 
 
 def test_the_family_is_the_cast_free_tensor_core_gate_set_with_scale_bytes() -> None:

@@ -152,9 +152,11 @@ Native peak: what a target's overhead is measured against
 
 A target names its ``anchor_device``, the **conformance device of its instruction** -- the card the relation was pinned
 on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for ``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``)
--- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  The number a
-benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry (``benchmarks/census/hardware.json``, data read
-by the benchmarks) of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the
+-- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  It is a SKU id
+(``a100-sxm4-80gb``), the card file's (``verity/hardware/cards/<sku>.toml``) where the device has one.  The number a
+benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry ``<sku>/<dtype>``
+(``benchmarks/census/hardware.json``, data read by the benchmarks) of that device and the target's operand dtype, the
+datasheet **dense** tensor-core peak at the
 relation's FP32 accumulate width.  One VU of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
 VU at a peak is ``2K / flop_per_second``.
 """
@@ -253,7 +255,8 @@ class Target:
     domain: str
     epilogue: str
     reference_vectors: tuple[str, ...]
-    #: The conformance device of the instruction: the card the relation was pinned on (module docstring, "Native peak").
+    #: The conformance device of the instruction, the card the relation was pinned on (module docstring, "Native peak"), as a
+    #: SKU id: its card file's (``verity.hardware.skus()``) where it has one.
     anchor_device: str
     status: Status = "frozen"
     instruction: str | None = None
@@ -274,7 +277,7 @@ FIRST = Target(
     domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
     epilogue="f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 (software canonical word; @2 has the hardware 0x7FFF)",
     reference_vectors=(K16_VECTOR, K1536_VECTOR),
-    anchor_device="NVIDIA A100 SXM4 80GB",
+    anchor_device="a100-sxm4-80gb",
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
     dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
@@ -298,7 +301,7 @@ BF16_HOPPER = Target(
         "Hopper BF16 store is the same cvt as Ampere's, so nothing pipeline-specific is pinned for the epilogue"
     ),
     reference_vectors=("bf16-hopper-mma-k16", "bf16-hopper-mma-k1536"),
-    anchor_device="NVIDIA H100 SXM5 80GB",
+    anchor_device="h100-sxm5-80gb",
     status="draft",
     instruction="sm90.mma.m16n8k16.bf16",
 )
@@ -327,7 +330,7 @@ FP8_HOPPER_WGMMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-hopper-wgmma-k32", "fp8-hopper-wgmma-k1536"),
-    anchor_device="NVIDIA H100 SXM5 80GB",
+    anchor_device="h100-sxm5-80gb",
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
     dossier="art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
@@ -347,7 +350,7 @@ FP8_ADA_MMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
-    anchor_device="NVIDIA GeForce RTX 4090",
+    anchor_device="rtx-4090",
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
     dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
@@ -381,7 +384,7 @@ NVFP4_SM120 = Target(
     domain=_NVFP4_DOMAIN,
     epilogue=_NVFP4_EPILOGUE,
     reference_vectors=("nvfp4-sm120-mma-k64", "nvfp4-sm120-mma-k1536"),
-    anchor_device="NVIDIA GeForce RTX 5090",
+    anchor_device="rtx-5090",
     status="draft",
     instruction="sm120.mma.m16n8k64.e2m1.nvf4",
 )
@@ -402,7 +405,7 @@ FP8_SM120_MMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-sm120-mma-k32", "fp8-sm120-mma-k1536"),
-    anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    anchor_device="rtx-pro-6000-server",
     status="draft",
     instruction="sm120.mma.m16n8k32.e4m3",
     dossier="art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89",

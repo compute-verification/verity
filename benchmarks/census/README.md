@@ -99,5 +99,6 @@ that sampled proofs assigns in the source run; the census records the run's coun
 ## Dependency direction
 
 - Verity core never reads `benchmarks/census/`. `tests/test_boundaries.py` enforces this.
-- Core takes such numbers as parameters: a target names only its `anchor_device`. The benchmark
-  (`verity_numerical.bench.census`) reads the peak of that device and dtype from `hardware.json`.
+- Core takes such numbers as parameters: a target names only its `anchor_device`, a SKU id (a card file's,
+  `verity/hardware/cards/<sku>.toml`, where the device has one). The benchmark (`verity_numerical.bench.census`) reads the
+  peak of that device and dtype from `hardware.json`'s line `<sku>/<dtype>`.

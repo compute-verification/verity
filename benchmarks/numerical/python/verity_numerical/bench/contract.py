@@ -317,8 +317,12 @@ def native_reference(profile: str = PROFILE) -> Any:
 
 
 def native_peak_of(target: Target) -> Any:
-    """The census hardware line a target's overhead divides by: its ``anchor_device`` running its instruction's operand dtype."""
-    return census.line(target.anchor_device, INSTRUCTIONS[target.instruction].a_dtype)
+    """The census hardware line a target's overhead divides by, ``<anchor_device>/<dtype>``: its anchor's SKU id running its
+    instruction's operand dtype."""
+    line = f"{target.anchor_device}/{INSTRUCTIONS[target.instruction].a_dtype}"
+    if line not in census.HARDWARE:
+        raise KeyError(f"no census hardware line {line!r} for {target.name}: add it to benchmarks/census/hardware.json")
+    return census.HARDWARE[line]
 
 
 #: The campaign target's native reference as a plain (JSON-serialisable) mapping, for the callers that predate

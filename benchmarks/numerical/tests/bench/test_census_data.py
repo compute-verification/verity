@@ -118,11 +118,12 @@ def test_the_reference_network_is_the_same_datacenter_and_the_sensitivity_profil
 
 
 def test_every_target_resolves_its_census_line_and_every_line_serves_a_target_or_a_workload() -> None:
-    """The overhead denominator: the census line of the target's anchor device and operand dtype (core names only the device)."""
+    """The overhead denominator: the census line of the target's anchor SKU and operand dtype (core names only the SKU)."""
     lines = {t.name: contract.native_peak_of(t) for t in TARGETS.values()}
     for name, h in lines.items():
         t = TARGETS[name]
-        assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
+        dtype = INSTRUCTIONS[t.instruction].a_dtype
+        assert h.id == f"{t.anchor_device}/{dtype}" and h.dtype == dtype and h is contract.native_reference(name)
     used = {h.id for h in lines.values()} | {w.serving.hardware for w in census.WORKLOADS.values()}
     # the L40S FP8 line serves no row yet; the RTX PRO 6000 lines serve the POUS bench's --hardware and the GemmCoordinate
     # hillclimbs (verity/ml/flock/pod/gemm_hill.py)
