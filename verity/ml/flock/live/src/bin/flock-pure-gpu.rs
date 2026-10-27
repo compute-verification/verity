@@ -1,6 +1,6 @@
 //! flock-pure-gpu: the Flock backend's relation as ONE block R1CS (`flock_live::pure_block`, `verity/flock-pure-block/v1`),
 //! proved by the CPU prover or by Flock-CUDA (`--gpu`, feature `gpu`) in a flock-128-r2 live session. The CLI and the
-//! output lines are flock-backend's `flock-pure` (so its bench.py drives either); the statement differs (no union, no
+//! output lines are `flock-pure`'s (so its bench.py drives either); the statement differs (no union, no
 //! wiring argument), so it is its own Table 1 configuration (`prover=flock-cuda-block`).
 //!
 //!   flock-pure-gpu serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
@@ -61,7 +61,7 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
     PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None, merkle_hash: HashKind::Sha256 }
 }
 
-// frame-v3 (flock-backend's flock-pure.rs, `verity.ml.commitments.merkle`)
+// frame-v3 (bin/flock-pure.rs, `verity.ml.commitments.merkle`)
 fn fv3_hash(tag: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(FRAME);

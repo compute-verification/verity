@@ -1,4 +1,4 @@
-//! `verity/flock-ir-block/v1`: identical units of an IR subcircuit template (lane flock-ir-lowering's `flock-ir-unit/v1`
+//! `verity/flock-ir-block/v1`: identical units of an IR subcircuit template (`flock-ir-unit/v1`
 //! netlists, `verity_flock.ir_lower`) as ONE block R1CS, so the CPU prover and Flock-CUDA's host-witness mode prove it.
 //!
 //! Block `b` holds units `U b .. U b + U - 1` (instance-major over the instance file), unit `u` at the 2^unit_log-bit slot
@@ -53,10 +53,10 @@ pub struct IrUnitNet {
     pub unit_log: usize,
     pub sha256: [u8; 32],
     /// The units' leaf maps (the `LEAVES <json>` line: per-unit `in` / `out` instance leaves, `in_ports` / `out_ports` as
-    /// `[leaves, bits]`), covered by `sha256` and so by the pin (red-team-flock-2 IR6).
+    /// `[leaves, bits]`), covered by `sha256` and so by the pin.
     pub leaves: Option<serde_json::Value>,
     /// A cut lowering's cut structure (its final `CUT <json>` line: `words`, `tail`, per-unit `in` / `out` ports), covered by
-    /// `sha256` and so by the pin (red-team-flock-2 IR4).
+    /// `sha256` and so by the pin.
     pub cut: Option<serde_json::Value>,
     /// A net committed at a position map (the Lean `Net.ofRowsAt`, a templated unit's `Tmpl.posMap`; its final
     /// `ORDER <json>` line): logical row `x` is row `order[x]`, so the rows are evaluated in that order, not by column.

@@ -1,7 +1,7 @@
 //! flock-ir-sampling: `GumbelTopPTokenSelect_v1{V}`'s lanes bound to their frame-v3 rows (`flock_live::ir_sampling`,
 //! `verity/flock-ir-sampling/v1`), proved by the CPU prover or by Flock-CUDA's host-witness mode (`--gpu`, feature `gpu`) in a
-//! flock-128-r2 live session. Lane flock-ir-sampling; this is `bin/flock-ir-frame.rs` at c53d9148 with the sampling statement's
-//! changes (the session protocol is flock-gpu-link's flock-pure-gpu). It refuses any file but a `flock-ir-sampling/v1` one.
+//! flock-128-r2 live session. This is `bin/flock-ir-frame.rs` at c53d9148 with the sampling statement's
+//! changes (the session protocol is flock-pure-gpu's). It refuses any file but a `flock-ir-sampling/v1` one.
 //!
 //!   flock-ir-sampling serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 --native-checked SHA256
 //!                              [--tables DIR] [--sessions N] [--operator LANE]
@@ -383,7 +383,7 @@ const CASES: &[(&str, bool, bool)] = &[
 const CUT_ONLY: &[&str] = &["row_scalar_forged", "eps_forged_tail_words", "aggregate_forged_with_its_scalar", "cut_input_differs_from_the_cut_word"];
 const RUNS_ONLY: &[&str] = &["chained_run_input_forged"];
 const TAIL_ONLY: &[&str] = &["eps_forged_tail_words", "aggregate_forged_with_its_scalar"];
-/// Load-time layout tampers the sampling statement refuses (red-team-flock-2 IR6: Rust derives the layout's meaning).
+/// Load-time layout tampers the sampling statement refuses (Rust derives the layout's meaning).
 const SAMPLING_ONLY: &[&str] = &["ir6_leaf_wiring_swapped", "ir6_row_key_changed", "ir6_lanes_moved_between_unit_slots"];
 
 fn skipped(st: &FrameStmt, name: &str) -> bool {
