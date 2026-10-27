@@ -17,10 +17,35 @@ from `τ`, and where they fail the bound is `⊤`, as C-Flock's link bound reads
 * `LiveAt.wrongE q τ`: the units wrong in the extractor's transcript at `τ`; `LiveAt.Holds q ε τ`, the claim;
   `LiveAt.bound τ`, `deltaPub` where `CR τ` holds and `⊤` elsewhere.
 * `LiveAt.sound`: at every `τ`, `Pr[flock-verify accepts ∧ ¬ Holds] ≤ bound τ`, where `K₀ − 1 ≤ ε n`.
+* `LiveAt.faultyE q τ`, `LiveAt.HoldsF`, `LiveAt.soundF`: the same on the units faulty in the sampling statement (wrong,
+  or with a committed value unopened), a superset of `wrongE` (`wrongE_card_le`), from `Bridge.card_faulty_lt_of_relS`.
 * `LiveAt.sound_honest`: `K₀ = ⌊ε n⌋ + 1` meets that hypothesis. `LiveAt.sound_nontrivial`: an accept-everything
   verifier breaks the bound at a prover whose extracted transcript fails the claim, where the finders meet the premises
   and `deltaPub < 1`.
 -/
+
+namespace Flock.Bridge
+
+open Claims.Sampling
+
+/-- **The sampling relation bounds the faulty units**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves
+fewer than `K₀` of the circuit's units faulty (`card_wrong_lt_of_relS`, before its restriction to the wrong ones). -/
+theorem card_faulty_lt_of_relS {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+    (κ : Fin C.N → Option Bool) (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
+    (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (w : Wit)
+    (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P) w) :
+    ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n)).card < K₀ := by
+  have hpa : ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) <
+      (designOf kd).Pa (partOf P) (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w) := h
+  rw [pa_partOf_window, window_zero_filter] at hpa
+  generalize (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n) = S at hpa ⊢
+  by_contra hK
+  have hc : (n - S.card).choose kd ≤ (n - K₀).choose kd := Nat.choose_le_choose _ (by omega)
+  have hdiv : ((n - S.card).choose kd : ℝ) / (n.choose kd : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by
+    gcongr
+  linarith
+
+end Flock.Bridge
 
 namespace Flock.Guarantees
 
@@ -210,6 +235,36 @@ theorem sound (q : Claims.Sampling.Query) (ε : ℝ) (hε : (K₀ : ℝ) - 1 ≤
     have hlt' : (A.wrongE q τ).card < K₀ := hlt
     have h1 : ((A.wrongE q τ).card : ℝ) + 1 ≤ K₀ := by exact_mod_cast hlt'
     show ((A.wrongE q τ).card : ℝ) ≤ ε * n
+    linarith
+  · exact le_top
+
+/-- **The units faulty in the session's sampling statement** at `τ`, under the fixed extractor's witness (`witDep` of
+`XplurZC`): wrong in the values it opens, or with a committed value it reads or writes unopened. They include the
+wrong ones (`wrongE_card_le`). -/
+noncomputable def faultyE (q : Claims.Sampling.Query) (τ : Strategy A.G) : Finset ℕ :=
+  (Claims.Sampling.faulty Claims.Sampling.sha512Msg A.Cd (Bridge.stmtOf A.P A.κ kd desc q A.roots) (Bridge.partOf A.P)
+    (Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ))).filter (· < n)
+
+theorem wrongE_card_le (q : Claims.Sampling.Query) (τ : Strategy A.G) : (A.wrongE q τ).card ≤ (A.faultyE q τ).card :=
+  Bridge.card_wrong_le_faulty A.P A.κ kd desc q A.roots Claims.Sampling.sha512Msg A.Cd _
+
+/-- **Sampled proofs' claim at `τ` on the faulty units**: at most an `ε` share of the `n` units faulty under the
+extractor's witness. It implies `Holds` (`wrongE_card_le`). -/
+def HoldsF (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) : Prop :=
+  ((A.faultyE q τ).card : ℝ) ≤ ε * n
+
+/-- **`sound` on the faulty units**: at every prover `τ`, flock-verify accepts while more than an `ε` share of the
+units are faulty under the extractor's witness with probability at most `bound τ`, where `K₀ − 1 ≤ ε n`. -/
+theorem soundF (q : Claims.Sampling.Query) (ε : ℝ) (hε : (K₀ : ℝ) - 1 ≤ ε * n) (τ : Strategy A.G) :
+    prob (fun o => LiveAcceptsZK A.I o ∧ ¬ A.HoldsF q ε τ) A.G τ ≤ A.bound τ := by
+  unfold bound
+  split_ifs with hCR
+  · refine (prob_mono (fun o ho => ⟨ho.1, fun hR => ho.2 ?_⟩) _ _).trans (A.ks q τ hCR)
+    have hlt := Bridge.card_faulty_lt_of_relS A.P A.κ kd K₀ desc q A.roots
+      Claims.Sampling.sha512Msg A.Cd _ hR
+    have hlt' : (A.faultyE q τ).card < K₀ := hlt
+    have h1 : ((A.faultyE q τ).card : ℝ) + 1 ≤ K₀ := by exact_mod_cast hlt'
+    show ((A.faultyE q τ).card : ℝ) ≤ ε * n
     linarith
   · exact le_top
 
