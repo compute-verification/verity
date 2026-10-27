@@ -397,11 +397,14 @@ SX_HD void kw_of(const u64* w, u64* kw) {
 
 namespace sha {
 
-using sx::ch;
 using sx::iv;
 using sx::K_DEV;
 using sx::K_HOST;
 using sx::maj;
+
+// The same function as sx::ch, written as the committer's rates were measured with it: ptxas schedules the two forms'
+// LOP3s differently.
+SX_HD uint64_t ch(uint64_t e, uint64_t f, uint64_t g) { return (e & f) ^ (~e & g); }
 
 SX_HD uint64_t add(uint64_t a, uint64_t b) {
 #if SHA_ADD == 1 && defined(__CUDA_ARCH__)
