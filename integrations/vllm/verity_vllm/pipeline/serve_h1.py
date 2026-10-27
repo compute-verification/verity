@@ -237,18 +237,14 @@ class GateSessions:
         that reserve failed or expires within `MARGIN`, else one reserved now (`reserve`; `CoinError` when the gate
         refuses). Then, while that reserve joined no period, the next window's is reserved ahead (`ahead_of`)."""
         got, fut = None, self._ahead.pop(window, None)
-        if fut is not None:
-            try:
-                got = fut.result()
-            except Exception as e:  # noqa: BLE001  (a reserve ahead that failed is replaced by one now, which may refuse)
-                print(f"[serve-h1] window {window}: its reserve ahead failed ({type(e).__name__}: {e}); reserving now",
-                      flush=True)
-            else:
-                expires = _expires(got)
-                if expires is not None and expires - self.now() < MARGIN:
-                    self._unused(got["session"], f"its reserve expires at {got['expires_utc']}, before its window could "
-                                                 "open it")
-                    got = None
+        if fut is not None and (e := fut.exception()) is not None:
+            print(f"[serve-h1] window {window}: its reserve ahead failed ({type(e).__name__}: {e}); reserving now", flush=True)
+        elif fut is not None:
+            got = fut.result()
+            expires = _expires(got)
+            if expires is not None and expires - self.now() < MARGIN:
+                self._unused(got["session"], f"its reserve expires at {got['expires_utc']}, before its window could open it")
+                got = None
         if got is None:
             got = self.reserve(window)
         if got.get("period") is None:
@@ -267,11 +263,8 @@ class GateSessions:
         if self.ahead is not None:
             self.ahead.shutdown(wait=True)
         for window, fut in sorted(self._ahead.items()):
-            try:
-                got = fut.result()
-            except Exception:  # noqa: BLE001  (a reserve ahead that failed holds no session)
-                continue
-            self._unused(got["session"], f"reserved ahead for window {window}, which never opened")
+            if fut.exception() is None:                  # a reserve ahead that failed holds no session
+                self._unused(fut.result()["session"], f"reserved ahead for window {window}, which never opened")
         self._ahead.clear()
 
     def open(self, session: str, root: str) -> dict[str, Any]:
@@ -424,7 +417,7 @@ class H1Windows:
         t0, unhooked = self.clock(), None
         try:
             comp.unhook()
-        except Exception as e:  # noqa: BLE001  (the window's failure, its outcome's error; its release still runs)
+        except (ValueError, RuntimeError, OSError) as e:          # the window's failure; its release still runs
             unhooked = f"{type(e).__name__}: {e}"
         finally:
             tap.untap()
@@ -443,30 +436,29 @@ class H1Windows:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the draw coin
         opened and its session closed) and, with ``sessions``, its end entry waited for; its outcome, recorded in
         ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``, one of the windows ``releasing``."""
-        t0 = self.clock()
+        t0 = t1 = self.clock()
         end = None
         try:
             try:
                 comp.close()
-            except Exception as e:  # noqa: BLE001  (the window's failure, its outcome's error)
+            except (ValueError, RuntimeError, OSError) as e:      # the window's failure, its outcome's error
                 error = error or f"{type(e).__name__}: {e}"
-            t1 = self.clock()
-            if held:
-                end = self.sessions.ended(held["session"])
+            finally:
+                t1 = self.clock()
+                if held:
+                    end = self.sessions.ended(held["session"])
             seconds = {**seconds, "queued": round(t0 - queued, 4), "release": round(t1 - t0, 4),
                        "ended": round(self.clock() - t1, 4)}
             out = self._outcome(window, run, held, end, seconds)
-        except Exception as e:  # noqa: BLE001  (the window's failure, its outcome's error)
-            error = error or f"{type(e).__name__}: {e}"
-            out = {"entry": ENTRY, "window": window, "session": None if not held else {**held, "end": end},
-                   "seconds": seconds}
-        if error is not None:
-            out["error"] = f"close: {error}"[:500]
-        with self._lock:
-            self.outcomes.append(out)
+            if error is not None:
+                out["error"] = f"close: {error}"[:500]
+            with self._lock:
+                self.outcomes.append(out)
+            return out
+        finally:
             if off:
-                self.releasing -= 1
-        return out
+                with self._lock:
+                    self.releasing -= 1
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
                  seconds: dict[str, float]) -> dict[str, Any]:
@@ -486,6 +478,7 @@ class H1Windows:
     def drain(self) -> None:
         """Every window's release ended and its outcome recorded, and every session reserved ahead (`GateSessions.drain`)."""
         if self.closer is not None:
+            print(f"[serve-h1] stopping: {self.releasing} windows still releasing", flush=True)
             self.closer.shutdown(wait=True)
         if self.sessions is not None:
             self.sessions.drain()
@@ -497,12 +490,22 @@ class H1Windows:
         with self._lock:
             outs, releasing = list(self.outcomes), self.releasing
         unused = [] if self.sessions is None else [h["session"] for h in list(self.sessions.held) if "unused" in h]
-        return {"windows": len(outs), "tied": sum(o.get("tied") is True for o in outs),
-                "untied": [o["window"] for o in outs if o.get("tied") is False][:20],
-                "gate_passed_rows": sum(int(g["rows"]) for o in outs
-                                        if (g := (o.get("gate") or {}).get("gate_passed")) is not None),
+        return {"windows": len(outs), "tied": sum(o["tied"] is True for o in outs),
+                "untied": [o["window"] for o in outs if o["tied"] is False][:20],
+                "gate_passed_rows": sum(int(o["gate"]["gate_passed"]["rows"]) for o in outs
+                                        if o["gate"]["gate_passed"] is not None),
                 "releasing": releasing, "unused": unused[:20]}
 
 
+def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
+    """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
+    ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` and its
+    release on a `worker` of its own."""
+    if not opts.protocols:
+        return None
+    return H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
+                     config=config_of(opts.protocols_config), sessions=sessions_of(opts), closer=worker("h1-release"))
+
+
 __all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "MARGIN", "OWN", "POLLS", "SCHEME", "SESSIONED",
-           "config_of", "listening", "refusal", "sessions_of", "units", "worker"]
+           "arm_of", "config_of", "listening", "refusal", "sessions_of", "units", "worker"]

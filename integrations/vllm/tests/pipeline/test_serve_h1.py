@@ -199,7 +199,7 @@ class Later:
             self.inside = True
             try:
                 got = job()
-            except Exception as e:  # noqa: BLE001
+            except (ValueError, RuntimeError, OSError) as e:
                 self.inside = False
                 fut.set_exception(e)
             else:

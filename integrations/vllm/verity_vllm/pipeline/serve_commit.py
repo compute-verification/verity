@@ -360,11 +360,9 @@ class CommitWindows:
     def _arm_closed(self, window: int, got: Any) -> None:
         """Window ``window``'s arm outcome, ``got`` or its `Future`'s: an error is a failed window's. Its line, if held for
         it, is written now."""
-        if callable(getattr(got, "result", None)):
-            try:
-                got = got.result()
-            except Exception as e:  # noqa: BLE001  (the window's visible failure; the server goes on)
-                got = {"error": f"close: {type(e).__name__}: {e}"[:500]}
+        if callable(getattr(got, "exception", None)):
+            e = got.exception()
+            got = got.result() if e is None else {"error": f"close: {type(e).__name__}: {e}"[:500]}
         with self._lock:
             if isinstance(got, Mapping) and "error" in got and window not in self.arm_failed:
                 self.arm_failed.append(window)
