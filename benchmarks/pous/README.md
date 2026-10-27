@@ -33,7 +33,7 @@ scheme's certified parameters.
 Implementations:
 
 - `reference`: `verity.core.protocols.pous` on CPU processes.
-- `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous` (#172, #188), from their own tree, through its frozen
+- `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous`, from their own tree, through its frozen
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
 - `band-gpu`: the same band and dense kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only
@@ -60,8 +60,8 @@ Implementations:
     stream behind the squeezes; `verity/core/protocols/pous/PROTOCOL.md`), so in the ideal-permutation model `D = 5` covers
     `Δ + RTT < 1.449` ms and the band's cliff at `d = 12` is about 3.14 ms. It is not an upper bound on an attacker's
     floor, and neither are the margins derived from it: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no
-    call and rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team,
-    4 Oct 2026, art:7617c8017e80). A floor that bounds the attacker must time that resume, not a whole call;
+    call and rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team).
+    A floor that bounds the attacker must time that resume, not a whole call;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
@@ -88,8 +88,7 @@ Implementations:
     from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
     sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's sketch and receipt
     (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
-    they're published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`. `tests/test_pous_p2_serve.py`
-    regenerates it.
+    `tests/test_pous_p2_serve.py` regenerates it.
   - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
     starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
     decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
@@ -111,7 +110,7 @@ A new one is a class in `bench.py`'s `IMPLS`.
 PYTHONPATH=. python benchmarks/pous/bench.py --impl reference \
   --weight-set qwen2.5-0.5b/linears+head --hardware local --out /tmp/pous-bench --max-segments 1   # about 50 s
 
-git -C <#188 checkout> archive -o impl.tar 4e49163193c3750dad580f3a28f5428fbb722a8a
+git -C <the implementation's checkout> archive -o impl.tar 4e49163193c3750dad580f3a28f5428fbb722a8a
 research run --on <L40S pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=4e49163193c3750dad580f3a28f5428fbb722a8a
 research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \

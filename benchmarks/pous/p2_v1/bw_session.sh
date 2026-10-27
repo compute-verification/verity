@@ -21,7 +21,7 @@
 #
 # Outside the lease: both held to their pins, the store's registration to the tracked one, and the toy's session on the
 # CPU (P2's reference decode, the same verifier) as a preflight. Under one untimed lease of at most LEASE_MIN minutes
-# (default 10), refused near the card's booked window (Tue 27 Oct 08:00-10:00Z): MODE's sessions (default both), the honest one
+# (default 10), refused near the card's booked window (`w0` to `w1`): MODE's sessions (default both), the honest one
 # (WINDOWS x PASSES, SAMPLES openings a window, expect accept) and then the cheat (SKIP_LAYER's reads skipped, one window
 # of one pass, expect reject). Each step's exit code is in $OUT/rc.txt and each session's verdict line in
 # $OUT/verdicts.txt; exits non-zero if any failed.
