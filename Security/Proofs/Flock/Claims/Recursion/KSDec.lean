@@ -39,7 +39,7 @@ open Claims (Msg Out)
 open FlockDeploy (Coin)
 
 /-- **An accepted run's V\* statement for part `s` is staged at the run's rounds before the sessions.** -/
-theorem runVstar_getD_staged {W Ω : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
+theorem runVstar_getD_stagedAcc {W Ω : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (x : Msg) (P : Claims.Prover Ω) (ω : Ω)
     (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin)
     (hacc : (Claims.run H P (deployRec I.V ivScope b).V x ω r).out = .acc) {s : ℕ}
@@ -54,12 +54,12 @@ theorem runVstar_getD_staged {W Ω : Type} (H : Msg → Msg) (I : Claims.Recursi
   unfold vstarAt
   rw [ite_eq_left hnum]
 
-/-- **An accepted run's V\* statements are staged at one prefix of its messages** (`runVstar_getD_staged`). -/
+/-- **An accepted run's V\* statements are staged at one prefix of its messages** (`runVstar_getD_stagedAcc`). -/
 theorem okRuns_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (shape : Claims.Recursion.Form → Prop) :
     OkRuns H (deployRec I.V ivScope b) I shape fun x xs ws => ResLower.XsStaged b.st x xs ws.length := by
   intro x st hst hf Ω P ω r hacc ws hl
-  exact ⟨_, fun s hs => runVstar_getD_staged H I ivScope b x P ω r hacc (lt_of_lt_of_eq hs hl)⟩
+  exact ⟨_, fun s hs => runVstar_getD_stagedAcc H I ivScope b x P ω r hacc (lt_of_lt_of_eq hs hl)⟩
 
 /-- **`StagedB` at `showsDec`**: `stagedB_deployRec_part`, and each part's staged statement on an accepted run decided
 (`ResLower.partDec_run`). -/
@@ -71,7 +71,7 @@ theorem stagedB_deployRec_dec {W : Type} (H : Msg → Msg) (I : Claims.Recursion
   intro x st hst hf Ω P ω r hacc s hs
   obtain ⟨h1, h2⟩ := stagedB_deployRec_part H I ivScope b untr L shape hrb hHeld x st hst hf Ω P ω r hacc s hs
   refine ⟨⟨h1, fun i spec sts hsu => ?_⟩, h2⟩
-  have hv := runVstar_getD_staged H I ivScope b x P ω r hacc hs
+  have hv := runVstar_getD_stagedAcc H I ivScope b x P ω r hacc hs
   change (Claims.run H P (V I.V b.st) x ω r).out = .acc at hacc
   change s < nS x at hs
   rw [hv] at hsu ⊢
