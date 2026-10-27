@@ -178,10 +178,11 @@ from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # no
 from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
-#: what a v2 audit (`--v2`, `proofs.check_v2`) covers: v2 verifies one statement a window, one circuit file and one public
-#: file, so one drawn member and its one session, at slot 0 of the window's held session (`a5_coins.v2_families`)
-V2_SCOPE = ("v2 covers one rank's window whose draw falls in one member: its one --zk session, slot 0 of the window's "
-            "held challenger session")
+#: what a v2 audit (`--v2`, `proofs.check_v2`) covers: v2 verifies one statement a window, one circuit file and the one
+#: public file its registration names (`window.public_file`, `proofs.with_public`, before any coin), so a window of one
+#: member and its one session, at slot 0 of the window's held session (`a5_coins.v2_families`)
+V2_SCOPE = ("v2 covers one rank's window of one member, whose public file its registration names: its one --zk session, "
+            "slot 0 of the window's held challenger session")
 #: what a plain audit covers until proofs' multi-table coverage lands (verifier PROTOCOL §16.15, `ProvedScope.drawLaw`)
 PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
                "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
@@ -455,7 +456,8 @@ def v2_audit(a: argparse.Namespace, rec: dict, mine: CS.Window, want: dict, leaf
     partition object, the challenger (its key, the draw's family) and the window root; v1's evidence with the draw's coins;
     the drawn member's statement files; and its session's ``coins``, the held session's segments in `session_uses` order
     (`a5_coins.session_segments`). Then the same audit on that session's coins altered: two rounds' segments swapped, and
-    none at all, each to be refused. -> ({accepted, outcome}, the negatives)."""
+    none at all; and on a registration naming another public file, and none: each to be refused. -> ({accepted,
+    outcome}, the negatives)."""
     import replay as RP
 
     published = a.coins.evidence()
@@ -481,6 +483,11 @@ def v2_audit(a: argparse.Namespace, rec: dict, mine: CS.Window, want: dict, leaf
     neg = {}
     for name, alt in bad.items():
         o = PF.check_v2(params, rec, evidence, proof, coins=[alt], **kw)
+        neg[name] = {"refused": o.get("verdict") not in (None, "accept"), "outcome": o}
+    unnamed = {k: v for k, v in rec["window"].items() if k != PF.PUBLIC_KEY}
+    for name, w in {"v2-unregistered-public": {**unnamed, PF.PUBLIC_KEY: hashlib.sha512(b"").hexdigest()},
+                    "v2-no-registered-public": unnamed}.items():
+        o = PF.check_v2(params, {**rec, "window": w}, evidence, proof, coins=[segs], **kw)
         neg[name] = {"refused": o.get("verdict") not in (None, "accept"), "outcome": o}
     return {"accepted": out.get("verdict") == "accept", "uses": len(segs), "outcome": out}, neg
 
@@ -667,6 +674,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                                "program_file": out / "program.json"},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
+    if a.v2:
+        # the stand-in prover's v2 statement: its registration names the window's one public file before any coin
+        if len(members) != 1:
+            summary["refused"] = {"v2-one-public-file": {"members": len(members), "scope": V2_SCOPE}}
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+            print("A5 " + json.dumps(summary["refused"]))
+            return summary, False
+        rec = PF.with_public(rec, members[0]["st"]["dir"] / f"pub-{members[0]['m'].n}.bin")
+        (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table).to_json()
     if mine.row_tables:

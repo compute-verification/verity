@@ -332,6 +332,49 @@ def test_session_uses_is_the_v2_audits_own(tmp_path):
             assert mine == lean_, (name, mine, lean_)
 
 
+PUB = "ab" * 64
+#: registrations and the evidence's public digest, and whether v2 takes the public file as the registration's
+PUBLICS = {"the registered one": ({"window": {"kind": "stand-in", "public_file": PUB}}, PUB, True),
+           "another": ({"window": {"kind": "stand-in", "public_file": PUB}}, "cd" * 64, False),
+           "the registered one in uppercase": ({"window": {"kind": "stand-in", "public_file": PUB}}, PUB.upper(), False),
+           "none registered": ({"window": {"kind": "stand-in"}}, PUB, False),
+           "a window not an object": ({"window": PUB}, PUB, False),
+           "no window": ({"kind": "stand-in"}, PUB, False),
+           "an uppercase registration": ({"window": {"public_file": PUB.upper()}}, PUB.upper(), False),
+           "a short registration": ({"window": {"public_file": PUB[:-2]}}, PUB[:-2], False),
+           "a registration not a string": ({"window": {"public_file": 7}}, "7", False)}
+
+
+def test_v2_takes_only_the_public_file_the_registration_names():
+    """v2 refuses evidence whose public file is not the one the registration names (`public_why`, Lean
+    `OneStageZk.publicWhy`, before any session is verified), so an accepted session's public file is the statement's:
+    the registration's ``window.public_file``, a SHA-512 digest in lowercase hex. A registration naming none, or naming
+    it in another form, is refused too. `with_public` registers a file."""
+    for name, (rec, pub, ok) in PUBLICS.items():
+        assert (PF.public_why(rec, pub) is None) is ok, name
+    assert PF.registered_public({"window": {"kind": "stand-in", "public_file": PUB}}) == PUB
+
+
+def test_with_public_registers_the_files_sha512_in_the_window(tmp_path):
+    f = tmp_path / "pub-8.bin"
+    f.write_bytes(b'{"units": {}}\nbody')
+    rec = PF.with_public({"window": {"kind": "stand-in", "run": "r"}, "previous": None}, f)
+    assert rec == {"window": {"kind": "stand-in", "run": "r", "public_file": hashlib.sha512(f.read_bytes()).hexdigest()},
+                   "previous": None}
+    assert PF.public_why(rec, PF.file_sha512(f)) is None
+
+
+@lean
+@pytest.mark.slow
+def test_public_why_is_the_v2_audits_own(tmp_path):
+    """`public_why` against `sampled-proofs-one-stage-zk public` (Lean `publicWhy`, which `checkBlobs` refuses on): the
+    same reason, or none, on each registration and digest. Slow for the v2 executable's build, which the v2 tests above
+    share."""
+    for name, (rec, pub, _) in PUBLICS.items():
+        (tmp_path / "record.json").write_bytes(PF._canonical(rec))
+        assert PF.public_v2(tmp_path / "record.json", pub) == {"why": PF.public_why(rec, pub)}, name
+
+
 @lean
 @pytest.mark.slow
 def test_session_uses_of_the_fixtures_record_is_the_v2_audits_own(fx):

@@ -367,6 +367,44 @@ def uses_v2(slot: int, record: Path) -> dict:
         raise LeanError(f"{V2_EXE} uses answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
+#: the key of the registration's ``window`` that names the public file the window's statement reads (Lean
+#: `OneStageZk.PUBLIC_KEY`)
+PUBLIC_KEY = "public_file"
+
+
+def registered_public(record: Mapping[str, Any]) -> str | None:
+    """Lean `OneStageZk.registeredPublic`: the public file the registration `record` names, ``window.public_file``, when
+    it names one as a SHA-512 digest (lowercase hex of 64 bytes)."""
+    w = record.get("window")
+    d = w.get(PUBLIC_KEY) if isinstance(w, Mapping) else None
+    return d if type(d) is str and re.fullmatch(r"[0-9a-f]{128}", d) else None
+
+
+def public_why(record: Mapping[str, Any], pub: str) -> str | None:
+    """Lean `OneStageZk.publicWhy`: why the evidence's public file of SHA-512 `pub` is not the one the registration
+    `record` names; None when it is. v2 refuses the evidence then."""
+    d = registered_public(record)
+    if d is None:
+        return f"the registration names no public file (window.{PUBLIC_KEY}, a SHA-512 digest)"
+    return None if pub == d else f"the evidence's public file is not the one the registration names, {d}"
+
+
+def with_public(record: Mapping[str, Any], public: Path) -> dict:
+    """`record` with its window naming the public file `public` (``window.public_file``, its SHA-512), as a prover
+    registers its window's statement for v2 before any coin."""
+    return {**record, "window": {**record["window"], PUBLIC_KEY: file_sha512(public)}}
+
+
+def public_v2(record: Path, pub: str) -> dict:
+    """`public_why` by the v2 audit's Lean (`sampled-proofs-one-stage-zk public`): its line, ``{"why": why | null}`` or
+    ``{"refused": why}``."""
+    p = subprocess.run([str(v2_executable()), "public", str(record), pub], capture_output=True, text=True)
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} public answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+
+
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, registered: Mapping[str, Any] | None,
              coins: Sequence[Sequence[Mapping[str, Any]]] | None = None) -> dict:
@@ -389,6 +427,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2",
-           "executable", "file_sha512", "parse_round_request", "proved_units", "reads_registered", "round_request",
-           "session_uses", "uses_v2", "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["EXE", "PACKAGE", "PUBLIC_KEY", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2",
+           "evidence_v2", "executable", "file_sha512", "parse_round_request", "proved_units", "public_v2", "public_why",
+           "reads_registered", "registered_public", "round_request", "session_uses", "uses_v2", "v2_executable",
+           "verdicts_v2", "verify", "with_public"]

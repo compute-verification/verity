@@ -6,13 +6,15 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   file (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify --registered`'s object, or null
   for a program that reads no registered value). The partition must not be null: the sessions are verified against the
   verifier's own partition object;
-* **commitment**: v1's (the registration record);
+* **commitment**: v1's (the registration record), whose window names the public file the statement reads,
+  `window.public_file`: its SHA-512, lowercase hex of 64 bytes (`registeredPublic`);
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"public", "sessions"}`: the public file's SHA-512 and,
   for each of v1's `sessions` in order, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
   `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`);
 * **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
   SHA-512 as `flock-verify --archive` finds them;
-* **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
+* **check**: a public file other than the one the registration names rejects (`publicWhy`), as does a registration that
+  names none; then `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path); then v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
@@ -402,10 +404,27 @@ def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.B
     | .error why => some why
   | _, _ => some ROUNDS_NEED_CHALLENGER
 
-/-- v2's check: the sessions' verdicts (`verdicts`), then v1's check at the draw's coins (`OneStage.coinsOf`,
-`OneStage.checkAt`), and an accept only when every coin the window read is the challenger's, one release a use
-(`roundsWhy`). -/
-def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+/-- The key of the registration's window that names the public file the window's statement reads. -/
+def PUBLIC_KEY : String := "public_file"
+
+/-- The public file the registration `c` names, `window.public_file`, when it names one as a SHA-512 digest (lowercase
+hex of 64 bytes). -/
+def registeredPublic (c : OneStage.Commitment) : Option String :=
+  match getD (getD c.record "window") PUBLIC_KEY with
+  | .str d => if digest? d then some d else none
+  | _ => none
+
+/-- Why the evidence's public file `pub` is not the one the registration `c` names (`registeredPublic`); none when it
+is. -/
+def publicWhy (c : OneStage.Commitment) (pub : String) : Option String :=
+  match registeredPublic c with
+  | none => some s!"the registration names no public file (window.{PUBLIC_KEY}, a SHA-512 digest)"
+  | some d => if pub == d then none else some s!"the evidence's public file is not the one the registration names, {d}"
+
+/-- v2's check on the statement's files: the sessions' verdicts (`verdicts`), then v1's check at the draw's coins
+(`OneStage.coinsOf`, `OneStage.checkAt`), and an accept only when every coin the window read is the challenger's, one
+release a use (`roundsWhy`). -/
+def checkProofs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match verdicts p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
@@ -416,6 +435,14 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
       | some why => .reject s!"proofs: round coins: {why}"
       | none => .accept x y
     | o => o
+
+/-- v2's check: a refusal when the evidence's public file is not the one the registration names (`publicWhy`), else
+`checkProofs`. -/
+def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+    Core.Outcome OneStage.Public Core.Integrity :=
+  match publicWhy c e.pub with
+  | some why => .reject s!"proofs: {why}"
+  | none => checkProofs p c e bs
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -438,7 +465,9 @@ proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evid
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
 difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). `uses SLOT RECORD`: the session record's
 uses of the challenger's coins at slot `SLOT` (`sessionUses`), one line `{"uses": [{after, coins, label, want}, ...]}`
-or `{"refused": why}`, which `one_stage.proofs.session_uses` is held to. -/
+or `{"refused": why}`, which `one_stage.proofs.session_uses` is held to. `public RECORD DIGEST`: why the public file of
+SHA-512 `DIGEST` is not the one the registration record `RECORD` names (`publicWhy`), one line `{"why": why}` (null
+when it is) or `{"refused": why}` for a record v2 can't decode, which `one_stage.proofs.public_why` is held to. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -465,6 +494,13 @@ def main (args : List String) : IO UInt32 := do
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if r.toBool then 0 else 1
+  | ["public", record, pub] =>
+    let r := OneStage.commitmentOf (← IO.FS.readBinFile record)
+    let line := match r with
+      | .ok c => Json.mkObj [("why", match publicWhy c pub with | some w => Json.str w | none => Json.null)]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
   | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"
@@ -486,6 +522,13 @@ def main (args : List String) : IO UInt32 := do
     (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/1/session", 1, 1), ("slot/1/t/rep0", 2, 5)]
 #guard (roundRequest "t/é" (ByteArray.mk (Array.replicate 64 7)) 261).data ==
   #[0, 4, 116, 47, 195, 169] ++ Array.replicate 64 7 ++ #[5, 1, 0, 0, 0, 0, 0, 0]
+#guard publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
+  digest := .empty } ("".pushn 'a' 128) == none
+#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
+  digest := .empty } ("".pushn 'b' 128)).isSome
+#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'A' 128))])],
+  digest := .empty } ("".pushn 'A' 128)).isSome
+#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [])], digest := .empty } ("".pushn 'a' 128)).isSome
 #guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
 #guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 
