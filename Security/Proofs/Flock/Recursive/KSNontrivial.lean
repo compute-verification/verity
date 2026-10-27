@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.Recursion.VCallsAt
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.LamDeployed
 import Proofs.Flock.Claims.Witnesses.RecursionLin2
-import Proofs.Flock.Claims.Recursion.Assumptions.FalseInScope
+import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
 
 /-!
 # `RecursiveKS` at the verifier that accepts everything (LEAN-66's `nontrivial`)
@@ -16,17 +16,21 @@ round with no SHA-512 call; it computes nothing, so its record holds no call and
 the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
 
 * **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `KSLin2On` at accept-all is false at every
-  brings, from one named assumption, `RecDeploy.FalseInScope`: a false dense compiled statement in the deployed scope.
-  The silent prover is accepted on every run and nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder
-  term is `0`; the tails are below `1/4` each at a large enough `M` and `R`; and `λ₂ ≥ 100` there
-  (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2` (`κ_lt_half_of_lamLin2`). The general form is
+  brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers map to a hand-built inner
+  statement (`DeployedParses`: a one-gate circuit `x ⊕ x` claimed to output `1` on `0`, one table at `m = 22`), with a
+  coin-server record at whose transcript its V\* parts are in scope (`PartsInScope`). Its density, its inner statement's
+  lack of a witness (by `decide`) and its plain scope are proved here. The silent prover is accepted on every run and
+  nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each at a
+  large enough `M` and `R`; and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`
+  (`κ_lt_half_of_lamLin2`). The general form is
   `not_ksLin2On_acceptAll`, at any compiled record and statement with no witness and `κ < 1/2`.
 * **Why the statement is a named assumption** (`recursiveKSAtAll_of_readX_none`): the bound's right-hand side is at
   least `κ`, whatever the verifier (`ksLin2On_of_one_le_κ`). At a statement whose bytes don't read
   (`RecDeploy.readX x = none`), `κ` is the inner Flock's at the empty inner statement, which sets up no table, so
   `κ ≥ e⁰ = 1` and the bound holds at every verifier there (`ksLin2On_acceptAll_readX_none`). The deployed parser reads
   a statement only through `jsonOf` (`Lean.Json.Parser.anyCore`, a `partial def`, which the kernel can't unfold), so no
-  statement can be built in Lean that it reads, and the nontrivial lemma takes one, witnessed by a fixture.
+  statement can be built in Lean that it reads, and the nontrivial lemma assumes only the reading, witnessed by a
+  fixture run.
 -/
 
 namespace Claims.Recursion
@@ -342,14 +346,75 @@ theorem flockR_of_R (b : RecDeploy.Brings) (L : Claims.Recursion.VStarB.LayoutB)
   rw [hx]
   exact hR
 
+/-- **The fixture's statement is dense**: its compiled form, by `DeployedParses`, has no holo inner circuit and no
+RecSparse phase. -/
+theorem denseAt_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) : RecDeploy.DenseAt x := by
+  intro s hs
+  have h1 := h.1
+  rw [hs] at h1
+  have h2 := Option.some.inj (h1 : some (s.form.holo, s.form.sparse) = some (false, none))
+  show s.form.holo = false ∧ s.form.sparse = none
+  exact ⟨congrArg Prod.fst h2, congrArg Prod.snd h2⟩
+
+/-- **The fixture's inner statement has no witness**: block 0 claims that `innerCircuit₀`, which outputs `0` on every
+input, outputs `1` on `0`. -/
+theorem notR_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) (v : Claims.Flock.Wit) :
+    ¬ Claims.Flock.R
+      (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+        (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+        RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+        RecDeploy.DeployedR.wR).deploy.parse (RecDeploy.xIOf x) v := by
+  intro hR
+  obtain ⟨s, hs, hrel⟩ := hR
+  have h2 := h.2.1
+  rw [hs] at h2
+  have h3 := Option.some.inj (h2 : some (s.C, s.inp 0, s.out 0, s.pub) = some RecDeploy.innerView₀)
+  have hC : s.C = RecDeploy.innerCircuit₀ := congrArg Prod.fst h3
+  have hi : s.inp 0 = [.pub 0] := congrArg (fun p => p.2.1) h3
+  have ho : s.out 0 = [.pub 1] := congrArg (fun p => p.2.2.1) h3
+  have hp : s.pub = [false, true] := congrArg (fun p => p.2.2.2) h3
+  have hb := hrel 0 (by unfold Claims.Flock.Stmt.nBlocks; positivity)
+  rw [hC, hi, ho] at hb
+  first
+    | (simp only [List.map_cons, List.map_nil, Claims.Flock.val, hp] at hb; revert hb; decide)
+    | (simp [Claims.Flock.val, hp, RecDeploy.innerCircuit₀, Claims.Circuit.eval, Claims.Circuit.wires] at hb)
+
+/-- **The fixture's inner statement is in the plain scope**: Flock's setup sets it up at one table, `m = 22`,
+`k_log = 6`, one region, two link points (`innerTables₀`). -/
+theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
+    ∃ s spec sts, FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts := by
+  have h3 := h.2.2
+  cases hs : FlockDeploy.setupOf false (RecDeploy.xIOf x) with
+  | none => rw [hs] at h3; simp at h3
+  | some t =>
+    obtain ⟨s, spec, sts⟩ := t
+    rw [hs] at h3
+    have h4 := Option.some.inj (h3 : some (spec.points, spec.mPts,
+      sts.toList.map fun st => (st.m, st.c.kLog, st.regions.size)) = some RecDeploy.innerTables₀)
+    have hpts : spec.points = 2 := congrArg Prod.fst h4
+    have hm : spec.mPts = 2 := congrArg (fun p => p.2.1) h4
+    have hl : sts.toList.map (fun st => (st.m, st.c.kLog, st.regions.size)) = [(22, 6, 1)] :=
+      congrArg (fun p => p.2.2) h4
+    have hsz : sts.size = 1 := by simpa using congrArg List.length hl
+    refine ⟨s, spec, sts, ⟨hs, by omega, by omega, by omega, fun st hst => ?_⟩⟩
+    have hmem := List.mem_map_of_mem (f := fun st : _root_.Flock.Stmt => (st.m, st.c.kLog, st.regions.size)) hst
+    rw [hl] at hmem
+    simp only [List.mem_singleton, Prod.mk.injEq] at hmem
+    obtain ⟨h1, h2, h3'⟩ := hmem
+    refine ⟨by omega, by omega, ?_⟩
+    first
+      | (show st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1026 ∧ spec.mPts ≤ 64; omega)
+      | (simp only [FlockSoundness.Accounting.Stmt.InRangeWide, FlockDeploy.acct]; omega)
+
 /-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKS`'s conclusion, `KSLin2On` at the deployed values, is
-false at the verifier that accepts everything (`RecAt.acceptAll`), at every brings, given one false dense compiled
-statement in the deployed scope (`RecDeploy.FalseInScope`, a named assumption witnessed by a fixture). The coin-server
-record is the statement's. The accepting verifier, the brings, the deployed decoders (`FlockDeploy.listWithin_plainTrim`,
-`Claims.GS.listWithin_zkDecodeRD`), the silent prover and the cutoffs `M`, `R` are built here: the silent prover is
-accepted on every run and nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are
-below `1/4` each; and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. -/
-theorem recursiveKS_nontrivial (h : RecDeploy.FalseInScope) :
+false at the verifier that accepts everything (`RecAt.acceptAll`), at every brings, from the named assumption
+`RecDeploy.KSFixture`: some bytes the deployed readers map to the hand-built fixture (`DeployedParses`), with a
+coin-server record at whose transcript its V\* parts are in scope (`PartsInScope`). Everything else is proved here: the
+statement is dense (`denseAt_of_parses`), its inner statement has no witness (`notR_of_parses`, by `decide` on the
+one-gate `innerCircuit₀`) and is in the plain scope (`plainIn_of_parses`); the silent prover is accepted on every run
+and nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each; and
+`λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. -/
+theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
     ∃ (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
       (recRest : Msg → List (Msg × Out) → List UInt8), ∀ b : RecDeploy.Brings,
       ¬ Claims.Recursion.KSLin2On FlockDeploy.sha512
@@ -361,7 +426,8 @@ theorem recursiveKS_nontrivial (h : RecDeploy.FalseInScope) :
           RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
           RecDeploy.DeployedR.wR)
         (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt := by
-  obtain ⟨x, aux, nOf, hd, recRest, s, spec, sts, hD, hR, hin, hO, hn, hS⟩ := h
+  obtain ⟨x, aux, nOf, hd, recRest, hP, hO, hn, hS⟩ := h
+  obtain ⟨s, spec, sts, hin⟩ := plainIn_of_parses hP
   refine ⟨aux, nOf, hd, recRest, fun b => ?_⟩
   have hO' : ∀ j < RecDeploy.nS x, ∃ i spec' sts', RecDeploy.PartIn
       (RecDeploy.staged ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } : RecDeploy.Brings).st
@@ -372,7 +438,7 @@ theorem recursiveKS_nontrivial (h : RecDeploy.FalseInScope) :
     (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols RecDeploy.DeployedR.wER
     FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wR FlockDeploy.KS.CpDep
-    RecDeploy.DenseAt x hD (fun v hv => hR v (flockR_of_R _ _ _ _ _ hv))
+    RecDeploy.DenseAt x (denseAt_of_parses hP) (fun v hv => notR_of_parses hP v (flockR_of_R _ _ _ _ _ hv))
     (Claims.Recursion.κ_lt_half_of_lamLin2
       (RecDeploy.lamLin2_deployed_ge_dep _root_.Flock.Readable.relation
         { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
