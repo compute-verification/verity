@@ -1,5 +1,7 @@
 import Proofs.Flock.Bridge.Deployed
+import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.Bridge.PortRoots
+import Proofs.Flock.Bridge.SampledSound
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 import Properties.Verity.Game
 
@@ -596,6 +598,22 @@ theorem val_opens {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Cl
   have := List.find?_some hf
   simp only [Bool.and_eq_true, beq_iff_eq] at this
   exact ⟨o, this.1, rfl, this.2⟩
+
+/-- **`hopen`'s premise at a live session**: a value a witness opens under the session's deployed commitment, at a
+statement over its roots (`LiveAt.valE`'s, by `rfl`), was opened by a spec row-leaf opening at its row's port, at a
+row/v2 file with `2 ≤ n < 2^64` units. -/
+theorem live_opens {r : Flock.Bridge.Parsed} {kd K₀ : ℕ} {desc : Claims.Msg}
+    (A : Flock.Guarantees.LiveAt r.n r.D r.hU kd K₀ desc) (hv2 : RowsV2 r.D.unroll) (hnl : 2 ≤ r.n)
+    (hlt : r.n < 2 ^ 64) {wt : Claims.Sampling.Wit} {s : Claims.Sampling.Stmt} (hs : s.roots = A.roots) {i : ℕ}
+    {b : Bool} (h : wt.val sha512Msg A.Cd s i = some b) :
+    ∃ ra rt, rowOfPos A.Cc A.rows i = some ra ∧ A.roots[ra.port]? = some rt ∧
+      ∀ id : Hash.Digest, id.bytes = bs (domOf r.D.unroll ra.port) → (placeOf A.Cc A.rows i).1 < 2 ^ 64 →
+        ∃ ro : Hash.RowLeaf.Opening,
+          Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 ⟨⟨id, r.n, fun k => k⟩, key512, .v2⟩ (digOf (bytes rt))
+            ra.leaf ro ∧ ro.row[((placeOf A.Cc A.rows i).2 : ℕ)]? = some b := by
+  obtain ⟨o, rfl, rfl, ho⟩ := val_opens h
+  rw [hs] at ho
+  exact opens_at hv2 hnl hlt A.hdup A.hroots ho
 
 /-! ## The constants -/
 
