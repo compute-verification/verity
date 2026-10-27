@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import pytest
 
 from verity_vllm.query.units import (PartitionError, Policy, ValueRef, VerificationUnit, admissibility, boundary, boundary_values,
-                                       partition_by, required_values, unit_boundary)
+                                       partition_by, required_values)
 
 
 @dataclass(frozen=True)
@@ -42,19 +42,13 @@ def by_module(P_):
 
 
 def test_one_unit_boundary_is_x_and_y():
-    Pr = chain(("m", "m"))
-    assert boundary_values(Pr, by_module) == {X, Y}
-    (unit,) = by_module(Pr)
-    ins, outs = unit_boundary(Pr, unit)
-    assert (ins, outs) == ({X}, {Y})
+    b = boundary(chain(("m", "m")), by_module)
+    assert b.values == {X, Y} and b.produced_in == {X: None, Y: "m"} and b.read_by == {X: ("m",), Y: ()}
 
 
 def test_two_units_boundary_is_x_u_y():
-    Pr = chain(("a", "b"))
-    assert boundary_values(Pr, by_module) == {X, U, Y}
-    ua, ub = by_module(Pr)
-    assert unit_boundary(Pr, ua) == ({X}, {U})
-    assert unit_boundary(Pr, ub) == ({U}, {Y})
+    b = boundary(chain(("a", "b")), by_module)
+    assert b.values == {X, U, Y} and b.produced_in == {X: None, U: "a", Y: "b"} and b.read_by == {X: ("a",), U: ("b",), Y: ()}
 
 
 def test_interior_value_read_by_two_calls_of_one_unit_is_not_a_boundary_value():
