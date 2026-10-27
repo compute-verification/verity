@@ -3787,6 +3787,15 @@
    "assumptions": [],
    "type_hash": "ce044d7f61c49917c656e0fef2aa65fc8cf9359727b975c2ee1adb3aec56f5e1"
   },
+  "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass": {
+   "owner": "@training"
+  },
   "Accounting.SecurityProofs.OnsiteEndToEnd": {
    "owner": "@training"
   },
@@ -12345,7 +12354,10 @@
    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial": "frozen (no-function): ReferenceBound's nontrivial witness (LEAN-66): without the reference's success (over the empty class, whose threshold is infinite) or its size (the unit task's circuits with an operation gate) it is false; a negated statement, not a function's acceptance.",
    "Accounting.SecurityProofs.Overhead.OverheadOfReference": "frozen (no-function): The overhead T(eta; A) / T(eta; A_phys) at least rho (Step 8), from ThresholdOfPointwise's and ReferenceBound's hypotheses over an arbitrary task, two classes and a reference circuit: not a function's acceptance.",
    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest": "frozen (no-function): OverheadOfReference's honest witness (LEAN-66): its hypotheses hold at the NOT task with rho = 2, A the circuits with at least two operation gates, A_phys every circuit and the NOT circuit as the reference; a statement about a constructed task, not a function's acceptance.",
-   "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": "frozen (no-function): OverheadOfReference's nontrivial witness (LEAN-66): without the coverage exception, the pointwise size bound or the reference's success it is false at the unit task; a negated statement, not a function's acceptance."
+   "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": "frozen (no-function): OverheadOfReference's nontrivial witness (LEAN-66): without the coverage exception, the pointwise size bound or the reference's success it is false at the unit task; a negated statement, not a function's acceptance.",
+   "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared": "lemma: the device model's links as declared (DeclaredLinks) on every run of a map from a game's runs to actual circuits, with each location's boundary capacity at most αF, give the links half of the onsite class on every run (CertifierLinks); a fact of the definitions, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass": "frozen (no-function): The onsite bridges read pointwise over a causal game (Verity.Game): on a run where every claim of an abstract live period of the device model holds and every wipe meets its survivor bound, the run's actual circuit is in the onsite class (Accounting.OnsiteClass, DampenerWindowsCap's hypotheses on it), under the physical constraints Causal and ComputeRate, CertifierLinks and the named premises WipeState and IntegrityContains; the period's verdicts, openings and schedule are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass": "frozen (no-function): Like JointPeriodLive, over the same abstract live period: each audit's per-period guarantee and each wipe's survivor bound are hypotheses, and the accepted runs with no break outside the onsite class (Accounting.OnsiteClass) are bounded by the sum of their errors under the device model and the onsite bridges (CertifierLinks, WipeState, IntegrityContains); the verdicts, openings and schedule are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

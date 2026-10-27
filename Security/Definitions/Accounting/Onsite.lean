@@ -1,5 +1,5 @@
 import Definitions.Accounting.JointLive
-import Definitions.Accounting.Guarantees.Actual.Dampener
+import Definitions.Accounting.Physical
 
 /-!
 # The onsite class, and the links half of it on every run (trusted)
