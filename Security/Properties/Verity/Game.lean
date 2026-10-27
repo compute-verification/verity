@@ -1,7 +1,6 @@
 import CoreOnsite
 import Properties.Composition
 import Properties.Flock.Circuit.CircuitOf
-import Properties.Pous.MemoryChallenger
 import Definitions.Accounting.JointLive
 import Definitions.Core.Game
 import Definitions.Hash.RowLeaf
@@ -44,17 +43,17 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's on
   with a committed input or output the commitment doesn't open to its value there (`Opens`: a registered constant to its
   constant, any other wire by an opening of its row leaf that `Hash.RowLeaf.accepts` passes under the compiled SHA-512).
 * **One adversary form: every prover, and the breaks two fixed finders output.** There is no strategy class and no
-  break in the event. Two fixed constructions are applied to the strategy, each making at most `c · calls(τ) + d`
-  SHA-512 calls (`finder_calls`, `forger_calls`): the collision finder `B` (`finder a`, a `Claims.Finder`) and the
-  forger `F` (`forger a`, a `Forger`), which outputs an LMS signature verifying under the key of the device whose
-  releases `a`'s check reads (`deviceKey`) on a message that device never signed. Subprotocol `a`'s error at a strategy
-  (`error`) is, where `B^τ` outputs a SHA-512 collision with probability at most the published `ε_cr` (`FinderCR`) and
-  `F^τ` a forgery with probability at most the published `ε_lms` (`ForgerEUF`), both at the strategy's calls, its
-  published `δ` at those calls plus its loss at `Pr[B^τ]` plus its LMS loss at `Pr[F^τ]`; elsewhere `⊤`. That admits
-  C-Flock's conditional bound (both losses `0`, F3) and the additive one (`crBound = forgeBound = 1`). Two openings of
-  one position and a second file with the registered digest (`fileFinder`) enter at `B`, a forged device release at
-  `F`. The named assumptions are asked only of the finders, outside the theorem: `ecr/sha-512` of `B` and
-  `euf-cma/lms-sha512-n64` of `F`.
+  break in the event. The collision finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the
+  strategy whose SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`); the LMS forger (`forger a`) is a fixed
+  function of the play's outcome, whose output is a forgery (`forgery`) when it verifies under the device's trusted
+  key and the device's log signs no such message. Subprotocol `a`'s error at a strategy (`error`) is, where `B^τ`
+  outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls (`FinderCR`,
+  quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]` plus the probability that the forger
+  succeeds in the play (`forges`); elsewhere `⊤`. That admits C-Flock's conditional bound (`loss = 0`, F3) and the
+  additive one (`crBound = 1`). Two openings of one position and a second file with the registered digest
+  (`fileFinder`) enter at `B`, a forged device release at the forger, an event of the device's log. The named
+  assumptions are asked only of the finders, each of its own, outside the theorem (Daniel, 26 Oct 6:15 PM PDT):
+  `ecr/sha-512` of `B` and `euf-cma/lms-sha512-n64` of the forger.
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the claim is its `Holds`.
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict (`Verdict`) is the file check,
   NCI's acceptance of the registration sampled proofs committed to (`RegistrationAccepts`, the conclusion of
@@ -75,10 +74,10 @@ reading at `D`, and the onsite name is it at `onsite` by definition. `Verity.Sou
 claims a deployment decides.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the blob, ONE-3b), `place`,
-`programDigest` and `registered` (ONE-7), `rounds`, `coinsRead` and `deviceKey` (ONE-4), `extract`, the finders and
-the forgers (ONE-8 and each target's), `computed` (ONE-16), `world` (the runs PoUS, the bandwidth audit and the network
-certifier realize: ONE-10, ONE-11 and ONE-12), and `certOf`, `crBound`, `forgeBound`, `delta`, `loss` and `lossLMS`
-(what the product publishes, functions of the parameters alone: ONE-19).
+`programDigest` and `registered` (ONE-7), `rounds`, `coinsRead` and `forgery` (ONE-4), `extract`, the finders and the
+forgers (ONE-8 and each target's), `computed` (ONE-16), `world` (the runs PoUS, the bandwidth audit and the network certifier realize: ONE-10,
+ONE-11 and ONE-12), and `certOf`, `delta` and `loss` (what the product publishes, functions of the parameters alone:
+ONE-19).
 -/
 
 namespace Verity
@@ -285,32 +284,12 @@ structure Place where
 the window, the device schedule, and what the network certifiers saw (`Accounting.PeriodWorld`, the one definition). -/
 abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.PeriodWorld d α
 
-/-- **An LMS forger**: its coins, its output on each coin (a message and a signature, or nothing), the messages the
-device signed under the attacked key in the run it plays on that coin (its signing oracle's queries), and its SHA-512
-calls. -/
-structure Forger where
-  S : Type
-  [fin : Fintype S]
-  [ne : Nonempty S]
-  out : S → Option (ByteArray × ByteArray)
-  signed : S → List ByteArray
-  cost : S → ℕ
-
-attribute [instance] Forger.fin Forger.ne
-
-/-- `Pr[F outputs a forgery under the key k]`: a signature the compiled LMS verifier accepts under `k`'s parameters and
-public key (`MemoryChallenger.Properties.LmsVerifies`) over a message the device never signed under it. -/
-noncomputable def Forger.Pr (k : Lms.Params × ByteArray) (F : Forger) : ℝ :=
-  Claims.Pr fun s : F.S => ∃ m sig, F.out s = some (m, sig) ∧
-    MemoryChallenger.Properties.LmsVerifies k.1 k.2 m sig ∧ m ∉ F.signed s
-
 /-- **The names the subprotocols define.** v2's reading of the committed blob (ONE-3b); the positions from the files and
 the commitment, the circuit file's digest in the parameters and the registered blob (ONE-7); the device's rounds, and
 the releases each component's check read, decoded from the device's signed log entries in what the prover sent
-(ONE-4), and the LMS key (parameters and public key) of the device whose releases each component's check reads, from
-the parameters; the extractor applied to a strategy, and each subprotocol's collision finder and LMS forger (ONE-8 and
-each target's), with their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`); the committed
-circuit's gates a play computed
+(ONE-4); the extractor applied to a strategy, and each subprotocol's collision finder (ONE-8 and each target's), with
+the finder's SHA-512 calls bounded by the strategy's (`finder_calls`); each subprotocol's LMS forger on the play's
+outcome, and what a forgery is there (ONE-4); the committed circuit's gates a play computed
 after their window's coin (ONE-16); the world each play realizes (ONE-10, ONE-11, ONE-12); the deployment's honest
 prover; and the certificates, errors, collision bounds and losses the product publishes, from the parameters and the
 strategy's SHA-512 calls alone (ONE-19).
@@ -324,28 +303,26 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   registered : ByteArray → ByteArray
   rounds : ByteArray → List ℕ
   coinsRead : Audit → Sent → List Release
-  deviceKey : ByteArray → Audit → Lms.Params × ByteArray
   extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
   finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
-  forger : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Forger
+  /-- Subprotocol `a`'s LMS forger at `θ`, applied to the play's outcome (whose `log` is the device's releases). -/
+  forger : Audit → ByteArray → Outcome → Option (ByteArray × ByteArray)
+  /-- `sig` is a forgery on `m` at `θ` and `o`: it verifies under the device's trusted LMS key at `θ`, and `o.log`
+  signs no such message (ONE-4's `Witness.Valid` at `.forgery`; memory accounting's `wipeForger`). -/
+  forgery : ByteArray → Outcome → ByteArray → ByteArray → Prop
   cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
   callsMul : ByteArray → Audit → ℕ
   callsAdd : ByteArray → Audit → ℕ
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
   finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
-  /-- **The forger's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the forger. -/
-  forger_calls : ∀ a θ F c σ (x : (forger a θ F c σ).S),
-    (forger a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
   computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → Finset (Fin (read F).circuit.N)
   world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → World d α
   honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c)
   certOf : ByteArray → Certificates
   crBound : ByteArray → Audit → ℕ → ℝ
-  forgeBound : ByteArray → Audit → ℕ → ℝ
   delta : ByteArray → Audit → ℕ → ℝ≥0∞
   loss : Audit → ByteArray → ℝ≥0∞ → ℝ≥0∞
-  lossLMS : Audit → ByteArray → ℝ≥0∞ → ℝ≥0∞
 
 namespace Vocab
 
@@ -411,7 +388,7 @@ def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Audit → 
   (V.live θ F c).Holds (V.certOf θ) σ
 
 /-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
-signature, which `a`'s forger outputs. -/
+signature, which the forger outputs. -/
 def Logged (a : Audit) (o : Outcome) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
 
 /-- **The finder for a second file with the registered digest**: on its one coin it hashes the committed blob and the
@@ -428,25 +405,24 @@ strategy's `cost` as ONE8's `qF`/`qS` are of `t'`. -/
 def FinderCR (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
 
-/-- **`F^τ`'s forgery premise, quantitative**: subprotocol `a`'s forger applied to the strategy outputs a forgery under
-the device's key (`deviceKey θ a`) with probability at most the published bound at the strategy's SHA-512 calls
-(`ε_lms`). `euf-cma/lms-sha512-n64` is asked at the forger's budget (`forger_calls`). -/
-def ForgerEUF (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
-  (V.forger a θ F c σ).Pr (V.deviceKey θ a) ≤ V.forgeBound θ a (V.cost θ F c σ)
+/-- **Subprotocol `a`'s forger succeeds** on the outcome `o`: it outputs a message and a signature that are a forgery
+at `θ` and `o`. -/
+def Forges (a : Audit) (θ : ByteArray) (o : Outcome) : Prop :=
+  ∃ m sig, V.forger a θ o = some (m, sig) ∧ V.forgery θ o m sig
 
-/-- The probability that subprotocol `a`'s forger, applied to the strategy, outputs a forgery under the device's key. -/
+/-- Pr[the LMS forger succeeds] in the play: `euf-cma/lms-sha512-n64`'s term. -/
 noncomputable def forges (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
-  ENNReal.ofReal ((V.forger a θ F c σ).Pr (V.deviceKey θ a))
+  Game.prob (V.Forges a θ) (V.game θ F c) σ
 
-/-- **Subprotocol `a`'s error at a strategy**: where its finder meets its collision premise (`FinderCR`) and its forger
-its forgery premise (`ForgerEUF`), its period's error (`Accounting.PeriodLive.error`: its published `δ` at the
-strategy's SHA-512 calls plus its loss at the probability that the finder outputs a collision) plus its LMS loss at the
-probability that the forger outputs a forgery; elsewhere no bound (`⊤`), as `Accounting.condError` reads it. C-Flock's
-conditional bound is the case `loss = lossLMS = 0` (F3), the additive one the case `crBound = forgeBound = 1`. -/
+/-- **Subprotocol `a`'s error at a strategy**: where its finder meets its collision premise (`FinderCR`), its
+period's error (`Accounting.PeriodLive.error`: its published `δ` at the strategy's SHA-512 calls plus its loss at the
+probability that the finder outputs a collision) plus the probability that its LMS forger succeeds in the play
+(`forges`); elsewhere no bound (`⊤`), as `Accounting.condError` reads it. The two breaks are separate terms, each of
+its own fixed finder: `ecr/sha-512` is asked of the collision finder and `euf-cma/lms-sha512-n64` of the forger,
+outside the theorem. C-Flock's conditional bound is the case `loss = 0` (F3), the additive one the case `crBound = 1`. -/
 noncomputable def error (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
-  condError (fun σ => V.FinderCR a θ F c σ ∧ V.ForgerEUF a θ F c σ)
-    (fun σ => (V.live θ F c).error sha512Msg a (V.delta θ a (V.cost θ F c σ)) (V.loss a θ) σ +
-      V.lossLMS a θ (V.forges a θ F c σ)) σ
+  condError (V.FinderCR a θ F c)
+    (fun σ => (V.live θ F c).error sha512Msg a (V.delta θ a (V.cost θ F c σ)) (V.loss a θ) σ + V.forges a θ F c σ) σ
 
 /-- **Soundness for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files `F` and
 commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for a blob that passed
