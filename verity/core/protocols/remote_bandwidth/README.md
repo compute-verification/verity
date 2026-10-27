@@ -20,7 +20,7 @@ it returns, and the ledger reads that record. `audit.Session` keeps the books be
 registration, event, window verdict or record field on which they differ refuses the session at that window as
 `disagreement`. The books check no openings: a window's verdict is the Lean's, and the Python check of its openings
 runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean became the verifier of record under
-the 8 Oct ruling (the friction skill), on these grounds:
+the switching rule (root `AGENTS.md`, "Lean is the definition and the verifier"), on these grounds:
 
 - the gap list is empty. A registration that binds PoUW's tiles is refused by both registries. A paced window's
   (k + 1)-th root is refused as `order` by both sessions. A transcript carries its session's pace. The Lean's record
