@@ -77,8 +77,8 @@ def WindowRuns.record (W : WindowRuns R) (ξ : (i : I) → Ω i) (i : Fin n) : L
 /-- **S2 (network-accounting, NET-85; open): the period check runs one-stage v2 on each window's case.** Where onsite's
 network component accepts at `ξ`, one-stage v2 accepted window `i`'s case. Today's `NetworkCheck.Period` reads each
 window's one-stage answer from the evidence the prover sends (`PeriodWindowProved`, `PeriodRowsProved`) and runs no
-verifier on it, so this needs Period to run `OneStageZk.checkBlobs` on each window's case: after #4637's blob interface
-and #4772's blob product land, and soundness confirms the change. -/
+verifier on it, so this needs Period to run `OneStageZk.checkBlobs` on each window's case: PERIOD-V2 (#4873), on
+#4637's blob interface (on `main`) and #4772's blob product. -/
 def PeriodRunsV2 (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
   ∀ ξ i, ComponentAccepts .network (s ξ) → W.v2 ξ i
 
