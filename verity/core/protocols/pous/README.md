@@ -138,8 +138,10 @@ past the published figure, which must reject), its `reads` the reads the leg exp
 one on its own host. The leg's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's leg
-declares whole, the host's DRAM, its disks) and an egress signed `UNCOUNTED`. It also carries the session's window, `t0` (the prover connected) and `t1` (the
-session signed) on the challenger's clock, which a network certifier counts the egress over.
+declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the leg declares the larger
+of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
+also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
+which a network certifier counts the egress over.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
