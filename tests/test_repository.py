@@ -26,7 +26,7 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
 #: The Glossary's second file, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
-#: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
+#: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
