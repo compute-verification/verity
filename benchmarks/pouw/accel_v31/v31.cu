@@ -1965,6 +1965,7 @@ static std::string env_str(const char* name, const char* dflt) {
 // consumers' end, timing the hash warps alone, -1: none, timing the GEMM alone in that CTA; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
 // V31_R5SRC 1 or 2 (timing only): the hash warps' row bytes from registers, or from D's loads alone (FusedLeaves' src);
+// V31_R5NHW n > 0: only the first n hash warps hash;
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
 // but room for a fifth CTA an SM); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued
@@ -2604,6 +2605,7 @@ struct Fill {
     CK(cudaMemcpy(wsw, hw.data(), 4 * (size_t)n, cudaMemcpyHostToDevice));
     wa_plain = wg_args(Ap, Bp, 0);
     wa_plain.hall = env_int("V31_HALL", 0);
+    wa_plain.hnw = env_int("V31_R5NHW", 0);
     wgw = wg && Wn > 0 && env_int("V31_WGW", 1) != 0;
     if (wgw) {   // T_1 .. T_W: mode 1 with no tail and no O over k < W L, gemm_kernel<true>'s prefix sums bit for bit
       wa_words = wg_args(X, W, 1);
@@ -2611,6 +2613,7 @@ struct Fill {
       wa_words.L = L;
       wa_words.S = Wn;
       wa_words.hall = wa_plain.hall;
+      wa_words.hnw = wa_plain.hnw;
       r5w = kn.rp == 5 && env_int("V31_R5W", 1) != 0;
     }
     if (tst)
@@ -3500,15 +3503,15 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"r5src\": %d, \"wgw\": %d, \"lminb\": %d, "
-           "\"sahead\": %d, "
+           "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"r5src\": %d, \"r5nhw\": %d, \"wgw\": %d, "
+           "\"lminb\": %d, \"sahead\": %d, "
            "\"fused_leaves\": %lld, "
            "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
-           f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.r5src, f.wgw ? 1 : 0,
+           f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.r5src, env_int("V31_R5NHW", 0), f.wgw ? 1 : 0,
            f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);

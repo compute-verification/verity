@@ -99,6 +99,7 @@ struct alignas(128) Args {
   int M, N, K, L, S, lp, dz, dy, TT, group, mode, diag, KQ;
   int hall;                   // RP 4, 5: 1, the hash warps hash every row, past the consumers' end (timing their own rate);
                               // -1, none (timing the GEMM alone in the plan's CTA)
+  int hnw;                    // RP 4, 5: the hash warps that hash, the first hnw (0: all of them)
 };
 
 WGD uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -234,7 +235,8 @@ enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3, TAIL_Q = 
 // Without hall, nothing starts once the consumers are done, and stop() ends the row's hash where it is.
 template <int BN, int NHW, int W0, class H>
 WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles_m, int tiles_n, int ntile) {
-  if (p.hall < 0) return;
+  const unsigned nw = p.hnw > 0 && p.hnw < NHW ? (unsigned)p.hnw : NHW;
+  if (p.hall < 0 || threadIdx.x / 32 - W0 >= nw) return;
   const unsigned w = threadIdx.x / 32 - W0, lane = threadIdx.x % 32, lpo = h.lpt(), Lg = (BN / TW) * lpo,
                  nq = (unsigned)ntile * Lg, nb = (nq + 31) / 32, done = 8u * (unsigned)ntile;
   auto stop = [&]() { return !p.hall && ld_acq(posted) >= done; };
@@ -249,7 +251,7 @@ WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles
     return h((unsigned long long)tm * (p.N / TW) + (unsigned long long)tn * (BN / TW) + jj / lpo, jj % lpo, stop, budget);
   };
   if (!h.chunk) {
-    for (unsigned b = w; b < nb; b += NHW) {
+    for (unsigned b = w; b < nb; b += nw) {
       unsigned v = posts();
       if (!p.hall && v >= done) break;
       while (v < need(b)) {
@@ -267,8 +269,8 @@ WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles
       __nanosleep(256);
       continue;
     }
-    for (unsigned b = lo; b < nb && v >= need(b) && (p.hall || v < done); b += NHW) {
-      if (__all_sync(~0u, visit(b, h.chunk)) && b == lo) lo += NHW;
+    for (unsigned b = lo; b < nb && v >= need(b) && (p.hall || v < done); b += nw) {
+      if (__all_sync(~0u, visit(b, h.chunk)) && b == lo) lo += nw;
       v = posts();
     }
   }
