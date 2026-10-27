@@ -184,12 +184,12 @@ def _heads(out: Path) -> dict:
 
 
 def _closed_heads(closed) -> dict:
-    """The head of each record the warden closed, as the check recomputes it."""
+    """The head of each complete record the warden closed, as the check recomputes it: the issuer certifies no other."""
     out = {}
     for name, (link, direction) in ws.CERTIFIED.items():
         grid = PARAMS.fails_grid if name == ws.FAILS else PARAMS.grid
         for r in closed:
-            if r.link == name:
+            if r.link == name and r.status.complete:
                 out[(link, direction.value, r.window)] = record_head(link, direction, r.window, r.grid, r.status, grid,
                                                                      PARAMS.digest)
     return out
@@ -197,10 +197,13 @@ def _closed_heads(closed) -> dict:
 
 def _unsalted(out: Path) -> list[dict]:
     """`certified.jsonl` line by line without what the certifier's fresh `salt_c` decides (the salt, the salted digest
-    and the signature over it), with the signature's LMS leaf q kept."""
+    and the signature over it), with the signature's LMS leaf q kept, and a link-window the issuer refused as it is."""
     out_ = []
     for line in (out / "certified.jsonl").read_text().splitlines():
         doc = json.loads(line)
+        if "refused" in doc:
+            out_.append(doc)
+            continue
         cert = doc["certificate"]
         out_.append({"head": doc["head"], "q": cert["signature"][:8],
                      "certificate": {k: v for k, v in cert.items() if k not in ("digest", "signature")}})
@@ -218,8 +221,8 @@ def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_pa
     publisher's byte for byte (the cost lines aside, which are timings), and its certificates are too but for what the
     certifier's fresh `salt_c` decides, each on the same LMS leaf and verifying on the head of the record the warden
     closed (no two runs share a `salt_c`, thread or process). With tick 20 late, window 0 of every link is
-    `monitor-unavailable` on both sides: the status crosses the process boundary in the close marker and is the one
-    signed."""
+    `monitor-unavailable` on both sides: the status crosses the process boundary in the close marker, and the issuer
+    certifies none of window 0's records."""
     thread_key, process_key = _key(tmp_path, "thread-key", "process-key")
     thread = _drive(tmp_path / "thread", thread_key, process=False, late=late)
     process = _drive(tmp_path / "process", process_key, process=True, late=late)
@@ -232,13 +235,15 @@ def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_pa
     assert _unsalted(tmp_path / "thread") == _unsalted(tmp_path / "process")
     assert _heads(tmp_path / "process") == _closed_heads(process["closed"])
     result = ws.check(tmp_path / "process")
-    faulted = {f"{name} window 0: {Reason.MONITOR_UNAVAILABLE.value}" for name in ws.CERTIFIED}
     if late is None:
         assert result["accepted"], result["problems"]
     else:
-        assert not result["accepted"] and faulted <= set(result["problems"])
-        assert not any("isn't certified" in p for p in result["problems"])
-    assert result["summary"]["certified_windows"] == 3 * WINDOWS
+        assert not result["accepted"]
+        assert {f"{name} window 0 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
+        assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [0] * len(ws.CERTIFIED)
+        assert {(x["record"], x["status"]) for x in result["windows"] if x["window"] == 0} == \
+            {(name, Reason.MONITOR_UNAVAILABLE.value) for name in ws.CERTIFIED}
+    assert result["summary"]["certified_windows"] == 3 * (WINDOWS - (late is not None))
 
 
 def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_window(tmp_path):

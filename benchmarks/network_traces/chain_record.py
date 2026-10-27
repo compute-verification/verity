@@ -121,8 +121,9 @@ WARDEN_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
-#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, and the certifier doesn't meet J there:
-#: an offset the prover chooses within a bucket reaches the client
+#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
+#: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
+#: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
 JITTER = "assumed (J)"
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -634,7 +635,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     count, the pooled form `HorizonLeakAccepted`'s at q = 1 (Fmax = ⌈ln(1/δ)⌉), each term in note
     network-accounting/20261025T2250Z-finding-warden-form-k's generator reading: log2 #Ss = 0, the fail cell's
     position log2(egress_cells + 1) a connection, the scan's ``prog`` rows its free inputs (T·NP a link-window as
-    registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
+    registered, an entry's 33 + KO·IDB bits a request if ``prog`` were an input only at its anchored entries,
+    `ingress_scan.entry_layout`), no faulty term with
     every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
     import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
@@ -651,7 +653,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                          f"drawn (scan_zk --draw {units})")
     NS, NP, NV = IS.state_bits(cls), IS.prog_bits(cls), IS.view_bits(cls)
     cap = math.log2(params.egress_cells + 1)
-    anchored = 32 + cls.KO * cls.IDB
+    anchored = sum(w for _, w in IS.entry_layout(cls))
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
     free = {"registered": {"link_window": T * NP, "request": 0}, "anchors": {"link_window": 0, "request": anchored}}
@@ -694,11 +696,11 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "a claim, with lean and Daniel",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
                 "and the server can't move an admission (not met today)",
-                f"the jitter term is 0 at D_j = 1, {JITTER}, which the certifier doesn't meet: an offset the prover "
-                "chooses within a bucket reaches the client",
+                f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
+                "buckets tell a receiver no more than an idle one",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
+                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
 
 
 #: each reading of the scan's free inputs, as the report labels it

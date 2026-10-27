@@ -5,7 +5,7 @@ import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 
 The bridge from the bandwidth audit v0's guarantee (`Bandwidth.Guarantees.AuditRO`, through its per-run reading
 `Accounting.Guarantees.BandwidthOfAuditPerRun`) to PoUB's per-period guarantee (`Accounting.PeriodRun.Sound` at audit
-`.poub`), the form `Accounting.Guarantees.JointPeriod` takes: in a period that realizes the bandwidth audit's game
+`.poub`), the coins model's form: in a period that realizes the bandwidth audit's game
 (`Accounting.RealizesBandwidthOfAuditPerRunPeriod`), at any bandwidth certificate `Q` at most
 `k·b − S_chip − c − G·b − λ`, PoUB accepts while the bandwidth account read fewer than `Q` bits over the period's window
 with probability at most `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` over PoUB's own coins, at any value of the others.

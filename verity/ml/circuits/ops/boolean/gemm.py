@@ -184,7 +184,10 @@ def GemmCoordinatePad(B, S, x, wrow):
         return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, wrow)
     space, idx, leaf = B.call(BL.constant(0)).refs[0]
     zeros = broadcast(space, idx, leaf, 16 * (S.K - S.T))
-    pad = lambda a: Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+
+    def pad(a):
+        return Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+
     return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), pad(x), pad(wrow))
 
 
@@ -283,7 +286,10 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
 def ScaledMmS8CoordinateRows(B, S, *ports):
     """`ScaledMmS8Coordinate_v2{K, DOT}` on bits, on the concatenations of x's and W's row's R parts."""
     R = S.R
-    cat = lambda parts: Coll(Array(S.K, E4M3), concat([p.refs for p in parts]))
+
+    def cat(parts):
+        return Coll(Array(S.K, E4M3), concat([p.refs for p in parts]))
+
     x, sx, wrow, sw = cat(ports[:R]), ports[R], cat(ports[R + 1:2 * R + 1]), ports[2 * R + 1]
     return B.call(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, wrow, sw)
 

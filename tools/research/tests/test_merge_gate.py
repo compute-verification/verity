@@ -634,6 +634,7 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
     cmd = ("uv", "run", "--locked", "python", "tools/verity/check/check.py")
     slot = ["python3", "tools/verity/check/slot.py"]
     for argv in ([*cmd], [*cmd, "--keep-going"], [*cmd, "--no-cache", "--cores", "8"], [*cmd, "--keep-going", "--verdicts-in", "v.tgz"],
+                 [*cmd, "--keep-going", "--no-cache", "--circuit-cache", "--verdicts-in", "v.tgz"],
                  [*cmd, "--verdicts-in", "v.tgz", "--cores", "4"], [*slot, "--", *cmd], [*slot, "--by", "x", "--", *cmd],
                  [*slot, "--priority", "--by", "gates", "--", *cmd, "--keep-going"], [*slot, "--twin", "p@vy-nebius-1", "--", *cmd],
                  [*slot, "--priority", "--by", "gates", "--twin", "p", "--", *cmd, "--keep-going"],

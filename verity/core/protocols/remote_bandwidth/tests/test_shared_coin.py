@@ -173,7 +173,7 @@ def skipping(window: int):
             return prover.run(challenges[t], i, previous, plan)
         held = copy.copy(prover.store)
         held.blocks = [bytes(codec.BLOCK_BYTES)] * N
-        return audit.Prover(held, None, prover.commitment, entropy=prover.entropy).run(challenges[t], i, previous, plan)
+        return audit.Prover(held, None, entropy=prover.entropy).run(challenges[t], i, previous, plan)
     return run
 
 

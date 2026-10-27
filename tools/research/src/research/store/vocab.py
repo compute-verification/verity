@@ -106,7 +106,7 @@ CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v
 CHALLENGER_MODELS_VALUES = ("head",)
 MEMORY_LINE_OF_RECORD = "memory-line-of-record"       # on a gate run's verifier run, by its lane: who computed its line of record
 MEMORY_LINE_OF_RECORD_PATTERN = r"lean conditional on [A-Z][A-Za-z]*(, [A-Z][A-Za-z]*)*"
-#: What statement C (the line's NoOutsideCompute premise) rests on in a line of record: itself, or the provider's lockdown that grounds it.
+#: What statement C (no outside device computes for the node, `NoOutsideCompute`) rests on in a line of record: itself, or the provider's lockdown that grounds it.
 MEMORY_LINE_GROUNDS = ("NoOutsideCompute", "ProviderLockdown")
 #: The file of the ref run's run record a `memory-line-of-record` label is held to (`check_line_of_record`).
 MEMORY_LINE_FILE = "out/auditor_line.json"
@@ -130,6 +130,7 @@ COMPONENT = "component"
 JOBS = "jobs"
 DTYPE = "dtype"
 STAGED = "staged"
+CIRCUITS = "circuits"
 
 # ---- approach labels: the registry (`research.approaches`), by the owning lane or its coordinator ------------------------------------
 
@@ -333,7 +334,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
-       "its order, which must name NoOutsideCompute (statement C in full, a premise of LineHeld) or ProviderLockdown (the provider's "
+       "its order, which must name NoOutsideCompute (statement C in full, which LineHeld reads from the certifiers' record) or ProviderLockdown (the provider's "
        "lockdown that grounds it); `research data label` reads the file from the ref run's record and refuses a label that isn't "
        "its (`check_line_of_record`). Labels up to gate run 10's (lean; credited-..., off-vocab) predate the rule",
        pattern=MEMORY_LINE_OF_RECORD_PATTERN),
@@ -404,6 +405,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(STAGED, GROUP_EVIDENCE, TEXT, "on ckpt:<repo>@<revision>: the UTC time a host finished staging the checkpoint's weights and checking every "
        "shard's sha256, written by the step that stages them (`verity-vllm records staged`); its ref names the evidence (the staging run, "
        "or host:path of the verify record)"),
+    _k(CIRCUITS, GROUP_EVIDENCE, TEXT, "on a run: the art: id of a fixture/v1 tree holding the circuit files and lookup tables one of its "
+       "sessions proved, under sha512/<hex> (the Lean verifier's --archive layout), so the run can be verified again from the store; one "
+       "label a session (benchmarks/one_stage/a5_tp.sh)", pattern=r"art:[0-9a-f]{64}"),
     # approach
     _k(APPROACH, GROUP_APPROACH, TEXT, "on a run or artifact: the <campaign>/<slug> of the approach it belongs to"),
     _k(TITLE, GROUP_APPROACH, TEXT, "an approach's title, one line"),
