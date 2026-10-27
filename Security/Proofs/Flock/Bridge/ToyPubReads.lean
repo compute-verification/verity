@@ -63,6 +63,14 @@ def lieWv {n : ℕ} {c : Flock.Circuit} {G : Type} : (Fin n × Fin c.ports.size)
   | .inl (_, q) => (Fin.last _, fun _ => decide (q.val ≠ 0))
   | .inr _ => (Fin.last _, fun _ => false)
 
+/-- Bit `i` of the registrant's row at row `(u, q)`, within the widest row's width, is `q ≠ 0`. -/
+theorem lieWv_get {n : ℕ} {c : Flock.Circuit} {G : Type} {p : (Fin n × Fin c.ports.size) ⊕ G} {u : Fin n}
+    {q : Fin c.ports.size} (hp : p = .inl (u, q)) {i : ℕ}
+    (hi : i < Finset.univ.sup (Discharge.Layout.portRowW c) + 1) :
+    Discharge.Layout.BitVal.get (lieWv p) i = decide (q.val ≠ 0) := by
+  subst hp
+  simp [lieWv, Discharge.Layout.BitVal.get, hi]
+
 /-- The port each read of row `(u, q)` opens: `liePort` at `q`, over the leaf `f` gives there. -/
 def portOf {n : ℕ} (c : Flock.Circuit) {G : Type} (f : (Fin n × Fin c.ports.size) ⊕ G → ByteArray) :
     (Fin n × Fin c.ports.size) ⊕ G → Flock.Registered.Port
@@ -114,8 +122,9 @@ theorem ownReads_lie (h1 : I.count ≤ 1) (hn : n ≤ 1) {t : Exec.Transcript} {
     (hnames : ∀ q : Fin c.ports.size,
       (List.range c.ports.size).find? (fun j => c.ports[j]!.name == c.ports[q].name) = some q.val) :
     OwnReadsHJ I (lieOwn (Reg := Reg) dj y₀ ht hc hscope hU hpub) c pub t
-      (lieReads (Reg := Reg) dj y₀ ht hc hscope hU hpub).isRead (lieReads dj y₀ ht hc hscope hU hpub).port
-      (lieReads dj y₀ ht hc hscope hU hpub).readAt := by
+      (lieReads (Reg := Reg) dj y₀ ht hc hscope hU hpub).isRead
+      (lieReads (Reg := Reg) dj y₀ ht hc hscope hU hpub).port
+      (lieReads (Reg := Reg) dj y₀ ht hc hscope hU hpub).readAt := by
   rintro p ⟨u, q, rfl⟩
   have hu : u.val = 0 := by have := u.isLt; omega
   refine ⟨u, q, d, D, dp, #[0], rfl, ?_, hnames q, hd, ?_, ?_, hidx, ?_, reads_liePort c q _ _⟩
@@ -142,12 +151,12 @@ theorem bit_lie {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) �
     (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU n) g = some (u, ⟨q, k⟩)) (y : List UInt8) :
     (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).bit
         ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).val
-          ((vbOf dj y₀ ht hc hscope hU hpub hpt).pos g,
+          ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).pos g,
             lieWv ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).pos g), y)) g =
       decide (q.val ≠ 0) := by
   have hle : k.val < Finset.univ.sup (Discharge.Layout.portRowW c) + 1 :=
     lt_of_lt_of_le k.isLt ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))
-  rw [vbOf_val, vbOf_pos_row h, vbOf_bit_row h]
-  simp [lieWv, Discharge.Layout.BitVal.get, hle]
+  exact (vbOf_bit_row h _).trans (lieWv_get (vbOf_pos_row (dj := dj) (y₀ := y₀) (ht := ht) (hc := hc)
+    (hscope := hscope) (hpub := hpub) (hpt := hpt) (Reg := Reg) h) hle)
 
 end Flock.Bridge.ToyPub
