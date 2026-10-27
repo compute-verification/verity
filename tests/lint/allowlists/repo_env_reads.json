@@ -91,7 +91,6 @@
     {"file": "benchmarks/numerical/python/verity_numerical/redteam/babybear.py", "count": 1},
     {"file": "benchmarks/numerical/python/verity_numerical/redteam/campaign.py", "count": 2},
     {"file": "benchmarks/numerical/python/verity_numerical/redteam/z3_babybear.py", "count": 2},
-    {"file": "benchmarks/numerical/python/verity_numerical/security/census.py", "count": 1},
     {"file": "benchmarks/numerical/tests/bench/test_bench_judge.py", "count": 1},
     {"file": "benchmarks/numerical/tests/bench/test_instances.py", "count": 1},
     {"file": "benchmarks/numerical/tests/bench/test_store_tables.py", "count": 1},
