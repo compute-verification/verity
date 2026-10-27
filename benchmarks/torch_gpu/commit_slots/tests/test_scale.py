@@ -31,7 +31,7 @@ LAYOUTS = {
     "edge": S.edge_layout(),
     "h200-3": S.h200_layout(layers=3),
     "h200-3-by-2": G.regroup(S.h200_layout(layers=3), 2),
-    "an-empty-group": S.Layout("ünits/v1", (S.Group((4,), ()), *S.edge_layout().groups)),
+    "an-empty-group": S.Layout("units/v1 \"q\"\\", (S.Group((4,), ()), *S.edge_layout().groups)),
     "families-like": families_like(5),
 }
 
