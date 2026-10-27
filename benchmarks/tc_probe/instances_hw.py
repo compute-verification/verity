@@ -64,6 +64,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -674,7 +675,7 @@ def main(argv: list[str] | None = None) -> int:
         "gpu_seconds": rep0["gpu_seconds"],
         "wall": results["seconds"],
     }
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         status = "failed" if failures else "passed"
         checker = (f"instances_hw: hardware words vs {inst.dataset}/{inst.tier} expected words ({inst.model})" if inst.negative is None else

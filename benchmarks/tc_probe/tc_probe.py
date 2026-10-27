@@ -110,6 +110,7 @@ import numpy as np
 from verity.ml.circuits.silicon import models as TCM
 from verity.ml.circuits.silicon import silicon as S
 from verity.ml.circuits.silicon import total as T
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 N = 8  # every shape here has 8 output columns
@@ -1689,7 +1690,7 @@ def compile_only(ids: list[str], out: Path, args) -> int:
         print(id_, json.dumps({k: v for k, v in entry.items() if k not in ("instruction", "sass")}),
               json.dumps({k: v for k, v in entry.get("sass", {}).items() if k in ("ok", "kernel", "tile_kernel_mma_count", "error")}), flush=True)
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         checks = {id_: {"compiled": e["compiled"], "sass_ok": e.get("sass", {}).get("ok", False), "mma_count": e.get("sass", {}).get("tile_kernel_mma_count"),
                         "expected_mma_count": e.get("sass", {}).get("expected_mma_count"), "single_instruction": e.get("sass", {}).get("single_instruction"),
@@ -1880,7 +1881,7 @@ def main() -> int:
     results["hypothesis_findings"] = findings
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         import canary as CANARY  # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
 
@@ -2005,7 +2006,7 @@ def main() -> int:
         })
         if evidence.get("labels"):
             print("labels (apply to the result artifact once `research run` has stored it):", flush=True)
-            for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], os.environ.get("RESEARCH_LANE", "<lane>")):
+            for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], SHARED.RESEARCH_LANE or "<lane>"):
                 print("   ", cmd, flush=True)
     print("FAILURES" if failures else "ALL HARDWARE WORDS REPRODUCED" if not findings else "RECORDED (hypothesis findings)",
           failures or findings, f"{results['seconds']}s", flush=True)
