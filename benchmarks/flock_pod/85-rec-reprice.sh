@@ -128,7 +128,7 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
   free -g | head -2; cat /proc/loadavg; nvidia-smi -L 2>/dev/null; } > $O/host-$STEP.txt 2>&1
 [ -x /usr/bin/time ] || { echo "no /usr/bin/time" >&2; exit 1; }
 
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
+KEY=$(cat benchmarks/flock_pod/20-gpu-link.sh benchmarks/flock_pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
@@ -459,7 +459,7 @@ stage_inner() {
   local o=$O/$1 c=$DD/$1-cache
   mkdir -p $o
   K=$K N=$N FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE= FLOCK_OWN_ROWS=1 /usr/bin/time -v -o $o/time-stage.txt \
-    python3 -m verity_flock.class_statement --program-module $REPO/verity/ml/flock/pod/rec_reprice.py:program \
+    python3 -m verity_flock.class_statement --program-module $REPO/benchmarks/flock_pod/rec_reprice.py:program \
     --partition q-template-instance --out $o --stage-only --batch fixed --n $N \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1
   echo "stage $1 exit $?"; tail -5 $o/stage.log
@@ -475,7 +475,7 @@ stage_inner() {
 # population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {
   [ -f $DD/stage/own-partition ] && return 0   # STAGE=0's caller wrote them
-  K=$K N=$N python3 $REPO/verity/ml/flock/pod/rec_reprice.py partition $DD/stage
+  K=$K N=$N python3 $REPO/benchmarks/flock_pod/rec_reprice.py partition $DD/stage
 }
 
 case $STEP in
@@ -500,7 +500,7 @@ build)
     exec 8>$W/build.lock; flock 8
     if [ ! -x $B ]; then
       [ -d $F ] || { [ -d ${WARM_FROM:-/workspace/jobs/proofs-vllm-moe/flock-gpu-link}/flock ] && cp -a ${WARM_FROM:-/workspace/jobs/proofs-vllm-moe/flock-gpu-link} $FW/flock-gpu-link; }
-      RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=$GPU SM=$SM bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
+      RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=$GPU SM=$SM bash benchmarks/flock_pod/60-circuit.sh > $O/build.log 2>&1 \
         || { tail -40 $O/build.log; tail -40 $O/build/out/build-circuit.txt 2>/dev/null; exit 1; }
       mkdir -p $BIN && cp $F/target/release/flock-circuit $B
     fi
@@ -621,7 +621,7 @@ EOF
   cat $O/icheck/tops.txt
   for w in top unsalted; do
     rm -rf $DD/neg-$w && mkdir -p $DD/neg-$w && cp -r $SESS/public.json $SESS/private.json $DD/neg-$w/ && ln -s $SESS/session $DD/neg-$w/session
-    python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $DD/neg-$w > $O/icheck/forge-$w.json
+    python3 benchmarks/flock_pod/rec_inner.py forge --what $w --inner $DD/neg-$w > $O/icheck/forge-$w.json
     python3 -m verity_flock.rec_vstar $DD/neg-$w > $O/icheck/neg-$w.json 2> $O/icheck/neg-$w.err; echo "neg $w vstar exit $?"; cat $O/icheck/neg-$w.json
   done
   ;;
@@ -825,12 +825,12 @@ lean)
   # this step checks, the step refuses to run it rather than judge it
   VPARTS=$(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | xargs -rn1 basename | grep -v '^forged-' | while read -r l; do want $l && echo $l; done)
   for w in ${NEG_INNER-challenge query}; do
-    [ -z "$VPARTS" ] || python3 verity/ml/flock/pod/lean_verdicts.py --cover inner-$w $VPARTS \
+    [ -z "$VPARTS" ] || python3 benchmarks/flock_pod/lean_verdicts.py --cover inner-$w $VPARTS \
       || { echo "lean: NEG_INNER=$w: include a part that reads it in LEVELS, or leave $w out of NEG_INNER"; exit 1; }
   done
   for w in ${NEG_INNER-challenge query}; do
     FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
-      && python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
+      && python3 benchmarks/flock_pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
     rec_coins $FI neg-$w || echo "rec-coins refused the forged inner $w: its verifies read the inner statement's files"
     NEGS="$NEGS $w"
   done
@@ -915,7 +915,7 @@ EOF
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
   else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null
-    python3 verity/ml/flock/pod/lean_verdicts.py $([ -s $O/lean/rows.json ] && echo "--compose $LEAN_BIN") $O/lean $PARTS; LEAN_RC=$?; fi
+    python3 benchmarks/flock_pod/lean_verdicts.py $([ -s $O/lean/rows.json ] && echo "--compose $LEAN_BIN") $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
 summary

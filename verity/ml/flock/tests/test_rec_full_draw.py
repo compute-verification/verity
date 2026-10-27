@@ -86,7 +86,7 @@ def test_the_full_draw_is_the_lean_verifiers_own_at_k_the_population(tmp_path):
 
 
 def test_the_forged_records_lose_the_draw_or_a_unit(tmp_path):
-    sys.path.insert(0, str(HERE.parent / "pod"))
+    sys.path.insert(0, str(HERE.parents[3] / "benchmarks" / "flock_pod"))
     import rec_inner as RI
 
     for what in ("nodraw", "partial"):

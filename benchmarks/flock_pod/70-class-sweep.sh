@@ -42,7 +42,7 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   # the proving build never has seed injection; the selftest's harness gets its own build with it. Both are kept per pod, keyed
   # by the build scripts, patches and the prover's sources, so later runs of the same builds skip the compile and another
   # tree's run on the pod builds its own
-  KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
+  KEY=$(cat benchmarks/flock_pod/20-gpu-link.sh benchmarks/flock_pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
     $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
   BIN=$W/bin-$KEY-g$G-sm$SM; F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock
   # the prover runs on CUDA 13.3: a driver older than that (R570) needs its compat library, cached binary or not
@@ -55,7 +55,7 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
     rm -rf $BIN || { echo "$BIN: built against another glibc, and this job can't remove it" >&2; exit 1; }
   fi
   if [ ! -x $BIN/flock-circuit-selftest ]; then
-    MODE=build GPU=$G SM=$SM bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+    MODE=build GPU=$G SM=$SM bash benchmarks/flock_pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
     mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
     source $HOME/.cargo/env
     FEAT="--features sha512"; [ $G = 1 ] && FEAT="$FEAT --features gpu"

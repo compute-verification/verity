@@ -5,13 +5,13 @@
 # --cwd source).
 # env: PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1 RUNS=3  BATCH_ANDS=2^32
 #      MAX_STATEMENT_BITS=2^34  ITERS=100
-#      DEFS=verity/ml/flock/pod/gemm-coordinates.defs.json (the Call counts: gemm-coordinates-4k fills 256 tiles of K = 2048)
+#      DEFS=benchmarks/flock_pod/gemm-coordinates.defs.json (the Call counts: gemm-coordinates-4k fills 256 tiles of K = 2048)
 #      GPUS="4 5 6 7" (on a machine with /run/gpu-lease: take the first free of these, as gpu-lease does)
 #      any other KEY=VALUE reaches the prover's environment (FC_NATIVE_SHA=0, FC_HOST_PINNED=0, ...)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/ovg}; mkdir -p $R/out
-DEFS=$REPO/${DEFS:-verity/ml/flock/pod/gemm-coordinates.defs.json}
+DEFS=$REPO/${DEFS:-benchmarks/flock_pod/gemm-coordinates.defs.json}
 if [ -d /run/gpu-lease ] && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
   for i in ${GPUS:-4 5 6 7}; do
     exec 9>>/run/gpu-lease/$i.lock
@@ -59,12 +59,12 @@ if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
 fi
 { nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv; nproc; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-}"; } | tee $R/out/host.txt
 # cores busy outside this attempt every 30 s (Builds overlapping it: ov.noisy)
-python3 verity/ml/flock/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt &
+python3 benchmarks/flock_pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt &
 SAMPLER=$!
 trap 'kill $SAMPLER 2>/dev/null' EXIT
 PREFLIGHT=${PREFLIGHT:-${GATE:-1}}
 if [ "$PREFLIGHT" = 1 ]; then
-  OUT=$R/out/preflight bash verity/ml/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 SELFTEST_GPU=1 \
+  OUT=$R/out/preflight bash benchmarks/flock_pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 SELFTEST_GPU=1 \
     SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial || exit 1
 fi
 # NSYS=1: a profile, not an attempt: the m = 34 prove sessions under Nsight Systems' CUDA trace (unpacked like CUDA 13.3), each
@@ -79,7 +79,7 @@ if [ "${NSYS:-0}" = 1 ]; then
   fi
   mkdir -p $R/out/nsys; export WRAP="$NS profile -t cuda --sample=none --cpuctxsw=none -o $R/out/nsys/prove-%p"
 fi
-OUT=$R/out/m34 bash verity/ml/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=${BATCH:-auto} ${N:+N=$N} BATCH_ANDS=${BATCH_ANDS:-4294967296} \
+OUT=$R/out/m34 bash benchmarks/flock_pod/70-class-sweep.sh DEFS=$DEFS BATCH=${BATCH:-auto} ${N:+N=$N} BATCH_ANDS=${BATCH_ANDS:-4294967296} \
   MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-17179869184} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 || exit 1
 if [ "${NSYS:-0}" = 1 ]; then
   for f in $R/out/nsys/*.nsys-rep; do
@@ -90,7 +90,7 @@ fi
 W=${FLOCK_WORK:-/workspace}/flock-circuit; UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/torch/bin/python ] || { $UV venv -q --python 3.12 $W/torch && $UV pip install -q --python $W/torch/bin/python 'torch>=2.7' \
   --index-url https://download.pytorch.org/whl/cu128; } || exit 1
-$W/torch/bin/python verity/ml/flock/pod/gemm_slowdown.py native --out $R/out/native.json --iters ${ITERS:-100} || exit 1
+$W/torch/bin/python benchmarks/flock_pod/gemm_slowdown.py native --out $R/out/native.json --iters ${ITERS:-100} || exit 1
 G=; [ "$PREFLIGHT" = 1 ] && G="--preflight $R/out/preflight/classes/results.jsonl"
-$W/py/bin/python3 verity/ml/flock/pod/gemm_slowdown.py compute --sweep $R/out/m34/classes/results.jsonl $G --native $R/out/native.json \
+$W/py/bin/python3 benchmarks/flock_pod/gemm_slowdown.py compute --sweep $R/out/m34/classes/results.jsonl $G --native $R/out/native.json \
   --result $R/result.json

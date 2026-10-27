@@ -1,7 +1,7 @@
 """The Lean verifier's reading of the inner session's transcript (`RecVStar.innerCommits`, `verify --rec-inner-transcript`,
 `flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the coin server's
 record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261012-081440-2d61`
-(`pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
+(`benchmarks/flock_pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
 Hello, R's top registered at staging, R's shape in META and each sparse phase's claim its last round): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (34 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
@@ -517,7 +517,7 @@ def test_a_plain_session_under_rs_registration_is_a_downgrade(tmp_path):
 
 
 #: the bucket's RecSparse shape 2d61 ran its sparse phase at, and META's range of its inner statement's hidden circuit
-#: (`pod/rec_inner.py stage --n 16 --plain-leaves`, circuit_sha512 676d7254…, which `rec_vstage stage --circuit` reads)
+#: (`benchmarks/flock_pod/rec_inner.py stage --n 16 --plain-leaves`, circuit_sha512 676d7254…, which `rec_vstage stage --circuit` reads)
 SPARSE = (18, 13, 6, 0)
 RANGE = {"count": 64, "net": "unit", "pos0": 256, "slot_log": 13, "type": "unit"}
 

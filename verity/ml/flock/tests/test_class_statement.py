@@ -71,7 +71,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
 
 
 def _gemm_fp():
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[1] / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "benchmarks" / "flock_pod" / "gemm_fp.py")
     gemm_fp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemm_fp)
     return gemm_fp
@@ -404,7 +404,7 @@ def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list]:
 def _gemm_fp():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[1] / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "benchmarks" / "flock_pod" / "gemm_fp.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

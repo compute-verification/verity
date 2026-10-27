@@ -35,7 +35,7 @@ set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
 export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
-. verity/ml/flock/pod/rec-env.sh
+. benchmarks/flock_pod/rec-env.sh
 
 N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}; STK=; MR=; REG=
 if [ -n "${STACKED:-}" ]; then
@@ -55,7 +55,7 @@ FOLD_BIN=$L/fold-$FSHA/inner-fold
   fi
 ) > $O/build-fold.log 2>&1 &
 FP=$!
-python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves $REG > $O/stage.json 2> $O/stage.err \
+python3 benchmarks/flock_pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves $REG > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
 [ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/
@@ -98,7 +98,7 @@ LEAN=($LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $
 echo "lean exit $?" | tee $O/lean-exit.txt
 for F in challenge nodraw partial; do
   FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
-  python3 verity/ml/flock/pod/rec_inner.py forge --what $F --inner $FS --record prover > $O/forged-$F.json
+  python3 benchmarks/flock_pod/rec_inner.py forge --what $F --inner $FS --record prover > $O/forged-$F.json
   "${LEAN[@]}" --session $FS/prover > $O/forged-$F-lean.txt 2>&1
   echo "forged $F lean exit $?"
 done

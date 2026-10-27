@@ -1,6 +1,6 @@
 """A served tree registered as a port, end to end (`one_stage.served.register_served`, `served_registered.py`): a
 RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by C-Flock in one
-loopback `--zk` session under a subset draw of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
+loopback `--zk` session under a subset draw of 16 (`benchmarks/flock_pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
 v2 or a segmented row). The verifier writes its own `--registered` file from the tree as the service holds it
 (`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` accepts the session
@@ -30,7 +30,7 @@ from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree, re
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: `pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,
+#: `benchmarks/flock_pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
@@ -38,7 +38,7 @@ FIXTURES = {
     G.SCHEMA_V2: "art:2425aa5eff7e781331bda47d22e1fcd7eb813cbd7e64e39965d851b6f843b0cd",
     G.SCHEMA_SEG: "art:1a17e14138bb6ab7412ad3ee01c62e49c9f84c666ca0fd9848c2688d6311f403",
 }
-#: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified draw of `PLAIN_K`
+#: `benchmarks/flock_pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified draw of `PLAIN_K`
 #: (stage/draw.json), and session/ a plain session (no --zk, OS coins) drawn by it; vectors/ is vectors.json's live set
 PLAIN = "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9"
 PLAIN_K = 16

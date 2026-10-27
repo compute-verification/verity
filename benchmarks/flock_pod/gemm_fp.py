@@ -2,7 +2,7 @@
 `GemmCoordinate{E4m3,Nvf4,Mxf4}_v1{K, DOT}` over one activation row, as `Gemm_v2` batches `GemmCoordinate_v2` for BF16, so the
 statement commits the activation row (and its scale bytes) once for every coordinate, and each weight row (and its scales) once.
 
-    python -m verity_flock.class_statement --program-module verity/ml/flock/pod/gemm_fp.py:e4m3_K2048_N2048 ...
+    python -m verity_flock.class_statement --program-module benchmarks/flock_pod/gemm_fp.py:e4m3_K2048_N2048 ...
 
 The row is an unregistered composite (``GemmRow[<coordinate id>]{N}``): core has no Gemm-level FP8 / FP4 Definition, and the
 proof block, the class the statement proves, is the registered coordinate.

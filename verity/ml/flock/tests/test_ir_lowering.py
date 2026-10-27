@@ -1173,7 +1173,7 @@ def test_an_ir_cell_plans_through_the_spine():
                verifier_addr="1.2.3.4:7400", rtt_target="1.2.3.4:22", lane="flock-ir-lowering", points="2 4", runs=5, placement=two_machines)
     assert c.relation == "irf:rope-head"
     v, p = c.jobs
-    assert v["command"][:3] == ["bash", "verity/ml/flock/pod/33-ir-cell.sh", "ROLE=verifier"] and "TEMPLATE=rope-head" in v["command"]
+    assert v["command"][:3] == ["bash", "benchmarks/flock_pod/33-ir-cell.sh", "ROLE=verifier"] and "TEMPLATE=rope-head" in v["command"]
     assert "--send" in v["argv"] and v["argv"][v["argv"].index("--send") + 1] == p["argv"][p["argv"].index("--send") + 1]
     assert "VERIFIER=1.2.3.4:7400" in p["command"] and "LOOPBACK=1" in p["command"]
 

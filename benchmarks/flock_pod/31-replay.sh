@@ -9,7 +9,7 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); RD=${RESEARCH_RUN_DIR:-/tmp/flock-replay}; O=$RD/out; W=/workspace/verify-flock-pure; mkdir -p $O $W
 REL=${REL:-bf16-hopper}; PER=${PER:-8192}; TAG=${TAG:-sessions}; BIN=${BIN:-flock-pure-gpu}; SCHEME=${SCHEME:-frame-v3}; LEAF=${LEAF:-blake3}; TB=$([ $BIN = flock-vllm-v1 ] && echo vllm || echo pure); NEG=${NEG-p3-8192/sessions-s0}; O=$O/$TAG; mkdir -p $O
-MODE=build GPU=0 bash verity/ml/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+MODE=build GPU=0 bash benchmarks/flock_pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env
 [ $BIN = flock-pure-gpu ] || (cd /workspace/flock-gpu-link/flock && cargo build --release -p flock-live --bin $BIN) >> $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=max; PER_=100000; }

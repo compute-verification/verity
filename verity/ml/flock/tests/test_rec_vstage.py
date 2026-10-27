@@ -3,7 +3,7 @@ proxy (each round's salted tops, ``c_k`` and coins for the verifier; its tops, r
 verifier's side from the public record alone (the table's shape, the fold points, every round's value rebuilt from its two
 ``c_k``, the openings' coefficients) against the Lean verifier's values (`fixtures/inner_claims.json`); the prover's running
 sums giving the algebra exactly the consistency sums of the openings, so both reps hold; and each forgery (a message, a running
-sum, the comb) failing the relation that reads it. Staging the circuits is the pod's (``pod/85-rec-reprice.sh STEP=vstage``);
+sum, the comb) failing the relation that reads it. Staging the circuits is the pod's (``benchmarks/flock_pod/85-rec-reprice.sh STEP=vstage``);
 staging with one salts file registers one chain; the slow test
 patches a small statement's ``inst.bin`` as the forged message does. ``VERITY_FLOCK_INNER_FOLD=1`` also runs `InnerFold.lean`
 interpreted (about 15 minutes) and holds its comb and extra claims to InnerClaims' dump."""

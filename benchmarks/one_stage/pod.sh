@@ -31,7 +31,7 @@ LP=$!
 
 # M0's flock-circuit, CPU build
 if [ "$(cat $W/bin/m0.sha 2>/dev/null)" != "$M0SHA" ]; then
-  (cd $W/m0 && RESEARCH_RUN_DIR=$O/m0 MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh) > $O/build-m0.log 2>&1 || { tail -40 $O/build-m0.log; exit 1; }
+  (cd $W/m0 && RESEARCH_RUN_DIR=$O/m0 MODE=build GPU=0 bash benchmarks/flock_pod/60-circuit.sh) > $O/build-m0.log 2>&1 || { tail -40 $O/build-m0.log; exit 1; }
   cp /workspace/flock-gpu-link/flock/target/release/flock-circuit $W/bin/ && echo $M0SHA > $W/bin/m0.sha
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }

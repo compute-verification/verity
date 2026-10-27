@@ -3,7 +3,7 @@
 # builds (benchmarks/pouw/hidden_zk/job.sh, sourced: the selftest build of flock-circuit, with seed-injection, and the Lean
 # flock-verify). From a clone:
 #   research run --on auto --source . --as LANE --project verity --cwd clone --cpus 16 --mem-gb 32 \
-#     -- bash verity/ml/flock/pod/92-zk-sessions.sh
+#     -- bash benchmarks/flock_pod/92-zk-sessions.sh
 # RoPE d64 (rope-head/d64/neox-bf16, generated n=32 seed 20260926) staged by verity_flock.circuit at 16 and 32 instances
 # (one circuit, hidden outputs), then, all with the selftest build (statement verity/flock-circuit+seed-injection):
 #   sessions/selftest   selftest --zk --record-dir on inst-16 (every case), converted by selftest_records.py

@@ -22,8 +22,8 @@ parts' logs (the honest parts 85 gave V*'s inputs, ``own-PART.txt``) accepts onl
 each accepted at the SHA-512 of that one rows file, and the step fails unless it does. Each forgery of a V* part, put in
 that part's place, must be refused by it too. A run of some of V*'s parts (``LEVELS``) is not composed, and says so.
 
-    python3 verity/ml/flock/pod/lean_verdicts.py [--compose BIN] DIR PART...
-    python3 verity/ml/flock/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
+    python3 benchmarks/flock_pod/lean_verdicts.py [--compose BIN] DIR PART...
+    python3 benchmarks/flock_pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
 """
 from __future__ import annotations
 

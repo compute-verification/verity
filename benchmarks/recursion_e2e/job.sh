@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The recursion bench's job (README.md): verity/ml/flock/pod/85-rec-reprice.sh's steps in order, as one research run, each
+# The recursion bench's job (README.md): benchmarks/flock_pod/85-rec-reprice.sh's steps in order, as one research run, each
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
 # every CPU step REPEAT times and every GPU step once with its runs; then the result (run.py result) in
 # $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
@@ -50,7 +50,7 @@ RR=/workspace/jobs/rec-reprice
 [ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
 [ -z "${WARM_FROM:-}" ] && [ -d $RR/flock-gpu-link/flock ] && export WARM_FROM=$RR/flock-gpu-link
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
-REC=verity/ml/flock/pod/85-rec-reprice.sh
+REC=benchmarks/flock_pod/85-rec-reprice.sh
 L=$FLOCK_WORK/cache
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 { echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT settings=$SETTINGS"

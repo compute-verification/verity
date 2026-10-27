@@ -15,13 +15,13 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then
-  . verity/ml/flock/pod/cpu-slices.sh
+  . benchmarks/flock_pod/cpu-slices.sh
   hold_slices "" "${CPUS:-32}" || exit 1
   export RI_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
   exec taskset -c $SLICE_CPUS bash "$0" "$@"
 fi
 export FC_COINS=os
-. verity/ml/flock/pod/rec-env.sh
+. benchmarks/flock_pod/rec-env.sh
 
 N=${N:-64}; D=$S/stage
 # InnerClaims.lean as an executable beside flock-verify (interpreted it takes about half an hour), cached by its sources
@@ -37,7 +37,7 @@ CLAIMS_BIN=$L/claims-$CSHA/inner-claims
   fi
 ) > $O/build-claims.log 2>&1 &
 CLP=$!
-python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 benchmarks/flock_pod/rec_inner.py stage --n $N --sets $S/sets --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
 TB=(); [ -d $D/tables ] && TB=(--tables $D/tables)
 PART=(--partition $D/partition.json)
@@ -71,7 +71,7 @@ echo "claims exit $?"
 # moves); both go to replay and Lean through session.json and to V*'s reference through public.json
 for F in challenge query; do
   FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
-  python3 verity/ml/flock/pod/rec_inner.py forge --what $F --inner $FS
+  python3 benchmarks/flock_pod/rec_inner.py forge --what $F --inner $FS
   $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $FS/session > $O/forged-$F-replay.txt 2>&1
   $LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" "${DRAWN[@]}" --coins os --session $FS/session > $O/forged-$F-lean.txt 2>&1
   echo "forged $F lean exit $?"

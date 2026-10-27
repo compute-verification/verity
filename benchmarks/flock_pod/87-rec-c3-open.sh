@@ -7,7 +7,7 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export RI_PINNED=${RI_PINNED:-$(taskset -pc $$ | cut -d: -f2 | tr -d ' ')} RAYON_NUM_THREADS=${RAYON_NUM_THREADS:-$(nproc)}
-. verity/ml/flock/pod/rec-env.sh
+. benchmarks/flock_pod/rec-env.sh
 python3 -c 'import pytest' 2>/dev/null || $UV pip install -q --python $W/py/bin/python pytest || exit 1
 FLOCK_CIRCUIT=$B PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -v --junitxml=$O/junit.xml \
   verity/ml/flock/tests/test_rec_c3_open.py > $O/pytest.txt 2>&1
