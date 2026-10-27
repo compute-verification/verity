@@ -10,8 +10,8 @@ declaration, or says "not yet in Lean". A gate count that credits or reports is 
 
 A bound is argued in three parts: **the feasible set** 𝓕 (what the hardware can run at all, from the developer's initial
 state), **protocol soundness** (each accepted protocol p's admissible set 𝒜_p holds except with probability δ_p;
-`Verity.Soundness`) and **the overhead lower bound** (how much of training's necessary subcomputation free compute can
-do, the one place the ACCEL model's resources appear).
+`Verity.Soundness`) and **the overhead lower bound** (T_min/T_ref: the least GPU-hours that can fit training's
+necessary subcomputation, over the reference's).
 
 **Circuits**
 
@@ -19,12 +19,12 @@ do, the one place the ACCEL model's resources appear).
 |---|---|---|
 | C, \|C\|, C(x) | A circuit: gates in topological order, each holding one value. \|C\| is its size, the number of its operation (non-input) gates. C(x) is the value of its output gates on the fresh input x. | `Verity.Circuit`, `Circuit.computed`, `Circuit.size`, `Circuit.eval` |
 | in(S), out(S) | For a set S of gates: the gates outside S with a wire into S; the gates of S read outside it, and its output gates. in(C) is C's input gates and out(C) its output gates. | `Circuit.into`, `Circuit.exits`; `Circuit.isInput`, `Circuit.outputs` |
-| θ, x | The registered information's input gates (the weights, the programs, the circuit builder), their values fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
-| D, R = (θ, D, 𝓘) | The declared circuit and its registration, once: θ, D and 𝓘, D's (c, k)-partition into inference blocks. | `Verity.Declaration`; 𝓘 is a `Verity.Partition` |
-| (c, k), 𝒞_{c,k} | A partition's gates per block, exactly (padded), and fresh input bits per block, at most: \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
-| A, x(g), t(g) | The actual circuit: everything run in the period, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
+| θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
+| D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R is its registration, once: θ, D and 𝓘, its (c, k)-partition into inference blocks, which the verifier checks. | `Verity.Declaration.D`, `Verity.Declaration`; 𝓘 is a `Verity.Partition` |
+| (c, k), 𝒞_{c,k} | A partition's budgets per block: gate budget c, exactly (padded), and fresh-input budget k, at most; \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
+| A, x(g), t(g) | The actual circuit: everything the hardware computed in the period, hidden work included, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
-| V(X, J), U(X, J) | The verified compute at X during J (below), as gate occurrences; the free gates, \|A[X, J]\| − \|A[X, J] ∩ V(X, J)\|. | the share 1 − V/C: `Nci.Dampener.residualShare` (W_cert there, renamed later); the sets not yet in Lean |
+| V(X, J), U(X, J) | The verified compute at X during J (below), as gate occurrences; the free gates, \|A[X, J]\| − \|A[X, J] ∩ V(X, J)\|. | the share 1 − V/C: `Nci.Dampener.residualShare`; the sets not yet in Lean |
 | s_× | The fewest gates of a counted operation, in the same count: U free gates complete at most U/s_× counted operations. | not yet in Lean |
 
 **The physical model**
@@ -34,14 +34,14 @@ do, the one place the ACCEL model's resources appear).
 | 𝓜, ρ | The ACCEL model: a period's devices, their resources (tensor cores, issue slots, shared-memory and register ports, device memory, links) and each resource's rate ρ, each a ceiling no program exceeds, at the firmware maximum; the card files `verity/hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, not yet in Lean; `FixedMachine` and `InitialBudget` not yet in Lean |
 | server-time block, serving block | A server's gates between two wipes (a server-time block); a serving block is one, its padded size c_S = ⌊Φ_s·Δ_wipe⌋ and its input allowance k_S = k_wipe + (r_in + r_side)·Δ_wipe: what the wipe leaves of M_s (at most 4×10^10 bits plus egress), and the certified ingress and the side channels over the wipe interval Δ_wipe. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the serving-block bound not yet in Lean |
-| k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its input accounting has not already charged. | not yet in Lean |
+| k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its fresh-input budget does not already count. | not yet in Lean |
 | HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`, which the per-party `Faithful`, `Secret` and `Confined` are to replace). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
 
 **Sets, protocols and the guarantee**
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝓕 | The feasible set: the computations, pairs (C, x), the hardware can run under HW from the developer's initial state a, which Λ bounds; unregistered hardware included. | `Accounting.Overhead.physClass`, renamed later; a set of computations is an `Accounting.Overhead.Class`, renamed later |
+| 𝓕 | The feasible set: the computations, pairs (C, x), the hardware can run under HW from the developer's initial state a, which Λ bounds; unregistered hardware included. | `Accounting.Overhead.physClass`, a set of computations being an `Accounting.Overhead.Class`, both renamed later |
 | 𝒜_p, δ_p | Protocol p's admissible set, the computations it accepts, and its failure bound: Pr[accept ∧ (A, x) ∉ 𝒜_p] ≤ δ_p. | `Accounting.Overhead.envelope`, renamed later; `Verity.Sound`; `Verity.Soundness`, not yet in Lean |
 | 𝒜 | The admissible set, 𝓕 ∩ ⋂_p 𝒜_p, which every accepted run lies in except with probability Σ_p δ_p and the cryptographic terms. | `Accounting.Overhead.restricted`, renamed later |
 | τ, b | A prover strategy; a server block (below). | `Verity.Game.Strategy`; b as `Verity.Block` |
@@ -53,38 +53,39 @@ do, the one place the ACCEL model's resources appear).
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝒢, 𝒴 | The training task: one random input x, drawn once, and a success test on the output read at positions fixed before the draw. The acceptable outputs are a set 𝒴, since many trained models pass, and success means C(x) ∈ 𝒴. Tasks are static; an interactive world is a causal experiment with each candidate's own queries. | `Accounting.Overhead.Task`, `Accounting.Overhead.Succeeds` |
+| 𝒢, 𝒴 | The training task: one random input x, drawn once, and a success test on the output at positions fixed before the draw, C(x) ∈ 𝒴: a set, since many trained models pass. Tasks are static; an interactive world is a causal experiment with each candidate's own queries. | `Accounting.Overhead.Task`, `Accounting.Overhead.Succeeds` |
 | η, P_α, η_cov | A success probability; the properties P_α a bound lower-bounds pointwise, each that the run computes a necessary subcomputation (below); the exception, Pr[success ∧ ¬⋁_α P_α] ≤ η_cov, uniform over strategies. | not yet in Lean |
-| GPU-hours, cost(C) | The unit of cost. The wipe and the per-block limit are per server, so whole servers are charged: cost(C) is each server's occupied time times its GPUs, summed over the servers, on C's worst input, never wall-clock. | `Accounting.Overhead.cost`; `Accounting.Overhead.serverTime`, each server's occupied time without its GPUs, renamed later |
+| GPU-hours, cost(C) | The unit of cost, by whole servers, since the wipe and the server block are per server: cost(C) sums each server's occupied time times its GPUs, on C's worst input, never wall-clock. | `Accounting.Overhead.cost`; `Accounting.Overhead.serverTime`, without the GPUs, renamed later |
 | T_𝒢(η; S) | The training cost of a set S of computations: the least GPU-hours at which some computation in S succeeds with probability above η, inf{cost(C) : Pr[(C, x) ∈ S ∧ C(x) ∈ 𝒴] > η}. | `Accounting.Overhead.threshold`, renamed later; `Accounting.Overhead.success` |
-| overhead(𝒢, 𝒜, η) | The training cost over the admissible set divided by the training cost over the feasible set, T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), with the same initial state a and Λ on both sides, defined when the denominator is in (0, ∞). | `Accounting.Overhead.overhead` |
+| overhead(𝒢, 𝒜, η) | T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), the training cost over the admissible set divided by that over the feasible set, with the same a and Λ on both sides, defined when the denominator is in (0, ∞). | `Accounting.Overhead.overhead` |
 | slowdown | Wall-clock time only, never overhead: reaching the task takes at least T_𝒢(η; 𝒜) GPU-hours spread over the fleet's GPUs. | — |
 
-**Registered or not**: the bound needs three yes/no distinctions, one per kind of thing (hardware, information,
-compute), and nothing else. Each share states its denominator, an overlap counted once:
+**Registered or not**, the bound's three yes/no distinctions (hardware, information, compute). Each share states its
+denominator, an overlap counted once:
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| registered hardware, L_unreg | Hardware in the auditors' inventory; unregistered hardware, the rest (its devices L_unreg), has no server blocks. | not yet in Lean |
-| registered information, fresh input | Information fixed before the period, θ (above), and the rest, the fresh input x (above). A block reads registered information at no charge. Every fresh input bit it takes in is charged, and that is what the per-block limit counts. | `Verity.Declaration.θ`; the charge not yet in Lean |
-| verified compute, utilization | Compute proved busy running the developer's registered programs, V (above): served inference, and the protocols' own work at the public best's cost, with the prover overhead γ ≤ 10 allowed. Utilization is the registered programs' operations per second over the card's ceiling. | its share V/C is 1 − `Nci.Dampener.residualShare`; utilization not yet in Lean |
-| free compute | Everything hidden training can use, U (above): one number with three sources, ε_undecl, ε_skip and ε_unreg (below); ε_undecl + ε_skip, its part on registered hardware, is driven to 0. | the part on registered hardware: `Nci.Dampener.residualShare`; the whole not yet in Lean |
-| ε_undecl | Registered hardware not running proved work, a share of the registered capacity C_X: idle or uncredited pipes, the host CPUs, the clock above the credited one, filler, and the honest implementation's excess over the public best. C_X is the location's capacity in 𝓜's resources at each SKU's ceiling, reported as counted operations (Φ_X, in gates per second, stays for the partition, c_S and the counting). | `Nci.Dampener.residualShare` reads it with ε_skip; ε_undecl alone not yet in Lean |
+| registered hardware, L_unreg | Hardware in the auditors' inventory; unregistered hardware is the rest, its devices L_unreg. | not yet in Lean |
+| registered information, fresh input | θ and x (above): information fixed before the period, and the rest. A block can read an unlimited amount of registered information, and its fresh-input budget caps the fresh input it takes in. | `Verity.Declaration.θ`; the budget not yet in Lean |
+| verified compute, utilization | V (above), the part of the actual circuit proved to match the declared circuit: served inference and the protocols' own work at the public best's cost, prover overhead γ ≤ 10 allowed. Utilization is the registered programs' operations per second over the card's ceiling. | its share V/C is 1 − `Nci.Dampener.residualShare`; utilization not yet in Lean |
+| free compute | Everything else in the actual circuit, U (above): one number with three sources, ε_undecl, ε_skip and ε_unreg (below); ε_undecl + ε_skip, its part on registered hardware, is driven to 0. | the part on registered hardware: `Nci.Dampener.residualShare`; the whole not yet in Lean |
+| ε_undecl | Registered hardware not running proved work, a share of the registered capacity C_X: idle or uncredited pipes, host CPUs, the clock above the credited one, filler, and the honest implementation's excess over the public best. C_X is the location's capacity in 𝓜's resources at each SKU's ceiling, as counted operations (Φ_X, gates per second, stays for the partition, c_S and the counting). | with ε_skip, `Nci.Dampener.residualShare`; alone not yet in Lean |
 | ε_skip | Work the proofs could miss, a share of C_X: PoUW's misses, ε_W of the share running registered programs, ε_W·(1 − ε_undecl), and the wrong certificates. | `Accounting.Compose` (ε_♭ = ε_skip + ε_cert + ε_route) |
 | ε_unreg | Unregistered hardware's share of the fleet's capacity, Φ(L_unreg) = ε_unreg·Φ_total; mainline 10^-3, range 10^-4 to 10^-2. | `Nci.Dampener.unmonitoredShare`, renamed later |
 | ε_break | The gates of the faulty proof blocks F. | `Nci.Guarantees.Dampener` (its χ) |
 
-**The bounding strategy**, a proof technique that connects the task and the admissible set and belongs to neither:
+**Blocks, yields and bounding strategies.** Server blocks are the actual circuit's, inference blocks the declared
+circuit's, and they meet in verified compute; gates on unregistered hardware are in no block:
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| server block, c_S, k_S | The gates one registered server computes between two wipes (unregistered hardware has none), padded to exactly c_S = ⌊Φ_s·Δ_wipe⌋ gates, taking in at most k_S = k_wipe + (r_in + r_side)·Δ_wipe fresh input bits: what the wipe leaves of M_s (at most 4×10^10 bits plus egress), and the certified ingress and side channels over Δ_wipe. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe` (their module's "server-time blocks", renamed later); the sum over server blocks not yet in Lean |
-| inference block | A piece of the circuit shaped like inference: at most c gates and k fresh input bits, one block of D's registered (c, k)-partition 𝓘 ("(c, k)-block" only in technical detail). | 𝓘 is a `Verity.Partition`; the (c, k) condition not yet in Lean |
-| N | The necessary subcomputation: what every successful training run must compute (the P_α above), at least N counted products. | not yet in Lean |
-| q, q_T(c, k) | The per-block limit: the most counted products one server block can complete, because it can take in only so much fresh input; q_T(c, k) is a pricing argument's limit for a block of c gates and k fresh input bits. | not yet in Lean |
-| pricing argument | A proof of the per-block limit that charges each counted product for the fresh input bits it needs: its operands, fan-out, partial sums and recovery. | `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.ContainedTraining` |
-| reference training algorithm | The best known way to train with no protocol; it bounds T_𝒢(η; 𝓕), the training cost over the feasible set. | not yet in Lean |
-| overhead lower bound | The result: a lower bound on overhead(𝒢, 𝒜, η) ("Size, credit and the overhead lower bound", below). | `Nci.Guarantees.Dampener`, `Nci.Guarantees.DampenerRemote`, renamed later |
+| server block S, c_S, k_S | The actual circuit's gates on one registered server between two wipes. Its gate budget c_S = ⌊Φ_s·Δ_wipe⌋ (padded) is what the server can compute in that interval; its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the sum over server blocks not yet in Lean |
+| inference block I, c, k | A block of 𝓘, the developer's (c, k)-partition of D: gate budget c, fresh-input budget k ("(c, k)-block" only in technical detail). In verified compute each sits inside one server block, 𝓘 refining the server blocks. | 𝓘 is a `Verity.Partition`, nested by `Verity.Partition.Refines`; the nesting not yet in Lean |
+| N | The necessary subcomputation: what every successful training run must compute (the P_α above), N counted objects of a kind we choose: products (weight × activation multiplies), products with their partial sums, or outputs the update can be recovered from. | not yet in Lean |
+| pricing argument, bounding strategy | How much of a block's fresh-input budget one counted object needs, which gives the yields (HeldRate is one, for products); a bounding strategy is a choice of necessary subcomputation and a pricing argument for it, and the bound takes the strongest that applies. | `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.ContainedTraining`; strategies not yet in Lean |
+| q_S, q(c, k) | The server-block yield, the most counted objects one server block can complete within its budgets; the inference-block yield, the same for one inference block. | not yet in Lean |
+| straddle term | The counted objects computed partly in verified and partly in free compute inside one block, bounded by the bits crossing between them. | not yet in Lean |
+| T_min, T_ref, overhead lower bound | The least GPU-hours that can fit N; those of the reference training algorithm, the best known way to train with no protocol, which bound T_𝒢(η; 𝓕); the result, T_min/T_ref ≤ overhead(𝒢, 𝒜, η) (below). | T_min, T_ref not yet in Lean; the result `Nci.Guarantees.Dampener`, `Nci.Guarantees.DampenerRemote`, renamed later |
 
 ## Size, credit and the overhead lower bound
 
@@ -92,21 +93,22 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
 
 - **Size** is a circuit's or a region's AND-gate count. AND gates are what C-Flock pays for, so size is the lingua franca
   every protocol credits in and every result reports computation in, in place of work, FLOPs, MAC-times and pricing.
-  U free gates complete at most U/s_× counted operations (s_×, above), which replaces κ/2.
+  U/s_× (above) replaces κ/2.
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
   Pr[accept ∧ the AND gates whose committed values are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
   needs no algorithmic premise: SAK (`SAKResidual`) is a premise of the overhead lower bound only. For the served PoUW,
   the one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's
   no-fold receipt, which takes none. The remote audit (`Accounting.Remote`) bounds no hidden work itself, so its PoUW
   guarantee is the size credit alone.
-- **The overhead lower bound** bounds how much hidden training free compute could do beside the credited work. Every
-  successful training run must compute the necessary subcomputation, and it can do that only on free compute. On
-  registered hardware, each server block also completes at most the per-block limit, because it can take in only so much
-  fresh input. Onsite, the per-block limit binds first; remotely, free compute does. The bound is the one place the
-  ACCEL model 𝓜's resources appear (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure a
-  device's capacity. Its result is reported as counted operations, each labelled with that operation's canonical AND
-  count, never converted to "ANDs of hidden work" (that would need a ceiling on ANDs per resource unit over all
-  programs, which is vacuous).
+- **The overhead lower bound** bounds the hidden training beside the credited work. Its N counted objects can come from
+  verified compute (products the declared circuit computes anyway, through inference-block yields) as well as free
+  compute: a server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free
+  compute can do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split
+  between the two. Onsite q_S is the smaller term, the fresh-input budget being small; remotely the other is: inference
+  blocks yield little, and free compute sets the number. It is the one place the ACCEL model 𝓜's resources appear
+  (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure a device's capacity. Its result is
+  reported as counted operations, each labelled with that operation's canonical AND count, never converted to "ANDs of
+  hidden work" (that would need a ceiling on ANDs per resource unit over all programs, which is vacuous).
 - **What counts every gate.** The (c, k)-partitions (inference blocks, a server block's c_S) and the Lean's counting
   results (`Circuit.size`) count every gate, so a report that reads one converts it explicitly (`Circuit.andSize` beside
   `Circuit.size`, and credit as `Verity.creditSize`: not yet in Lean). In Credit, S is the AND count of the
@@ -178,12 +180,11 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block" for a bucket of the network certifier's timing advice, and "the one-block cap"; the Lean's `OccupancyReadsOwnBlock`, `EncardAccSeqsLeBlocks`, until they are renamed | bucket (the τ_b time slot), and "a bucket's cap" |
 | "block" for G of the certifier's served rows; the Definition `CompileSliceBlocks_v1` | row group |
 | "compile unit" | the compile slice's proof block |
-| "physical block" | server block |
 | "isolation unit" (IU) | isolation block |
 | "replay unit" (RU) | replay block |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
-| "row" for a server's window (s, w), "per-row bound" | server block, per-block limit |
+| "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until they are restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the overhead lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
@@ -194,30 +195,24 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until it is renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until they are renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
-| ρ, "slowdown" and "the circuit-size slowdown" for \|C\|/T_0, "dampener", "compute dampener"; `benchmarks/rho` (its `Slowdown.rho`, `slowdown()`, the `rho` command) until they are renamed, the Lean's `Nci.Dampener` and `Dampener*` names (`DampenerRemotePeriod`) until they are renamed | overhead(𝒢, 𝒜, η); "slowdown" is wall-clock time only, and ρ is 𝓜's resource rate |
+| ρ, "slowdown" and "the circuit-size slowdown" for \|C\|/T_0, "dampener", "compute dampener"; `benchmarks/rho` (its `Slowdown.rho`, `slowdown()`, the `rho` command) and the Lean's `Nci.Dampener` and `Dampener*` names (`DampenerRemotePeriod`), until they are renamed | overhead(𝒢, 𝒜, η); "slowdown" is wall-clock time only, and ρ is 𝓜's resource rate |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕), which the reference training algorithm bounds; the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝓕, 𝒜_p, δ_p, 𝒜; the feasible set, protocol soundness, the overhead lower bound |
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until they are renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
-| ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are an input term (k_S's r_in and r_side), reported beside it in bits |
-| 𝒜_phys, "physical class", "the physical model's class"; the Lean's `Accounting.Overhead.physClass`, until it is renamed | the feasible set 𝓕 |
-| "envelope" for 𝒜_p, and "subprotocol application" for its p; the Lean's `Accounting.Overhead.envelope`, `benchmarks/rho`'s `envelopes.py` and `data/envelopes.toml`, until they are renamed | the admissible set 𝒜_p of protocol p |
-| 𝒜′, "restricted class", "monitored class", "training class" for 𝒜′; the Lean's `Accounting.Overhead.restricted`, until it is renamed | the admissible set 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p |
-| "class" for a set of computations; the Lean's `Accounting.Overhead.Class`, until it is renamed | set |
-| "initial information" for what both sides of the overhead start from | the initial state a, which Λ bounds |
-| "server-time" for the cost; the Lean's `Accounting.Overhead.serverTime`, until it is renamed and counts each server's GPUs | GPU-hours |
-| "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.threshold`, until it is renamed | the training cost T_𝒢(η; S) |
-| "server-time block", "serving block", "server-window", and "window" for a server's gates between two wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
-| "server block" for the proof blocks one server runs in one circuit, and "server-time block" for the steps that circuit spans; the network certifier's `blocks.Server` and `Blocks.window`, and the `server` and `server_time` keys of `verity/blocks/v1`, until a format version | a server's proof blocks; the circuit's steps |
+| ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
+| 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class`, `benchmarks/rho`'s `envelopes.py` and `data/envelopes.toml`, until they are renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p; set; the initial state a, which Λ bounds |
+| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until they are renamed | GPU-hours; the training cost T_𝒢(η; S) |
+| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
+| "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; the network certifier's `blocks.Server`, `Blocks.window` and `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "certified block" | inference block |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
-| "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block cap", "window cap", q_S, and `benchmarks/rho`'s `Cap` and `data/exclusion.toml`, until they are renamed | the overhead lower bound; the per-block limit q |
-| "training class" for a premise set and the per-block count it gives; "allowance", "tier", "route" and "application" for a proof of the per-block limit; `benchmarks/rho`'s `classes.py`, `CLASSES` and `Allowance`, until they are renamed | pricing argument (`benchmarks/nci`'s tiers are sets of mechanisms, and `benchmarks/rho`'s routes sources of free compute) |
-| "reference construction", "reference run", "reference circuit" for the best known training with no protocol | the reference training algorithm |
-| "dark", "dark compute", "dark fleet", "dark leaves", "unmonitored", "undeclared hardware"; ε_dark, L_dark; the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark`, until they are renamed | unregistered hardware; ε_unreg, L_unreg |
-| "monitored", "monitored compute", "monitored hardware", "a monitored server" | registered hardware (the monitoring period keeps its name) |
-| "certified work", "accounted compute", "declared compute", W_acc, W_cert for compute; the Lean's W_cert (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`), `benchmarks/resource_accounting`'s `w_cert` and the block record's `W_cert` symbol (`verity/block-record/v1`), until they are renamed | verified compute, V ("certified" stays where a certifier certifies, as in certified ingress, and "declared" for D) |
-| "certified share", "declared utilization" | utilization (γ stays the prover overhead) |
-| "slack", "uncertified capacity", "the uncertified share", "the unaccounted share", "unaccounted compute", "undeclared compute", "skippable work", "residual compute"; "uncertified gates", "unaccounted gates" | free compute (the unaccounted share was its registered part, ε_undecl + ε_skip); U counts the free gates. "Slack" keeps its other senses, such as a tick's slack |
+| "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap` and `data/exclusion.toml`, until they are renamed | the overhead lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
+| "registered computation" | the declared circuit (registered programs on committed inputs) |
+| "training class" for a premise set and the yield it gives; "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `classes.py`, `CLASSES` and `Allowance`, until they are renamed | pricing argument (`benchmarks/nci`'s tiers are sets of mechanisms, and `benchmarks/rho`'s routes sources of free compute) |
+| "reference construction", "reference run", "reference circuit" | the reference training algorithm |
+| "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark` until they are renamed; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
+| "certified work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v1`), `benchmarks/resource_accounting`'s `w_cert`, until they are renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays where a certifier certifies, as in certified ingress); utilization |
+| "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute" | free compute (the unaccounted share was its registered part, ε_undecl + ε_skip); U counts the free gates. "Slack" keeps its other senses, such as a tick's slack |
 | "unregistered input", "unregistered input bits", "unregistered information" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
 | a for the protocol index: 𝒜_a, δ_a | p: 𝒜_p, δ_p (a is the initial state) |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |

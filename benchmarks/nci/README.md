@@ -242,11 +242,11 @@ All values below are from `parameters.json`; render the index for the findings b
     (`b_tok/entropy-coded`).
   - Requiring coded prompts shrinks `K` about 8x for the same fresh prompt tokens. That multiplies every full-weight
     bracket by about 5–10, but it also shrinks the free headroom for non-text state.
-  - `K` caps what a block reads, not what it serves: outputs are never charged, so tokens a block generates, and prompts
-    committed in `θ`, cost it nothing. Threads crowd out only fresh inputs read outside `θ`.
-- **Gradient compression does not evade a per-block limit.** DiLoCo-family methods cut traffic 100–3000x between workers
-  that each hold a full model (`grad.compression_ratio/frontier`). Their achieved per-step updates, 0.04–0.6 bits per
-  parameter, are thousands of times `K` at frontier scale (`update.bits_per_param_step/pretraining`).
+  - `K`, a block's fresh-input budget, caps what it takes in, not what it serves: its outputs, the tokens it generates,
+    and prompts committed in `θ` use none of it. Threads crowd out only fresh inputs read outside `θ`.
+- **Gradient compression does not evade a block's fresh-input budget.** DiLoCo-family methods cut traffic 100–3000x
+  between workers that each hold a full model (`grad.compression_ratio/frontier`). Their achieved per-step updates,
+  0.04–0.6 bits per parameter, are thousands of times `K` at frontier scale (`update.bits_per_param_step/pretraining`).
 - **Shared headroom is elicitation.**
   - Every demonstrated gain from a few MB or less elicits skill the base model has: TinyLoRA, one-shot RL, LIMA and s1,
     prompt and playbook optimization (`capability.bits/*`).

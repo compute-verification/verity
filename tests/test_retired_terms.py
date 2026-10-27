@@ -43,10 +43,10 @@ DOC_TERMS = {
     "thread block": "CTA",
     "KV block": "KV page",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
-    "exclusion bound": "overhead lower bound (the result) or per-block limit (the per-block step)",
-    "window cap, per-block cap": "per-block limit",
+    "exclusion bound": "overhead lower bound (the result) or server-block yield (the per-block step)",
+    "window cap, per-block cap, per-block limit": "server-block yield",
     "physical class": "feasible set",
-    "monitored class, training class, restricted class": "admissible set (a premise set with its per-block count is a "
+    "monitored class, training class, restricted class": "admissible set (a premise set with the yield it gives is a "
                                                          "pricing argument)",
     "work requirement": "necessary subcomputation",
     "reference construction": "reference training algorithm",
@@ -55,16 +55,18 @@ DOC_TERMS = {
     "declared compute, accounted compute, certified work": "verified compute",
     "undeclared compute, unaccounted compute, skippable work, uncertified capacity, uncertified share": "free compute",
     "unregistered input bits": "fresh input bits",
+    "registered computation": "the declared circuit (registered programs on committed inputs)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?"
                        rf"|(?:physical|thread|KV|serving|certified|server{_SPACE}time){_SPACE}blocks?"
-                       rf"|server{_SPACE}windows?|exclusion{_SPACE}bounds?|(?:window|per{_SPACE}block){_SPACE}caps?"
+                       rf"|server{_SPACE}windows?|exclusion{_SPACE}bounds?|window{_SPACE}caps?"
+                       rf"|per{_SPACE}block{_SPACE}(?:caps?|limits?)"
                        rf"|(?:physical|monitored|training|restricted){_SPACE}class(?:es)?|work{_SPACE}requirements?"
                        rf"|reference{_SPACE}constructions?|dark{_SPACE}(?:compute|fleets?|leaves)|dark"
                        rf"|(?:monitored|(?:un)?declared|(?:un)?accounted){_SPACE}compute"
                        rf"|(?:skippable|certified){_SPACE}work|uncertified{_SPACE}(?:capacit(?:y|ies)|shares?)"
-                       rf"|unregistered{_SPACE}input{_SPACE}bits?"
+                       rf"|unregistered{_SPACE}input{_SPACE}bits?|registered{_SPACE}computations?"
                        rf"|legs?)\b)|\bIUs?\b")
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
@@ -208,6 +210,9 @@ def test_the_doc_scan_reads_each_form():
                 "Accounted compute, unaccounted\ncompute, skippable work, certified work; unregistered input bits.\n"
                 "It went dark. Not the monitoring period, a declared circuit, accounted for, certified ingress,\n"
                 "registered input bits, a tick's slack or Slack.\n",
+        "f.md": "A per-block limit, two per-block\nlimits; the registered computation and registered computations.\n"
+                "Not a per-block error, per-block keys, a window limit, registered programs or the computation\n"
+                "registered.\n",
         "benchmarks/numerical/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
@@ -223,4 +228,5 @@ def test_the_doc_scan_reads_each_form():
         ("e.md", 1, "dark leaves"), ("e.md", 1, "monitored compute"), ("e.md", 1, "declared compute"),
         ("e.md", 1, "undeclared compute"), ("e.md", 2, "Accounted compute"), ("e.md", 2, "unaccounted compute"),
         ("e.md", 3, "skippable work"), ("e.md", 3, "certified work"), ("e.md", 3, "unregistered input bits"),
-        ("e.md", 4, "dark")]
+        ("e.md", 4, "dark"), ("f.md", 1, "per-block limit"), ("f.md", 1, "per-block limits"),
+        ("f.md", 2, "registered computation"), ("f.md", 2, "registered computations")]

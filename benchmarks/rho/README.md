@@ -64,9 +64,9 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   leaves (by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_p`, split into `δ_coin` and
   `δ_crypto`. The NCI check is the registration (`Policy`). A regime is the protocols that run, and builds the
   server blocks with their cuts.
-- **The overhead lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as per-block limits
-  `q_T(c, k)`, the attacks as constructions, and the sum over server blocks: each server block's least cut
-  (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
+- **The overhead lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as yields `q(c, k)` of
+  a block with budgets `(c, k)`, the attacks as constructions, and the sum over server blocks: each server block's least
+  cut (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
   (`theorem.aggregate`).
 
 | Notation | here |
@@ -75,7 +75,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `ε_unreg`, `L_unreg` | `fleet.<name>.eps_dark`, `Partition.eps_dark` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
 | server block `S`, `(c_S, k_S)`, `n_S` | `ServingBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
-| the per-block limit `q_T(c, k)` | `Cap`, from a pricing argument's `Allowance` by `classes.per_block` |
+| the yield `q(c, k)`, `q_S` at a server block's budgets | `Cap`, from a pricing argument's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.faulty` (`Cut.uncertified`) |
 | `𝒜_p`, `δ_p`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
