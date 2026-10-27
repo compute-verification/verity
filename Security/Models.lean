@@ -27,6 +27,7 @@ import Definitions.Nci.Guarantees.CoverFanOutValue
 import Definitions.Nci.Guarantees.CoverPartialSum
 import Definitions.Nci.Guarantees.CoverTraining
 import Definitions.Nci.Guarantees.CoverChained
+import Definitions.Nci.Guarantees.Ldl
 import Definitions.Pous.Assumptions
 import Definitions.Pous.Guarantees
 import Definitions.Pouw.Assumptions
@@ -42,9 +43,12 @@ import Definitions.NetworkCertifier.Guarantees.Horizon
 import Definitions.Flock.Guarantees
 import Definitions.Accounting.Assumptions.Remote
 import Definitions.Accounting.Assumptions.RemoteOutside
+import Definitions.Accounting.Assumptions.CreditedWords
 import Definitions.Accounting.Assumptions.RemoteP2
 import Definitions.Accounting.Assumptions.Parties
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
+import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.Guarantees.HorizonLeak
 
 /-! Each component's named assumptions and guarantee statements. -/
