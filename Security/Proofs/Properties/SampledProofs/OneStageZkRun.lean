@@ -306,7 +306,7 @@ theorem runFrom_verdict {r0 : Run} {o : Own} {pd : String} {sessions : Array Ses
         | (rw [hp] at hpl; cases hpl)
         | (simp only [hp, ↓reduceIte] at hpl; cases hpl)
         | simp [hp] at hpl
-    exact ⟨hr0, fun s hs => ⟨tags0, circuitB, pubB, rd, rfl, hp, hc, hpb, hrd, hss s (Array.mem_toList_iff.2 hs)⟩⟩
+    exact ⟨hr0, fun s hs => ⟨tags0, circuitB, pubB, rd, ht, hp, hc, hpb, hrd, hss s (Array.mem_toList_iff.2 hs)⟩⟩
 
 /-- The group form's fold of members that returned an accepting run started from an accepting one and ran each
 member's sessions at the member's inputs and public file. -/
@@ -339,10 +339,7 @@ theorem session_verdict {p : Params} {c : OneStage.Commitment} {e : Evidence} {b
   unfold checkBlobs at hacc
   split at hacc
   · next hone =>
-    have hone' : p.members = #[] ∧ e.members = #[] := by
-      first
-      | simpa using hone
-      | (simp only [Bool.and_eq_true, Array.isEmpty_iff] at hone; exact hone)
+    have hone' : p.members = #[] ∧ e.members = #[] := by simpa using hone
     unfold checkOne at hacc
     split at hacc
     · cases hacc
@@ -359,11 +356,7 @@ theorem session_verdict {p : Params} {c : OneStage.Commitment} {e : Evidence} {b
         · rw [if_neg hall] at hacc
           cases hacc
       · next o' hne hchk =>
-        first
-        | exact (hchk _ _ hacc).elim
-        | exact (hchk _ _ (hne ▸ hacc)).elim
-        | exact (hchk _ _ (hne.symm ▸ hacc)).elim
-        | (subst hne; exact (hchk _ _ hacc).elim)
+        exact (hchk _ _ hacc).elim
   · next hone =>
     rcases hs with ⟨hp0, he0, -, -, -⟩ | ⟨y, hy, rfl, rfl, hs⟩
     · exact absurd (by simp [hp0, he0]) hone
@@ -387,11 +380,7 @@ theorem session_verdict {p : Params} {c : OneStage.Commitment} {e : Evidence} {b
               · rw [if_neg hall] at hacc
                 cases hacc
             · next o' hne hchk =>
-              first
-              | exact (hchk _ _ hacc).elim
-              | exact (hchk _ _ (hne ▸ hacc)).elim
-              | exact (hchk _ _ (hne.symm ▸ hacc)).elim
-              | (subst hne; exact (hchk _ _ hacc).elim)
+              exact (hchk _ _ hacc).elim
 
 /-- An accepting verdict ran `Zk.verify` on the session's setup and proof files, then the scope check, the draw-less
 session's refusal and the record's canonical text. -/

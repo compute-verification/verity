@@ -438,10 +438,7 @@ theorem acceptMeansGroup (p : Params) (c : OneStage.Commitment) (e : Evidence) (
             · rw [if_pos hall] at h
               cases h
               have hq : r.proved.qsort (· < ·) = e.base.provedUnits ∧ increasing e.base.provedUnits.toList = true := by
-                first
-                | simpa [hall] using hunits
-                | (simp only [hall, Bool.true_and, Bool.or_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true',
-                    not_or, Decidable.not_not, Bool.not_eq_false] at hunits; exact hunits)
+                simpa [hall] using hunits
               obtain ⟨hn, htags, sss, hlen, hsss, hpr, hsz⟩ := runGroup_ok hrun hall
               obtain ⟨_, _, _, -, -, -, hva, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ hchk
               obtain ⟨x, hx, -⟩ := hva.2.1
@@ -462,11 +459,7 @@ theorem acceptMeansGroup (p : Params) (c : OneStage.Commitment) (e : Evidence) (
             · rw [if_neg hall] at h
               cases h
           · next o hne hchk =>
-            first
-            | exact (hchk _ _ h).elim
-            | exact (hchk _ _ (hne ▸ h)).elim
-            | exact (hchk _ _ (hne.symm ▸ h)).elim
-            | (subst hne; exact (hchk _ _ h).elim)
+            exact (hchk _ _ h).elim
 
 /-- **What v2 accepts is `Accepted`**: the single form's acceptance with no member on either side, else the group
 form's. -/
@@ -475,10 +468,7 @@ theorem acceptMeans : AcceptMeans := by
   unfold checkBlobs at h
   split at h
   · next hone =>
-    have hone' : p.members = #[] ∧ e.members = #[] := by
-      first
-      | simpa using hone
-      | (simp only [Bool.and_eq_true, Array.isEmpty_iff] at hone; exact hone)
+    have hone' : p.members = #[] ∧ e.members = #[] := by simpa using hone
     exact .inl ⟨hone'.1, hone'.2, acceptMeansOne p c e blobs pub prof h⟩
   · exact .inr (acceptMeansGroup p c e blobs pub prof h)
 
