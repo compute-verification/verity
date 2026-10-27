@@ -74,7 +74,8 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGem
            "CublasSplitKGemm", "CublasSplitKGemmBf16Partials", "CublasSplitKGemmBf16PartialsAligned",
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
            "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP", "HOPPER_STEP_V3",
-           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX",
+           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstV2", "HopperBf16Dot16StepFirstX",
+           "HopperBf16Dot16StepFirstXV2", "HopperBf16Dot16StepV2", "HopperBf16Dot16StepX", "HopperBf16Dot16StepXV2",
            "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_DOT", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M",
            "TRAIN_ROUTES",
            "aligned_bounds", "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "residue_first", "route_gemm",
@@ -156,6 +157,7 @@ HopperBf16Dot16StepFirstX, HopperBf16Dot16StepFirst, HopperBf16Dot16StepX, Hoppe
 #: `HopperBF16WgmmaDot16_v3`'s four parts, the `_v2` of `HOPPER_STEP`'s
 HOPPER_STEP_V3 = chain_step("HopperBf16Dot16Step", BG.HopperBF16WgmmaDot16V3.build, _HOPPER_PARAMS,
                             ("HopperBF16WgmmaDot16_v1(acc, a, b)", "a"), version=2)
+HopperBf16Dot16StepFirstXV2, HopperBf16Dot16StepFirstV2, HopperBf16Dot16StepXV2, HopperBf16Dot16StepV2 = HOPPER_STEP_V3
 for _part in (*HOPPER_STEP, *HOPPER_STEP_V3):
     silicon_step(_part, BG.HopperBF16WgmmaDot16.silicon)
 _DOT_STEPS = {BG.HopperBF16WgmmaDot16.id: HOPPER_STEP, BG.HopperBF16WgmmaDot16V3.id: HOPPER_STEP_V3}
