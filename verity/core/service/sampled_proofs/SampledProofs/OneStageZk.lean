@@ -257,16 +257,18 @@ def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
   pure (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
     Flock.registeredOpenings sts rd.registered)
 
+/-- A session's set-up statement, as `setupAt` returns it. -/
+abbrev SetUp := V (Flock.SessionSpec × Array Flock.Setup × Json × Json)
+
 /-- What `verdicts` carries from one session to the next: the coin-tree keys the earlier sessions used, the verdicts so
-far, the units the accepted ones proved, and whether every one accepted. -/
+far, the units the accepted ones proved, whether every one accepted, and the setups so far by their draw's canonical
+JSON, so sessions at one draw share one setup. -/
 structure Run where
   coinKeys : Array String
   out : Array (String × Json)
   proved : Array Nat
   all : Bool
-
-/-- A session's set-up statement, as `setupAt` returns it. -/
-abbrev SetUp := V (Flock.SessionSpec × Array Flock.Setup × Json × Json)
+  setups : Array (Option String × SetUp)
 
 /-- The session's proof files: per rep stream of its setup, the blob its `reps` name for it. -/
 def filesOf (bs : Core.Blobs) (s : Session) (st : SetUp) : V (Array ByteArray) := do
@@ -319,25 +321,28 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
   let coinKeys := match coinKey with | some k => r.coinKeys.push k | none => r.coinKeys
   match verdict with
   | .error why =>
-    pure { coinKeys, all := false, proved := r.proved, out := r.out.push (verdictJson rd programSha s st false why #[]) }
+    pure { r with coinKeys, all := false, out := r.out.push (verdictJson rd programSha s st false why #[]) }
   | .ok () =>
     if (programSha.map Json.str) != some want then
       throw s!"session {s.name}'s verdict names program {programSha.getD "none"}, not the partition object's {want.compress}"
     else do
       let units ← provedUnits I.publicFile record
-      pure { coinKeys, all := r.all, proved := r.proved ++ units,
+      pure { r with coinKeys, proved := r.proved ++ units,
              out := r.out.push (verdictJson rd programSha s st true "" units) }
 
 /-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own draw
-(`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
-makes after it (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in no blob or not UTF-8, or it
-accepted naming another program than the partition object's. -/
+(`setupAt`, once per draw: a draw `r` has set up reuses its setup), its rep files the blobs its `reps` name, its
+coin-tree key fresh, `Zk.verify` and the checks `verifyCmd` makes after it (`verdictOf`), its verdict pushed (`push`). A
+refusal when its record is in no blob or not UTF-8, or it accepted naming another program than the partition object's. -/
 def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope : V Unit) (programSha : Option String)
     (want : Json) (r : Run) (s : Session) : V Run := do
   let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
     | throw s!"session {s.name}'s record is not UTF-8"
   let draw := Flock.Witness.recordDraw record
-  let st := setupAt I rd draw
+  let key := draw.map fun d => (Flock.canon d).toOption.getD ""
+  let (st, r) := match r.setups.find? (·.1 == key) with
+    | some (_, x) => (x, r)
+    | none => let x := setupAt I rd draw; (x, { r with setups := r.setups.push (key, x) })
   let coinKey := coinKeyOf record st
   push I rd programSha want r s record st coinKey (verdictOf I scope r.coinKeys record draw st (filesOf bs s st) coinKey)
 
@@ -363,7 +368,7 @@ def run (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Opti
   let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
     false rd.registered.isSome
   let r ← sessions.foldlM (step I rd bs scope (programDigest p.program) (getD p.partition "program"))
-    ⟨#[], #[], #[], true⟩
+    ⟨#[], #[], #[], true, #[]⟩
   match provedUnits? with
   | some want =>
     if r.all && r.proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
