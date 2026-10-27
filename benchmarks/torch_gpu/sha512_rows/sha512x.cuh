@@ -1,10 +1,10 @@
 // FIPS 180-4 SHA-512's compression for the serve-time commit (engine.py), on the device and the host, every word a
 // big-endian u64. `compress<V, ROLL>(st, w)` has `sha::compress`'s contract (benchmarks/pouw/commit_gpu/sha512.cuh): it
-// advances the chaining value st by the block w, and the schedule overwrites w.
+// advances the chaining value st by the chunk w, and the schedule overwrites w.
 //
 // The rounds are p2keys4.cuh's (benchmarks/pous/p2_v1/p2keys4.cuh, `chunk`; copied, not included: the names a .. h rotate
 // through the round macro instead of moving, Ch is g ^ (e & (f ^ g)), the schedule runs in place over 16 words), with a
-// whole message schedule instead of P2's mostly zero counter block.
+// whole message schedule instead of P2's mostly zero counter chunk.
 //
 // V picks the pipe of each sigma's shifts, two bits each (S0 | S1 << 2 | s0 << 4 | s1 << 6): 0 funnel shifts on the integer
 // ALU, 1 the high half of each rotation and shift as mul.hi / mad.lo by 2^k on the FMA pipe and the low half a funnel shift,
@@ -210,8 +210,8 @@ SX_HD void compress(u64* st, u64* W) {
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
 
-// K[t] + W[t] for the block that ends a 256-byte message (0x80, zeros, the bit length 2048): every word is a constant, so
-// the whole schedule is (hm96's h ends with this block)
+// K[t] + W[t] for the chunk that ends a 256-byte message (0x80, zeros, the bit length 2048): every word is a constant, so
+// the whole schedule is (hm96's h ends with this chunk)
 #define SX_KW_PAD256_LIST                                                                                              \
   0xc28a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull,                          \
       0x3956c25bf348b538ull, 0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull,                      \
@@ -246,8 +246,8 @@ SX_HD const u64* kw_pad256() {
 #endif
 }
 
-// compress's rounds alone, over a block whose K[t] + W[t] are given (kw_pad256): the chaining value compress gives over that
-// block, without its schedule
+// compress's rounds alone, over a chunk whose K[t] + W[t] are given (kw_pad256): the chaining value compress gives over that
+// chunk, without its schedule
 template <int V, int ROLL>
 SX_HD void compress_kw(u64* st, const u64* KW) {
   constexpr int M0 = V & 3, M1 = (V >> 2) & 3;

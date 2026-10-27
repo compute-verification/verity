@@ -1,11 +1,11 @@
 """The whole encoded store through the staging decode on one GPU, one tensor at a time, each held to the plain weights'
-digests; then the exact W8A8 GEMM (KS8-SIMPLE) on one layer's staged matrices.
+digests; then the exact W8A8 GEMM on one layer's staged matrices.
 
     python full.py --layout LAYOUT --weights M (--w W | --generator G --shape S --weights-seed SEED)
                    --encoded ENC --source HEX --commitment HEX --lib LIB --out OUT [--layers 0-52] [--gemm-layer 51]
                    [--m 16384] [--reps 2] [--readers 6] [--hashers 4] [--n-chunk 16384]
 
-`LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: CMP-95 item 2's layout, the weights manifest with
+`LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: the store's layout, the weights manifest with
 each stream tensor's SHA-256 (`manifest --digests`, the digests memory-accounting held W to), and memory-accounting's
 encoded store, read only, under the salt `setup.draw_salt` of the coin and commitment its `setup.json` is held to.
 
@@ -440,7 +440,7 @@ def layer_set(spec: str, last: int) -> set[int]:
 def main(argv=None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (CMP-95 item 2)")
+    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest, with digests")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
     ap.add_argument("--generator", default="e2e_h200.served_weights", help="the seeded generator, without --w")
@@ -462,8 +462,8 @@ def main(argv=None) -> int:
     ap.add_argument("--samples", type=int, default=24, help="GEMM words sampled per call for check.py")
     ap.add_argument("--seed", type=int, default=12)
     ap.add_argument("--receipts", action="store_true", help="the bandwidth audit's pass beside the stage pass")
-    ap.add_argument("--challenge", default=FULL_CHALLENGE, help="the pass's window challenge (32 bytes, hex)")
-    ap.add_argument("--pass-index", type=int, default=0, help="the pass's index in its window")
+    ap.add_argument("--challenge", default=FULL_CHALLENGE, help="the pass's period challenge (32 bytes, hex)")
+    ap.add_argument("--pass-index", type=int, default=0, help="the pass's index in its period")
     ap.add_argument("--previous", default=FULL_PREVIOUS, help="the root before (the registration's digest at pass 0)")
     ap.add_argument("--salts", type=Path, help="with --receipts: the leaves' salts, 192 bytes each (default fresh)")
     ap.add_argument("--keep", type=Path, help="with --receipts: σ, y, the salts and the pass for bw_ref.py")
