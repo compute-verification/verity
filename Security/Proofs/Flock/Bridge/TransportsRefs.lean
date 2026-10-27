@@ -190,7 +190,7 @@ theorem opens_commitDepL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → 
     rfl
   unfold commitDepL
   rw [SamplingDeploy.opens_pathCommitRow]
-  refine ⟨_, _, hat, find?_portsOfL c L (rootsOfL c L) hq hfirst, ?_⟩
+  refine ⟨by rw [saltOf_dataOfL hy]; exact hy, _, _, hat, find?_portsOfL c L (rootsOfL c L) hq hfirst, ?_⟩
   dsimp only
   rw [hrow, saltOf_dataOfL hy, hleaf, SamplingDeploy.bytes_digBytes, FlockSoundness.Discharge.PlainReg.regLeaf_bytes,
     hπ]

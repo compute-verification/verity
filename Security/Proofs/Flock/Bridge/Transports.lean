@@ -250,7 +250,7 @@ theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → O
     rfl
   unfold commitDep
   rw [SamplingDeploy.opens_pathCommitRow]
-  refine ⟨_, _, hat,
+  refine ⟨by rw [saltOf_dataOf hy]; exact hy, _, _, hat,
     find?_portsOf c nl _ hq fun q' h => PortRoots.rootsDistinct_of_fixes hdup hsep r.port q' h hq, ?_⟩
   dsimp only
   rw [hrow, saltOf_dataOf hy, hleaf, SamplingDeploy.bytes_digBytes, FlockSoundness.Discharge.PlainReg.regLeaf_bytes,
@@ -292,7 +292,7 @@ theorem pathOf_length_of_opens (C : FlockSoundness.Audit.Circuit) (rows : Fin C.
     (pathOf (Flock.log2ceil nl) o).length = 64 * Flock.log2ceil nl := by
   unfold commitDep at h
   rw [SamplingDeploy.opens_pathCommitRow] at h
-  obtain ⟨ri, reg, -, hf, ho⟩ := h
+  obtain ⟨-, ri, reg, -, hf, ho⟩ := h
   have hm := Array.mem_of_find?_eq_some hf
   rw [portsOf_eq, Array.mem_map] at hm
   obtain ⟨q, -, rfl⟩ := hm

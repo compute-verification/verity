@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Soundness.Binding.Leaf
+import Definitions.Hash.Hm96
 
 /-!
 # The hm96 leaf binds (hm96-sha512/row/v1)
@@ -9,13 +10,16 @@ The trace commitment's leaf is `hm96-sha512/row/v1`'s, as Flock's soundness proo
 salt's `c = H(salt_prefix ‖ y)`, and the leaf `H(leaf_prefix ‖ (x ⊕ M·y) ‖ c)`. Here it is as an oracle program:
 
 * `hm96Leaf row salt`: at an opening `o`, the three queries in that order, on its row's `sha512/row/v1` input `row o`
-  and its salt `salt o`, refusing when `x` or `c` isn't 64 bytes, which SHA-512's never are.
+  and its salt `salt o`, refusing when `x` or `c` isn't 64 bytes, which SHA-512's never are, and when the salt isn't
+  `Hash.Hm96.SALT_BYTES` (192) bytes, as the code refuses it (`Flock.MerkleScheme.opens`, the `saltBytes` of
+  `hm96-sha512/v1`).
 * `RowPlaces row`: openings at one position of different values have different rows (the row places the value).
 * `hm96Leaf_binds`: **`LeafBinds H (hm96Leaf row salt)` for every `H`**, at a row that places the value. One leaf of
   two openings is one answer to the outer queries; where they differ that is the collision, and otherwise (both digests
   64 bytes, so `b` and `c` split) the salt digests agree at two salts, or else (one salt, so one mask) the row digests
   agree at two rows.
-* `hm96Leaf_sha512`: at SHA-512 the program never refuses and its leaf is Flock's, `hm96Input`'s digest.
+* `hm96Leaf_sha512`: at SHA-512 and a 192-byte salt the program doesn't refuse and its leaf is Flock's, `hm96Input`'s
+  digest; at any other salt it refuses (`hm96Leaf_sha512_salt`).
 * `Binding_of_hm96`: **the claims' `Binding`** for a commitment of hm96 leaves under the registered path check.
 -/
 
@@ -28,12 +32,12 @@ def hm96Outer (H : Msg → Msg) (row salt : Opening Bool → Msg) (o : Opening B
   K512.leafPrefix ++ (FlockSoundness.Merkle.xorBytes (H (row o)) (K512.mask (salt o)) ++ H (K512.saltPrefix ++ salt o))
 
 /-- **hm96's leaf as an oracle program**: the row's digest, the salt's, then the outer hash, refusing digests that
-aren't 64 bytes. -/
+aren't 64 bytes and a salt that isn't `Hash.Hm96.SALT_BYTES` bytes. -/
 def hm96Leaf (row salt : Opening Bool → Msg) (o : Opening Bool) : OC (Option Msg) :=
   .query (row o) fun x =>
     .query (K512.saltPrefix ++ salt o) fun c =>
       .query (K512.leafPrefix ++ (FlockSoundness.Merkle.xorBytes x (K512.mask (salt o)) ++ c)) fun l =>
-        .ret (if x.length = 64 ∧ c.length = 64 then some l else none)
+        .ret (if x.length = 64 ∧ c.length = 64 ∧ (salt o).length = Hash.Hm96.SALT_BYTES then some l else none)
 
 /-- **The row places the value**: openings at one position of different values have different rows. -/
 def RowPlaces (row : Opening Bool → Msg) : Prop :=
@@ -41,7 +45,9 @@ def RowPlaces (row : Opening Bool → Msg) : Prop :=
 
 theorem hm96Leaf_fst (H : Msg → Msg) (row salt : Opening Bool → Msg) (o : Opening Bool) :
     ((hm96Leaf row salt o).eval H).1 =
-      if (H (row o)).length = 64 ∧ (H (K512.saltPrefix ++ salt o)).length = 64 then some (H (hm96Outer H row salt o))
+      if (H (row o)).length = 64 ∧ (H (K512.saltPrefix ++ salt o)).length = 64 ∧
+          (salt o).length = Hash.Hm96.SALT_BYTES then
+        some (H (hm96Outer H row salt o))
       else none :=
   rfl
 
@@ -59,8 +65,8 @@ theorem hm96Leaf_binds (H : Msg → Msg) {row : Opening Bool → Msg} (hrow : Ro
   rw [hm96Leaf_fst] at h h'
   split_ifs at h with hg
   split_ifs at h' with hg'
-  obtain ⟨hx, hc⟩ := hg
-  obtain ⟨hx', hc'⟩ := hg'
+  obtain ⟨hx, hc, -⟩ := hg
+  obtain ⟨hx', hc', -⟩ := hg'
   rw [hm96Leaf_log, hm96Leaf_log]
   by_cases hq : hm96Outer H row salt o = hm96Outer H row salt o'
   · have hcs := List.append_cancel_left hq
@@ -78,9 +84,16 @@ theorem hm96Leaf_binds (H : Msg → Msg) {row : Opening Bool → Msg} (hrow : Ro
   · exact ⟨(hm96Outer H row salt o, _), by simp, (hm96Outer H row salt o', _), by simp, hq,
       (Option.some.inj h).trans (Option.some.inj h').symm⟩
 
-/-- **At SHA-512 the program is Flock's hm96 leaf**: it never refuses, and its leaf is the digest of `hm96Input` at the
-row and salt (`ExplicitLeaf.hm96`'s, the executable's `Hm96.Default512.treeLeaf` by `hm96_treeLeaf`). -/
-theorem hm96Leaf_sha512 (row salt : Opening Bool → Msg) (o : Opening Bool) :
+/-- **At SHA-512 the program refuses a salt of another length.** -/
+theorem hm96Leaf_sha512_salt (row salt : Opening Bool → Msg) (o : Opening Bool)
+    (hs : (salt o).length ≠ Hash.Hm96.SALT_BYTES) :
+    ((hm96Leaf row salt o).eval sha512Msg).1 = none := by
+  rw [hm96Leaf_fst, if_neg fun h => hs h.2.2]
+
+/-- **At SHA-512 the program is Flock's hm96 leaf**: at a salt of `Hash.Hm96.SALT_BYTES` bytes it doesn't refuse, and its
+leaf is the digest of `hm96Input` at the row and salt (`ExplicitLeaf.hm96`'s, the executable's `Hm96.Default512.treeLeaf`
+by `hm96_treeLeaf`). -/
+theorem hm96Leaf_sha512 (row salt : Opening Bool → Msg) (o : Opening Bool) (hs : (salt o).length = Hash.Hm96.SALT_BYTES) :
     ((hm96Leaf row salt o).eval sha512Msg).1 = some (digBytes (H512 (hm96Input (row o) (salt o)))) := by
   have e : ∀ m, sha512Msg m = digBytes (H512 m) := fun m => by
     unfold sha512Msg bytes
@@ -89,7 +102,7 @@ theorem hm96Leaf_sha512 (row salt : Opening Bool → Msg) (o : Opening Bool) :
   have hlen : ∀ m, (sha512Msg m).length = 64 := fun m => by
     rw [e]
     exact hL512 _
-  rw [hm96Leaf_fst, ite_eq_left ⟨hlen _, hlen _⟩]
+  rw [hm96Leaf_fst, ite_eq_left ⟨hlen _, hlen _, hs⟩]
   simp only [hm96Outer, e, hm96Input, commitString]
 
 /-- **Sampling: binding, at hm96 leaves under the registered path check**: a deployment whose trace commitment checks

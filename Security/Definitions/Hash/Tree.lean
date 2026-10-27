@@ -5,8 +5,9 @@ import Definitions.Hash.Basic
 
 The served tree, `verity.ml.commitments.merkle` under `frame-v3-sha512` (`verity/ml/commitments/frame_v3/PROTOCOL.md`
 §1 and §6), with the hash a parameter `H` (SHA-512 is the instance of record). A frame hashes
-`FRAME ‖ u32be |tag| ‖ tag ‖ Σ (u64be |part| ‖ part)` (`frame`). A domain is the verifier's: its id (a digest the verifier
-derives from the binding, owner, positions and count, never from an opening), its count, and its positions. The frame
+`FRAME ‖ u32be |tag| ‖ tag ‖ Σ (u64be |part| ‖ part)` (`frame`). A domain is the verifier's: its id (the bytes the verifier
+frames first, never read from an opening: PoUW's digest of the binding, owner, positions and count, or C-Flock's port
+name), its count, and its positions. The frame
 leaf is `H(frame "leaf" [id, uint rank, uint position, schema, value])` and a node at level `lv` and index `i` is
 `H(frame "node" [id, uint lv, uint i, l, r])`; the verifier's code is `PouwCommit.Domain.verify`.
 
@@ -25,19 +26,19 @@ def FRAME : Msg := cstr "veritor/protocol/merkle/frame/v3"
 def frame (tag : String) (parts : List Msg) : Msg :=
   FRAME ++ be 4 (utf8 tag).length ++ utf8 tag ++ parts.flatMap fun p => be 8 p.length ++ p
 
-/-- A frame-v3 domain as the verifier holds it: its id, its count, and the position of each rank. -/
+/-- A frame-v3 domain as the verifier holds it: its id's bytes, its count, and the position of each rank. -/
 structure Domain where
-  id : Digest
+  id : Msg
   count : ℕ
   position : ℕ → ℕ
 
 /-- The frame leaf's message over `value` at `rank`, under `schema`. -/
 def leafMsg (D : Domain) (rank : ℕ) (schema : String) (value : Msg) : Msg :=
-  frame "leaf" [D.id.bytes, uint rank, uint (D.position rank), utf8 schema, value]
+  frame "leaf" [D.id, uint rank, uint (D.position rank), utf8 schema, value]
 
 /-- The node's message at level `lv` and index `i` over the children `l` and `r`. -/
 def nodeMsg (D : Domain) (lv i : ℕ) (l r : Digest) : Msg :=
-  frame "node" [D.id.bytes, uint lv, uint i, l.bytes, r.bytes]
+  frame "node" [D.id, uint lv, uint i, l.bytes, r.bytes]
 
 /-- `merkle_depth`: `⌈log₂ count⌉`, and 0 for a count of at most 1. -/
 def depth (count : ℕ) : ℕ := if count ≤ 1 then 0 else Nat.log2 (count - 1) + 1

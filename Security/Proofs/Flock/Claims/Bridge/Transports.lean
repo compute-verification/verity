@@ -132,13 +132,13 @@ theorem valOf_eq (hW : (place o.pos).1 ≤ W) {v : BitVal W} (hv : RowShaped v) 
     · exact (hv.2 i (by omega)).symm
 
 /-- **At SHA-512 a path commitment over hm96 leaves of rows is the verifier's check**, at any row function `rowf`: it
-passes exactly when the verifier's own port whose root `at_` names opens the hm96 leaf of the opening's row at `at_`'s
-index through `π`. -/
+passes exactly when the salt is `Hash.Hm96.SALT_BYTES` bytes and the verifier's own port whose root `at_` names opens the hm96
+leaf of the opening's row at `at_`'s index through `π`. -/
 theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (rowf : Opening Bool → Msg)
     (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
     (pathCommit at_ (hm96Leaf rowf salt) π (regPath own) layer).Opens sha512Msg roots o = true ↔
-      ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+      (salt o).length = Hash.Hm96.SALT_BYTES ∧ ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (rowf o) (salt o)))))
           ri.2 (bytes (π o)) = true := by
   unfold Commitment.Opens pathCommit
@@ -146,9 +146,11 @@ theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (ro
   cases hat : at_ roots o.pos with
   | none => simp [OC.eval]
   | some ri =>
-    simp only [ocBind_eval, hm96Leaf_sha512]
-    rw [regPath_sha512]
-    simp
+    by_cases hs : (salt o).length = Hash.Hm96.SALT_BYTES
+    · simp only [ocBind_eval, hm96Leaf_sha512 _ _ _ hs]
+      rw [regPath_sha512]
+      simp [hs]
+    · simp [ocBind_eval, hm96Leaf_sha512_salt _ _ _ hs, OC.eval, hs]
 
 /-- **At SHA-512 a path commitment over hm96 leaves of deployed rows is the verifier's check**
 (`opens_pathCommitRow` at `row`). -/
@@ -156,7 +158,7 @@ theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place
     (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
     (pathCommit at_ (hm96Leaf (row place bits) salt) π (regPath own) layer).Opens sha512Msg roots o = true ↔
-      ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+      (salt o).length = Hash.Hm96.SALT_BYTES ∧ ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row place bits o) (salt o)))))
           ri.2 (bytes (π o)) = true :=
   opens_pathCommitRow at_ (row place bits) salt π own layer roots o
@@ -164,7 +166,7 @@ theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place
 /-- **At SHA-512 the deployed check is the verifier's** (`opens_pathCommit` at a sampled verifier's code). -/
 theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
     (commit c).Opens sha512Msg roots o = true ↔
-      ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+      (c.salt o).length = Hash.Hm96.SALT_BYTES ∧ ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row c.place c.bits o) (c.salt o)))))
           ri.2 (bytes (c.π o)) = true :=
   opens_pathCommit c.at_ c.place c.bits c.salt c.π c.own c.layer roots o
@@ -174,7 +176,7 @@ theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
 theorem opens_shaped (c : Code) (roots : List Msg) (o : Opening Bool) (h16 : (c.place o.pos).1 % 16 = 0)
     (hW : (c.place o.pos).1 ≤ W) :
     (commit c).Opens sha512Msg roots o = true ↔
-      ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+      (c.salt o).length = Hash.Hm96.SALT_BYTES ∧ ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input
           (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) (valOf c.place c.bits o W)) (c.salt o)))))
           ri.2 (bytes (c.π o)) = true := by
