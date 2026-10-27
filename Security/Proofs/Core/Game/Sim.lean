@@ -1,4 +1,5 @@
 import Mathlib.Data.Fintype.Lattice
+import Mathlib.Logic.Equiv.Fin.Basic
 import Proofs.Core.Game.Tape
 import Proofs.Pouw.PearlC.FlockTile.Bridge
 
@@ -400,5 +401,36 @@ theorem dom_split {α β : Type} {p : α → Prop} {q : β → Prop} {g : Game �
     [Nonempty X] {m : ℕ} (sp : Split X m) {K : X → Game β}
     (h : Dominated p g s q (nested (sp.first :: sp.rest) fun y => K (sp.e y))) : Dominated p g s q (.coin X K) :=
   dom_coin_equiv sp.e (h.covers (covers_nested _ _))
+
+/-- A coin split into chunks, read through an equivalence. -/
+def Split.congr {X Y : Type} {m : ℕ} (sp : Split X m) (e : X ≃ Y) : Split Y m := ⟨sp.first, sp.rest, sp.e.trans e⟩
+
+/-- `r` bits then `k` bits are `r + k` bits. -/
+def appendBits (r k : ℕ) : (Fin r → Bool) × (Fin k → Bool) ≃ (Fin (r + k) → Bool) :=
+  (Equiv.sumArrowEquivProdArrow (Fin r) (Fin k) Bool).symm.trans (Equiv.arrowCongr finSumFinEquiv (Equiv.refl Bool))
+
+/-- `r` bits then `k` bits are `n` bits, where `r + k = n`. -/
+def appendBitsTo (r k n : ℕ) (h : r + k = n) : (Fin r → Bool) × (Fin k → Bool) ≃ (Fin n → Bool) :=
+  (appendBits r k).trans (Equiv.arrowCongr (finCongr h) (Equiv.refl Bool))
+
+/-- **`r` of a release's `m` bits as a chunk**: its first `r` bits, the rest unread. -/
+def Chunk.bits {m : ℕ} (r : ℕ) (h : r ≤ m) : Chunk m where
+  P := Fin r → Bool
+  R := Fin (m - r) → Bool
+  f := appendBitsTo r (m - r) m (by omega)
+  hf := uniform_equiv _
+  dec x := ((appendBitsTo r (m - r) m (by omega)).symm x).1
+  dec_f a b := by simp
+
+/-- **`K` bits drawn `m` at a time**: whole releases while more than `m` bits are left, then the first bits of one
+more. -/
+def splitBits (m : ℕ) (hm : 0 < m) (K : ℕ) : Split (Fin K → Bool) m :=
+  if h : K ≤ m then ⟨Chunk.bits K h, [], Equiv.prodPUnit _⟩
+  else
+    have : K - m < K := by omega
+    let s := splitBits m hm (K - m)
+    ⟨Chunk.bits m le_rfl, s.first :: s.rest,
+      ((Equiv.refl (Fin m → Bool)).prodCongr s.e).trans (appendBitsTo m (K - m) K (by omega))⟩
+termination_by K
 
 end Verity.Game
