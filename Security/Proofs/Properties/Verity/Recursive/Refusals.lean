@@ -1,6 +1,7 @@
 import Proofs.Properties.Verity.Recursive.Names
 import Proofs.Properties.Verity.Recursive.BaseSetup
 import Proofs.Properties.Verity.Recursive.Compiled
+import Proofs.Properties.Verity.Recursive.PartStatement
 import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 import Proofs.Flock.Soundness.Refine.Walk
@@ -22,9 +23,10 @@ words. Each is the compiled component's own refusal:
   part's verdict refuses them, so an accepted session with a part shows it.
 * **The sizes.** The compiled component refuses a staged public file, inner record, coin server's transcript or staged
   rows file of `2 ^ 56` bytes or more (`fits`), so each file the blobs show is under `2 ^ 64` bytes (`record_of_compiled`,
-  `transcript_of_compiled`, `rows_of_compiled`). `x`'s length is no input of the compiled component, since `Names` pins
-  `x`'s JSON fields only up to parsing: `pub_of_compiled` takes `x.length < 2 ^ 63` and gives `x` with each part's public
-  file under `2 ^ 64` bytes at every part `nS x` counts.
+  `transcript_of_compiled`, `rows_of_compiled`). `Names` pins every field `x` encodes to a file the component read or the
+  canonical bytes of a value it read, so `x` is no longer than the compiled `statementSize` (`x_len_le`), which the
+  component refuses at `2 ^ 56` bytes or more (`statementFits`): `pub_of_compiled` gives `x` with each part's public file
+  under `2 ^ 64` bytes at every part `nS x` counts, with no hypothesis on `x`.
 -/
 
 namespace Verity.Recursive.RefusalsOf
@@ -353,17 +355,225 @@ theorem nS_le {x : Claims.Msg} {w : RecDeploy.RecX} (hx : RecDeploy.decodeX x = 
     exact le_refl _
   · exact Nat.zero_le _
 
-/-- **`Refusals.pub`**: where the compiled component accepts, `x` names its inputs and is under `2 ^ 63` bytes, and `P s`
-is part `s`'s public file on the blobs, `x` with each part's public file is under `2 ^ 64` bytes at every part `nS x`
-counts. -/
+/-! ## The statement's length -/
+
+/-- An optional file's size, `0` when absent. -/
+def osz (o : Option ByteArray) : ℕ := (o.map ByteArray.size).getD 0
+
+theorem len_encOptB (o : Option ByteArray) : (FlockDeploy.encOpt FlockDeploy.encBytes o).length ≤ 9 + osz o := by
+  cases o with
+  | none => simp only [FlockDeploy.encOpt, List.length_cons, List.length_nil] <;> omega
+  | some b =>
+    have : osz (some b) = b.size := rfl
+    simp only [FlockDeploy.encOpt, List.length_cons, Part.len_encBytes] <;> omega
+
+theorem len_encOptN (o : Option ℕ) : (FlockDeploy.encOpt FlockDeploy.encNat o).length ≤ 9 := by
+  cases o with
+  | none => simp only [FlockDeploy.encOpt, List.length_cons, List.length_nil] <;> omega
+  | some n => simp only [FlockDeploy.encOpt, List.length_cons, FlockComplete.encNat_length] <;> omega
+
+/-- A Flock statement with no lookup tables encodes in its files, the bytes of its optional files and at most 200 bytes
+of lengths, flags, numbers and format. -/
+theorem raw_le (r : FlockDeploy.Raw) (ht : r.tables = []) :
+    r.encode.length ≤ 200 + r.statement.toUTF8.size + r.circuit.size + r.publicFile.size + osz r.draw +
+      osz r.partition + osz r.program + osz r.workTable + osz r.closure + osz r.registered + osz r.publicInputs := by
+  have hf : FlockDeploy.FORMAT.toUTF8.size ≤ 32 := by decide
+  have := len_encOptB r.draw
+  have := len_encOptB r.partition
+  have := len_encOptB r.program
+  have := len_encOptB r.workTable
+  have := len_encOptB r.closure
+  have := len_encOptB r.registered
+  have := len_encOptB r.publicInputs
+  have := len_encOptN r.work
+  have := len_encOptN r.stratified
+  simp only [FlockDeploy.Raw.encode, ht, FlockDeploy.encList, FlockDeploy.encBool, List.length_append,
+    Part.len_encStr, Part.len_encBytes, FlockComplete.encNat_length, List.flatMap_nil, List.length_nil,
+    List.length_cons]
+  omega
+
+/-- The compiled statement encodes in its inner statement, inner shape, registration and parts, and at most 100
+bytes of lengths and format. -/
+theorem recx_le (w : RecDeploy.RecX) :
+    w.encode.length ≤ 100 + w.inner.length + w.recInner.size + osz w.registration +
+      (w.parts.flatMap RecDeploy.PartX.encode).length := by
+  have hf : RecDeploy.XFORMAT.toUTF8.size ≤ 32 := by decide
+  have := len_encOptB w.registration
+  simp only [RecDeploy.RecX.encode, FlockDeploy.encList, List.length_append, Part.len_encStr, Part.len_encBytes,
+    FlockComplete.encNat_length]
+  omega
+
+theorem partx_eq (q : RecDeploy.PartX) : q.encode.length = 16 + q.base.encode.length + q.bindings.size := by
+  have hs : (⟨q.base.encode.toArray⟩ : ByteArray).size = q.base.encode.length := by
+    show q.base.encode.toArray.size = _
+    simp
+  simp only [RecDeploy.PartX.encode, List.length_append, Part.len_encBytes, hs]
+  omega
+
+/-- **Part `j`'s statement is no longer than the compiled `partSize`** where it is named by the component's part `j`
+(`PartNames`). -/
+theorem part_le {j : ℕ} {po : VStar.Recursive.PartOwn} {pp : VStar.Recursive.PartProof} {bs : Core.Blobs}
+    {q : RecDeploy.PartX} {a : ℕ} (hN : PartNames po pp bs j q)
+    (hs : VStar.Recursive.partSize j po pp bs = .ok a) : q.encode.length ≤ a := by
+  have htg : Flock.Tags.find? VStar.Recursive.STATEMENT = some Flock.Tags.circuit := rfl
+  unfold VStar.Recursive.partSize at hs
+  simp only [htg] at hs
+  obtain ⟨circuitB, hc, hs⟩ := bind_ok hs
+  obtain ⟨pubB, hp, hs⟩ := bind_ok hs
+  obtain ⟨recordB, hr, hs⟩ := bind_ok hs
+  obtain ⟨record, hu⟩ : ∃ record, String.fromUTF8? recordB = some record := by
+    cases hu : String.fromUTF8? recordB with
+    | none => simp only [hu] at hs <;> exact absurd hs (throw_ne_ok _ _)
+    | some record => exact ⟨record, rfl⟩
+  simp only [hu] at hs
+  obtain ⟨drawB, hd, hs⟩ := bind_ok hs
+  obtain ⟨regB, hreg, hs⟩ := bind_ok hs
+  obtain ⟨partitionB, hpa, hs⟩ := bind_ok hs
+  obtain ⟨bindingsB, hb, hs⟩ := bind_ok hs
+  have ha : a = VStar.Recursive.STMT_OVER + VStar.Recursive.STATEMENT.toUTF8.size + circuitB.size + pubB.size +
+      po.program.size + partitionB.size + osz regB + osz drawB + bindingsB.size := (Except.ok.inj hs).symm
+  have hcB : circuitB = q.base.circuit := Except.ok.inj (hc.symm.trans hN.circuit)
+  have hpB : pubB = q.base.publicFile := Except.ok.inj (hp.symm.trans hN.publicFile)
+  rw [hcB] at hd
+  have hdraw : drawB = q.base.draw := Except.ok.inj (hd.symm.trans (hN.drawB _ _ _ htg hr hu))
+  have hregB : regB = q.base.registered := Except.ok.inj (hreg.symm.trans hN.registeredB)
+  have hbB : bindingsB = q.bindings := Except.ok.inj (hb.symm.trans hN.bindingsB)
+  have hpart : q.base.partition = some partitionB := by
+    have := hN.partitionB
+    rw [hpa] at this
+    exact (Except.ok.inj this).symm
+  obtain ⟨hst, -, -, -, htab, -, hwt, -, hcl, hpi⟩ := hN.form
+  have hraw := raw_le q.base htab
+  have e1 : q.base.statement.toUTF8.size = VStar.Recursive.STATEMENT.toUTF8.size := by rw [hst]
+  have e2 : q.base.circuit.size = circuitB.size := by rw [hcB]
+  have e3 : q.base.publicFile.size = pubB.size := by rw [hpB]
+  have e4 : osz q.base.draw = osz drawB := by rw [hdraw]
+  have e5 : osz q.base.partition = partitionB.size := by rw [hpart] <;> rfl
+  have e6 : osz q.base.program = po.program.size := by rw [hN.program] <;> rfl
+  have e7 : osz q.base.workTable = 0 := by rw [hwt] <;> rfl
+  have e8 : osz q.base.closure = 0 := by rw [hcl] <;> rfl
+  have e9 : osz q.base.publicInputs = 0 := by rw [hpi] <;> rfl
+  have e10 : osz q.base.registered = osz regB := by rw [hregB]
+  have e11 : q.bindings.size = bindingsB.size := by rw [hbB]
+  have hso : VStar.Recursive.STMT_OVER = 1024 := rfl
+  have := partx_eq q
+  omega
+
+/-- **The parts' statements are no longer than the compiled `partsSize`**, part `k + i` named by the component's
+(`PartNames`). -/
+theorem parts_le {bs : Core.Blobs} : ∀ (qs : List RecDeploy.PartX) (ps : List VStar.Recursive.PartOwn)
+    (pps : List VStar.Recursive.PartProof) (k T : ℕ), VStar.Recursive.partsSize bs k ps pps = .ok T →
+    qs.length = ps.length → ps.length = pps.length →
+    (∀ i q po pp, qs[i]? = some q → ps[i]? = some po → pps[i]? = some pp → PartNames po pp bs (k + i) q) →
+    (qs.flatMap RecDeploy.PartX.encode).length ≤ T
+  | [], _, _, _, _, _, _, _, _ => by simp
+  | q :: qs, po :: ps, pp :: pps, k, T, hT, hl1, hl2, hN => by
+    simp only [VStar.Recursive.partsSize] at hT
+    obtain ⟨a, ha, hT⟩ := bind_ok hT
+    obtain ⟨b, hb, hT⟩ := bind_ok hT
+    have hab : a + b = T := Except.ok.inj hT
+    have h0 := part_le (j := k) (by simpa using hN 0 q po pp (by simp) (by simp) (by simp)) ha
+    have h1 := parts_le qs ps pps (k + 1) b hb (by simpa using hl1) (by simpa using hl2)
+      fun i q' po' pp' e1 e2 e3 => by
+        have := hN (i + 1) q' po' pp' (by simpa using e1) (by simpa using e2) (by simpa using e3)
+        rwa [show k + (i + 1) = k + 1 + i by omega] at this
+    rw [List.flatMap_cons, List.length_append]
+    omega
+  | _ :: _, [], _, _, _, _, hl1, _, _ => by simp at hl1
+  | _ :: _, _ :: _, [], _, _, _, _, hl2, _ => by simp at hl2
+
+/-- **`x` is no longer than the compiled `statementSize`** where it names the component's inputs (`Names`): every
+field `x` encodes is a file the component read or the canonical bytes of a value it read. -/
+theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {x : Claims.Msg}
+    {h : VStar.Recursive.InnerHeld} {T : ℕ} (hn : Names p e bs x)
+    (hh : VStar.Recursive.innerHeld p.own e.proofs bs = .ok h) (hl2 : p.own.parts.size = e.proofs.parts.size)
+    (hT : VStar.Recursive.statementSize h p.own e.proofs bs = .ok T) : x.length ≤ T := by
+  obtain ⟨w, ri, hxw, hi, hI, hl, hN⟩ := hn
+  have hx : w.encode = x := RecDeploy.decodeX_encode hxw
+  have hin : ri.encode = w.inner := FlockDeploy.decode_encode hi
+  unfold VStar.Recursive.statementSize at hT
+  obtain ⟨circuitB, hc, hT⟩ := bind_ok hT
+  obtain ⟨pubB, hp, hT⟩ := bind_ok hT
+  obtain ⟨drawB, hd, hT⟩ := bind_ok hT
+  obtain ⟨regB, hreg, hT⟩ := bind_ok hT
+  obtain ⟨partitionB, hpa, hT⟩ := bind_ok hT
+  obtain ⟨shapeB, hsh, hT⟩ := bind_ok hT
+  obtain ⟨partsB, hps, hT⟩ := bind_ok hT
+  have hTe : T = VStar.Recursive.STMT_OVER + (VStar.Recursive.STMT_OVER +
+      VStar.Recursive.INNER_STATEMENT.toUTF8.size + circuitB.size + pubB.size + drawB.size + p.own.program.size +
+      partitionB.size) + shapeB.size + osz regB + partsB := (Except.ok.inj hT).symm
+  have hraw := raw_le ri hI.tables
+  have hpart : ri.partition = some partitionB := by
+    have := hI.partitionB
+    rw [hpa] at this
+    exact (Except.ok.inj this).symm
+  have e1 : ri.statement.toUTF8.size = VStar.Recursive.INNER_STATEMENT.toUTF8.size := by rw [hI.statement]
+  have e2 : ri.circuit.size = circuitB.size := by rw [Except.ok.inj (hc.symm.trans hI.circuit)]
+  have e3 : ri.publicFile.size = pubB.size := by rw [Except.ok.inj (hp.symm.trans hI.pub)]
+  have e4 : osz ri.draw = drawB.size := by rw [hI.draw, hd] <;> rfl
+  have e5 : osz ri.partition = partitionB.size := by rw [hpart] <;> rfl
+  have e6 : osz ri.program = p.own.program.size := by rw [hI.program] <;> rfl
+  have e7 : osz ri.workTable = 0 := by rw [hI.workTable] <;> rfl
+  have e8 : osz ri.closure = 0 := by rw [hI.closure] <;> rfl
+  have e9 : osz ri.registered = 0 := by rw [hI.registered] <;> rfl
+  have e10 : osz ri.publicInputs = 0 := by rw [hI.publicInputs] <;> rfl
+  have e11 : w.recInner.size = shapeB.size := by rw [Except.ok.inj ((hI.recInnerB h hh).symm.trans hsh)]
+  have e12 : osz w.registration = osz regB := by
+    have hr := hI.registration
+    cases hor : p.own.registration with
+    | none =>
+      rw [hor] at hr hreg
+      have a1 : regB = none := (Except.ok.inj hreg).symm
+      have a2 : w.registration = none := (Option.some.inj hr).symm
+      rw [a1, a2]
+    | some d =>
+      rw [hor, Option.mapM_some] at hr hreg
+      cases hg : bs.get d "rec inner registration" with
+      | error err =>
+        rw [hg] at hreg
+        first | cases hreg | simp [Functor.map, Except.map] at hreg
+      | ok b =>
+        rw [hg] at hreg hr
+        have a1 : regB = some b := (Except.ok.inj hreg).symm
+        have a2 : w.registration = some b := (Option.some.inj hr).symm
+        rw [a1, a2]
+  have hps' := parts_le w.parts p.own.parts.toList e.proofs.parts.toList 0 partsB hps (by simp [hl]) (by simp [hl2])
+    fun i q po pp e1 e2 e3 => by
+      simpa using hN i q po pp e1 (by simpa using e2) (by simpa using e3)
+  have hrx := recx_le w
+  rw [hx, ← hin] at hrx
+  have hso : VStar.Recursive.STMT_OVER = 1024 := rfl
+  omega
+
+/-- The compiled `statementFits` at `FIELD_MAX` passes only on a statement size under `2 ^ 56`. -/
+theorem statementFits_lt {h : VStar.Recursive.InnerHeld} {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs}
+    {bs : Core.Blobs} (hf : VStar.Recursive.statementFits VStar.Recursive.FIELD_MAX h o pr bs = .ok ()) :
+    ∃ T, VStar.Recursive.statementSize h o pr bs = .ok T ∧ T < 2 ^ 56 := by
+  unfold VStar.Recursive.statementFits at hf
+  obtain ⟨T, hT, hf⟩ := bind_ok hf
+  refine ⟨T, hT, ?_⟩
+  unfold VStar.Recursive.need at hf
+  by_cases hc : T < 2 ^ 56
+  · exact hc
+  · have hd : decide (T < VStar.Recursive.FIELD_MAX) = false :=
+      decide_eq_false (by simpa [VStar.Recursive.FIELD_MAX] using hc)
+    simp only [hd, Bool.false_eq_true, ↓reduceIte] at hf
+    exact absurd hf (throw_ne_ok _ _)
+
+/-- **`Refusals.pub`**: where the compiled component accepts, `x` names its inputs, and `P s` is part `s`'s public file
+on the blobs, `x` with each part's public file is under `2 ^ 64` bytes at every part `nS x` counts: the component refuses
+a statement of `2 ^ 56` bytes or more (`statementFits`, which bounds `x`: `x_len_le`) and a public file of as many
+(`fits`). -/
 theorem pub_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
     {x : Claims.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x)
     {P : ℕ → ByteArray} {what : String}
-    (hP : ∀ s q, e.proofs.parts[s]? = some q → bs.get q.pub what = .ok (P s)) (hx : x.length < 2 ^ 63) :
+    (hP : ∀ s q, e.proofs.parts[s]? = some q → bs.get q.pub what = .ok (P s)) :
     ∀ s < RecDeploy.nS x, x.length + (P s).size < 2 ^ 64 := by
   intro s hs
-  obtain ⟨h, ss, -, -, -, hsz1, hsz2, hparts, -⟩ := parts_of_accepts hacc
+  obtain ⟨h, ss, hh, -, -, hsz1, hsz2, hparts, hfit, -⟩ := parts_of_accepts hacc
+  obtain ⟨T, hT, hTlt⟩ := statementFits_lt hfit
+  have hx := x_len_le hn hh (by omega) hT
   obtain ⟨w, ri, hxw, -, -, hl, -⟩ := hn
   have hle := nS_le hxw
   have hs1 : s < p.own.parts.size := by omega
@@ -372,7 +582,8 @@ theorem pub_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage
   have e1 := hP s _ (Array.getElem?_eq_getElem hs2)
   have e2 : P s = pubB := Except.ok.inj ((get_what e1).symm.trans hpb)
   rw [e2]
-  exact lt_of_lt_of_le (Nat.add_lt_add hx hlt) (by norm_num)
+  have h64 : (2 : ℕ) ^ 56 + 2 ^ 56 ≤ 2 ^ 64 := by norm_num
+  omega
 
 /-- **`Refusals.record`**: the inner session's record on the blobs is under `2 ^ 64` bytes where the compiled
 component accepts. -/

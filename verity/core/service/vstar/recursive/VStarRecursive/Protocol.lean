@@ -224,8 +224,9 @@ def registeredOf (j : Json) :
 def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
 /-- The bound on a file every part's session encodes as one field (the staged public file, the inner record and the coin
-server's transcript): each field's length is one 8-byte word, so the verifier refuses a file of `2^56` bytes or more,
-under which the statement's own fields keep every encoded field under `2^64`. -/
+server's transcript), and on the whole statement the inputs name (`statementFits`): each field's length is one 8-byte
+word, so the verifier refuses a file or statement of `2^56` bytes or more, under which every encoded field stays under
+`2^64`. -/
 def FIELD_MAX : Nat := 2 ^ 56
 
 /-- `need` on a file's size: `what` is under `FIELD_MAX` bytes. -/
@@ -461,8 +462,9 @@ def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Boo
   pure ok
 
 /-- **The recursive session's verdict**: the inner session held (`innerHeld`), one part per V* statement at its shape
-(`RecVStar.statements`), in order, and each part's verdict (`partVerdict`). Each part's verdict, by its statement's name,
-and the session's: accepted exactly when every part's is. -/
+(`RecVStar.statements`), in order, and each part's verdict (`partVerdict`), and the statement the inputs name under
+`FIELD_MAX` bytes (`statementFits`). Each part's verdict, by its statement's name, and the session's: accepted exactly when
+every part's is. -/
 def partVerdicts (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (InnerHeld × Array (String × V Unit)) := do
   let h ← innerHeld o pr bs
   let ss ← Flock.RecVStar.statements h.shape
