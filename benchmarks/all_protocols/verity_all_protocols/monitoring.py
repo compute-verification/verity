@@ -278,6 +278,7 @@ def communication(rows: Sequence[Mapping[str, Any]], dep: Mapping[str, Any]) -> 
             once = fmax * (UNIT_BITS + math.ceil(math.log2(n + 1)))
             row[str(d)] = {"pooled": {"K_bits": t * worst["every_window"] + once, "every_window_bits": worst["every_window"],
                                       "faulty_once_bits": once, "faulty_units_at_most": fmax, "units": n,
+                                      "jitter_term": C.JITTER,
                                       "statement": RESOURCE_STATEMENTS["communication"]["name"]},
                            "except_with": "δ + Σ_i e_i + Σ_i e'_i (#4367's hesc and hleak); the run computes neither"}
         periods[name] = row
