@@ -1179,7 +1179,7 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
 
 
 def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
-    """PRF-126: the period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
+    """The period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
     window only when the descriptor of the circuit its sessions prove hashes to it. vllm's rehearsal shape is credited;
     a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
     isn't bytes, and a window in no period count toward none, each naming the fix."""
@@ -1282,8 +1282,8 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
             C.pin_line(*bad)
 
 
-#: the seven commits the challenger host was pinned to on 20 Oct: #2953's branch commits, which landed through the
-#: queue's merge 1018753ee5, so each is in main's history and none is on its first-parent line
+#: seven commits the challenger host was pinned to: a branch's commits, which landed through the queue's merge `MERGE`,
+#: so each is in main's history and none is on its first-parent line
 BRANCH_PINS = ("5902f9e85d36b0de284dd4de819cad464a801739", "63179aad879e4a38c025746abde7d747b6e73fe3",
                "a655828a4fc022fd6527f64f1c20d30b610f0c18", "aa782259fb3b6d7ffee53fafa63bc571403f6d49",
                "c33bf091a3f12522fd6e6be04046fdb05d06a6f6", "d2ad7bdea69504f6b4ed848207f65a4d37f31a8b",
@@ -1292,7 +1292,7 @@ MERGE = "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
 
 
 def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_line(tmp_path, signer):
-    """CMP-74: `credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
+    """`credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
     A session whose open names `PIN`, main's tip when infra repinned vy-challenger-1 and the one line of the pins log it
     published, sealed in the open, is credited against the auditor's own first-parent list of main. Refused, each with
     its reason and no fallback to `audited_session`: a pin on main's first-parent line the log doesn't record, an absent
@@ -1418,3 +1418,53 @@ def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
 def test_an_address_is_host_and_port(address):
     with pytest.raises(ValueError, match="HOST:PORT"):
         R.RemoteChallenger.connect(address)
+
+
+def _clock_and_sleep():
+    now, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    return (lambda: now[0]), sleep, slept
+
+
+def test_a_session_whose_tunnel_listens_late_is_connected_once_it_listens():
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def connect(address, secret):
+        tries.append((address, secret))
+        if len(tries) < 3:
+            raise ConnectionRefusedError(111, "Connection refused")
+        return "client"
+
+    assert R.connect_when_listening("127.0.0.1:7811", b"s", connect, 120, clock, sleep) == "client"
+    assert tries == [("127.0.0.1:7811", b"s")] * 3 and slept == [0.5, 0.5]
+
+
+def test_a_session_that_never_listens_raises_once_its_wait_is_over():
+    clock, sleep, slept = _clock_and_sleep()
+
+    def refused(address, secret):
+        raise ConnectionRefusedError(111, "Connection refused")
+
+    with pytest.raises(C.CoinError, match="nothing listened"):
+        R.connect_when_listening("127.0.0.1:7811", None, refused, 2, clock, sleep)
+    assert slept == [0.5] * 4
+
+
+@pytest.mark.parametrize("error", [C.CoinError("the challenger refused the hello"), ConnectionResetError(104, "reset"),
+                                   ValueError("a challenger's address is HOST:PORT")])
+def test_any_other_failure_to_connect_raises_at_once(error):
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def failing(address, secret):
+        tries.append(address)
+        raise error
+
+    with pytest.raises(type(error)):
+        R.connect_when_listening("127.0.0.1:7811", None, failing, 120, clock, sleep)
+    assert len(tries) == 1 and slept == []

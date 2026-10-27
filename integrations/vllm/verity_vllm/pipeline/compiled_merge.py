@@ -1,5 +1,5 @@
 """Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
-(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit stage reads.
+(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit phase reads.
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is
 by run index (control run i <-> treatment run i).  Refuses when the two processes' compilation settings differ (CompilationMode,
@@ -87,7 +87,7 @@ def main(a: Options) -> None:
     # [coord M-0178 (2a)] the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
     # {(name, source sha256)}) and the per-piece launch programs.  The treatment's pieces carry the record op as an extern call, so its
     # launch programs (call_set) legitimately differ; its KERNEL SET should equal the control's -- a difference means the record op changed
-    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the row's implementation is then the treatment's).
+    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the workload's implementation is then the treatment's).
     gkc, gkt = cc.get("generated_kernels") or {}, ct.get("generated_kernels") or {}
     kernels_identified = bool(gkc.get("kernel_set_sha256")) and bool(gkt.get("kernel_set_sha256"))
     kernel_set_equal = kernels_identified and gkc.get("kernel_set_sha256") == gkt.get("kernel_set_sha256")
@@ -123,7 +123,7 @@ def main(a: Options) -> None:
             problems.append("P_compiled path: P_compiled not derived from BOTH arms' Inductor output code (--manifest-control/--manifest-treatment)")
         elif not program_digests["equal"]:
             problems.append(f"P_compiled path: the Program derived from the treatment's output code differs from the control's: {program_digests}")
-        # [Daniel M-0776 (3)] runtime <-> pinned artifact identity: the code objects LOADED in each running process (PyCodeCache registry:
+        # runtime <-> pinned artifact identity: the code objects LOADED in each running process (PyCodeCache registry:
         # Triton sources + cubins) must be one set across arms, and every kernel P_compiled names must be among the loaded objects
         lc, lt = gkc.get("loaded") or {}, gkt.get("loaded") or {}
         # refusal = the LOADED KERNEL SOURCES (the code objects) differ; the binaries (cubin sha256 where Inductor retains the bytes, else
@@ -248,7 +248,7 @@ def main(a: Options) -> None:
                 config_differ.append(k)
             if code_equal and cc_bytes and ct_bytes and cc_bytes != ct_bytes:
                 code_equal_denied_differ.append(k)
-        # [R16 compiled, Daniel DECISIONS-3 autotune rule] a kernel whose arms executed DIFFERENT autotune configs of the SAME source is two
+        # [the compiled-kernel autotune rule] a kernel whose arms executed DIFFERENT autotune configs of the SAME source is two
         # specializations -- lifted only when the treatment process SHOWED, on committed inputs of sampled launches, that the kernel's own
         # compiled source under EVERY candidate config of its heuristic reproduces the committed outputs bit for bit (compiled_autotune),
         # every treatment run agreeing, the control's executed config(s) among the candidates, and the sources equal; else it stays DIFFERS.
