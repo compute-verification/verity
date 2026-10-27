@@ -2,6 +2,7 @@ import Definitions.Core.Boolean
 import Definitions.Core.Partition
 import Flock.Desc
 import Properties.Flock.Circuit.Outs
+import Properties.Flock.Circuit.RowOf
 
 /-!
 # The registered circuit file as core's circuit

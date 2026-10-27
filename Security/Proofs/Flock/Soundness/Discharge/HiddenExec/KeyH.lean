@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Proofs.Flock.Soundness.Discharge.Layout.Keyed
 import Proofs.Flock.Soundness.Discharge.Layout.PinsX
+import Properties.Flock.Circuit.RowOf
 
 set_option Elab.async false
 
@@ -36,20 +37,6 @@ open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW OutColAt outDecode 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ}
 
 /-! ## Output rows' bits -/
-
-variable (c) in
-/-- The output word of copy `d.1`'s output `d.2.1`. -/
-def outWordOf (d : ℕ × ℕ × ℕ) : ℕ := (c.leavesOut.getD d.1 #[])[d.2.1]!
-
-variable (c) in
-/-- **An output row's bit**: copy `d.1`'s output `d.2.1`, bit `d.2.2`, of unit `u` is bit `16 k + d.2.2` of `u`'s output
-row `nIn + jo`, where the copy's output word is word `k` of output port `jo` (`outPortOf`); none past the row. -/
-def outBitRow (u : Fin n) (d : ℕ × ℕ × ℕ) : Option (Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :=
-  if hq : HmOut.nIn c + outPortOf c (outWordOf c d) < c.ports.size then
-    if hk : 16 * (outWordOf c d - Hidden.outAt c (outPortOf c (outWordOf c d))) + d.2.2 < portRowW c ⟨_, hq⟩ then
-      some (u, ⟨⟨_, hq⟩, ⟨_, hk⟩⟩)
-    else none
-  else none
 
 theorem outBitRow_spec {u u' : Fin n} {d : ℕ × ℕ × ℕ} {q : Fin c.ports.size} {k : Fin (portRowW c q)}
     (h : outBitRow c u d = some (u', ⟨q, k⟩)) :
@@ -98,19 +85,6 @@ theorem unit_wire (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((
     rw [hn] at h
     cases h
 
-variable (c hU n) in
-open Classical in
-/-- **The output-row bit of a unit's computed gate**: the bit (`outBitRow`) of the returned output whose column of the
-gate's unit's instance holds the gate (`Layout.outDecode`). -/
-noncomputable def outRowOf (outs : Finset (Fin (keyN c hU n))) (g : Fin (keyN c hU n)) :
-    Option (Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :=
-  match (keyProg c hU n).unit g with
-  | some u =>
-    if h : ∃ x, (Const.Prog.instC (keyProg c hU n) outs u).wire x = g then
-      outBitRow c u (outDecode c hU (Classical.choose h).val)
-    else none
-  | none => none
-
 theorem outRowOf_wire (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
     (hgu : (keyProg c hU n).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = some u)
     (hx : ((keyProg c hU n).rows u).nIn ≤ x.val) :
@@ -138,15 +112,6 @@ theorem outRowOf_wire_some (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x
     exact absurd h (by simp)
   · obtain ⟨rfl, hx⟩ := unit_wire outs x hgu
     exact ⟨rfl, hx, (outRowOf_wire outs x hgu hx).symm.trans h⟩
-
-variable (c hU n) in
-/-- **The row bits of `keyProg` at a hidden-output statement**: an input row's bit (`Layout.keyRowOf`), else an output
-row's (`outRowOf`). -/
-noncomputable def rowOfH (outs : Finset (Fin (keyN c hU n))) (g : Fin (keyN c hU n)) :
-    Option (Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :=
-  match keyRowOf c hU n (portRowW c) g with
-  | some r => some r
-  | none => outRowOf c hU n outs g
 
 theorem rowOfH_of_key (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
     {r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)} (h : keyRowOf c hU n (portRowW c) g = some r) :

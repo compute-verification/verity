@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Properties.Flock.Circuit.RowOf
 
 set_option Elab.async false
 
@@ -230,9 +231,6 @@ theorem stackRow_input {R : Rows} {k : ℕ} {f : Fin R.nComp → List (Fin R.w)}
 /-! ## `KeysRow` -/
 
 variable (c : Flock.Circuit) (hU : Built c.unit)
-
-/-- **The row widths**: port `q`'s `16 · words` bits. -/
-def portRowW (q : Fin c.ports.size) : ℕ := 16 * c.ports[q].words
 
 /-- **Every input a unit row reads is a port bit**: a circuit condition (an input column outside every port may be a self
 row, which `Net.ofRows` lets a row read; Δ copies nothing into it). -/

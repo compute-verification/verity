@@ -4,6 +4,7 @@ import Proofs.Flock.Bridge.PortRoots
 import Proofs.Flock.Bridge.SampledSound
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 import Properties.Verity.Game
+import Properties.Verity.Place
 
 /-!
 # C-Flock's row openings are the spec's hm96 row leaves (`Hash.RowLeaf.accepts`) at SHA-512
@@ -29,7 +30,8 @@ code's bytes read as the spec's messages:
 * `rowLeaf_accepts`: the composition, in every format.
 
 The ports' rows are `16 · words` bits (`Layout.portRowW`), so a `sha512/row/v1` row is whole words, as the spec's `v1`
-verifier requires (`Hash.RowLeaf.Format.fits`; `live_opens`).
+verifier requires (`Hash.RowLeaf.Format.fits`; `live_opens`). At a gate, that opening is at the gate's place
+(`Verity.placeAt`, the vocabulary's `place` at the committed files; `place_opens`).
 
 The spec's domain id is the port's domain itself, the UTF-8 of the port's name in the circuit file (`domOf`).
 -/
@@ -503,11 +505,6 @@ theorem rowLeaf_accepts (reg : Registered.Port) (V : Hash.RowLeaf.Verifier)
 
 /-! ## The port's format -/
 
-/-- **A port's format**: `sha512/row-seg/v1` at a segmented port, `sha512/row/v2` at a bit row, `sha512/row/v1`
-otherwise, as C-Flock frames the port's rows (`Registered.portSchema`) and hashes them (`rowMsg`). -/
-def formatOf (p : Flock.Port) : Hash.RowLeaf.Format :=
-  if p.segs.isSome then .seg else if p.v2 then .v2 else .v1
-
 theorem portSchema_eq (p : Flock.Port) : Registered.portSchema p = (formatOf p).schema := by
   unfold Registered.portSchema formatOf
   split_ifs <;> rfl
@@ -716,6 +713,41 @@ theorem live_opens {r : Flock.Bridge.Parsed} {kd K₀ : ℕ} {desc : Claims.Msg}
   obtain ⟨hpl, hm⟩ := live_row A hr
   have hw1 : (placeOf A.Cc A.rows o.pos).1 = ra.width := by rw [placeOf_eq hr hpl]
   exact ⟨ra, rt, p, hr, hrt, hp, fun hw => ha hw (fits_of_words (by rw [hw1]; exact hm))⟩
+
+/-- **A value a live session opens at gate `g` is opened at `g`'s place** (`Verity.placeAt`, the vocabulary's
+`place` at the committed files): at a live session over the parse `r` and its public file, a value a witness opens
+under the session's deployed commitment at `g`'s claims position, at a statement over its roots, has an opening at
+`g`'s place that the place's verifier accepts under SHA-512 at its root and rank, with the value at its offset, at
+ports whose rows are below `2^64` bits. -/
+theorem place_opens {r : Flock.Bridge.Parsed} {kd K₀ : ℕ} {desc : Claims.Msg}
+    (A : Flock.Guarantees.LiveAt r.n r.D r.hU kd K₀ desc) (hlt : r.n < 2 ^ 64)
+    (hw : ∀ q, FlockSoundness.Discharge.Layout.portRowW r.D.unroll q < 2 ^ 64) {wt : Claims.Sampling.Wit}
+    {s : Claims.Sampling.Stmt} (hs : s.roots = A.roots) (g : Fin A.Cc.N) {b : Bool}
+    (h : wt.val sha512Msg A.Cd s (posOf A.Cc g) = some b) :
+    ∃ p, Verity.placeAt r.D r.hU r.n A.pub g = some p ∧ ∃ ro : Hash.RowLeaf.Opening,
+      Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank ro ∧ ro.row[p.offset]? = some b := by
+  obtain ⟨ra, rt, p, hr, hrt, hp, ha⟩ := live_opens A hlt hs h
+  have hr' := hr
+  rw [rowOfPos_posOf] at hr'
+  obtain ⟨x, hx, rfl⟩ := Option.map_eq_some_iff.mp hr'
+  have hpl : x.2.2.val < FlockSoundness.Discharge.Layout.portRowW r.D.unroll x.2.1 := x.2.2.isLt
+  have hplace := placeOf_eq hr hpl
+  have hpq : p = r.D.unroll.ports[x.2.1] := by
+    rw [Array.getElem?_eq_getElem x.2.1.isLt] at hp
+    exact (Option.some.inj hp).symm
+  subst hpq
+  have h1 : A.roots.getD x.2.1 [] = rt := by
+    rw [List.getD_eq_getElem?_getD, hrt, Option.getD_some]
+  have hroot : digOf (bytes rt) = fun i => (Flock.FV3.root (domOf r.D.unroll x.2.1)
+      (leavesOf r.D.unroll A.pub r.n x.2.1) Flock.Sha512.hash).data.getD i.val 0 := by
+    rw [← h1, rootsOf_getD r.D.unroll A.pub r.n x.2.1.isLt, Claims.Sampling.bytes_bs]
+    rfl
+  obtain ⟨ro, hacc, hrow⟩ := ha (by rw [hplace]; exact hw x.2.1)
+  refine ⟨_, by rw [Verity.placeAt, hx]; rfl, ro, ?_, ?_⟩
+  · rw [hroot] at hacc
+    exact hacc
+  · rw [hplace] at hrow
+    exact hrow
 
 /-! ## The constants -/
 

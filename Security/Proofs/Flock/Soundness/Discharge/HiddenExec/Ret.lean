@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+import Properties.Flock.Circuit.RowOf
 
 set_option Elab.async false
 
@@ -264,9 +265,6 @@ theorem outCol_leaf {c : Circuit} (ht : c.typed = none) (ho : c.outNet = c.unitN
   simp only [Circuit.slotCol, Circuit.unitRange, hpv]
 
 /-! ## The output port of an output word -/
-
-/-- The output port output word `o` is in: the last whose first word is at most `o`. -/
-def outPortOf (c : Circuit) (o : ℕ) : ℕ := Nat.findGreatest (fun j => Hidden.outAt c j ≤ o) c.outPorts.size
 
 theorem foldl_snd_sum : ∀ (l : List (String × ℕ)) (a : ℕ), l.foldl (· + ·.2) a = a + (l.map (·.2)).sum
   | [], a => by simp

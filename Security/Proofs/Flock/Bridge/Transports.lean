@@ -2,6 +2,7 @@ import Proofs.Flock.Bridge.Canon
 import Proofs.Flock.Bridge.PortRoots
 import Proofs.Flock.Claims.Bridge.Transports
 import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
+import Properties.Flock.Circuit.RowOf
 
 /-!
 # A shaped registered opening opens the deployed commitment
@@ -76,10 +77,6 @@ theorem placeOf_eq {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r) (hpl 
 
 theorem rootsOf_length (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : (rootsOf c pub nl).length = c.ports.size := by
   simp [rootsOf]
-
-/-- The leaves of port `q`'s registered tree. -/
-def leavesOf (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : Array ByteArray :=
-  (Array.range nl).map fun u => Flock.Registered.leafAs (schemaOf c q) (domOf c q) u (regLeafOf c pub q u)
 
 theorem leavesOf_size (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : (leavesOf c pub nl q).size = nl := by
   simp [leavesOf]

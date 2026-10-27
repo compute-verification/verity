@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Site
 import Proofs.Flock.Soundness.Discharge.Layout.OfRows
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Properties.Flock.Circuit.Outs
+import Properties.Flock.Circuit.RowOf
 
 set_option Elab.async false
 
@@ -217,21 +218,6 @@ theorem keyN_pos : 0 < keyN c hU n :=
   lt_of_lt_of_le (by show 0 < 2 + n * keyB c hU; omega) (Placed.le_gates _ _ n)
 
 variable (rowW : Fin c.ports.size → ℕ)
-
-/-- **The row bits of `keyProg`**: input gate `2 + u·B + b` is bit `8·byte + bit` of unit `u`'s row port `q` when input
-`b`'s Δ key is message bit `bit < 8` of byte `byte` of row port `q`, within the row's `rowW q` bits. -/
-noncomputable def keyRowOf (g : Fin (keyN c hU n)) : Option (Fin n × (q : Fin c.ports.size) × Fin (rowW q)) :=
-  if h : 2 ≤ g.val ∧ g.val < 2 + n * keyB c hU then
-    match Aliased.srcKey c ((g.val - 2) % keyB c hU) with
-    | .msg q byte bit =>
-      if hq : q < c.ports.size then
-        if hk : 8 * byte + bit < rowW ⟨q, hq⟩ ∧ bit < 8 then
-          some (⟨(g.val - 2) / keyB c hU, (Nat.div_lt_iff_lt_mul (Nat.pos_of_ne_zero fun h0 => by
-            rw [h0, Nat.mul_zero] at h; omega)).2 (by omega)⟩, ⟨⟨q, hq⟩, ⟨8 * byte + bit, hk.1⟩⟩)
-        else none
-      else none
-    | _ => none
-  else none
 
 variable {c hU n rowW}
 

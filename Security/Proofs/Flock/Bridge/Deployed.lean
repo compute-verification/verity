@@ -2,6 +2,7 @@ import Proofs.Flock.Bridge.Defs
 import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Soundness.Binding.RowSeg
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
+import Properties.Flock.Circuit.RowOf
 
 /-!
 # The deployed sampling commitment at a C-Flock session
@@ -91,13 +92,6 @@ def pathOf (d : ℕ) (o : Opening Bool) : Msg := (o.data.drop saltLen).take (64 
 /-- An opening's row bit `k`: the `k`th byte after the salt and the path is `1`. -/
 def bitsOf (d : ℕ) (data : Msg) (k : ℕ) : Bool := (data.drop (saltLen + 64 * d))[k]? == some 1
 
-/-- A port's frame-v3 domain: its name in the circuit file. -/
-def domOf (c : Flock.Circuit) (q : ℕ) : ByteArray := ((c.ports[q]?.map (·.name)).getD "").toUTF8
-
-/-- A port's leaf schema: `Registered.portSchema`'s, as C-Flock frames the port's rows (`HmRow.checkPublic`). -/
-def schemaOf (c : Flock.Circuit) (q : ℕ) : String :=
-  (c.ports[q]?.map Flock.Registered.portSchema).getD Flock.HmRow.ROW_SCHEMA_V2
-
 /-- **The registered ports**: the circuit file's, each at its root among `roots`, with `nl` leaves, its domain and its
 leaf schema. -/
 def portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) : Array Flock.Registered.Port :=
@@ -144,10 +138,6 @@ def rowDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) 
   match portOfPos C rows c o.pos with
   | some p => rowMsg p (SamplingDeploy.rowBits place bits o)
   | none => SamplingDeploy.row place bits o
-
-/-- **The registered tree leaf of row `(u, q)`**: C-Flock's hm96 tree leaf of the public file's `b ‖ c` there. -/
-def regLeafOf (c : Flock.Circuit) (pub : Flock.Public) (q u : ℕ) : ByteArray :=
-  Flock.Hm96.Default512.treeLeaf (pub.digest u q c.ports.size)
 
 /-- **The registration's frame-v3 roots**: per port, the root over its `nl` rows' tree leaves at its schema. -/
 def rootsOf (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : List Msg :=

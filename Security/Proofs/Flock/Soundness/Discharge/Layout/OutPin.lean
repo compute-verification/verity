@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Properties.Flock.Circuit.Outs
+import Properties.Flock.Circuit.RowOf
 
 set_option Elab.async false
 
@@ -60,14 +61,6 @@ theorem col_val_comp {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg
 /-! ## The returned outputs' columns -/
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
-
-/-- The copy, output and bit a stacked computed column is on (`OutColAt` read back). -/
-noncomputable def outDecode (x : ℕ) : ℕ × ℕ × ℕ :=
-  ((x - c.upv * (Rows.ofNet hU).nIn) / ((Rows.ofNet hU).nComp + 1),
-    ((Rows.ofNet hU).nIn + ((x - c.upv * (Rows.ofNet hU).nIn) % ((Rows.ofNet hU).nComp + 1) - 1) -
-      (c.unit.outGroups.getD 0 default).col * WORD) / 16,
-    ((Rows.ofNet hU).nIn + ((x - c.upv * (Rows.ofNet hU).nIn) % ((Rows.ofNet hU).nComp + 1) - 1) -
-      (c.unit.outGroups.getD 0 default).col * WORD) % 16)
 
 variable {c hU} in
 theorem outDecode_of {x u' j t : ℕ} (h : OutColAt c hU x u' j t) : outDecode c hU x = (u', j, t) := by

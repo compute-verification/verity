@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Lowering
 import Properties.Flock.Circuit.Outs
+import Properties.Flock.Circuit.RowOf
 
 /-!
 # A program's own instance of each unit's rows
@@ -49,11 +50,6 @@ theorem castW_wire_one {N n : ℕ} {q : FlockSoundness.Prog N n} {u : Fin n} {R 
     (W : q.RowsWire u R) : (castW e W).wire R'.one = W.wire R.one := by
   subst e
   rfl
-
-/-- **Unit `u`'s rows, wired as the program wires them**, as an instance in the program's circuit. -/
-def instC {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) (u : Fin n) :
-    (p.partition outs).IsRowsUnit u (p.rows u) :=
-  (rowsWireC p u).toIsRowsUnit outs
 
 /-- **The gate the program wires unit `u`'s constant to**: for the unit `snoc p R ins one hone` adds, `one`. -/
 def oneAt : ∀ {N n : ℕ}, FlockSoundness.Prog N n → Fin n → Fin N

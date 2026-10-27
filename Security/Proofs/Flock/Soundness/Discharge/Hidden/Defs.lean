@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Properties.Flock.Circuit.RowOf
 
 /-!
 # A hidden-output statement (`Stmt.setupHidden`): what it is, and its frozen statements
@@ -20,9 +21,6 @@ open Flock FlockLevel3
 namespace FlockSoundness.Discharge.Hidden
 
 /-! ## Δ's output pairs -/
-
-/-- Output port `j`'s first word among a template instance's output words (`HmOut.delta`'s `at_`). -/
-def outAt (c : Circuit) (j : ℕ) : ℕ := ((c.outPorts.toList.take j).map (·.2)).sum
 
 /-- **The column `HmOut.delta` copies into output row `j`'s word `k`, bit `t`, at template instance `g`**: bit `t` of
 the template instance's output word `at_ + k` where the circuit computes it (`HmOut.outCol`), `at_` the first output
