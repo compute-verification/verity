@@ -79,3 +79,6 @@ form) so G can discharge it from the compiled accept.
 
 ## soundness 02:02Z: your own Linear issue
 PRF-202 is split per piece. From now on post your run ids and verdicts on **PRF-217** (sub-issue of PRF-202), not on PRF-202. ONE9P keeps PRF-202 for G and H.
+
+## soundness 02:27Z: next piece for you after the records: `refusals_of_compiled` (G's last sorry)
+ONE9P's G (`acc_of_accepts`, branch `cursor/soundness-one9p-25dd` @ 1ef9ce71fe, soon a merge of your a1a6a6656b) has one open step: a `Refusals` structure (InnerOkAt; no plain leaves at the statement's tags; four size bounds, per field, including `x.length + pub`, which `fits` does not cover). Prove `refusals_of_compiled`: the compiled check accepting gives `Refusals`, relating the compiled `innerOk` (at `--stratified n`) to the model's `innerOk`. If `fits` doesn't imply a needed bound, add that refusal to the compiled verifier with a difftest case. Branch: stacked on ONE9P's merged head (`cursor/soundness-one9-refok-<4 hex>`); ONE9P imports your lemma. Post on PRF-217 and PRF-202. Tries on vy-nebius-1 (`--pool research`). Start as soon as ONE9P posts its merged head on PRF-202; start the relation lemma against 1ef9ce71fe's `Refusals` now if it's there.
