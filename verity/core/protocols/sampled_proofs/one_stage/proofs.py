@@ -296,9 +296,8 @@ def parse_round_request(request: bytes) -> tuple[str, bytes, int] | None:
     k = int.from_bytes(request[:2], "big")
     if len(request) != 2 + k + 64 + 8:
         return None
-    try:
-        stream = request[2:2 + k].decode()
-    except UnicodeDecodeError:
+    stream = request[2:2 + k].decode(errors="replace")
+    if stream.encode() != request[2:2 + k]:
         return None
     return stream, request[2 + k:2 + k + 64], int.from_bytes(request[-8:], "little")
 
