@@ -59,11 +59,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
 import fixture as FX  # noqa: E402
+import int_mm as IM  # noqa: E402
 import kbench  # noqa: E402
 import run as R  # noqa: E402
 from verity_vllm.commit import row_tables as RTB  # noqa: E402
 from verity_vllm.commit import row_tables_device as D  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 CTX, KEY = bytes(range(64)), bytes(range(100, 132))
@@ -138,7 +138,7 @@ class Linears:
             R.poison(y)
             self.kern.call(x, sa, wt.w, wt.sw, y, cfg)
             torch.cuda.synchronize()
-            self.gate[name] = {"cfg": str(cfg), "mismatches": R.diff(y, R.reference(E.int_mm(x, wt.w), sa, wt.sw))}
+            self.gate[name] = {"cfg": str(cfg), "mismatches": R.diff(y, R.reference(IM.int_mm(x, wt.w), sa, wt.sw))}
             self.calls.append((x, sa, wt, y, cfg))
         side = torch.cuda.Stream()
         side.wait_stream(torch.cuda.current_stream())

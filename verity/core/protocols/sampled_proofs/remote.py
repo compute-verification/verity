@@ -3,7 +3,7 @@
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
 vy-challenger-1, that port is one of the prover machine's certifier coin link (`benchmarks/live_challenger/auditor.py`,
-the coins' path, with its premises `CoinsConfidential` and `OneClock`); in development
+the coins' path; the premises `CoinsConfidential` and `OneClock` are this package's README's); in development
 (`benchmarks/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
 its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
 and the head of the release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the
@@ -41,7 +41,9 @@ nothing.
 `LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
 their frames back to back, then the replies in order, the wire and the release log as the same opens one at a time.  It
 raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
-commitment after `after` (`live_reason`), and refuses every coin after.
+commitment after `after` (`live_reason`), and refuses every coin after.  A client whose session the gate has just opened
+connects with `connect_when_listening`: until the session's tunnel listens, the connection is refused before any hello,
+so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
 bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
@@ -373,7 +375,8 @@ class RemoteChallenger:
 
     @classmethod
     def connect(cls, address: str, secret: bytes | None = None) -> RemoteChallenger:
-        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one."""
+        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one (`connect_when_listening`
+        waits for a session's tunnel to listen)."""
         host, sep, port = address.rpartition(":")
         if not sep or not host or not port.isdigit():
             raise ValueError(f"a challenger's address is HOST:PORT, not {address!r}")
@@ -479,6 +482,30 @@ class RemoteChallenger:
     def __exit__(self, *exc: object) -> None:
         if self._ended is None:
             self.close()
+
+
+#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
+#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
+#: coins' path)
+TUNNEL_WAIT_S = 120
+
+
+def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] | None = None,
+                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
+                           sleep: Callable[[float], None] = time.sleep) -> Any:
+    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
+    coin, so it is tried again every half second for up to `wait_s`, then refused (`CoinError`); any other failure raises
+    at once.  `connect` is `RemoteChallenger.connect` by default, read at the call."""
+    connect = connect or RemoteChallenger.connect
+    deadline = clock() + wait_s
+    while True:
+        try:
+            return connect(address, secret)
+        except ConnectionRefusedError as e:
+            if clock() >= deadline:
+                raise CoinError(f"nothing listened at {address} within {wait_s} s of the session's open (its tunnel never "
+                                "came up); no hello was sent and no coin opened") from e
+            sleep(0.5)
 
 
 def _read(path: Path, what: str) -> str | None:

@@ -1,7 +1,8 @@
 # The differential test's Lean half: `Difftest.serve`, the server every port's difftest executable runs, and an example
-# port (`difftest-example`) that the harness's own tests drive. Code, not analysis: Lean core and C-Flock's canonical JSON.
+# port (`difftest-example`) that the harness's own tests drive, and C-Flock's JSON parser's port (`flock-json-difftest`:
+# C-Flock's package has no dependencies, so its port lives here). Code, not analysis: Lean core and C-Flock.
 name = "verity_difftest"
-defaultTargets = ["Difftest", "difftest-example"]
+defaultTargets = ["Difftest", "difftest-example", "flock-json-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -17,3 +18,7 @@ name = "Difftest"
 [[lean_exe]]
 name = "difftest-example"
 root = "DifftestExample"
+
+[[lean_exe]]
+name = "flock-json-difftest"
+root = "FlockJsonDifftest"
