@@ -20,7 +20,7 @@ commands. What attaches Verity to vLLM is `integrations/vllm/`, and the chain an
 ## Placement
 
 `placement.toml` is where each run goes and what its node holds: the node's venv, CUDA, HF cache, taps and workload dirs,
-and the flags the run recorder (`tools/research/README.md`) starts each run with. `run.sh` hands a run's script its node's paths as its environment, so no script names
+and each run's `research run` flags. `run.sh` hands a run's script its node's paths as its environment, so no script names
 a node. The endpoint, the prover and the Lean verifier share one GPU node, holding one leased RTX PRO 6000 while serving;
 the verifier's coins are its own, or the live challenger's on an auditor host (`--env PP_CHALLENGER=...`). `example.toml`
 states the example's doneness (`examples/README.md`).
@@ -28,8 +28,8 @@ states the example's doneness (`examples/README.md`).
 ## Commands
 
 `run.sh` is the one command (`verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`): it starts the run with
-the run recorder from the tree root on the node `placement.toml` names, and returns once it starts. FLAGs go to the
-recorder; `--dry-run` prints the command.
+`research run` from the tree root on the node `placement.toml` names, and returns once it starts (`research status RUN`
+checks on it). FLAGs go to `research run`; `--dry-run` prints the command.
 
 1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit that
    seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names the
