@@ -36,7 +36,7 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   egress and the spot reads, with the challenger accepting, with probability at most `ε`. `ε` may depend on the
   adversary's moves, so it can carry the labels' PRF advantage.
 
-**One GPU, one store** (Daniel's rulings of 25 Oct): the device is one GPU, and its one store is the GPU's HBM
+**One GPU, one store**: the device is one GPU, and its one store is the GPU's HBM
 (`Accounting.Device.mem`, M). The model has no host store.
 
 **The blocks are private.** The blocks' gate sets split the circuit's gates over time, as a partition does, and like a
@@ -175,7 +175,7 @@ fixed before `z` is drawn. The on-chip state is counted, not assumed wiped: chip
 definition. `ε` is a function of the adversary's moves (`S_φ`, `hold`, `keep`), so it can cover the wipe's own error,
 the labels' PRF advantage against the distinguisher those moves make (the standard-model term, as
 `Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network certifier's count of
-the egress enters (NET-78). A constant `ε` reads the labels as ideal. `Pous.Guarantees.SecureErasureMeetsFamily` is the
+the egress enters. A constant `ε` reads the labels as ideal. `Pous.Guarantees.SecureErasureMeetsFamily` is the
 proved family bound underneath, and `Pous.Guarantees.StreamedWipe` the streamed game's proved bound. The bridge from an
 accepted verdict to this bound is memory-accounting's, in a package that sees both. -/
 def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ)

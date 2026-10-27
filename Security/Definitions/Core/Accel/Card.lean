@@ -119,7 +119,7 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
 structure Open where
   /-- the in-flight backlog, in ticks: work issued in a window completes within `slack` ticks after it -/
   slack : ℕ
-  /-- the tensor units a `b1` MAC uses: no data sheet gives a `b1` peak. CALIB (CMP-115) measured 1/8 on the H200;
+  /-- the tensor units a `b1` MAC uses: no data sheet gives a `b1` peak. CALIB measured 1/8 on the H200;
   sm_120's is unmeasured. A floor that needs `1/8 ≤ b1` (PEARLC-MODEL's) takes it as a hypothesis on this parameter. -/
   b1 : ℚ≥0
   /-- on a card whose data-sheet tensor rate is another instruction's (the H200's is `wgmma`'s), the factor by which
@@ -201,7 +201,7 @@ namespace Card
 /-- The card's stores' contents: a word at every location (`Machine.Mem` of `machine` at any parameters). -/
 abbrev Mem (c : Card) : Type := (Σ s : Store, Fin (c.size s)) → Word
 
-/-- **The card's contents as the model reads them** under register encodings `e` (RT-LEAN-2 L30): register word `q`
+/-- **The card's contents as the model reads them** under register encodings `e`: register word `q`
 read by `e q` (an FP64 code's other word at `q + 1` for `f64lo`, `q - 1` for `f64hi`), so a float code that
 represents an integer exactly, within its format's exact range, reads as that integer's two's complement, and every
 other word, and every word of every other store, as it is. Each word's reading depends on at most it and one

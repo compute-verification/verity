@@ -13,7 +13,7 @@ number of egress values the observer can tell apart is the leakage, in bits its 
   single assignment and acyclicity, the egress off the cone of the wrong set `B` is the honest egress, and which egress
   slots lie in the cone is fixed by `B` and the wiring. So the egress takes at most `#honest · Σ_B |V| ^ E(B)` values,
   `E(B)` the egress slots in `B`'s cone (`coneEgress`), and `E(B) ≤ Σ_{u ∈ B} E(u)` (`card_coneEgress_le`).
-  `card_leak_le_coneEgress` is Daniel's form: at most `m` wrong units and `E(u) ≤ E_max` give
+  `card_leak_le_coneEgress` is the uniform form: at most `m` wrong units and `E(u) ≤ E_max` give
   `#honest · C(|U|, m) · |V| ^ (m E_max)`, that is `log₂ C(|U|, m) + m · E_max · log₂ |V|` bits beyond the honest egress.
   `card_leak_le_coneEgress_sum` is the weighted form: a draw that bounds `Σ_{u ∈ B} E(u) ≤ M` gives `|V| ^ M` times the
   number of wrong sets within that budget.
@@ -188,7 +188,7 @@ theorem card_leak_le_cone [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Typ
         rw [card_product, card_univ, Fintype.card_fun, Fintype.card_coe]
     _ = _ := by rw [mul_sum]
 
-/-- **Daniel's form**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the egress takes at most
+/-- **The uniform form**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the egress takes at most
 `#honest · C(|U|, m) · |V| ^ (m E)` values, so the leakage beyond the honest egress is at most
 `log₂ C(|U|, m) + m · E · log₂ |V|` bits. -/
 theorem card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
