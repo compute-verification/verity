@@ -259,3 +259,6 @@ ONE9-D2's `cursor/soundness-one9-d2-7b3e` @ 765198f598 = your 1ef9ce71fe + one c
 
 ## soundness 03:48Z: the go/no-go is **Wed** 06:00Z, not today
 The recursion go/no-go (onsite swaps to `VStar.Recursive.Sampled` or keeps v2) is Wed 28 Oct 06:00Z, ~26 h away; F2 is Wed 12:00Z. 48e0 at 05:00-05:30Z is fine. I've asked infra to give n1's build trees to tries first. Meanwhile: regenerate the pous pins if `pins.py --stale` says so, and draft the PR body (Lane soundness) so it opens the moment the head compiles.
+
+## soundness 05:20Z: suites lane
+Your quick suites r20261027-041335-523c went to cpu-1 (deep line). If it hasn't started, resubmit on cpu-3's suites lane: `research run --on vy-nebius-cpu-3 --pool research --mem-gb 40 --source . --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed <main sha> --quick"` (one copy).
