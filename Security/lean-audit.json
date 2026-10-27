@@ -1542,6 +1542,10 @@
    "owner": "@compute-research",
    "digest": "28cb732496bb8c32eae62d9deea08ce4eebd652f3c71107a813dbda29cabf67c"
   },
+  "Pouw.Assumptions.CertifiedImport": {
+   "owner": "@compute-research",
+   "digest": "0f7df21f278a9ef9041ce53b73206c604a6339505cc9b57d2c1c165f47d065bf"
+  },
   "Pouw.Assumptions.CertifierSeesImports": {
    "owner": "@compute-research",
    "digest": "966a0d751ac558f6a4796279d246e233492835d7e2f6ae06f17d654ff3d79f4e"
@@ -1610,6 +1614,10 @@
    "owner": "@compute-research",
    "digest": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8"
   },
+  "Pouw.Assumptions.OutsourceWithinEgressPeriod": {
+   "owner": "@compute-research",
+   "digest": "013bcc3c0b1aa40378be24e92307dd2c92358f76931d7c812b2d5207d7f70d15"
+  },
   "Pouw.Assumptions.OwnDither": {
    "owner": "@compute-research",
    "digest": "14587c33d7d3ff0bdab1def743552da1bfff7faa306ac293271baf4686c60772"
@@ -1617,6 +1625,10 @@
   "Pouw.Assumptions.ProofSystemSound": {
    "owner": "@compute-research",
    "digest": "d56e224bb81a43377e362a0b70e2a39751b98bb316ca7044d538e6eb2cd1cf3a"
+  },
+  "Pouw.Assumptions.RemoteWorkFloor": {
+   "owner": "@compute-research",
+   "digest": "94149488193a30d3ff759729014af0c567a5fb05dbd73bcc0a391aa941016751"
   },
   "Pouw.Assumptions.RootAfterCoin": {
    "owner": "@compute-research",
@@ -2164,7 +2176,9 @@
   "PouwCommit.Py",
   "PouwCommit.Coins",
   "PouwCommit.Draws",
-  "SampledProofs"
+  "SampledProofs",
+  "Proofs.Pouw.DitherWitness",
+  "Proofs.Pouw.OnsiteFreed"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
@@ -2793,7 +2807,9 @@
    "Proofs.Flock.Bridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Pouw.DitherWitness": "the honest and nontrivial witnesses (LEAN-66) of WorkSound, WorkMoment and FleetSound state their premises and the accept-everything break at RT-LEAN L7's toy instance (`tw`, `twRound`, `twPd`, `twVerdict`, `honest`), which is proof-only; CMP-152, CMP-154",
+   "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses (LEAN-66) read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it; CMP-145"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -9996,6 +10012,97 @@
    "assumptions": [],
    "type_hash": "07e56fe9f88102f6281f1a4a536410aae27868252a8f1755aaf703c795446802"
   },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.OnsiteFreed : Pouw.Guarantees.OnsiteFreed"],
+   "assumptions": [],
+   "type_hash": "ea838f92eb546fdbd1a46db535290a9613d0ffe4e5b81e20314587429ad64bdd"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed_honest": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.OnsiteFreed_honest :",
+    "  And (Pouw.SecurityProofs.DitherWitness.twPd.DualOpt Pouw.SecurityProofs.DitherWitness.twμ 1)",
+    "    (And",
+    "      (Real.instLT.lt 0",
+    "        (Finset.univ.sum fun r =>",
+    "          instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
+    "            (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r))))",
+    "      (And (Real.instLE.le 0 0)",
+    "        (And Pouw.SecurityProofs.DitherWitness.tw.G1",
+    "          (And Pouw.SecurityProofs.DitherWitness.tw.G2",
+    "            (And Pouw.SecurityProofs.DitherWitness.tw.P1",
+    "              (And Pouw.SecurityProofs.DitherWitness.tw.P2",
+    "                (And",
+    "                  (Pouw.Assumptions.RemoteWorkFloor Pouw.SecurityProofs.DitherWitness.tw",
+    "                    Pouw.SecurityProofs.DitherWitness.twRound 2 Pouw.SecurityProofs.DitherWitness.twVerdict",
+    "                    Pouw.SecurityProofs.DitherWitness.twμ Pouw.SecurityProofs.OnsiteFreedWitness.twF (1 / 2))",
+    "                  (And",
+    "                    (Pouw.Assumptions.OutsourceWithinEgressPeriod Pouw.SecurityProofs.DitherWitness.tw",
+    "                      Pouw.SecurityProofs.DitherWitness.twRound 2 Pouw.SecurityProofs.DitherWitness.twμ 0)",
+    "                    (And",
+    "                      (Pouw.Assumptions.CertifiedImport Pouw.SecurityProofs.DitherWitness.tw",
+    "                        Pouw.SecurityProofs.DitherWitness.twRound 2 Pouw.SecurityProofs.OnsiteFreedWitness.twNet",
+    "                        Pouw.SecurityProofs.DitherWitness.twDev 0 0)",
+    "                      (And",
+    "                        (Real.instLT.lt",
+    "                          (instHDiv.hDiv",
+    "                            (Real.instMax.max 0",
+    "                              (instHAdd.hAdd",
+    "                                (instHSub.hSub",
+    "                                  (Finset.univ.sum fun r =>",
+    "                                    instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
+    "                                      (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r)))",
+    "                                  Pouw.SecurityProofs.OnsiteFreedWitness.twF)",
+    "                                (instHMul.hMul 0 0)))",
+    "                            (Finset.univ.sum fun r =>",
+    "                              instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
+    "                                (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r))))",
+    "                          1)",
+    "                        (And (Real.instLT.lt (instHAdd.hAdd (1 / 2) 0) 1)",
+    "                          (And Pouw.SecurityProofs.DitherWitness.honest.ExchangeFree",
+    "                            (∀ (o : Pouw.SecurityProofs.DitherWitness.twRound.Orc)",
+    "                              (x :",
+    "                                Fin 2 →",
+    "                                  Prod Pouw.SecurityProofs.DitherWitness.twRound.Draw",
+    "                                    Pouw.SecurityProofs.DitherWitness.twRound.Chk),",
+    "                              Pouw.SecurityProofs.DitherWitness.honest.Passes",
+    "                                (Pouw.Dither.onsiteVerdict Pouw.SecurityProofs.DitherWitness.twVerdict",
+    "                                  Pouw.SecurityProofs.OnsiteFreedWitness.twNet)",
+    "                                Pouw.SecurityProofs.DitherWitness.twDev o x)))))))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0e0433a70ca691339a6cf3dee24a3ec99bb41fca5db4afaab2545a9a9e179e08"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed_nontrivial": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.OnsiteFreed_nontrivial :",
+    "  Not",
+    "    (Pouw.Dither.FreedSound Pouw.SecurityProofs.DitherWitness.tw Pouw.SecurityProofs.DitherWitness.twRound 2",
+    "      (Pouw.Dither.onsiteVerdict (fun x x_1 x_2 x_3 => True) fun x x_1 x_2 x_3 => True)",
+    "      Pouw.SecurityProofs.DitherWitness.twDev Pouw.SecurityProofs.DitherWitness.twPd 1",
+    "      (fun x =>",
+    "        instHDiv.hDiv",
+    "          (Real.instMax.max 0",
+    "            (instHAdd.hAdd",
+    "              (instHSub.hSub",
+    "                (Finset.univ.sum fun r =>",
+    "                  instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
+    "                    (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r)))",
+    "                Pouw.SecurityProofs.OnsiteFreedWitness.twF)",
+    "              (instHMul.hMul 0 0)))",
+    "          (Finset.univ.sum fun r =>",
+    "            instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
+    "              (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r))))",
+    "      (Finset.univ.sum fun r =>",
+    "        instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
+    "          (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r)))",
+    "      fun x => instHAdd.hAdd (1 / 2) 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "1c6a8be37950f4d2d1524691e8fca382350901e3a271851aef69fe49b5d7a79d"
+  },
   "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": {
    "owner": "@compute-accounting",
    "signature": [
@@ -11087,6 +11194,16 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram (G : Pouw.Dither.Accel) (P : Pouw.Dither.RoundProto) (k : Nat)",
+    "  (μ : G.Res → Real) (β : Real) (hβ : Real.instLE.le 0 β) :",
+    "  Pouw.Assumptions.OutsourceWithinEgress G μ β → Pouw.Assumptions.OutsourceWithinEgressPeriod G P k μ β"
+   ],
+   "assumptions": [],
+   "type_hash": "dc206f8da1cb7089d76383ca206a593f621abfac031add19a8c8d3d98a11d600"
   },
   "RecDeploy.lamLin2_deployed_ge": {
    "owner": "@proofs",
@@ -12486,7 +12603,11 @@
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest": "completeness: the honest lemma of OverlapFloorKPerProver and OverlapFloorKOneSidedPerProver: as StagedFloorPerProverHonest on one round of one draw over one cell-block, ServiceSoundOverlapPerProver at the fork finders with zero break terms, KScopeOverlapAffine, KScopeOverlapOneSided and ChargeVF3j16Overlap at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest": "completeness: the honest lemma of StagedFloorKOneSidedJ10RPerProver: as StagedFloorPerProverHonest on one round of one call over one cell-block of J10-R's call design (n = L = B = n' = 1), ServiceSoundStagedJ10RPerProver at the fork finders with zero break terms, KScopeOneSidedJ10R and ChargeVF3j16J10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest": "completeness: the honest lemma of OverlapFloorKOneSidedJ10RPerProver: as StagedFloorJ10RPerProverHonest on one round of one call draw over one cell-block, ServiceSoundOverlapJ10RPerProver at the fork finders with zero break terms, KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
-   "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": "completeness: the nontrivial lemma of the six floors per prover: for every HashedService whose verifier accepts everything, every coin map, sha, kz and positive floor F, ServiceFloorPerProver at breakPr with the floors' luck 2^-40 and zero break terms fails in funMachine (a constant adversary is accepted at every seed and charged nothing, while its error is 2^-40). Each floor per prover concludes ServiceFloorPerProver at that breakPr, at its own F."
+   "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": "completeness: the nontrivial lemma of the six floors per prover: for every HashedService whose verifier accepts everything, every coin map, sha, kz and positive floor F, ServiceFloorPerProver at breakPr with the floors' luck 2^-40 and zero break terms fails in funMachine (a constant adversary is accepted at every seed and charged nothing, while its error is 2^-40). Each floor per prover concludes ServiceFloorPerProver at that breakPr, at its own F.",
+   "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifiedImport, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads (CMP-145, CMP-136).",
+   "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness (LEAN-66): every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at RT-LEAN L7's toy instance, the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous (CMP-145).",
+   "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verdicts that accept everything; a counterexample about no protocol function (CMP-145).",
+   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod (RT-POOL RP21), one premise's form from another's, about no protocol function's acceptance (CMP-145)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -25731,7 +25852,7 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Assumptions.Dither": {
-   "digest": "e8a2480f2c99b53f365cf03311c0d41a097b6dcfb17d638eba637080ae52622b",
+   "digest": "3750e922a2cd7491cfd4299c9f6ab4bef75726f6143830f46d0d0b719bdd4af3",
    "definitions": {
     "Pouw.Assumptions.CoinsConfidential": "d8393ab6968720ddd2ebc0ab09931d9b238144a58e0fb8b5391cf9385cd23115",
     "Pouw.Assumptions.ImportWithinCertifier": "da3d3b0e08858ad33f905c8e639f5f63d576cccc0197c9ae5dac826a40b6084d",
@@ -25739,7 +25860,9 @@
     "Pouw.Assumptions.OwnDither": "14587c33d7d3ff0bdab1def743552da1bfff7faa306ac293271baf4686c60772",
     "Pouw.Assumptions.ProofSystemSound": "d56e224bb81a43377e362a0b70e2a39751b98bb316ca7044d538e6eb2cd1cf3a",
     "Pouw.Assumptions.SAKMatmul": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919",
-    "Pouw.Assumptions.SAKSha": "b5e591ee106588c0a39051b7bb8ff598566ebfba0dfcba9771ec134bc0b7fde5"
+    "Pouw.Assumptions.SAKSha": "b5e591ee106588c0a39051b7bb8ff598566ebfba0dfcba9771ec134bc0b7fde5",
+    "Pouw.Assumptions.ServiceSound": "ad7aa962f2d81c72c56e9a919f0f84a08e2183e328b115ed7192fc51fd7ab19f",
+    "Pouw.Assumptions.ShaSpeed": "a7aaf286384107345096ab0159333defd5d18be6702c647d43c33036731f1ccf"
    },
    "guarantees": [
     "Pouw.SecurityProofs.Dither.FleetSound",
@@ -25752,7 +25875,8 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120"
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120",
+    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram"
    ]
   },
   "Definitions.Pouw.Assumptions.DitherInstance": {
@@ -25844,6 +25968,19 @@
     "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
     "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
     "Pouw.SecurityProofs.NCP.WrapWordFloorIndU"
+   ]
+  },
+  "Definitions.Pouw.Assumptions.OnsiteFreed": {
+   "digest": "c08bb55e5aedbc73c7de7cfa237606ceda0f3160a299e15391506e0a56aa2220",
+   "definitions": {
+    "Pouw.Assumptions.CertifiedImport": "0f7df21f278a9ef9041ce53b73206c604a6339505cc9b57d2c1c165f47d065bf",
+    "Pouw.Assumptions.OutsourceWithinEgressPeriod": "013bcc3c0b1aa40378be24e92307dd2c92358f76931d7c812b2d5207d7f70d15",
+    "Pouw.Assumptions.RemoteWorkFloor": "94149488193a30d3ff759729014af0c567a5fb05dbd73bcc0a391aa941016751"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.OnsiteFreed",
+    "Pouw.SecurityProofs.OnsiteFreed_honest",
+    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram"
    ]
   },
   "Definitions.Pouw.Assumptions.PearlC.Deadline": {
@@ -26695,7 +26832,11 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120",
-    "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize"
+    "Pouw.SecurityProofs.OnsiteFreed",
+    "Pouw.SecurityProofs.OnsiteFreed_honest",
+    "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
+    "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize",
+    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram"
    ]
   },
   "Definitions.Pouw.DitherInstance": {
@@ -27596,6 +27737,13 @@
     "Pouw.SecurityProofs.NCP.YUChecked"
    ]
   },
+  "Definitions.Pouw.Guarantees.OnsiteFreed": {
+   "digest": "606eee6ca8d37e477e7eea11472dd94dc6e6f2fa35d59020d37b19a752adc481",
+   "definitions": {
+    "Pouw.Guarantees.OnsiteFreed": "cd0625c3fd5b0e28a6d3344526af43add471c25395cab979da46d6b5a71b931b"
+   },
+   "guarantees": ["Pouw.SecurityProofs.OnsiteFreed"]
+  },
   "Definitions.Pouw.Guarantees.PearlC": {
    "digest": "cf8941b9cebdc583e6120886c20a3a4d30ffa31e233e34920c68d980ba6aa439",
    "definitions": {
@@ -28312,6 +28460,20 @@
     "Pouw.SecurityProofs.NCP.NCPWordFloorIndU",
     "Pouw.SecurityProofs.NCP.WrapFinalOnlyIndU",
     "Pouw.SecurityProofs.NCP.WrapWordFloorIndU"
+   ]
+  },
+  "Definitions.Pouw.OnsiteFreed": {
+   "digest": "8d9661d1b35fb5e1c4a8896948a08ee55e57e7467b19b46b965758a06f1ff333",
+   "definitions": {
+    "Pouw.Dither.Prover.ExchangeFree": "ccea515898e003a33ce95485ae9954a7ec2887f704db911e4951f361fde3aac0",
+    "Pouw.Dither.noReadings": "2903a53018d912a5bd86d2f97cef8ddffeb75dcda7ac5f5dbedd266882ede7cb",
+    "Pouw.Dither.onsiteVerdict": "8c8a686b4ecd6fba49478a381359cd1182aac642fb45abfce1fa7d565673bb16"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.OnsiteFreed",
+    "Pouw.SecurityProofs.OnsiteFreed_honest",
+    "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
+    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram"
    ]
   },
   "Definitions.Pouw.PearlC.Accum": {
@@ -31587,6 +31749,9 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120",
+    "Pouw.SecurityProofs.OnsiteFreed",
+    "Pouw.SecurityProofs.OnsiteFreed_honest",
+    "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
@@ -31606,7 +31771,8 @@
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged",
-    "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize"
+    "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize",
+    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram"
    ]
   },
   "Definitions.Pouw.RelativeSecurityFork": {
@@ -49908,6 +50074,53 @@
     "Flock.Guarantees.ZeroKnowledgeHidden": "e97810d67353f19fbd3b1214d078198f1c1e70af9df7dfb2ae023e3f66055827"
    },
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden"]
+  },
+  "Proofs.Pouw.DitherWitness": {
+   "digest": "26e7069d96aded9514570abbdc652ba4f929caa756dfff4ab303c95045e0c3de",
+   "definitions": {
+    "Pouw.SecurityProofs.DitherWitness.RCell": "94f700ba1b1c06aecae6cbde395f1f17fa0263fb74c79b0ef20ff71560dc5d51",
+    "Pouw.SecurityProofs.DitherWitness.TAlg": "f2e57b2b642039905579641ac94f8af9e2b64c6a67aa9030db87b0b583398f14",
+    "Pouw.SecurityProofs.DitherWitness.TAlg.calls": "fd706efbf5519adae1c2a1649dfac6dcfa4da21e9c000e71c62548d0cd533a5e",
+    "Pouw.SecurityProofs.DitherWitness.TAlg.ofFun": "bb5ebcc30493d1f2f6ca371348d38158be55399775f93fe78c0df613e975cbfb",
+    "Pouw.SecurityProofs.DitherWitness.TAlg.run": "f1ade4446a9e1955d8fd1b8e62b2735c2bda52aafdd4b84e2653b7a3dc00a346",
+    "Pouw.SecurityProofs.DitherWitness.TAlg.use": "451ed88915c69fecb9b0de66529cebb9786eda820c227df5c9326c0677a403b9",
+    "Pouw.SecurityProofs.DitherWitness.TDraw": "1d466015c3c892e022ab26183890975e7d1014a812de063f4594a6ca4f3d3f55",
+    "Pouw.SecurityProofs.DitherWitness.TRoot": "ffd6e251eeb2651a25c350cda9c59d33c77487730433d5f79bbab71100f24fb9",
+    "Pouw.SecurityProofs.DitherWitness.TTr": "a1dbd4d114d41e71d0964432e32c8eab62951f1ff287973680035b1e4ea3b9e6",
+    "Pouw.SecurityProofs.DitherWitness.dec": "de26b0718a4d695226b089a91579a1209c9391044cc174eb60b316d96a7fdf86",
+    "Pouw.SecurityProofs.DitherWitness.enc": "df6c6b95d2fb0df6380a3dede5298ac8511c453dca02533a9e4c260e74b4f5e5",
+    "Pouw.SecurityProofs.DitherWitness.hAnswer": "c76699042b874f0dc12fe815cf6aa5bc11b41633249c385e353d63e4195cdc33",
+    "Pouw.SecurityProofs.DitherWitness.hWork": "e96ce192f33b09a67b742cb7f4e6a864ce3ae1fbb9ce7e1943b74e85bc30e7a8",
+    "Pouw.SecurityProofs.DitherWitness.honest": "78cb42d66998b8acba725d8d9abdc9cac4d47e45b26cbd91548ca91b52283f51",
+    "Pouw.SecurityProofs.DitherWitness.hw": "549b7b5312a0e75cceddf7c2433791c7aaaba40f29ee76bd6b692c4a63f13149",
+    "Pouw.SecurityProofs.DitherWitness.nonconst": "895f0a47d8e158767439c65db82b80d3f60bcaaa8e03721f19448b5689597572",
+    "Pouw.SecurityProofs.DitherWitness.tm": "49365b58b7887a9a02f638b5d88c54ad17e2b2eb87072f4b02fbbbaa83705a93",
+    "Pouw.SecurityProofs.DitherWitness.tw": "9ff40000e72509785bd3df7639c56c43fc7394f37814aa89a1f6be055a1b0782",
+    "Pouw.SecurityProofs.DitherWitness.twDev": "3185037457637ae5beda8397b7498947e75cdd06a727c34891725dcfb2f921b5",
+    "Pouw.SecurityProofs.DitherWitness.twHmm": "bc070742990e99a7ec848d7d8f0752949b94a5ff6467a3b86cbcc7c448e109e6",
+    "Pouw.SecurityProofs.DitherWitness.twHo": "1258c07e26cd2279a1e8af6da2a3955df068948c96f6ceb2fcb80141d4792530",
+    "Pouw.SecurityProofs.DitherWitness.twHon": "a4b533f7c1d12cafec843dea41e20f94d0e53da58dd055c6ec341fb9b684395d",
+    "Pouw.SecurityProofs.DitherWitness.twHsha": "b549bba57de1abb2419730da0358d2bac40c93de9c8c3fa5a24198b44710ec22",
+    "Pouw.SecurityProofs.DitherWitness.twNF": "48183adc3e5247e2921bd5b14d1290176b258816035b8d3d62bff726a158aea3",
+    "Pouw.SecurityProofs.DitherWitness.twPd": "7e48621d88c4684504e8fb938cabad2bbcc1146fd6afdf5e42865e72855e09bf",
+    "Pouw.SecurityProofs.DitherWitness.twReg": "4ba4802e6254f29187df9f5f82ff3c21130dd81d4ce1a0bd1764d7d475d932dd",
+    "Pouw.SecurityProofs.DitherWitness.twRound": "32fc1ddb9e0bdf861b7bc14913d9bb074467f125cc57fb317e9d523b1fa0269c",
+    "Pouw.SecurityProofs.DitherWitness.twVerdict": "e348a836df9c468a2d44e7b2840a1994059afdab5eb9e00967ca79e894bd4c43",
+    "Pouw.SecurityProofs.DitherWitness.twδ": "d06accfbc371f121783f788907c17bf0af3bc4f9bb5f0d6cc264782d73c5db74",
+    "Pouw.SecurityProofs.DitherWitness.twε": "8224b85829f12abfba069fd8e81f40c8615e26080a1e8bb3b9466da522d5a9d7",
+    "Pouw.SecurityProofs.DitherWitness.twη": "0171db6aa2f2befbc6525e36ee6e7f082f88bb895aeaa001943fc2319aa471b8",
+    "Pouw.SecurityProofs.DitherWitness.twμ": "94af1c53fc82b17bc3e9d33465b15a076980b136c274def1130dac4956bfa702",
+    "Pouw.SecurityProofs.DitherWitness.twξ": "86085f4455102a1e3f305243849351d156a5573e0525bb98018716fa6ce24bfa"
+   },
+   "guarantees": ["Pouw.SecurityProofs.OnsiteFreed_honest", "Pouw.SecurityProofs.OnsiteFreed_nontrivial"]
+  },
+  "Proofs.Pouw.OnsiteFreed": {
+   "digest": "a39e1cd5dba35f26c345ede290c7ff2aa55fcde23f8ba8d6c2b141db51be62f6",
+   "definitions": {
+    "Pouw.SecurityProofs.OnsiteFreedWitness.twF": "4bd814a3c7440580a87dec5d311349acb1b20692de8eea847ff88f75d2aac1f7",
+    "Pouw.SecurityProofs.OnsiteFreedWitness.twNet": "356b030fbba6cf0d9b17551c1612f7fd51179261dd6d2b45ab00b43d006f86ea"
+   },
+   "guarantees": ["Pouw.SecurityProofs.OnsiteFreed_honest", "Pouw.SecurityProofs.OnsiteFreed_nontrivial"]
   },
   "SampledProofs.Json": {
    "digest": "99c35d0e5462b833da3e3cab51b370a49a0bb020b93865b13f7fdd30ca5ad57c",
