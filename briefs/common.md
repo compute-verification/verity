@@ -81,3 +81,6 @@ First every smell is cleaned up and the remote demo runs on the right names and 
 - KEEP and land (marked or one step away): #5324, #5603, #5616, the flock-verify setup-cache fix, #4822, #5233, #5105, #5330, #4987 (its current records, then its mark), #5490, #5273 and the wipe chain.
 - STOP (push what you have, write a checkpoint note saying where it stands, cancel your waiting runs by id, end your turn): the canon line (CANON-A/B/C, ONE9-E), ONE8's transfer branch, ONE5's `RoundsByDevice`, ONE4's refusal batches (b624/3c71: rounds, sizes, the `RecordDrawn` refusals), ONE19's Pub nontrivial, ONE78's openings, #5326/#5327 (F3) and #5320/#5321.
 - Soundness owns the **registration cluster** (PRF-268, P-TOP-3, C3): one registration log that every subprotocol and both composites read. New workers take its duplicates.
+
+## Worktree tries ship the wrong tree (22:25Z)
+`verity lean try` (and any `research run` whose launcher code comes from `/workspace/.venv`) ships the checkout its own CLI code lives in, `/workspace`, not your worktree. From a worktree, run the worktree's own CLI (`uv run --project <worktree> verity lean try …` from inside it, or `python3 <worktree>/tools/verity/cli/…`), and check the run's `source_sha`/`tree_sha` (`research status RUN --json`) equals your head before trusting a pass.
