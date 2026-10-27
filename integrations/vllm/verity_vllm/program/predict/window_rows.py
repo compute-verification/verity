@@ -18,8 +18,8 @@ function of the window's values:
   prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `OutCollect_v1` the select
   collected on from the lane's head (`io_shell.collect_reference`), and the last position's `SlotEntry_v1` the slot's entry
   (`io_shell.entry_reference`);
-- each token select's chunks the first maximum above -inf of their logits and its index (`chunk_best`), and its ``x0``
-  unit ``logits[0]``;
+- each token select's group units each group's first maximum above -inf of its logits and its index in the group
+  (`chunk_best`), and its ``x0`` unit ``logits[0]``;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
   core's ``one_stage.registered.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
@@ -133,7 +133,7 @@ def chunk_best(x: np.ndarray) -> tuple[int, int]:
 
 def _pinned(family: str) -> str | None:
     """What the circuit pins a node of Definition ``family``'s value to, which a served value is held to: an embedding's
-    its opening of the table, a token select's its chunks' scan; None where a served value is taken as served."""
+    its opening of the table, a token select's its groups' scan; None where a served value is taken as served."""
     if family == "Embedding":
         return "the table's row at its token"
     if family == "TokenSelect":
@@ -448,19 +448,19 @@ class Rows:
                 self._put(*feed, "o0", _i32([t]), EVALUATED)
                 self._put(*feed, "o1", _i32(S.carried[p]), EVALUATED)
         picks = []
-        for j, (chunks, x0) in P.selects.items():
+        for j, (groups, x0) in P.selects.items():
             logits = S.operand(nodes[j].args[0])
             if logits.dtype.itemsize != 2:
                 raise ValueError(f"node {j}: logits of {logits.dtype}, not bf16 words")
             lo = 0
-            for ct, cu in chunks:
-                C = self.fns[ct].bindings["C"]
-                best, i = chunk_best(logits[lo:lo + C])
-                self._put(ct, cu, "o0", np.array([[best]], dtype=np.uint16), EVALUATED)
-                self._put(ct, cu, "o1", _i32([i]), EVALUATED)
+            for ct, cu in groups:
+                C, G = self.fns[ct].bindings["C"], self.fns[ct].bindings["G"]
+                parts = [chunk_best(logits[lo + a:lo + min(a + G, C)]) for a in range(0, C, G)]
+                self._put(ct, cu, "o0", np.array([[b for b, _ in parts]], dtype=np.uint16), EVALUATED)
+                self._put(ct, cu, "o1", _i32([i for _, i in parts]), EVALUATED)
                 lo += C
             if lo != len(logits):
-                raise ValueError(f"node {j}: chunks of {lo} logits, not its {len(logits)}")
+                raise ValueError(f"node {j}: group units of {lo} logits, not its {len(logits)}")
             self._put(*x0, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
             picks.append(int(S.values[j][0][0]))
         self._scan(P, S, picks)

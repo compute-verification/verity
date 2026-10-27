@@ -40,7 +40,7 @@ def _registered(config: dict) -> Registered:
 
 
 def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict[str, int]:
-    return CZ.census(class_circuit(_registered(config), cls, 1, grain))
+    return CZ.census(class_circuit(_registered(config), cls, 1, grain, provable=False))
 
 
 def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_class():

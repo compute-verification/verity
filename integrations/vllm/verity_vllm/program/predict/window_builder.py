@@ -44,10 +44,10 @@ class Grain:
     // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
     `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (C-Flock's
     composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256), and a
-    token select is chunks of ``select`` logits (768: 167 chunks at V = 128,256)."""
+    token select is units of ``select`` logits (2,672: 48 units at V = 128,256, each 167 groups of 16)."""
     gemm_words: int = 32768
     rows: int = 256
-    select: int = 768
+    select: int = 2672
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +112,9 @@ def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
 class _Builder:
     grain: Grain
     programs: int = 1
+    #: refuse at `settle` every unit C-Flock's composer wouldn't prove (`interface.check_proof_block`); off only for a
+    #: probe's census and for tests of the lowering at a class too small to prove
+    provable: bool = True
     fns: dict[str, Any] = field(default_factory=dict)
     units: dict[str, int] = field(default_factory=dict)
     local: dict[tuple[int, str], int] = field(default_factory=dict)
@@ -223,7 +226,9 @@ class _Builder:
         """Each port read as m writer rows cut m ways (`interface.Layout.cut`: row j its outer elements
         [j·n/m, (j+1)·n/m), each writer row one of them), and every feed wired. Refused at once, naming each
         (`Unexpressible`): a port read at two row counts (a port is cut one way), rows that aren't its outer elements cut
-        that many ways, and a unit of more than ``grain.rows`` rows in and out."""
+        that many ways, a unit of more than ``grain.rows`` rows in and out, and, unless not ``provable``, a unit C-Flock's
+        composer wouldn't prove (`interface.check_proof_block`: past 256 rows, no row past 111 bytes, or rows past its
+        block)."""
         counts: dict[tuple[str, str], set[int]] = {}
         widths: dict[tuple[str, str], set[int]] = {}
         for f in self.feeds:
@@ -245,6 +250,13 @@ class _Builder:
                 if (k := _rows(fn, self.cuts.get(tid))) > self.grain.rows]
         if why:
             raise Unexpressible(f"{len(why)} templates the window can't hold, each port cut once a writer row: " + "; ".join(why))
+        for tid, fn in self.fns.items() if self.provable else ():
+            try:
+                IF.check_proof_block(fn, self.cuts.get(tid))
+            except ValueError as e:
+                why.append(str(e))
+        if why:
+            raise Unexpressible(f"{len(why)} templates C-Flock's composer wouldn't prove: " + "; ".join(why))
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
 

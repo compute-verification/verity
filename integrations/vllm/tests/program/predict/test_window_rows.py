@@ -81,7 +81,7 @@ def window():
     """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
     state's, `STATE` committed as a stand-in for the network certifier's, in ``row/v2`` rows as the scan's units commit
     their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
-    low = WC.lower(_registered(), CLASS, None, GRAIN)
+    low = WC.lower(_registered(), CLASS, None, GRAIN, provable=False)
     fields = _weights(low.fn)
     state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
@@ -127,7 +127,7 @@ def test_a_slots_tokens_are_its_prompt_then_its_selects(window):
 
 def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
-    `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's chunks, ``x0``
+    `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's group units, ``x0``
     and combine give the node's token; each feed (every position but the first
     below the prompt cap) holds its token and carried slot; each slot's scan read every lane's first token and carried slot,
     occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector the 2 outputs
@@ -159,13 +159,15 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             if feed is not None:
                 f = rows.outs[feed[0]]
                 assert _i32(f[0][feed[1]]) == [t] and _i32(f[1][feed[1]]) == s.carried[p]
-        for j, (chunks, x0) in P.selects.items():
+        for j, (units, x0) in P.selects.items():
             token = int(s.values[j][0][0])
             run, run_i = int(rows.outs[x0[0]][0][x0[1]][0]), 0
-            for c, (ct, cu) in enumerate(chunks):
-                best, idx = int(rows.outs[ct][0][cu][0]), _i32(rows.outs[ct][1][cu])[0]
-                if _gt(best, run):
-                    run, run_i = best, c * 64 + idx
+            for c, (ct, cu) in enumerate(units):
+                bests, idxs = rows.outs[ct][0][cu].tolist(), _i32(rows.outs[ct][1][cu])
+                assert len(bests) == len(idxs) == 64 // WC.GROUP
+                for g, (best, idx) in enumerate(zip(bests, idxs)):
+                    if _gt(best, run):
+                        run, run_i = best, c * 64 + g * WC.GROUP + idx
             assert run_i == token
             (_, _, r), = P.outs[j]
             assert _i32(rows.outs[r.tid][0][r.unit]) == [token]

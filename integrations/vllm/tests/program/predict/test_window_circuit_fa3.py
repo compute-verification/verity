@@ -69,8 +69,8 @@ def test_an_fa3_head_is_v20s_calls_reading_a_key_and_a_value_row_a_position():
     windows of the class are one circuit, blocks included, with the weights and the scan state pinned no input row is free,
     and every wire reads its own slot at its step or before."""
     reg = _registered()
-    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
-    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
+    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN, provable=False)
     assert _bytes(circuit) == _bytes(other) and _blocks(circuit) == _blocks(other)
     n = Counter()
     for fn, k in circuit.templates:
@@ -108,8 +108,8 @@ def test_an_attention_with_no_cut_is_its_heads_each_reading_a_key_and_a_value_ro
     v20's first block reads (`_reads_its_keys_and_values`). Two windows of the class are one circuit, no input row is free,
     and every wire reads its own slot at its step or before."""
     reg = _registered(GUARDED)
-    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
-    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
+    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN, provable=False)
     assert _bytes(circuit) == _bytes(other) and _blocks(circuit) == _blocks(other)
     n = {_label(fn): k for fn, k in circuit.templates}
     assert {t: k for t, k in n.items() if t.startswith(("Attention", "AttnBlock", "AttnHeadEnd"))} == {

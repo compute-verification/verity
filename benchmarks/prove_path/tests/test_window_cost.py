@@ -46,7 +46,7 @@ SIZING = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/pipeline
 
 def _census(cls: WindowClass, probe: int | None = None) -> dict:
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188})
-    doc = CR.census(class_circuit(Registered.of(phi, default_seed=7), cls, probe, GRAIN), IF)
+    doc = CR.census(class_circuit(Registered.of(phi, default_seed=7), cls, probe, GRAIN, provable=False), IF)
     doc["class"] = {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions}
     return doc
 
@@ -122,7 +122,7 @@ def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leave
     cfg = json.loads(LLAMA_1B.read_text()) | {"quantization_config": dict(INT8_EXACT_QUANT)}
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg},
               target={"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"})
-    probe = CR.census(class_circuit(Registered.of(phi, default_seed=7), WindowClass(1, 2, 2), 1), IF)
+    probe = CR.census(class_circuit(Registered.of(phi, default_seed=7), WindowClass(1, 2, 2), 1, provable=False), IF)
     probe["class"] = {"slots": 1, "prompt": 2, "outputs": 2, "positions": 3}
     doc = W.price(probe, "h200", to=(8, 1024, 64), sizing=json.loads(SIZING.read_text())["sizing"])
     assert all(0 < r["F"]["ands"] < r["all"]["ands"] for r in doc["stream"].values())

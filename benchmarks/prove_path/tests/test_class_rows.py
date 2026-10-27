@@ -30,7 +30,7 @@ GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 
 def _circuit():
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188})
-    return class_circuit(Registered.of(phi, default_seed=7), WindowClass(2, 4, 2), None, GRAIN)
+    return class_circuit(Registered.of(phi, default_seed=7), WindowClass(2, 4, 2), None, GRAIN, provable=False)
 
 
 def test_every_input_row_of_tinys_class_circuit_is_filled_and_a_gemm_slice_is_wired_registered_and_one_row_out():
