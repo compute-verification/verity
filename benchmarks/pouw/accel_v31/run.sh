@@ -26,6 +26,9 @@
 # of FILL_LS (default "768 4096 8192 0", 0: L = K), `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O,
 # gate-up and down at m 16384) beside cuBLASLt and CUTLASS; fill-sample on each shape's sampled tiles; fill-table.
 # VARIANTS here default to "row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row).
+# FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
+# circuit/dither.py). FILL_PROF=1 then runs Nsight Compute's pipe utilization on `v31 fill-once` (OVL_CALLS calls, default 4)
+# for the first variant on each shape and L, and h200_pipes.py's duty of each pipe over the overlapped call (pipes.md).
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
@@ -108,7 +111,7 @@ if [ "$MODE" = fill ]; then
   [ "$VARIANTS" = row=8192 ] && VARIANTS="row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1"
   FILL_LS=${FILL_LS:-"768 4096 8192 0"}
   FILL_SHAPES=${FILL_SHAPES:-"8B-qkv:16384:6144:4096 8B-o:16384:4096:4096 8B-up:16384:28672:4096 8B-down:16384:4096:14336"}
-  export VARIANTS FILL_SHAPES LP REPS Q D PY
+  export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY
   # shellcheck disable=SC2086
   nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
     -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
@@ -125,9 +128,13 @@ if [ "$MODE" = fill ]; then
     nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv \
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
     $PY $D/v31lib.py gate --lib "$W/libv31.so" --out "$O/fill-gates" --q "$Q" > "$O/fill-gates.log" 2> "$O/fill-gates.err"
-    echo "fill gate rc $?" >> "$O/rc.txt"'
+    echo "fill gate rc $?" >> "$O/rc.txt"
+    if [ "${FILL_DITHER:-0}" = 1 ]; then
+      $PY $D/fill_dither.py --lib "$W/libv31.so" --out "$O/fill-dither" > "$O/fill-dither.log" 2> "$O/fill-dither.err"
+      echo "fill dither rc $?" >> "$O/rc.txt"
+    fi'
   echo "lease fill gate rc $?" >> "$O/rc.txt"
-  grep -E '^[a-z].*(ACCEPT|REFUSE)' "$O/fill-gates.log" >> "$O/verdicts.txt"
+  grep -hE '^[a-z].*(ACCEPT|REFUSE)' "$O/fill-gates.log" "$O"/fill-dither.log >> "$O/verdicts.txt" 2> /dev/null
   # the bench runs whatever the gate's verdicts (its own checked call is sampled below); cite it only beside a passed gate
   for v in $VARIANTS; do
     for L in $FILL_LS; do
@@ -148,6 +155,37 @@ if [ "$MODE" = fill ]; then
       echo "lease fill-bench $v L$L rc $?" >> "$O/rc.txt"
     done
   done
+  if [ "${FILL_PROF:-0}" = 1 ]; then
+    NCU=$(command -v ncu || ls /usr/local/cuda/bin/ncu /usr/local/cuda-*/bin/ncu /opt/nvidia/nsight-compute/*/ncu 2>/dev/null | head -1)
+    export NCU
+    [ -n "$NCU" ] || echo "fill prof rc no-ncu" >> "$O/rc.txt"
+    # shellcheck disable=SC2016,SC2086
+    $LEASE bash -c '
+      v=${VARIANTS%% *}
+      tag=$(tr "," "-" <<< "$v" | tr -d "=")
+      n=$(knob "$v" nreg "")
+      # the tensor pipes this chip counts, beside the section pipes (ncu refuses a metric it lacks)
+      "$NCU" --query-metrics --chip "${NCU_CHIP:-gh100}" > "$O/ncu-metrics.txt" 2>&1
+      tens=$(awk "{print \$1}" "$O/ncu-metrics.txt" | grep -E "^sm__(pipe_tensor[a-z0-9_]*_cycles_active|inst_executed_pipe_tensor[a-z0-9_]*)$" |
+        sed "s/$/.avg.pct_of_peak_sustained_active/" | paste -sd, -)
+      for L in $FILL_LS; do
+        for s in $FILL_SHAPES; do
+          f="$O/ncu-$tag-L$L-${s%%:*}"
+          for extra in "${tens:+,$tens}" ""; do
+            env $(knob_env "$v") V31_ONCE_OVL="${OVL_CALLS:-4}" "$NCU" --clock-control none --section ComputeWorkloadAnalysis \
+              --section SpeedOfLight --metrics "sm__cycles_active.avg,sm__cycles_elapsed.avg$extra" -f -o "$f" \
+              "$W/v31${n:+-n$n}" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+            rc=$?
+            [ $rc = 0 ] && break
+          done
+          echo "fill prof $tag L$L ${s%%:*} rc $rc" >> "$O/rc.txt"
+          "$NCU" -i "$f.ncu-rep" --csv --page raw > "$f.raw.csv" 2>> "$f.log"
+        done
+      done'
+    echo "lease fill prof rc $?" >> "$O/rc.txt"
+    $PY $D/h200_pipes.py "$O" > "$O/pipes.md" 2> "$O/pipes.err"
+    echo "pipes rc $?" >> "$O/rc.txt"
+  fi
   for s in "$W"/fbench/*/samples/*/; do
     [ -d "$s" ] || continue
     name=$(basename "$(dirname "$(dirname "$s")")")-$(basename "$s")

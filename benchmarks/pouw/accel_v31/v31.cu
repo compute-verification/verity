@@ -2643,6 +2643,34 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
   return 0;
 }
 
+// One shape's Dither calls back to back as fill-bench's ovl arm makes them (a served A, gen_kernel's activations; the weight
+// side a period's), V31_ONCE_OVL of them (default 4), each committed beside the next call's compute, nothing timed: what a
+// profiler watches
+static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, const std::string& sh) {
+  char name[64];
+  int m, n, k;
+  if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+  const int L = Lspec > 0 ? Lspec : k, calls = std::max(1, env_int("V31_ONCE_OVL", 4));
+  Fill f;
+  f.setup(m, n, k, lp, L, row, read_params(pdir + "/" + fill_params_name(m, n, k, lp, L, row)), 0);
+  int8_t* A = dalloc<int8_t>((size_t)m * k);
+  gen_kernel<<<m, 256, 0, f.s0>>>(A, k, 1u, true);
+  gen_kernel<<<n, 256, 0, f.s0>>>(f.B, k, 2u, false);
+  std::vector<uint8_t> sd(384), ks(64);
+  for (size_t i = 0; i < sd.size(); i++) sd[i] = (uint8_t)mix32((u32)i);
+  for (size_t i = 0; i < ks.size(); i++) ks[i] = (uint8_t)mix32((u32)(i + 384));
+  f.set_seeds(sd.data());
+  CK(cudaStreamSynchronize(f.s0));
+  for (int i = 0; i < calls; i++) f.issue(ks.data(), A);
+  f.flush();
+  CK(cudaDeviceSynchronize());
+  CK(cudaGetLastError());
+  printf("%s: %d calls, L %d row %d, grid %d, gemm_bn %d\n", name, calls, L, row, f.grid, f.pair ? G_BN : TILE);
+  cudaFree(A);
+  f.release();
+  return 0;
+}
+
 #ifdef V31_LIB
 // ---------------------------------------------------------------- the per-call binding (v31lib.py over ctypes)
 // One process, one device: every context shares its compute and commit streams (calls run in issue order, each commit beside
@@ -2818,6 +2846,8 @@ int main(int argc, char** argv) {
     return cmd_fill_bench(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]),
                           std::vector<std::string>(argv + 8, argv + argc));
   if (argc == 7 && !strcmp(argv[1], "once")) return cmd_once(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6]);
+  if (argc == 7 && !strcmp(argv[1], "fill-once"))
+    return cmd_fill_once(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6]);
   if (argc >= 10 && !strcmp(argv[1], "gate"))
     return cmd_gate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), atoi(argv[8]), argv[9]);
   if (argc >= 9 && !strcmp(argv[1], "bench"))
@@ -2829,7 +2859,8 @@ int main(int argc, char** argv) {
     return 0;
   }
   fprintf(stderr, "usage: v31 gate DIR M N K LP T ROW CHEAT | bench REPS OUT PDIR LP T ROW name:M:N:K... | once PDIR LP T ROW "
-                  "name:M:N:K | fill-bench REPS OUT PDIR LP L ROW name:M:N:K... (L 0: K) | attrs\n");
+                  "name:M:N:K | fill-bench REPS OUT PDIR LP L ROW name:M:N:K... (L 0: K) | fill-once PDIR LP L ROW name:M:N:K | "
+                  "attrs\n");
   return 2;
 }
 #endif
