@@ -574,9 +574,7 @@ theorem lineHeldAtComponent_bites : ∃ (node : Node) (r : Record) (sm : RemoteA
   · rw [hs0, toy_start, toy_stop, hh, hsp, hl0]
     norm_num [Toy.full, Toy.trace]
   · rw [hw0, Rat.cast_zero, mul_zero]
-    first
-      | exact mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
-      | exact mul_nonneg (Nat.cast_nonneg _) (Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _)
+    exact mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
 
 /-! ## `AcceptIsVerified` at a check that accepts everything, and at the deployed check -/
 
