@@ -212,6 +212,7 @@ import Proofs.Flock.Claims.Recursion.CallsRep
 import Proofs.Flock.Claims.Recursion.CallsTop
 import Proofs.Flock.Claims.Recursion.CallsDecision
 import Proofs.Flock.Claims.Recursion.CallsR
+import Proofs.Flock.Claims.Recursion.CallsClosed
 import Proofs.Flock.Claims.Recursion.VerdictRowDTie
 import Proofs.Flock.Claims.Recursion.InnerAtCoins
 import Proofs.Flock.Claims.Recursion.InnerSetupSame
