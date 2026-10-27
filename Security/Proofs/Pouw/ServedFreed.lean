@@ -7,8 +7,10 @@ import Proofs.Pouw.DitherWitness
 
 * `ServedFreed`: the guarantee `Definitions.Pouw.Guarantees.ServedFreed`. The outsourcing premise turns the prover
   into an exchange-free one with the same transcript, which the work check accepts wherever it accepts the prover. Off
-  the remote floor's bad event that one spent at least `F`, so the prover spent at least `F − β · ext`, and the
-  certifier's check puts `ext ≤ K`. `FreedOfFloor` turns the floor `F − β K` into freed compute.
+  the remote floor's bad event that one spent at least `F`, so the prover spent at least `F − β · ext`, and off the
+  certifier's bad event `ext ≤ K`. `FreedOfFloor` turns the floor `F − β K` into freed compute, and the union bound
+  adds the two events' `κ + δ`.
+* `certifiedImport_of_within`: `ImportWithinCertifier` is `CertifiedImport` at `δ = 0`.
 * `outsourcePeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
   `OutsourceWithinEgressPeriod` asks no more of the model. Each program is replaced by its exchange-free one; the state
   path, and so the transcript, is unchanged, and the answers' exchanged bits are nonnegative (G2).
@@ -17,8 +19,8 @@ import Proofs.Pouw.DitherWitness
   checks (`twVerdict`). Every premise holds there: the remote floor at `F = (1 − ε_W) C`, `ε_W = 1/7 + ln 2 / 2`
   `WorkSound`'s error at the witness, from `WorkSound`'s conclusion there (`witness_freed`) by filling each resource the
   prover leaves with its other job; the outsourcing premise at `β = 0` from the per-program one; the certifier's count
-  at `K = 0`, since the witness machine exchanges nothing. The onsite verdict accepts the honest prover, and the bound
-  is `ε = ε_W < 1` at `κ = 1/2`. At verdicts that accept everything the conclusion is false: a prover that does nothing
+  at `K = 0` and `δ = 0`, since the witness machine exchanges nothing. The onsite verdict accepts the honest prover,
+  and the bound is `ε = ε_W < 1` at `κ + δ = 1/2`. At verdicts that accept everything the conclusion is false: a prover that does nothing
   leaves the period to other work worth 46 against at most `32 + ε C < 46`.
 
 **What the witness doesn't show.** The witness machine exchanges no bits, so `β = K = 0` and the certifier's check
@@ -37,16 +39,28 @@ theorem floor_of_max {C X F e : ℝ} (hC : 0 < C) (h : F - e ≤ X) : (1 - max 0
 
 /-- **An accepted onsite period frees at most `ε C`** (`Definitions.Pouw.Guarantees.ServedFreed`). -/
 theorem ServedFreed : Pouw.Guarantees.ServedFreed := by
-  intro G P k Obs vw vn dev Pd μ F β K κ hdual hC hβ hG1 hG2 hP1 hP2 hfloor hout himp A
+  intro G P k Obs vw vn dev Pd μ F β K κ δ hdual hC hβ hG1 hG2 hP1 hP2 hfloor hout himp A
   obtain ⟨hμ, hneeds, hval, z', hfit', hslack⟩ := hdual
   obtain ⟨A', hfree, hA'⟩ := hout hG1 hG2 hP1 hP2 A
-  refine le_trans (prob_mono fun ox h => ?_) (hfloor hG1 hG2 hP1 hP2 A' hfree)
+  have hf := hfloor hG1 hG2 hP1 hP2 A' hfree
+  have hi := himp A
+  refine le_trans (prob_mono fun ox h => ?_) ((prob_or_le _ _).trans (add_le_add hf hi))
   obtain ⟨⟨hw, hn⟩, z, hfit, hnot⟩ := h
-  obtain ⟨htr, hcost⟩ := hA' ox.1 ox.2
-  refine ⟨show vw ox.1 ox.2 (A'.transcript ox.1 ox.2) () by rw [htr]; exact hw, not_le.mp fun hge => hnot ?_⟩
-  have hext : β * A.ext ox.1 ox.2 ≤ β * K := mul_le_mul_of_nonneg_left (himp A ox.1 ox.2 hn) hβ
-  exact Pouw.SecurityProofs.Dither.FreedOfFloor G Pd 1 _ (A.timedUse ox.1 ox.2) μ z z' hμ hneeds hval zero_le_one
-    (div_nonneg (le_max_left _ _) hC.le) hfit' hslack hfit (floor_of_max hC (by linarith))
+  by_cases hK : A.ext ox.1 ox.2 ≤ K
+  · left
+    obtain ⟨htr, hcost⟩ := hA' ox.1 ox.2
+    refine ⟨show vw ox.1 ox.2 (A'.transcript ox.1 ox.2) () by rw [htr]; exact hw, not_le.mp fun hge => hnot ?_⟩
+    have hext : β * A.ext ox.1 ox.2 ≤ β * K := mul_le_mul_of_nonneg_left hK hβ
+    exact Pouw.SecurityProofs.Dither.FreedOfFloor G Pd 1 _ (A.timedUse ox.1 ox.2) μ z z' hμ hneeds hval zero_le_one
+      (div_nonneg (le_max_left _ _) hC.le) hfit' hslack hfit (floor_of_max hC (by linarith))
+  · exact Or.inr ⟨hn, not_le.mp hK⟩
+
+/-- **The certifier's sure count is its count at `δ = 0`**: `ImportWithinCertifier` gives `CertifiedImport` with no
+error. -/
+theorem certifiedImport_of_within {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} {verdict : Verdict P k Obs}
+    {dev : Readings G P k Obs} {K : ℝ} (h : ImportWithinCertifier G P k verdict dev K) :
+    CertifiedImport G P k verdict dev K 0 := fun A =>
+  (prob_mono fun ox hox => (not_le.mpr hox.2 (h A ox.1 ox.2 hox.1) : False)).trans Dither.prob_false.le
 
 end Guarantee
 
@@ -297,31 +311,33 @@ open Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.ServedFreedWitness
 /-- **`ServedFreed`'s honest witness** (LEAN-66, CMP-145): at `Proofs.Pouw.DitherWitness`'s machine, round and period,
 every premise of `ServedFreed` holds: the dual price, `C = 14 > 0`, `β = 0`, G1, G2, P1 and P2, the remote floor at
 `F = (1 − ε_W) C` and `κ = 1/2` (from `WorkSound` there), the period form of the outsourcing premise (from the
-per-program one) and the certifier's count at `K = 0`. The bound says something (`ε = ε_W < 1`, `κ = 1/2`), and the
-onsite verdict accepts the honest prover, which exchanges nothing, on every oracle and coins. -/
+per-program one) and the certifier's count at `K = 0` and `δ = 0`. The bound says something (`ε = ε_W < 1`,
+`κ + δ = 1/2`), and the onsite verdict accepts the honest prover, which exchanges nothing, on every oracle and
+coins. -/
 theorem ServedFreed_honest :
     twPd.DualOpt twμ 1 ∧ 0 < ∑ r, twμ r * (1 * twPd.hon r) ∧ (0 : ℝ) ≤ 0 ∧
       tw.G1 ∧ tw.G2 ∧ tw.P1 ∧ tw.P2 ∧
       RemoteWorkFloor tw twRound 2 twVerdict twμ twF (1 / 2) ∧
-      OutsourceWithinEgressPeriod tw twRound 2 twμ 0 ∧ ImportWithinCertifier tw twRound 2 twNet twDev 0 ∧
+      OutsourceWithinEgressPeriod tw twRound 2 twμ 0 ∧ CertifiedImport tw twRound 2 twNet twDev 0 0 ∧
       max 0 (∑ r, twμ r * (1 * twPd.hon r) - twF + 0 * 0) / ∑ r, twμ r * (1 * twPd.hon r) < 1 ∧
-      (1 / 2 : ℝ) < 1 ∧
+      (1 / 2 + 0 : ℝ) < 1 ∧
       honest.ExchangeFree ∧ ∀ o x, honest.Passes (onsiteVerdict twVerdict twNet) twDev o x := by
   refine ⟨twDual, by rw [twC]; norm_num, le_rfl, tw_G1, tw_G2, trivial, trivial, twFloor,
-    outsourcePeriod_of_perProgram tw twRound 2 twμ 0 le_rfl twOutsource, fun _ _ _ _ => ?_,
+    outsourcePeriod_of_perProgram tw twRound 2 twμ 0 le_rfl twOutsource,
+    certifiedImport_of_within fun _ _ _ _ => ?_,
     by rw [twEps]; exact twε_lt honest, by norm_num, fun _ _ _ => ⟨rfl, rfl⟩,
     fun o x => ⟨honest_accepted o x, trivial⟩⟩
   show ∑ _b : Fin 2, ((0 : ℝ) + 0) ≤ 0
   simp
 
 /-- **`ServedFreed`'s nontrivial witness** (LEAN-66, CMP-145): its conclusion at the honest witness's instance
-(`ε = ε_W`, `C = 14`, `κ = 1/2`) is false at verdicts that accept everything. The quiet prover is accepted on every
-oracle and coins and leaves the period to other work worth 46, against at most `32 + ε C < 46` for any honest
+(`ε = ε_W`, `C = 14`, `κ + δ = 1/2`) is false at verdicts that accept everything. The quiet prover is accepted on
+every oracle and coins and leaves the period to other work worth 46, against at most `32 + ε C < 46` for any honest
 strategy, so the event has probability 1. -/
 theorem ServedFreed_nontrivial :
     ¬ FreedSound tw twRound 2 (onsiteVerdict (fun _ _ _ _ => True) (fun _ _ _ _ => True)) twDev twPd 1
       (fun _ => max 0 (∑ r, twμ r * (1 * twPd.hon r) - twF + 0 * 0) / ∑ r, twμ r * (1 * twPd.hon r))
-      (∑ r, twμ r * (1 * twPd.hon r)) (fun _ => 1 / 2) := by
+      (∑ r, twμ r * (1 * twPd.hon r)) (fun _ => 1 / 2 + 0) := by
   intro h
   have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
     (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))

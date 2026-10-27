@@ -1558,6 +1558,9 @@
    "owner": "@compute-accounting",
    "digest": "e1e59f7569d7baa02fa14dca3be9f25d1ee520b7975c05df13083b151eb78739"
   },
+  "Pouw.Assumptions.CertifiedImport": {
+   "owner": "@compute-research"
+  },
   "Pouw.Assumptions.CertifierSeesImports": {
    "owner": "@compute-research",
    "digest": "966a0d751ac558f6a4796279d246e233492835d7e2f6ae06f17d654ff3d79f4e"
@@ -12312,8 +12315,8 @@
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pouw.SecurityProofs.ServedFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and ImportWithinCertifier, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads (CMP-145, CMP-136).",
-   "Pouw.SecurityProofs.ServedFreed_honest": "completeness: ServedFreed's honest witness (LEAN-66): every premise, RemoteWorkFloor from WorkSound's conclusion and OutsourceWithinEgressPeriod from the per-program premise among them, holds at RT-LEAN L7's toy instance, the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so ServedFreed is not vacuous (CMP-145).",
+   "Pouw.SecurityProofs.ServedFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifiedImport, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads (CMP-145, CMP-136).",
+   "Pouw.SecurityProofs.ServedFreed_honest": "completeness: ServedFreed's honest witness (LEAN-66): every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at RT-LEAN L7's toy instance, the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so ServedFreed is not vacuous (CMP-145).",
    "Pouw.SecurityProofs.ServedFreed_nontrivial": "lemma: ServedFreed's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verdicts that accept everything; a counterexample about no protocol function (CMP-145).",
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod (RT-POOL RP21), one premise's form from another's, about no protocol function's acceptance (CMP-145)."
   },
