@@ -1,4 +1,4 @@
-"""The scale-products source (`acquire.sources.scale_products_source`) on CPU tensors with a recording committer: its words are the IR's
+"""The scale-products source (`acquire.sources.scale_products_source`) on CPU tensors with a recording committer: its words are the circuit's
 (`ScaledMmFp8BlockSharedScale_v1` evaluated as a standalone Call, its committed interior gates `query.scale_products.slots` read in
 order, NaN payloads, infinities and subnormals included); it commits `<linear module>/scale_products` only inside the manifest site during
 a committed step and refuses a launch of another block geometry; `attach` refuses a manifest without the family, and `taps.attach`
@@ -37,7 +37,7 @@ def _f32(words) -> "torch.Tensor":
 def _ir(xs: list[int], ws: list[list[int]]) -> list[int]:
     from verity.ml.circuits.evaluation.reference import standalone_call
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
 
     prog, call = standalone_call(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
     t: dict[int, int] = {}

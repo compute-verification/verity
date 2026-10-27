@@ -1,14 +1,14 @@
 # Kueue on the Nebius cluster (Kueue v0.19.6, applied by cluster_up.sh). The weekly retune edits only this file: the nominalQuota
 # lines below, from usage_report.py's summary.
 #
-# One cohort (nebius). GPU generation and CPU checking are separate queues (Daniel, 16:05Z: batch everything):
-#   deployments-gpu  a vLLM deployment's GPU work (Commits; port captures): 6 GPUs (Daniel 1 Oct 01:35Z: circuits' vLLM work first),
+# One cohort (nebius). GPU generation and CPU checking are separate queues (batch everything):
+#   deployments-gpu  a vLLM deployment's GPU work (Commits; port captures): 6 GPUs (circuits' vLLM work first),
 #                    a fixed 4 vCPU per GPU and 640 GiB, borrowing up to 320 GiB more (a batch-8 Commit requests 170 GB and peaks at 78 GB or less; 2 Oct 02:16Z). Every pod it runs requests at most 4 vCPU per GPU (test_nebius_sky) and bursts onto idle cores.
 #                    It borrows up to 72 idle vCPU more: a leased Commit requests no GPU but up to 16 vCPU, so 24 + 8 admitted only two
 #                    while 8 GPUs sat idle (2 Oct 14:25Z).
 #   deployments-cpu  a vLLM deployment's CPU work (Builds, replay and checks): no GPU, and it can't borrow one. 640 GiB of its own (160 moved from the GPU queue, 2 Oct
 #                    02:16Z: Builds wait on memory, Commits book little), and it borrows up to 384 GiB of idle memory, which the Commits reclaim from its Builds (priority 500) but not its replays (600).
-#   provers          the provers' floor of 2 GPUs, one per proving lane, plus 1 borrowed (Daniel 1 Oct 01:35Z). It borrows idle GPUs, CPU and memory from the cohort (Daniel 19:12Z: one pool, borrowing
+#   provers          the provers' floor of 2 GPUs, one per proving lane, plus 1 borrowed. It borrows idle GPUs, CPU and memory from the cohort (one pool, borrowing
 #                    both ways, no ceremony), and a borrowed job is evicted when the Commits reclaim their quota: a timed bench
 #                    stays inside provers' own nominal quota (an earlier bench on borrowed quota was evicted mid-run, twice).
 #   backfill         the dispatcher's standing tier (root via RC, 15:36Z): nominal quota 0, so everything it runs is borrowed idle quota,
@@ -110,8 +110,7 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      # Proofs borrows every idle GPU, and the cohort's whole CPU and memory to go with them; Commits (600) reclaim from it (300)
-      # (Daniel, 10:58 PM PDT 30 Sep).
+      # Proofs borrows every idle GPU, and the cohort's whole CPU and memory to go with them; Commits (600) reclaim from it (300).
       - {name: nvidia.com/gpu, nominalQuota: 2, borrowingLimit: "6"}
       - {name: cpu, nominalQuota: 64, borrowingLimit: "124"}
       - {name: memory, nominalQuota: 384Gi, borrowingLimit: "1280Gi"}
@@ -161,7 +160,7 @@ kind: LocalQueue
 metadata: {name: backfill, namespace: default}
 spec: {clusterQueue: backfill}
 ---
-# PoUW's overflow on node 1's idle GPUs (Daniel 19:12Z: one pool, borrowing both ways): work that neither ranks nor times sm_120,
+# PoUW's overflow on node 1's idle GPUs (one pool, borrowing both ways): work that neither ranks nor times sm_120,
 # so it runs as backfill, on borrowed quota, evicted first.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue

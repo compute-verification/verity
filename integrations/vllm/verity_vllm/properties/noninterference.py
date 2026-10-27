@@ -62,7 +62,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
 from verity_vllm.properties.record import seal
 
@@ -729,7 +729,7 @@ def orchestrate(args) -> int:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_32x16_1req.json")
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     max_tokens: int | None = option("--max-tokens", type=int, default=None)

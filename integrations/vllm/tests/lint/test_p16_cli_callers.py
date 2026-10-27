@@ -6,19 +6,25 @@ A command in ``verity_vllm.pipeline.cli.COMMANDS`` is called when one of these r
   a module starts, its own module included), or a stage driver's ``cli("NAME", ...)``;
 * a script: a line of a ``.sh``, ``.toml`` or ``.yaml`` file that isn't a comment, or a string in another module's code (not
   a docstring), reading ``verity-vllm NAME`` or ``verity_vllm.pipeline.cli NAME``, options allowed in between;
-* ``PUBLIC_COMMANDS``: a command run from outside ``integrations/vllm``, which this suite doesn't read, with that caller.
+* a public command: one run from outside ``integrations/vllm``, which this suite doesn't read, that the ``public`` table of
+  ``allowlists/p16_cli_callers.json`` names with the file that runs it.  It is a declaration rather than an exception, as the
+  environment-read lint's settings-registry marks are, so no ratchet counts it: the ratchet gate
+  (``integrations/vllm/tools/ratchet_gate.py``) accepts one a change adds, or gives another caller, when that file, in the
+  change's tree, runs the command (``runs``, as this module's base copy finds a call), and refuses it otherwise.
 
 Scanned: ``integrations/vllm`` outside ``tests`` directories, ``test_*`` files and ``cli.py`` (whose table names every
 command). A test is not a caller, and neither is Markdown or a command's own help text.  Checked today, against
-``allowlists/p16_cli_callers.json``: an ``uncalled-command``, keyed by the file of the module it runs.
+``allowlists/p16_cli_callers.json``: an ``uncalled-command``, keyed by the file of the module it runs.  The gate loads this
+module from a change's base without running a test, so it imports only the standard library and reads no file as it loads.
 """
 from __future__ import annotations
 
 import ast
+import json
 import re
 from collections.abc import Collection
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import _ratchet as R
 
@@ -27,23 +33,16 @@ RULE = "P16 (every CLI command has a caller)"
 CLI = R.PKG / "pipeline" / "cli.py"
 LAUNCHERS = frozenset({"verity-vllm", "verity_vllm.pipeline.cli"})
 SCRIPTS = frozenset({".sh", ".toml", ".yaml", ".yml"})
+PUBLIC = "public"
 
-#: commands run from outside integrations/vllm, each with one caller
-PUBLIC_COMMANDS: dict[str, str] = {
-    "advice": "benchmarks/network_e2e/e2e.py (ADVICE)",
-    "advice-windows": "benchmarks/one_stage/a5_tp.sh",
-    "build": "benchmarks/stacked_share/job.sh",
-    "epoch": "benchmarks/one_stage/llama1b_tp1_commit.sh",
-    "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
-    "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
-    "serve-openai": "benchmarks/one_stage/llama1b_serve_seal.sh",
-    "served-match": "benchmarks/hash/maxtput/build_job.sh",
-    "served-pin": "benchmarks/served_commit/served_arm.sh",
-    "serving-rows": "benchmarks/one_stage/a5.sh",
-    "sweep": "an operator's night (`verity-vllm sweep plan`, tools/research/src/research/pods/nebius/sky/submit.sh)",
-    "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
-    "workload": "benchmarks/stacked_share/job.sh",
-}
+
+@lru_cache(maxsize=None)
+def public_commands() -> dict[str, str]:
+    """The list's ``public`` table: each command run from outside integrations/vllm, with the file that runs it."""
+    table = json.loads((R.ALLOWLISTS / f"{NAME}.json").read_text(encoding="utf-8")).get(PUBLIC, {})
+    assert isinstance(table, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()), \
+        f"allowlists/{NAME}.json: {PUBLIC!r} is a table of command -> the file that runs it: {table}"
+    return table
 
 
 @lru_cache(maxsize=None)
@@ -83,6 +82,14 @@ def script_callers(text: str, names: frozenset[str]) -> set[str]:
     return {m.group(1) for line in text.splitlines() if not line.lstrip().startswith("#") for m in rx.finditer(line)}
 
 
+def runs(path: str, text: str, command: str) -> bool:
+    """Whether the file ``path``, holding ``text``, runs ``command`` as a scanned file would: a public command's caller."""
+    suffix, names = PurePosixPath(path).suffix, frozenset({command})
+    if suffix == ".py":
+        return command in py_callers(text, names)
+    return suffix in SCRIPTS and command in script_callers(text, names)
+
+
 def module_file(module: str) -> str:
     p = R.PKG.parent / Path(*module.split("."))
     return R.rel(p / "__init__.py") if p.is_dir() else R.rel(p.with_suffix(".py"))
@@ -105,7 +112,7 @@ def scan() -> tuple[R.Violation, ...]:
     by_module: dict[str, list[str]] = {}
     for c, m in cmds.items():
         by_module.setdefault(module_file(m), []).append(c)
-    called: set[str] = set(PUBLIC_COMMANDS)
+    called: set[str] = set(public_commands())
     for p in scanned():
         if p.suffix == ".py":
             called |= py_callers(R.source(p), names, by_module.get(R.rel(p), ()))
@@ -118,7 +125,8 @@ def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
                     "A command nothing runs is dead: delete it from COMMANDS (and its module, if nothing else imports it), "
                     "or run it from the stage or script it belongs to. A command run from outside integrations/vllm goes "
-                    "in PUBLIC_COMMANDS (tests/lint/test_p16_cli_callers.py) with its caller.")
+                    f"in the {PUBLIC!r} table of tests/lint/allowlists/{NAME}.json with the file that runs it, which the "
+                    "ratchet gate checks.")
 
 
 def test_allowlist_has_no_stale_entries() -> None:
@@ -126,8 +134,9 @@ def test_allowlist_has_no_stale_entries() -> None:
 
 
 def test_public_commands_are_commands() -> None:
-    gone = sorted(set(PUBLIC_COMMANDS) - set(commands()))
-    assert not gone, f"{RULE}: PUBLIC_COMMANDS names commands COMMANDS no longer has; delete them: {gone}"
+    gone = sorted(set(public_commands()) - set(commands()))
+    assert not gone, f"{RULE}: allowlists/{NAME}.json's {PUBLIC!r} table names commands COMMANDS no longer has; delete them: " \
+                     f"{gone}"
 
 
 def test_detectors_on_examples() -> None:
@@ -149,3 +158,6 @@ def test_detectors_on_examples() -> None:
           'python -m verity_vllm.pipeline.cli served-pin x\n'
           'verity-vllm rows\n')
     assert script_callers(sh, names) == {"row"}
+    assert runs("benchmarks/x/run.sh", sh, "row") and not runs("benchmarks/x/run.sh", sh, "twins")
+    assert runs("benchmarks/x/e2e.py", src, "advice") and not runs("benchmarks/x/e2e.py", src, "twins")
+    assert not runs("benchmarks/x/README.md", sh, "row")

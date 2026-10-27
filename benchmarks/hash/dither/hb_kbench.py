@@ -21,7 +21,7 @@ Gates, on the device before any timing of a (linear, M), for every honest arm (a
 C and R filled with 0xA5 and the arm run once: C equal to torch._int_mm's product of the same operands, and R on --gate-rows
 sampled rows (first, last, spread; the first and last tile rows included) equal to kb_ref_rows (the receipt by its
 definition, computed from X and W); then the no-write control (WRITE = false, same poison) must be rejected. After the
-lease, `verify.py` checks two of those rows against CA's numpy twin (dc/dgemm_ref.py) from the regenerated inputs.
+lease, `verify.py` checks two of those rows against the numpy twin (dc/dgemm_ref.py) from the regenerated inputs.
 
 Writes OUT/kbench.json: per (linear, M) the gates, per-arm per-rep µs a call with the SM clock of each item, medians, and
 ratios of each honest arm over cutlass, lt and int_mm.
@@ -32,7 +32,6 @@ import argparse
 import ctypes
 import json
 import math
-import os
 import statistics
 import sys
 import time
@@ -41,6 +40,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from verity_config.settings import of
+
+settings = of(__file__)
 
 LINEARS = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
 MS = (1, 32, 256, 2048, 8192)
@@ -121,7 +123,7 @@ class Clock:
         try:
             import pynvml as nv
             nv.nvmlInit()
-            uuid = os.environ.get("GPU_LEASE_UUID")
+            uuid = settings.GPU_LEASE_UUID
             self.h = nv.nvmlDeviceGetHandleByUUID(uuid) if uuid else nv.nvmlDeviceGetHandleByIndex(0)
             self.nv = nv
             self.name = nv.nvmlDeviceGetName(self.h)

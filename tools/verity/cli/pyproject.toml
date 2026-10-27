@@ -1,7 +1,7 @@
 [project]
 name = "verity-cli"
 version = "0.0.0"
-description = "`verity`: the repository's one command (check, bench, --remote), dispatching to the tools beside it."
+description = "`verity`: the repository's one command (check, bench, run, config, --remote), dispatching to the tools beside it."
 requires-python = ">=3.12"
 dependencies = []
 
@@ -15,3 +15,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["verity_cli"]
 dev-mode-exact = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity run` and `verity config` (`tests/test_run.py`): `verity`, the configuration's checks
+# (`verity.core.deploy.config`), what step 0's declarations read (`WardenParams`, the law parser) and the core parties
+# the test's table (`tests/step0.py`) runs.
+inputs = ["verity"]
