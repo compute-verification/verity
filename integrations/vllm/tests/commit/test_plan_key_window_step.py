@@ -134,7 +134,7 @@ def test_a_geometry_key_alone_hits_the_plan_of_another_window_step_after_a_reque
     """The key as it was: the second window's lone request, past the sites, hits the plan the first window's lone request learned
     with the quantizers' bytes, and the plan it relearns is then missed by the first window's schedule run again."""
     com = _committer(monkeypatch)
-    com.step_targets = lambda step: ()
+    com.step_targets = lambda step: b""
     q = K + 4                                                 # x_q and s_a of one row
     assert _serve(com, WINDOWS) == [(1, 4, q + 160, 160), (2, 2, 160, q + 160)]
 
@@ -144,5 +144,11 @@ def test_every_hit_step_stages_its_plan_when_the_key_binds_the_step_keyed_source
     assert _serve(com, WINDOWS) == [] and com.errors == []
     src = com.sources[0]
     assert src.stats["quant_tensors"] == 2 * sum(min(len(sched), SITES) for sched in WINDOWS)
-    assert com.step_targets(SITES - 1) == ((f"{LIN}/row_quant_{SITES - 1}/0", 1), (f"{LIN}/row_quant_{SITES - 1}/1", 1))
-    assert com.step_targets(SITES) == ()
+    assert len({com.step_targets(e) for e in range(SITES)}) == SITES and com.step_targets(SITES) == b""   # the fx nodes count on
+
+
+def test_a_steps_digest_is_kept_only_while_the_sources_are_the_same(monkeypatch):
+    com = _committer(monkeypatch)
+    first, other = com.step_targets(0), com.step_targets(1)
+    com.attach_source(SimpleNamespace(targets_at=lambda step: {"logits_processor/div": 1} if step == 0 else {}))
+    assert com.step_targets(0) not in (first, b"") and com.step_targets(1) == other

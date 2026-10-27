@@ -53,10 +53,10 @@ def test_new_and_cached_requests_both_count_and_a_prefill_step_keys_by_its_promp
 
 def test_the_step_keyed_sources_names_are_bound_and_none_leaves_the_geometry_key():
     s = _sched([("r1", 46, 1)])
-    names = (("model.layers.0.mlp.down_proj/row_quant_25/0", 1), ("model.layers.0.mlp.down_proj/row_quant_25/1", 1))
-    assert plan_key_of(s, 1, 1, ()) == plan_key_of(s, 1, 1)
-    keyed, mode = plan_key_of(s, 1, 1, names)
+    assert plan_key_of(s, 1, 1, b"") == plan_key_of(s, 1, 1)
+    keyed, mode = plan_key_of(s, 1, 1, bytes(16))
     assert mode == "geometry" and keyed != plan_key_of(s, 1, 1)[0] and 0 < keyed < 2**63
+    assert plan_key_of(s, 1, 1, b"\1" * 16)[0] != keyed
 
 
 def test_counts_fallback_is_named_when_the_scheduler_output_lacks_geometry():
