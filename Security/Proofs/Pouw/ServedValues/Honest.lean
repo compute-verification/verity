@@ -233,13 +233,13 @@ theorem liveAt_skipPeriod {Ω : Type} {N : ℕ} :
     · rfl
     · exact liveAt_skipPeriod n x.2 w'
 
-theorem windowAt_skipPeriod {Ω : Type} {N : ℕ} :
+theorem stages_skipPeriod {Ω : Type} {N : ℕ} :
     ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipPeriod Ω N n).windowAt x w = skipStages N
   | 0, _, w => w.elim0
   | n + 1, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
     · rfl
-    · exact windowAt_skipPeriod n x.2 w'
+    · exact stages_skipPeriod n x.2 w'
 
 /-- **No block of the skipping period is paid.** -/
 theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : PeriodRun Bool B (circuit N).rounds s N n V)
@@ -247,7 +247,7 @@ theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : PeriodRun Bool B (circuit
     periodMode (circuit N) (skipPeriod _ N n) pr x u ≠ .paid := by
   unfold periodMode
   split_ifs
-  · rw [windowAt_skipPeriod]
+  · rw [stages_skipPeriod]
     simp [skipStages, SplitStages.joint, SplitStages.modeAt, tileStage, Declared.stageOf, circuit]
   · decide
 
