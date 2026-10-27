@@ -1,6 +1,6 @@
-"""Independent tests: the v1 descriptor codec composed with the Hopper binding and the TP sharded program.
+"""Lane IT (independent tests): DC's v1 descriptor codec composed with HP's Hopper binding and TP's sharded program.
 
-None of their own tests ran this combination (descriptor-codec.md §1 measured B0/B1 `Serve`; hopper.py and b1_tp2.py
+Neither DC nor HP nor TP ran this combination (descriptor-codec.md §1 measured B0/B1 `Serve`; hopper.py and b1_tp2.py
 were validated by correspondence, not through the codec). Everything here is at toy scale (`TINY`: H=32, NL=2,
 LP=3, STEPS=2) -- the B1-scale descriptors are never built locally.
 
@@ -9,7 +9,7 @@ What is checked, per program (`Serve{TINY}` as the control, `ServeHopper{TINY}`,
 1. encode (v1) -> canonical bytes -> json -> decode -> `descriptor_equivalence.compare(original, decoded)` is
    `equivalent`, and the same through v0;
 2. the v1 digest is a function of the program: re-encoding the decoded program gives the same digest
-   (the codec's `test_v1_kv_cache_arguments_alias_...` claim, now on the ported/sharded definition sets);
+   (DC's `test_v1_kv_cache_arguments_alias_...` claim, now on the ported/sharded definition sets);
 3. the equivalence is discriminating across bindings: `ServeHopper{TINY}` vs `Serve{TINY}` is a `Mismatch`
    (definition sets differ), and so is `ServeTP2` vs `Serve`;
 4. a *fresh* process that imports only `verity.ml.circuits` (not `verity.ml.definitions.registry.hopper`) can or cannot decode the Hopper

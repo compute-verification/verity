@@ -159,7 +159,7 @@ class ElementwiseRefRule(OpRule):
     """Element-wise reference kinds over whole tensors in DT ∈ {f32, bf16}: relu, silu, gelu (erf / tanh), and
     add / mul of two same-shape tensors.
 
-    v3 (Gemma `embeds * embed_scale`): ONE binary operand may be a **0-d parameter/buffer of the module** (a declared
+    v3 (G-RH-17, Gemma `embeds * embed_scale`): ONE binary operand may be a **0-d parameter/buffer of the module** (a declared
     weight leaf: `GemmaTextScaledWordEmbedding.embed_scale`, `sqrt(H)` registered as a buffer). It is already a prescribed Input
     (a field of the weights record with its name, shape `[]` and dtype); the rule feeds that one Input leaf to the kind N times
     (zero-stride references — no gates, no copy, no numerics beyond the kind's) and records the operand's provenance in the
@@ -173,7 +173,7 @@ class ElementwiseRefRule(OpRule):
     modes = frozenset({"reference"})
     info = RuleInfo("Elementwise[reference]", 3, "op-binding", applies_to="aten.relu / silu / gelu(approximate none|tanh) / add.Tensor / mul.Tensor on f32 or bf16 values",
                     preconditions=("operands are value collections of one dtype in {f32, bf16}",
-                                   "binary operands have identical shapes, OR exactly one of them is a 0-d parameter/buffer of the module ("
+                                   "binary operands have identical shapes, OR exactly one of them is a 0-d parameter/buffer of the module (G-RH-17: "
                                    "its one Input leaf is read N times; name / kind / dtype / value recorded); no other broadcast, no Python scalar",
                                    "add.Tensor alpha == 1", "gelu approximate in {'none', 'tanh'}"),
                     evidence_domain="numerics are the ReluRef/SiluRef/GeluRef/AddRef/MulRef kinds' — reference-defined")
@@ -208,7 +208,7 @@ class ElementwiseRefRule(OpRule):
             zero = [a for a in ops if shape(ctx, a) == ()]
             if zero and ctx.weight_of(zero[0]) is None:
                 return (f"operands differ in shape {shape(ctx, ops[0])} vs {shape(ctx, ops[1])}: {zero[0].name} is a 0-d COMPUTED value, "
-                        f"not a parameter/buffer of the module (only a declared 0-d weight leaf is read broadcast)")
+                        f"not a parameter/buffer of the module (only a declared 0-d weight leaf is read broadcast, G-RH-17)")
             return f"operands differ in shape {shape(ctx, ops[0])} vs {shape(ctx, ops[1])} (broadcast is not a bound rule)"
         if node.target is aten.add.Tensor and node.kwargs.get("alpha", 1) != 1:
             return "alpha != 1"
@@ -370,7 +370,7 @@ class RMSNormRefRule(OpRule):
 
 
 class CastRefRule(OpRule):
-    """`x.to(dtype)` between bf16 and f32 in reference mode: exact widening / RNE narrowing kinds. v2: also the
+    """`x.to(dtype)` between bf16 and f32 in reference mode: exact widening / RNE narrowing kinds. v2 (G-RH-2): also the
     `to.device(x, device, dtype)` / `to.dtype_layout(x, dtype=…, device=…)` spellings — the device is not semantics."""
     modes = frozenset({"reference"})
     info = RuleInfo("CastF32Bf16", 2, "op-binding", applies_to="aten.to.dtype / to.device / to.dtype_layout / _to_copy between bfloat16 and float32",
@@ -404,7 +404,7 @@ class MatmulRefRule(OpRule):
     """`aten.matmul / mm / bmm (a[..., M, K] @ b[..., K, N])` in reference mode -> one `LinearRef_v1{K,N,DT,BIAS=false}` call per
     row of `a` with `b`'s [K,N] slice read transposed (a view — reference-sequence permutation, no gates). Covers GPT-2 `Conv1D`
     (`x @ W[in,out]`, W a parameter) and activation×activation products (`q @ k^T`, `p @ v`) alike: the kind does not care which
-    operand is a parameter. Batch dims must agree (no broadcasting of batch dims)."""
+    operand is a parameter (XFER-G1). Batch dims must agree (no broadcasting of batch dims)."""
 
     modes = frozenset({"reference"})
     info = RuleInfo("Matmul[reference]", 1, "op-binding", applies_to="aten.matmul / mm / bmm with a[..., M, K] @ b[..., K, N] on f32 or bf16 values",
@@ -443,7 +443,7 @@ class MatmulRefRule(OpRule):
         DT = _dt_of(ctx, an)
         sa, w = shape_of(a.type)
         sb = shape_of(b.type)[0]
-        vec = len(sa) == 1  # x[K] @ W[K,N]: one row
+        vec = len(sa) == 1  # x[K] @ W[K,N]: one row (XFER-G10)
         if vec:
             a = a.reshape(Array(1, Array(sa[0], Value(w))))
             sa = (1, sa[0])
@@ -513,10 +513,10 @@ class BroadcastBiasAddRefRule(OpRule):
 
 class EmbeddingRefRule(OpRule):
     """`aten.embedding(table[V,H], ids)` with ids a *value* (a prescribed input or a computed token) -> `EmbeddingRef_v1{V,H,DT}` per
-    token; int64 ids are narrowed first with `I64ToI32_v1` (range-checked). Static ids (`wpe[arange(T)]`) stay
+    token; int64 ids are narrowed first with `I64ToI32_v1` (range-checked, XFER-G3 / R4). Static ids (`wpe[arange(T)]`) stay
     `StaticGather_v1`.
 
-    v2: `padding_idx` may be any Python int or None. ATen's forward `embedding(weight, indices, padding_idx, …)` is
+    v2 (G-RH-14): `padding_idx` may be any Python int or None. ATen's forward `embedding(weight, indices, padding_idx, …)` is
     `weight.index_select(0, indices)` whatever `padding_idx` is — the argument is read only by `embedding_backward` (it zeroes the
     gradient of that row) and by `nn.Embedding.__init__` (it zero-initialises the row, a fact about the weights, not the op). So the
     forward IS the plain gather and the kind is the same `EmbeddingRef_v1{V,H,DT}`; the value is recorded. `scale_grad_by_freq` /
@@ -590,7 +590,7 @@ class SdpaRefRule(OpRule):
     arithmetic is the kind's (f32 sequential dot, one DT rounding per stated point); torch's math SDPA scales q and k by
     sqrt(scale) before the matmul — agreement with torch CPU is measured, not assumed, as for every reference kind.
 
-    v2 binds the three spellings transformers 5.x `sdpa_attention_forward` uses, each only when it is the SAME
+    v2 binds the three spellings transformers 5.x `sdpa_attention_forward` uses (G-RH-8/-9/-10), each only when it is the SAME
     computation as v1's `is_causal=True, scale=None, KVH=NH`:
       * the causal structure as an explicit **static bool mask** (`is_causal=False`, `attn_mask` a `StaticIndex` of dtype bool whose
         every `[T, T]` slice equals `tril(ones)` — allowed iff key <= query; torch: `is_causal=True` IS `attn_mask=tril(ones(L, S))`

@@ -1,4 +1,4 @@
-"""The reference-mode kinds of `verity/ml/definitions/registry/ref_prims.py`.
+"""Lane NUMERIC: the reference-mode kinds of `verity/ml/definitions/registry/ref_prims.py`.
 
 Three layers, kept separate (brief boundary 5 — semantics vs evidence):
   1. **definition consistency** — the numpy twins equal the gate-by-gate circuit evaluation of the registered bodies on
