@@ -618,10 +618,6 @@ theorem ref_slotOf {n : ℕ} (P : Partition C n) (u : Fin n) (val : ℕ → Opti
         exact absurd hB (by simp)
   funext i
   unfold RU.ref
-  split_ifs with h1 h2 h2
-  · rfl
-  · exact absurd ((hiff i).1 h1) h2
-  · exact absurd ((hiff i).2 h2) h1
-  · rfl
+  exact if_congr (hiff i) rfl rfl
 
 end Flock.Bridge

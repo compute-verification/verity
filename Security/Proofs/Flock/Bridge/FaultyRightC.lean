@@ -44,7 +44,7 @@ theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : 
   simp
 
 /-- **A one-gate proof unit of an input is correct** wherever its committed value is opened. -/
-theorem correct_input {Cp : Prog} {ref : ℕ → Option Bool} {p : ℕ} (hp : Cp.gates[p]? = some .input)
+theorem correct_input {Cp : Claims.Sampling.Prog} {ref : ℕ → Option Bool} {p : ℕ} (hp : Cp.gates[p]? = some .input)
     (h : ref p ≠ none) : Cp.Correct ref [p] := by
   intro g hg
   obtain rfl : g = p := List.mem_singleton.1 hg
