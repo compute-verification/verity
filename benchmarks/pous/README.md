@@ -153,6 +153,14 @@ research run --on <RTX PRO 6000 node> --project verity --source . --cwd source -
   -- bash benchmarks/pous/streamed_wipe/run.sh
 ~~~
 
+`streamed_wipe/served_wipe.sh` is the wipe's piece of a served window (VLLM-33, MEM-96): `demo.sh`'s wipe of the H200 a
+window is served on, before its engine loads, with the memory challenger on vy-auditor-2. It writes the core answer
+(verity/wipe/v0) to `DIR/answer.json`, with demo.sh's outputs and `served.json` beside it.
+`benchmarks/one_stage/served_verdicts.sh` runs it as
+`WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
+key that isn't on the node, and kills nothing. Its header lists the challenger's settings. `tests/test_pous_served_wipe.py`
+runs it on a CPU, with one segment in host memory.
+
 `wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
 `D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs
