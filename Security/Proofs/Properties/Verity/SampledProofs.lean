@@ -74,7 +74,7 @@ theorem bound_le (S : SampledIn V θ F c σ) :
   by_cases hcr : V.FinderCR .sampled θ F c σ
   · rw [Flock.Guarantees.LiveAt.bound, ite_eq_left (S.cr hcr), Vocab.error, Accounting.condError, ite_eq_left hcr]
     dsimp only [PeriodLive.error]
-    exact add_le_add_right S.delta_le _
+    exact add_le_add S.delta_le le_rfl
   · rw [Vocab.error, Accounting.condError, ite_eq_right hcr]
     exact le_top
 
@@ -105,7 +105,7 @@ theorem le_error (S : SampledIn V θ F c σ) :
             S.A.G S.τ + V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ) :=
           add_le_add (S.accept_le.trans (FlockSoundness.Game.prob_mono (fun _ ho => ⟨ho, hA⟩) _ _)) S.break_le
       _ ≤ S.A.bound S.τ + V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ) :=
-          add_le_add_right (S.A.soundF S.q (V.certOf θ).ε S.hε S.τ) _
+          add_le_add (S.A.soundF S.q (V.certOf θ).ε S.hε S.τ) le_rfl
       _ ≤ V.error .sampled θ F c σ := S.bound_le
 
 end SampledIn
