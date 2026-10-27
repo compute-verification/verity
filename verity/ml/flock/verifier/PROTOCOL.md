@@ -1460,8 +1460,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   climb its path to the root at its position, each instance's ref name its unit's read position in the verifier's
   program (units `derived`). With `F`, a circuit that names a port twice refuses (`Registered.namesOnce`), since `F`
   names a port by its name. A port on
-  one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. `F` names
-  every port of the statement, whatever else it holds: a circuit port, input or output row, that is no port of `F`
+  one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
+  with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
   refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
   (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. With the verifier's own
   `--program`, `F` must also cover every registered input the program's root feeds the circuit's template: each
