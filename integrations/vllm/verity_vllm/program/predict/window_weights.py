@@ -173,8 +173,9 @@ def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, serve
 
     The checkpoint tie is the committer's own: each field is composed from the checkpoint's pinned shards, and a field
     ``served`` (the words the committer serves, by field, as `check.weights_of_record` composes them) names other words
-    for, or a field with a root it doesn't name, is refused (ValueError) by name, as is a checkpoint not of record. With no
-    ``served``, what it registers is the checkpoint's own words."""
+    for, or a field with a root it doesn't name, is refused (ValueError) by name, as is a checkpoint not of record or one
+    whose manifest entry is another model or revision than ``registered``'s. With no ``served``, what it registers is the
+    checkpoint's own words."""
     r, fields, params, of = _weights(registered, grain)
     nonces = weight_nonces(params)
     entries: dict[str, dict[str, Any]] = {}
@@ -196,13 +197,17 @@ def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, serve
             entries[p] = v.entry()
 
     rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype, commit)
+    model = registered.phi.model
     if rec.get("of_record") is not True:
         why = rec.get("why") or f"shards pinned: {rec['checkpoint'].get('all_shards_pinned')}"
         raise ValueError(f"the checkpoint is not of record ({why}): a committer registers the weights of its pinned shards")
+    entry = rec["checkpoint"]["entry"]
+    if (entry["repo"], entry["revision"]) != (model["repo"], model["revision"]):
+        raise ValueError(f"the checkpoint's manifest entry is {entry['repo']}@{entry['revision']}, not the registered model "
+                         f"{model['repo']}@{model['revision']}: a committer registers only its own model's weights")
     if refused:
         raise ValueError(f"no weight registered: {refused} (a committer registers a weight only as the checkpoint's pinned "
                          "shards hold it)")
-    model = registered.phi.model
     return WeightsRegistration(program=r.digest, repo=model["repo"], revision=model["revision"], grain=asdict(grain),
                                values=entries, unrooted=_unrooted(rec, of, entries)).dump()
 
