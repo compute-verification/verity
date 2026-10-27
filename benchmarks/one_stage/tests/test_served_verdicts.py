@@ -1,4 +1,4 @@
-"""`served_verdicts.py`, the Wed 28 run's window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
+"""`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing

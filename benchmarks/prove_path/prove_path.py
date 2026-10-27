@@ -24,7 +24,7 @@ Two kinds of committed run:
 * **A served window** (``--serve-run DIR --window K --row-dir DIR``, TP1): one closed Commit window of a `verity-vllm
   serve-openai` run, its window ``rank0/``. The run dir is serve-openai's (``serve.json``, ``windows.jsonl``, ``requests.jsonl``)
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
-  the prover's); the window's Commit is its sealed row dir (#3532's form: ``commit/replay_bundle_p0``, the Commit's records, the
+  the prover's); the window's Commit is its sealed row dir (``commit/replay_bundle_p0``, the Commit's records, the
   Build's Programs, ``manifest.json``). The compiler is `Capped` over `I2Compiler` under φ of the served engine
   (`phi_of_serve`), the bodies each request's ingress record (`serve_ingress`), named as `verity-vllm advice` registers it
   (`served_identity`: compile_steps over the tree's code identity). The advice is committed once, by the server:
@@ -82,7 +82,7 @@ Two kinds of committed run:
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
   class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
-  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at ASK-122's fixed slots; every slot's
+  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots; every slot's
   Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
   its description) and its input count at the verifier's pins (``--pin NAME=ROOT``, the roots it fixed before the run,
   each of its parameter alone, a weight's ``weights/<label>@<words>``; ``--pins REGISTRATION``, each weight's hiding root
@@ -161,7 +161,7 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 #: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
 #: (`served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O shell's units
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
-#: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``, #3619)
+#: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
 PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
@@ -517,7 +517,7 @@ def serve_id(q: Mapping[str, Any]) -> str:
 
 
 def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
-    """Each served request's body by its I1 id (`serve_id`), as vllm's advice compiler gives it to I2 (#3619's
+    """Each served request's body by its I1 id (`serve_id`), as vllm's advice compiler gives it to I2 (its
     ``advice_compile.served_inputs``): the sampling fields the request brought (its ingress record's ``brought``) with its
     prompt token ids."""
     out: dict[str, dict] = {}
@@ -530,7 +530,7 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's advice compiler (#3619's) registers it (the formula its Build compiles the request Programs under):
+    """φ of a served engine as vllm's advice compiler registers it (the formula its Build compiles the request Programs under):
     the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
     pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
     unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
@@ -582,7 +582,7 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 @functools.lru_cache(maxsize=1)
 def served_identity() -> tuple[str, str]:
     """The compiler a served window's advice is registered under, the one `verity-vllm advice` binds (``pipeline.advice``'s
-    ``registered_compiler``, #3619): compile_steps by its module path, its digest over the tree's code identity
+    ``registered_compiler``): compile_steps by its module path, its digest over the tree's code identity
     (`source_identity.code_identity`: ``integrations/vllm`` and ``verity``), so the audit's tree holds the server's."""
     try:
         from verity_vllm.pipeline import advice as ADV
@@ -1239,7 +1239,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's padded size at its class ``--class`` (`class_size`): one class Program of the window's registration
     lowered at the small class ``--probe`` (`window_circuit.class_circuit`, exact), projected to ``--class`` with v19's heads
     (`class_size.project`) and priced (`class_size.size`) a Program and at the class's slots, the window's circuit whatever
-    its requests (ASK-122). -> the probe's census, the requests its advice compiles to and the two sizes."""
+    its requests. -> the probe's census, the requests its advice compiles to and the two sizes."""
     from dataclasses import asdict
 
     import class_size as CZ

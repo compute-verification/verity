@@ -22,7 +22,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 
 - **Where it runs.** A run with no GPU prove (firewalled, on 85's CPU prover, the default; or `--cpu`) is a plain run on a
   CPU node: `research run --on vy-nebius-cpu-2 ... --mem-gb 128 --timeout <max-min>m -- taskset -c 0-31 bash job.sh ...
-  GPU=0 FLOCK_WORK=/workspace/cache/rec-bench` (infra, 24 Oct). `--on` picks another of vy-nebius-cpu-2 to cpu-5, and
+  GPU=0 FLOCK_WORK=/workspace/cache/rec-bench`. `--on` picks another of vy-nebius-cpu-2 to cpu-5, and
   `--cores` its cores. vy-nebius-1, 2 and 3 and vy-nebius-cpu-1 take runs only through their slots, so a CPU run is refused
   there. A GPU run (`--oprove-gpu 1`, or modes without the firewall) is a GPU host job on vy-nebius-1's queue, and
   `--preemptible` is for a guest on another lane's node (vy-nebius-2 admits guests only so).
@@ -30,10 +30,10 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 - **Firewall on by default.** `--modes firewall`: AGENTS.md has outer proofs go through the firewall one at a time.
   `dev` and `host` are there to compare against, never the default. A run never proves two of its V* statements at once:
   85 proves 4 at once by default, so `job.sh` sets its `OPROVE_JOBS=1` and records it in `params.txt` (the table's header
-  says "V* statements 1 at a time"). r20261025-094601-4794 ran before that and timed its sessions 4 at once.
+  says "V* statements 1 at a time").
 - **The lease, per statement.** A firewalled V* session at K = 4096 takes minutes, and its time is the Lean session
   loop's, not the prover's. Each statement's lease (`stmt_lease_min` in `run.py`, printed by `plan`) is 1.5 times its
-  measured firewalled session (r20261024-094937-6572, the CPU prover, one at a time, end to end): L0 3738 s, L1 894,
+  measured firewalled session (the CPU prover, one at a time, end to end): L0 3738 s, L1 894,
   L2 836, L3 469, alg-p0 815, alg-p1 847, the caps 51–86. No one ratio to the dev session fits: L0 took 626 times its
   dev session, L1–L3 190–315 times, alg-p0 62 times. 85 takes one `GPU_MAX_MIN` for every prove of an invocation, so
   `--lease-min` defaults to the largest lease among the statements `LEVELS` selects (94 min with L0, 12 with `LEVELS=L3`).
@@ -43,12 +43,12 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 - **Memory.** `--mem-gb` defaults to 128 with a firewalled oprove, else 64. It is the run's memory reservation, and a queued node makes it the run's MemoryMax,
   and L0's firewalled session peaked at 99 GB: 57 GB in the Lean session loop and 31 GB in the prover.
 - **The CPU prover under the firewall** (`--oprove-gpu auto`, which is 0 with `--modes firewall`). Node 1's lease pool
-  stopped every firewalled L0 session at about 10 minutes (exit 143) despite a 74-minute, non-preemptible lease. The
-  run was r20261024-075309-69be, and the GPU computes nothing while the Lean session loop works. So V*'s statements are
+  stopped every firewalled L0 session at about 10 minutes (exit 143) despite a 74-minute, non-preemptible lease, and the
+  GPU computes nothing while the Lean session loop works. So V*'s statements are
   proved by 85's CPU prover (`GPU=0`, built once beside the GPU one), and no lease is needed. The session's time is then
   the firewall's, plus a CPU prove where a GPU prove would take about a second. `--oprove-gpu 1` puts the GPU prover back
   under `--lease-min`.
-- **`--e2e`**, the one-pass mode (RECBENCH's draft): build, inner, vstage, vcap, oprove, lean and negative once each, one
+- **`--e2e`**, the one-pass mode: build, inner, vstage, vcap, oprove, lean and negative once each, one
   session per prove and no warm one. With `--cpu` it is the CPU prover end to end (`GPU=0`, no lease), on a
   CPU node.
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner session with one coin of
@@ -65,9 +65,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   `--no-forge-after`; `--steps ...,forge-after` asks for it alone). The firewall stops those three before Lean sees them,
   so `forge_after.py` makes each one after proving instead, on copies of the honest L0 and alg-p0 statements: row 0 of
   the port one bit off, as its `b || c` alone, as `pub.bin`'s consistent table, and as the whole registration. Lean
-  verifies each with the lean step's own flags, beside the honest control, which must accept (first run
-  r20261024-160722-958b: all refused at setup, the controls accepted; as a step, r20261024-172707-4385 at K = 64, N = 16
-  with `--forge coef,dirs,message`: complete and accepted, every forgery refused). The headline's `forged_refused` gives
+  verifies each with the lean step's own flags, beside the honest control, which must accept. The headline's `forged_refused` gives
   each kind's verdict.
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
   session needs ran (build, inner, vstage, vcap, oprove, lean). `ok` when, in addition, every invocation exited 0, every
@@ -80,7 +78,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 
 ## The pipeline (stage map)
 
-Every stage is a STEP of 85 (proofs' job, read as it is), run on one node with the big files under
+Every stage is a STEP of 85 (read as it is), run on one node with the big files under
 `$FLOCK_WORK/data/$TAG` for the next step. Each GPU step leases one RTX PRO 6000 per prover invocation (`on_gpu`), and
 everything else is CPU. The node column is a GPU run's: a CPU run (the default) runs every step on its CPU node
 with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
