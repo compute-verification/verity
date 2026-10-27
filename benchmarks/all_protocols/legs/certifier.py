@@ -81,9 +81,10 @@ per link-window the scan's registration in the commitment (its ``rows/<direction
 roots and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the three records' certificates and the
 two rows' registrations, under the deployment's key and its one schedule; the scan's Program its descriptor
 (`scan_zk`'s ``joint/program.json``, the generator form's), off which the period check reads the scan's terms (it
-refuses a checker form, whose egress rows are inputs, by name). A period with a link-window the scan didn't answer
-raises (`WARDEN_PENDING`: link-window 0 alone is proved yet, and a ``late`` run's is refused before the scan registers
-it).
+refuses a checker form, whose egress rows are inputs, by name); and beside the loop's audits the scan's block round's
+(`block_audit`), whose o1 is the scan's `prog`, as the rows form's `progTied` asks. A period with a link-window the
+scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved yet, and a ``late`` run's is refused before
+the scan registers it).
 
 Layout terms (`layout`): the audit's free inputs (`free_inputs`, from the window's ``circuit.json``: every unit's
 input-row bits, less the rows wires feed or ``external`` names) and its Program (`audit_program`, the window's
@@ -185,8 +186,11 @@ WARDEN_TRAFFIC = ("--rate", "0.5", "--seed", "0", "--tail", "60", "--temperature
 WARDEN_PENDING = "scan_zk.py proves link-window 0 alone (no --window W), so no later link-window has a scan answer"
 #: the scan's sampled draw (``SCAN_DRAW``): Lean ``draw --stratified K`` of the window's 2T units
 SCAN_DRAW = 16
-#: what `scan_prove` keeps of a scan's ``--out``: its summary and its honest round's registration, draw and audit record
-SCAN_KEEP = ("summary.json", "joint/program.json", "honest/registration.json", "honest/draw.json", "honest/audit.json")
+#: what `scan_prove` keeps of a scan's ``--out``: its summary, its honest round's registration, draw and audit record,
+#: and its answers (whose ``audits`` hold the block round's, the compute audit whose o1 is the scan's `prog`) with the
+#: block round's audit record
+SCAN_KEEP = ("summary.json", "joint/program.json", "honest/registration.json", "honest/draw.json", "honest/audit.json",
+             "answers.json", "block/audit.json")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -652,14 +656,34 @@ def scan_window(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tupl
         return None
     d = Path(sp["dir"])
     reg = json.loads((d / "honest" / "registration.json").read_text())
-    record = json.loads((d / "honest" / "audit.json").read_text()) if (d / "honest" / "audit.json").exists() else None
-    if record is not None and record.get("accepted") is True:
-        answer = audit_answer(reg, {"verdict": "accept"}, record, delta)
-    else:
-        answer = {"commitment": R.digest(reg), "profile": None, "protocol": ONE_STAGE, "public": None,
-                  "reason": f"the scan's audit of link-window 0 refused (scan_zk.py exited {sp['exit']})",
-                  "verdict": "reject"}
+    answer = _redecided(reg, d / "honest" / "audit.json", delta,
+                        f"the scan's audit of link-window 0 refused (scan_zk.py exited {sp['exit']})")
     return reg, answer, json.loads((d / "joint" / "program.json").read_text())
+
+
+def block_audit(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tuple[dict, dict, int, dict] | None:
+    """The scan's block round's compute audit, whose o1 is the scan's `prog` (``answers.json``'s ``audits``,
+    `scan_zk.answers`): its registration, its one-stage answer re-decided at ``delta`` as `scan_window`'s is, its free
+    inputs and its Program's descriptor; None when the run's scan kept no block round."""
+    sp = (sess.get("scan_prove") or {}).get(strategy)
+    f = Path(sp["dir"]) / "answers.json" if sp else None
+    audits = json.loads(f.read_text()).get("audits", []) if f is not None and f.exists() else []
+    if not audits:
+        return None
+    a = audits[0]
+    answer = _redecided(a["registration"], f.parent / "block" / "audit.json", delta,
+                        f"the block's audit refused (scan_zk.py exited {sp['exit']})")
+    return a["registration"], answer, a["free"], a["program"]
+
+
+def _redecided(reg: dict, record: Path, delta: Fraction, reason: str) -> dict:
+    """One-stage's answer for ``reg`` from its audit record re-decided at ``delta`` (`audit_answer`), a reject naming
+    ``reason`` where the record is absent or not accepted."""
+    got = json.loads(record.read_text()) if record.exists() else None
+    if got is not None and got.get("accepted") is True:
+        return audit_answer(reg, {"verdict": "accept"}, got, delta)
+    return {"commitment": R.digest(reg), "profile": None, "protocol": ONE_STAGE, "public": None, "reason": reason,
+            "verdict": "reject"}
 
 
 def warden_tampers() -> list[str]:
@@ -1205,8 +1229,11 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         else:
             for k, delta in enumerate(DELTAS):
                 d = term_delta(delta, len(ws))
-                case = rows_case_of(rw, ws, {0: scan_window(sess, strategy, d)}, _audits(records, d), ws[0],
-                                    [summary["free_inputs"]["bits"]], [program])
+                tied = [b] if (b := block_audit(sess, strategy, d)) else []
+                case = rows_case_of(rw, ws, {0: scan_window(sess, strategy, d)},
+                                    _audits(records, d) + [(r, a) for r, a, _, _ in tied], ws[0],
+                                    [summary["free_inputs"]["bits"], *(f for _, _, f, _ in tied)],
+                                    [program, *(p for *_, p in tied)])
                 a = check(exe, case)
                 holds_at(index, a, delta)
                 name = ("" if strategy == "honest" else f"{strategy}.") + "certifier" + (

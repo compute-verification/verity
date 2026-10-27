@@ -659,6 +659,26 @@ def test_a_scan_window_is_its_audit_records_answer_and_a_refused_one_a_reject(tm
     assert L.scan_window({}, "honest", Fraction(1, 100)) is None
 
 
+def test_the_block_audit_is_the_scans_answers_audit_re_decided_and_absent_without_one(tmp_path):
+    d = tmp_path / "scan" / "honest"
+    (d / "block").mkdir(parents=True)
+    sess = {"scan_prove": {"honest": {"dir": str(d), "exit": 0}}}
+    assert L.block_audit(sess, "honest", Fraction(1, 100)) is None
+    (d / "answers.json").write_text(json.dumps({"audits": [
+        {"answer": {}, "free": 7, "program": PROGRAM, "registration": LOOP, "steps": 0}]}))
+    for record, verdict in ((ACCEPTED, "accept"), (ACCEPTED | {"accepted": False}, "reject"), (None, "reject")):
+        (d / "block" / "audit.json").unlink(missing_ok=True)
+        if record is not None:
+            (d / "block" / "audit.json").write_text(json.dumps(record))
+        reg, a, free, desc = L.block_audit(sess, "honest", Fraction(1, 100))
+        assert (reg, free, desc) == (LOOP, 7, PROGRAM)
+        assert check_answer(a) == a and a["verdict"] == verdict and a["commitment"] == R.digest(LOOP)
+        assert verdict == "accept" or "the block's audit refused" in a["reason"]
+    assert L.block_audit(sess, "late", Fraction(1, 100)) is None
+    (d / "answers.json").write_text(json.dumps({"audits": []}))
+    assert L.block_audit(sess, "honest", Fraction(1, 100)) is None
+
+
 def test_a_rows_case_is_the_rows_forms():
     import warden_serve as WS
 
