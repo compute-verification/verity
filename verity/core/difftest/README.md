@@ -10,7 +10,9 @@ is checked against; after, the Python is held to the Lean.
 - `lean/` is the Lake package `verity_difftest`, lib `Difftest`: `Difftest.serve` answers requests `{"fn", "input"}` one
   JSON line at a time with `{"output"}`, `{"reject"}`, or `{"error"}` for a protocol fault (an unknown `fn`, a bad
   request, an output with no canonical form). Output is canonical JSON, written by C-Flock's `Flock.canon` (required by path
-  from `verity/core/service/flock`). `difftest-example` is the port the harness's own tests drive.
+  from `verity/core/service/flock`). `difftest-example` is the port the harness's own tests drive. `flock-json-difftest`
+  is C-Flock's JSON parser's port (C-Flock's package has no dependencies): `Flock.JsonParse.parse` and Lean core's
+  `Lean.Json.parse` against one Python mirror, value and refusal text alike (`tests/test_flock_json_port.py`).
 - `python/verity_difftest` is the Python side: `Port`, `run`, `replay`, `Server`, `server_fixture`, `canonical`. `run`
   keeps one server open, compares outputs as canonical JSON, requires reject parity (both reject or neither; reasons may
   differ), treats an undeclared exception or a protocol fault as a difference, and fails a vacuous run (no output, or no
