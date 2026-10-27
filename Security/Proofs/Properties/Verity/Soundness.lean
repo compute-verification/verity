@@ -103,14 +103,14 @@ theorem soundness_at : SoundnessAt := by
     unfold Deployment.restrict
     cases hc : D.comp a with
     | some P => exact hT a (by simp [Deployment.Decides, hc]) θ F c
-    | none => exact V.sound_of_not_decides hc θ F c
+    | none => exact sound_of_not_decides V hc θ F c
   calc Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
           ∃ a, D.Decides a ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ
       ≤ Game.prob (fun o => ∃ a, (V.liveAt D θ F c).accepts a o ∧ ¬ (V.liveAt D θ F c).Holds (V.certOf θ) σ a o)
           (V.game θ F c) σ :=
         Game.prob_mono (fun o ⟨hacc, hreg, a, ha, hfail⟩ =>
           ⟨a, (⟨hreg, accepts_registered_at hacc, accepts_component_at hacc ha⟩ : V.VerdictAt D a o),
-            fun h => hfail ((V.holds_liveAt D θ F c σ a o).1 h)⟩) _ σ
+            fun h => hfail ((holds_liveAt V D θ F c σ a o).1 h)⟩) _ σ
     _ ≤ ∑ a, D.restrict (fun b => V.error b θ F c σ) a :=
         Accounting.SecurityProofs.JointPeriodLive ι α d (V.circuitOf F) Outcome (V.game θ F c) (V.liveAt D θ F c)
           (V.certOf θ) (fun a σ => D.restrict (fun b => V.error b θ F c σ) a) hS σ
