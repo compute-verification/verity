@@ -236,6 +236,10 @@ class _Program:
         self.position = 0
         self.slot: Row | None = None
         self.occ: Row | None = None
+        #: the units a node makes beyond its output rows: each position's `TokenFeed_v1` unit and (at position 0) its
+        #: `SLOT_ROW` unit, None past the class's prompt cap; each token select's chunks, ``x0`` unit and `IO.SlotMask` unit
+        self.tokens: list[tuple[tuple[str, int] | None, tuple[str, int] | None]] = []
+        self.selects: dict[int, tuple[tuple[tuple[str, int], ...], tuple[str, int], tuple[str, int]]] = {}
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -337,6 +341,7 @@ class _Program:
             raise Unexpressible(f"{self.name}: position {p}'s token reads {segs[0][:2]}; a class Program reads its one prompt row "
                                 "at position 0 and every other position's token from its predecessor's select")
         if p >= NP:
+            self.tokens.append((None, None))
             return self.rows(tok.refs)
         tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=p == 0))
         if p == 0:
@@ -344,9 +349,11 @@ class _Program:
             self.b.value(rtid, "row", ru, SLOT_ROWS, self.slot_index, self.cls.slots)
             self.b.feed(tid, "slot", u, 1, (Row(rtid, ru, "o1", 2 * (NP + 1)),))
             self.occ = Row(rtid, ru, "o0", 2)
+            self.tokens.append(((tid, u), (rtid, ru)))
         else:
             self.b.feed(tid, "slot", u, 1, (self.slot,))
             self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
+            self.tokens.append(((tid, u), None))
         self.slot = Row(tid, u, "o1", 2 * (NP + 1))
         return (Row(tid, u, "o0", 2),)
 
@@ -572,6 +579,7 @@ class _Program:
         mtid, mu = self.b.unit(bind(IO.SlotMask))
         self.b.feed(mtid, "occ", mu, 1, (self.occ,))
         self.b.feed(mtid, "tok", mu, 1, self.outs[j][0][2:])
+        self.selects[j] = (tuple(parts), (xtid, xu), (mtid, mu))
 
 
 FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",
