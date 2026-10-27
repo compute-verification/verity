@@ -73,7 +73,7 @@ class RootsArm(ProfArm):
     out/layouts.jsonl. Every RootsArm commits under one run id, so their roots compare across arms. ``retain_levels`` None is the
     committer's default (no levels under retain=none).
 
-    The records are written after the run's timed window, where `ServedCommitArm` checks a run (the next ``begin_run``, before its
+    The records are written after the run's timed period, where `ServedCommitArm` checks a run (the next ``begin_run``, before its
     clock, or the harness reading ``extras`` or ``gate``): building and hashing a run's layout costs tens of milliseconds at 26k
     tensors (and its garbage collections), which a run's time must not hold. A run's thread CPU runs from its ``begin_run`` to its
     record, so it includes the finalize."""
@@ -146,7 +146,7 @@ class RootsArm(ProfArm):
 
 class StockProfArm:
     """The stock engine with ProfArm's exec/sample and run ranges and nothing else: the control's own per-step times. Its
-    per-thread CPU line in out/roots.jsonl is written after the run's timed window, as `RootsArm`'s records are."""
+    per-thread CPU line in out/roots.jsonl is written after the run's timed period, as `RootsArm`'s records are."""
 
     protocols: tuple[str, ...] = ()
     precision = "bfloat16"
@@ -264,7 +264,7 @@ class RowsW64Arm(RowsArm):
 
 
 class RowsCapArm(RowsArm):
-    """The rows arm hashing each window in launches of at most PROF_ROWS_CAP (default 32) blocks while two ring slots are free (the
+    """The rows arm hashing each window in launches of at most PROF_ROWS_CAP (default 32) CTAs while two ring slots are free (the
     committer's rows_cap_blocks policy): the same bytes, with the other SMs left to serving."""
 
     def ready(self, target: Any) -> None:
@@ -294,8 +294,8 @@ class Rows4kArm(RowsArm):
 
 
 def _layer_source(**kw: Any) -> Any:
-    """A served compiled source acquiring only what a per-layer unit commits: per compiled piece its first convert_element_type (the
-    fused add-norm's residual, one hidden vector per token: the layer-folded unit's) and the embedding's first output, the keys and
+    """A served compiled source acquiring only what a per-layer proof block commits: per compiled piece its first convert_element_type (the
+    fused add-norm's residual, one hidden vector per token: the layer-folded proof block's) and the embedding's first output, the keys and
     values each attention layer is given (post-RoPE K, and V), the token inputs and the logits. Measurement only: not the step's
     values, so not a Commit of the step."""
     from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
@@ -334,7 +334,7 @@ def _layer_source(**kw: Any) -> Any:
 
 
 class RowsLayerArm(RowsArm):
-    """The rows arm acquiring only the per-layer unit's values (`_layer_source`)."""
+    """The rows arm acquiring only the per-layer proof block's values (`_layer_source`)."""
 
     def install(self, target: Any) -> RowsLayerArm:
         self.source = _layer_source(into=target.hooks, batch_copies=self.batch_copies)
@@ -356,7 +356,7 @@ class RowsLayerCapArm(RowsCapArm, RowsLayerArm):
 
 class HiPrioArm(NativeDrainArm):
     """The nativedrain arm with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
-    on its side stream at the default priority (CUDA's lowest), gets a block slot only when no serving block waits for one."""
+    on its side stream at the default priority (CUDA's lowest), gets a CTA slot only when no serving CTA waits for one."""
 
     def ready(self, target: Any) -> None:
         import os
@@ -376,7 +376,7 @@ class RowsHiPrioArm(HiPrioArm):
 
 class FinalizeProfArm(NativeDrainArm):
     """The nativedrain arm with the committer's finalize under cProfile: the top functions by cumulative time of each run's finalize
-    (inside the timed window) appended to $RESEARCH_RUN_DIR/out/finalize_prof.txt."""
+    (inside the timed period) appended to $RESEARCH_RUN_DIR/out/finalize_prof.txt."""
 
     def ready(self, target: Any) -> None:
         import cProfile

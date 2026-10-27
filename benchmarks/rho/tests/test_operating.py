@@ -8,9 +8,9 @@ REG = Registry.load()
 
 
 def test_the_reference_numbers_match_the_spec_arithmetic():
-    # top's arithmetic on Daniel's spec: one 17 GB SparseLoCo sync takes about 4.3 years through one server's 1 kb/s
-    # (the side channel alone; the certifier's timing channel adds its own); the pretraining run takes about 35 s on
-    # the whole fleet unencumbered at the training MFU, and the dark pool takes that over its share (0.1%, Daniel 26 Oct)
+    # one 17 GB SparseLoCo sync takes about 4.3 years through one server's 1 kb/s (the side channel alone; the
+    # certifier's timing channel adds its own); the pretraining run takes about 35 s on the whole fleet unencumbered at
+    # the training MFU, and the dark pool takes that over its share (0.1%)
     sync = REG["exfil.sparseloco-sync.bits"]
     alone = evaluate_named(REG.override({"regime.onsite.timing": 0.0}), "reference-onsite-h200")
     assert math.isclose(operating.exfil(alone.scenario, sync)["one location"] / (365 * 86400), 4.31, rel_tol=0.01)
@@ -20,9 +20,9 @@ def test_the_reference_numbers_match_the_spec_arithmetic():
     work = operating.work(r, REG["work.v4-pretrain.flops"])
     assert 30 < work["unencumbered"] < 40
     assert math.isclose(work["dark pool"], work["unencumbered"] / r.scenario.context.fleet.eps_dark)
-    assert math.isclose(work["lower end"], r.scenario.seconds(r.lo))
-    assert math.isclose(work["best attack"], r.scenario.seconds(r.hi))
-    assert work["unencumbered"] <= work["lower end"] <= work["best attack"] * (1 + 1e-9) <= work["dark pool"] * 1.001
+    assert math.isclose(work["lower bound"], r.scenario.seconds(r.lo))
+    assert math.isclose(work["best attack"], r.scenario.seconds(r.attack))
+    assert work["unencumbered"] <= work["lower bound"] <= work["best attack"] * (1 + 1e-9) <= work["dark pool"] * 1.001
 
 
 def test_remote_exfiltration_is_unbounded():
@@ -44,8 +44,7 @@ def test_every_reference_has_an_operating_point():
 
 
 def test_faulty_outputs_carry_every_reference_before_their_first_detection():
-    # the training lane's reference-DC model (art:dee8d74e…) from tiers' sampled-proof defaults at delta = 1e-6: the
-    # channel carries 1.06e17 bits before its first detection, and catches the weights with chance 8.33e-4, one
+    # from tiers' sampled-proof defaults at delta = 1e-6: the channel carries 1.06e17 bits before its first detection, and catches the weights with chance 8.33e-4, one
     # SparseLoCo sync 1.77e-5 and 1,000 syncs 1.76%
     row = operating.faulty(REG, build(REG, "reference-remote-h200-sampled"))
     assert math.isclose(row.q, 2.0833e-15, rel_tol=1e-4)

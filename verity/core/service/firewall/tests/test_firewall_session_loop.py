@@ -83,10 +83,7 @@ class Auditor:
 
     def _serve(self):
         while True:
-            try:
-                c, _ = self.srv.accept()
-            except OSError:
-                return
+            c, _ = self.srv.accept()
             mine: list[bytes] = []
             self.got.append(mine)
             threading.Thread(target=self._conn, args=(c, mine), daemon=True).start()
