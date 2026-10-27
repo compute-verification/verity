@@ -34,7 +34,7 @@ verity_vllm/
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
 tools/                scripts run by path: popread.py (which units' cross-unit reads a committed value steers; each unit's egress E(u)), migrate/ (registry splits)
-workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool
+workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool (workloads/: SHA256SUMS only, the files in the evidence store)
 ~~~
 
 **`pipeline/`** holds the stage drivers (Build / Match / Commit): `build.py`, `match.py`, `commit.py`, `hot.py`, `report.py`,
@@ -395,7 +395,13 @@ modules, and prints their run ids (`tools/suite_parts.py --help`).  Every tool i
 A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/workload/v2`, read as `config.RowConfig`: the
 checkpoint's repo (`model`) and role (`case`), an `engine` block (`config.RowEngine`: the checkpoint's full `revision`, the
 `vllm` commit, the engine `args`, the `env` that selects kernels, the declared `target`, and `reasons`: why the row sets a served
-switch away from vLLM's default), and the workload (requests, sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
+switch away from vLLM's default), and the workload (requests, sampling, the sweep's parameters).  `verity-vllm workload` writes it.
+Its bytes are a fixture in the evidence store: the tree keeps its name and SHA-256 (`workloads/SHA256SUMS`) and its art id
+(`fixtures/artifacts.json`, the path gitignored), and every reader takes it through `config.workload_file`, which fetches an absent
+one by that id (`research data fetch-fixtures`) and refuses one whose digest differs; a shell script that reads one itself runs
+`verity-vllm workload-file PATH` first.  A new or changed row file is a new fixture: `research data put --kind fixture/v1 --file
+PATH --preserve`, its id and path in the registry, its path in `.gitignore`, its line in `SHA256SUMS`
+(`tests/pipeline/test_workload_file.py` refuses a workload no `SHA256SUMS` lists).  The κ profile a Match folds with is the role's
 (`observe.fold.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
 file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.  Every Commit reads back,
 on every rank, the switches that select its kernels (`engine/served.py`: batch invariance, DeepGEMM, the shared-experts stream,

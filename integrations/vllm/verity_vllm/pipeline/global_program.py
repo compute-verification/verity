@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
 from verity_vllm import settings
-from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg
+from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg, workload_file
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.records.workload import Workload, WorkloadSampling
@@ -593,7 +593,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     are taken from it (module docstring).  `early`, `canon`: components `follow_components` already loaded, and their definition set.  `theta_registered`: the weights bound at registration (`WorkloadProgram`'s), which moves the workload digest."""
     t0 = time.time()
     artifact_root = os.path.abspath(artifact_root) if artifact_root else os.path.dirname(os.path.abspath(out))
-    raw = open(workload_path, "rb").read()
+    raw = workload_file(workload_path).read_bytes()
     m = json.loads(raw)
     w = Workload.of(m, workload_path)     # config's own readers (`done_source_refusal`, `RowEngine`) take the document `m`
     mdigest = hashlib.sha256(raw).hexdigest()
@@ -765,7 +765,7 @@ def main(a: Options) -> int:
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
     early, canon = None, {}
     if a.follow:
-        reqs = manifest_requests(Workload.load(a.workload))
+        reqs = manifest_requests(Workload.load(workload_file(a.workload)))
         early = follow_components(a.derived, {shape_of(r) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
                                   stop=a.follow_stop)
         if early is None:

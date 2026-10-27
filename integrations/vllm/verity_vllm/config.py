@@ -317,7 +317,6 @@ REPO = ROOT.parent.parent
 #: A workload directory's digests, ``<sha256>  <name>`` a line (``sha256sum``'s format): each file it lists is a fixture in the
 #: evidence store, gitignored here, and every reader takes it through :func:`workload_file`.
 DIGESTS = "SHA256SUMS"
-_CHECKED: dict[Path, tuple[int, int]] = {}
 
 
 def stored_workloads(d: Path = WORKLOADS) -> dict[str, str]:
@@ -356,23 +355,22 @@ def workload_file(path: str | Path) -> Path:
     want = stored_workloads(p.parent).get(p.name)
     if want is None:
         return p
-    key = p.resolve()
     if not p.is_file():
         _fetch([p])
-    st = p.stat()
-    if _CHECKED.get(key) != (st.st_mtime_ns, st.st_size):
-        got = hashlib.sha256(p.read_bytes()).hexdigest()
-        if got != want:
-            raise RuntimeError(f"{p}: SHA-256 {got} is not the {want} its {DIGESTS} lists: a changed workload is a new fixture "
-                               "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in fixtures/artifacts.json, "
-                               f"its digest in {DIGESTS}); `research data fetch-fixtures PATH` restores the stored one")
-        _CHECKED[key] = (st.st_mtime_ns, st.st_size)
+    if (got := hashlib.sha256(p.read_bytes()).hexdigest()) != want:
+        raise RuntimeError(f"{p}: SHA-256 {got} is not the {want} its {DIGESTS} lists: a changed workload is a new fixture "
+                           "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in fixtures/artifacts.json, "
+                           f"its digest in {DIGESTS}); `research data fetch-fixtures PATH` restores the stored one")
     return p
 
 
 def workload_arg(s: str) -> str:
-    """The ``type`` of an option naming a workload file: ``s`` as given, its file made present and checked (:func:`workload_file`)."""
-    workload_file(s)
+    """The ``type`` of an option naming a workload file: ``s`` as given, its file made present and checked (:func:`workload_file`;
+    its refusal a :class:`UsageError`)."""
+    try:
+        workload_file(s)
+    except RuntimeError as e:
+        raise UsageError(str(e)) from e
     return s
 
 

@@ -23,7 +23,7 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity_vllm.config import RowConfig, option, workload_arg
+from verity_vllm.config import RowConfig, option, workload_arg, workload_file
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
 from verity.ml.definitions.boolean import write_word
@@ -176,7 +176,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     wl = sampling.get("workload")
     if wl:
         try:
-            w = json.load(open(wl))
+            w = json.loads(workload_file(wl).read_text())
             reqs = list(w.get("requests") or [])
         except Exception as e:  # noqa: BLE001
             return refuse(f"cannot read the workload manifest {wl!r} for the sampler batch: {e!r}", reason="sampler_geometry")

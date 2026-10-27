@@ -1291,7 +1291,11 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity_vllm.config import workload_arg
+    from verity_vllm.config import workload_file
+
+    def workload_arg(s: str) -> str:
+        workload_file(s)
+        return s
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)

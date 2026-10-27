@@ -99,7 +99,7 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
     global check can run before lane gprog's builder lands.  It reads the manifest and the components only -- never the record.
     `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = an older Program that
     declares no lag (G6 then fails by name on any EOS stop)."""
-    wl = Workload.load(workload_path)
+    wl = Workload.load(workload_file(workload_path))
     comps = {}
     for d in component_dirs:
         sh = component_shape(d)
@@ -511,7 +511,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
     wl = None
     if wl_path and workload_file(wl_path).is_file():
         try:
-            wl = Workload.load(wl_path)
+            wl = Workload.load(workload_file(wl_path))
         except RecordError as e:
             c.fail(f"the workload manifest is not a workload record: {e}")
             return None
