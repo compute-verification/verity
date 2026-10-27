@@ -3,6 +3,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Proofs.Flock.Claims.Complete.Json.Parse
 
 /-!
 # What the record needs of the statement, from its setup
@@ -282,7 +283,7 @@ theorem unitDraw_of (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.cano
     {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
   obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
-  have hw := S.parse_wf _ _ ht
+  have hw := FlockComplete.JsonRT.parse_wf _ _ ht
   rw [hm] at hw
   cases hw with
   | obj hwf _ => exact drawn_header hwf hm hd

@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.Json.Record
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest record decodes (S1–S14)
@@ -152,8 +153,8 @@ theorem decode_recordObj (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock
       rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := S.canon_ok d hg
-      have hc' : canon dv = .ok c := by rw [← S.canon_same _ _ hdvs, hc]
+      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg
+      have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]
       rfl

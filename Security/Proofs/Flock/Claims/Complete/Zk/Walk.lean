@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Proofs.Flock.Claims.Complete.Walk
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The masked session's reps, by index
@@ -225,7 +226,7 @@ theorem RunZk.walk (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon
         streams[r]! fun p => o.zp 0 r = p := by
   obtain ⟨st, hst, hsp, h25, -⟩ := o.table
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz, hc⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hc⟩ := FlockComplete.JsonRT.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, hRk⟩ := hP o.toCaseZk st (by rw [hst]; simp)

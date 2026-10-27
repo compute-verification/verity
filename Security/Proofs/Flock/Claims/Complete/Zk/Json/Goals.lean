@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Complete.Custody
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # B's record checks at the honest masked run
@@ -73,7 +74,7 @@ theorem RunZk.json (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon
         streams.map (·.map liveRound)⟩ := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz, hc⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hc⟩ := FlockComplete.JsonRT.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, hR⟩ := hP o.toCaseZk st (by rw [hst]; simp)

@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import Proofs.Flock.Claims.Complete.Json.Parse
 
 /-!
 # What the masked record needs of the statement, at one table
@@ -194,7 +195,7 @@ private theorem unitDraw_of (S : JsonSpec) {tags : Tags} {c : Circuit} {pf : Byt
     (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
   obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
-  have hw := S.parse_wf _ _ ht
+  have hw := FlockComplete.JsonRT.parse_wf _ _ ht
   rw [hm] at hw
   cases hw with
   | obj hwf _ => exact drawn_header hwf hm hd

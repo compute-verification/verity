@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 import Proofs.Flock.Claims.Complete.Files
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked run's proof files
@@ -224,7 +225,7 @@ theorem RunZk.rep (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon)
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     RunZk.json S h64 hS hP o
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz', hc⟩ := S.canon_ok _ hg
+  obtain ⟨hz', hc⟩ := FlockComplete.JsonRT.canon_ok _ hg
   obtain ⟨ct', hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, -⟩ := hP o.toCaseZk st (by rw [hst]; simp)
   have hrun := o.ran

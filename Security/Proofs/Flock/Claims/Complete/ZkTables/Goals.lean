@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Prover
 import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
 import Proofs.Flock.Claims.Complete.Json.Text
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The record's checks at the honest masked run of several tables
@@ -43,7 +44,7 @@ theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
       o.live = ⟨rbs, o.spec.tables.map fun _ => ByteArray.empty, pointsOf o.spec (Claims.coinSeq o.r 0),
         streams.map (·.map liveRound)⟩ := by
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS
-  obtain ⟨hz, hcz⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hcz⟩ := FlockComplete.JsonRT.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   have hn := o.toCase.tables_nodup

@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked session runs, at several tables
@@ -105,7 +106,7 @@ return. -/
 theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) :
     ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies) := by
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS
-  obtain ⟨hz, hcn⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hcn⟩ := FlockComplete.JsonRT.canon_ok _ hg
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have hfit := c.ready_parts.2.2.1
   obtain ⟨-, -, hspec, hall⟩ := c.tables

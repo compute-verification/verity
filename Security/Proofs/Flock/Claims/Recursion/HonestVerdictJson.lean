@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Complete.Json.Decode
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest record survives the reader's substitutions
@@ -71,8 +72,8 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec Flock.JsonParse.parse printJ Floc
       rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := S.canon_ok d hg
-      have hc' : canon dv = .ok c := by rw [← S.canon_same _ _ hdvs, hc]
+      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg
+      have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', FlockComplete.ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]
       rfl
