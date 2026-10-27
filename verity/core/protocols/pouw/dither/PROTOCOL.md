@@ -6,8 +6,8 @@ is credited at the public best price of its work, and the work the developer cou
 ε_skip·W_reg. This is v3.2: v3.1 with the pooling fixes, written in the shared notation.
 
 Its credit at pub(μ°) against W_reg is superseded, tentatively: credit is a sampling block's size in AND gates, a
-statement about values, and 𝓜's resources appear only inside the exclusion argument (`GLOSSARY.md`, "Size, credit and
-exclusion"). This document still states the protocol at pub(μ°) until it is restated in sizes.
+statement about values, and 𝓜's resources appear only inside the overhead lower bound (`GLOSSARY.md`, "Size, credit
+and the overhead lower bound"). This document still states the protocol at pub(μ°) until it is restated in sizes.
 
 The protocol is experimental. Its guarantee is `Pouw.Guarantees.Dither.WorkSound` and its card instances
 `Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The change whose
@@ -48,7 +48,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 - **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
   proof block in Dither's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
-  is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
+  is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's verified compute V.
 - **W_reg**: a replica's budget for a monitoring period, registered before its first coin.
 - **W_F, W_cap and W_S**: a fleet's registered total, or its registered cap, and the total of its accepted replicas'
   W_reg (see "The fleet").
