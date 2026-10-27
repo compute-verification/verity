@@ -363,9 +363,8 @@ class RemoteChallenger:
     def __init__(self, sock: socket.socket, secret: bytes | None = None) -> None:
         self._wire, self._ended = _Wire(sock), None
         hello = {"type": "hello"} if secret is None else {"type": "hello", "secret": bytes(secret).hex()}
-        self._send(hello)
-        kind, got = self._answer({"commitment": LiveCommitment.from_json, "layout": _layout_of})
-        self.withheld = kind == "layout"
+        got = self._ask(hello, "commitment", LiveCommitment.from_json)
+        self.withheld = not isinstance(got, LiveCommitment)
         self.commitment: LiveCommitment | None = None if self.withheld else got
         self._layout = got if self.withheld else (got.scheme, got.epoch, got.families)
         self._epoch, self.families = self._layout[1], self._layout[2]
@@ -395,7 +394,8 @@ class RemoteChallenger:
             raise self._end(f"the stream broke ({e})") from e
 
     def _reply(self, kind: str, read: Callable[[Any], Any]) -> Any:
-        return self._answer({kind: read})[1]
+        """The reply of `kind`, read with `read`; a hello's (`commitment`) may be a withheld session's `layout` instead."""
+        return self._answer({kind: read, **({"layout": _layout_of} if kind == "commitment" else {})})[1]
 
     def _answer(self, reads: dict[str, Callable[[Any], Any]]) -> tuple[str, Any]:
         try:
