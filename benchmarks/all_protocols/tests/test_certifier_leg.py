@@ -886,7 +886,10 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     for u, (lab, rows) in want.items():
         assert got[u][0] == lab and all(np.array_equal(got[u][1][p], r) for p, r in rows.items())
     circuit = json.loads((d / "circuit.json").read_text())
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
+    pins = {v: e["root"] for v, e in json.loads(weights["pin"].read_text())["values"].items()}
+    roots = IF.registered_roots(json.loads((d / "registration.json").read_text())["window"])
+    assert set(pins) == {"w", "sw"} and roots == pins
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins=pins, roots=roots)["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
 
 
@@ -937,7 +940,9 @@ def test_a_wired_registered_window_gives_the_leg_its_requests_outputs_and_free_i
     assert L.match_outputs([{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}], events, FRAMES, outputs,
                            STEPS)["equal"]
     # every activation is a tie and every weight registered: only the requests' step-0 up_proj inputs are free
-    pins, untied = RA.window_pins(json.loads((d / "registration.json").read_text())["window"], circuit)
+    w = json.loads((d / "registration.json").read_text())["window"]
+    pins, untied = RA.window_pins(w, circuit)
     pins |= RA.pinned(json.loads(weights["pin"].read_text()))
     assert not untied
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins=pins)["free"] == 2 * (1024 + 32)
+    count = IF.input_count(circuit, pins=RA.pin_roots(pins), roots=RA.window_roots(w))
+    assert L.free_inputs(circuit)["bits"] == count["free"] == 2 * (1024 + 32)
