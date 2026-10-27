@@ -110,24 +110,20 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   (`holo_runs_sound`), which the oracle count (`holoTable_sound`, a1o, with a1s's `sparse_sound` and a1r's
   `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound.
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
-  `holoTableCL_plays`), VBridge from the stages' obligations (`vbridge_c3`), the honest family (`C3Family.honest`,
-  n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), the fixed decoder at which n6 states the
-  read facts (`C3/Compose/Decoder.lean`), `SrcOK`'s decode fixed point where each stage plays on its steps to the
-  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`), and its stages' coins at the checked sessions from
-  the guarantee's custody (`stageCoins_checked`).
+  `holoTableCL_plays`), the honest family (`C3Family.honest`, n0), the fixed decoder at which n6 states the read
+  facts (`C3/Compose/Decoder.lean`), and `SrcOK`'s decode fixed point where each stage plays on its steps to the
+  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`).
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3), and its read fact on
   the source's runs' own steps from their sparse phases' plays (`SrcSparseOK`, `sparseReadAt_of_ok`), which a source
   tied to V*'s accepted RecSparse units gives (`SrcSparseTie`, `srcSparseOK_of_tie`), and the tie from the unit's copy
-  in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`), that copy from V*'s sessions (`SparseSessionAt`,
-  `sparseTieL_of_session`), `HCols` at every unit `RecSparse.check` accepts (`hCols_of_check`), and `HAlgRows` at a
-  holo shape from the verifier's checks and the algebra parts' `ResZeroAtLH` (`C3/Reps/`, `hAlgRows_of_res`).
+  in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`), and that copy from V*'s sessions (`SparseSessionAt`,
+  `sparseTieL_of_session`).
 * (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4), at the honest family from
   its read fact (`OpeningRead`, `hOpening_of_read`), and that fact from the `rec-opening` unit's residuals
   (`residuals_eq_runO`, `openingRead_of_rows`), and from V*'s sessions and the verifier's coins but the claim tie and
   the tape prefix (`openingRead_of_session`).
-* (f) `C3/RegLevels/`, `FlockC3.RegLevels`: R's levels against the registered cap (`HRegLevels`; n5) and R's
-  registered top from the verifier's hold of the inner transcript (`stackedTop_of_innerCommits`, t0).
+* (f) `C3/RegLevels/`, `FlockC3.RegLevels`: R's levels against the registered cap (`HRegLevels`; n5).
 * (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`), at the
   honest family from the verifier's check (n1), and the commitments there (`hCommits_honest`).
 * (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParsesScoped_of_list`), R's
