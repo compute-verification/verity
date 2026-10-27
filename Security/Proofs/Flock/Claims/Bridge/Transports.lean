@@ -19,8 +19,8 @@ hashes only `RowV2.enc` of a row of its place's width. So the openings the deplo
   leaf of a shaped value.
 * `leaf_misshaped`: **a misshaped game opening's leaf is the leaf of a deployed opening only by a SHA-512 collision**
   (`Binding.hm96Pair_spec`).
-* `valOf_eq` and `opens_pathCommit`: a shaped value is the value of the row bits it agrees with, and the check of any
-  path commitment over hm96 leaves of deployed rows is the verifier's, for `Proofs.Flock.Bridge.Transports`.
+* `valOf_eq` and `opens_pathCommitRow`: a shaped value is the value of the row bits it agrees with, and the check of
+  any path commitment over hm96 leaves of rows is the verifier's, for `Proofs.Flock.Bridge.Transports`.
 -/
 
 namespace SamplingDeploy
@@ -131,14 +131,15 @@ theorem valOf_eq (hW : (place o.pos).1 ≤ W) {v : BitVal W} (hv : RowShaped v) 
       simp [FlockSoundness.Discharge.Layout.BitVal.get, i.isLt]
     · exact (hv.2 i (by omega)).symm
 
-/-- **At SHA-512 a path commitment over hm96 leaves of deployed rows is the verifier's check**: it passes exactly when
-the verifier's own port whose root `at_` names opens the hm96 leaf of the opening's row at `at_`'s index through `π`. -/
-theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool)
+/-- **At SHA-512 a path commitment over hm96 leaves of rows is the verifier's check**, at any row function `rowf`: it
+passes exactly when the verifier's own port whose root `at_` names opens the hm96 leaf of the opening's row at `at_`'s
+index through `π`. -/
+theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (rowf : Opening Bool → Msg)
     (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
-    (pathCommit at_ (hm96Leaf (row place bits) salt) π (regPath own) layer).Opens sha512Msg roots o = true ↔
+    (pathCommit at_ (hm96Leaf rowf salt) π (regPath own) layer).Opens sha512Msg roots o = true ↔
       ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
-        Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row place bits o) (salt o)))))
+        Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (rowf o) (salt o)))))
           ri.2 (bytes (π o)) = true := by
   unfold Commitment.Opens pathCommit
   dsimp only
@@ -148,6 +149,17 @@ theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place
     simp only [ocBind_eval, hm96Leaf_sha512]
     rw [regPath_sha512]
     simp
+
+/-- **At SHA-512 a path commitment over hm96 leaves of deployed rows is the verifier's check**
+(`opens_pathCommitRow` at `row`). -/
+theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool)
+    (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
+    (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
+    (pathCommit at_ (hm96Leaf (row place bits) salt) π (regPath own) layer).Opens sha512Msg roots o = true ↔
+      ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+        Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row place bits o) (salt o)))))
+          ri.2 (bytes (π o)) = true :=
+  opens_pathCommitRow at_ (row place bits) salt π own layer roots o
 
 /-- **At SHA-512 the deployed check is the verifier's** (`opens_pathCommit` at a sampled verifier's code). -/
 theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :

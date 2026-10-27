@@ -79,8 +79,7 @@ theorem FixedBefore.adapted (h : FixedBefore r P o) (S : ℝ) :
 
 /-- **One window at a time**: whatever the earlier windows' capacity coins, `PeriodHeld` bounds window `u`'s
 `ShortAccepted` over its own capacity coins by `δ + ε_max`. -/
-theorem shortAccepted_le (hd : AcceptsDecodes) (hp : PublishesRoot)
-    (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
+theorem shortAccepted_le (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (hdev : ∀ u x, RingDevice (r u x) (P u x) D Q L round)
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
@@ -94,15 +93,14 @@ theorem shortAccepted_le (hd : AcceptsDecodes) (hp : PublishesRoot)
   have ho : ∀ a, o u (Function.update x u a) = o u x := fun a => hfix.2.2 u _ _ (e a)
   simp only [ShortAccepted, Function.update_self, hr, hP, ho]
   exact prCoin_le_ofReal _
-    (periodHeld hd hp hH D Q L hP2 ι α ΩW ΩQ (d u) (r u x) (P u x) round S (hdev u x) (hS u x) (o u x))
+    (periodHeld hH D Q L hP2 ι α ΩW ΩQ (d u) (r u x) (P u x) round S (hdev u x) (hS u x) (o u x))
 
 open Classical in
 /-- **PoUS pooled over `U` windows, Chernoff form.** Under `PeriodHeld`'s premises, with each window a ring-model
 server (`RingDevice`) fixed before its capacity coins (`FixedBefore`) and every window's certificate fitting the ring
 game's state bound: at least `M` windows accepted with no break while short (`ShortAccepted`) has probability `P` with
 `P · z^M ≤ (1 + (z − 1)(δ + ε_max))^U` for every `z ≥ 1`. -/
-theorem pooledShort (hd : AcceptsDecodes) (hp : PublishesRoot)
-    (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
+theorem pooledShort (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (hdev : ∀ u x, RingDevice (r u x) (P u x) D Q L round)
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
@@ -111,13 +109,12 @@ theorem pooledShort (hd : AcceptsDecodes) (hp : PublishesRoot)
     prCoin (fun x => M ≤ (Finset.univ.filter fun u => ShortAccepted r P o S u x).card) * z ^ M ≤
       (1 + (z - 1) * ENNReal.ofReal ((Params.δ : ℝ) + Params.εMax.toReal)) ^ U :=
   Periods.prCoin_count_mul_pow_le _ (hfix.adapted S) hz
-    (shortAccepted_le hd hp hH D Q L hP2 hfix round S hdev hS) M
+    (shortAccepted_le hH D Q L hP2 hfix round S hdev hS) M
 
 open Classical in
 /-- **PoUS pooled over `U` windows, binomial form**: at least `M` windows accepted short with probability at most
 `C(U, M) (δ + ε_max)^M`. -/
-theorem pooledShort_choose (hd : AcceptsDecodes) (hp : PublishesRoot)
-    (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
+theorem pooledShort_choose (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (hdev : ∀ u x, RingDevice (r u x) (P u x) D Q L round)
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
@@ -125,14 +122,13 @@ theorem pooledShort_choose (hd : AcceptsDecodes) (hp : PublishesRoot)
     (M : ℕ) :
     prCoin (fun x => M ≤ (Finset.univ.filter fun u => ShortAccepted r P o S u x).card) ≤
       U.choose M * ENNReal.ofReal ((Params.δ : ℝ) + Params.εMax.toReal) ^ M :=
-  Periods.prCoin_count_le_choose _ (hfix.adapted S) (shortAccepted_le hd hp hH D Q L hP2 hfix round S hdev hS) M
+  Periods.prCoin_count_le_choose _ (hfix.adapted S) (shortAccepted_le hH D Q L hP2 hfix round S hdev hS) M
 
 open Classical in
 /-- **PoUS pooled over `U` windows, at `δ'`**: with `p = δ + ε_max`, at least `M` windows accepted short has
 probability at most `δ'` once `M ≥ ((z − 1) U p + ln(1/δ')) / ln z` for some `z > 1`, so out of `U` windows at least
 `U − M + 1` certify `S`. -/
-theorem pooledShort_log (hd : AcceptsDecodes) (hp : PublishesRoot)
-    (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
+theorem pooledShort_log (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (hdev : ∀ u x, RingDevice (r u x) (P u x) D Q L round)
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
@@ -141,14 +137,13 @@ theorem pooledShort_log (hd : AcceptsDecodes) (hp : PublishesRoot)
     (hM : ((z - 1) * U * ((Params.δ : ℝ) + Params.εMax.toReal) + Real.log (1 / δ')) / Real.log z ≤ M) :
     prCoin (fun x => M ≤ (Finset.univ.filter fun u => ShortAccepted r P o S u x).card) ≤ ENNReal.ofReal δ' :=
   Periods.prCoin_count_le_of_log _ (hfix.adapted S) (add_nonneg δ_nonneg ENNReal.toReal_nonneg)
-    (shortAccepted_le hd hp hH D Q L hP2 hfix round S hdev hS) hz hδ' hM
+    (shortAccepted_le hH D Q L hP2 hfix round S hdev hS) hz hδ' hM
 
 open Classical in
 /-- **PoUS pooled over `U` windows, sure shortness**: every window accepted with no break while at least `M` of them
 are short on every capacity coin (`Accounting.Run.CapacityShort`, fixed before the window's capacity coins) has
 probability at most `(δ + ε_max)^M`. -/
-theorem pooledSureShort (hd : AcceptsDecodes) (hp : PublishesRoot)
-    (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
+theorem pooledSureShort (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (hdev : ∀ u x, RingDevice (r u x) (P u x) D Q L round)
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
@@ -163,7 +158,7 @@ theorem pooledSureShort (hd : AcceptsDecodes) (hp : PublishesRoot)
     (fun u x => (P u x).Accepts ((o u x).1, (o u x).2, x u) ∧ ¬ (P u x).Break ((o u x).1, (o u x).2, x u))
     (fun u x => (r u x).CapacityShort S ((o u x).1, (o u x).2, x u)) ?_ ?_
     (fun u x => (prCoin_mono fun a h => ⟨h.1.1, h.1.2, h.2 _⟩).trans
-      (shortAccepted_le hd hp hH D Q L hP2 hfix round S hdev hS u x)) M
+      (shortAccepted_le hH D Q L hP2 hfix round S hdev hS u x)) M
   · intro u x x' hx
     simp only [hfix.2.1 u x x' fun i hi => hx i hi.le, hfix.2.2 u x x' fun i hi => hx i hi.le, hx u le_rfl]
   · intro u x x' hx

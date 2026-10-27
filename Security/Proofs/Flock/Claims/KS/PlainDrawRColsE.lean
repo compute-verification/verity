@@ -81,9 +81,10 @@ theorem decR_rd {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List 
   obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨hfl, hst⟩ := Option.filter_eq_some_iff.1 hfl
   refine ⟨fl, by rw [ha]; exact hfl, ?_⟩
   obtain rfl := Option.some.inj h
-  rfl
+  exact (beq_iff_eq.1 hst).symm
 
 /-- `decR` reads the coins only at the first and between the first and the last. -/
 theorem decR_congr_coins (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg)

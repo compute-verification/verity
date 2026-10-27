@@ -191,11 +191,12 @@ def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max
     return passes * (blocks if append_coins == 0 else max_blocks)
 
 
-def binding_over(windows: int, receipts: int, samples: int, queries: int) -> float:
-    """`binding` over a session of `windows` windows, at most `receipts` receipts a window (`window_receipts`) and a
-    draw cap of `samples`, its prover making at most `queries` SHA-512 compressions over the span."""
+def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float:
+    """`binding` over a session of `draws` draws, at most `receipts` receipts a draw (`window_receipts` times the
+    windows a draw covers) and a draw cap of `samples`, its prover making at most `queries` SHA-512 compressions over
+    the span."""
     s = min(samples, receipts)
-    return windows * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
+    return draws * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
 
 
 def binding(record: audit.Record, node: Node) -> float:
@@ -208,16 +209,20 @@ def binding(record: audit.Record, node: Node) -> float:
     `Accounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
     L_t a set holding every receipt window t opens at every outcome, s_t the session's draw cap and split_t the chance
     that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
-    prover's play: this charges them at `window_receipts` and the record's `samples`.  Where the cut fixes the roots,
-    split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
+    prover's play: this charges them at `window_receipts` and the record's `samples`.  At `groups_per_coin` g > 1 the
+    term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
+    each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
+    roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
     deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
     yet: this charge takes it as 0, pending the change that sends the prover no commitment to a window's openings coin
     before its roots (the gap `binding-split`, `PROTOCOL.md` §8)."""
     if record.samples is None or record.append_coins is None:
         raise ValueError("the binding term is charged at the session's bounds, its draw cap and its append coins, "
                          "which a record no session made doesn't state")
+    g = record.groups_per_coin
     L = window_receipts(record.pace, record.blocks, record.append_coins, record.codec.max_blocks)
-    return binding_over(len(record.windows), L, record.samples, node.sketch_outside * compressions(record, node))
+    return binding_over(coins.openings_coins(len(record.windows), g), g * L, record.samples,
+                        node.sketch_outside * compressions(record, node))
 
 
 @dataclass(frozen=True, slots=True)

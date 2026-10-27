@@ -25,7 +25,7 @@ SCHEMA = "cb-a/global-match/v1"
 INFO = frozenset({"comparator", "rules_version", "utc", "oracle_dir", "log", "global_program", "chronology_unit", "request_id_convention",
                   "within_step_criterion", "within_step_note", "x09", "request_ids", "execution", "achieved_concurrency",
                   "sampler_geometry", "scheduled_live", "moe_construction", "eos_truncated_requests", "eos_verified", "seconds",
-                  "alternate_verdict", "phases", "impl"})
+                  "alternate_verdict", "phases", "impl", "fold_form"})
 
 
 def _strs(v: Sequence[Any] | None, where: str, name: str) -> tuple[str, ...] | None:

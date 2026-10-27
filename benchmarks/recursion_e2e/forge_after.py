@@ -159,19 +159,12 @@ def own_flags(binary: Path, dd: Path, n: str, stmts: dict[str, Path], o: Path) -
                          text=True, check=True).stdout
     (line,) = [json.loads(ln[9:]) for ln in txt.splitlines() if ln.startswith("RECVSTAR ")]
     names = [s[0] for s in line["statements"]]
-    v = dd / "v"
-    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
-                            [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
-                             if (d / "registered.json").is_file()])["ports"]
+    (o / "rows.json").write_text(json.dumps(VS.staged_shared_rows(dd / "v")))
     out = {}
     for name, c in stmts.items():
         with (c / "circuit.txt").open() as f:
             unit = f.readline().split()[1]
-        ports = json.loads((c / "registered.json").read_text())["ports"]
-        rows = o / f"rows-{name}.json"
-        rows.write_text(json.dumps({"format": "verity/registered-reads/v0",
-                                    "ports": shared | ({"acc0": ports["acc"]} if "acc0" not in shared and "acc" in ports else {})}))
-        flags = ["--rec-inner", str(o / "rec-inner.json"), "--rec-rows", str(rows)]
+        flags = ["--rec-inner", str(o / "rec-inner.json"), "--rec-rows", str(o / "rows.json")]
         if unit in names:
             flags += ["--rec-part", str(names.index(unit))]
         b = RB.bindings(json.loads((c / "partition.json").read_text()), json.loads((c / "program.json").read_text()))

@@ -216,7 +216,9 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
     `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
-    --stratified K``)."""
+    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
+    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
+    Lean holds the object to its key when it reads it (`archiveGet`)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -225,9 +227,21 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     part = [str(st["partition_file"])] if st.get("partition_file") else []
     prog = [str(st["program_file"])] if st.get("program_file") else []
     reads = [str(st["registered_file"])] if st.get("registered_file") else []
-    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part, *prog,
-             *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
+    circuit, held = st["dir"] / "circuit.txt", st.get("archived")
+    s = circuit.stat()
+    ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
+    pre = held.get(ident) if held is not None else None
+    if pre is not None:
+        (archive / "sha512").mkdir(parents=True, exist_ok=True)
+        if not (archive / "sha512" / pre[0]).exists():
+            os.link(pre[1], archive / "sha512" / pre[0])
+    p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
+             *prog, *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
+    if pre is not None:
+        keys["circuit.txt"] = pre[0]
+    elif held is not None and "circuit.txt" in keys:
+        held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []

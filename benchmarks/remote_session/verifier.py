@@ -99,7 +99,7 @@ at two windows in flight, as the Lean's `session` refuses one in flight at G > 1
 its end is complete. An append past them refuses the session: `coin` on the books, and under the Lean, whose session
 holds only the append coins released, `disagreement`.
 
-Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
+Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
@@ -576,7 +576,7 @@ def lean_record(session: dict) -> dict:
                          "a window's arrivals not one a pass")
     return {"appended": pub["appended"], "appends": pub["appends"], "blocks": pub["blocks"],
             "lifetime": pub["lifetime"], "pace": pub["pace"], "registration": pub["registration"],
-            "released": pub["released"],
+            "released": pub["released"], **{k: pub[k] for k in ("groups_per_coin",) if k in pub},
             "windows": [{"arrived_ns": list(x["arrivals_ns"]), "deadline_ns": w["deadline_ns"],
                          "drawn": w["profile"]["drawn"]["receipt"], "heads": w["heads"], "lengths": w["lengths"],
                          "opened_ns": w["opened_ns"], "post_seed": w["post_seed"], "released_ns": w["released_ns"],
@@ -611,13 +611,14 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     the record's times must be, or another, `line.CLOCKS`), against its HBM and `host_bytes`, at `rates`
     (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`); with `transcript`, the
     session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself. Refused unless the
-    record is of `registration`."""
+    record is of `registration` (`wire.registration_json`'s form), which the inputs name as the Lean reads one, so
+    that the line refuses a record not of it too (`line.unregistered`)."""
     mem, record = session["ledger"]["memory"], lean_record(session)
     if record["registration"] != registration["digest"]:
         raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
                          f"{registration['digest'][:16]}…")
     return line.record_inputs_json(
-        record, samples=session["samples"],
+        record, registration=lv.registration_json(wire.registration_of(registration)), samples=session["samples"],
         seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
         per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=recorded_chip_bytes(mem),
         node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates, clock=clock, session=transcript)
@@ -1715,9 +1716,9 @@ def main() -> int:
                          f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
                     help="each session's windows drawn on one openings coin (`audit.Params.groups_per_coin`): its "
-                         "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all; a session "
-                         "drawn G > 1 a coin has no line of record (`line.SHARED`), and none is at one window in "
-                         "flight (a `--paced` F = 1), which no property covers")
+                         "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all, and the line "
+                         "of record's pooled bound reads its draws (`line.draws_of`); none is at one window in "
+                         "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "

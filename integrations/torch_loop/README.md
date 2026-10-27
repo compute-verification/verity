@@ -24,6 +24,16 @@ committed row longer than one SHA-512 block.
   binding the run root (`TorchLoop.commit_activations`). Their entries are in the registration's window, fixed before the
   draw, and their salts in the window's `activations-private.json`. No read of them is declared, so they leave the free
   count as it is.
+- The wired circuit (`--wired`, opt-in, CIR-100): each linear at each token row is one `ScaledMmS8_v1{K=128, N=128}` unit,
+  its outputs one 256-byte row, and each ReLU and quantize one `QuantRowS8_v1{N=128, RELU}` unit (`verity.ml.circuits.ops.quant`),
+  which reads that row and writes the codes and the scale the next linear reads. Each of those ties is a per-window value
+  (`TorchLoop.ties_of`) that the writer's output port and the reader's input port both read row for row (registered reads
+  of output ports, #4575), committed after the run under a domain bound to the run root and named in the registration, so
+  the Lean verifier opens a reader's row against the root its writer's row opens. Only each request's own row is free, so
+  an altered activation is the refusal of the drawn quantize unit (`--tamper-activations`), and a row read other than its
+  writer's opens no root. With `--registered` the weights are one row a linear (`commit_weights(wired=True)`), and the
+  default shape's free inputs drop to 2,112 bits. A member holds one unit (`--cap 1`). The audit pins the ties from the
+  registration (`records_audit.window_pins`) and keeps them out of the output class, so the draw samples their units.
 - `verity_torch_loop/checkpoint.py`, `checkpoint/` and `manifests/checkpoints-int8.json`: the loop's model as the int8
   checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The auditor's gate (`benchmarks/live_challenger/models.py`) registers that role
   to sign the loop's weights root.
@@ -35,7 +45,9 @@ committed row longer than one SHA-512 block.
 - `verity_torch_loop/pouw.py` (`serve.py --pouw h1`): the loop's PoUW window, every linear served as split-K tiles of the
   H1 tile PoUW's verifier pins (`core_check.TILES`, `PouwH1Tile_v1` at K = 64, 4 × 8), whose exact z gives the loop's own
   output; written to `DIR/pouw` under a one-stage registration in PoUW's window form, at all-protocols' PoUW parameters.
-  `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
+  The tiles' A and B rows are committed before the salt as per-window values (PoUW's `operands`), which the
+  registration's ``activations`` names and the tiles' ports read; `serve.py` prints their root X, which the salt is
+  released against. `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
   `core_check` and Lean's `pouw-check`. Its gaps are in `pouw.py`'s docstring.
 - `tests/`: the loop's outputs are the Definition's, unit by unit; its H1 tiles carry its linears and core's PoUW check
   registers its PoUW window; core's registration check passes the written window and
@@ -55,7 +67,8 @@ committed row longer than one SHA-512 block.
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
   each tampered window refused. `PP_TORCH_LOOP_REGISTERED=1` serves the registered weights, audits against their pin
   (`records_audit.py --registered PIN`) and adds an arm serving other weights, which Lean's registered reads refuse
-  (r20261025-220011-057f).
+  (r20261025-220011-057f). `PP_TORCH_LOOP_WIRED=1` audits the wired circuit under `stratified:3` (a unit of every template),
+  with an arm whose quantize units' codes are tampered.
 - `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root (CMP-95 interface 1), for any
   decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
   to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
@@ -80,7 +93,7 @@ The window is one request for one decode step. That is N = 256 units: two linear
 the 256 units (q = 1/4).
 
 **Over a monitoring period.** Serve windows like this one through any monitoring period, a week, a month or a year,
-each window on its own live coins. If every window is accepted, the wrong units over the whole period total at most 18
+each window on its own live coins. If every window is accepted, the faulty proof blocks over the whole period total at most 18
 at δ = 1%, and at most 55 at δ = 10⁻⁶. The bound adds Σ (ε_ks + δ_link) over the period's windows to δ.
 - The theorem is `Flock.Guarantees.IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`): the total
   stays below ln(1/δ)/q.
@@ -101,7 +114,7 @@ The per-window figures follow. Each arm is a run of its own, with its own root a
 
 The tampered windows flip bit 0 of every output. The firewall's refusal of each tampered arm reads "FIREWALL-REFUSED:
 circuit: the constraints lincheck final fail on a rep's pads". Per window, beside the period's total, the integrity
-profile's bound for each accepted arm: an accepted transcript has at most 2 wrong units of 256, except with probability
+profile's bound for each accepted arm: an accepted transcript has at most 2 faulty proof blocks of 256, except with probability
 δ = 0.5. r20261025-170501-8a09 ran the
 same four arms at subset:2, and they behaved the same way, but its bound is only 74 of 256.
 
