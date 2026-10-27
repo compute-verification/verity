@@ -3,7 +3,7 @@ import Definitions.Accounting.Gates.Ranges
 /-!
 # Declared bounds, earned: what a declared interval may rest on, and the int8 circuits that need nothing else (trusted)
 
-A declared bound is never taken on trust (the ruling of 18 Oct, 02:29Z). An input is declared at its type's whole
+A declared bound is never taken on trust. An input is declared at its type's whole
 range (`TypeRange`), so the one thing asked of an input assignment is that each slot carry a word of its type
 (`Typed`). A budgeted gate's declared interval holds its evaluator's value on every operand in that operand's derived
 interval (`Declared`): the evaluator's type width (a saturating cast, a word read at its width), a producer's proven

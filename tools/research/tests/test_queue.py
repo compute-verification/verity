@@ -217,6 +217,28 @@ def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(worl
     assert [m.pr for m in q.sync()[0]] == [1, 2]
 
 
+def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_branch_is_at_the_api_head(world):
+    """GitHub can leave a PR's refs/pull/N/head behind its branch and API head for hours, and the PR waited every sync. A
+    branch whose tip is the API head stands in for the pull ref; one at any other commit doesn't."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, old := world.change({"b.txt": "old\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+    new = world.change({"b.txt": "new\n"})
+    _git(world.origin, "update-ref", "refs/heads/feature-2", old)
+    world.gh.prs[2] = PR(2, new, "change 2", "Lane `lane-2`.", branch="feature-2")
+    world.gh.ready.add((2, new))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1] and entries[2].state == "waiting" and "disagree" in entries[2].why
+
+    _git(world.origin, "update-ref", "refs/heads/feature-2", new)
+    members, _ = q.sync()
+    assert [(m.pr, m.head) for m in members] == [(1, world.gh.prs[1].head), (2, new)]
+    assert any("#2's pull ref isn't at its API head" in line for line in world.logs)
+    assert _git(world.origin, "rev-parse", "refs/pull/2/head") == old
+
+
 def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
     """GitHub can list an open PR before it makes refs/pull/N/head (27 Oct: #5290, and every drive tick from 13:14Z ended rc=1,
     since one missing ref failed the whole fetch): that PR waits, and the rest of the queue syncs."""
@@ -249,7 +271,7 @@ def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep
 
 
 def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_then_admission_order(world):
-    """26 Oct (Daniel: "CI runs at breakneck speed"): a member above a Lean change waits for that change's Lean check, ~1 h, though
+    """A member above a Lean change waits for that change's Lean check, ~1 h, though
     it changes no Lean itself.  What a sync merges goes non-Lean first, `--first`'s order then admission's within each part; a PR
     that contains a Lean change stays above it, and one stacked on a member already on `next` is judged by its own change."""
     world.gh.put(1, h1 := world.change({"pkg/A.lean": "-- 1\n"}))
@@ -2828,7 +2850,7 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
 
 
 def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):
-    """No tool call may block more than 20 minutes (Daniel, 19 Oct), and a quick tier may wait hours for a check slot: `ready --on`
+    """No tool call may block more than 20 minutes, and a quick tier may wait hours for a check slot: `ready --on`
     leaves its run going, marks nothing, names `judge RUN`, and exits STILL_GOING; `judge` marks the PR once the run passed."""
     from research import queue as Q
 

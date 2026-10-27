@@ -48,7 +48,7 @@ RT4-SHEET-13's two-slot round trip (one ATOM.E.XOR and one LD.E back, at `φ*·(
 `π*`), is left off the menu: li's XOR has three inputs a half step, `y ⊕ w ⊕ k`, and those two instructions carry
 two, so it is a count, not a fold; with the third input it is the three-slot round trip, which is on the menu.
 
-Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, the 8 Oct ruling's, no advantage bound) and read at
+Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, with no advantage bound) and read at
 `√δ_fork` (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves (RT2-LOGIC-2). The proof
 service's other pieces are named premises too: proof soundness (`ProofSoundAt`, which C-Flock's bound doesn't discharge
 until it states the rows link) and the Definitions' pinning (`ProofsPin`, which no Lean checks of the served relations:

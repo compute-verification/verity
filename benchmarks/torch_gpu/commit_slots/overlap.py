@@ -1,4 +1,4 @@
-"""On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind ALLP-H200's
+"""On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind the H200's
 served step (`examples/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
 and a summary to ``--out``/summary.txt.
 

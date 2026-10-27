@@ -1,4 +1,4 @@
-"""window_cost (VLLM-128): the class-of-record window's commit priced from a class_rows census.
+"""window_cost: the class-of-record window's commit priced from a class_rows census.
 
 * TINY's census rebuilt through `split` and `window_units` is class_rows' total in the census model, and its private bodies
   are the census's bytes and a salt a row;
