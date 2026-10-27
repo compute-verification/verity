@@ -6,9 +6,7 @@ import Mathlib.Algebra.Order.Floor.Defs
 /-!
 # The end-to-end overhead guarantee (serving route)
 
-The training lane's overhead definitions (`note:training-20261027T0206Z-report-overhead-definitions`, locked 26 Oct) and
-the corrected theorem of `note:training-20261027T0134Z-draft-e2e-overhead-proof` §9, as one corollary of
-`Vocab.Soundness`:
+The overhead definitions and the end-to-end theorem, as one corollary of `Vocab.Soundness`:
 
 * a **task** `𝒢` (`Overhead.Task`): a draw of an input `x` and the set `𝒴` of its acceptable outputs;
 * **success** (`Overhead.Succeeds`): the output a run holds at positions fixed before `x` lies in `𝒴`;
@@ -29,7 +27,7 @@ the windows played (`Overhead.Deployment`).
 accepts every window, the run succeeds and its server-time is below `T_min = ω (⌈(N − q_D)/q⌉ − n)` is at most
 `Σ_b ε_b`, plus the probability that the prover commits to a window whose soundness and wipe errors exceed its budget,
 plus the coverage exception `η`. Here `n` is the number of servers, `ω` the window length and `q` the per-window cap.
-`− n` is F9's off-by-one, once per server: a server's last window may be partly idle.
+`− n` is one window per server: a server's last window may be partly idle.
 
 Its premises are named:
 
@@ -218,7 +216,7 @@ def ServingCap (f : ℝ) (Phys : Actual.Run L → Prop) (q : ℝ) : Prop :=
     Phys (D.run x ws) → ((D.inWindow x ws i).card : ℝ) ≤ q
 
 /-- PREMISE. **The dark share** `q_D`: at most `q_D` counted products are materialized outside every monitored
-server-window (the dark fleet, 0.1% in the mainline; Daniel, 26 Oct). -/
+server-window (the dark fleet, 0.1% in the mainline). -/
 def DarkShare (qD : ℝ) : Prop :=
   ∀ x ws, ((D.dark x ws).card : ℝ) ≤ qD
 
@@ -289,8 +287,7 @@ def Overhead_nontrivial : Prop :=
 
 /-- **The overhead guarantee's premises hold where it says something** (rule 3, honest). At a deployment, every premise
 of `Overhead` holds and some strategy's run is accepted at every window and succeeds with probability `1`. Its instance
-is the toy deployment, once soundness's instance of `Vocab` exists (soundness is staffing it). Until then this is stated
-and not proved. -/
+is the toy deployment, once soundness's instance of `Vocab` exists. Until then this is stated and not proved. -/
 def Overhead_honest : Prop :=
   ∃ (ι : Type) (d : Device ι) (α : Type) (_ : Fintype α) (V : Vocab d α) (In L Srv ιP Act : Type) (_ : Fintype Srv)
     (m B : ℕ) (G : Task In (Fin m → List Bool)) (D : Deployment V In L Srv ιP Act B) (f : ℝ)
