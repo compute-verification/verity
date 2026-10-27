@@ -1,4 +1,12 @@
-# datacenter
+# network
+
+Network accounting's first example (TOP-103 item 4): the accounting layer's model of a datacenter, the package
+`datacenter`, and its night on a two-node rack. `python -m datacenter.demo`, run here, serves the night honestly and then
+with an adversary whose five deviations the audit refuses, each for its own reason. Its protocol is the composite `onsite`
+as the model accounts for it: the certifiers' records, the wipes, a store's challenge and read window, and PoUW's credit.
+Its workload is the demo's two-stage BF16 model (`none`: no integration), and every party is a Python object on one CPU
+machine (`example.toml`: run moved, proof none). It has no runner yet, so `verity example network` names none.
+`benchmarks/network_certifier/sim/` reads the package by path. network-accounting's.
 
 A datacenter as Verity accounts for it, in a small Python API: a Program, the hardware it runs on, the binding between
 them, the verifier's plan, a run with what the trusted devices record, the audit's claims, and the account.

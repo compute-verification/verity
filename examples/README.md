@@ -34,6 +34,9 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   phase a run, from the step's commit on the H200 to its drawn blocks proved. Level 1 on DRAWPROVE r20261027-013625-8e25: 8
   live-drawn proof blocks are proved by C-Flock `--zk` and accepted by Lean, and the flipped bit is refused. Demo B's memory
   terms (memory-accounting's, M4) have a slot in its `example.toml` and aren't claimed.
+- `network/`: network accounting's first example, the accounting layer's model of a datacenter (`datacenter`) and its night
+  on a two-node rack, honest and then with an adversary the audit refuses, on one CPU machine: onsite as the model accounts
+  for it, run moved and proof none, with no runner yet. network-accounting's.
 - `toy_onsite/`: the CPU toy (`integrations/torch_loop`) through every protocol and the wipe, composed through onsite, one run
   on one CPU machine. Its run.sh is `benchmarks/all_protocols/run.sh`, which `verity bench
   all-protocols` runs. Level 1 on S1's run of record, r20261026-161826-eb34: a window with one egress byte changed is
