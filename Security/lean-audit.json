@@ -1736,7 +1736,7 @@
   },
   "Pouw.Dither.OnCard": {
    "owner": "@compute-research",
-   "digest": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612"
+   "digest": "e20c87706269f72b71ea976ba7603ab9d00d2ef322d355e02f7b49e0c96f6aef"
   },
   "Pouw.Dither.Period.DualOpt": {
    "owner": "@compute-research",
@@ -26593,7 +26593,7 @@
    ]
   },
   "Definitions.Pouw.DitherInstance": {
-   "digest": "99daf7d47e90e7cce27b208d6c05dd7404111734becf379e846e6dfff435c55b",
+   "digest": "b4de04331dbcea7dd41fd3a0ea90459546b2f006437a766bd5d3e8c1b9d18ee9",
    "definitions": {
     "Pouw.Dither.CallsAtPub": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
     "Pouw.Dither.CardRunsAt": "5e79c94717cbf271888e33bd189df60cf3592130f9c4be689ee6811157bd382b",
@@ -26609,10 +26609,7 @@
     "Pouw.Dither.HostRow.amx": "6325d2df5554fa6aa1d5c5d499c864925225b65d02182892d4d892b43b09d2ea",
     "Pouw.Dither.HostRow.sha": "ff1150cb9831866a085cc88fa56f6748429da9d92849f24d31300486ce65e351",
     "Pouw.Dither.HostsCounted": "2e9647f866c68156bca4a51cafe3d1f65e86170e9569d9e33310a990c8dd1d1e",
-    "Pouw.Dither.Layout": "affede2725c1751449bf3c73a90e6b2bb42759178fd3a1887f2f124cb2f122d0",
-    "Pouw.Dither.Layout.getTr": "46ad1981f0225680e93fed9c4e1fa599fc3a79b1d71591a17bf151546f21db44",
-    "Pouw.Dither.Layout.putDraw": "d3cff26b2460c1748fbefbbfcf29f66c836b93a3a936f5c6bd18f5f2d59d4edc",
-    "Pouw.Dither.OnCard": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612",
+    "Pouw.Dither.OnCard": "e20c87706269f72b71ea976ba7603ab9d00d2ef322d355e02f7b49e0c96f6aef",
     "Pouw.Dither.Others": "2985cb8b555ff9caf086220f753b3bb52d56c0e18b79ee98cfc83c4ce32d4bad",
     "Pouw.Dither.Others.Res": "be4ae3d434f432d0dddad16d2029c87bf0488b981a687fd891becf9aec36751d",
     "Pouw.Dither.Others.mem": "ce3edda18db870d680b813910376b074b74a1bc75782aae66be55ee97c3ec8ef",
@@ -26621,6 +26618,9 @@
     "Pouw.Dither.PubBest.mm": "dce1b856943e578402c3384463215ad34ca8c4ab66866c4930ac39357b670632",
     "Pouw.Dither.PubBest.sha": "d2b5f1feef9d1114d4e83a67e83d12ffac814144bf0b86faa27c56b0e70f0187",
     "Pouw.Dither.ResUnits": "3d8c0d264700e210ebb1fecc04f965bede4bd611610a65d313a4976a9cb4e2d9",
+    "Pouw.Dither.RoundPlan": "d9035d0b1774d8f2ceb2dbae79a1ea40339d231b9f8e45369d0087b2004e05dc",
+    "Pouw.Dither.RoundPlan.getTr": "0773ae16c8865621277946cb50e33dda6e90f542bd65a58ed1e9f1d08f008355",
+    "Pouw.Dither.RoundPlan.putDraw": "fcca059d5e05147d9d360beb8b2ee152bca0bd277bce31ebecee87367e00791a",
     "Pouw.Dither.Timed": "1c01048225e123eabd58c5ea3d14f7b0ce6f94691f988057518e7d4b777d228e",
     "Pouw.Dither.TimedWorkFits": "82083adcdba152dc434b6451ac2a977ffe5ecc69aa57a1e10f320200332634cd",
     "Pouw.Dither.cardRun": "3016cac84d25a6b758d60f89bae812a774026c41638cac5e7feabe3c1c708443",
@@ -27393,10 +27393,10 @@
    ]
   },
   "Definitions.Pouw.Guarantees.DitherInstance": {
-   "digest": "670e1e50cfbe55cbc43292889f095adaedabc7fdeabb02e6f048f92fbb091870",
+   "digest": "e17bca60f5c7d09d3ce152e86680e9715b4326cb6143d036a41003a2d35e2aa3",
    "definitions": {
     "Pouw.Guarantees.DitherInstance.WorkSoundAt": "368f1f2ade0dfbd379aca0aea8c44ba2f8fed6749da5f05b73a1224b7a2fbff9",
-    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "701364265cb44de7ed2432cfdb7d6f78aad897d5dd410016754f66c818b59955",
+    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "6f776a82be4efd79893adbb2609d08b94f72db15876c3a0e86c69aac57e268ad",
     "Pouw.Guarantees.DitherInstance.WorkSoundH200": "fa9597a9f89c02b477637bab831c3892f4cb39c2573cbcbadbca8f32c78e5385",
     "Pouw.Guarantees.DitherInstance.WorkSoundOnCard": "60d9c1b01c7f3715ecf4a3ef33d4feeceaabca5b72bb5a144bbbd8612c98aafa",
     "Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200": "8ee80046f55922ff1450d52cf565b3a0922baa23d8ac99f1f2c80d6dae918af4",
