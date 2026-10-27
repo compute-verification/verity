@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.ml.circuits import Program, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.definitions.registry import spec
 from verity.ml.definitions.registry.b1 import Serve
 from tests.program.crosscheck import _standalone
@@ -99,7 +99,7 @@ def test_verify_branch_tiny_evaluates_and_accepts_own_argmax():
 
 
 def _eval_program(prog: Program, inputs: list[list[int]]) -> list[int]:
-    from verity.ml.circuits.evaluate import evaluate_region
+    from verity.ml.circuits.evaluation import evaluate_region
     from verity.ml.circuits.layout import resolve
     C = prog.circuit
     t = {}

@@ -395,14 +395,14 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     """The rows recorded into a `Window` (its registered values under the committer's key, the tables' supplied) are
     every unit's Definition on the inputs the window commits: its wired rows, its registered reads' rows and its openings',
     each word template's outputs under the reference evaluator, each embedding read's by `gates.embedding.reference`; the
-    window closes over them, labelled by step and source. What no cheaper test reaches: the circuit's own wires and reads
+    window closes over them, labelled by step, slot and form. What no cheaper test reaches: the circuit's own wires and reads
     resolved by the window, against every Definition. Slow (minutes) for the window's members, which trace the embedding
     read's population Program, and the reference evaluator on every unit."""
     low, _f, values, weights, slots = window
     rows_, store = _served(low, slots[0], T=1)
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
     rows = WR.Rows(low, [s0, slots[1]], values)
-    win = IF.Window(low.circuit, RUN, LAW, 64, registered=values)
+    win = IF.Window(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
     bad = {}
@@ -431,5 +431,6 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     c = win.close(salt_key=bytes(32))
     assert c is not None
     labels = win.labels()
-    seen = {lab["source"] for m in labels["members"] for *_, lab in m["labels"]}
-    assert seen == {"served", "computed", "evaluated"} and all(m["labels"] for m in labels["members"])
+    seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}
+    assert seen == set(WR.FORMS) and all(m["labels"] for m in labels["members"])
+    assert {int(x) for v in rows.source.values() for x in v} == {WR.SERVED, WR.COMPUTED, WR.EVALUATED}

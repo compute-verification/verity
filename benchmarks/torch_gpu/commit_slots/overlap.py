@@ -153,21 +153,6 @@ class Smi:
             self.proc.terminate()
 
 
-def load_layout(path: Path) -> S.Layout:
-    """circuits' Layout JSON (`slots._layout_json`), equal groups shared (CIR-113's loader)."""
-    doc, memo = json.loads(path.read_text()), []
-
-    def group(g: dict) -> S.Group:
-        for raw, built in memo:
-            if raw == g:
-                return built
-        built = S.Group(tuple(g["sources"]),
-                        tuple(tuple(S.Row(tuple(S.Part(*p) for p in r)) for r in u) for u in g["units"]))
-        memo.append((g, built))
-        return built
-    return S.Layout(doc["name"], tuple(group(g) for g in doc["groups"]))
-
-
 def describe(layout: S.Layout) -> dict[str, Any]:
     return {"name": layout.name, "digest": S.layout_digest(layout).hex(), "groups": len(layout.groups),
             "distinct_groups": len({id(g) for g in layout.groups}), "units_a_slot": layout.unit_count,
@@ -658,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
         nonlocal current
         if current is None or current[0] != lay:
             drop(False)
-            layout = load_layout(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
+            layout = S.load(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
             if layout is None:
                 raise SystemExit(f"--runs: {lay!r} is shared or families")
             current = (lay, layout)
