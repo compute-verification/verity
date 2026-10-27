@@ -8,7 +8,7 @@ negatives.
 - **Workload:** vLLM's committed values: Commit windows and serving rows from `integrations/vllm`, Llama-3.2-1B and GLM-5.3
   TP8. `prove_bundle.py` uses the torch loop's window instead.
 - **Placement:** one CPU pod holds every party: the prover (M0) and the verifier's draw and Lean verifier (`pod.sh`). The
-  GPU halves (`a5_glm53_commit.sh`, `served_verdicts.sh`) run on a GPU host.
+  GPU half (`a5_glm53_commit.sh`) runs on a GPU host.
 - **Command:** `pod.sh`, below.
 - **Owner:** proofs. Its rung on the ladder is `example.toml`.
 
@@ -66,7 +66,9 @@ while they import or run the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gp
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
-- `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
+- `benchmarks/one_stage/served_verdicts.sh`, with `served_verdicts.py` and its test (`tests/test_served_verdicts.py`, in a
+  suite of its own), stayed behind when this directory moved: vllm runs it from there, and moves the three to
+  `examples/vllm/` after the Wed 28 run (VLLM-33). That run is one served window through every subprotocol
   (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
   few greedy requests from the certifier's traffic generator, and seals each window. On the window holding the most requests,

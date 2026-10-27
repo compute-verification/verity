@@ -4,19 +4,31 @@
 # holds measurement only).
 #
 # - `benchmarks/one_stage/`, the one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end, becomes
-#   `examples/one_stage/`, whole. Its scripts import each other from their own directory (`sys.path` and `import a0`), and
-#   its cost jobs need the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gpu.sh` runs `a8.py`), so the cost jobs come
-#   along rather than being cut off. `zk_cost.py`, `zk_cost.sh`, `zk_cost_cpu.sh`, `a8_cost.py` and `a8_gpu.sh` go back to
-#   `benchmarks/` in phase 2, once they no longer need the drivers. It is not a package, and its suite is named by its path.
+#   `examples/one_stage/`, all but served_verdicts. Its scripts import each other from their own directory (`sys.path` and
+#   `import a0`), and its cost jobs need the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gpu.sh` runs `a8.py`), so the
+#   cost jobs come along rather than being cut off. `zk_cost.py`, `zk_cost.sh`, `zk_cost_cpu.sh`, `a8_cost.py` and
+#   `a8_gpu.sh` go back to `benchmarks/` in phase 2, once they no longer need the drivers. It is not a package, and its
+#   suite is named by its path.
+# - served_verdicts stays: `served_verdicts.sh`, `served_verdicts.py` and `tests/test_served_verdicts.py` are vllm's, which
+#   runs them from `benchmarks/one_stage/` until Wed 28 Oct 23:00Z and then moves them to `examples/vllm/` itself (vllm,
+#   27 Oct 04:23Z). Each has a [paths] row of its own (old == new), and [rewrite] excludes all three, so the move leaves
+#   them byte for byte; `served_verdicts.sh` runs nothing else of the directory. Their test gets a suite of its own: #4910
+#   added `tests/served_verdicts.pyproject.toml`, which this map names `tests/pyproject.toml` and holds there (its own row,
+#   so a rerun leaves it). [split] acknowledges each reference to the directory as a whole, all of which follow the audit;
+#   on the moved tree no reference needs them, so rerun the map there without [split].
 # - `benchmarks/private_circuit/`, protocol 2 (the private circuit through the universal unit) end to end, becomes
 #   `examples/private_circuit/`.
 # The directories keep their names, with `_`: `verity example NAME` reads a `-` in NAME as `_`, and an example's name is
 # `[a-z0-9_]+` (the ladder, `tools/verity/cli/verity_cli/examples.py`). Neither is pinned by `deploy.toml` or run by a gate
-# script. Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+# script. Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s.
 #
 # It runs on a tree where every path to or from these directories is in a form `layout.py` rewrites (#4910). `layout.py`
 # rewrites neither a single segment off an alias (`HERE.parent / "network_traces"`) nor a path after a `-` (a shell
-# default, `${X:-benchmarks/…}`). The move is the commit this map wrote (#4916, M below). Carry an open branch across it with
+# default, `${X:-benchmarks/…}`). The move is the commit this map wrote (#4916, M below). `move_check` infers a directory's
+# move only when all of it moved, so it certifies this one given the split and the three files that stay:
+# `verity check move BASE M --map benchmarks/one_stage=examples/one_stage` plus
+# `--map benchmarks/one_stage/F=benchmarks/one_stage/F` for each F of `served_verdicts.sh`, `served_verdicts.py` and
+# `tests/test_served_verdicts.py`. Carry an open branch across the move with
 # `tools/move/restack.py BRANCH --move-commit M --script-arg=--no-lock --script-arg=--map
 # --script-arg="$PWD/tools/move/reorg_proofs_map.toml"`.
 
@@ -26,6 +38,11 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 
 [paths]
 "benchmarks/one_stage/" = "examples/one_stage/"
+"benchmarks/one_stage/served_verdicts.sh" = "benchmarks/one_stage/served_verdicts.sh"
+"benchmarks/one_stage/served_verdicts.py" = "benchmarks/one_stage/served_verdicts.py"
+"benchmarks/one_stage/tests/test_served_verdicts.py" = "benchmarks/one_stage/tests/test_served_verdicts.py"
+"benchmarks/one_stage/tests/served_verdicts.pyproject.toml" = "benchmarks/one_stage/tests/pyproject.toml"
+"benchmarks/one_stage/tests/pyproject.toml" = "benchmarks/one_stage/tests/pyproject.toml"
 "benchmarks/private_circuit/" = "examples/private_circuit/"
 
 [retired]
@@ -34,13 +51,41 @@ paths = ["benchmarks/one_stage/", "benchmarks/private_circuit/"]
 [drop]
 paths = []
 
+[split]
+# `benchmarks/one_stage/` splits: served_verdicts (its script, its driver and its test, with the test's suite) stays, for
+# vllm, which runs it from there until Wed 28 Oct 23:00Z and then moves it to `examples/vllm/` itself; the rest of the
+# one-stage audit moves. Each reference below names the audit's drivers, its suite or the audit as a whole, so it follows
+# the larger part, and none of them reads served_verdicts.
+".agents/skills/using-slack/registry.json: benchmarks/one_stage" = "proofs owns the one-stage audit; vllm's own entries name served_verdicts' files"
+"benchmarks/all_protocols/pyproject.toml: benchmarks/one_stage" = "the integrity leg's audit, which its opt-in end-to-end test runs, is the drivers'"
+"benchmarks/network_traces/n2_advised_zk.py: benchmarks/one_stage" = "puts the drivers on sys.path"
+"benchmarks/network_traces/n2_zk.py: benchmarks/one_stage" = "ONE_STAGE, the drivers' directory"
+"benchmarks/network_traces/tests/test_n2_period_coins.py: benchmarks/one_stage" = "puts the drivers on sys.path"
+"benchmarks/network_traces/transfer_zk.py: benchmarks/one_stage" = "ONE_STAGE, the drivers' directory"
+"benchmarks/network_traces/warden_zk.py: benchmarks/one_stage" = "ONE_STAGE, the drivers' directory"
+"benchmarks/one_stage/a5_tp.sh: benchmarks/one_stage" = "a comment naming an A5 partition, which moves"
+"benchmarks/prove_path/prove_path.py: benchmarks/one_stage" = "puts the drivers on sys.path"
+"benchmarks/prove_path/pyproject.toml: benchmarks/one_stage" = "its tests import the drivers (a5_coins, prove_leg), not served_verdicts"
+"benchmarks/prove_path/records_audit.py: benchmarks/one_stage" = "puts the drivers on sys.path"
+"benchmarks/prove_path/tests/test_prove_path.py: benchmarks/one_stage" = "puts the drivers on sys.path"
+"benchmarks/prove_path/tests/test_records_audit.py: benchmarks/one_stage" = "puts the drivers on sys.path"
+"benchmarks/prove_path/tests/test_served_statics_zk.py: benchmarks/one_stage" = "puts the drivers on sys.path"
+"tools/verity/check/suites.py: benchmarks/one_stage" = "AFTER_LEAN names the audit's suite, which builds the Lean verifier; served_verdicts' suite doesn't"
+"tools/verity/check/tests/test_after_lean.py: benchmarks/one_stage" = "names the audit's suite"
+"verity/core/protocols/sampled_proofs/README.md: benchmarks/one_stage" = "names the one-stage audit end to end"
+"verity/ml/flock/README.md: benchmarks/one_stage" = "names the one-stage audit, which runs the prover"
+
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves), and files
 # whose bytes a digest pins.
 exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
            "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
-           "tools/research/src/research/store/moves.json"]
+           "tools/research/src/research/store/moves.json",
+           # served_verdicts, which stays (vllm's, frozen until Wed 28 Oct 23:00Z): it names nothing that moves, and the
+           # rewrite would otherwise recount its test's own-directory anchor (`HERE`) to the audit's new place
+           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
+           "benchmarks/one_stage/tests/test_served_verdicts.py"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
 # An old path that names a file at a past commit of another branch, never rewritten: circuits' F3 nonzeros
 # (cursor/f3-nonzero-cost-f253 @76e405893), which never was in this tree.
@@ -50,4 +95,6 @@ keep = ["benchmarks/private_circuit/nonzero_cost.py"]
 # the renames [paths] and [roots] imply (`layout.py --modules`): neither directory is a package, and nothing names either one
 # as a module
 "benchmarks.one_stage" = "examples.one_stage"
+"benchmarks.one_stage.served_verdicts" = "benchmarks.one_stage.served_verdicts"
+"benchmarks.one_stage.tests.test_served_verdicts" = "benchmarks.one_stage.tests.test_served_verdicts"
 "benchmarks.private_circuit" = "examples.private_circuit"
