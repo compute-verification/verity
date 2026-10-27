@@ -53,6 +53,8 @@ ALLOWED: dict[str, str] = {
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
+    '"proof unit": re.compile': "`survey.py conventions`' detector of the retired term (`RETIRED_PROSE`), which names it to "
+                                "count it, as this file does",
 }
 
 PENDING: dict[str, str] = {
