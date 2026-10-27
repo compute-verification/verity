@@ -56,8 +56,8 @@ coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_sc
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
 `joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life
-of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`,
-#3786), with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
+of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`),
+with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
 nominal length.
 
 *The prover system.* Its pass devices are verbatim (`rate-sketch-verbatim`), and they are told their pass's summary:
@@ -156,9 +156,9 @@ residency, as the vLLM serving store does (the earlier
 60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each draw at least
 2,773 openings, which no deployed KV-credited session is yet. An honest run meets every hypothesis but the world's, with
 its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1`, at a decode schedule and
-at a prefill. The decode witness (#3924, `Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a
-sequence, each page's coin back two steps after it completes, with page-parity groups. The prefill witness (#3994,
-`Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
+at a prefill. The decode witness (`Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a
+sequence, each page's coin back two steps after it completes, with page-parity groups. The prefill witness
+(`Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
 group a page, so a chunk may complete several pages while their coins are out; its credit is exactly its tiles' bits,
 and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
 

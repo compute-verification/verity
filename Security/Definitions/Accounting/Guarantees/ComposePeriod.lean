@@ -165,10 +165,10 @@ it in the period are not credited, and `period-close` is refused while a reserve
 stream's committed periods must be disjoint: each window in at most one period, and one period open at a time, the
 next committed only after the last closes. Two periods that share windows count those windows twice, and a prover
 that commits `P` overlapping periods and claims whichever is accepted pays `P·δ_s`, not `δ_s`. No check on main does
-this today. The served path has no period: `Credits` (SALT-WIRE's, #2847) registers a window once when it is received,
+this today. The served path has no period: `Credits` (SALT-WIRE's) registers a window once when it is received,
 before its draw coin is open or any proof, and nothing closes a stream at its first refused window, so `Credits`
 credits each window on its own, which is dropping failed windows (*Liveness*, below). The challenger's `order_reason`
-(`SampledProofs.Challenger.orderReason`, on main since #2573) checks one family of an epoch's coins: coin `i` opened
+(`SampledProofs.Challenger.orderReason`, on main) checks one family of an epoch's coins: coin `i` opened
 once, after the `i`-th recorded root, and every recorded root's coin opened. That is the order within a window. Run
 over one family holding every window's round coins and draw in order, with `n` and the circuit in the epoch's
 commitment, it would be the period's check.

@@ -102,8 +102,8 @@ unit's late cone and in no other unit's, so committing it after later coins leav
 value chosen after that unit's noise, and no reader whose skip goes uncharged: its own unit's proof checks it when the
 unit is drawn, and the unit's cone pays for it when it isn't. The draw coin still follows every commitment. That
 is `Accounting.Compose.LayerCommitted`'s second case. The ring hides the live coins' round trip off the prover's node,
-about 100 ms, behind `D` steps: about 104 ms a token at `D = 2` (the next round's root), 0.09 ms at `D = 6` (kernels'
-#3003; `Properties.Served.witTieRing`). An A row gets no such range: written after its reader's coin, `A = −b` cancels a
+about 100 ms, behind `D` steps: about 104 ms a token at `D = 2` (the next round's root), 0.09 ms at `D = 6`
+(`Properties.Served.witTieRing`). An A row gets no such range: written after its reader's coin, `A = −b` cancels a
 one-bit dither (RT4-INT-12). An arm that forms a call's A rows
 after the coin or salt its noise reads is in no form here: dither-a, dither-one and `serve.py`'s seeded mode do today,
 and dither-a is to move to this order. A request entry is a run input (`act`), not a registered one:
@@ -147,8 +147,8 @@ statement is over the declared circuit; these are the checks that make its `comm
 * the challenger: every round's coin opened by the live challenger, the auditor's device (AGENTS.md, auditor-trusted
   devices; `trusted-host`), on a machine the prover doesn't control and never a process on the prover's node.
   A challenger in the prover's process gives the prover its coins as they are drawn, so its coins are seeded ones,
-  whatever the record calls them. `serve.py` builds `live_challenger` in the prover's process today (#2639 l.446–454,
-  `window.py`'s `entropy=os.urandom`), so its runs establish only the order of roots and coins (RT2-INT-6, SG-11);
+  whatever the record calls them. `serve.py` builds `live_challenger` in the prover's process today
+  (`window.py`'s `entropy=os.urandom`), so its runs establish only the order of roots and coins (RT2-INT-6, SG-11);
 * `receipt`: round `r`'s receipt roots under the root of one later round, recorded before that round's coin (round
   `r + D − 1`'s in a ring of depth `D`), or under the manifest before the draw coin, at the commit coin the declared
   circuit gives them; each drawn unit's receipt opened under it;
@@ -159,7 +159,7 @@ statement is over the declared circuit; these are the checks that make its `comm
   record (`PouwH1TileZy_v1`'s `pub` row, whose salt is public, so the verifier computes it); the unit's salt
   `window.round_key(commitment, coin_r, r, root_r)`'s stream, derived by the verifier from the challenger's opening of
   round `r`'s coin and the recorded root, never read from the record (`serve.py`'s reference recomputation reads the
-  record's `salt` today, and `h1_prove`'s units PoUW's window salt `pouw_salt`, #3030, which no round's coin keys);
+  record's `salt` today, and `h1_prove`'s units PoUW's window salt `pouw_salt`, which no round's coin keys);
 * every window of a salt timed from the salt's release (`EpochTie.salted`): the challenger's one `salted_at` an epoch,
   never a window's own start;
 * the window's `F.rounds L` live rounds (`Llama31Rounds`). Compose's bound reads the largest round's share of the
@@ -188,7 +188,7 @@ is that realization's to prove, at the premises `Accounting.Guarantees.TS.Sessio
 * `ServedRootsLinked`'s `rows` read the unit's `zy` and A ports at its round root's tables, which
   `Flock.SecurityProofs.ServedRowsLinked` gives at the drawn units under `RowsSession.ServedRegistered`.
 
-A leaf proved as several statements is one unit (RT4-LOGIC-30): option A's 33 statements (#3109's 32 lanes
+A leaf proved as several statements is one unit (RT4-LOGIC-30): option A's 33 statements (32 lanes
 `PouwH1LaneZy_v1` and their combine `PouwH1Combine_v1`) are one `Cd` unit, the leaf's, and the lanes' partials are
 values of the proof layer that realizes it, not gates of `Cd`. They take no class, `ValueChecked`'s fifth clause ranges
 over the unit's records only, and no gate of the unit reads another unit's computed word through them. That the 33
@@ -522,7 +522,7 @@ scale is the call's Program's (`Properties.Served.ServedUnits`), as which row an
 function-of statement: a `y` that reads `z` and takes another product's value (`y = 0·z + 1·p`, RT3-INT-3) fails it
 unless that value is `dq` of `z`'s on every typed input. It is `dq` at every `outY` word, an empty slot's included,
 with no case for zero: an empty slot's `s_a` is `+0` and its `y` is `dq(0, +0, s_w)`, which is `+0` only at a finite
-positive `s_w` (0x8000 at a negative one, 0x7FFF at an infinite or NaN one; kernels' #3063). That `dq` is the dequant
+positive `s_w` (0x8000 at a negative one, 0x7FFF at an infinite or NaN one). That `dq` is the dequant
 the served code computes is the Definition's review. -/
 def DequantOf {ι : Type} (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) (y z sa sw : ℕ) : Prop :=
   sa < Cd.dag.length ∧ cls sa = .act ∧ Cd.call sa = Cd.call z ∧ ¬ S8 Cd sa ∧

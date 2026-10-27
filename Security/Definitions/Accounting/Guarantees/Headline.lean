@@ -23,7 +23,7 @@ the peer-GPU premise, every billable GPU on the node credited each window or the
 and AVX-512 (and NVLink peers) take every device over 1% on some real host.
 
 Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins drawn after
-the commitments. The sampled path's `ε_sample` (#2466's `DrawnLayer`) and the Fiat–Shamir premium (decision 122) are
+the commitments. The sampled path's `ε_sample` (`DrawnLayer`) and the Fiat–Shamir premium (decision 122) are
 separate lines, in none of these statements.
 
 The luck (I7) is split at the receipt (LEDGER §1.3) into two named luck premises, and `LuckOfReceipt` gives (I7) at
@@ -71,7 +71,7 @@ Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, as ruled, no ad
 The unfolded branch binds on sm_120's sheet (`5.860%`); on sm_120's measured vector the folded branch binds
 (`0.591%`). The proof service's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness
 (`ProofSoundAt`, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning
-(`ProofsPin`, which no Lean checks of the served relations: `PouwSegCheck_v2` lacks it, PIN's checks of #2417 recompute
+(`ProofsPin`, which no Lean checks of the served relations: `PouwSegCheck_v2` lacks it, PIN's checks recompute
 every word they absorb), beside `RightFixed` (RT3-LOGIC-3). `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses
 over `Definitions/` (RT2-LOGIC-2).
 

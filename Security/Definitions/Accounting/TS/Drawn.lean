@@ -178,7 +178,7 @@ an opening that fails its relation with probability at most `δ_ks` over the win
 def JointSound [Fintype C] [Fintype B] (δks : ℝ) : Prop := ∀ w, prob (fun x => ∃ i, pf.Unsound x w i) ≤ δks
 
 /-- **Each unit's relation pins its rightness**: values of its slots that satisfy unit `j`'s relation are right. A
-check with no absorbed word as witness (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`, #2417) recomputes
+check with no absorbed word as witness (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`) recomputes
 every word it absorbs from the unit's operands, its seed and its noise. -/
 def Pins : Prop := ∀ x w j v, pf.rel x w j v → pf.right x w j v
 

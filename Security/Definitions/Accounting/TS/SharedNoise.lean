@@ -16,7 +16,7 @@ tiles, its column streams carry the row block, and each tile's fold keys stay it
 * `ReceiptGame.CondReceiptLuck e pr`: `ReceiptLuck pr` with the coin split by `e` into a rest and an own part, at every
   value of the rest, over the own part alone.
 
-**No new premise.** The composed statements (#2482, #2638) read three luck premises per tile, each stated over the
+**No new premise.** The composed statements read three luck premises per tile, each stated over the
 stage's whole coin `C`, so their Lean form already allows tiles whose coins correlate. Under one seed a call they are
 read at `C = CallCoin`, at the values they have today:
 
@@ -36,7 +36,7 @@ What changes is the scope of those three claims (one seed a call, rows shared al
 That scope is approved, with the same values, and served only once the gain is measured.
 
 **The bits.** `CallCoin` fixes what is shared, not how it is derived. `h1tile.banded_noise`
-(`verity/core/protocols/pouw/circuit/h1tile.py`, #2866) is the bit-exact derivation. Bands are g ≤ 64 column tiles, cut from
+(`verity/core/protocols/pouw/circuit/h1tile.py`) is the bit-exact derivation. Bands are g ≤ 64 column tiles, cut from
 column tile 0. Tile `(I, J)` reads its rows' noise from the seed at the position of its band's first tile, and its
 columns' noise and its fold keys from its own position. A call is then one `CallCoin 1 g` per row block and band, each
 from its own seed.

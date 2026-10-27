@@ -38,7 +38,7 @@ Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
   defined from the circuit, so under `LayerCommitted` it is bound at the IR's cuts (a value only its own unit reads,
   committed later, at its commit coin, which adds no late edge out of its unit), reads each round's coin and has
   every late edge the IR has (`StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`, proved of it), and only its
-  run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is #2466's `DrawnRightOff`, one
+  run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is `DrawnRightOff`, one
   event of probability `δ_bind + δ_ks` off which every drawn tile is right (RT-I8's `compose_sampled` shape).
 * (P) `CreditOfWork`, the physical layer's step: on the tensor–scalar model of a data sheet, a run with that work takes
   at least `(1 − ε)·T_cred`. Its premises are exactly the machine model's: the model the circuit's on the sheet
@@ -68,8 +68,8 @@ The other guarantees are (L)'s lemmas:
 * `SplitRateExp`: `SplitRateAt` at the sharp `Λ`, with its `ν, ν₀` in closed form;
 * `SplitRateMerged`: `SplitRate` at `Λ = b(1 + Kρw_max)/(ρK(1 − q))` for any luck at most `q`;
 * `ServiceCovers`: the service's share, each skipped tile's late cone from the IR (`tileCone`), covers every tile that
-  isn't good at any joint run's modes on the IR's layer (#2466's `DrawnLayer.Covers`, from `DrawnLayer.covers_of_cone`);
-* `BindingOfECR`: a prover's `δ_bind` from #2466's `DrawnBindingOfFork`, AM–GM and `ecr/sha-512` on its fork finder
+  isn't good at any joint run's modes on the IR's layer (`DrawnLayer.Covers`, from `DrawnLayer.covers_of_cone`);
+* `BindingOfECR`: a prover's `δ_bind` from `DrawnBindingOfFork`, AM–GM and `ecr/sha-512` on its fork finder
   (RT-DELTA r2), the one reading of binding's number PoUW's per-prover floors share;
 * `WholeLuckOfEntropy`: `SeedLuckAt`'s whole half from `WholeEntropyAt` (the optional entropy premise), at any rate
   whose per-tile moment at that entropy is at most `1`.
@@ -172,7 +172,7 @@ collision finder `F` for `H` whose collisions bound the fork event up to `κ` (`
 `Pr[F finds] + κ`: the prover's fork finder, which runs the window twice from the cut and takes both openings with
 C-Flock's knowledge extractor, `κ` its extraction failure), for every `δ' > 0`
 `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(F) + κ)`, where `ecr(F)` is `E[cost F]/2^256` if `F` meets `ecr/sha-512`
-(`Claims.ExpectedCR`) and `⊤` if it doesn't. It is #2466's `DrawnBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
+(`Claims.ExpectedCR`) and `⊤` if it doesn't. It is `DrawnBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
 with AM–GM (`√(γx) ≤ δ' + γx/(4δ')`), and it assumes no hash: a prover whose fork finder beats `ecr` gets `⊤`, so it
 is the per-prover `δ_bind` the statements take (`MovedIn ≤ δ_bind`), on the IR's layer under live coins and on the
 draw's (`Declared.atDraw`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
@@ -233,7 +233,7 @@ noise's generation. Under:
   `max_c κ_c + coll`) and `Pins`;
 * the four claims: (H-μ) (`OperandHMu` at its kind's `μ`) and B′ (`ReceiptLuckAt` at its kind's `r_B`) for every
   credited tile folded at its stage, the guess bound (`GuessLuckAt` at its kind's guess) for every one whole, and the
-  fixed-words claim, #2466's `UnitFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and
+  fixed-words claim, `UnitFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and
   the tiles' words;
 
 an accepted window's run has all but a share `d_F + d₀` of its committed words fixed right and all but `d₀` folded,

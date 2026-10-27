@@ -27,7 +27,7 @@ Which form each takes:
   the menu heads a fresh word.
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
-  `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
+  `benchmarks/pouw/theory/fold_opt.py`) is a mechanical fact; the multi-round residual, that no program folds
   below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
   (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
   `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at

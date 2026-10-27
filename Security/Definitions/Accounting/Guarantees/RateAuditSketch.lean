@@ -169,10 +169,10 @@ with probability
 
   `((k − 1)/N)^s + s/2^h + Pr_σ[∃ u, rank_ℚ(block_u σ) < r] + q/2^(8·r)`.
 
-**The reading.** It is #1883's per-pass reading, `q·2^-8r + Pr_σ[∃ u, rank < r]`, as a theorem for the verbatim class.
+**The reading.** It is the per-pass reading, `q·2^-8r + Pr_σ[∃ u, rank < r]`, as a theorem for the verbatim class.
 At `k_s = 16` no block binds (its rank is at most 16), and `r` trades the guess, `2^-8r` per query, against the chance
 that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' law evaluated outside
-Lean (`r* = 12` in #1883). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
+Lean (`r* = 12`). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
 session's passes and the grinding of their keys are not modeled here. Proof:
 `Accounting.SecurityProofs.RateAuditTensorSketchRank`, from `RateAuditSketch` and `SketchRankFiber`.
 
