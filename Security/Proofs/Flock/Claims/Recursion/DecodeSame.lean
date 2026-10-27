@@ -97,7 +97,7 @@ theorem keep_mkObj {l : List (String × Json)} (hd : Distinct l) {k : String} {v
 
 /-- **The honest record's checks pass at a value alike it** (S1–S14): what `decode_recordObj` proves after parsing,
 at any `j` alike the honest record. -/
-theorem decodeJ_same (S : Claims.JsonSpec BEq.beq) {h : ByteArray → ByteArray}
+theorem decodeJ_same {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
@@ -121,7 +121,7 @@ theorem decodeJ_same (S : Claims.JsonSpec BEq.beq) {h : ByteArray → ByteArray}
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
   unfold Record.decodeJWith
   simp only [hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, ok_bind,
-    beq_self_eq_true, check_true, S.beq_same _ _ (.bool true)]
+    beq_self_eq_true, check_true]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))

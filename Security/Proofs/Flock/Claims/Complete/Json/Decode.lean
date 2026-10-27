@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Json.Canon
 /-!
 # The honest record decodes (S1–S14)
 
-`decode_recordObj`: under the JSON library's specification (`JsonSpec`), `Record.decodeWith` through
+`decode_recordObj`: with no premise on the JSON library, `Record.decodeWith` through
 `Hashes.ofSha512 h` reads the printed honest record (`printJ` of `recordObj`) back as `sessOf`, its every check passing,
 for one table, no keyed coin tree, a printable draw that decodes (`DrawOk`), a non-empty `Σ` and `root_B`, the
 configured point shape, one recorded stream per rep stream and well-formed rounds, with `h`'s outputs 64 bytes (S12
@@ -97,7 +97,7 @@ def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array Byt
 /-- **The honest record decodes** (S1–S14) as `sessOf`: one table `t`, no keyed coin tree, the statement's draw
 `DrawOk`, a non-empty `Σ` and `root_B`, the configured points, one recorded stream per rep stream, each with rounds of
 `1 ≤ n ≤ 65536` coins, and `h`'s outputs 64 bytes. -/
-theorem decode_recordObj (S : Claims.JsonSpec BEq.beq) {h : ByteArray → ByteArray}
+theorem decode_recordObj {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)

@@ -103,7 +103,7 @@ end Several
 
 /-- **The masked session runs** at a good case where the statement's `hello` prints and the prover's pieces
 return. -/
-theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) :
+theorem Case.sessionRuns (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) :
     ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies) := by
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS
   obtain ⟨hz, hcn⟩ := FlockComplete.JsonRT.canon_ok _ hg
@@ -243,7 +243,7 @@ theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : P
   exact Runs.pure trivial
 
 /-- **The masked session runs** at several tables: the goal `SessionRunsJ`. -/
-theorem sessionRunsJ_goal (S : JsonSpec) (hS : StmtOkJ H rel) (hR : ProverRunsJ H rel) : SessionRunsJ H rel :=
-  fun c hc => c.sessionRuns S (hS c hc) (hR c hc)
+theorem sessionRunsJ_goal (hS : StmtOkJ H rel) (hR : ProverRunsJ H rel) : SessionRunsJ H rel :=
+  fun c hc => c.sessionRuns (hS c hc) (hR c hc)
 
 end FlockComplete.ZkTables

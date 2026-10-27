@@ -1,6 +1,6 @@
 import Flock.Canon
 import Std.Data.TreeMap.Raw.Lemmas
-import Definitions.Claims.Json
+import Proofs.Flock.Claims.Complete.Json.Value
 import Definitions.Claims
 import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.Complete.Prover.Print
@@ -9,13 +9,13 @@ import Proofs.Flock.Claims.Complete.Json.RoundTrip
 /-!
 # What the record's round trip needs from the JSON library
 
-`Json`'s `==` is a `partial` definition: Lean runs it, and no proof unfolds it. Everything else the session record's
-round trip reads (the prover's `printJ`, a total printer of `Json.compress`'s bytes, then `Record.decodeWith`'s,
-`liveOf`'s and `recordDraw`'s `parse`) is proved: the verifier's parser `Flock.JsonParse.parse` and its `canon` are
-total, the parser reads back what `printJ` and `canon` print (`RoundTrip.lean`: `parse_print`, `parse_canon`), builds
-well-formed trees (`Parse.lean`), and `canon` is the same on alike values (`Canon.lean`). So the record's theorems take
-only `Claims.JsonSpec BEq.beq`, a named assumption that `==` holds of alike (`Same`) values, over printable (`Good`) and
-well-formed (`Wf`) values (`Definitions/Claims/Json.lean`). Here are the lemmas on alike values the proofs read: alike
+Nothing the session record's round trip reads is assumed (the prover's `printJ`, a total printer of
+`Json.compress`'s bytes, then `Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`): the verifier's parser
+`Flock.JsonParse.parse` and its `canon` are total, the parser reads back what `printJ` and `canon` print
+(`RoundTrip.lean`: `parse_print`, `parse_canon`), builds well-formed trees (`Parse.lean`), and `canon` is the same on
+alike values (`Canon.lean`). The verifier reads no `Json` `==` (a `partial` definition no proof unfolds): it tests
+flags by `matches`. Alike (`Same`), printable (`Good`) and well-formed (`Wf`) values are `Value.lean`'s. Here are the
+lemmas on alike values the proofs read: alike
 leaves are equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
 (`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`)
 passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
@@ -100,12 +100,8 @@ theorem _root_.Claims.Json.Same.getObjVal_none {j j' : Json} (h : Same j j') {k 
 
 /-! ## The masked proofs' names
 
-The masked completeness proofs (`Zk/`, `ZkTables/`) name the JSON library's specification at the honest prover's
-printer and the oracle's 64-byte outputs by these; a statement the lock lists reads `Claims.JsonSpec BEq.beq` and
-`Claims.Out64`. -/
-
-/-- `Claims.JsonSpec` at `Json`'s `==`. -/
-abbrev JsonSpec : Prop := Claims.JsonSpec BEq.beq
+The masked completeness proofs (`Zk/`, `ZkTables/`) name the oracle's 64-byte outputs by this; a statement the lock lists
+reads `Claims.Out64`. -/
 
 /-- `Claims.Out64`: the oracle's outputs are 64 bytes. -/
 abbrev Out64 (H : Claims.Msg → Claims.Msg) : Prop := Claims.Out64 H

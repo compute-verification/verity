@@ -216,7 +216,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, the
 verifier's extra claims are the prover's, the table has `25 ≤ m`, and rep `r`'s decoded masked proof is the proof it
 returned, ending at that stream. -/
-theorem RunZk.walk (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem RunZk.walk (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (streams : Array (Array Round)),
       o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = v.1 ∧ streams.size = 2 ∧
@@ -248,7 +248,7 @@ theorem RunZk.walk (S : Claims.JsonSpec BEq.beq) (h64 : Claims.Out64 H) (hS : St
   have hdec : Record.decodeWith o.hs o.spec o.record = .ok (sessOf o.spec (Claims.hOf H) #[flat cm.cap]
       (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZk S (hOf_size h64) ht hct hH hdraw hsig hrb hpts hpm (by rw [hss, hrs1]; rfl) hrs
+    exact decode_recordObjZk (hOf_size h64) ht hct hH hdraw hsig hrb hpts hpm (by rw [hss, hrs1]; rfl) hrs
       o.proofs
   have hsess : o.sess = sessOf o.spec (Claims.hOf H) #[flat cm.cap] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
       o.proofs := by

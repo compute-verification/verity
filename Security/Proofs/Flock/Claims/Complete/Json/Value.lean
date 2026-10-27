@@ -1,24 +1,21 @@
-import Mathlib
+import Lean.Data.Json
+import Std.Data.TreeMap.Raw.Basic
 
 /-!
-# The JSON library's specification: completeness's JSON assumption
+# JSON values alike, printable and well formed
 
-The honest prover sends its session record as JSON, and the verifier reads it back: the prover's printer prints it,
-the verifier's parser reads it, and what the verifier compares is `Json`'s `==` and the canonical printer's output.
-`JsonSpec` states what completeness still assumes of them, over JSON values that are alike (`Json.Same`): that `==`
-holds of them. The proofs read printable (`Json.Good`) and well-formed (`Json.Wf`) values too.
+What the completeness proofs read of the record's JSON values:
 
 * **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
   one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
-  the printer prints the keys in sorted order and `parse` inserts them in that order, so a parsed object is another
+  the printer prints the keys in sorted order and the parser inserts them in that order, so a parsed object is another
   tree than the one printed, alike at every key lookup.
 * **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). The printer
   prints a number in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`.
+* **Well-formed values** (`Wf`): every object a well-formed tree.
 
-Mathlib only, as `Definitions/` is: the comparison is a parameter, which the completeness proofs instantiate at
-`BEq.beq`. What the verifier's parser (`Flock.JsonParse.parse`, total) reads back of the honest prover's printer
-(`FlockComplete.printJ`) and the canonical printer (`Flock.canon`) is proved, not assumed
-(`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`).
+The verifier's parser `Flock.JsonParse.parse` reads back an alike value from what the honest prover's printer and
+`Flock.canon` print of a printable value (`RoundTrip.lean`), so the round trip rests on no assumption.
 -/
 
 namespace Claims
@@ -58,17 +55,5 @@ inductive Wf : Json → Prop
   | obj {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Wf v) : Wf (.obj m)
 
 end Json
-
-/-- **`JsonSpec`: `Json`'s `==` holds of alike values**, at the comparison `beq` (instantiated at `BEq.beq`, Lean's
-`==` on `Json`).
-
-It affects completeness only, never soundness: it says that the honest prover's record reads back, and no soundness
-guarantee takes it. `Json`'s `==` is a `partial` definition, opaque to the kernel, so no proof unfolds it. What the
-verifier's parser and printers do is proved, not assumed: the parser builds well-formed trees
-(`FlockComplete.JsonRT.parse_wf`) and reads back an alike value from the prover's printer and from `canon`
-(`FlockComplete.JsonRT.parse_print`, `parse_canon`), and `canon` is the same on alike values and returns on printable
-ones (`FlockComplete.JsonRT.canon_same`, `canon_ok`). -/
-structure JsonSpec (beq : Json → Json → Bool) : Prop where
-  beq_same : ∀ a b, Json.Same a b → beq a b = true
 
 end Claims

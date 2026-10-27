@@ -127,7 +127,7 @@ theorem wf_all : ∀ k,
           · cases h
       · cases h
 
-/-- **`Flock.JsonParse.parse` builds only well-formed trees** (`JsonSpec`'s `parse_wf` before it was dropped): every
+/-- **`Flock.JsonParse.parse` builds only well-formed trees**: every
 object it returns is `∅` with its members inserted, and every value in it is well formed. -/
 theorem parse_wf (s : String) (j : Json) (h : parse s = .ok j) : Wf j := by
   rw [parse_eq] at h

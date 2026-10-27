@@ -10,7 +10,7 @@ import Proofs.Flock.Claims.Complete.Json.Parse
 
 `stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes
 to the statement's instances (`DrawOk`), and the statement's draw is the one it was set up at: `StmtOk`, from the case's
-setup alone, under the JSON library's specification (`JsonSpec`).
+setup alone.
 
 * The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), so the hello's `coins`
   entry is absent or a string, and `CoinTree.ofHello` reads none (`ofHello_helloOf`). The scope check
@@ -279,7 +279,7 @@ theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeM
 
 /-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
 `unit_draw`. -/
-theorem unitDraw_of (S : Claims.JsonSpec BEq.beq) {tags : Tags} {c : Circuit} {pf : ByteArray}
+theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray}
     {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
   obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
@@ -312,7 +312,7 @@ theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
     exact .str _
 
 /-- A canonical object whose `coins` is absent or a string names no coin tree (`CoinTree.ofHello`). -/
-theorem ofHello_none_of (S : Claims.JsonSpec BEq.beq) {L : List (String × Json)} (hd : Distinct L)
+theorem ofHello_none_of {L : List (String × Json)} (hd : Distinct L)
     (hg : ∀ p ∈ L, Good p.2) (hc : (L.map Prod.fst).contains "coins" = false ∨ ∃ x, ("coins", Json.str x) ∈ L)
     {s : String} (h : Flock.canon (Json.mkObj L) = .ok s) : CoinTree.ofHello s = none := by
   obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_canon _ _ (good_mkObj hd hg) h
@@ -333,13 +333,13 @@ theorem ofHello_none_of (S : Claims.JsonSpec BEq.beq) {L : List (String × Json)
     rfl
 
 /-- **The plain verifier's hello names no coin tree**: at the OS's coins or a seed's, `CoinTree.ofHello` reads none. -/
-theorem ofHello_helloOf (S : Claims.JsonSpec BEq.beq) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
+theorem ofHello_helloOf {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
     {coins : Coins} {hello : String} (hc : coins = .os ∨ coins = .seed)
     (h : Flock.helloOf tags sigma mPts coins = .ok hello) : CoinTree.ofHello hello = none := by
   unfold Flock.helloOf at h
   rcases hc with rfl | rfl <;> dsimp only at h <;> repeat' split at h
   all_goals
-    refine ofHello_none_of S (by simp) ?hg ?hc h
+    refine ofHello_none_of (by simp) ?hg ?hc h
     case hc => first | (left; simp; done) | (right; exact ⟨tags.coinScheme, by simp⟩)
     case hg =>
     repeat' first
@@ -559,7 +559,7 @@ theorem _root_.FlockComplete.Case.one (c : Case H rel) :
 /-- **What the record needs of the statement holds at every good case** (`StmtOk`), under the JSON library's
 specification: the plain verifier's coins name no coin tree, Σ is a SHA-512 digest, the draw is printable and decodes to
 the statement's instances, and the session's draw is the statement's. -/
-theorem stmtOk (S : Claims.JsonSpec BEq.beq) : StmtOk H rel := by
+theorem stmtOk : StmtOk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
   obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt h1
@@ -567,13 +567,13 @@ theorem stmtOk (S : Claims.JsonSpec BEq.beq) : StmtOk H rel := by
   obtain ⟨hzk, hcoins, hdraw⟩ := Raw.ins_read hw
   have hz : c.s.read.zk = false := hzk.trans hwz
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 c.ready_parts.1
-  have hu := unitDraw_of S hl (hd d hdd)
+  have hu := unitDraw_of hl (hd d hdd)
   have hU : c.spec.unitDraw = some d := by
     rw [hspec]
     simp [Stmt.spec, hu, Except.toOption]
   refine ⟨?_, ?_, ?_, by rw [hU, hdd]⟩
   · rw [hspec]
-    refine ofHello_helloOf S ?_ hhello
+    refine ofHello_helloOf ?_ hhello
     simp only [Readable.Read.coins, hz, Bool.false_eq_true, ↓reduceIte]
     exact hcoins hwz
   · rw [hspec]

@@ -830,10 +830,6 @@
    "owner": "@proofs",
    "digest": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2"
   },
-  "Claims.JsonSpec": {
-   "owner": "@proofs",
-   "digest": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
-  },
   "Claims.Sampling.Commitment.Binds": {
    "owner": "@proofs",
    "digest": "3d281bc90d41540bc59fac317c7704f40034ecf5b92268542b66de988a289858"
@@ -2429,9 +2425,6 @@
    "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
    "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
    "Claims.SimCost": "a simulator's expected calls; `ClaimsStated` records it, but no claim reads it, so no ZK claim bounds its simulator's cost",
-   "Claims.Json.Good": "a helper the claims read: a printable JSON value, which the record's round trip (`FlockComplete.JsonRT.parse_print`, `parse_canon`) reads",
-   "Claims.Json.Same": "a helper the claims read: two JSON values alike, which `JsonSpec` reads",
-   "Claims.Json.Wf": "a helper the claims read: a well-formed JSON value, which the completeness proofs read",
    "Claims.Out64": "a hypothesis `Complete` reads (the oracle's outputs are 64 bytes, SHA-512's whole output), no claim",
    "Claims.Recursion.Bound.Binds": "a premise of `Bridge` on the bound record (its row digest input is injective), a condition on the record like `decOK`, no claim",
    "Claims.Recursion.Bound.LastBinds": "P4 as first stated, superseded by `Bound.LastBindsEC` with `Bound.LastCoinFree` (card ef47c02e): two accepted last messages that `final` keeps apart, after the same rounds and coins, give a collision; false at the deployed bound record before S0 (a trailing space in the record's text, which S0 refuses: `RecDeploy.LastGap.check_space`), kept because `RecDeploy.KSBoundRoute` reads it, a premise, no claim",
@@ -17866,34 +17859,6 @@
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated"
    ]
-  },
-  "Definitions.Claims.Json": {
-   "digest": "82f971f29719d8884c4d9ccbf3d7033d0f508829e540d7f0f8a47c4a14142010",
-   "definitions": {
-    "Claims.Json.Good": "049bbffb568b7a24dc10ae33ffefdb6a5d2c9b084cb34437d2c331acc5fb7d93",
-    "Claims.Json.Good.arr": "8415fb2c81ce9d83a6177315a99833ce4533ef41121cfb4e6aae6136c92aafae",
-    "Claims.Json.Good.bool": "2f65b38b55391e1b2a4a92ce1945ad50bfe54a5984c5e5a73b34b16460d91913",
-    "Claims.Json.Good.null": "8490234e05d4b9a1fbb72d465411d195044e0afa61d27e8a0be54cf04a639f58",
-    "Claims.Json.Good.num": "51c1d2d58a498b3149fed825747d0f297e538e1c66e9ca34e80ffec367867e1c",
-    "Claims.Json.Good.obj": "521e3f833d2b3f066a1c3b827e2f770c52b8fab3789a1c90a44d1a80bde1e5c4",
-    "Claims.Json.Good.str": "040fa7e2ee286e2a4dfd642c7b6a54aca413cf48d89e5d9c3701631206e6e6d5",
-    "Claims.Json.Same": "cd13ee51602f00777dc5796a714d805392234be7dac95b5e5812335d80340039",
-    "Claims.Json.Same.arr": "e87dd25ddf6b953f9aeeee63d5c0587694008db1d0ebfb9e2928d6c7ad1f32bd",
-    "Claims.Json.Same.bool": "1a33018d145460847d02327efac75493faf112f074c700b88e47ea1f8ad9a454",
-    "Claims.Json.Same.null": "55c85178129c9bfcc25ad10cedb56d2a4e09b7d9cf0b9358aebdb841835aac95",
-    "Claims.Json.Same.num": "c4ff2591e9aaccd6b70f530619f20695f1b15b5b5ccdf4217a28447912421f53",
-    "Claims.Json.Same.obj": "e3f68dee278a83a0c9d3b06d2c3620b0382a04d7b31c29d48080b72b51762b11",
-    "Claims.Json.Same.str": "edc6f41fdd9b77d8d27366af97f0f9b1204fec73589759359ddec8bd80a260c2",
-    "Claims.Json.Wf": "556000b439e1ef10b1f095ad04be4965a477a2e7dea8a87f44747082e197c07b",
-    "Claims.Json.Wf.arr": "7e162bdd2017d129a73c036f06ce86820bf9838d39070cbc1aeae8b44a2accdf",
-    "Claims.Json.Wf.bool": "4699ff7cc322ca11b4942dc22d69e4bcd0b8da2f8c1e173737afbe448438985a",
-    "Claims.Json.Wf.null": "56b4c0fddc22c93b36e35b666066ec6746fc0f6d251e70c6b29c0c8c9e595662",
-    "Claims.Json.Wf.num": "c0fde77e0148d77d2a9bd77d6b01fb819f606eadb660543f68d5ae4fd3ea8e9a",
-    "Claims.Json.Wf.obj": "a26fc49abe31a28e2fd80de728e6f48281d412678e8f129887067fbadbe855bc",
-    "Claims.Json.Wf.str": "1130cfd92d68d48b9b92694c0bfe11cadd3df5734428e3e751a08712c00ea8f8",
-    "Claims.JsonSpec": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
-   },
-   "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
    "digest": "aac9706b10ae206eb9567cbf0e5aa7de14661c5d5e19e2a4af122885bcc5f47c",

@@ -1,7 +1,7 @@
 import Flock.Canon
 import Flock.Norm
 import Std.Data.TreeMap.Raw.WF
-import Definitions.Claims.Json
+import Proofs.Flock.Claims.Complete.Json.Value
 import Proofs.Flock.Claims.JsonEq
 
 /-!

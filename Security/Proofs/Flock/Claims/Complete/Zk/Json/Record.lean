@@ -159,7 +159,7 @@ theorem same_obj_wf {m : Std.TreeMap.Raw String Json compare} {j : Json} (h : Sa
 
 /-- **R7 with the prover's nonce**: the prover's `Hello`, the verifier's own with `64` zeros put in `coins.nonce`,
 passes, its nonce those zeros. -/
-theorem checkHello_ok (S : Claims.JsonSpec BEq.beq) {m kvs : Std.TreeMap.Raw String Json compare}
+theorem checkHello_ok {m kvs : Std.TreeMap.Raw String Json compare}
     (hm : m.WF) (hkv : kvs.WF) (hco : m.get? "coins" = some (.obj kvs)) (hg : Good (helloJ (.obj m))) {hz : String}
     (hc : canon (helloJ (.obj m)) = .ok hz) : CoinTree.checkHello (.obj m) hz = .ok (zeros 64) := by
   obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_canon _ _ hg hc
@@ -184,7 +184,7 @@ theorem checkHello_ok (S : Claims.JsonSpec BEq.beq) {m kvs : Std.TreeMap.Raw Str
 
 /-- **The record's `coin_tree`** passes: its keys are `key, nonce, root, spec`, its nonce `Hello`'s, its key and root
 hex of their lengths with bit 2047 clear, and its spec the statement's. -/
-theorem checkRecord_ok (S : Claims.JsonSpec BEq.beq) (ct : CoinTree.Spec) {cj : Json}
+theorem checkRecord_ok (ct : CoinTree.Spec) {cj : Json}
     (hs : Same (coinTreeJ ct) cj) : ∃ key, CoinTree.checkRecord ct (zeros 64) cj = .ok key := by
   have hd := coinTreeJ_list_distinct ct
   have gC : ∀ {k v}, (k, v) ∈ [("key", Json.str (zeros 512)), ("nonce", Json.str (zeros 64)),

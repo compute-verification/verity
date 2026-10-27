@@ -1,6 +1,6 @@
 import Flock.JsonParse
 import Flock.Canon
-import Definitions.Claims.Json
+import Proofs.Flock.Claims.Complete.Json.Value
 import Proofs.Flock.Claims.Complete.Prover.Print
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
@@ -11,8 +11,7 @@ import Batteries.Tactic.OpenPrivate
 
 `Flock.JsonParse.parse`, the verifier's total parser, reads back an alike value (`Same`) from the honest prover's printer
 `FlockComplete.printJ` of a printable value (`Good`), and from the verifier's canonical printer `Flock.canon`
-(`parse_print`, `parse_canon`). These were `Claims.JsonSpec`'s fields `parse_print` and `parse_canon`; both are
-theorems now, so `JsonSpec` assumes only `Json`'s `==`.
+(`parse_print`, `parse_canon`).
 
 The proof is one relation, `ReadBack.Pr j t`: a text `t` that `value` reads as a value alike to `j`, whatever follows it
 up to a separator (`Stop`). Both printers print a text in it (`print_pr`, `canon_pr`), and `pr_value` reads it, by

@@ -1,6 +1,6 @@
 import Flock.RecordText
 import Std.Data.TreeMap.Raw.Lemmas
-import Definitions.Claims.Json
+import Proofs.Flock.Claims.Complete.Json.Value
 import Proofs.Flock.Claims.Complete.Prover.Print
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 
