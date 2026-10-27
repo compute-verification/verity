@@ -48,7 +48,7 @@ noncomputable def Finder.mix {ι : Type} [Fintype ι] [Nonempty ι] (fam : ι �
 /-- **The mixture succeeds with the members' average success.** -/
 theorem Finder.mix_Pr {ι : Type} [Fintype ι] [Nonempty ι] (H : Msg → Msg) (fam : ι → Finder) :
     (Finder.mix fam).Pr H = Ex fun i => (fam i).Pr H := by
-  haveI := Classical.decEq ι
+  letI := Classical.decEq ι
   classical
   unfold Finder.Pr
   show Claims.Pr (fun x : ι × ((i : ι) → (fam i).S) => ∃ u v, (fam x.1).out (x.2 x.1) = some (u, v) ∧ Collision H u v) =
