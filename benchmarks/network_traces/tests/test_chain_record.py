@@ -12,9 +12,9 @@ let through as negatives; d1's K is #4404's horizon count over the compute audit
 network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
 honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
-period answer, an accepted report writes the block record's certifier entry by #4404's `block_leg`, in the block
-record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link, session
-and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
+period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
+block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
+session and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
 verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
 doesn't give, other audits, another registration, a link-window N2 didn't register, a missing case, no verifier, a
 refused or scan-only chain or no server."""
@@ -283,6 +283,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     also re-decides them here in the Lean executable's place, one-stage v2 accepting each link-window's proof as on a
     real session's (the mirror runs no prover, so no case of its own is accepted)."""
     import jsonschema
+    from block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
     monkeypatch.setattr(period, "_proved", lambda *a: None)
     case = period.build("honest", 1, small=True)
@@ -293,7 +294,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["block"]["written"] is True, got["block"]
     entry = got["block"]["entry"]
-    assert entry == cr._allp().block_leg(answer, server="node-1", runs=["r-chain", "c1"])
+    assert entry == block_leg(answer, server="node-1", runs=["r-chain", "c1"])
     schema = json.loads(BLOCK_SCHEMA.read_text())
     jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
                                      "$ref": "#/$defs/leg"}).validate(entry)
