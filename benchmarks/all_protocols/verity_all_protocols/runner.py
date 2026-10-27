@@ -59,6 +59,12 @@ other law is refused here rather than in every window's audit.
 ``--wired``: the loop's wired circuit (`serve --wired`), its weights with ``--registered`` committed one row a linear.
 The output tie reads the per-coordinate circuit's output units, so ``--tie`` and ``--wired`` are refused together.
 
+``--challenger local|loopback:HOST:PORT --main FILE``: each window's integrity draw on a development challenger session's
+coins (the leg's ``period.json`` ``challenger``, `legs/sampled_proofs.py`), under an LMS key made for it and pinned on the
+verifier's copy of main's first-parent history: ``local`` opened by the audit itself, ``loopback:HOST:PORT`` by the
+challenger party's own process (`challenger_party.py`, one session at a time, so with ``--windows 1``). Without it, the
+draw is on the verifier's in-process coins.
+
 ``--of-record``: S1's run of record (`OF_RECORD`), the one way a run counts as its evidence. It sets ``--tie --pouw h1
 --registered --law work:64 --jobs 1 --session-jobs 1`` (and ``CERTIFIER_TAMPER=byte`` under ``--tie-tamper``) and refuses
 a command that contradicts any of them, or gives ``--wired``, with the reason (`of_record`). It is unwired, and its mode
@@ -227,6 +233,7 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
         "mode": getattr(a, "mode", None),
+        **({"challenger": a.challenger} if getattr(a, "challenger", None) else {}),
         **({"registered": str(pins)} if pins else {}), **({"tie": tie} if tie else {})}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
@@ -325,6 +332,7 @@ def mode_of(a: argparse.Namespace, argv: Sequence[str]) -> dict[str, Any]:
                       "windows": a.windows, "start": a.start, "tamper": sorted(a.tamper),
                       "tie_tamper": sorted(a.tie_tamper), "registered": a.registered, "wired": a.wired,
                       "requests": a.requests, "steps": a.steps, "cap": a.cap, "delta": a.delta,
+                      "challenger": (getattr(a, "challenger", None) or {}).get("mode"),
                       "certifier_tamper": os.environ.get("CERTIFIER_TAMPER")},
             **({"gap": WIRING_GAP, "companion": COMPANION} if a.of_record else {})}
 
@@ -365,8 +373,18 @@ def main(argv: list[str] | None = None) -> int:
                     "work:64 --jobs 1 --session-jobs 1, refusing a command that contradicts them (OF_RECORD)")
     ap.add_argument("--check", action="store_true", help="only check the command and print its mode (run.sh does, "
                     "before it builds, so a refused run of record costs nothing)")
+    ap.add_argument("--challenger", help="local or loopback:HOST:PORT: each window's integrity draw on a development "
+                    "challenger session's coins (records_audit --challenger), not the verifier's in-process ones; needs --main")
+    ap.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history, newest first")
     argv = list(sys.argv[1:] if argv is None else argv)
     a = ap.parse_args(argv)
+    if a.challenger not in (None, "local") and not a.challenger.startswith("loopback:"):
+        ap.error(f"--challenger is local or loopback:HOST:PORT, not {a.challenger!r}")
+    if a.challenger and not a.main:
+        ap.error(f"--challenger {a.challenger} needs --main")
+    if a.challenger and a.challenger.startswith("loopback:") and a.windows != 1:
+        ap.error("--challenger loopback:HOST:PORT is one session at a time: give --windows 1")
+    a.challenger = {"mode": a.challenger, "main": str(Path(a.main).resolve())} if a.challenger else None
     a.tamper = {int(x) for x in a.tamper.split(",") if x.strip()}
     a.tie_tamper = {int(x) for x in a.tie_tamper.split(",") if x.strip()}
     if a.of_record and (refused := of_record(a)):

@@ -46,7 +46,7 @@ too, but the prover chose its rows: its reads count free, and the count names it
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
+        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME ...]
 
@@ -73,7 +73,8 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
 ``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine, or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
+takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session in the challenger
+party's own process (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
@@ -696,7 +697,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
-    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "
+    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, loopback:HOST:PORT or "
                    "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
@@ -722,8 +723,8 @@ def main(argv: list[str] | None = None) -> int:
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
     if a.challenger:
-        if a.challenger != "local" and not a.challenger.startswith("gate:"):
-            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
+            ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:
