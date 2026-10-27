@@ -213,8 +213,8 @@ the standing rulings stated nowhere else.
   all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
   one. The datacenter's size (from `benchmarks/census/`) and the window's length are stated parameters, and a figure
   scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over the
-  period and as a share of the compute it covers, beside the per-window figure, never the per-window figure alone: a
-  per-window δ that looks weak is not the result.
+  period and as a share of the compute it covers, beside the per-window figure, never instead of it: a per-window δ that
+  looks weak is not the result.
 
 ## Tests
 
