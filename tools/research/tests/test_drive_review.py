@@ -1536,7 +1536,7 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
     assert [lab.value for lab in world.store.labels(label_target(1, old), key=vocab.REVIEWED)] == ["hold"]
     with pytest.raises(QueueError, match="full 40-character SHA"):
         Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha="0badc0de")
-    with pytest.raises(QueueError, match="neither #1's head"):                     # 27 Oct: a mistyped full SHA for #5332
+    with pytest.raises(QueueError, match="neither #1's head"):                     # a mistyped full SHA
         Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new[:12] + "0" * 28)
     assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
 
