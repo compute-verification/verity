@@ -256,9 +256,14 @@ class Wipe:
 
 
 #: the warden form's public parameters the declared I/O bound reads (`Certifier.declared`)
-DECLARED_IO = ("cell_bytes", "cell_rate", "lanes", "cells", "id_bits", "hold", "outputs", "bucket_s")
+DECLARED_IO = ("cell_bytes", "cell_rate", "lanes", "cells", "id_bits", "hold", "outputs", "bucket_s", "window_buckets")
 #: a request's fields besides its prompt ids: `max_tokens` and `seed` (u32), `temperature` and `top_p` (24 bits each)
 FIELD_BITS = 112
+
+
+def clog2(x: float) -> int:
+    """`⌈log₂ x⌉` for `x ≥ 1`, as `NetworkCheck.Period.clog2`."""
+    return (int(x) - 1).bit_length()
 
 
 @dataclass(frozen=True)
@@ -267,17 +272,24 @@ class Certifier:
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
     inference block runs on a single server (NET-92; Daniel, 26 Oct). At the warden form's public parameters a request
-    is at most `cells` cells of `K = (cell_bytes − 9) // 11` ids of `id_bits` bits, plus its fields, in, and `outputs`
-    ids and their count out, and a lane holds a request at least `hold + 1` buckets of `bucket_s`. So a server anchors
-    `N ≤ lanes ⌈m T / (D + 1)⌉` requests in `m T` buckets, and
+    is at most `cells` cells of `K = (cell_bytes − 9) // 11` ids of `id_bits` bits, its fields and `request_slack` in,
+    and `outputs` ids and their count out; each bucket adds which of each lane's `r` slots it carries; and a lane holds
+    a request at least `hold + 1` buckets of `bucket_s`. So a server anchors at most `lanes ⌈T / (D + 1)⌉` requests in a
+    link-window of `T = window_buckets` buckets, and
 
-        r_in ≤ lanes (C K IDB + 112) / ((D + 1) τ_b)      r_out ≤ lanes (KO IDB + ⌈log₂(KO + 1)⌉) / ((D + 1) τ_b)
+        r_in ≤ windowBits / (T τ_b)
+             = (lanes ⌈T / (D + 1)⌉ (C K IDB + 112 + requestSlack) + lanes T ⌈log₂(r + 1)⌉) / (T τ_b)
+        r_out ≤ lanes ⌈T / (D + 1)⌉ (KO IDB + ⌈log₂(KO + 1)⌉) / (T τ_b)
 
-    (`note:network-accounting/20261027T0220Z-finding-net92-plan`). This is a draft until NET-92's PR 5 states the
-    per-server bits in Lean. Until then `declared_x` keeps the line rate as the ingress's upper end: the ingress is
-    `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of the
-    serving credited at the location can't feed that serving, so `declared` is off by default until a deployment picks
-    one that does."""
+    (`requestBits`, `windowRequests` and `windowBits` of PR 5's `Properties.NetworkCertifier.PerServerIngress`,
+    `note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee`). The bound is stated per window, so the
+    rate is too: the ceiling's extra request a lane a window is in it, and rho never cites less than the bound states.
+    This is the bound's honest-δ form, at a δ where only the empty faulty set is possible: a faulty ingress unit frees
+    its bucket, `faulty_unit_bits` more a unit, which the count charges and this bound excludes until every ingress unit
+    is drawn. It is a draft until NET-92's PR 5 proves it. Until then `declared_x` keeps the line rate as the ingress's
+    upper end: the ingress is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is
+    below the prompt rate of the serving credited at the location can't feed that serving, so `declared` is off by
+    default until a deployment picks one that does."""
 
     #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 under
     #: NET-92, which admits only declared inputs (without `declared`)
@@ -290,7 +302,8 @@ class Certifier:
     side: float = 0.0
     #: each server's ingress at most its inference blocks' declared inputs (NET-92), at the parameters below
     declared: bool = False
-    #: `B`, bytes a cell; `r`, cells a lane a bucket (the warden's line rate); lanes a server; `C`, cells a request
+    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the warden's line rate); lanes a server; `C`, cells a
+    #: request
     cell_bytes: float = math.nan
     cell_rate: float = math.nan
     lanes: float = math.nan
@@ -301,13 +314,16 @@ class Certifier:
     hold: float = math.nan
     outputs: float = math.nan
     bucket_s: float = math.nan
+    #: `T`, buckets a link-window (the warden's `window`), the length PR 5's bound is stated per
+    window_buckets: float = math.nan
     #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
     #: NET-92, and line rate the upper end until its PR 5
     declared_x: float = 1.0
 
     CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
     INTAKE = ("draft:NET-92",)
-    DECLARED = ("draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan")
+    DECLARED = ("draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan",
+                "note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee")
 
     def __post_init__(self) -> None:
         unset = [k for k in DECLARED_IO if self.declared and not math.isfinite(getattr(self, k))]
@@ -323,30 +339,49 @@ class Certifier:
         return int(self.cell_bytes - 9) // 11
 
     @property
+    def request_slack(self) -> int:
+        """`requestSlack = 32 + 1 + ⌈log₂(C + 1)⌉ + 1`: a request's connection ordinal, whether its prompt ends at its
+        last cell, a failed request's prefix, and an absent request."""
+        return 32 + 1 + clog2(self.cells + 1) + 1
+
+    @property
     def request_in(self) -> float:
-        """Bits a request's declared input holds: `C K IDB + 112`."""
-        return self.cells * self.ids_per_cell * self.id_bits + FIELD_BITS
+        """Bits a request's declared input holds: `C K IDB + 112 + requestSlack` (`requestBits`)."""
+        return self.cells * self.ids_per_cell * self.id_bits + FIELD_BITS + self.request_slack
+
+    @property
+    def bucket_in(self) -> int:
+        """Bits a bucket adds to a server's ingress, how many of each lane's `r` slots it carries:
+        `lanes ⌈log₂(r + 1)⌉`."""
+        return int(self.lanes) * clog2(self.cell_rate + 1)
+
+    @property
+    def faulty_unit_bits(self) -> float:
+        """Bits a faulty ingress unit frees, which the honest-δ form excludes: its row's `8 B lanes r` and its lanes'
+        requests (`scanBound`'s charge a unit)."""
+        return 8 * self.cell_bytes * self.lanes * self.cell_rate + self.lanes * self.request_in
 
     @property
     def request_out(self) -> float:
         """Bits a request's declared output holds: `KO IDB + ⌈log₂(KO + 1)⌉`, its ids and their count."""
         return self.outputs * self.id_bits + math.ceil(math.log2(self.outputs + 1))
 
-    def period_bits(self, buckets: float) -> tuple[float, float]:
-        """`(ingress_bits, egress_bits)` of one server over `buckets` buckets (a period's `m T`), at the most requests
-        it anchors, `N = lanes ⌈buckets / (D + 1)⌉`."""
+    def window_bits(self, buckets: float) -> tuple[float, float]:
+        """`(ingress_bits, egress_bits)` of one server in a link-window of `buckets` buckets (`windowBits`), at the most
+        requests it anchors, `windowRequests = lanes ⌈buckets / (D + 1)⌉`, and each bucket's `bucket_in` in. A period of
+        `W` link-windows is `W` times it (`ingressBits`), not one ceiling over all its buckets."""
         n = self.lanes * math.ceil(buckets / (self.hold + 1))
-        return n * self.request_in, n * self.request_out
+        return n * self.request_in + buckets * self.bucket_in, n * self.request_out
 
     @property
     def r_in(self) -> float:
-        """One server's declared ingress, bit/s."""
-        return self.lanes * self.request_in / ((self.hold + 1) * self.bucket_s)
+        """One server's declared ingress, bit/s: a link-window's `windowBits` over its `T τ_b` seconds."""
+        return self.window_bits(self.window_buckets)[0] / (self.window_buckets * self.bucket_s)
 
     @property
     def r_out(self) -> float:
-        """One server's declared egress, bit/s."""
-        return self.lanes * self.request_out / ((self.hold + 1) * self.bucket_s)
+        """One server's declared egress, bit/s, at a link-window's requests."""
+        return self.window_bits(self.window_buckets)[1] / (self.window_buckets * self.bucket_s)
 
     @property
     def warden_rate(self) -> float:
