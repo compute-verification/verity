@@ -16,7 +16,7 @@ C-Flock is the one active backend family. The others are frozen: kept, still in 
 | `sp1/` | D-SP1 | frozen | the SP1 zkVM checker guest, its host and the Python driver `verity_sp1` |
 | `vole/` | VOLE (QuickSilver, designated verifier) | frozen | the WP2 checker exported for Diet Mac'n'Cheese, a patch to swanky, the bench driver |
 | `numerical/` | none | frozen | `verity_numerical`: independent references, the WP2 checker, the soundness calculator, and the bench spine (`verity_numerical.bench`) that C-Flock and the table renderers still use |
-| `shared/` | none | frozen | GPU Merkle hashing (`shared/hash_gpu/`: Poseidon2, BLAKE3 and SHA-256 trees, and SHA-256 frame-v3 trees) and the A100 re-pricing (`shared/anchor_a100/`) for A-GKR and B-Ligero |
+| `shared/` | none | frozen | GPU Merkle hashing (`shared/hash_gpu/`: Poseidon2, BLAKE3 and SHA-256 trees, and SHA-256 frame-v3 trees) and the A100 re-pricing (`shared/anchor_a100/`) for A-GKR and B-Ligero; the proof campaign's judge (`shared/judge.py`, `AGENTS.md`'s identity rule) and its latency table (`shared/latency_compare.py`) |
 | `redteam/` | none | frozen | red-team forgery harnesses against A-GKR and B-Ligero |
 | `pouw-blake3/` | none | frozen | Pearl-C's BLAKE3 hashing formats (-h1, -h2, the BLAKE3 -h3), their kernels, benches and vectors, kept after the 2026-10-06 ruling that standardized PoUW on SHA-512 (`pouw-blake3/README.md`); no tests |
 

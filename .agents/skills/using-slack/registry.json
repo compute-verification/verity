@@ -234,6 +234,7 @@
         "benchmarks/nci/",
         "examples/h200/",
         "examples/h200/interfaces/",
+        "examples/pouw_window/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
