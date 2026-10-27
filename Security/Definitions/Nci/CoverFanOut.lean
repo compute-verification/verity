@@ -84,7 +84,7 @@ as its own tokens' (`c = 1`): a backward-only token has no valid lookup, and eve
 dk_nope into one value reaching 65536 products, more than `aOut`. Counting Dgrad raises `α₀` from 0.148 to 0.301
 (`kappa.py` at sequence 4096).
 
-Scope, the red team's conditions:
+Scope:
 
 * the LM head's forward products are not counted, since their activation reaches 163840 products, more than `aOut`;
 * layer 0's q_a and kv_a products, whose activation is keyed to an embedding gather (about 0.05%), are not counted
