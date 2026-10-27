@@ -11,7 +11,8 @@ ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` or ``tests/
 and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
 integration's ruff lint (and ``archive/``) to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
-``integrations/vllm/ruff.toml`` extends; its slugs stay apart from the integration's.  A change is judged when it touches a
+``integrations/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``; its slugs stay apart from the
+integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
 ``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
 when:
@@ -39,9 +40,12 @@ The top change's Python is linted too (the vLLM coordinator, 26 Oct 22:45Z: driv
 finding would land and be reverted), when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
 adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
 under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
-grows, naming each new finding ``file:line RULE message``.  A renamed file's before is its old path's (``git diff -M``), so a
-move keeps its findings, and a file the change doesn't touch is never linted.  Only the top change is linted: a PR's own
-commits at the preflight, its merge onto `next` at the sync, where the members below were linted at their own merges.
+grows, naming each new finding ``file:line RULE message``.  (file, rule) is the repository's ruff lint's key too, so a
+finding moved within its file passes both.  A renamed file's before is its old path's (``git diff -M``), so a move keeps its
+findings; but that lint reads no history, so a rename must move the file's entries in ``allowlists/repo_ruff.json`` with it
+(``test_repo_ruff.py --move OLD NEW``), and one that leaves them behind fails, naming each entry and the command.  A file
+the change doesn't touch is never linted.  Only the top change is linted: a PR's own commits at the preflight, its merge onto
+`next` at the sync, where the members below were linted at their own merges.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
@@ -96,8 +100,9 @@ PYPROJECT = "pyproject.toml"
 REPO_LINT = "tests/lint"
 REPO_RUFF_LINT = "repo_ruff"
 REPO_RUFF_CONFIG = "ruff.toml"
-#: the repository's ruff lint's module, whose ``LEFT_OUT`` says which files the source lint leaves to others
+#: the repository's ruff lint's module, whose ``LEFT_OUT`` says which files the source lint leaves to others, and its list
 REPO_RUFF_MODULE = f"{REPO_LINT}/test_{REPO_RUFF_LINT}.py"
+REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
 FILE_MODES = {"100644", "100755"}
 #: the lint directories, each run as its base has it
@@ -318,9 +323,14 @@ def is_pure_move(c: Change, base: str) -> bool:
         return subprocess.run([sys.executable, str(p), c.lo, c.hi], capture_output=True).returncode == 0
 
 
+def kind(entry: object) -> object:
+    """An entry's kind: its ``kind``, or the repository ruff list's ``rule``."""
+    return entry.get("kind", entry.get("rule")) if isinstance(entry, dict) else None
+
+
 def counted_kinds(s: str, entries: list) -> set:
     """The kinds of ratchet ``s`` whose counts pool: each kind one of ``entries`` (before and after) records a count in."""
-    return set() if s in MEASURES else {e.get("kind") for e in entries if isinstance(e, dict) and "count" in e}
+    return set() if s in MEASURES else {kind(e) for e in entries if isinstance(e, dict) and "count" in e}
 
 
 def growth(before: dict[str, list], after: dict[str, list],
@@ -333,7 +343,7 @@ def growth(before: dict[str, list], after: dict[str, list],
         kinds = counted_kinds(s, before[s] + now)
 
         def in_pool(e: object) -> bool:
-            return isinstance(e, dict) and e.get("kind") in kinds
+            return isinstance(e, dict) and kind(e) in kinds
 
         sites, now_sites = [e for e in before[s] if not in_pool(e)], [e for e in now if not in_pool(e)]
         was = {key(e): count(e) for e in sites}
@@ -344,14 +354,14 @@ def growth(before: dict[str, list], after: dict[str, list],
         for e in now_sites:
             if count(e) > was.get(key(e), count(e)):
                 grown.append(f"{paths[s]} count {was[key(e)]} -> {count(e)} for {key(e)}")
-        for kind in sorted(kinds, key=str):
+        for pool in sorted(kinds, key=str):
             lo, hi = Counter(), Counter()
             for side, entries in ((lo, before[s]), (hi, now)):
                 for e in entries:
-                    if in_pool(e) and e.get("kind") == kind:
+                    if in_pool(e) and kind(e) == pool:
                         side[key(e)] += count(e)
             moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] != hi[k]), key=lambda k: (lo[k] - hi[k], k))
-            total = f"{paths[s]} {kind} {sum(lo.values())} -> {sum(hi.values())} in total"
+            total = f"{paths[s]} {pool} {sum(lo.values())} -> {sum(hi.values())} in total"
             if sum(hi.values()) > sum(lo.values()):
                 grown.append(total)
                 fix += [f"{paths[s]}: {k} {lo[k]} -> {hi[k]}" for k in moved]
@@ -470,17 +480,31 @@ def left_out(rev: str) -> tuple[str, ...] | None:
                    f"files its ruff lint holds")
 
 
-def changed_sources(lo: str, hi: str, left: tuple[str, ...]) -> list[tuple[str, str | None, str]]:
-    """(path, its blob before or None, its blob after) of each ``*.py`` and ``*.pyi`` file ``lo..hi`` adds or modifies outside
-    ``left``.  A renamed file's blob before is its old path's, so a move keeps its findings."""
+def changed_sources(lo: str, hi: str, left: tuple[str, ...]) -> list[tuple[str, str | None, str | None, str]]:
+    """(path, its path before, its blob before, its blob after; None before for a new file) of each ``*.py`` and ``*.pyi`` file
+    ``lo..hi`` adds or modifies outside ``left``.  A renamed file's before is its old path's, so a move keeps its findings."""
     fields = git("diff", "--raw", "-z", "-M", "--no-abbrev", lo, hi).split("\0")
     out, i = [], 0
     while i + 1 < len(fields):
         old_mode, new_mode, old, new, status = fields[i].lstrip(":").split()
         n = 2 if status[0] in "RC" else 1
-        path, i = fields[i + n], i + 1 + n
+        was, path, i = fields[i + 1], fields[i + n], i + 1 + n
         if new_mode in FILE_MODES and path.endswith((".py", ".pyi")) and not path.startswith(left):
-            out.append((path, old if old_mode in FILE_MODES and status[0] != "C" else None, new))
+            kept = old_mode in FILE_MODES and status[0] != "C"
+            out.append((path, was if kept else None, old if kept else None, new))
+    return out
+
+
+def repo_list(rev: str) -> Counter:
+    """The findings the repository's ruff list at ``rev`` allows, per (file, rule) (none when it has no list)."""
+    try:
+        doc = json.loads(git("show", f"{rev}:{REPO_RUFF_LIST}"))
+    except (GitError, ValueError):
+        return Counter()
+    out: Counter = Counter()
+    for e in doc.get("entries", []) if isinstance(doc, dict) else []:
+        if isinstance(e, dict) and isinstance(e.get("file"), str):
+            out[(e["file"], kind(e))] += count(e)
     return out
 
 
@@ -522,22 +546,25 @@ def ruff_findings(ruff: list[str], config: str, files: dict[str, bytes]) -> list
                  f["message"]) for f in found]
 
 
-def source_lint(c: Change, base: str) -> tuple[list[str], list[str]]:
-    """(each finding the change adds, ``file:line RULE message``; each (file, rule) that grew, with its counts): ruff under the
-    base's root ``ruff.toml`` on the Python the change adds or modifies that the base's repository ruff lint holds, before
-    and after.  Of a grown key's findings, those on lines the change adds are named first.  Sets ``c.linted``."""
+def source_lint(c: Change, base: str) -> tuple[list[str], list[str], list[str]]:
+    """(each finding the change adds, ``file:line RULE message``; each (file, rule) that grew, with its counts; each entry of
+    the repository's ruff list a rename leaves behind, with the command that moves it): ruff under the base's root
+    ``ruff.toml`` on the Python the change adds or modifies that the base's repository ruff lint holds, before and after, per
+    (file, rule) as that lint counts.  Of a grown key's findings, those on lines the change adds are named first.  A key that
+    didn't grow fails when the change's list leaves more of its findings uncovered than its base's list did (at a renamed
+    file's old path): the lint reads no history, so a renamed file's entries move with it.  Sets ``c.linted``."""
     left = left_out(base)
     if left is None:
-        return [], []
+        return [], [], []
     sources = changed_sources(c.lo, c.hi, left)
     c.linted = [path for path, *_ in sources]
     if not sources:
-        return [], []
+        return [], [], []
     config = git("show", f"{base}:{REPO_RUFF_CONFIG}")
-    data = blobs({b for _, lo, hi in sources for b in (lo, hi) if b})
+    data = blobs({b for *_, lo, hi in sources for b in (lo, hi) if b})
     ruff = [*python_for(ruff_pin(base), [REPO_RUFF_LINT]), "-m", "ruff"]
-    was = Counter((f, rule) for f, rule, *_ in ruff_findings(ruff, config, {p: data[lo] for p, lo, _ in sources if lo}))
-    now = ruff_findings(ruff, config, {p: data[hi] for p, _, hi in sources})
+    was = Counter((f, rule) for f, rule, *_ in ruff_findings(ruff, config, {p: data[lo] for p, _, lo, _ in sources if lo}))
+    now = ruff_findings(ruff, config, {p: data[hi] for p, *_, hi in sources})
     counts = Counter((f, rule) for f, rule, *_ in now)
     grown = sorted(k for k in counts if counts[k] > was[k])
     named = []
@@ -545,7 +572,22 @@ def source_lint(c: Change, base: str) -> tuple[list[str], list[str]]:
         fresh = added_rows(c.lo, c.hi, f)
         sites = sorted((line not in fresh, line, message) for g, r, line, message in now if (g, r) == (f, rule))
         named += [(f, line, f"{f}:{line} {rule} {message}") for _, line, message in sites[:counts[f, rule] - was[f, rule]]]
-    return [n for *_, n in sorted(named)], [f"{f} {rule} {was[f, rule]} -> {counts[f, rule]}" for f, rule in grown]
+    old = {path: was_at for path, was_at, *_ in sources}
+    listed_before, listed = repo_list(c.lo), repo_list(c.hi)
+    unmoved = []
+    for f, rule in sorted(k for k in counts if counts[k] <= was[k]):
+        o = old[f]
+        if max(0, counts[f, rule] - listed[f, rule]) <= max(0, was[f, rule] - listed_before[o, rule]):
+            continue
+        if o != f and listed[o, rule]:
+            entry = json.dumps({"file": o, "rule": rule, "count": listed[o, rule]})
+            unmoved.append(f"{REPO_RUFF_LIST}: move {entry} to {json.dumps(f)}, as the change moves the file "
+                           f"(`python3 {REPO_RUFF_MODULE} --move {o} {f}`)")
+        else:
+            unmoved.append(f"{REPO_RUFF_LIST} allows {listed[f, rule]} of {f}'s {counts[f, rule]} {rule} finding(s), and "
+                           f"allowed {listed_before[o, rule]} of {o}'s before the change: keep its entry")
+    return ([n for *_, n in sorted(named)], [f"{f} {rule} {was[f, rule]} -> {counts[f, rule]}" for f, rule in grown],
+            unmoved)
 
 
 def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
@@ -664,27 +706,40 @@ def judge(c: Change, base: str) -> None:
 
 
 def lint_top(c: Change, base: str) -> None:
-    """The source lint on the top change ``c``, after ``judge``: a finding it adds fails a change that passed or touched
-    nothing else, unless it is exempt; a change already failed or exempt keeps its verdict."""
+    """The source lint on the top change ``c``, after ``judge``: a finding it adds, or a list entry a rename leaves behind,
+    fails a change that passed or touched nothing else, unless it is exempt (a revert; a pure move, from its findings but not
+    from the entries it leaves behind, which would fail the repository's lint as surely); a change already failed or exempt
+    keeps its verdict."""
     if c.verdict in ("failed", "exempt"):
         return
-    new, grown = source_lint(c, base)
+    new, grown, unmoved = source_lint(c, base)
     if not c.linted:
         return
-    if not new:
+    if (new or unmoved) and is_revert(c):
+        c.verdict, c.why = "exempt", "a revert"
+        return
+    if new and is_pure_move(c, base):
+        if not unmoved:
+            c.verdict, c.why = "exempt", f"a pure move ({MOVE_CHECK} certifies it)"
+            return
+        new, grown = [], []
+    if not (new or unmoved):
         note = f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"
         c.why = note if c.verdict == "untouched" else f"{c.why}; {note}"
         c.verdict = "passed"
-    elif is_revert(c):
-        c.verdict, c.why = "exempt", "a revert"
-    elif is_pure_move(c, base):
-        c.verdict, c.why = "exempt", f"a pure move ({MOVE_CHECK} certifies it)"
-    else:
-        c.verdict = "failed"
-        c.why = (f"adds {len(new)} ruff finding(s) to the Python it changes, under the base's root {REPO_RUFF_CONFIG} "
-                 f"({'; '.join(grown)}): fix the code (`ruff check --fix PATH` fixes some, F401 and F541 among them), or, where "
-                 f"a rule is wrong for that line, say why in a `# noqa: CODE` on it")
-        c.fix = new[:CHEAPEST] + ([f"... and {len(new) - CHEAPEST} more"] if len(new) > CHEAPEST else [])
+        return
+    why = []
+    if new:
+        why.append(f"adds {len(new)} ruff finding(s) to the Python it changes, under the base's root {REPO_RUFF_CONFIG} "
+                   f"({'; '.join(grown)}): fix the code (`ruff check --fix PATH` fixes some, F401 and F541 among them), or, "
+                   f"where a rule is wrong for that line, say why in a `# noqa: CODE` on it")
+    if unmoved:
+        why.append(f"renames Python whose findings {REPO_RUFF_LIST} allows at the old path, and leaves {len(unmoved)} entr"
+                   f"{'y' if len(unmoved) == 1 else 'ies'} behind: {REPO_RUFF_MODULE} counts a file's findings under its "
+                   f"path, so it would fail after landing; move each entry with its file in the same change")
+    c.verdict, c.why = "failed", "; and ".join(why)
+    fix = new + unmoved
+    c.fix = fix[:CHEAPEST] + ([f"... and {len(fix) - CHEAPEST} more"] if len(fix) > CHEAPEST else [])
 
 
 #: what `judge` decides, the fields a cached verdict restores

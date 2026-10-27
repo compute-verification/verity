@@ -4,9 +4,11 @@ between its keys keeps; the other entries by number, per ratchet, or by an entry
 moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
 ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the repository's ruff lint beside it
-(`tests/lint`: its list held like the integration's, and a change to the root config both ruff lints read reruns both), the
-source lint (the top change's Python under the root config: a new finding is refused by name, a fixed one passes, a rename keeps
-its findings, a file the change doesn't touch is never linted, nor a member below the top), where ruff comes from (this
+(`tests/lint`: its list, a count per (file, rule) pooled by rule, held like the integration's, and a change to the root config
+both ruff lints read reruns both), the source lint (the top change's Python under the root config: a new finding is refused by
+name, a fixed one passes, one moved to another function passes it and the repository's lint, a rename keeps its findings once
+its entry moves with it and is refused naming the entry when it doesn't, a file the change doesn't touch is never linted, nor
+a member below the top), where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""
@@ -563,9 +565,9 @@ def test_ruff_runs_on_this_python_with_the_pin_else_from_uvs_cache_else_the_inde
     assert fix in str(e.value)
 
 
-TOOLS_F401 = {"file": "tools/a.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"}
+TOOLS_F401 = {"file": "tools/a.py", "rule": "F401", "count": 1}
 BOTH_FOUND = ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused",
-              "repo_ruff: tools/a.py:1 [F401] <module>: `os` imported but unused"]
+              "repo_ruff: tools/a.py [F401]: 1 found, 0 allowed", "repo_ruff: tools/a.py:1 `os` imported but unused"]
 
 
 @pytest.fixture
@@ -581,11 +583,13 @@ def both_ruffed(ruffed) -> Repo:
 
 
 def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
-    b401 = {**TOOLS_F401, "file": "tools/b.py", "detail": "`sys` imported but unused"}
+    """Its entries are counts per (file, rule), pooled by rule: a new pair's count grows its rule's total."""
+    b401 = {**TOOLS_F401, "file": "tools/b.py"}
     both_ruffed.commit("a new finding, allowed", {"tools/b.py": "import sys\n", REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"], c["touched"]) == ("failed", 4, 5, [REPO_RUFF_JSON]), c["why"]
-    assert c["why"].startswith(f"grows {REPO_RUFF_JSON} 1 -> 2 entries") and c["fix"] == [f"{REPO_RUFF_JSON}: new {G.key(b401)}"]
+    assert c["why"].startswith(f"grows {REPO_RUFF_JSON} F401 1 -> 2 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 1"]
 
 
 @pytest.mark.parametrize("loosen", [
@@ -629,15 +633,65 @@ def test_a_fixed_ruff_finding_passes_and_does_not_pay_for_another_rule(both_ruff
     assert (c["verdict"], c["fix"]) == ("failed", ["tools/a.py:1 F821 Undefined name `B`"])
 
 
-def test_a_renamed_file_keeps_its_ruff_findings_and_a_copy_does_not(both_ruffed):
-    both_ruffed.commit("moves a.py, with a line more", {"tools/a.py": None, "tools/sub/a.py": "import os\nA = 1\nB = 2\n"})
-    assert both_ruffed.git("diff", "--name-status", "-M", "main", "pr").startswith("R")
+def _repo_lint(repo: Repo) -> str | None:
+    """the repository's ruff lint, as the root suite runs it after landing, on ``repo``'s checkout: its failure, or None"""
+    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_ruff as T; "
+                        "T.test_no_new_findings()"], cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def _move_entries(repo: Repo, old: str, new: str) -> str:
+    """``--move``, the fix the gate names: the list with ``old``'s entries under ``new``"""
+    subprocess.run([sys.executable, REPO_RUFF_LINT, "--move", old, new], cwd=repo.root, check=True, capture_output=True)
+    return (repo.root / REPO_RUFF_JSON).read_text()
+
+
+def test_a_finding_moved_to_another_function_in_its_file_passes_the_gate_and_the_repository_lint(both_ruffed):
+    """Both count per (file, rule), so a refactor that moves an allowed finding into a new function changes neither."""
+    both_ruffed.git("checkout", "-q", "main")
+    d841 = {"file": "tools/d.py", "rule": "F841", "count": 1}
+    both_ruffed.commit("d.py, whose unused local the list allows", {"tools/d.py": "def f():\n    x = 1\n",
+                                                                    REPO_RUFF_JSON: _allowlist(TOOLS_F401, d841)})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("the unused local moves to a new function", {
+        "tools/d.py": "def f():\n    return g()\n\n\ndef g():\n    x = 1\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["linted"]) == ("passed", ["tools/sub/a.py"]), c["why"]
+    assert (c["verdict"], c["linted"]) == ("passed", ["tools/d.py"]), c["why"]
+    assert _repo_lint(both_ruffed) is None
+
+
+def test_a_rename_that_moves_its_entry_passes_the_gate_and_the_repository_lint_and_a_copy_is_new(both_ruffed):
+    """``--move`` carries the entry; the gate pools it within its rule, the base's lint agrees, and the source lint sees the
+    renamed file's finding covered at its new path."""
+    both_ruffed.commit("moves a.py, with a line more", {"tools/a.py": None, "tools/sub/a.py": "import os\nA = 1\nB = 2\n"})
+    both_ruffed.commit("its entry", {REPO_RUFF_JSON: _move_entries(both_ruffed, "tools/a.py", "tools/sub/a.py")})
+    assert '{"file": "tools/sub/a.py", "rule": "F401", "count": 1}' in (both_ruffed.root / REPO_RUFF_JSON).read_text()
+    assert both_ruffed.git("diff", "--name-status", "-M", "main", "pr", "--", "tools").startswith("R")
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"], c["linted"]) == ("passed", [REPO_RUFF_JSON], ["repo_ruff"],
+                                                                     ["tools/sub/a.py"]), c["why"]
+    assert _repo_lint(both_ruffed) is None
     both_ruffed.git("checkout", "-q", "-b", "copy", "main")
     both_ruffed.commit("copies a.py", {"tools/sub/a.py": "import os\nA = 1\nB = 2\n"})
     [c] = G.gate("main", "copy")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", ["tools/sub/a.py:1 F401 `os` imported but unused"])
+
+
+def test_a_rename_that_leaves_its_entry_behind_is_refused_naming_the_entry_to_move_even_as_a_pure_move(both_ruffed):
+    """The repository's lint reads no history, so it would fail after landing; the gate refuses it at the mark instead."""
+    both_ruffed.commit("moves a.py as it is", {"tools/a.py": None, "tools/sub/a.py": "import os\nA = 1\n"})
+    assert G.is_pure_move(G.changes("main", "pr")[0], "main")
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed", c["why"]
+    assert c["why"].startswith(f"renames Python whose findings {REPO_RUFF_JSON} allows at the old path, and leaves 1 entry "
+                               f"behind"), c["why"]
+    assert c["fix"] == [f'{REPO_RUFF_JSON}: move {{"file": "tools/a.py", "rule": "F401", "count": 1}} to "tools/sub/a.py", as '
+                        f"the change moves the file (`python3 {REPO_RUFF_LINT} --move tools/a.py tools/sub/a.py`)"]
+    assert "tools/sub/a.py [F401]: 1 found, 0 allowed" in (_repo_lint(both_ruffed) or "")
+    both_ruffed.commit("its entry", {REPO_RUFF_JSON: _move_entries(both_ruffed, "tools/a.py", "tools/sub/a.py")})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
+    assert _repo_lint(both_ruffed) is None
 
 
 def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypatch):
