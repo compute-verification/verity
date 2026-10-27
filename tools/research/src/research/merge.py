@@ -54,7 +54,7 @@ head that landed (GitHub's "delete head branch" fires only on merges made on Git
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
-`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
+`research merge --sweep` after the push does it. Whoever lands a train passes --push. Once origin has main, the
 same commit goes to vy-nebius-cpu-4's bare repository, whose main its builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
@@ -66,8 +66,8 @@ remote is the main they last ran for, and every `research merge` that can change
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
-reads each again when the tip lands (`unstacked`). It reads no ready mark and no grant, since the train's own check is the gate
-(Daniel, 6 and 8 Oct); the owner's ready mark is what admits a PR to a train (`research queue`), not part of this gate.
+reads each again when the tip lands (`unstacked`). It reads no ready mark and no grant, since the train's own check is the gate;
+the owner's ready mark is what admits a PR to a train (`research queue`), not part of this gate.
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
 that doesn't parse (`_merge`). Generated files never keep merged text: every merge runs the tree's own
@@ -75,8 +75,8 @@ that doesn't parse (`_merge`). Generated files never keep merged text: every mer
 Lake changes reach, re-points its dependency bundle's pin, regenerates every stale pin, and resolves a conflict in any of those
 files; the merge commit names what it rewrote in a `Regenerated:` trailer, which `reverted` reads as removals the train means.
 
-A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
-what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts,
+A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) sends the
+spec-change DM of what changed, and nothing waits on its reader (`spec_alert`). A DM that fails is printed and goes to #agent-alerts,
 and SPEC_ALERTED_REF stays where it was, so every later `research merge` sends it again and `--sweep` fails until it goes.
 """
 from __future__ import annotations
@@ -122,8 +122,8 @@ SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
 #: slot.py's options (its `parse`): which slot a check waits for, and how long, never what it runs
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
-#: or `--cores N`
-CHECK_FLAGS = ("--no-cache", "--keep-going")
+#: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
+CHECK_FLAGS = ("--no-cache", "--circuit-cache", "--keep-going")
 
 
 def invocation(argv, command) -> tuple[str, object]:
@@ -1474,7 +1474,7 @@ SWEEP_LIMIT = 200
 
 def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: float | None = None, dry_run: bool = False,
                    gh=None, log=print, chunk: int = 100, keep: Iterable[str] = (), limit: int = SWEEP_LIMIT) -> tuple[int, int]:
-    """The branch sweep (CI-48, 17 Oct, after Daniel asked why the repository had 4,000 branches): delete each branch whose tip
+    """The branch sweep: delete each branch whose tip
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
@@ -1668,7 +1668,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
 
 #: the remote's ref holding the main commit the after-landing steps last ran for
 AFTER_LAND_REF = "refs/research/after-land"
-#: the remote's ref holding the main commit Daniel was last sent the spec change up to: it moves only when the DM went, so one
+#: the remote's ref holding the main commit the spec-change DM last went up to: it moves only when the DM went, so one
 #: that failed is sent again by the next `research merge`, and `--sweep` fails while it lags main
 SPEC_ALERTED_REF = "refs/research/spec-alerted"
 
@@ -1718,7 +1718,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
             return None
     if spec_from and spec_from != tip:
         if _git(repo, "merge-base", "--is-ancestor", spec_from, tip, check=False).returncode:
-            log(f"research merge: Daniel was last sent the spec change up to {spec_from[:12]}, which isn't in {remote}'s main "
+            log(f"research merge: the spec-change DM last went up to {spec_from[:12]}, which isn't in {remote}'s main "
                 f"({tip[:12]}); no DM was sent: send it by hand, then `git push {remote} {tip}:{SPEC_ALERTED_REF}`")
         elif alert(repo, spec_from, tip, remote=remote, log=log):
             _move(repo, remote, SPEC_ALERTED_REF, alerted, tip, log)
@@ -1939,7 +1939,7 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
 
 
 #: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
-#: and "only drive moves main and next" (23 Oct, Daniel) let only that App move `main` and `next`
+#: and "only drive moves main and next" let only that App move `main` and `next`
 DRIVE_ENV = "RESEARCH_DRIVE"
 DRIVE_ONLY = ("main", "next")
 
@@ -1955,7 +1955,7 @@ def off_drive(ref: str, verb: str) -> str:
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
-    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
+    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), send the spec-change DM of what it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
     says so, and `research merge --sweep` after the push does it. On main the steps are `caught_up`'s, from the marker (or main

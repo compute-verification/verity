@@ -1,5 +1,5 @@
-"""On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind ALLP-H200's
-served step (`benchmarks/e2e_h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
+"""On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind the H200's
+served step (`examples/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
 and a summary to ``--out``/summary.txt.
 
 Today's loop (`e2e_h200.driver.Driver.step_slots`) streams each group (the embedding, a layer, the head) to the commit's
@@ -54,9 +54,10 @@ from typing import Any
 
 import numpy as np
 import torch
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
-E2E = HERE.parents[1] / "e2e_h200"
+E2E = HERE.parents[2] / "examples" / "h200"
 sys.path[:0] = [str(HERE), str(E2E)]
 import slots as S
 import slots_gpu as G
@@ -306,7 +307,7 @@ class Threaded(Pipelined):
 
 
 def prompts_for(run_id: str, batch: int, p: int) -> np.ndarray:
-    """`benchmarks/e2e_h200/run.py`'s prompts."""
+    """`examples/h200/run.py`'s prompts."""
     h = hashlib.sha512(b"e2e-h200/prompts-fixture\0" + run_id.encode()).digest()
     rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
     return rng.integers(32, 127, size=(batch, p), dtype=np.int64)
@@ -599,9 +600,9 @@ def main(argv: list[str] | None = None) -> int:
     from e2e_h200 import served_weights as SW
     dev = torch.device("cuda")
     shape = SHAPES[a.shape]
-    smi = Smi(os.environ.get("GPU_LEASE_UUID") or "0")
+    smi = Smi(SHARED.GPU_LEASE_UUID or "0")
     props = torch.cuda.get_device_properties(dev)
-    doc: dict[str, Any] = {"env": {"name": props.name, "uuid": os.environ.get("GPU_LEASE_UUID"), "sms": props.multi_processor_count,
+    doc: dict[str, Any] = {"env": {"name": props.name, "uuid": SHARED.GPU_LEASE_UUID, "sms": props.multi_processor_count,
                                    "hbm_gb": round(props.total_memory / 1e9, 2), "torch": torch.__version__,
                                    "cuda": torch.version.cuda, "smi_fields": list(smi.fields), "limits": smi.limits()},
                            "shape": shape.name, "batch": a.batch, "micro_batch": a.micro_batch, "layouts": {}, "runs": []}

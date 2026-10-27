@@ -35,7 +35,7 @@ appear).
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, not yet in Lean; `FixedMachine` and `InitialBudget` not yet in Lean |
 | server-time block, serving block | A server's gates between two wipes (a server-time block); a serving block is one, its padded size c_S = ⌊Φ_s·Δ_wipe⌋ and its input allowance k_S = k_wipe + (r_in + r_side)·Δ_wipe: what the wipe leaves of M_s (at most 4×10^10 bits plus egress), and the certified ingress and the side channels over the wipe interval Δ_wipe. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the serving-block bound not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its input accounting has not already charged. | not yet in Lean |
-| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a wipe clears. INV is the inventory's: coverage, the dark fleet's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
+| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a wipe clears. INV is the inventory's: coverage, the dark fleet's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`, which the per-party `Faithful`, `Secret` and `Confined` are to replace). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
 
 **Classes, protocols and the guarantee**
 
@@ -126,7 +126,8 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a) |
 | "proof unit", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of C-Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block |
 | "wrong unit", "incorrect unit", "faulty unit"; the Lean's `wrong`, the audit record's `wrong_units` | faulty proof block |
-| "transcript" for the values of a run's gates; `ExecutionTranscript` | trace |
+| "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
+| "verifier of record" | the verifier: the one whose verdict counts and that the guarantees are proved about. Other code that checks the same thing is named for what it is: the Rust cross-check, a Python mirror, or a Python verifier until its Lean verifier replaces it |
 | "δ_link", "the link term"; the Lean's `LinkSound` and `δlink` | ε_bind, the binding error |
 | "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block (C-Flock's statement layout keeps VU in its own sense: Narrower senses) |
 | "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | C-Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
@@ -161,7 +162,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "physical block" | server-time block |
 | "isolation unit" (IU) | isolation block |
 | "replay unit" (RU) | replay block |
-| "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `benchmarks/all_protocols/legs/`, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
+| "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until they are restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the exclusion statement's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
@@ -236,7 +237,10 @@ Some words keep a different, narrower sense:
   - a **VU** is one instance's share of the witness: the slots that lay out one drawn proof block, with its rows' digests,
     its unit copies and its outputs (a padding VU lays out none);
   - an **R1CS block** is one diagonal block of the statement's block R1CS, 2^{k_log} witness bits holding
-    G = `vus_per_block` VUs, a power of two (the spec's "block"; a statement has 2^{nbl} of them).
+    G = `vus_per_block` VUs, a power of two (the spec's "block"; a statement has 2^{nbl} of them). **C-Flock's block
+    size limit** is k_log ≤ 27, at most 2^27 witness bits (`MAX_K_LOG`; the range the soundness bound covers,
+    `Stmt.InRange`, with at most 1024 regions and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one
+    R1CS block can't be proved as one.
 
   So "at least one unit per VU and a power of two of VUs per block" reads "at least one unit copy per VU and a power of
   two of VUs per R1CS block". An R1CS block is never a proof block, and the identifiers (`units_per_vu`,
@@ -248,6 +252,22 @@ Some words keep a different, narrower sense:
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`). It is not a period.
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).
+- Five words still carry two senses in the code; each entry says which sense keeps the word and what the other is called:
+  - **Row**: a commitment row, the bits one leaf hashes (hm96 rows, the `*/row/*` leaf schemes, the row-form statements).
+    A matrix's row (a slot is one row of a step's activations) stays plain English. A workload or a serving block is
+    never a row (Older names).
+  - **Transcript**: the messages of a proof or a session, what its verifier sees (C-Flock's, PoUS's transcript hash).
+    The values of a run's gates are its trace; `evaluate_call`'s `transcript` argument and `ExecutionTranscript` keep
+    the old word until they are renamed.
+  - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
+    A step of a run is a phase (Older names); a stage of a Boolean lowering, such as one level of a log shifter, is a
+    level; a pipeline stage keeps its sense (above).
+  - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's window and
+    its salt) are one period's served steps, and keep the word until they are renamed. A span of time is a period; a
+    sliding window is a model's term (above).
+  - **Escape**: a faulty proof block's chance to be accepted is its acceptance probability (Older names); the
+    integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape
+    (`E_OPAQUE_HOST`) is a value read on the host, such as `.item()`, which the frontend refuses.
 
 ## Terms of one area
 
@@ -274,6 +294,22 @@ Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so t
   beside it; an input set is a batch of them for one subcircuit, with their provenance (captured or synthetic).
 - **Cell**: one benchmark result: a proof system (an archived one's backend id included) × statement × input set × prover
   hardware.
+- **Input block** (`INPUT_UNIT` in `verity.ml.circuits.partition`): the part of a partition that holds every input gate
+  (weights, request inputs, randomness). It is certified by checking each input's commitment root against its external
+  anchor (the declared weights root, the client's request commitment, the randomness source), always, never sampled.
+- **Pinned**, as an instruction's status (`verity.ml.circuits.silicon.instructions`): its silicon model matched every
+  hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records; the other statuses are
+  hypothesis and unprobed. A pinned value or root is another sense: one fixed before the run, which a check compares to.
+- **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of the steps whose role is served
+  (`Accounting.Gates.Census.servedMacs`, the census's `served_macs`). It is not size: credit and reports count AND gates.
+- **Binding unit** (circuit-check's cache, `circuit_check.cache` and `targets.BINDINGS`): one unit of a binding file, a
+  root function, a `_model_roots` entry or a `TEMPLATE_PARAMS` entry; a target's cached pass holds the digest of each
+  binding unit whose roots reach it.
+- **Transformer sublayer**: one of a transformer layer's two halves, its attention or its FFN (MLP or MoE), each with its
+  residual add; in DeepSeek-V4, each is wrapped by the hyper-connections' pre and post mixes.
+- **Value acquisition** and **native tap** (`integrations/vllm`'s `acquire/`): value acquisition takes a required value's
+  bytes where vLLM computes it, through a Python hook or a native tap, a capture compiled into a kernel. A tap is never
+  the network certifier (Older names).
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
   clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`WardenParams.grid`), proved as its own proof
   block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`). The code's link-window is a sampling block of
@@ -301,3 +337,10 @@ Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so t
   - **After-landing run**: the full check of `main`'s tip after each landing; when it passes, `main` is verified.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`; it lands alone, without review.
+- **Running jobs** (`tools/research`, `infra/`):
+  - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs; `research run` is the
+    command that makes one.
+  - **Pool**: a node's named set of run slots (`research run --pool NAME`; `research` is any lane's, where
+    `--on auto` spills). Not a "line" or a "queue".
+  - **Node lease** and **GPU lease**: a node lease (`~/.research/lease`) is the node's own deadline, after which it stops
+    once every run on it has custody; a GPU lease (`gpu-lease`) books a node's GPUs for one workload while it runs.

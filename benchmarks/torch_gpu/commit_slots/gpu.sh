@@ -9,8 +9,8 @@
 # STEPS (default "tests check bench"; a failing tests step ends the lease; "step" runs step.py's time on STEP_ARGS, layout
 # files and options; STEP_WRAP, a command it runs under, e.g. nsys profile ...), CHECK_ARGS, BENCH_ARGS, STEP_ARGS,
 # LEASE_MIN (default 25), PY,
-# LEASE_END (a UTC time, e.g. 2026-10-26T02:40Z, on a card lent until then: a lease that starts too late to end by it runs
-# nothing).
+# LEASE_END (a UTC time `date -d` reads, e.g. YYYY-MM-DDTHH:MMZ, on a card lent until then: a lease that starts too late
+# to end by it runs nothing).
 set -uo pipefail
 O=${OUT:?}
 ROOT=$PWD D=benchmarks/torch_gpu/commit_slots
@@ -18,7 +18,7 @@ for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [
 PY=${PY:-python3}
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
-export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D PYTHONDONTWRITEBYTECODE=1
+export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1
 git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$O/commit.txt"
 { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'
   echo "cuda ${CUDA:-none}"; nvcc --version | tail -2; nvidia-smi --query-gpu=index,name,compute_cap,driver_version --format=csv; } \

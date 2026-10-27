@@ -1,7 +1,6 @@
 """`research queue`: the merge queue (infra plan change 5).  `next` is `main` plus every admitted PR, one merge commit each, in the
 order they were admitted.  Drive (`research.drive`) fast-forwards `main` to the top of the longest prefix of `next` whose every
-member has a reviewer's land verdict at its head (Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs
-after landing).
+member has a reviewer's land verdict at its head: PRs land on an eyeball review, and the full check runs after landing.
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
@@ -21,9 +20,10 @@ after landing).
                                                    --mark, on the owner's word alone (`MarkOnly`).  First the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against `main` unless a records run or Lean check in the store passed
-                                                   that package, of the head or of a commit whose trees of the package, the
-                                                   packages it requires, lean-toolchain and the Lean checker (tools/verity/lean)
-                                                   are the head's, naming the run to start; then, in about a minute, the preflight (`Preflight`) refuses, with
+                                                   that package, of the head or of a commit whose files of the package and the
+                                                   packages it requires (tests and docs aside), lean-toolchain and the Lean
+                                                   checker (tools/verity/lean) are the head's, naming the run to start; then,
+                                                   in about a minute, the preflight (`Preflight`) refuses, with
                                                    the fix, a head that conflicts with a
                                                    fresh `next` (naming the paths), contains an open PR that isn't admitted
                                                    (naming it), fails a landing gate of drive.toml at `main` (with
@@ -39,7 +39,8 @@ after landing).
                          [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): sync and land the
                                                    reviewed prefix of `next`, a Lean change once its Lean check passed, then
-                                                   check `main` (--after-landing-no-cache: reusing no pass); tell @ci the rest.
+                                                   check `main` (--after-landing-no-cache: reusing no pass but
+                                                   circuit-check's); tell @ci the rest.
                                                    --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
                                                    fresh each tick, so a change to them is a reviewed commit (drive's of record:
                                                    tools/verity/check/drive.toml); a flag given here overrides the file's, the
@@ -87,7 +88,7 @@ after landing).
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
-no change waits on a per-head grant (Daniel, 8 Oct).  A PR based on another branch is never admitted: `ready` marks it and says so,
+no change waits on a per-head grant.  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
@@ -115,8 +116,8 @@ checks it).  `--no-preflight` skips it, for the lander.
 Records gate.  On 26 Oct three marks of heads whose own records run had printed `AUDIT: FAIL` for Security each failed a train's
 Lean check (TOP-90 row 58).  So `ready` (and `judge`) first refuse a head whose change against `main` touches a `lean-audit.json`
 unless the store holds a records run or a Lean check of that head that passed each such package on its lock, or of a commit whose
-trees of the package's inputs (it, the packages it requires, `lean-toolchain`, the checker) are the head's, or vouches for it through a head
-that only merged `main` or committed the record a run regenerated (`RecordsGate`).  It reads the store's remote
+inputs for the package are the head's (its files and those of the packages it requires, tests and docs aside; `lean-toolchain`
+and the checker whole), or vouches for it through a head that only merged `main` or committed the record a run regenerated (`RecordsGate`).  It reads the store's remote
 and refuses when it can't; `--no-preflight` doesn't skip it.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
@@ -138,7 +139,8 @@ mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked 
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
-Members the sync keeps never move for it.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+Members the sync keeps never move for it, but for drive's lift (`Queue.lift`, `Driver._lift`): while no Lean check of `next` runs
+or passed, the reviewed members that change no Lean above its lowest Lean change go to the bottom, and land at once.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
@@ -151,7 +153,7 @@ names the PR it contains and why that one is out, judging each PR after those it
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, by a fast-forward of `main` (no new merge commit), and checks `main` after each landing, reverting
 what that check fails; it tells `@ci` what it refuses.  A push refused because `main` moved leaves `main` alone; the next sync
-rebuilds `next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).
+rebuilds `next` on the new `main`.  A landing that changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
 drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
@@ -377,10 +379,9 @@ class DriveFlags:
     marked_after: str | None = None
     regenerate_locks: bool = False
     first: tuple[int, ...] = ()
-    #: how `next` lands: "review", each member on a reviewer's verdict, the full check running after landing (`Driver`;
-    #: Daniel, 24 Oct 06:05Z)
+    #: how `next` lands: "review", each member on a reviewer's verdict, the full check running after landing (`Driver`)
     land: str = "review"
-    #: the after-landing run reuses no pass (`check.py --no-cache`)
+    #: the after-landing run reuses no pass but circuit-check's per-target ones (`check.py --no-cache --circuit-cache`)
     after_landing_no_cache: bool = False
     #: scripts a PR passes to be admitted (`gate_refusal`: its head at the ready mark's preflight, its merge onto `next` at the
     #: sync), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
@@ -388,7 +389,7 @@ class DriveFlags:
     #: the most Lean checks of the review landing running at once: a lower one and those stacked above it (`drive.lean_stack`)
     max_lean_checks: int = 2
     #: what a sync merges onto `next` anyway goes non-Lean changes first (`Queue._nonlean_order`), so they don't wait above a
-    #: Lean change for its Lean check (Daniel, 26 Oct 06:04Z: "CI runs at breakneck speed")
+    #: Lean change for its Lean check
     nonlean_first: bool = True
     #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
     #: owner once a day), and before drive closes it; 0 is off
@@ -639,7 +640,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 
 #: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked after
-#: landing, a failure reverting it (Daniel, 25 Oct 11:19 PM PDT); Lean anywhere else runs as code (C-Flock's verifier and the ZK
+#: landing, a failure reverting it; Lean anywhere else runs as code (C-Flock's verifier and the ZK
 #: server, the PoUS grader, the certifier program, the NCI check, the remote audit's verifier) and keeps its Lean check first
 LEAN_PROOFS_TREE = "Security/"
 
@@ -820,6 +821,10 @@ class Queue:
         #: members a running check (or a `hold`ing passed one) covers that keep their place at the head it checks though their PR's head has moved
         #: (`Driver`; top, 17 Oct: a new head no longer cancels a running train, and its PR rejoins above once that train ends)
         self.frozen: set[int] = set()
+        #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: reviewed
+        #: ones that change no Lean, above a Lean change no running or passed Lean check holds); what `order` moved of them
+        self.lift: list[int] = []
+        self._lifted: list[int] = []
         self.now: Callable[[], float] = time.time
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
@@ -860,11 +865,20 @@ class Queue:
 
     def fetch(self, prs: Iterable[PR] = ()) -> dict[int, str]:
         """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`;
-        return each fetched pull ref's commit, which can briefly differ from GitHub's API head."""
+        return each fetched pull ref's commit, which can briefly differ from GitHub's API head, and none for a PR whose pull ref
+        GitHub doesn't have (it waits, `fetch_prs`)."""
         prs = list(prs)
         self._registry = None
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
-        self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
+        if self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs, ok=None).returncode:
+            # one pull ref GitHub hasn't made yet fails the whole fetch (27 Oct: #5290 had only refs/pull/5290/merge, and every
+            # tick from 13:14Z ended rc=1): fetch `main` alone, raising as before, then each PR's ref, leaving out what's missing
+            self._remote(self.workdir, "fetch", "-q", "--prune", "origin", specs[0])
+            for p, spec in zip(prs, specs[1:], strict=True):
+                if (r := self._remote(self.workdir, "fetch", "-q", "origin", spec, ok=None)).returncode:
+                    _git(self.workdir, "update-ref", "-d", f"refs/queue/pr/{p.number}", check=False)
+                    self.log(f"research queue: #{p.number}'s pull ref can't be fetched, so it waits this sync: "
+                             f"{(r.stderr or r.stdout).strip()[-200:]}")
         # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
         # drivers (27 Oct: an agent VM's clone, checked out at 21 Oct, refused #4835 over a lean-audit.json conflict main's
         # merge.py resolves).  Drive's checkout, `next`'s tip, contains `main` and stays
@@ -875,14 +889,21 @@ class Queue:
             self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
         else:
             _git(self.workdir, "update-ref", "-d", f"refs/remotes/origin/{self.branch}", check=False)
-        return {p.number: _out(self.workdir, "rev-parse", f"refs/queue/pr/{p.number}") for p in prs}
+        heads = {p.number: _git(self.workdir, "rev-parse", "-q", "--verify", f"refs/queue/pr/{p.number}", check=False) for p in prs}
+        return {n: r.stdout.strip() for n, r in heads.items() if not r.returncode}
 
     def fetch_prs(self, prs: list[PR]) -> tuple[list[PR], dict[int, Entry]]:
         """Fetch ``prs`` and separate any whose API head disagrees with its pull ref, so one GitHub propagation race cannot stop
-        the queue.  Such a PR waits outside ``next`` until a later snapshot agrees rather than admitting an unverified old head."""
+        the queue.  Such a PR waits outside ``next`` until a later snapshot agrees rather than admitting an unverified old head,
+        unless its branch's tip is the API head."""
         fetched = self.fetch(prs)
         consistent, waiting = [], {}
         for p in prs:
+            if fetched.get(p.number) != p.head and p.branch and self._head_from_branch(p):
+                fetched[p.number] = p.head
+            if p.number not in fetched:
+                waiting[p.number] = Entry(p, state="waiting", why="GitHub has no pull ref for its head yet; retrying next sync")
+                continue
             if fetched[p.number] == p.head:
                 consistent.append(p)
                 continue
@@ -891,6 +912,19 @@ class Queue:
             self.log(f"research queue: #{p.number}'s API head {p.head[:12]} and fetched pull ref "
                      f"{fetched[p.number][:12]} disagree; retrying next sync")
         return consistent, waiting
+
+    def _head_from_branch(self, p: PR) -> bool:
+        """Take ``p``'s head from its branch when the branch's tip is the API head: GitHub can leave refs/pull/N/head behind its
+        branch and API head for hours."""
+        ref = f"refs/queue/branch/{p.number}"
+        r = self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{p.branch}:{ref}", ok=None)
+        tip = _git(self.workdir, "rev-parse", "-q", "--verify", ref, check=False).stdout.strip() if not r.returncode else ""
+        _git(self.workdir, "update-ref", "-d", ref, check=False)
+        if tip != p.head:
+            return False
+        _git(self.workdir, "update-ref", f"refs/queue/pr/{p.number}", tip)
+        self.log(f"research queue: #{p.number}'s pull ref isn't at its API head {p.head[:12]}; took the head from its branch")
+        return True
 
     def load_state(self) -> dict:
         try:
@@ -1017,11 +1051,12 @@ class Queue:
                     and not (self.before_cutoff and self.before_cutoff(a.pr.number, a.pr.head))    # then it's a `true`
                     and _who(self.marked_by(a.pr.number, a.pr.head) or "") == who))
 
-    def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
+    def order(self, chain: list[Member], entries: dict[int, Entry], lift: Iterable[int] = ()) -> list[int]:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
         number, each after the PRs it contains.  The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so they land first; but
-        above the bottom `hold` members, which a running check covers."""
+        above the bottom `hold` members, which a running check covers.  With no `hold`, the members of ``lift`` at the heads
+        `next` holds go above `first` and below the rest, each only after the PRs it contains (`_lifted`)."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
         kept = [m.pr for m in chain
                 if m.pr in ready and self._same_or_fixed(m, entries) or self._frozen(m, entries) or self._pending(m, entries)]
@@ -1043,9 +1078,14 @@ class Queue:
 
         new = sorted(ready - set(kept))
         cold = {n for n in new if self._forces_cold(n)}
+        at = {m.pr: m.head for m in chain}
+        self._lifted = []
+        for n in () if held else lift:
+            if n in kept and entries[n].pr.head == at.get(n) and all(a in self._lifted for a in entries[n].after):
+                self._lifted.append(n)
         # a newly ready PR that makes circuit-check run cold goes above the warm ones; members already on `next` keep their place,
         # and so the check that covers them
-        for n in held + [f for f in self.first if f in ready] + kept + [n for n in new if n not in cold] + sorted(cold):
+        for n in held + [f for f in self.first if f in ready] + self._lifted + kept + [n for n in new if n not in cold] + sorted(cold):
             place(n)
         return out
 
@@ -1205,7 +1245,15 @@ class Queue:
         def last(order: list[int]) -> list[int]:
             return [n for n in order if n not in out] + [n for n in order if n in out]
 
-        order = last(self.order(chain, entries))
+        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
+        flag: list[bool] = []
+
+        def nonlean() -> bool:
+            if not flag:
+                flag.append(self.nonlean_first if self.nonlean_first is not None else flags_at(self.workdir, main).nonlean_first)
+            return flag[0]
+
+        order = last(self.order(chain, entries, self.lift if self.lift and nonlean() else ()))
         heads = {n: frozen.get(n, entries[n].pr.head) for n in order}
 
         def kept(order: list[int]) -> int:
@@ -1213,10 +1261,14 @@ class Queue:
             return next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
 
         k = kept(order)
-        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
-        nonlean = self.nonlean_first
-        if len(order) - k > 1 and (nonlean if nonlean is not None else flags_at(self.workdir, main).nonlean_first):
-            order = last(order[:k] + self._nonlean_order(order[k:], heads, entries))
+        if lifted := k < len(self._lifted):
+            self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed, no Lean change) go to the bottom of "
+                     f"`{self.branch}`, below a Lean change that waits for its Lean check")
+        # a lift merges the members above it again in their order: only what comes new goes non-Lean first, so an unreviewed
+        # member doesn't go below the Lean change and keep it from its Lean check
+        j = max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0)) if lifted else k
+        if len(order) - j > 1 and nonlean():
+            order = last(order[:j] + self._nonlean_order(order[j:], heads, entries))
             k = kept(order)
         members = chain[:k]
         tip = members[-1].commit if members else _out(self.workdir, "rev-parse", "origin/main")
@@ -1704,7 +1756,7 @@ SLOT_NOT_STARTED = 75
 SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
-#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
+#: a lane's own test run, which no landing needs (a PR lands on an eyeball review)
 LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 
@@ -2721,9 +2773,14 @@ RECORDS_SKEW_S, RECORDS_LOOKBACK_S = 3600, 3 * 86400
 #: checker `RECORDS_COMMAND` runs (`lean_changed.py`, with the `lean_audit.py`, `check.py`, `merge.py` and `sandbox.sh` it loads,
 #: and the `common.py` the audit's key counts among its files; `lean_slot.py` only takes a slot)
 RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py")
-#: the most commits with runs in the window, records runs' first and then the newest, that `RecordsGate` fetches when this clone
-#: lacks them, in its search for a run on the same inputs (one the clone can't read vouches for nothing)
-RECORDS_FETCH = 64
+#: the most commits with runs in the window, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
+#: (a safety bound): those this clone lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in
+#: halves until the commits the remote won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read
+#: vouches for nothing
+RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 1000, 200, 48
+#: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
+#: `tests/` or `test/` directory of it, Markdown and READMEs; everything else stays, as a build may read any file
+RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -2781,13 +2838,14 @@ class RecordsGate:
     but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
     for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
-    A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): the git tree
-    of the package's directory, lock included, of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
-    `lakefile.toml`'s, transitively) or its lock names under `proved_in`, and `RECORDS_SHARED` (the root `lean-toolchain` and
-    the checker: `tools/verity/lean/` and `tools/verity/check/common.py`), each the same id there as at the head, so a pass under
-    another checker vouches for nothing.  A PR that carries another PR's Lean change needs no run of its own for the packages that change passed in.  The
-    candidates are the commits of the attempts in the window read (`RECORDS_FETCH` of them fetched when this clone lacks them);
-    a commit that can't be read vouches for nothing.
+    A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): every file of
+    the package's directory, lock included, and of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
+    `lakefile.toml`'s, transitively) or its lock names under `proved_in`, less those a records run doesn't read (in a `tests/` or
+    `test/` directory, Markdown, READMEs: `RECORDS_UNREAD_DIRS`), the same blob there as at the head; and `RECORDS_SHARED` (the
+    root `lean-toolchain` and the checker: `tools/verity/lean/` and `tools/verity/check/common.py`) the same whole, so a pass
+    under another checker vouches for nothing.  A PR that carries another PR's Lean change needs no run of its own for the
+    packages that change passed in.  The candidates are the commits of the attempts in the window read, the newest first
+    (`RECORDS_FETCH` of them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
 
     The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts since the oldest commit the walk may
     read or the newest that changed those inputs was written, and never more than `RECORDS_LOOKBACK_S` back); a store with no
@@ -2802,6 +2860,7 @@ class RecordsGate:
         self._merges: dict[str, bool] = {}
         self._since = ""
         self._candidates: list[str] | None = None
+        self._readable: list[str] | None = None
         self.notes: list[str] = []
 
     def __call__(self, pr: PR) -> str | None:
@@ -2871,7 +2930,7 @@ class RecordsGate:
             self.notes.append(f"{len(errs)} attempt(s) on the remote couldn't be read, e.g. {errs[0]}")
 
     def _inputs(self, head: str, pkg: str) -> list[str]:
-        """The paths whose git trees decide ``pkg``'s records at ``head``: the package, each in-repo Lake package it requires by
+        """The paths whose files decide ``pkg``'s records at ``head``: the package, each in-repo Lake package it requires by
         path (its `lake-manifest.json`'s and `lakefile.toml`'s, transitively) or its lock names under `proved_in`, and
         `RECORDS_SHARED`.  Raises on a file it can't parse or a path outside the repository."""
         seen: list[str] = []
@@ -2896,49 +2955,89 @@ class RecordsGate:
                 todo.append(q)
         return sorted({*seen, *RECORDS_SHARED})
 
-    def _trees(self, commits: list[str], paths: list[str]) -> dict[str, tuple[str, ...] | None]:
-        """{commit: the object id of each of ``paths`` there (`-` where it's absent)}, None for a commit this clone can't read;
-        one `git cat-file --batch-check` for all of them."""
-        specs = [s for c in commits for s in (f"{c}^{{commit}}", *(f"{c}^{{tree}}" if p == "." else f"{c}:{p}" for p in paths))]
-        r = subprocess.run(["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"], cwd=self.repo, capture_output=True,
-                           text=True, input="".join(s + "\n" for s in specs), env=git_env(), check=False)
+    def _present(self, commits: list[str]) -> set[str]:
+        """The ``commits`` this clone can read, by one `git cat-file --batch-check`."""
+        r = subprocess.run(["git", "cat-file", "--batch-check=%(objecttype)"], cwd=self.repo, capture_output=True, text=True,
+                           input="".join(f"{c}^{{commit}}\n" for c in commits), env=git_env(), check=False)
         lines = r.stdout.splitlines()
-        if r.returncode or len(lines) != len(specs):
+        if r.returncode or len(lines) != len(commits):
             raise QueueError(f"git cat-file --batch-check: {r.stderr.strip()[-300:]}")
-        out, n = {}, 1 + len(paths)
-        for i, c in enumerate(commits):
-            got = [ln.split() for ln in lines[i * n:(i + 1) * n]]
-            out[c] = None if got[0][-1] != "commit" else tuple(g[0] if g[-1] != "missing" else "-" for g in got[1:])
-        return out
+        return {c for c, ln in zip(commits, lines) if ln.split()[-1] == "commit"}
 
     def _commits(self) -> list[str]:
-        """The clean commits of the attempts since the window's start, those with a records run first, then the newest."""
+        """The clean commits of the attempts since the window's start, the newest first, `RECORDS_FETCH` at most."""
         if self._candidates is None:
             rows = self.store.index.sql(
-                "SELECT source_commit, MAX(manifest_json LIKE '%--records%'), MAX(id) FROM attempts WHERE id > ? AND "
-                "source_dirty = 0 AND source_commit IS NOT NULL GROUP BY source_commit ORDER BY 2 DESC, 3 DESC", (self._since,))
-            self._candidates = [c for c, _, _ in rows if _SHA.fullmatch(str(c))]
+                "SELECT source_commit, MAX(id) FROM attempts WHERE id > ? AND source_dirty = 0 AND source_commit IS NOT NULL "
+                "GROUP BY source_commit ORDER BY 2 DESC", (self._since,))
+            self._candidates = [c for c, _ in rows if _SHA.fullmatch(str(c))][:RECORDS_FETCH]
         return self._candidates
 
-    def _same_inputs(self, head: str, pkg: str, inputs: list[str]) -> str | None:
-        """Why a pass of ``pkg`` at another commit whose ``inputs`` have the head's trees vouches for it, or None."""
-        try:
-            want = self._trees([head], inputs)[head]
-            cands = [c for c in self._commits() if c != head]
-            got = self._trees(cands, inputs)
-            lacking = [c for c in cands if got[c] is None][:RECORDS_FETCH]
+    def _readable_commits(self) -> list[str]:
+        """`_commits` this clone can read once it fetched those it lacks from the remote by sha, in `RECORDS_FETCH_CHUNK`s,
+        a chunk that fails split in halves until the commits the remote won't serve stand alone, `RECORDS_FETCH_CALLS` fetches
+        at most."""
+        if self._readable is None:
+            cands = self._commits()
+            have = self._present(cands)
+            lacking = [c for c in cands if c not in have]
+            todo = [lacking[i:i + RECORDS_FETCH_CHUNK] for i in range(0, len(lacking), RECORDS_FETCH_CHUNK)]
+            calls = 0
+            while todo and calls < RECORDS_FETCH_CALLS:
+                part = todo.pop(0)
+                calls += 1
+                if _git(self.repo, *STALL, "fetch", "-q", self.remote, *part, check=False).returncode and len(part) > 1:
+                    todo[:0] = [part[:len(part) // 2], part[len(part) // 2:]]
             if lacking:
-                if _git(self.repo, *STALL, "fetch", "-q", self.remote, *lacking, check=False).returncode:
-                    for c in lacking:
-                        _git(self.repo, *STALL, "fetch", "-q", self.remote, c, check=False)
-                got.update(self._trees(lacking, inputs))
-                if unread := sum(got[c] is None for c in cands):
-                    self.notes.append(f"{unread} commit(s) with runs can't be read here or from {self.remote}")
+                have = self._present(cands)
+            if unread := len(cands) - len(have):
+                self.notes.append(f"{unread} of {len(cands)} commit(s) with runs can't be read here or from {self.remote}")
+            self._readable = [c for c in cands if c in have]
+        return self._readable
+
+    def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
+        """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
+        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside)."""
+        if not commits:
+            return set()
+        r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
+                           cwd=self.repo, capture_output=True, input="".join(f"{c} {head}\n" for c in commits).encode(),
+                           env=git_env(), check=False)
+        if r.returncode:
+            raise QueueError(f"git diff-tree --stdin: {r.stderr.decode(errors='replace').strip()[-300:]}")
+        shared = [p for p in inputs if p in RECORDS_SHARED]
+        pkgs = sorted((p for p in inputs if p not in RECORDS_SHARED), key=len, reverse=True)
+        out, at, n = set(), None, 0
+        for tok in r.stdout.decode(errors="surrogateescape").split("\0"):
+            if n < len(commits) and tok == commits[n]:          # `--always`: each pair's header, in order, its paths after it
+                at, n = tok, n + 1
+                continue
+            if not tok or at in out:
+                continue
+            if at is None:
+                raise QueueError(f"git diff-tree --stdin printed {tok!r} before any commit")
+            if any(tok == s or tok.startswith(s + "/") for s in shared):
+                out.add(at)
+                continue
+            p = next((p for p in pkgs if p == "." or tok.startswith(p + "/")), None)
+            rel = tok if p in (None, ".") else tok[len(p) + 1:]
+            name = posixpath.basename(rel)
+            if not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md") or name.startswith("README")):
+                out.add(at)
+        if n != len(commits):                                    # a pair it skipped (an object it couldn't read) is no match
+            raise QueueError(f"git diff-tree --stdin compared {n} of {len(commits)} commits")
+        return out
+
+    def _same_inputs(self, head: str, pkg: str, inputs: list[str]) -> str | None:
+        """Why a pass of ``pkg`` at another commit whose ``inputs`` are the head's (`_differs`) vouches for it, or None."""
+        try:
+            cands = [c for c in self._readable_commits() if c != head]
+            differ = self._differs(head, cands, inputs)
         except Exception as e:  # noqa: BLE001  (a search that can't finish vouches for nothing)
-            self.notes.append(f"the trees of {pkg}'s inputs can't be compared ({type(e).__name__}: {e})")
+            self.notes.append(f"{pkg}'s inputs can't be compared ({type(e).__name__}: {e})")
             return None
         for c in cands:
-            if want is not None and got[c] == want and (how := self._passed(c, pkg)):
+            if c not in differ and (how := self._passed(c, pkg)):
                 return f"a {how[0]} of {c[:12]} ({how[1]}) with identical inputs"
         return None
 
@@ -3306,12 +3405,13 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
         return 0
     m = next((m for m in chain if m.pr == pr), None)
     live = (p := opened.get(pr)) and ((p.branch and getattr(q.github, "branch_tip", lambda _b: None)(p.branch)) or p.head)
-    if sha and len(sha) < 40:
+    if sha:
+        # a full SHA is checked too: a mistyped one would record a verdict on a commit that doesn't exist, which never counts
         known = {h for h in (m and m.head, live) if h and h.startswith(sha)}
         r = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False)
         if len(known) != 1 and r.returncode:
             raise QueueError(f"review: --sha {sha} is neither #{pr}'s head on `{q.branch}` nor on GitHub, nor a commit the queue's "
-                             "clone has: pass the full 40-character SHA")
+                             f"clone has: pass {'the' if len(sha) < 40 else 'its'} full 40-character SHA")
         sha = known.pop() if len(known) == 1 else r.stdout.strip()
     if sha is None and m and live and live != m.head:
         raise QueueError(f"review: #{pr} is on `{q.branch}` at {m.head[:12]}, but GitHub has its head at {live[:12]}, pushed since "
@@ -3556,8 +3656,8 @@ def main(argv: list[str]) -> int:
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else with --on on {PREFLIGHT_LEAN_ON}); the records gate (a changed Lean lock needs a records "
-                         "run that passed it, of the head or of a commit whose trees of its package, the packages it requires, "
-                         "lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
+                         "run that passed it, of the head or of a commit whose files of its package and the packages it requires "
+                         "(tests and docs aside), lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
     ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
                     help="drive: land a commit whose Lean check passed by regenerating lock records with those locks committed "
                          "on top (`Regenerated:`), which `research merge`'s gate accepts on that check (CI-64)")
@@ -3567,7 +3667,8 @@ def main(argv: list[str]) -> int:
                                                         "order, ahead of members that keep their place (a fix `main` "
                                                         "needs)")
     ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
-                    help="drive: run the after-landing check reusing no pass (check.py --no-cache)")
+                    help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
+                         "(check.py --no-cache --circuit-cache)")
     for old in ("--max-running", "--train-size"):
         ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted, #5070)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
