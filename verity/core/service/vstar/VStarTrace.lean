@@ -166,15 +166,20 @@ structure Bad where
   region : Nat := 0
   /-- the first failure: block, kind, row or region bit -/
   first : Option (Nat × String × Nat) := none
+  deriving Inhabited
 
 def Bad.add (a b : Bad) : Bad :=
   { rows := a.rows + b.rows, pin := a.pin + b.pin, region := a.region + b.region, first := a.first <|> b.first }
 
-/-- Block `o` of the trace (`bits`) against table `p`: every row, the pin and every region bit. -/
-def checkBlock (p : Placed) (pin : Nat) (bits : Nat → Bool) (o : Nat) : Bad := Id.run do
-  let mut x := ByteArray.emptyWithCapacity p.bs
-  for j in [0:p.bs] do
-    x := x.push (if bits (o * p.bs + j) then 1 else 0)
+/-- Block `o` of the trace (`bits`), a byte a bit. -/
+def blockOf (bits : Nat → Bool) (bs o : Nat) : ByteArray := Id.run do
+  let mut x := ByteArray.emptyWithCapacity bs
+  for j in [0:bs] do
+    x := x.push (if bits (o * bs + j) then 1 else 0)
+  return x
+
+/-- Block `o` of the trace (`x`) against table `p`: every row, the pin and every region bit. -/
+def checkBlock (p : Placed) (pin : Nat) (x : ByteArray) (o : Nat) : Bad := Id.run do
   let mut bad : Bad := {}
   for r in [0:p.bs] do
     if (side p p.rowsA p.da x r && side p p.rowsB p.db x r) != (byteAt x r == 1) then
@@ -187,11 +192,20 @@ def checkBlock (p : Placed) (pin : Nat) (bits : Nat → Bool) (o : Nat) : Bad :=
         bad := { bad with region := bad.region + 1, first := bad.first <|> some (o, s!"region {reg.name}", i) }
   return bad
 
+/-- `checkBlock` on a layout of the task's own: objects shared between tasks count their references atomically, and the
+row loop's reads of a shared layout contend on them. -/
+@[noinline] def checkOwn (st : Flock.Stmt) (x : ByteArray) (o : Nat) : Bad :=
+  match placed st with
+  | .ok p => checkBlock p st.pin x o
+  | .error e => { rows := 1, first := some (o, e, 0) }
+
 /-- `--draw F`, `--partition F`: JSON files. -/
 def jsonArg (args : List String) (k : String) : IO (Except String (Option Json)) := do
   match args.dropWhile (· != k) with
   | _ :: f :: _ => pure ((Json.parse (← IO.FS.readFile f)).map some |>.mapError (s!"{k}: " ++ ·))
   | _ => pure (.ok none)
+
+def INFLIGHT : Nat := 256
 
 def satUsage : String :=
   "usage: vstar-trace --sat --circuit F --public F --instances F [--partition F] [--program F] [--draw F] [--mask zero|SEED] [--flip Q,Q,...]"
@@ -239,18 +253,29 @@ def sat (args : List String) : IO UInt32 := do
     ("delta", ((st.da.size + st.db.size : Nat) : Json)), ("flips", (flips.length : Json))]
   if !fits || tm != st.m || c.kLog != kl then
     IO.println (Json.compress (Json.mkObj (("ok", Json.bool false) :: head))); return 0
+  let t0 ← IO.monoMsNow
   let z := Trace.slots c pin
   let f := Trace.bitAtT z mask (Trace.bitTables c)
   let fl : Std.HashSet Nat := flips.foldl (·.insert ·) {}
   let bits := if flips.isEmpty then f else fun q => f q != fl.contains q
-  let tasks := (List.range (2 ^ (st.m - kl))).map fun o => Task.spawn fun _ => checkBlock p st.pin bits o
-  let bad := tasks.foldl (fun b t => b.add t.get) ({} : Bad)
+  -- the trace's blocks are built here, so no task reads `z`; at most `INFLIGHT` blocks wait for their check
+  let mut tasks : Array (Task Bad) := #[]
+  let mut bad : Bad := {}
+  let mut next := 0
+  for o in [0:2 ^ (st.m - kl)] do
+    let x := blockOf bits (2 ^ kl) o
+    tasks := tasks.push (Task.spawn fun _ => checkOwn st x o)
+    if tasks.size - next ≥ INFLIGHT then
+      bad := bad.add tasks[next]!.get
+      next := next + 1
+  for t in tasks.extract next tasks.size do
+    bad := bad.add t.get
   let first := match bad.first with
     | some (o, k, i) => Json.mkObj [("block", (o : Json)), ("kind", Json.str k), ("at", (i : Json))]
     | none => Json.null
   IO.println (Json.compress (Json.mkObj ([("ok", Json.bool (bad.rows + bad.pin + bad.region == 0 && shapeOk))] ++ head ++
     [("blocks", ((2 ^ (st.m - kl) : Nat) : Json)), ("rows_bad", (bad.rows : Json)), ("pin_bad", (bad.pin : Json)),
-     ("region_bad", (bad.region : Json)), ("first", first)])))
+     ("region_bad", (bad.region : Json)), ("first", first), ("ms", ((← IO.monoMsNow) - t0 : Json))])))
   return 0
 
 end VStar.TraceCli
