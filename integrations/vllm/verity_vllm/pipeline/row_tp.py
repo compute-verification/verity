@@ -299,7 +299,7 @@ class TpRow(Row):
                 f.result()
 
     def manifest_global(self, stage: str) -> int:
-        """The v2 query (Q_module_body_v1 + TP-04) over the W rank Programs, merged by rank -> manifest.json, under the manifest's own
+        """The v2 query (Q_module_body_v1) over the W rank Programs, merged by rank -> manifest.json, under the manifest's own
         limit: ``--manifest-timeout``, else `row_records.manifest_timeout` of its W x declared requests component builds (0 = none),
         never one derive's."""
         n = self.W * self.requests

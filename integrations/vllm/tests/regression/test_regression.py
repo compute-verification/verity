@@ -52,7 +52,7 @@ with the current code, and the two are diffed as canonical JSON on every field t
 
 CPU-ONLY.  Every check here runs without a GPU.  T0 inputs are <= ~100 MB per row (the small records); `manifest_digest` needs the
 row's request Programs (50-300 MB of instances.json.gz) and rebuilds for minutes; `coverage` needs the 39-222 MB manifest.json.  T1
-needs the multi-GB fold records / binding maps; T2 the Build rebuild.  NONE of it is meant for the laptop tonight: run on a pod.
+needs the multi-GB fold records / binding maps; T2 the Build rebuild.  NONE of it is meant for a laptop: run on a pod.
 
 NOT PINNED BY ANY RECORD (gaps -- do not read a green run as covering these): committed bytes / the arena, opening proofs (counts only),
 challenge derivation, C2 replay inputs, the weights root beyond `weights_pin`, Match per-instance attribution tables, fast-vs-record
@@ -89,8 +89,8 @@ instead of recomputing, and diffs it against the frozen expected:
 
     cd integrations/vllm && VERITY_REGRESSION=1 VERITY_REGRESSION_CANDIDATE=/path/to/v2/rows python -m pytest tests/regression -m regression -q
 
-Markers: `regression` (all of these), `pod` (T1/T2 and anything reading > 100 MB), `weak` (PASS-side / unexercised).  Green tonight =
-T0 byte-equal on every row where the inputs resolve + the #57 refusal reproduces + tests/program green.
+Markers: `regression` (all of these), `pod` (T1/T2 and anything reading > 100 MB), `weak` (PASS-side / unexercised).  Green =
+T0 byte-equal on every row where the inputs resolve + workload 57's refusal reproduces + tests/program green.
 """
 from __future__ import annotations
 

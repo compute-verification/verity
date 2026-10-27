@@ -686,7 +686,7 @@ def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
 
 
 def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manifest_of_record(tmp_path, monkeypatch):
-    """#4's Commit (15:31Z) moved the Build's Q_word manifest aside as "not the query path's" and rebuilt it: a third full build per row."""
+    """The Commit keeps the Build's Q_word manifest: moving it aside as "not the query path's" and rebuilding it is a third full build per row."""
     r, built = _row_with_build(tmp_path, monkeypatch)
     assert r.program_digest() == PD
     _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
@@ -1057,7 +1057,7 @@ def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_st
 
 
 @pytest.mark.parametrize("argv, reads", [
-    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: vy-glm53-cpu-2 runs them
+    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: a CPU node runs them
     (("--stages", "match", "--match-phase", "gpu"), True),
     (("--stages", "match"), True),                                  # the GPU legs and the CPU half in one run
     (("--stages", "commit"), True),

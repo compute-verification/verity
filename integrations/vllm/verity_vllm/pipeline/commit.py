@@ -39,7 +39,6 @@ PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-
     required-value manifest whose program_digest is not the Build's is refused before the engine starts; the population is Q(P) at the CAP shape -- EOS-stopped
     positions are classified not-executed by rule, never cut out; control and instrumented tokens must be equal; PASS only when
     every commit_verdict check holds (the first failing reason is the verdict; never "PASS with errors recorded").
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations
@@ -300,7 +299,7 @@ def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, 
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
     fails by name.  `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
-    served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record), no longer the bare cap."""
+    served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record)."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
     for st in sorted(request_rows or {}):
@@ -502,7 +501,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
 
 from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
-from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
+from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03 fail-closed verdict)
 
 
 def tensor_digests(com, out, pair: int, prev: dict) -> int:
@@ -575,7 +574,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
                    finish_reasons: dict | None = None) -> dict[str, Any]:
     """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
     -- together the executed prefix of record every population consumer is placed over."""
-    """BIND-01: the binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
+    """The binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
@@ -718,7 +717,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
     if wrong_program:                                                              # a manifest of another Program is never a population
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=wrong_program)
-    elif man_hdr is not None and man_hdr.get("complete") is False:                 # [MAN-02] a manifest with unmodelled Program families is not a population
+    elif man_hdr is not None and man_hdr.get("complete") is False:                 # a manifest with unmodelled Program families is not a population
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []),
                    error="manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted(man_hdr["unmodelled"].items())))
     elif not epr["ok"]:                                                            # an early stop the declared rule cannot place, by name
@@ -1082,7 +1081,7 @@ class Options:
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
     expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run root (hex) differs from this reference root (the arm2/arm3 equality gate)")
     late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST: drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the " "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
-    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (MAN-09, a substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
+    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (a substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
     window_mb: int | None = option("--window-mb", type=int, default=None, help="windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); omitted = the collector's " "(native_collect.window_mb_default: 256 on native_collect_v2b unless --retain device, else per-step blocks); 0 = per-step blocks")
     window_slots: int | None = option("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
     layout: str = option("--layout", default="chunk-leaf-v1", choices=["chunk-leaf-v1", "chunk-leaf-v2"], help="L1 leaf-header layout of the executed and padding " "leaves, recorded in the binding map; v2 = header M := 0 (coordinator decision; roots differ from v1; windowed native_collect_v2b only)")
@@ -1094,7 +1093,7 @@ class Options:
     host_admit: float | None = option("--host-admit", type=float, default=None, metavar="MARGIN", help="with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the " "cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
     replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens " "EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots)")
     open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="(default on) after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); " "--no-open-after-release opens in the run only (not under --retain none)")
-    required_classes: str | None = option("--required-classes", default=None, help="REL-02 (R-14 interim): comma-separated class ids that MUST be declared with tensors > 0 by every " f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other " "evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
+    required_classes: str | None = option("--required-classes", default=None, help="comma-separated class ids that MUST be declared with tensors > 0 by every " f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other " "evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
     match_dir: str | None = option("--match-dir", "--oracle", default=None, help="the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, " "capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that " "identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
     program_dir: str | None = option("--program-dir", default=None, help="B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: " "sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the " "exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
@@ -1107,8 +1106,8 @@ class Options:
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting; default = the run root alone (honest-prover measurement)")
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (its certifier coin link)")
-    weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
+    weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
     replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
@@ -1128,7 +1127,7 @@ class Options:
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
-    required_manifest: str | None = option("--required-manifest", default=None, help="[MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
+    required_manifest: str | None = option("--required-manifest", default=None, help="the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the counts+classes source, which is the labelled fallback")
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
     padded_finalize: bool = option("--padded-finalize", default=False, action="store_true", help="the padded Commit: at finalize, every identity the required manifest names " "for a request OUTSIDE its executed prefix of record (declared LAG + declared EOS + served tokens; never inferred) is MATERIALISED as the " "canonical bot of its lifted width -- a step nobody executed becomes a padding step, a mixed step (B>1) is refolded from the retained leaf " "digests + the padding leaves -- so the ONE run root is over S = cap steps and the map (padded-binding-map/1) binds the full cap " "population (activity active / bot-by-enablement).  Requires --required-manifest.  Off = today's executed-steps-only Commit")
     moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
@@ -1335,7 +1334,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                        "worker_job": (_HOT or {}).get("jobs"), "worker_pid": os.getpid() if _HOT is not None else None,
                        "engine_built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((_HOT or {}).get("t_built") or time.time())),
                        # process state that decides the speed of the CPU-bound phases (register_weights, forked replay): a hot worker measured
-                       # ~+5 s on each vs a cold process on cp-sys -- these numbers are for locating the cause, not a verdict field
+                       # ~+5 s on each vs a cold process -- these numbers are for locating the cause, not a verdict field
                        "process_state": _process_state()}
     versions["engine_kwargs"] = {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")}
     # the RESOLVED async-scheduling mode (scheduler_config after the build), same fact the RunHeader attests
@@ -1655,7 +1654,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             w = GR.register_weights(_HOT, com, args.weights_hash)
         TL.end("prep.committer_setup", kind=kind)
         print(f"[delta] weight registration ({kind}): {w}", flush=True)
-        # [MAN-09] the weights of record are the CHECKPOINT's, not the committer's: sha256 every live parameter
+        # the weights of record are the CHECKPOINT's, not the committer's: sha256 every live parameter
         # the registration just hashed (same tensors, same moment) for the field-by-field comparison with the checkpoint-composed digests of
         # record (per pair, below).  Once per process, excluded from steady state like the registration itself.
         _live_wd: dict[str, Any] | None = None
@@ -1683,7 +1682,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     if not _pd:
                         raise RuntimeError("--checkpoint-dir needs the Program of record (--program-dir / --programs-root)")
                     _wor_rec = WR.build_record(_pd, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,   # the engine's own checkpoints.json (shard pins)
-                                               kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))   # [MAN-09c] the kv scales' engine assumption
+                                               kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))   # the kv scales' engine assumption
                     _wor_rec["source"] = f"derived in-process from {_pd} x {args.checkpoint_dir}"
                     if getattr(args, "programs_root", None):
                         # stamp the WHOLE of-record set (every component's digest, struct-checked, + the workload digest +
@@ -1888,7 +1887,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                       "root_finalisation_s": s.root_finalisation_s, "root_ready_after_step_end_s": s.t_root_ready - s.t_step_end,
                                       "backlog_at_step_end": s.backlog_at_step_end,
                                       "spans": rc.spans["per_step"].get(s.step, {})})
-                # REL-02 (R-14 interim): the coverage declaration of THIS run feeds the verdict -- every required class declared, every
+                # the coverage declaration of THIS run feeds the verdict -- every required class declared, every
                 # declared leaf-binding class with tensors > 0 -- so a producer that never fired cannot pass on equal attempt counts
                 d = com.coverage_declaration(rc)
                 d["run"] = {"workload": args.workload, "case": eng.case, "model": eng.cp["repo"]}
@@ -1897,7 +1896,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 row["commit"]["expected_tensors"] = rc.extra.get("expected_tensors")
                 row["commit"]["committed_tensors"] = rc.extra.get("committed_tensors")
                 row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
-                # BIND-01: binding map + identity coverage against the collector-independent expected population, and openings drawn
+                # binding map + identity coverage against the collector-independent expected population, and openings drawn
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
                 GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and (_HOT or {}).get("last", _HOT is None), after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
@@ -1928,7 +1927,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 _ids_full = None                                                          # the engine-step-annotated identities the reconciler re-derives the cell counts from
                 if required_manifest is not None and hasattr(com, "layouts_dump"):
                     TL.start("validate.manifest_coverage", pair=pair)
-                    # [MAN-01] identity coverage against the Program/query manifest (the collector's own layouts are the CLAIM, the manifest the requirement)
+                    # identity coverage against the Program/query manifest (the collector's own layouts are the CLAIM, the manifest the requirement)
                     lay = com.layouts_dump()
                     _pad_lay = None
                     if getattr(com, "_padding", None):
@@ -2214,7 +2213,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 elif not _c2_deferred and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
                     C2.run(_c2, replay_cache)
                 if _wor_rec is not None or _live_wd is not None:
-                    # [MAN-09] WEIGHTS PIN: the served parameters the committer registered == the checkpoint of record, field by field
+                    # WEIGHTS PIN: the served parameters the committer registered == the checkpoint of record, field by field
                     from verity_vllm.check import weights_of_record as WR
                     TL.start("validate.weights_pin", pair=pair)
                     if _wor_rec is None or _live_wd is None or _wor_rec.get("error"):
