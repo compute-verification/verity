@@ -1,6 +1,7 @@
 import Proofs.Properties.Verity.SampledAccept
 import Proofs.Properties.Verity.PlayDevice
 import Proofs.Properties.Verity.PlayDeviceLog
+import Proofs.Properties.Verity.AcceptRounds
 
 /-!
 # `PlayCoupling.prob_le` by driving the play through the live audit (`SampledDeploy.accept_le`'s reduction)
