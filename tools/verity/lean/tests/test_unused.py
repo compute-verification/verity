@@ -196,5 +196,5 @@ def test_used_lean_on_the_controls(tmp_path):
     got = U.decide(pkg, policy, used, [], [])
     why = {m: r.split(":", 1)[0] for m, r in got["kept"].items()}
     assert why == {"Control": "root", "Control.Assumptions": "used", "Control.Defs": "used", "Control.Thms": "used",
-                   "Control.Base": "refs", "Control.Syn": "syntax", "Scratch": "exempt", "RunOk": "exempt"}
+                   "Control.Base": "refs", "Control.Syn": "syntax", "Scratch": "exempt", "RunOk": "runs"}
     assert got["unused"] == ["Control.Extra", "Control.Group"]
