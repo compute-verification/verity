@@ -430,13 +430,13 @@
   "Properties.Attest": {
    "imports": [
     "Mathlib",
-    "MemoryChallenger.Attest",
+    "Attest.Period",
     "Properties.Pous.MemoryChallenger",
     "Definitions.Claims",
     "Definitions.Accounting.Assumptions.Parties"
    ],
    "except": [],
-   "why": "a party's signed periods are stated over the code that checks them (MemoryChallenger.Attest, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+   "why": "a party's signed periods are stated over the code that checks them (Attest.Period, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
   },
   "Properties.Identity": {
    "imports": ["Identity.Tagged"],
