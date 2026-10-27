@@ -23,8 +23,10 @@ from verity_vllm.program.predict import window_weights as WW
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
 from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.gates import embedding as E
+from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 
 PROGRAM = "test/model"
@@ -416,6 +418,36 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
         WW.weight_value(program, "weights/x@3/rows", np.zeros(3, np.uint16), KEY, 0)
 
 
+def _as_leaves(x: np.ndarray, width: int, leaves: int) -> np.ndarray:
+    """A port's ``width``-bit elements as its Definition's ``leaves``: the elements themselves, or each element's bits, least
+    significant first, where the port's leaves are bits (`ScanSlots_v1`'s state words)."""
+    if x.shape[1] == leaves:
+        return x
+    return ((x.astype(np.uint64)[:, :, None] >> np.arange(width, dtype=np.uint64)) & 1).reshape(len(x), -1)
+
+
+def _packed(bits: np.ndarray, width: int) -> np.ndarray:
+    """``(n, k · width)`` bits as ``k`` ``width``-bit elements, least significant first (`_as_leaves`' inverse)."""
+    return (bits.reshape(len(bits), -1, width) << np.arange(width, dtype=np.uint64)).sum(axis=2)
+
+
+def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
+    """`_as_leaves` and `_packed` against `ScanSlots_v1` and `SlotEntry_v1`, whose ports are words of bit leaves: a state row
+    gives `slots_reference`'s lanes through them, and an entry's bits pack to `entry_reference`'s words."""
+    scan = SS.bridge(CLASS.scan, CLASS.prompt)
+    row = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
+    (_, t), = scan.signature()[0]
+    out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(1, -1).astype(np.uint64)
+    b = scan.bindings
+    ref = IO.slots_reference(row[0].tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
+    assert _packed(out, 32)[0].tolist() == [v for r, h in ref for v in (*r, *h)]
+    entry = bind(IO.SlotEntry, KO=2, IDB=17, NP=4, STOP=())
+    state = [(2 - 4 - 2) & IO.M32, 2, 17, 3]
+    bits = np.asarray(evaluate_batch(entry, np.array([[1]], np.uint32), np.array([state], np.uint32), kernel="reference"))
+    words = _packed(bits.reshape(1, -1).astype(np.uint64), 16)[0].tolist()
+    assert words == IO.entry_reference(1, state, 2, 17, 4, ()) and words[:2] == [2, 0]
+
+
 @pytest.mark.slow
 def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs(window):
     """The rows recorded into a `Window` (its registered values under the committer's key, the tables' supplied) are
@@ -447,10 +479,16 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
                 if h != rows.outs[tid][0][u].tolist() or [ok] != rows.outs[tid][1][u].tolist():
                     bad.setdefault(tid, []).append(u)
             continue
-        args = [np.ascontiguousarray(x).view(f"<u{w // 8}").reshape(n, -1) for x, w in zip(ins, lay.widths)]
-        want = np.asarray(evaluate_batch(fn, *args, kernel="reference")).reshape(n, -1).astype(np.uint64)
-        got = np.concatenate([np.ascontiguousarray(o).view(f"<u{w // 8}").reshape(n, -1).astype(np.uint64)
-                              for o, w in zip(rows.outs[tid], lay.widths[len(lay.rows):])], axis=1)
+        params, ret = fn.signature()
+        args = [_as_leaves(np.ascontiguousarray(x).view(f"<u{w // 8}").reshape(n, -1), w, t.leaves)
+                for x, w, (_, t) in zip(ins, lay.widths, params)]
+        flat = np.asarray(evaluate_batch(fn, *args, kernel="reference")).reshape(n, -1).astype(np.uint64)
+        got, want, at = [], [], 0
+        for o, w, f in zip(rows.outs[tid], lay.widths[len(lay.rows):], getattr(ret, "fields", None) or (ret,)):
+            got.append(np.ascontiguousarray(o).view(f"<u{w // 8}").reshape(n, -1).astype(np.uint64))
+            part, at = flat[:, at:at + f.leaves], at + f.leaves
+            want.append(part if part.shape[1] == got[-1].shape[1] else _packed(part, w))
+        got, want = np.concatenate(got, axis=1), np.concatenate(want, axis=1)
         if (u := np.flatnonzero((got != want).any(axis=1))).size:
             bad[tid] = u.tolist()
     assert bad == {}
