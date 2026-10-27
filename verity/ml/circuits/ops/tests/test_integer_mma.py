@@ -7,12 +7,14 @@ from dataclasses import replace
 import pytest
 
 from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.silicon.instructions import EVIDENCE_IDS as INSTRUCTION_IDS
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 from verity.ml.circuits.silicon.integer import (
     BLACKWELL_SM100_S8_K32,
     BLACKWELL_SM120_S8_M16N8K32,
     BLACKWELL_SM120_S8_M16N8K32_WRAP,
     BLACKWELL_SM120_U8S8_M16N8K32,
+    EVIDENCE_IDS,
     HOPPER_SM90_S8_K32,
     S32_MAX,
     S32_MIN,
@@ -120,8 +122,10 @@ def test_the_s8_limit_is_2_17_and_tight() -> None:
 def test_registry_entry() -> None:
     ins = INSTRUCTIONS["sm120.mma.m16n8k32.s8"]
     assert ins.model is SAT and ins.status == "pinned" and ins.acc_dtype == "s32" and ins.shape == (16, 8, 32)
-    assert "r20261015-084000-06d8" in ins.evidence[0] and "r20261015-071801-6d3c" in ins.evidence[0]
-    assert ins.dossier == "art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474"
+    assert ins.evidence[0] == SAT.validated
+    probe, library_kernel = EVIDENCE_IDS[SAT.name]["runs"]
+    assert {probe, library_kernel} <= set(INSTRUCTION_IDS[ins.id]["runs"])
+    assert ins.dossier == EVIDENCE_IDS[SAT.name]["dossier"] and ins.dossier.startswith("art:")
     assert "HYPOTHESIS" not in SAT.validated and "HYPOTHESIS" not in WRAP.validated
     assert MODELS[SAT.name] is SAT and MODELS[WRAP.name] is WRAP
 
@@ -131,7 +135,7 @@ def test_u8s8_sibling_wraps_the_exact_dot() -> None:
     from verity.ml.circuits.ops import prims as P
 
     assert (U8S8.dtype, U8S8.b_dtype, U8S8.satfinite) == ("u8", "s8", False) and MODELS[U8S8.name] is U8S8
-    assert "r20261015-084000-06d8" in U8S8.validated and "u8.s8" in U8S8.validated
+    assert EVIDENCE_IDS[U8S8.name]["runs"] == EVIDENCE_IDS[SAT.name]["runs"][:1] and "u8.s8" in U8S8.validated
     rng = random.Random(5)
     cases = [([255] * 32, [127] * 32, S32_MAX), ([255] * 32, [-128] * 32, S32_MIN), ([0] * 32, [0] * 32, -1)]
     cases += [([rng.randrange(256) for _ in range(32)], [rng.randrange(-128, 128) for _ in range(32)],

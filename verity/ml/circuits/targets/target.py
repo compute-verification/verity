@@ -152,7 +152,9 @@ proof block at a peak is ``2K / flop_per_second``.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from verity.ml.circuits.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16,
@@ -162,6 +164,7 @@ from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, Pipeline
 __all__ = [
     "BF16_HOPPER",
     "DISCREPANCY_LOG",
+    "EVIDENCE_IDS",
     "FAMILY",
     "FAMILY_DIGEST",
     "FIRST",
@@ -238,13 +241,20 @@ class Target:
     anchor_device: str
     status: Status = "frozen"
     instruction: str | None = None
-    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``benchmarks/tc_probe/trust.py``).
+    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``benchmarks/tc_probe/trust.py``),
+    #: from :data:`EVIDENCE_IDS`.
     dossier: str | None = None
 
 
+#: Target name -> the store ids it cites (``dossier``).
+EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("target_evidence.json").read_text())
 
 
-FIRST = Target(
+def _target(**kw) -> Target:
+    return Target(**kw, dossier=EVIDENCE_IDS.get(kw["name"], {}).get("dossier"))
+
+
+FIRST = _target(
     name="first-campaign-target/2026-09-21",
     family=FAMILY,
     family_digest=FAMILY_DIGEST,
@@ -257,10 +267,9 @@ FIRST = Target(
     anchor_device="NVIDIA A100 SXM4 80GB",
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
-    dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
 )
 
-BF16_HOPPER = Target(
+BF16_HOPPER = _target(
     name="bf16-hopper-mma-draft/2026-09-22",
     family=BF16_HOPPER_FAMILY,
     family_digest=BF16_HOPPER_FAMILY_DIGEST,
@@ -292,7 +301,7 @@ _FP8_EPILOGUE = (
     "composes with this target, it is not part of it"
 )
 
-FP8_HOPPER_WGMMA = Target(
+FP8_HOPPER_WGMMA = _target(
     name="fp8-hopper-wgmma-draft/2026-09-22",
     family=FP8_HOPPER_FAMILY,
     family_digest=FP8_HOPPER_FAMILY_DIGEST,
@@ -308,10 +317,9 @@ FP8_HOPPER_WGMMA = Target(
     anchor_device="NVIDIA H100 SXM5 80GB",
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
-    dossier="art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
 )
 
-FP8_ADA_MMA = Target(
+FP8_ADA_MMA = _target(
     name="fp8-ada-mma-draft/2026-09-22",
     family=FP8_ADA_FAMILY,
     family_digest=FP8_ADA_FAMILY_DIGEST,
@@ -327,7 +335,6 @@ FP8_ADA_MMA = Target(
     anchor_device="NVIDIA GeForce RTX 4090",
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
-    dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
 )
 
 
@@ -342,7 +349,7 @@ _NVFP4_EPILOGUE = (
     "with this target, it is not part of it"
 )
 
-NVFP4_SM120 = Target(
+NVFP4_SM120 = _target(
     name="nvfp4-sm120-mma-draft/2026-09-22",
     family=NVFP4_FAMILY,
     family_digest=NVFP4_FAMILY_DIGEST,
@@ -364,7 +371,7 @@ NVFP4_SM120 = Target(
 
 # The conformance device is the RTX PRO 6000, where the step was measured, not the arch's default anchor (the RTX 5090): the
 # vLLM sm_120 target runs on the PRO 6000, and no FP8 capture exists on the 5090.
-FP8_SM120_MMA = Target(
+FP8_SM120_MMA = _target(
     name="fp8-sm120-mma-draft/2026-09-30",
     family=FP8_SM120_FAMILY,
     family_digest=FP8_SM120_FAMILY_DIGEST,
@@ -380,7 +387,6 @@ FP8_SM120_MMA = Target(
     anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
     status="draft",
     instruction="sm120.mma.m16n8k32.e4m3",
-    dossier="art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89",
 )
 
 #: Every target by name; ``verity/ml/circuits/silicon/discrepancy_log.json`` entries name one of these (or an instruction id).
