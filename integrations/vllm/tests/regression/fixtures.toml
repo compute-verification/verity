@@ -498,6 +498,6 @@ since = "348a4e2ae (S1, vllm query: Q_word v1 as the partition of record), lande
 needs = "a re-record of #74 on an H100 (GPU) whose Programs name ScaledMmFp8BlockSharedScale_v1, then a re-baseline of expected/ from it"
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".retired.step_segmentation]
-reason = "request_component raises KeyError: AmpereBF16TcDot16_v1 over the staged descriptors: 74b7f51f1 removed the v1 registration (the step is core AmpereBF16TcDot16_v2, same values, new Definition id), and the epoch re-record of the row was deferred at its Match (G4 FAIL)"
+reason = "request_component raises KeyError: AmpereBF16TcDot16_v1 over the staged descriptors: 74b7f51f1 removed the v1 registration (the step is core AmpereBF16TcDot16_v2, same values, new Definition id), and the epoch re-record of workload 101 was deferred at its Match (G4 FAIL)"
 since = "74b7f51f1 (2026-09-28: vllm registry, AmpereBF16TcDot16_v2)"
-needs = "a re-record of the row on an L40S under the current registry (GPU), then a re-baseline of expected/ from it"
+needs = "a re-record of workload 101 on an L40S under the current registry (GPU), then a re-baseline of expected/ from it"

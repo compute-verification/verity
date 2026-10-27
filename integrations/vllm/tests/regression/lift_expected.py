@@ -16,7 +16,7 @@ reference itself moved -- a finding, not a refresh.  The hand-written `[[rows.<r
 test_regression.py LABELLED DECISIONS) are the one thing not lifted from the records: they are read from the existing fixtures.toml
 and written back verbatim.
 
-expected/ is lifted only for the rows the index names.  A row recorded outside the vault extraction (`row = 101`, the stochastic canary)
+expected/ is lifted only for the rows the index names.  A row recorded outside the vault extraction (workload 101, the stochastic canary)
 has its own INDEX-shaped inventory: `--append` adds the rows it names to the fixtures.toml and files.toml on disk (the existing text is
 kept byte for byte; a key already there is refused), and a later regeneration from the vault's INDEX.json carries every row that index does not name
 over as it is (spec, files, artifacts).  An index entry may state its `selection` (default: `green` for GREEN, else `by-name`).
