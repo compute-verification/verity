@@ -1,6 +1,8 @@
 import Proofs.Flock.EndToEnd.Period.Run
 import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Seq
+import Mathlib.Algebra.BigOperators.Field
 
 /-!
 # A period's run: the union bound and the horizon escape
@@ -71,7 +73,7 @@ theorem endsE_nonneg {f : α → Game δ} {c : (a : α) → Strategy (f a) → �
     ∀ (g : Game α) (s : Strategy (g.bind f)), 0 ≤ endsE f c g s
   | .ret a, s => hc a s
   | .send _ kk, s => endsE_nonneg hc (kk s.1) s.2
-  | @Game.coin _ C _ _ kk, s =>
+  | @Game.coin _ _ _ _ kk, s =>
       div_nonneg (Finset.sum_nonneg fun x _ => endsE_nonneg hc (kk x) (s x)) (Nat.cast_nonneg _)
 
 theorem endsE_mono {f : α → Game δ} {c c' : (a : α) → Strategy (f a) → ℝ} :
@@ -79,7 +81,7 @@ theorem endsE_mono {f : α → Game δ} {c c' : (a : α) → Strategy (f a) → 
       endsE f c g s ≤ endsE f c' g s
   | .ret _, _, h => h
   | .send _ kk, s, h => endsE_mono (kk s.1) s.2 h
-  | @Game.coin _ C _ _ kk, s, h =>
+  | @Game.coin _ _ _ _ kk, s, h =>
       div_le_div_of_nonneg_right (Finset.sum_le_sum fun x _ => endsE_mono (kk x) (s x) (h x)) (Nat.cast_nonneg _)
 
 theorem endsE_const (f : α → Game δ) (r : ℝ) :
@@ -229,11 +231,13 @@ theorem periodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) �
 
 /-- **The expectation of `f` at sampling block `i + d`** of the period played by `s`, at the strategy that plays it
 there, over the coins of the sampling blocks before it; `0` past the period's end. -/
-noncomputable def periodE (G : (i : ℕ) → Game (β i)) (f : (j : ℕ) → Strategy (G j) → ℝ) :
-    (d i T : ℕ) → Strategy (periodG G i T) → ℝ
-  | _, _, 0, _ => 0
-  | 0, i, _ + 1, s => f i (Strategy.ofBind _ (G i) s)
-  | d + 1, i, T + 1, s => endsE (fun _ => periodG G (i + 1) T) (fun _ s' => periodE G f d (i + 1) T s') (G i) s
+noncomputable def periodE (G : (i : ℕ) → Game (β i)) (f : (j : ℕ) → Strategy (G j) → ℝ)
+    (d i T : ℕ) (s : Strategy (periodG G i T)) : ℝ :=
+  match T, s, d with
+  | 0, _, _ => 0
+  | _ + 1, s, 0 => f i (Strategy.ofBind _ (G i) s)
+  | T + 1, s, d + 1 => endsE (fun _ => periodG G (i + 1) T) (fun _ s' => periodE G f d (i + 1) T s') (G i) s
+termination_by structural T
 
 section PeriodE
 
@@ -261,7 +265,7 @@ theorem periodE_const_le (r : ℕ → ℝ) (hr : ∀ j, 0 ≤ r j) :
   | d + 1, i, T + 1, s => by
       refine (endsE_mono (G i) s (atEnds_of_forall (fun _ s' => periodE_const_le r hr d (i + 1) T s') (G i) s)).trans
         (le_of_eq ?_)
-      rw [endsE_const, show i + 1 + d = i + (d + 1) by omega]
+      exact (endsE_const _ (r (i + 1 + d)) (G i) s).trans (congrArg r (by omega))
 
 theorem periodE_zero : ∀ (d i T : ℕ) (s : Strategy (periodG G i T)), periodE G (fun _ _ => 0) d i T s = 0
   | _, _, 0, _ => rfl
@@ -284,8 +288,8 @@ theorem periodE_mul (a : ℕ → ℝ) (f : (j : ℕ) → Strategy (G j) → ℝ)
   | 0, _, _ + 1, _ => rfl
   | d + 1, i, T + 1, s => by
       refine (endsE_congr (fun _ s' => periodE_mul a f d (i + 1) T s') (G i) s).trans ?_
-      rw [endsE_mul, show i + 1 + d = i + (d + 1) by omega]
-      rfl
+      refine (endsE_mul _ (a (i + 1 + d)) (fun _ s' => periodE G f d (i + 1) T s') (G i) s).trans ?_
+      exact congrArg (· * periodE G f (d + 1) i (T + 1) s) (congrArg a (by omega))
 
 theorem periodE_sum {ι : Type} (t : Finset ι) (f : ι → (j : ℕ) → Strategy (G j) → ℝ) :
     ∀ (d i T : ℕ) (s : Strategy (periodG G i T)),
@@ -329,9 +333,12 @@ theorem period_unionE {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
           · exact ⟨r, hr, hbr⟩) (G i) s hs.2)
       have hE : ∑ d ∈ Finset.range (T + 1), periodE G f d i (T + 1) s = f i (Strategy.ofBind _ (G i) s) +
           endsE (fun _ => periodG G (i + 1) T) (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') (G i) s := by
-        rw [Finset.sum_range_succ', add_comm, endsE_sum]
-        rfl
-      rw [hE, ENNReal.ofReal_add (hf _ _) (endsE_nonneg hc (G i) s)]
+        rw [Finset.sum_range_succ', add_comm]
+        exact congrArg (fun x => f i (Strategy.ofBind _ (G i) s) + x)
+          (endsE_sum (Finset.range T) _ (fun d _ s' => periodE G f d (i + 1) T s') (G i) s).symm
+      have hε : ∑ t ∈ Finset.range (T + 1), ε (i + t) = ε i + ∑ t ∈ Finset.range T, ε (i + 1 + t) := by
+        rw [Finset.sum_range_succ', Nat.add_zero, add_comm]
+        exact congrArg (ε i + ·) (Finset.sum_congr rfl fun t _ => congrArg ε (by omega))
       calc value (fun l => ∃ r ∈ l, bad r) (periodRun G rec i (T + 1) s)
           ≤ prob (fun b => bad (rec i (Strategy.ofBind _ (G i) s) b)) (G i) (Strategy.ofBind _ (G i) s) +
               (∑ t ∈ Finset.range T, ε (i + 1 + t) + ENNReal.ofReal (endsE (fun _ => periodG G (i + 1) T)
@@ -340,11 +347,9 @@ theorem period_unionE {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
               (∑ t ∈ Finset.range T, ε (i + 1 + t) + ENNReal.ofReal (endsE (fun _ => periodG G (i + 1) T)
                 (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') (G i) s)) := by
             gcongr; exact hstage i _ hs.1
-        _ = ∑ t ∈ Finset.range (T + 1), ε (i + t) + (ENNReal.ofReal (f i (Strategy.ofBind _ (G i) s)) +
-              ENNReal.ofReal (endsE (fun _ => periodG G (i + 1) T)
-                (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') (G i) s)) := by
-            rw [Finset.sum_range_succ', Nat.add_zero,
-              Finset.sum_congr rfl fun t _ => by rw [Nat.add_assoc, Nat.add_comm 1 t]]
+        _ = ∑ t ∈ Finset.range (T + 1), ε (i + t) +
+              ENNReal.ofReal (∑ d ∈ Finset.range (T + 1), periodE G f d i (T + 1) s) := by
+            rw [hε, hE, ENNReal.ofReal_add (hf _ _) (endsE_nonneg hc (G i) s)]
             ring
 
 /-- **The union bound over a period's sampling blocks.** -/
