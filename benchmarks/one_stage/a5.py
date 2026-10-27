@@ -422,9 +422,9 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
     """The verifier's wiring check (§16.13, `wiring.check_drawn`) on altered wires, each with the units it alters drawn: the first
-    wire's writers rotated (each unit reading another unit's row), two wires of one output swapped (a split's partial read into
-    another combine slot), and a wired row's string flipped in its reader's public body (a partial that is not the one its
-    writer committed), its unit 0 drawn."""
+    wire's unit 0 reading another unit's row of its words (rotating the writers is the honest wire at one unit a member or on
+    a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
+    flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 drawn."""
     neg: dict[str, dict] = {}
     k = next((k for k, m in enumerate(members) if m.wired), None)
     if k is None:
@@ -437,8 +437,12 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     def units(j: int) -> range:
         return range(members[j].base, members[j].base + members[j].n)
 
-    neg["chunk-wired-to-another-unit (§16.13)"] = {
-        "refused": bool(WI.check_drawn(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics, units(k)))}
+    words = dict(members[k].rows)[p]
+    other = next((x.base + i for x in members if dict(x.out_rows).get(o) == words for i in range(x.n) if x.base + i != ws[0]),
+                 None)
+    if other is not None:
+        neg["chunk-wired-to-another-unit (§16.13)"] = {
+            "refused": bool(WI.check_drawn(rewired(k, ((p, o, (other, *ws[1:])), *rest)), publics, [members[k].base]))}
     swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
                  if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
     if swap is not None:
