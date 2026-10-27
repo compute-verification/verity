@@ -1941,7 +1941,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves.
 // V31_GSM N > 0: a Fill's calls on a Split, the compute on N SMs and the commit on the rest, each call's commit beside the
 // next calls' compute (V31_SCHED 0's order whatever V31_SCHED says); V31_GCOINS 1 there, a call's coins on the commit's
-// SMs too, after the previous call's form.
+// SMs too, after the previous call's form. V31_GSM_BY "NxK:G_NxK:G ...": a Fill of that N and K on G (0: no split) in
+// place of V31_GSM.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
@@ -1950,6 +1951,18 @@ struct Knobs {
       gsm = env_int("V31_GSM", 0), gcoins = env_int("V31_GCOINS", 0),
       ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
   std::string cprio = env_str("V31_CPRIO", "hi");
+  int gsm_of(int n, int k) const {
+    std::string s = env_str("V31_GSM_BY", "");
+    for (char& c : s)
+      if (c == '_' || c == ',') c = ' ';
+    std::istringstream is(s);
+    for (std::string e; is >> e;) {
+      int en, ek, g;
+      if (sscanf(e.c_str(), "%dx%d:%d", &en, &ek, &g) != 3) { fprintf(stderr, "V31_GSM_BY: bad entry %s\n", e.c_str()); exit(2); }
+      if (en == n && ek == k) return g;
+    }
+    return gsm;
+  }
 };
 static void set_carveout(int pct) {
   if (pct < 0) return;
@@ -2068,6 +2081,12 @@ static void splits_free() {
   }
   g_splits.clear();
   g_stream_sms.clear();
+}
+// every stream's work so far done, the splits' too (cudaDeviceSynchronize waits on the current context's alone)
+static void device_sync() {
+  CK(cudaDeviceSynchronize());
+  for (const Split* p : g_splits)
+    for (int j = 0; j < 3; j++) cuk(cuStreamSynchronize((CUstream)p->s[j]), "cuStreamSynchronize");
 }
 // s's work so far before the next on each of p's streams, and theirs so far before s's next (s a device-context stream)
 static void split_fork(const Split* p, cudaStream_t s) {
@@ -2602,7 +2621,7 @@ struct Fill {
       CK(cudaEventRecord(ev_done[b], s1));
     }
     CK(cudaEventCreateWithFlags(&ev_formed, cudaEventDisableTiming));
-    if (kn.gsm > 0) use(split_of(kn.gsm));
+    if (const int g = kn.gsm_of(n, k); g > 0) use(split_of(g));
   }
   cudaStream_t cs() const { return sp ? sp->s[0] : s0; }
   cudaStream_t ms() const { return sp ? sp->s[1] : s1; }
@@ -2639,7 +2658,7 @@ struct Fill {
   void use(const Split* p) {
     if (p == sp) return;
     flush();
-    CK(cudaDeviceSynchronize());
+    device_sync();
     if (p) prep(p);
     Evs cur{sp, {ev_comp[0], ev_comp[1]}, {ev_done[0], ev_done[1]}, ev_formed, {ev_salt[0], ev_salt[1]}, ev_coins};
     Evs nx{};
@@ -2869,8 +2888,11 @@ struct Fill {
   // copy b's committed values (testing): leaves x ROW bytes, leaf pos's row at pos ROW (dither.values_buffer); words[b]
   // itself, or the rows gathered into vbuf
   const uint8_t* values_of(int b);
-  // C.ks of st's context (cx: st's split side, else null)
+  // C.ks on st (cx: st's split side, else null), in the current context's copy and in cx's: a kernel on a split's stream
+  // reads one of the two, the context the runtime resolves it in
   void set_ks(int b, cudaStream_t st, CUcontext cx = nullptr) {
+    CK(cudaMemcpyToSymbolAsync(C, ksw[b], 128, offsetof(Consts, ks), cudaMemcpyHostToDevice, st));
+    if (!cx) return;
     InCtx in(cx);
     CK(cudaMemcpyToSymbolAsync(C, ksw[b], 128, offsetof(Consts, ks), cudaMemcpyHostToDevice, st));
   }
@@ -3402,7 +3424,7 @@ static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, co
   }
   for (int i = 0; i < novl; i++) f.issue(f.calls * f.leaves, A, Cheat{}, true);
   f.flush();
-  CK(cudaDeviceSynchronize());
+  device_sync();
   CK(cudaGetLastError());
   printf("%s: %llu calls (2 serial, %d overlapped, weight coins a call), ltw %d, served %d, gsm %d (%d + %d SMs)\n", name,
          (unsigned long long)f.calls, novl, f.ltw ? 1 : 0, f.o ? 1 : 0, f.sp ? f.sp->n : 0, f.sp ? f.sp->sms[0] : f.nsm,
@@ -3724,8 +3746,9 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
 
 #ifdef V31_LIB
 // ---------------------------------------------------------------- the per-call binding (v31lib.py over ctypes)
-// One process, one device: every context shares its compute and commit streams (V31_GSM: its split's; calls run in issue
-// order, each commit beside the next call's compute), a domain slot each (COMMIT_GPU_DOMS of them) and one ROW (commit_gpu's
+// One process, one device: every context shares its compute and commit streams (V31_GSM, V31_GSM_BY: its split's, shared
+// by the contexts on that split; calls run in issue order, each commit beside the next call's compute), a domain slot each
+// (COMMIT_GPU_DOMS of them) and one ROW (commit_gpu's
 // C fixes it). Every
 // function returns 0, or -1 with the reason in v31_error(); a CUDA failure exits the process (commit_gpu's CK). Not
 // thread-safe: one thread drives every context.
@@ -3768,7 +3791,7 @@ void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const 
     CK(cudaStreamCreateWithPriority(&g_s0, cudaStreamNonBlocking, cp == "lo" ? hi : lo));
     CK(cudaStreamCreateWithPriority(&g_s1, cudaStreamNonBlocking, cp == "hi" ? hi : lo));
   }
-  CK(cudaDeviceSynchronize());   // Committer::init rewrites C, which a running salt phase reads
+  device_sync();   // Committer::init rewrites C, which a running salt phase reads
   LibCtx* c = new LibCtx;
   c->f.o = served != 0;
   c->f.setup(m, n, k, lp, L, row, read_params(params_path), dom, g_s0, g_s1);
