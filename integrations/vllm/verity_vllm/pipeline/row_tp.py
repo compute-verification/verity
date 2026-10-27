@@ -135,7 +135,6 @@ class TpRow(Row):
             print(f"no manifest {self.wl}")
             raise Stop(2)
         self.nccl = self.p2p_env()
-        self.hidden_so = self.hidden_build()
         self.bdir, self.M = f"{self.d}/build", f"{self.d}/match"
         for p in (self.d, self.bdir, self.M, self.ncb):
             os.makedirs(p, exist_ok=True)
@@ -168,7 +167,7 @@ class TpRow(Row):
         code9 = self.code9 = sha[:9]
         shapes = " ".join(f"{lp},{t}" for lp, t in self.shapes)
         self.log(f"start tp={self.W} B={self.B} I={self.I} O={self.O} MML={self.MML} mnbt={self.MNBT} shapes=[{shapes}] ckpt={self.ck or '-'} "
-                 f"stages={self.stages} fold_profile={self.fold_profile or 'none'} gpu_util={self.gpu_util} hidden_so={self.hidden_so} code={code9} "
+                 f"stages={self.stages} fold_profile={self.fold_profile or 'none'} gpu_util={self.gpu_util} code={code9} "
                  f"NCCL_P2P_DISABLE={self.nccl or 'unset'} {self.engine[-1]}")
         self.tl("row", "start", ("stages", self.stages), ("B", self.B), ("tp", self.W), ("code", code9), ("pod", os.uname().nodename))
         self.install_signal_forwarding()
@@ -201,11 +200,6 @@ class TpRow(Row):
         """The ``--engine-arg``s tp-capture and tp-commit share; ``disable_custom_all_reduce`` last."""
         return ["--engine-arg", f"max_model_len={self.MML}", "--engine-arg", f"max_num_batched_tokens={self.MNBT}",
                 "--engine-arg", f"disable_custom_all_reduce={str(self.custom_all_reduce_off()).lower()}"]
-
-    def hidden_build(self) -> str:
-        """The FA2 tap build the ranks run: the guarded-max one unless GUARDED_MAX_TAP=0 (for A/B only)."""
-        env = self.env
-        return env.hidden_so or (env.hidden_so_fa2_guarded if self.ck_.guarded_max_tap == "1" else env.hidden_so_fa2)
 
     # ------------------------------------------------------------------------------------------------ Build
     def derive_jobs(self, shapes: list[tuple[int, int]], derives: int) -> int:
@@ -500,9 +494,6 @@ class TpRow(Row):
         to_k = ck.commit_timeout or 7200
         t0 = int(time.time())
         self.tl("stage.commit", "start")
-        if not os.path.isfile(self.hidden_so):
-            self.verdict("commit", "FAIL", f"hidden .so missing: {self.hidden_so}")
-            raise Stop(12)
         for r in range(self.W):
             if not R.tp_rank_workload_digest(self.bdir, r):
                 self.verdict("commit", "FAIL", f"GP-01 workload digest absent for rank {r}: Build first")
@@ -526,7 +517,7 @@ class TpRow(Row):
         if why:
             self.verdict("commit", "FAIL", why)
             raise Stop(12)
-        self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families); guarded max {'on' if ck.guarded_max_tap == '1' else 'off'}")
+        self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families)")
         self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
         self.child_env["VERITY_RETAIN"] = ck.retain
         self.child_env["VERITY_STAGING_BOUNDED"] = "1" if self.config_run else "0"
@@ -562,7 +553,7 @@ class TpRow(Row):
         else:
             match, arms = ["--match-dir", self.M], ["--pairs", str(ck.pairs), "--warmup", "2", "--value-check"]
         cmd = self.cli("tp-commit", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--committer", "native_collect_v2b",
-                       "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
+                       "--openings", "64", "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *self.build_ranks(),
                        "--required-manifest", f"{d}/manifest.json", *match, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")

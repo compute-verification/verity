@@ -1,7 +1,6 @@
-"""The Commit of record's acquisition on a built committer: its required classes (`classes_of_record`) and every source, tap and
-hook set its required-value manifest asks for (`attach_of_record`). `pipeline.commit.main` builds every committer of a Commit
-through these, and serve-openai's rows-sha512 Commit (`pipeline.serve_seal.committer`) builds its own through them too, over
-the bench row's manifest of record."""
+"""The Commit of record's acquisition on a built committer: every source, tap and hook set its required-value manifest asks for
+(`attach_of_record`). `pipeline.commit.main` builds every committer of a Commit through it, and serve-openai's rows-sha512 Commit
+(`pipeline.serve_seal.committer`) builds its own through it too, over the bench row's manifest of record."""
 from __future__ import annotations
 
 import json
@@ -10,58 +9,23 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm import settings
-from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
-from verity_vllm.check.commit_rules import HIDDEN_CLASS_BY_FA, hidden_classes_required, required_classes_default
-
-
-def classes_of_record(required_manifest: dict[str, Any] | None, model: Any, fa_version: int | None) -> tuple[tuple[str, ...], str | None]:
-    """The required classes of an eager Commit whose engine runs FA``fa_version``, with the attention hidden class the manifest names
-    for ``model`` (`hidden_source.attention_hidden`), and that class (None: none)."""
-    hidden_family = HS.attention_hidden(required_manifest, model)["family"]
-    return HS.with_hidden_class(required_classes_default(fa_version), hidden_family), hidden_family
+from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.check.commit_rules import hidden_stream_refusal
 
 
 def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str, Any] | None, out: Path, *, kind: str,
-                     required_classes: tuple[str, ...], required_classes_cli: bool, hidden_family: str | None, fa_version: int | None,
-                     cb_plan: Any = None, served: Any = None) -> SimpleNamespace:
-    """The Commit's acquisition on ``com`` (``eng``'s model and runner) for its required-value manifest: the attention hidden source
-    (``args.hidden_so``) when the manifest names the hidden class, the taps (`taps.attach`: the norm scales and every other family
-    the manifest names), the KV-slots source under ``args.memory_map``, the MoE block source, the promoted members' consumer
-    inputs, the X-03 attention plane classes from the Build's record, and the committer's hook sets from the acquisition plan
-    (written into ``out``; refused, exit 3, as the Commit refuses). `main` builds every committer of a Commit here, and
-    serve-openai's rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over the bench row's manifest of record.
-    Returns the required classes, whether the MoE source attached and whether the manifest requires the hidden class."""
+                     required_classes: tuple[str, ...], required_classes_cli: bool, cb_plan: Any = None, served: Any = None) -> SimpleNamespace:
+    """The Commit's acquisition on ``com`` (``eng``'s model and runner) for its required-value manifest: the taps (`taps.attach`: the
+    norm scales and every other family the manifest names), the KV-slots source under ``args.memory_map``, the MoE block source, the
+    promoted members' consumer inputs, the X-03 attention plane classes from the Build's record, and the committer's hook sets from
+    the acquisition plan (written into ``out``; refused, exit 3, as the Commit refuses, and so is a manifest that still names the
+    attention interiors, `commit_rules.hidden_stream_refusal`). `main` builds every committer of a Commit here, and serve-openai's
+    rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over the bench row's manifest of record.
+    Returns the required classes and whether the MoE source attached."""
     moe_attached = False
-    _hidden_required = hidden_classes_required(required_manifest)
-    if args.hidden_so and _hidden_required is False:
-        # a tap that never fires would fail the identity check and the required classes as an omitted producer
-        if not required_classes_cli:
-            required_classes = tuple(c for c in required_classes if c not in HIDDEN_CLASS_BY_FA.values())
-        print(f"[delta] hidden source NOT attached: the required-value manifest names no {' / '.join(HIDDEN_CLASS_BY_FA.values())} identity "
-              f"(families {sorted((required_manifest.get('populations') or {}).get('by_family') or {})}); required classes "
-              f"{list(required_classes)}", flush=True)
-    # MLA / DSA sparse MLA: no hidden class, no FA2 source
-    if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
-        from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-        # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
-        # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
-        # the attention implementation the built engine executes (`observed_flash_attn_version`, the TargetProfile fact): a mismatch is
-        # refused here, before any run (F-hw-08: the FA2 tap under FA3 never fires).
-        src_cls = getattr(com, "hidden_source_cls", None)                # R11: native_collect_v2 supplies its C++ FA2 glue
-        if args.tap_cap_mb is not None:
-            settings.put("VERITY_FA2_TAP_CAP_MB", str(int(args.tap_cap_mb)))   # [R18 tap] read by NativeHiddenM1Source at construction
-        com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
-                                             fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
-        print(f"[delta] hidden source attached: {args.hidden_so} -> committer {com.name} ({type(com.sources[-1]).__name__ if getattr(com, 'sources', None) else '?'}, engine FA{fa_version})", flush=True)
-        _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
-        if _hsrc is not None and hasattr(_hsrc, "tap_cap_bytes"):
-            # [R18 tap, F-r17-23] the bounded tap's per-window telemetry + summary live in the attempt dir (fa2_tap_windows.jsonl / fa2_tap_bound.json)
-            if args.out:
-                _hsrc.telemetry_path = str(Path(args.out) / "fa2_tap_windows.jsonl")
-            print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
-                  f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
-                  f"telemetry {_hsrc.telemetry_path}", flush=True)
+    if why := hidden_stream_refusal(required_manifest):
+        print(f"[delta] REFUSE: {why}", flush=True)
+        sys.exit(3)
     required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
     if args.memory_map:
         from verity_vllm.acquire.sources import kv_slots_source
@@ -162,4 +126,4 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
         (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
         print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan, "
               f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
-    return SimpleNamespace(required_classes=required_classes, moe_attached=moe_attached, hidden_required=_hidden_required)
+    return SimpleNamespace(required_classes=required_classes, moe_attached=moe_attached)

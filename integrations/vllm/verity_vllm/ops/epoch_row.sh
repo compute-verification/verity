@@ -106,7 +106,7 @@ trap 'on_signal TERM 15' TERM; trap 'on_signal INT 2' INT; trap 'on_signal HUP 1
 
 # ---- 0 guard ----------------------------------------------------------------------------------------------------------------------------
 [ "${RESEARCH_SOURCE_SHA:-}" = "$EPOCH_SHA" ] || stop 3 "guard: shipped tree ${RESEARCH_SOURCE_SHA:-?} is not the epoch sha $EPOCH_SHA"
-for v in NORM_TAP GUARDED_MAX_TAP ROUTER_TAP VOCAB_TAP ROW_TAPS; do
+for v in NORM_TAP ROUTER_TAP VOCAB_TAP ROW_TAPS; do
   [ "${!v:-1}" = "1" ] || stop 3 "guard: $v=${!v} switches an epoch default off"
 done
 case "${VERITY_WORD_CHECK:-16/32}" in 16/32) ;; *) stop 3 "guard: VERITY_WORD_CHECK=$VERITY_WORD_CHECK is not the record's 16/32";; esac

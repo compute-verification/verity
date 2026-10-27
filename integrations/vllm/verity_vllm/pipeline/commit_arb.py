@@ -1,7 +1,7 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
     VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
-        --required-manifest ROW/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
+        --required-manifest ROW/manifest.json [--norm-tap-so SO]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
         [--prefix-caching] [--system-prompts N] [--system-tokens 384] [--turns N]
@@ -108,9 +108,6 @@ class Options:
                                                 "Commit's parts are built from (serve_seal.committer)")
     programs_root: str | None = option("--programs-root", default=None,
                                        help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
-    hidden_so: str | None = option("--hidden-so", default=None, help="the attention hidden tap (as serve-openai's --hidden-so)")
-    hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
-    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB")
     norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap (as serve-openai's --norm-tap-so)")
 
 
@@ -125,7 +122,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) 
     """What the committer would refuse after the model has loaded, refused before it."""
     if not opts.required_manifest:
         raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its bench "
-                         "row's manifest names: pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so)")
+                         "row's manifest names: pass --required-manifest ROW_DIR/manifest.json (and the row's --norm-tap-so)")
     if not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if which("ninja") is None:

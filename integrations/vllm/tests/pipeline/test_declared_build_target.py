@@ -16,7 +16,6 @@ from verity_vllm.engine.profiles import devices
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
-from verity_vllm.pipeline.row import fa_version
 from verity_vllm.program.frontend.target_profile import TargetProfile, parse_target_arg
 
 ROW_120 = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
@@ -59,9 +58,7 @@ def test_the_preflight_asks_no_device_of_a_declared_build_and_still_asks_it_of_a
     assert tf.check(ROW_120, {"sweep": {}}, ["build", "commit"])["verdict"] == "FAIL", "a Commit on another family's GPU is refused"
 
 
-def test_fa_version_and_the_cache_key_of_a_declared_target_read_no_device(tmp_path, monkeypatch):
-    monkeypatch.setattr(TargetProfile, "from_device", classmethod(lambda cls, device=0: (_ for _ in ()).throw(AssertionError("device read"))))
-    assert fa_version(_wl(tmp_path), R.declared_target(_wl(tmp_path), row=ROW_120)) == 2
+def test_the_cache_key_of_a_declared_target_reads_no_device(tmp_path, monkeypatch):
     monkeypatch.setattr(RC.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("nvidia-smi")))
     row = types.SimpleNamespace(tgt=R.declared_target(_wl(tmp_path), row=ROW_120))
     assert RC.device_id(row) == {"declared_target": row.tgt}

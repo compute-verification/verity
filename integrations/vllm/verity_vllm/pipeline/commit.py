@@ -63,7 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import protocols as PO
-from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
+from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
@@ -74,7 +74,7 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
+from verity_vllm.pipeline.commit_attach import attach_of_record  # noqa: E402
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
@@ -500,7 +500,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
     raise ValueError(kind)
 
 
-from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage  # noqa: E402
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
@@ -607,12 +607,6 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
                  "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree), **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
-    # [R18 tap, F-r17-23] the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
-    for _s in getattr(com, "sources", []) or []:
-        if hasattr(_s, "tap_cap_bytes"):
-            with contextlib.suppress(Exception):
-                _s.sync_stats()
-            collector["fa2_tap_bounded"] = dict(getattr(_s, "stats", {}).get("bounded_tap") or {"cap_bytes": int(_s.tap_cap_bytes)})
     # request ids are r<index> (COORD R15 ruling 2): the workload's declared `index` when present, else declaration position
     order = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     arrivals = {f"r{int(r.get('index', i))}": int(r.get("arrive_step") or 0) for i, r in enumerate(reqs)}
@@ -782,8 +776,7 @@ def _positions_digest(positions) -> str | None:
 
 def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, tokens_ref: dict | None = None) -> dict[str, Any]:
     """The P0 acceptance step.  Freeze the finished run's authentication state (roots, layouts, levels), RELEASE every raw device copy, then
-    open the challenge positions (+ forced picks: a leaf of the prefill step, a leaf inside an FA2 hidden `fa2.m1/` row, a leaf of the last
-    step) and verify each against the ORIGINAL roots.  Value bytes come from the host copy when the committer retained one (`--retain host`),
+    open the challenge positions (+ forced picks: leaves of the prefill step, a leaf of the last step) and verify each against the ORIGINAL roots.  Value bytes come from the host copy when the committer retained one (`--retain host`),
     otherwise from a REPLAY: the same workload is executed again under the collector (values kept on host for this run only); BI determinism
     makes the replay byte-identical, which the ORIGINAL roots check (a differing byte fails to open).  Nothing here changes what was bound."""
     import copy
@@ -803,10 +796,6 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     if steps_sorted:
         big = max(steps_sorted, key=lambda st: rc.steps[st].n_bytes)          # the prefill step (largest)
         metas = frozen._layouts[big]
-        fa2 = [m for m in metas if "fa2.m1/" in m.name or "fa3.m1/" in m.name]     # [R13 hopper] forced pick inside a hidden row of either tap
-        if fa2:
-            m = fa2[len(fa2) // 2]
-            forced.append((big, (m.stream_off + m.nbytes // 2) // frozen.chunk)); forced_why[forced[-1]] = "largest step: inside a hidden-m1 row"
         gem = [m for m in metas if "down_proj" in m.name]
         if gem:
             forced.append((big, gem[-1].stream_off // frozen.chunk)); forced_why[forced[-1]] = "largest step: last down_proj output"
@@ -1073,9 +1062,6 @@ class Options:
     regen_row4: bool = option("--regen-row4", default=False, action="store_true", help="native_host: row-4 BASELINE candidate — regenerate residual.float() and bind it (+4 B/elem)")
     fast_copy: bool = option("--fast-copy", default=False, action="store_true", help="native_host: snapshot via cudaMemcpyAsync through ctypes (no torch ops on the serving thread)")
     batch_copy: bool = option("--batch-copy", default=False, action="store_true", help="native_host: batch the D2D snapshots of not-overwritten tensors into one _foreach_copy_ per step")
-    hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
-    hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
-    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="[R18 tap, F-r17-23] cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
     tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
@@ -1093,8 +1079,8 @@ class Options:
     retain_exclude: str | None = option("--retain-exclude", default=None, help="[R17 fp8, R17-5] with --bounded-staging --retain host: comma-separated value families (e.g. fa3_hidden_m1) whose chunk-aligned " "interior is NOT copied to host (sets VERITY_RETAIN_EXCLUDE): those leaves open by REPLAY against the original root in " "openings_after_release (needs --open-after-release); everything else opens from host as before")
     host_admit: float | None = option("--host-admit", type=float, default=None, metavar="MARGIN", help="[R17-7.3] with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the " "cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
     replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens " "EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots: R17-5 parity)")
-    open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="R13 P0 acceptance (default on): after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); " "--no-open-after-release opens in the run only (not under --retain none)")
-    required_classes: str | None = option("--required-classes", default=None, help="REL-02 (R-14 interim): comma-separated class ids that MUST be declared with tensors > 0 by every " f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other " "evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
+    open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="R13 P0 acceptance (default on): after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); " "--no-open-after-release opens in the run only (not under --retain none)")
+    required_classes: str | None = option("--required-classes", default=None, help="REL-02 (R-14 interim): comma-separated class ids that MUST be declared with tensors > 0 by every " f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
     match_dir: str | None = option("--match-dir", "--oracle", default=None, help="[R15 COORD M-0111 (2)] the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, " "capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that " "identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
     program_dir: str | None = option("--program-dir", default=None, help="[DECISIONS-2 §4 C2 / M-0356 (1)] B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: " "sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the " "exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
@@ -1305,19 +1291,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             gc.collect()
             torch.cuda.synchronize()
             _HOT.update(eng=eng, t_built=time.time(), base0=baseline_state(eng), cuda0=cuda_census())   # pristine baseline BEFORE any committer of any job
-    # R13 hopper: the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli and served is not None:
-        # the served values: the step's ids, the sampled ids, the logits and every other value of the pieces (compiled_kernel_buffers);
-        # FA3's outputs are values of the pieces, not a tap's hidden stream
-        required_classes, hidden_family = HS.with_hidden_class(required_classes_default(fa_version), None) + ("compiled_kernel_buffers",), None
+        # the served values: the step's ids, the sampled ids, the logits and every other value of the pieces (compiled_kernel_buffers)
+        required_classes = REQUIRED_CLASSES_DEFAULT + ("compiled_kernel_buffers",)
         print(f"[delta] required classes (served): {required_classes}", flush=True)
-    elif not required_classes_cli:
-        required_classes, hidden_family = classes_of_record(required_manifest, eng.model, fa_version)
-        if compiled_kernels is not None:
-            # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
-            required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
-            print(f"[delta] required classes (P_compiled): {required_classes}", flush=True)
+    elif not required_classes_cli and compiled_kernels is not None:
+        # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
+        required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
+        print(f"[delta] required classes (P_compiled): {required_classes}", flush=True)
     print(f"[delta] engine attention: vllm_flash_attn_version={fa_version}; required classes {','.join(required_classes)}", flush=True)
     print(f"[delta] engine {'REUSED (hot; originally built' if _live is not None else 'built'} in {eng.build_s:.1f}s{')' if _live is not None else ''} "
           f"(case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
@@ -1422,15 +1404,14 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
         _att = attach_of_record(com, eng, args, required_manifest, out, kind=kind, required_classes=required_classes,
-                                required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
-                                fa_version=fa_version, cb_plan=cb_plan, served=served)
-        required_classes, moe_attached, _hidden_required = _att.required_classes, _att.moe_attached or moe_attached, _att.hidden_required
+                                required_classes_cli=required_classes_cli, cb_plan=cb_plan, served=served)
+        required_classes, moe_attached = _att.required_classes, _att.moe_attached or moe_attached
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
                         "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
                         "max_num_batched_tokens": eng.kwargs.get("max_num_batched_tokens"), "max_model_len": eng.kwargs.get("max_model_len")}
-            asz = com.size_arena(envelope, hidden_m1=bool(args.hidden_so) and _hidden_required is not False)
+            asz = com.size_arena(envelope)
             print(f"[delta] arena sizing (X-02, {kind}): decode block {asz['decode_block_bytes'] >> 20} MiB x{asz['blocks_preallocated']} + prefill block "
                   f"{asz['prefill_block_bytes'] >> 20} MiB "
                   f"(step bound {asz['step_bound_bytes'] >> 20} MiB: prefill {asz['prefill_tokens']} tok -> {asz['prefill_step_bytes'] >> 20} MiB "
@@ -2410,8 +2391,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                "required_classes": list(required_classes), "required_classes_source": (
                    f"program/query manifest {required_manifest['manifest_digest']} (R14 MAN-01; classes kept as a secondary check)" if required_manifest is not None else
                    "cli" if args.required_classes is not None else
-                   (f"default for FA{fa_version} + moe_block_stream (MOE-03: MoE source attached; REL-02 interim fallback)" if moe_attached else
-                    f"default for FA{fa_version} (REL-02 interim fallback: counts+classes, not the Program/query manifest)")),
+                   ("default + moe_block_stream (MOE-03: MoE source attached; REL-02 interim fallback)" if moe_attached else
+                    "default (REL-02 interim fallback: counts+classes, not the Program/query manifest)")),
                "required_manifest": ({"path": args.required_manifest, "manifest_digest": required_manifest["manifest_digest"], "program_digest": required_manifest["program_digest"],
                                       "populations": required_manifest["populations"], "query": required_manifest.get("query"),
                                       "coverage": [r["commit"].get("coverage") for r in rows if r["arm"] != "control" and r.get("commit")]} if required_manifest is not None else None),

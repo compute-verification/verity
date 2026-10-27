@@ -519,8 +519,7 @@ class TP2CaptureWorkerExtension:
 
     # ------------------------------------------------------------------ R13 P4 step 4: rank-aware commitment (the collector in every rank)
 
-    def tp2_commit_make(self, *, kind: str, run_id: str, cp: dict, case: str, engine_kwargs: dict, hidden_so: str | None, hidden_ns: str | None,
-                        envelope: dict, arena_mb: int | None = None, tp_partials: bool = True, program_digest: str | None = None,
+    def tp2_commit_make(self, *, kind: str, run_id: str, cp: dict, case: str, engine_kwargs: dict, envelope: dict, arena_mb: int | None = None, tp_partials: bool = True, program_digest: str | None = None,
                         n_requests: int = 1, required_manifest: str | None = None, request_order: list[str] | None = None,
                         arrivals: dict[str, int] | None = None, caps: dict[str, int] | None = None, tp_relabel: dict | None = None,
                         tp_partials_omit_rank: int | None = None, tp_partials_omit_site: dict | None = None,
@@ -531,8 +530,8 @@ class TP2CaptureWorkerExtension:
                         serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None,
                         commit_scheme: str | None = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
-        the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
-        weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
+        the rank's loaded weight SHARDS), attach the sources, size the arena from the workload envelope, register the rank's
+        weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
         (unset = rows-sha512) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512 by default,
         whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
@@ -549,12 +548,7 @@ class TP2CaptureWorkerExtension:
                                commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}
-        from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
-        man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
-        if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
-            com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
-                                                 fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
-            res["hidden_source"] = hidden_so
+        man = json.loads(Path(required_manifest).read_text()) if required_manifest else None
         # [R15 moe TP-MOE-SRC] the fused-MoE layer source (R13 MOE-03: router_w/ids, up, act, down, sum per MoE layer per step, class
         # moe_block_stream), attached exactly as commit_delta's `--moe-source auto` does: when the rank's model has MoE-runner modules.
         # Without it a TP MoE row's Commit binds no `moe/L<n>` plane (Qwen3-30B-A3B TP2 B2: 37 440 of 132 708 required identities per
@@ -597,7 +591,7 @@ class TP2CaptureWorkerExtension:
         else:
             res["tp_partial_source"] = None      # negative: collective outputs only (the R13 state) -- must fail the required classes
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None:
-            res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1="hidden_source" in res))
+            res["arena_sizing"] = _jsonable(com.size_arena(envelope))
             if getattr(com, "windowed", False):
                 # [R13 tp / P0-01 parity] windowed staging (VERITY_WINDOW_MB > 0): the ring replaces the per-step blocks -- the same call
                 # commit_delta makes after size_arena; without it every windowed step fails closed (`win_log2_chunks` unset -> 0 tensors).

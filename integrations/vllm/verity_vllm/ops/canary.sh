@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # R13 rel: the release canary suite (BRIEF §5A), run on the verification worker (cp-rev) for EVERY release candidate before it is tagged.
 #
-#   cd <tree>/integrations/vllm && bash verity_vllm/ops/canary.sh <candidate-tag> [positives=smollm2,llama[,llama_b2,llama_b2_bm,phi3,qwen,olmoe,stoch]] [negatives=arena,omitted,lateread[,drop1dup0,nopd,nosr,flipweight,lateflush,wl_swapped]]
+#   cd <tree>/integrations/vllm && bash verity_vllm/ops/canary.sh <candidate-tag> [positives=smollm2,llama[,llama_b2,llama_b2_bm,phi3,qwen,olmoe,stoch]] [negatives=arena,lateread[,drop1dup0,nopd,nosr,flipweight,lateflush,wl_swapped]]
 #   -> evidence under /workspace/cp/canary/<tag>/, summary canary.json; last line  CANARY-GREEN <tag>  or  CANARY-RED <tag> <first failing check>
 #
 # Positives (the two base canaries, through the SAME row procedure the sweep uses -- `verity-vllm row run`, PAIRS=1):
@@ -12,13 +12,11 @@
 #   what the collector binds changed (or the values did) and that needs a decision, not a tag.
 # Negatives (SmolLM2, must FAIL the way stated):
 #   arena     --arena-mb 1 --arena-unchecked            -> exit 3, reason expected_tensors != committed_tensors / arena block too small (X-03)
-#   omitted   no --hidden-so (FA2 producer never attached) -> exit 3, reason "required class 'fa2_hidden_m1_stream' not declared" (REL-02 / R-14)
-#             [R15 hopper] on a Hopper pod (cc 9.x, FlashAttention-3 engine) the class is 'fa3_hidden_m1_stream' and the tap fa3_matReq
 #   lateread  --late-read qkv_proj (R11 regression)      -> the run root MUST differ from the known-good root (openings still verify: binding
 #             is not correctness -- the harness must never take a verifying root as evidence the right buffer was read)
-# Env: everything `verity-vllm row` takes (PY, PY312, HIDDEN_SO, GPU_UTIL, timeouts); CANARY_DIR (/workspace/cp/canary).
+# Env: everything `verity-vllm row` takes (PY, PY312, GPU_UTIL, timeouts); CANARY_DIR (/workspace/cp/canary).
 set -uo pipefail
-TAG=${1:?candidate tag, e.g. r13-rel0}; POS=${2:-smollm2,llama}; NEG=${3:-arena,omitted,lateread}
+TAG=${1:?candidate tag, e.g. r13-rel0}; POS=${2:-smollm2,llama}; NEG=${3:-arena,lateread}
 # [R17 rel, COORD R17-19 (4)] the canary runs from the tree it is given (VERITY_TREE, default the pod's live tree): a second canary GPU
 # (cp-big GPU 1) takes the SAME candidate installed as an OWN tree (pod_release.sh REMOTE_TREE=/workspace/cp/<tag>) without replacing that
 # pod's live tree; the collector build dir is the one the release built for THIS tree (RELEASE.json build_dirs.native_collect, per tree for
@@ -53,13 +51,6 @@ EOF
   export NATIVE_COLLECT_BUILD=${NCB_REL:-/workspace/cp/nc_build}
 fi
 export NATIVE_COLLECT_BUILD
-# [R15 hopper] the tap = the attention implementation this device executes (TargetProfile.effective_flash_attn_version(), as row_pod.sh):
-# cc 9.x runs FlashAttention-3 -> the FA3 M1 tap (HOP-01) and the required hidden class is fa3_hidden_m1_stream; the omitted negative's
-# expected reason names that class.  HIDDEN_SO overrides (a foreign tap is refused by commit_delta's engine check, not silently accepted).
-FA_VER=$($PY -c "from verity_vllm.program.frontend.target_profile import TargetProfile; print(TargetProfile.from_device().effective_flash_attn_version())" 2>/dev/null || echo 2)
-G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as the row selects it
-HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq$G/verity_fa3_matReq$G.so || echo /workspace/cp/fa2/build/matReq$G/verity_fa2_matReq$G.so)}; export HIDDEN_SO
-HIDDEN_CLASS=$([ "$FA_VER" = 3 ] && echo fa3_hidden_m1_stream || echo fa2_hidden_m1_stream)
 GPU_UTIL=${GPU_UTIL:-0.5}; export GPU_UTIL
 CD=${CANARY_DIR:-/workspace/cp/canary}/$TAG; mkdir -p "$CD"; export SWEEP_DIR=$CD
 CC=$($PY -c "import torch;p=torch.cuda.get_device_properties(0);print(f'{p.major}.{p.minor}')")
@@ -89,7 +80,7 @@ coverage_of() {   # <row dir>
   [ -n "$cov" ] && echo "${cov% }; $man"
 }
 
-log "start commit=$COMMIT cc=$CC flash_attn=$FA_VER hidden_so=$HIDDEN_SO hidden_class=$HIDDEN_CLASS positives=$POS negatives=$NEG"
+log "start commit=$COMMIT cc=$CC positives=$POS negatives=$NEG"
 
 # ------------------------------------------------------------------ positives: the row procedure itself, then the root pin
 positive() {   # <name> <row-id> <ROLE> <repo> <revision>
@@ -209,9 +200,8 @@ negative() {   # <name> <expect: exit3|rootdiff> <reason-regex> <args...>
       else rec "neg_$name" PASS "root ${root:0:16} != known-good ${exp:0:16} (rc=$rc; openings still verified: binding != correctness)"; fi ;;
   esac
 }
-[[ ",$NEG," == *,arena,* ]]    && negative arena exit3 "expected_tensors .* != committed_tensors|arena block too small" --hidden-so "$HIDDEN_SO" --arena-mb 1 --arena-unchecked
-[[ ",$NEG," == *,omitted,* ]]  && negative omitted exit3 "required class '$HIDDEN_CLASS' not declared|$HIDDEN_CLASS.*never fired"
-[[ ",$NEG," == *,lateread,* ]] && negative lateread rootdiff "" --hidden-so "$HIDDEN_SO" --late-read qkv_proj
+[[ ",$NEG," == *,arena,* ]]    && negative arena exit3 "expected_tensors .* != committed_tensors|arena block too small" --arena-mb 1 --arena-unchecked
+[[ ",$NEG," == *,lateread,* ]] && negative lateread rootdiff "" --late-read qkv_proj
 # [R14 BIND-01, F-rev-01] drop `/1` + bind `/0` twice on every layer>0 input_layernorm: counts + classes unchanged, so only the identity-coverage
 # check against the row's required-value manifest (MAN-01, built by the smollm2 positive's Commit) can reject it -- exit 3 "identity coverage".
 # [R15 manbind C1, COORD M-0205] --required-manifest is refused without --program-digest (the Build's digest of record, never the manifest's):
@@ -222,14 +212,14 @@ if [[ ",$NEG," == *,drop1dup0,* ]]; then
   PD=$($PY -c 'import json,sys; print((json.load(open(sys.argv[1])).get("request") or {}).get("program_digest") or "")' "$CD/$SMOL/build_summary.json" 2>/dev/null || true)
   if [ ! -f "$MAN" ]; then rec neg_drop1dup0 FAIL "no required-value manifest at $MAN (run the smollm2 positive first; row_pod commit builds it)"
   elif [ -z "$PD" ]; then rec neg_drop1dup0 FAIL "no Build program digest in $CD/$SMOL/build_summary.json (request.program_digest): cannot arm --required-manifest"
-  else export VERITY_FAULT=drop1_dup0; negative drop1dup0 exit3 "identity coverage" --hidden-so "$HIDDEN_SO" --required-manifest "$MAN" --program-digest "$PD"; unset VERITY_FAULT; fi
+  else export VERITY_FAULT=drop1_dup0; negative drop1dup0 exit3 "identity coverage" --required-manifest "$MAN" --program-digest "$PD"; unset VERITY_FAULT; fi
 fi
 # [R15 manbind C1] the refusal itself is a canary negative: a required manifest WITHOUT the Build's digest must be refused before the engine
 # starts (rc 1, named), never silently accepted (rev-cb M-0334 F-cb-05/06).
 if [[ ",$NEG," == *,nopd,* ]]; then
   MAN="$CD/$SMOL/manifest.json"
   if [ ! -f "$MAN" ]; then rec neg_nopd FAIL "no required-value manifest at $MAN (run the smollm2 positive first)"
-  else negative nopd exit1 "REFUSED: --required-manifest requires --program-digest" --hidden-so "$HIDDEN_SO" --required-manifest "$MAN"; fi
+  else negative nopd exit1 "REFUSED: --required-manifest requires --program-digest" --required-manifest "$MAN"; fi
 fi
 # [R15 manbind MAN-06 O1, COORD M-0522 (1)] sampled-replay ABSENCE: a row-procedure Commit (binding block armed by --required-manifest) that is
 # given NO Program dir (--program-dir / --programs-root) must FAIL named "C2 of record not established" (exit 3) -- never a PASS on C1 + C3
@@ -239,7 +229,7 @@ if [[ ",$NEG," == *,nosr,* ]]; then
   PD=$($PY -c 'import json,sys; print((json.load(open(sys.argv[1])).get("request") or {}).get("program_digest") or "")' "$CD/$SMOL/build_summary.json" 2>/dev/null || true)
   if [ ! -f "$MAN" ]; then rec neg_nosr FAIL "no required-value manifest at $MAN (run the smollm2 positive first)"
   elif [ -z "$PD" ]; then rec neg_nosr FAIL "no Build program digest in $CD/$SMOL/build_summary.json (request.program_digest)"
-  else negative nosr exit3 "C2 of record not established" --hidden-so "$HIDDEN_SO" --required-manifest "$MAN" --program-digest "$PD"; fi
+  else negative nosr exit3 "C2 of record not established" --required-manifest "$MAN" --program-digest "$PD"; fi
 fi
 # [R16 pin, BRIEF 4A "substituted weight input"; MAN-09 / rev-cb M-0610] WEIGHTS PIN negative on the real engine: the smollm2 positive's
 # Commit derived weights_of_record.json (row_pod MAN-09 hunk: the pinned checkpoint shards composed by the stacking rule, for the Build's
@@ -254,7 +244,7 @@ if [[ ",$NEG," == *,flipweight,* ]]; then
   if [ ! -f "$WOR" ]; then rec neg_flipweight FAIL "no weights_of_record.json at $WOR (run the smollm2 positive first; its row_pod Commit derives the pin beside build_request, MAN-09)"
   elif [ -z "$PD" ]; then rec neg_flipweight FAIL "no Build program digest in $CD/$SMOL/build_summary.json (request.program_digest)"
   else negative flipweight exit3 "(weights_pin|weights of record): .*served weight\(s\) differ from the checkpoint of record: .*model\.layers\.0\.self_attn\.qkv_proj\.weight" \
-         --hidden-so "$HIDDEN_SO" --weights-of-record "$WOR" --program-digest "$PD" --flip-weight model.layers.0.self_attn.qkv_proj.weight:7; fi
+         --weights-of-record "$WOR" --program-digest "$PD" --flip-weight model.layers.0.self_attn.qkv_proj.weight:7; fi
 fi
 # [R15 moe FLUSH-02, ALERT M-0479 / COORD M-0522 (1)] the un-fixed late read as a canary negative: the panel's QK-norm / fused-MoE models are
 # not on this pod, so the check is moe's byte-level test file over the BUILT C++ collector (the committer's own hook bodies with an in-place
@@ -301,11 +291,11 @@ EOF
 fi
 
 # ------------------------------------------------------------------ summary
-python3 - "$CD/canary.json" "$TAG" "$COMMIT" "$CC" "$HIDDEN_SO" "${RESULTS[@]}" <<'EOF'
+python3 - "$CD/canary.json" "$TAG" "$COMMIT" "$CC" "${RESULTS[@]}" <<'EOF'
 import json, sys, time
-out, tag, commit, cc, so, *res = sys.argv[1:]
+out, tag, commit, cc, *res = sys.argv[1:]
 checks = [dict(zip(("check", "result", "detail"), r.split("|", 2))) for r in res]
-json.dump({"schema": "verity-sweep/canary/v1", "tag": tag, "commit": commit, "compute_capability": cc, "hidden_so": so, "green": all(c["result"] == "PASS" for c in checks),
+json.dump({"schema": "verity-sweep/canary/v1", "tag": tag, "commit": commit, "compute_capability": cc, "green": all(c["result"] == "PASS" for c in checks),
            "checks": checks, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, open(out, "w"), indent=1)
 EOF
 if [ -z "$FIRST_FAIL" ]; then log "CANARY-GREEN $TAG"; else log "CANARY-RED $TAG $FIRST_FAIL"; exit 1; fi

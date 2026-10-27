@@ -299,7 +299,7 @@ def main() -> None:
                 "max_num_batched_tokens": kw.get("max_num_batched_tokens"), "max_model_len": kw.get("max_model_len")}
     t0 = time.perf_counter()
     made = llm.collective_rpc(make, timeout=a.rpc_timeout,
-                              kwargs={"arm": a.arm, "run_id": f"tp-decode/{a.arm}", "cp": cp, "case": case, "hidden_so": None, "hidden_ns": None,
+                              kwargs={"arm": a.arm, "run_id": f"tp-decode/{a.arm}", "cp": cp, "case": case,
                                       "envelope": envelope, "n_requests": max(batches), "engine_kwargs": engine_kwargs,
                                       "required_manifest": str(manifest) if manifest else None})
     if len(made) != world:

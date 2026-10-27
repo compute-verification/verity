@@ -187,12 +187,7 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
     closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`; the route
     source (when any rank's model has a capture map), the linear quant source and the MoE align source (when any rank's rows name their
-    Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
-    hidden class every rank reports
-    (`hidden_source.require_hidden_on_every_rank`)."""
-    from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
-
-    required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
+    Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit)."""
     for key in ("route_source", "linear_quant_source", "moe_align_source", "narrowed_source"):
         states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
         if any(states.values()):

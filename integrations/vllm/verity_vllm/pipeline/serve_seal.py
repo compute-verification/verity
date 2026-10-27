@@ -3,9 +3,8 @@
 `committer` builds the server's committer: ``--scheme rows-sha512`` (the default) the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
 acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench row's required manifest
-(``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
-the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
-attach is refused (`parts_missing`); ``--scheme vllm-v1`` `NativeHostCommitter` (SHA-256, 32-byte roots), which only a recorded
+(``--required-manifest``): the norm-scale tap (``--norm-tap-so``) and the hook sets of the acquisition plan, so its name is the
+Commit's (``...+norm_scale+plan``) and a part the manifest names that did not attach is refused (`parts_missing`); ``--scheme vllm-v1`` `NativeHostCommitter` (SHA-256, 32-byte roots), which only a recorded
 run's readers take, so a run under it names the recorded vllm-v1 run it serves again (``--of-record``, `scheme_refusal`). Then
 `served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port the certifier's
@@ -18,7 +17,7 @@ deferred Commit's row dir, ``windows/w<k>/``, the way a declared Commit with ``-
 the manifest), and beside it the record that bundle is opened against (`deferred_rows.of_record`): ``commit/verdict.json``
 naming the bundle, ``commit/runs.jsonl`` with the window's run, and ``commit/binding_map_p0.json``. The binding map names
 each committed value as the row's Programs read it (`served_binder`: a Linear's ``out``, RoPE's ``query`` / ``key``, a norm's
-``norm_scale``, ``fa2.m1/*``, and the port's ids and positions as the identities the Programs read them under,
+``norm_scale``, and the port's ids and positions as the identities the Programs read them under,
 `port_identities`), with no second tensor under an identity the port is (`copies_beside_port`) and no port position other
 than its rows ran (`positions_off`), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
 shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
@@ -90,7 +89,7 @@ def scheme_refusal(opts: Any) -> str | None:
         return f"--scheme {ROWS} (the default) is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree"
     if opts.scheme == ROWS and not opts.required_manifest:
         return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its bench row's manifest names: "
-                "pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so), or --no-commit to serve "
+                "pass --required-manifest ROW_DIR/manifest.json (and the row's --norm-tap-so), or --no-commit to serve "
                 "without a Commit")
     if opts.scheme == ROWS and int(opts.max_num_batched_tokens) % PORT_IDS:
         return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
@@ -124,7 +123,7 @@ def committer_args(opts: Any) -> SimpleNamespace:
     return SimpleNamespace(layout="chunk-leaf-v1", arena_mb=0, profile_hooks=False, pinned_populate_threads=None,
                            commit_scheme=opts.scheme, chunk=opts.chunk, hash_threads=opts.hash_threads,
                            required_manifest=opts.required_manifest, programs_root=programs_root_of(opts), program_dir=None,
-                           hidden_so=opts.hidden_so, hidden_ns=opts.hidden_ns, tap_cap_mb=opts.tap_cap_mb, out=opts.out,
+                           out=opts.out,
                            tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), memory_map=None, moe_source="auto",
                            required_classes=None)
 
@@ -145,14 +144,13 @@ def manifest_of_record(opts: Any) -> dict[str, Any]:
     return require_partition(json.loads(Path(opts.required_manifest).read_text()), programs_root_of(opts), None)
 
 
-def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool | None) -> list[str]:
-    """The committer parts the Commit of record has for ``manifest`` that ``com`` lacks: the hidden tap when the manifest names
-    the hidden class, each tap source `taps.attached` names, and the acquisition plan."""
+def parts_missing(com: Any, manifest: Mapping[str, Any]) -> list[str]:
+    """The committer parts the Commit of record has for ``manifest`` that ``com`` lacks: each tap source `taps.attached` names,
+    and the acquisition plan."""
     from verity_vllm.acquire.sources.taps import attached
 
     have = str(com.name).split("+")
-    want = (["hidden_m1"] if hidden_required else []) + attached(manifest) + ["plan"]
-    return [p for p in want if not any(h == p or (p == "hidden_m1" and h.startswith(p)) for h in have)]
+    return [p for p in attached(manifest) + ["plan"] if p not in have]
 
 
 def target_of(model: Any = None) -> dict[str, Any]:
@@ -190,9 +188,9 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     run_id = f"{label}:{opts.run_id}"
     eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
-    manifest, hidden_m1 = None, False
+    manifest = None
     if opts.scheme == ROWS:
-        from verity_vllm.engine import vllm_adapter as va
+        from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT
         from verity_vllm.pipeline import commit as C, commit_attach as CA
 
         manifest, args = manifest_of_record(opts), committer_args(opts)
@@ -205,15 +203,12 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     if com.retain != "host":
         raise UsageError(f"VERITY_RETAIN={com.retain}: the served record is read back from the values retained on the host")
     if manifest is not None:
-        fa = va.observed_flash_attn_version(llm.model)
-        classes, family = CA.classes_of_record(manifest, llm.model, fa)
-        att = CA.attach_of_record(com, eng, args, manifest, Path(opts.out) / "acquisition", kind=DECLARED_COMMITTER,
-                                 required_classes=classes, required_classes_cli=False, hidden_family=family, fa_version=fa)
-        if missing := parts_missing(com, manifest, bool(att.hidden_required and family)):
+        CA.attach_of_record(com, eng, args, manifest, Path(opts.out) / "acquisition", kind=DECLARED_COMMITTER,
+                            required_classes=REQUIRED_CLASSES_DEFAULT, required_classes_cli=False)
+        if missing := parts_missing(com, manifest):
             raise UsageError(f"--scheme rows-sha512: the committer {com.name} lacks {missing}, which the Commit of record attaches for "
-                             f"{opts.required_manifest}; pass the bench row's taps (--hidden-so, --norm-tap-so) as its Commit does")
+                             f"{opts.required_manifest}; pass the bench row's taps (--norm-tap-so) as its Commit does")
         com.required_manifest, com.required_manifest_path = manifest, str(Path(opts.required_manifest).resolve())
-        hidden_m1 = bool(opts.hidden_so) and att.hidden_required is not False
     from verity_vllm.commit.served_record import SamplerInputsSource, StepInputPort
 
     tokens = int(opts.max_num_batched_tokens)
@@ -225,8 +220,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
         single_ids(com, manifest)
     com.attach_source(SamplerInputsSource(com))
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
-                                              "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len},
-                                             hidden_m1=hidden_m1)
+                                              "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len})
     if getattr(com, "windowed", False):
         com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
     if opts.seal:

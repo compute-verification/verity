@@ -14,6 +14,7 @@ import os
 import time
 from typing import Any
 
+from verity_vllm.check.commit_rules import hidden_stream_refusal
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
 from verity_vllm.program import prefix_plan as PP
@@ -480,19 +481,17 @@ QUERY_OF_RECORD = "Q_word_v1{X=16,W=32,R=no-recompute}"
 #: header key its policy writes, which is also its identities' family)
 TAP_POLICIES = (("norm_tap", "--norm-scales", "norm_scales"), ("router_tap", "--router-softmax", "router_softmax"),
                 ("vocab_tap", "--vocab-range", "vocab_range"))
-#: the tap policies and the guarded max, which lengthens the attention stream's identities instead of adding a family
-POLICIES = (*TAP_POLICIES, ("guarded_max_tap", "--guarded-max", "guarded_max"))
 
 
 def tap_policy_flags(ck: Any) -> list[str]:
     """The manifest build / verify flags of the row's CommitConfig, every policy explicit (`--no-norm-scales` etc. under NORM_TAP=0)."""
-    return [flag if getattr(ck, field, "0") == "1" else f"--no-{flag[2:]}" for field, flag, _key in POLICIES]
+    return [flag if getattr(ck, field, "0") == "1" else f"--no-{flag[2:]}" for field, flag, _key in TAP_POLICIES]
 
 
 def policy_mismatch(q: Any, ck: Any) -> list[str]:
     """The policies a manifest's query header `q` disagrees with the row's CommitConfig on, either way (every policy the row runs when
     there is no header)."""
-    return [key for field, _flag, key in POLICIES if (getattr(ck, field, "0") == "1") != (isinstance(q, dict) and isinstance(q.get(key), dict))]
+    return [key for field, _flag, key in TAP_POLICIES if (getattr(ck, field, "0") == "1") != (isinstance(q, dict) and isinstance(q.get(key), dict))]
 
 
 def manifest_policy_mismatch(path: str, ck: Any) -> list[str]:
@@ -518,6 +517,8 @@ def manifest_not_of_record(doc: Any, program_digest: str, ck: Any) -> tuple[str,
     mismatch = policy_mismatch(q, ck)
     if mismatch:
         return "policy-" + "-".join(mismatch).replace("_", "-"), f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
+    if hidden := hidden_stream_refusal(doc):
+        return "hidden-stream", hidden
     unchecked = word_check_refusal(q)
     if unchecked:
         return "unchecked", f"does not record a passing word check ({unchecked})"
@@ -739,7 +740,7 @@ def tp_manifest_not_of_record(d: str, ck: Any) -> str:
     mismatch = policy_mismatch(q, ck)
     if mismatch:
         return f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
-    return word_check_refusal(q) or ""
+    return hidden_stream_refusal(doc) or word_check_refusal(q) or ""
 
 
 def tp_check_line(m: str) -> str:

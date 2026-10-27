@@ -1,7 +1,7 @@
 """R13 lane tp, P4 step 4 — rank-aware Commit + overhead at `--tp 2`: `commit_delta`'s pairs protocol with the collector installed in
 EVERY rank through the `worker_extension_cls` seam (`tp2_worker.tp2_commit_*`).
 
-    ... tp2_commit --workload <manifest> --case LLAMA32_1B --tp 2 --committer native_collect_v2b --hidden-so <so> --openings 64 --pairs 3 \
+    ... tp2_commit --workload <manifest> --case LLAMA32_1B --tp 2 --committer native_collect_v2b --openings 64 --pairs 3 \
         --max-num-seqs B --engine-arg gpu_memory_utilization=0.3 --label <row> --out <row>/commit
 
 Run commitment over the ranks: every rank commits under ``--commit-scheme`` (default rows-sha512, `commit.step_rows`: hm96-sha512
@@ -38,6 +38,7 @@ from verity_vllm import settings
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.commit_rules import hidden_stream_refusal
 from verity_vllm.check.component_programs import post_load_tensors
 from verity_vllm.config import group, option
 from verity_vllm.engine import served as SV
@@ -134,8 +135,6 @@ class Options:
                                 help="every rank's commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with "
                                      "--window-mb > 0) under the SHA-512 TP run root, or vllm-v1 by name (tests, an old record's "
                                      "configuration) under the SHA-256 tp-run-root/v1")
-    hidden_so: str | None = option("--hidden-so", default=None)
-    hidden_ns: str | None = option("--hidden-ns", default=None)
     openings: int = option("--openings", type=int, default=64)
     pairs: int = option("--pairs", type=int, default=3)
     warmup: int = option("--warmup", type=int, default=2)
@@ -280,6 +279,8 @@ def main(args: Options) -> int:
     versions["build_program_digest"] = {str(k): v for k, v in pds.items()}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     man_doc = require_partition(json.loads(Path(args.required_manifest).read_text()), None, None) if args.required_manifest else None
+    if why := hidden_stream_refusal(man_doc):
+        raise SystemExit(f"fail-closed: {why}")
     if man_doc is not None:
         pdr = man_doc.get("program_digest_per_rank") or {}
         for r in range(world):
@@ -363,8 +364,8 @@ def main(args: Options) -> int:
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     with PH.TL.span("prep.committer_setup", kind=args.committer):
         made = llm.collective_rpc("tp2_commit_make", timeout=args.rpc_timeout,
-                                  kwargs={"kind": args.committer, "commit_scheme": args.commit_scheme, "run_id": Path(args.workload).stem, "cp": cp, "case": case, "hidden_so": args.hidden_so,
-                                          "hidden_ns": args.hidden_ns, "envelope": envelope, "arena_mb": args.arena_mb, "tp_partials": not args.no_tp_partials,
+                                  kwargs={"kind": args.committer, "commit_scheme": args.commit_scheme, "run_id": Path(args.workload).stem, "cp": cp, "case": case,
+                                          "envelope": envelope, "arena_mb": args.arena_mb, "tp_partials": not args.no_tp_partials,
                                           "program_digest": {str(k): v for k, v in pds.items()}, "n_requests": len(reqs),
                                           "required_manifest": args.required_manifest, "request_order": request_order, "request_ids": request_ids, "arrivals": arrivals, "caps": caps,
                                           "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
@@ -629,7 +630,7 @@ def main(args: Options) -> int:
                         cov_ok = all((c.get("binding") or {}).get("coverage", {}).get("ok") for c in per_rank.values()) and not reasons
                         man_hdrs = {r: ((c.get("binding") or {}).get("population") or {}).get("manifest") for r, c in per_rank.items()}
                         cov = {"checker": ("verity/coverage/binding-r15-tp04 (verity_vllm.commit.binding per TP rank; population of record = manbind's required manifest "
-                                           "(Program(rank) x canonical query, rows with rank=r: instance outputs incl. AllReduce2/AllGather2 outputs + tp_rank_partials + fa2 hidden + weights + tokens); "
+                                           "(Program(rank) x canonical query, rows with rank=r: instance outputs incl. AllReduce2/AllGather2 outputs + tp_rank_partials + weights + tokens); "
                                            "coverage counted per rank; no rank folded)" if man_doc else
                                            "verity/coverage/binding-r14 (bind BIND-01 verity_vllm.commit.binding, per TP rank; population = structure x steps x rank + rank-local collective members)"),
                                "verdict": ("NOT_RUN" if len(skipped) == len(per_rank) else ("PASS" if cov_ok else "FAIL")), "rules_version": versions["rules_version"], "world": world, "ranks_present": sorted(per_rank),

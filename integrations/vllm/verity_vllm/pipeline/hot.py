@@ -10,7 +10,7 @@ the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`
 Key (what may share an engine) = sha256 of
   * CODE identity: `source_identity.code_identity` of the executing repository -- content hashes of its import closure (the integration
     plus Verity core, `research_tools.CLOSURE`), so an edited pod tree is a different key ("hot" never executes stale code),
-  * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
+  * the native extensions the job would load ($NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
   * the interpreter (`sys.executable`) and the process environment that shapes the engine / collector (PYTHONPATH, VLLM_*, VERITY_* except
     the per-job VERITY_TIMELINE / VERITY_FOOTPRINT, CUDA_*, HF_*),
   * the engine-shaping arguments: the workload file's engine-relevant blocks (case / model, its `engine` block, execution), --checkpoints
@@ -131,9 +131,6 @@ def _argvals(argv: list[str], flag: str) -> list[str]:
 def so_identity(argv: list[str]) -> dict[str, str | None]:
     """sha256 of the native extensions a job would load (missing file -> 'missing:<path>' so the key still differs)."""
     paths: list[str] = []
-    hs = _argval(argv, "--hidden-so")
-    if hs:
-        paths.append(hs)
     ncb = settings.NATIVE_COLLECT_BUILD
     if ncb:
         # [R17 rel M-0803] NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
@@ -401,15 +398,15 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- server
-# committer attributes that own device / pinned memory (native_collect window ring + scratch, the FA2/FA3 tap buffers of the hidden
-# sources, the staging arena, the pinned pool, the retained device store).  A cold process frees them at exit; the hot worker must drop them
+# committer attributes that own device / pinned memory (native_collect window ring + scratch, the tap buffers of its sources, the
+# staging arena, the pinned pool, the retained device store).  A cold process frees them at exit; the hot worker must drop them
 # explicitly after `close()` so the caching allocator can hand the memory to the next job (R16 sys: +2.3 GiB allocated per hot job otherwise).
 DEVICE_ATTRS = ("win_tensors", "win_scratch", "arena", "pool", "_gpu_blocks", "_gpu_levels", "_levels", "_done", "_layouts", "_streams",
                 "_metas_cache", "_wrapped", "_handles", "_cur", "sources", "_nc", "_hi")
 
 
 def release_committer_device(com: Any) -> list[str]:
-    """Best-effort: after `close()`, drop every attribute of the committer (and of its hidden sources: tap buffers) that pins device or
+    """Best-effort: after `close()`, drop every attribute of the committer (and of its sources: tap buffers) that pins device or
     pinned-host memory.  Returns the attribute names it cleared.  The committer object is dead afterwards (the hot worker never reuses it)."""
     cleared: list[str] = []
     w = getattr(com, "_worker", None)

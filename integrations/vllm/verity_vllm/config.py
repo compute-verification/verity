@@ -582,7 +582,6 @@ class CommitConfig:
     window_slots: int = option("--window-slots", env="WINDOW_SLOTS", type=int, default=8)
     retain: str = option("--retain", env="RETAIN", default="host", help="where raw copies are retained: host, device or gpu")
     open_after_release: str = option("--open-after-release", env="OPEN_AFTER_RELEASE", default="1", help="0 opts out")
-    tap_cap_mb: int = option("--tap-cap-mb", env="TAP_CAP_MB", type=int, default=2048, help="FA2 tap residency cap (0 = unbounded)")
     replay_cache: str = option("--replay-cache", env="REPLAY_CACHE", default="1", help="0 = every pair replays")
     required_classes: str | None = option("--required-classes", env="REQUIRED_CLASSES", default=None)
     required_manifest: str | None = option("--required-manifest", env="REQUIRED_MANIFEST", default=None,
@@ -615,10 +614,6 @@ class CommitConfig:
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
-    guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
-                                  help="0 opts out, for A/B only: by default the attention stream's ROW word 3 carries GuardNegInfZero(m) after a "
-                                       "row's first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written "
-                                       "by the guarded-max FA2/FA3 tap build")
     router_tap: str = option("--router-tap", env="ROUTER_TAP", default="1",
                              help="0 opts out, for A/B only: by default the row commits the selection-order router's softmax per token row "
                                   "(verity_vllm.query.router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source) "
@@ -648,12 +643,6 @@ class RunEnv:
     native_collect_build: str | None = option("--native-collect-build", env="NATIVE_COLLECT_BUILD", default=None,
                                               help="collector build dir (default: the release's, else --native-collect-default)")
     native_collect_default: str = option("--native-collect-default")
-    hidden_so: str | None = option("--hidden-so", env="HIDDEN_SO", default=None,
-                                   help="M1 tap .so (default: the one of the row's attention implementation)")
-    hidden_so_fa2: str = option("--hidden-so-fa2")
-    hidden_so_fa3: str = option("--hidden-so-fa3")
-    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
     norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
     router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
     hot_root: str = option("--hot-root", env="HOT_ROOT")

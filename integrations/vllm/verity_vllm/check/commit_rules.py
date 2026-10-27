@@ -16,29 +16,25 @@ from verity_vllm.records.fields import RecordError
 
 BINDING = "the run's Commit block"
 
-# The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model (the R12 canary rows' `required_classes`
-# minus the two derived-from-bound norm classes, which are protocol clauses with no leaves and are checked for presence only when declared).
+# The interim required-value manifest for the native committer on a dense model (the R12 canary rows' `required_classes` minus the two
+# derived-from-bound norm classes, which are protocol clauses with no leaves and are checked for presence only when declared).
 # Lanes override with `commit_delta --required-classes a,b,c` (recorded in verdict.json) when the model's producers genuinely differ
-# (e.g. a native FA3 tap class on Hopper) -- never to make a missing producer pass.
-REQUIRED_CLASSES_DEFAULT = ("input_token_ids", "instance_outputs_native", "sampled_token_ids", "weights", "fa2_hidden_m1_stream")
+# -- never to make a missing producer pass.
+REQUIRED_CLASSES_DEFAULT = ("input_token_ids", "instance_outputs_native", "sampled_token_ids", "weights")
 LEAF_HOWS = ("bound-as-leaf", "registered-input")
-HIDDEN_CLASS_BY_FA = {2: "fa2_hidden_m1_stream", 3: "fa3_hidden_m1_stream"}
+#: the FlashAttention taps' interior streams, which no manifest names any more: nothing opens or checks them
+HIDDEN_STREAM_FAMILIES = ("fa2_hidden_m1_stream", "fa3_hidden_m1_stream")
 
 
-def required_classes_default(flash_attn_version: int | None) -> tuple[str, ...]:
-    """The default manifest keyed by the engine's attention implementation (the TargetProfile fact `effective_flash_attn_version`,
-    the same fact that selects the Bet A attention Definition and the Match pattern): the attention hidden class is the FA2 tap's under FA2
-    and the FA3 tap's (`fa3_hidden_m1_stream`, hidden_source.HiddenM1SourceFA3) under FA3.  None -> the FA2 default (rows recorded without the fact)."""
-    hidden = HIDDEN_CLASS_BY_FA.get(int(flash_attn_version) if flash_attn_version is not None else 2, "fa2_hidden_m1_stream")
-    return tuple(hidden if c == "fa2_hidden_m1_stream" else c for c in REQUIRED_CLASSES_DEFAULT)
-
-def hidden_classes_required(manifest: Mapping[str, Any] | None) -> bool | None:
-    """Whether the required-value manifest names an attention hidden-stream identity (FA2's or FA3's tap); None without a manifest.
-    A Program whose attention is its own Calls (the exact-int8 profile's) names none, and its Commit attaches no hidden tap."""
-    if manifest is None:
+def hidden_stream_refusal(manifest: Mapping[str, Any] | None) -> str | None:
+    """Why a Commit refuses ``manifest`` (None: it doesn't): a manifest built before the attention interiors left it still names their
+    stream, which no Commit acquires, so it is rebuilt rather than committed short of what it requires."""
+    families = ((manifest or {}).get("populations") or {}).get("by_family") or {}
+    named = sorted(f for f in HIDDEN_STREAM_FAMILIES if int(families.get(f, 0) or 0) > 0)
+    if not named:
         return None
-    families = (manifest.get("populations") or {}).get("by_family") or {}
-    return any(int(families.get(f, 0) or 0) > 0 for f in HIDDEN_CLASS_BY_FA.values())
+    return (f"the required-value manifest names {', '.join(named)} rows, an attention interior no Commit acquires: rebuild it "
+            f"(`verity-vllm manifest build-global`, or the row's Build) and commit against the rebuilt manifest")
 
 
 def json_short(v: dict, n: int = 160) -> str:
@@ -630,7 +626,7 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
     src = str(ctx.get("required_classes_source") or "")
     notes = []
     if required_classes is None or "default" in src or "fallback" in src or src == "cli":
-        notes.append(_leak("commit_verdict.REQUIRED_CLASSES_DEFAULT", "the required class set is a table keyed by the attention implementation, not the Program/query manifest"))
+        notes.append(_leak("commit_verdict.REQUIRED_CLASSES_DEFAULT", "the required class set is a fixed table, not the Program/query manifest"))
     if declaration is None and required_classes is None:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN, notes=notes)
     req = tuple(required_classes) if required_classes is not None else REQUIRED_CLASSES_DEFAULT

@@ -65,13 +65,12 @@ def load(path: str) -> dict[str, Any]:
 
 def engine_key(args: Any, identity: Callable[[list[str]], dict[str, Any]], argv: list[str]) -> dict[str, Any]:
     """What a row's engine and the native code its Commit loads are made of: the hot worker's engine identity (`hot.engine_identity`)
-    but the workload's row id and path, and the committer, the attention tap and the other taps' extensions."""
+    but the workload's row id and path, and the committer and the taps' extensions."""
     ident = identity(argv)
     ident.pop("workload_path", None)
     ident["workload"] = {k: v for k, v in (ident.get("workload") or {}).items() if k != "row"}
     taps = getattr(args, "tap_sources", None)
-    ident.update(committer=args.committer, hidden_so=args.hidden_so, hidden_ns=args.hidden_ns,
-                 taps=taps.given() if hasattr(taps, "given") else None)
+    ident.update(committer=args.committer, taps=taps.given() if hasattr(taps, "given") else None)
     return ident
 
 

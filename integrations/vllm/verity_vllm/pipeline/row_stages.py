@@ -150,7 +150,7 @@ class SingleRow(Row):
         self.precheck_target()
         self.admission()
         self.log(f"start B={self.B} I={self.I} O={self.O} LP={self.LP} T={self.T} ckpt={self.ck} stages={self.stages} "
-                 f"target={self.tgt or 'device'} hidden_so={self.hidden_so} code={self.code9}")
+                 f"target={self.tgt or 'device'} code={self.code9}")
         self.tl("row", "start", ("stages", self.stages), ("B", self.B), ("I", self.I), ("O", self.O), ("LP", self.LP), ("T", self.T),
                 ("code", self.code9), ("release", self.rel_tag), ("pod", os.uname().nodename))
         self.install_signal_forwarding()
@@ -188,12 +188,6 @@ class SingleRow(Row):
         self.MML = self.I + self.O
         self.tgt = R.declared_target(self.path(self.wl), self.protocols, row=self.row)
         self.tgt_args = ["--target", self.tgt] if self.tgt else []
-        # the attention implementation the workload executes (declared, else the pinned vLLM's default for this device) selects the tap
-        _, fa = self.output(self.cli("row", "fa-version", self.wl, *self.tgt_args), stderr=subprocess.DEVNULL)
-        if self.guarded_max():
-            self.hidden_so = self.env.hidden_so or (self.env.hidden_so_fa3_guarded if fa.strip() == "3" else self.env.hidden_so_fa2_guarded)
-        else:
-            self.hidden_so = self.env.hidden_so or (self.env.hidden_so_fa3 if fa.strip() == "3" else self.env.hidden_so_fa2)
         self.code9 = self.export_commit()[:9]
         self.snap_steps = None if self.cm.snapshot_steps in (None, "row-default") else self.cm.snapshot_steps
 
@@ -221,10 +215,6 @@ class SingleRow(Row):
         self.tl("admission", "end", ("rc", 0), ("advisory", "true"))
 
     # ------------------------------------------------------------------------------------------------ manifest
-    def guarded_max(self) -> bool:
-        """The workload runs the guarded-max tap build: by default, as every workload's attention is FA2/FA3 (GUARDED_MAX_TAP=0 for A/B only)."""
-        return self.ck_.guarded_max_tap == "1"
-
     def required_manifest(self, stage: str, digest: Callable[[], str] | None = None) -> int | None:
         """The required-value manifest of record (`row_build.required_manifest`) -> 0 | 3 | 1 | None."""
         return RB.required_manifest(self, stage, digest)
@@ -535,7 +525,7 @@ class SingleRow(Row):
         ck = self.ck_
         pairs, warmup = ("1", "1") if self.config_run else (str(ck.pairs), "2")
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
-                       "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
+                       "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
         if self.config_run:                           # one instrumented run (and its control with a baseline), bounded staging, k units
             cmd += [] if ck.config_baseline == "1" else ["--only-arm", "instrumented"]
@@ -551,7 +541,6 @@ class SingleRow(Row):
         if not self.config_run:
             cmd.append("--no-bounded-staging")
         cmd.append("--open-after-release" if ck.open_after_release != "0" else "--no-open-after-release")
-        cmd += ["--tap-cap-mb", str(ck.tap_cap_mb)]
         for ea in (ck.extra_engine_args or "").split():
             cmd += ["--engine-arg", ea]
         cmd += (ck.extra_commit_args or "").split()
@@ -693,8 +682,6 @@ class SingleRow(Row):
         to = ck.commit_timeout or min(CAP, 2400 * kb * kt)
         self.log(f"commit timeout {to}s (B={self.B} I={self.I} O={self.O}; x{kb} x{kt} over the 2400 s floor)")
         self.tl("stage.commit", "start")
-        if not os.path.isfile(self.hidden_so):
-            self.commit_stop(12, f"hidden .so missing: {self.hidden_so}")
         self.tl("commit.prepare", "start")
         if self.B <= 1:
             served = R.served_shape(d)
@@ -706,7 +693,7 @@ class SingleRow(Row):
         why = R.missing_tap_build(taps, self.env)
         if why:
             self.commit_stop(12, why)
-        self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families); guarded max {'on' if self.guarded_max() else 'off'}")
+        self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families)")
         cmd = self.commit_cmd(taps)
         if man:
             cmd += ["--required-manifest", man]

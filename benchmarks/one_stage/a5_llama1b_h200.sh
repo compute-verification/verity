@@ -19,7 +19,6 @@ ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 TREE=$PWD
 H=/workspace/research/vllm-composed-h200int8
-FA3=${FA3_SO:-$H/fa2/build/fa3_matReq/verity_fa3_matReq.so} FA3G=${FA3G_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NT=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
 PART=$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json
 ROOT=${A5_ROOT:-/workspace/research/vllm-sha512-a5}
@@ -27,7 +26,7 @@ BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 D=$BASE/$ROW WD=$BASE/serving-rows FW=$ROOT/flock-work
 VENV=/workspace/cp/venv312
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-for f in "$FA3" "$FA3G" "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
+for f in "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW"
 
 # the CPU side's builds, in the background: the tree's venv, Lean's flock-verify, flock-firewall and sampled-proofs-verifier, M0
@@ -54,7 +53,7 @@ export VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED SERVING_ROWS
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; echo "CUDA_HOME $CUDA_HOME"; nvidia-smi -L
-  sha256sum "$FA3" "$FA3G" "$NT"; } | tee "$OUT/machine.txt"
+  sha256sum "$NT"; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
   --why "VLLM-17: A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): the row dir, its sealed bundle and window" | tail -2
 
@@ -62,7 +61,7 @@ row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in
   local name=$1; shift
   echo "$(date -u +%H:%M:%SZ) $name: $*" | tee -a "$OUT/steps.txt"
   (cd "$TREE/integrations/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
-     --hidden-so-fa3 "$FA3" --hidden-so-fa3-guarded "$FA3G" --norm-tap-so "$NT" "$@") > "$OUT/$name.out" 2>&1
+     --norm-tap-so "$NT" "$@") > "$OUT/$name.out" 2>&1
   local rc=$?
   echo "$(date -u +%H:%M:%SZ) $name rc=$rc" | tee -a "$OUT/steps.txt"
   tail -5 "$OUT/$name.out"

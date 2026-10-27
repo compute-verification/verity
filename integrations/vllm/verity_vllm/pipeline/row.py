@@ -122,15 +122,7 @@ class Shed(_Research):
     env: RunEnv = group(RunEnv)
 
 
-@dataclass(frozen=True, kw_only=True)
-class FaVersion:
-    """The FlashAttention version a workload's row executes on this device (its declared target over the device's)."""
-
-    workload: str = option("workload")
-    target: str | None = option("--target", default=None, help="the row's declared TargetProfile JSON (the Build's --target); with a capability, no device is read")
-
-
-COMMANDS = {"run": Run, "stage": Stage, "chain": Chain, "shed": Shed, "fa-version": FaVersion}
+COMMANDS = {"run": Run, "stage": Stage, "chain": Chain, "shed": Shed}
 
 
 def _overrides(cfg: Any, prefix: str) -> dict[str, Any]:
@@ -207,14 +199,6 @@ def _workload(row: str) -> str:
     return str(row_file(row))
 
 
-def fa_version(workload: str, target: str | None = None) -> int:
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    t = json.loads(target) if target else dict(RowConfig.load(workload).engine.target or {})
-    d = (TargetProfile.default() if t.get("compute_capability") else TargetProfile.from_device()).to_json()
-    d.update({k: v for k, v in t.items() if v is not None})
-    return TargetProfile.from_json(d).effective_flash_attn_version()
-
-
 def main(o: Any) -> int:
     if isinstance(o, Stage):
         return research.stage(o, run_row)
@@ -229,8 +213,4 @@ def main(o: Any) -> int:
         first = o.stages.split(",")[0]
         st = cli.parse("row", ["stage", first, o.row, o.role, o.repo, o.rev, *o.flags], o.env.environ)
         return research.chain(o, st.env.sweep_dir)
-    if isinstance(o, Shed):
-        return research.shed(o)
-    print(fa_version(o.workload, o.target))
-    sys.stdout.flush()
-    return 0
+    return research.shed(o)

@@ -19,11 +19,6 @@ SCHEMA = "verity-sweep/manifest-verify/v1"
 ENGINE = "v2-query"
 
 
-def _guarded_max(man: dict[str, Any]) -> dict[str, Any] | None:
-    q = man.get("query")
-    return q.get("guarded_max") if isinstance(q, dict) else None
-
-
 def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str | None = None) -> dict[str, Any]:
     rows_digest = manifest_digest(used.get("identities") or [])
     rec = {"schema": SCHEMA, "manifest": manifest_path, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
@@ -31,13 +26,10 @@ def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str 
            "used_identities": len(used.get("identities") or []), "rebuilt_identities": rebuilt["populations"]["identities"], "rebuilt_complete": rebuilt.get("complete"),
            "used_query": (used.get("query") or {}).get("engine") if isinstance(used.get("query"), dict) else None,
            "rebuilt_engine": ENGINE}
-    gu, gb = _guarded_max(used), _guarded_max(rebuilt)          # a query-header policy: the identities do not tell it apart
-    if gu or gb:
-        rec.update(used_guarded_max=gu, rebuilt_guarded_max=gb)
     rec["ok"] = bool(rec["used_digest"] == rows_digest == rec["rebuilt_digest"] and rec["used_program_digest"] == rec["rebuilt_program_digest"]
-                     and rebuilt.get("complete") is True and gu == gb)
+                     and rebuilt.get("complete") is True)
     if not rec["ok"]:
-        why = [] if gu == gb else [f"guarded-max policy {gu} != the rebuilt {gb}"]
+        why = []
         if rec["used_digest"] != rows_digest:
             why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} (edited after digesting)")
         if rows_digest != rec["rebuilt_digest"]:

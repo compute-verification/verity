@@ -13,7 +13,7 @@
 # then compiled_merge.py pairs them by run index -> $D/commit/{summary.json,summary.md,runs.jsonl,verdict.json} (row_pod.sh's Commit shape).
 #
 # Usage: compiled_commit.sh <ROW> <ROLE> [CUDAGRAPH_MODE]          (CUDAGRAPH_MODE default PIECEWISE: attention = splitting op, runs outside the graphs
-#        env: SWEEP_DIR, PAIRS (3), GPU_UTIL (0.3), HIDDEN_SO, EXTRA_ENGINE_ARGS, COMMIT_TIMEOUT (2400), FAULT (VERITY_FAULT for the treatment)
+#        env: SWEEP_DIR, PAIRS (3), GPU_UTIL (0.3), EXTRA_ENGINE_ARGS, COMMIT_TIMEOUT (2400), FAULT (VERITY_FAULT for the treatment)
 set -uo pipefail
 ROW=$1; ROLE=$2; CGM=${3:-PIECEWISE}
 PY=${PY:-/workspace/venv-cu129/bin/python}
@@ -40,9 +40,8 @@ fi
 B=$(python3 -c "import json;print(json.load(open('$WL')).get('batch') or json.load(open('$WL')).get('max_num_seqs') or 1)" 2>/dev/null || echo 1)
 [[ "$ROW" =~ __b([0-9]+)__ ]] && B=${BASH_REMATCH[1]}
 PAIRS=${PAIRS:-3}; GPU_UTIL=${GPU_UTIL:-0.3}; TO=${COMMIT_TIMEOUT:-2400}; TAPS=${TAPS:-kernels}
-HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so}
 log() { echo "[$(date -u +%FT%TZ)] compiled_commit $ROW: $*" | tee -a "$D/stages.txt"; }
-COMMON=(--case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --hidden-so "$HIDDEN_SO" --openings 64 --pairs "$PAIRS" --warmup 2
+COMMON=(--case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64 --pairs "$PAIRS" --warmup 2
         --max-num-seqs "$B" --engine-arg "gpu_memory_utilization=$GPU_UTIL" --engine-arg enforce_eager=false
         # [M-0285 (b)] the compilation_config of record is the WORKLOAD's engine.args (workload.py --target: cudagraph_mode +
         # inductor_compile_config {emulate_precision_casts: true} from TargetProfile.engine_args()); an explicit 3rd argument overrides the
@@ -54,7 +53,7 @@ for ea in ${EXTRA_ENGINE_ARGS:-}; do COMMON+=(--engine-arg "$ea"); done
 for ca in ${EXTRA_COMMIT_ARGS:-}; do COMMON+=("$ca"); done
 REQUIRED_MANIFEST=${REQUIRED_MANIFEST:-}
 if [ -z "$REQUIRED_MANIFEST" ] && [ "$TAPS" != kernels ] && [ -f "$D/build_request/instances.json.gz" ]; then
-  if "${PY%/*}/verity-vllm" manifest build --program "$D/build_request" --workload "$WL" --no-norm-scales --no-guarded-max --no-router-softmax \
+  if "${PY%/*}/verity-vllm" manifest build --program "$D/build_request" --workload "$WL" --no-norm-scales --no-router-softmax \
        --no-vocab-range --out "$D/manifest.json" > "$D/manifest.log" 2>&1; then
     REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest: $(tail -n 1 "$D/manifest.log")"
   fi

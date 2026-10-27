@@ -16,7 +16,7 @@
   complete; an unresolved checkpoint dir is named in row.log;
 * the admission plan is advisory: it writes admission.json and one row.log line and never stops the row;
 * the taps run by default (NORM_TAP=0 etc. for A/B only), each attached only where the row's manifest names its family, and a TP
-  row runs the guarded-max build and every tap that applies to it.
+  row runs every tap that applies to it.  A manifest naming an attention interior is moved aside and rebuilt.
 """
 from __future__ import annotations
 
@@ -610,23 +610,23 @@ TP_DENSE = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 
 def _tap_manifest(path: Path, *families: str) -> str:
     """A manifest built under every tap policy whose identities name `families` (a policy with no site writes its header only)."""
-    query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range")}}
     path.write_text(json.dumps({"query": query, "identities": [{"family": "instance_outputs"}] + [{"family": f} for f in families]}))
     return str(path)
 
 
 def test_the_taps_are_on_by_default_and_0_turns_one_off_for_ab_only(tmp_path):
     ck = _opts(tmp_path).commit
-    assert (ck.norm_tap, ck.guarded_max_tap, ck.router_tap, ck.vocab_tap) == ("1", "1", "1", "1")
-    off = _opts(tmp_path, "--router-tap", "0", environ={"NORM_TAP": "0", "GUARDED_MAX_TAP": "0"}).commit
-    assert (off.norm_tap, off.guarded_max_tap, off.router_tap, off.vocab_tap) == ("0", "0", "0", "1")
-    assert R.tap_policy_flags(ck) == ["--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"]
-    assert R.tap_policy_flags(off) == ["--no-norm-scales", "--no-router-softmax", "--vocab-range", "--no-guarded-max"]
+    assert (ck.norm_tap, ck.router_tap, ck.vocab_tap) == ("1", "1", "1")
+    off = _opts(tmp_path, "--router-tap", "0", environ={"NORM_TAP": "0"}).commit
+    assert (off.norm_tap, off.router_tap, off.vocab_tap) == ("0", "0", "1")
+    assert R.tap_policy_flags(ck) == ["--norm-scales", "--router-softmax", "--vocab-range"]
+    assert R.tap_policy_flags(off) == ["--no-norm-scales", "--no-router-softmax", "--vocab-range"]
     for argv in (["manifest", "build", "--program", "p"], ["manifest", "build-global", "--fixture", "f", "--programs-root", "r"],
                  ["manifest-verify", "--manifest", "m"]):
         on, ab = cli.parse(argv[0], [*argv[1:], "--out", "o"], {}), cli.parse(argv[0], [*argv[1:], "--out", "o", *R.tap_policy_flags(off)], {})
-        assert (on.norm_scales, on.router_softmax, on.vocab_range, on.guarded_max) == (True, True, True, True)
-        assert (ab.norm_scales, ab.router_softmax, ab.vocab_range, ab.guarded_max) == (False, False, True, False)
+        assert (on.norm_scales, on.router_softmax, on.vocab_range) == (True, True, True)
+        assert (ab.norm_scales, ab.router_softmax, ab.vocab_range) == (False, False, True)
 
 
 def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
@@ -634,16 +634,14 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
     assert R.manifest_policy_mismatch(man, _opts(tmp_path).commit) == []
     assert R.manifest_policy_mismatch(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == ["norm_scales"]
     (tmp_path / "old.json").write_text(json.dumps({"query": {"engine": "v2-query"}, "identities": []}))
-    assert R.manifest_policy_mismatch(str(tmp_path / "old.json"), _opts(tmp_path).commit) == ["norm_scales", "router_softmax", "vocab_range",
-                                                                                                "guarded_max"]
+    assert R.manifest_policy_mismatch(str(tmp_path / "old.json"), _opts(tmp_path).commit) == ["norm_scales", "router_softmax", "vocab_range"]
 
 
 def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatch):
     """`commit` read `commit_prepare`'s local manifest once the two were split: every passing single-GPU Commit raised NameError
     before its manifest check and verdict (r20261017-204707-7b27, Llama-3.2-1B B1)."""
     r, man, verified = _row(tmp_path), _tap_manifest(tmp_path / "manifest.json"), []
-    (tmp_path / "tap.so").write_bytes(b"")
-    r.hidden_so, r.B, r.I, r.O = str(tmp_path / "tap.so"), 1, 256, 32
+    r.B, r.I, r.O = 1, 256, 32
 
     def verify(m: str) -> None:
         verified.append(m)
@@ -660,13 +658,16 @@ def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatc
 PD = "p" * 64
 
 
-def _record_manifest(path: Path, query_id: str, *, program_digest: str = PD, partition: bool = True, word_check: bool = True) -> None:
-    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+def _record_manifest(path: Path, query_id: str, *, program_digest: str = PD, partition: bool = True, word_check: bool = True,
+                     hidden: bool = False) -> None:
+    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range")}}
     if partition:
         query["partition"] = {"object": {"format": "verity/partition/v1"}, "digest": "d" * 128}
     if word_check:
         query["word_check"] = {"query": query_id, "strict": True, "ok": True, "violations": 0}
-    path.write_text(json.dumps({"query": query, "program_digest": program_digest, "identities": [{"family": "instance_outputs"}]}))
+    families = {"instance_outputs": 1, **({"fa3_hidden_m1_stream": 1} if hidden else {})}
+    path.write_text(json.dumps({"query": query, "program_digest": program_digest, "identities": [{"family": f} for f in families],
+                                "populations": {"by_family": families}}))
 
 
 def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
@@ -683,7 +684,7 @@ def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
 
 def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
     from verity_vllm.query import required
-    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", "fa2_hidden_m1_stream", return_slots=True)["query_id"]
+    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", return_slots=True)["query_id"]
 
 
 def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manifest_of_record(tmp_path, monkeypatch):
@@ -702,6 +703,7 @@ def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manif
     # the Commit refuses a Q_word manifest without a passing word check (commit.partition.word_check_refusal): a Build of before the
     # header recorded it, or one built with --word-check off, is rebuilt instead of starting a Commit that refuses
     ({"word_check": False}, "unchecked", "does not record a passing word check (no word check recorded"),
+    ({"hidden": True}, "hidden-stream", "names fa3_hidden_m1_stream rows, an attention interior no Commit acquires"),
 ])
 def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_aside_and_rebuilt(tmp_path, monkeypatch, kw, slug, why):
     r, built = _row_with_build(tmp_path, monkeypatch)
@@ -713,7 +715,8 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
 
 
 @pytest.mark.parametrize("kw, why", [({}, ""), ({"complete": False}, "not complete"), ({"query_id": "Q_module_body_v1"}, "query of record"),
-                                     ({"partition": False}, "query of record"), ({"word_check": False}, "no word check recorded")])
+                                     ({"partition": False}, "query of record"), ({"word_check": False}, "no word check recorded"),
+                                     ({"hidden": True}, "an attention interior no Commit acquires")])
 def test_a_tp_rows_complete_word_checked_manifest_is_reused_not_rebuilt_on_the_gpu_host(tmp_path, kw, why):
     """[GLM-5.3] the TP Commit rebuilt manifest.json before leasing the GPUs every time: hours of CPU and ~470 GB beside the engine."""
     r = _row(tmp_path)
@@ -727,7 +730,7 @@ def test_a_tp_rows_complete_word_checked_manifest_is_reused_not_rebuilt_on_the_g
 
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     r = _row(tmp_path)
-    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.B = 1
     r.env = dataclasses.replace(r.env, norm_tap_so=str(tmp_path / "absent" / "verity_norm_tap.so"))   # a host with the default build (/workspace/cp/...) has the .so
     man = _tap_manifest(tmp_path / "manifest.json", "norm_scales")
     taps = R.applicable_taps(man, r.ck_)
@@ -744,24 +747,22 @@ def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
     o = _opts(tmp_path, *argv, row=row, **kw)
     t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None,
               build=o.build, match=o.match, commit=o.commit)
-    t.hidden_so, t.B, t.requests, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, 2, [], "/ck", ""
+    t.B, t.requests, t.engine, t.ck, t.fold_profile = 2, 2, [], "/ck", ""
     t.bdir, t.M = f"{t.d}/build", f"{t.d}/match"
     return t
 
 
-def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_path, monkeypatch):
+def test_a_tp_row_runs_every_tap_its_manifest_names_and_no_attention_tap(tmp_path, monkeypatch):
     t = _tp_row(tmp_path, TP_MOE)
-    assert t.hidden_so == t.env.hidden_so_fa2_guarded
-    assert _tp_row(tmp_path, TP_MOE, environ={"GUARDED_MAX_TAP": "0"}).hidden_so == t.env.hidden_so_fa2
     seen: list[list[str]] = []
     monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
     os.makedirs(t.d)
     t.manifest_global("commit.required_manifest")
-    assert {"--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"} <= set(seen[0])
+    assert {"--norm-scales", "--router-softmax", "--vocab-range"} <= set(seen[0])
     taps = R.applicable_taps(_tap_manifest(tmp_path / "moe.json", "norm_scales", "router_softmax", "vocab_range"), t.ck_)
     cmd = t.commit_cmd(taps)
-    assert cmd[cmd.index("--hidden-so") + 1] == t.env.hidden_so_fa2_guarded and "--vocab-range" in cmd
+    assert "--hidden-so" not in cmd and "--vocab-range" in cmd
     assert cmd[cmd.index("--norm-tap-so") + 1] == t.env.norm_tap_so and cmd[cmd.index("--router-tap-so") + 1] == t.env.router_tap_so
     dense = _tp_row(tmp_path, TP_DENSE)
     cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
@@ -772,7 +773,7 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
     """SERVING_ROWS reaches the single-GPU Commit and tp-commit alike as the request `Row.serving_rows_request` writes."""
     pf = str(tmp_path / "partition.json")
     single = _row(tmp_path, environ={"SERVING_ROWS": pf})
-    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
+    single.B = 1
     tp = _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1"})
     for r in (single, tp):
         cmd = r.commit_cmd([])
@@ -788,7 +789,7 @@ def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_
     from verity_vllm.pipeline import commit
 
     single = _row(tmp_path, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"})
-    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
+    single.B = 1
     cmd = single.commit_cmd([])
     assert cmd[cmd.index("--remote-verifier") + 1] == "10.0.0.7:7781"
     assert "--remote-verifier" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
@@ -814,7 +815,7 @@ def test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_
 
     def precheck_reached() -> str:
         raise Stop(99)
-    monkeypatch.setattr(t, "hidden_build", precheck_reached)
+    monkeypatch.setattr(t, "refuse_unserved_engine", precheck_reached)
     with pytest.raises(Stop) as e:
         t.prepare()
     assert e.value.rc == 99 and t.nccl == p2p
@@ -1030,7 +1031,7 @@ def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_pat
     for argv, form in (((), "progressions"), (("--instances-form", "runs"), "runs")):
         single, tp = _row(tmp_path, *argv), _tp_row(tmp_path, GLM53, *argv)
         monkeypatch.setattr(single, "release_line", precheck_reached)
-        monkeypatch.setattr(tp, "hidden_build", precheck_reached)
+        monkeypatch.setattr(tp, "refuse_unserved_engine", precheck_reached)
         for r in (single, tp):
             with pytest.raises(Stop):
                 r.prepare()
@@ -1041,7 +1042,6 @@ def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_st
     """A TP row's stages serve with prefix caching off and its rank Programs take no cached prefix, so a TP row whose file declares it is
     refused at its precheck; a single-GPU prefix row passes it (its warm requests' Programs read their cached rows as an input)."""
     tp = _tp_row(tmp_path, "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager")
-    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
     monkeypatch.setattr(tp, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
     with pytest.raises(Stop) as e:
         tp.prepare()
@@ -1070,7 +1070,7 @@ def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it
     def target_family(*extra, out):
         seen.append(extra)
         raise Stop(99)
-    for name, fn in (("hidden_build", lambda: "/x/verity_fa2_matReqG.so"), ("release_line", lambda arg: ("PASS|x", None)),
+    for name, fn in (("release_line", lambda arg: ("PASS|x", None)),
                      ("export_commit", lambda: ""), ("source_identity", lambda pys, out: False), ("target_family", target_family)):
         monkeypatch.setattr(t, name, fn)
     with pytest.raises(Stop) as e:

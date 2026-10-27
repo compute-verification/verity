@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' row dirs, for PROVE-PATH's served
 # windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench row's Commit of record's
-# committer and acquire sources, built from its manifest ROW/manifest.json and taps HIDDEN_SO, NORM_TAP_SO: hm96-sha512 rows in
+# committer and acquire sources, built from its manifest ROW/manifest.json and norm-scale tap NORM_TAP_SO: hm96-sha512 rows in
 # frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
 # idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
 # --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to),
@@ -21,7 +21,7 @@
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
 # admission order (VLLM-98), else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
 # `verity example vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
-# CUDA_HOME, HF_HOME, HIDDEN_SO and NORM_TAP_SO, the run's SERVE_ROOT, and the row's REPO, REV and ROW (the Commit of record's row
+# CUDA_HOME, HF_HOME and NORM_TAP_SO, the run's SERVE_ROOT, and the row's REPO, REV and ROW (the Commit of record's row
 # dir) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
@@ -36,7 +36,7 @@
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
-for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
+for v in REPO REV ROW NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
   [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity example vllm serve\` (examples/vllm/run.sh)"; exit 2; }
 done
 TREE=$PWD
@@ -95,8 +95,8 @@ under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free o
 # finishes the pending seals
 "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin \
   --run-id "${RESEARCH_RUN_ID:-local}" \
-  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
-  --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" \
+  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" \
+  --norm-tap-so "$NORM_TAP_SO" --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" \
   --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "$DISK_FLOOR_GB" \
   --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \
   ${WINDOW_REQUESTS:+--window-requests "$WINDOW_REQUESTS"} ${PROTOCOL:+--protocol "$PROTOCOL"} \
@@ -283,15 +283,13 @@ reads = {"gemm_out": ("model.layers.0.mlp.gate_up_proj", "out"), "rope_l0_query"
          "rope_l15_key": ("model.layers.15.self_attn.rotary_emb", "key"), "norm_scale": ("model.layers.3.input_layernorm", "norm_scale"),
          "rmsnorm_residual": ("model.layers.3.post_attention_layernorm", "1")}
 have = {name: sum(store.has(q, s, op, m) for q, s in pairs) for name, (op, m) in reads.items()}
-fa2 = sum(any(e["identity"]["op_path"].startswith("fa2.m1/") and e["identity"]["request_id"] == q and e["identity"]["step"] == s
-              for e in bmap["entries"]) for q, s in pairs[:8])
 how = Counter(e.get("observation", "label/slot") for e in bmap["entries"] if e.get("kind") == "leaf")
 raw = sorted({e["identity"]["op_path"] + "/" + e["identity"]["output_member"] for e in bmap["entries"]
               if e.get("kind") == "leaf" and e["identity"]["output_member"] in ("0", "1") and not e["identity"]["op_path"].endswith("layernorm")})
 first = pairs[0] if pairs else None
 print(json.dumps({"window": int(k), "committer": json.loads((w / "commit" / "runs.jsonl").read_text())["commit"]["committer"],
                   "aliases": len((r.manifest or {}).get("op_path_aliases") or {}), "request_steps": len(pairs), "found": have,
-                  "fa2_in_first_8": fa2, "embed_tokens_in": dict(Counter(e.get("name") for e in bmap["entries"]
+                  "embed_tokens_in": dict(Counter(e.get("name") for e in bmap["entries"]
                                                           if (e["identity"]["op_path"], e["identity"]["output_member"]) == ("model.embed_tokens", "in"))), "observation": dict(how), "raw_slot_members": raw[:6],
                   "lookup": None if first is None else {"request": first[0], "step": first[1] + 1,
                                                        "gate_up_proj/out": store.words(first[0], first[1] + 1, *reads["gemm_out"], 0, 1)[1]
