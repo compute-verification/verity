@@ -67,7 +67,8 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
     gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
     minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
     lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
-    origin's delay and 30 s for the key and the check."""
+    origin's delay and 30 s for the key and the check, and `warden_windows` (in `WARDEN_WINDOW_MS`, the schedule's
+    link-window) is at least the run's link-windows, which its key must sign."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     argv = A.warden_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
@@ -79,10 +80,14 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
     assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
     assert ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
     window_s = args.window * args.bucket_ms / 1000
+    assert A.WARDEN_WINDOW_MS == args.window * args.bucket_ms
+    most = ws.varied_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+    assert [x["at"] for x in ws.varied_traffic(400, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)] == \
+        [x["at"] for x in most[:400]]
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
-        last = ws.varied_traffic(n, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)[-1]["at"]
-        took = math.ceil((last + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
-        assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
+        windows = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s)
+        assert windows * window_s + args.start_in + 30 <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
+        assert windows <= A.warden_windows(n, scan=False), n
 
 
 def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_cover_the_link(tmp_path):
@@ -165,6 +170,34 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
         took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
         assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
+
+
+def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_at_the_scans_schedule():
+    """The gate sizes a scan rehearsal's key on `warden_windows` of its requests (`warden_height`), so for every
+    request count it takes, those are at least the link-windows `rehearse` runs (its traffic's last arrival and tail,
+    at `scan_zk.PARAMS`) on the gate's id traffic and on `--prompts`' arrivals; a request count's traffic is the
+    first of the most's. The gate's most requests are 1064 link-windows of `--prompts`, about 57 minutes, which height
+    13 signs and 12 doesn't."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    window_s = sz.PARAMS.window * sz.PARAMS.bucket_ms / 1000
+    assert A.SCAN["--window"] * A.SCAN["--bucket-ms"] == sz.PARAMS.window * sz.PARAMS.bucket_ms
+    ids = ws.id_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED,
+                        max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    prompted = ws.prompt_traffic([[1]], A.WARDEN_PROMPT_REQUESTS[1], model="m", params=sz.PARAMS, max_tokens=24,
+                                 rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+    assert [x["at"] for x in ws.prompt_traffic([[1]], 400, model="m", params=sz.PARAMS, max_tokens=24,
+                                               rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)] == \
+        [x["at"] for x in prompted[:400]]
+
+    def windows(traffic, n):
+        return math.ceil((traffic[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s)
+    for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
+        assert windows(ids, n) <= A.warden_windows(n) and windows(prompted, n) <= A.warden_windows(n), n
+    assert (windows(prompted, 400), windows(prompted, 1700), A.warden_windows(1700)) == (259, 1064, 1119)
+    assert A.warden_height(windows(prompted, 1700)) == A.warden_height(A.warden_windows(1700)) == 13
 
 
 def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows_and_its_minutes_cover_them(tmp_path):

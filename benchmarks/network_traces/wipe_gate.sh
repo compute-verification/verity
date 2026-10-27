@@ -5,14 +5,17 @@
 #
 # With AT (a UTC time) it first waits until then, so a run launched early fires on the clock with no VM awake: give the
 # run a --timeout past AT, MINUTES and the fetch. Launched more than LATE_S (60) seconds after AT it sends nothing. It
-# sends the gate REQUESTS prompts of the toy's class (`demo_stub.py prompts`), the toy (`demo_stub.py serve`) already
-# listening on PEER's loopback PORT, and writes the gate's answer to start.json; a refusal (another rehearsal still runs)
-# is a visible failure, never retried. Then `status` every 15 s until the run ends (status.json), and its bundle with
-# witness/, the lane's own (`fetch`), to bundle.tgz. Exits with the gate run's rc.
+# sends the gate PROMPTS prompts of the toy's class (`demo_stub.py prompts`; REQUESTS, at most the gate's 400 prompts)
+# for REQUESTS requests, request j the (j mod PROMPTS)-th, the toy (`demo_stub.py serve`) already listening on PEER's
+# loopback PORT, and writes the gate's answer to start.json; a refusal (another rehearsal still runs, or MINUTES or
+# HEIGHT short of what REQUESTS take, with the least that fits) is a visible failure, never retried. Then `status`
+# every 15 s until the run ends (status.json), and its bundle with witness/, the lane's own (`fetch`), to bundle.tgz.
+# Exits with the gate run's rc.
 #
-# 400 requests, the gate's most, are 259 link-windows at its fixed seed (`warden_serve.prompt_traffic`): 828.8 s from
-# the session's origin, which is about 15 s after the request at HEIGHT 12. A wipe whose [t0, t1) lies within
-# [origin + 1 s, origin + 827.8 s) is covered; then
+# At the gate's fixed seed (`warden_serve.prompt_traffic`) 400 requests are 259 link-windows, 828.8 s from the
+# session's origin, about 15 s after the request (HEIGHT 12, MINUTES 20), and the gate's most, 1700, are 1064, 3404.8 s
+# (HEIGHT 13, MINUTES 60 or more: at 12 the key's 4096 one-time signatures, 5 a window, run out at 819). A wipe whose [t0, t1)
+# lies within [origin + 1 s, origin + session − 1 s) is covered; then
 #
 #   python benchmarks/network_traces/wipe_egress.py $OUT/bundle.tgz --t0-ns T0 --t1-ns T1 --out egress.json
 #
@@ -22,6 +25,7 @@ set -euo pipefail
 GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-network-accounting}
 CHALLENGER=${CHALLENGER:-research@204.12.178.84}
 PEER=${PEER:-vy-dc-h200-2} PORT=${PORT:-18776} REQUESTS=${REQUESTS:-400} HEIGHT=${HEIGHT:-12} MINUTES=${MINUTES:-20}
+PROMPTS=${PROMPTS:-$((REQUESTS < 400 ? REQUESTS : 400))}
 LATE_S=${LATE_S:-60}
 SSH=(ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o ServerAliveInterval=15 -i "$GATE_KEY" "$CHALLENGER")
 REQUEST="warden-rehearse --peer $PEER --port $PORT --minutes $MINUTES --requests $REQUESTS --height $HEIGHT --scan"
@@ -35,7 +39,7 @@ if [ -n "${AT:-}" ]; then
   [ "$now" -ge "$at" ] || sleep $((at - now))
 fi
 echo "$(date -u +%FT%TZ): $REQUEST"
-PYTHONPATH=$PWD python3 benchmarks/network_traces/demo_stub.py prompts --count "$REQUESTS" | "${SSH[@]}" "$REQUEST" \
+PYTHONPATH=$PWD python3 benchmarks/network_traces/demo_stub.py prompts --count "$PROMPTS" | "${SSH[@]}" "$REQUEST" \
   | tee "$OUT/start.json"
 RUN=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' "$OUT/start.json")
 echo "$(date -u +%FT%TZ): gate run $RUN"

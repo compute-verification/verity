@@ -30,8 +30,9 @@ The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the
 Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over its
 session [t0, t1) comes after, from a warden session that spans it: `wipe_gate.sh` runs that session through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
-when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
-`wipe-egress/v1` record from what the gate published. Each link-window meeting [t0 − 1 s, t1 + 1 s) counts at the
+when asked, and fetches the run's bundle. One session spans at most the gate's 1700 requests, 1064 link-windows (about
+57 minutes; `REQUESTS=1700 HEIGHT=13 MINUTES=60` or more), a whole node's wipe. `wipe_egress.py BUNDLE --t0-ns T0
+--t1-ns T1` then writes the `wipe-egress/v1` record from what the gate published. Each link-window meeting [t0 − 1 s, t1 + 1 s) counts at the
 schedule's capacity, 2,621,440 bits a link-window, with K that count and δ 0. The record is covered only when every one
 of those windows is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered record and
 keeps the wipe uncounted otherwise.

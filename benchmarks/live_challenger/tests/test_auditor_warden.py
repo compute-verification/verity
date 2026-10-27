@@ -87,8 +87,8 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--requests", "4", "--minutes", "3", "--height", "10"], "give --minutes 4 or more"),
     (["--requests", "400", "--minutes", "16", "--height", "10"], "give --minutes 17 or more, or fewer --requests"),
     *[(["--height", v], f"--height {v!r}: 10 to 20") for v in ("9", "21", "010", "20.0", "H", "")],
-    (["--requests", "3"], "--requests '3': 4 to 400"),
-    (["--requests", "401"], "--requests"),
+    (["--requests", "3"], "--requests '3': 4 to 1700"),
+    (["--requests", "1701"], "--requests '1701': 4 to 1700"),
     (["--tokens", "15"], "--tokens '15': 16 to 256"),
     (["--tokens", "257"], "--tokens '257': 16 to 256"),
     (["--tokens", "+32"], "--tokens '+32': 16 to 256"),
@@ -135,6 +135,33 @@ def test_the_least_minutes_are_two_seconds_a_request_three_minutes_and_the_key_m
                                                                     (4, 60, 61, 100, 400)] == [8, 10, 10, 11, 21]
     for h in (10, 20):
         assert all(A.warden_minutes(n + 30, h) == A.warden_minutes(n, h) + 1 for n in range(4, 371))
+
+
+def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
+    """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    so height 12's 4096 sign 819 windows and 1031 (55 minutes of the scan's 3.2 s windows) take 13; a load's heads come
+    first. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
+    takes; at 12 it refuses them with the height that fits. The gate's most, 1700, take 13 too, and default height 20
+    signs anything the gate takes."""
+    assert [A.warden_height(w) for w in (1, 204, 205, 819, 820, 1031, 1638, 1639)] == [10, 10, 11, 12, 13, 13, 13, 14]
+    assert A.warden_height(1031, heads=733) == 13
+    assert A.warden_height(819, heads=1) == 12 and A.warden_height(819, heads=2) == 13
+    assert (A.warden_windows(1559), A.warden_windows(1700), A.warden_windows(1700, scan=False)) == (1031, 1119, 60)
+    assert (A.warden_minutes(1559, 13), A.warden_minutes(1700, 13), A.warden_minutes(1700)) == (55, 60, 64)
+    long = REQUEST[:-1] + ["55", "--scan", "--prompts", "--requests", "1559", "--height"]
+    rc, out = gate(host, long + ["13"], stdin=b"[[1]]", started=[])
+    assert rc == 0 and {k: json.loads(out)[k] for k in ("requests", "minutes", "height")} == \
+        {"requests": 1559, "minutes": 55, "height": 13}
+    rc, out = gate(host, long + ["12"], stdin=b"[[1]]", started=[], token="cd34")
+    assert rc == 3 and json.loads(out)["refused"] == (
+        "--height 12: 1559 requests take 1031 link-windows, 5155 one-time signatures (5 a window), past the key's "
+        "4096: give --height 13 or more, or fewer --requests")
+    assert not (host.certifier / "c20261024T110000Z-cd34").exists()
+    rc, out = gate(host, REQUEST[:-1] + ["60", "--scan", "--requests", "1700", "--height", "13"], started=[],
+                   token="ef56")
+    assert rc == 0 and json.loads(out)["requests"] == 1700
+    rc, out = gate(host, REQUEST[:-1] + ["64", "--scan", "--requests", "1700"], started=[], token="ab34")
+    assert rc == 0 and json.loads(out)["height"] == 20
 
 
 SALT_C = "5a" * 64
@@ -345,8 +372,8 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     (["--prompts"], b"[[1]]", "--prompts: the scan's id requests' prompts, with --scan"),
     (["--scan", "--window-per-group"], b"[[1]]", "--window-per-group: groups of the --prompts"),
     (["--window-per-group"], b"[[1]]", "--window-per-group: groups of the --prompts"),
-    (["--scan", "--prompts", "--requests", "0"], b"[[1]]", "--requests '0': 1 to 400"),
-    (["--scan", "--prompts", "--requests", "401"], b"[[1]]", "--requests '401': 1 to 400"),
+    (["--scan", "--prompts", "--requests", "0"], b"[[1]]", "--requests '0': 1 to 1700"),
+    (["--scan", "--prompts", "--requests", "1701"], b"[[1]]", "--requests '1701': 1 to 1700"),
     (["--scan", "--prompts", "--tokens", "0"], b"[[1]]", "--tokens '0': 1 to 64"),
     (["--scan", "--prompts", "--tokens", "65"], b"[[1]]", "--tokens '65': 1 to 64"),
     *[(["--scan", "--prompts"], bad, "--prompts: stdin is a JSON array of 1 to 400 prompts, each an array of 1 to 2048 "
