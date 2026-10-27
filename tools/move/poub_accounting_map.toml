@@ -1,0 +1,40 @@
+# PoUB's analysis takes PoUB's name: what `tools/move/rename.py --map tools/move/poub_accounting_map.toml` renames. The
+# security analysis of the remote bandwidth audit was `Accounting.Remote` (with `Accounting.Guarantees.Remote` and
+# `Accounting.SecurityProofs.Remote`) in `Remote*` files under `Security/Definitions/Accounting` and
+# `Security/Proofs/Accounting`, which a reader confuses with the remote protocol (`verity/core/protocols/remote`,
+# `Core.Remote`). They become `Accounting.Poub`, `Accounting.Guarantees.Poub` and `Accounting.SecurityProofs.Poub`, in `Poub*`
+# files. Declarations keep their short names, so the rate audit's `RemoteSession*` and `RemoteWindow*` guarantees stay as
+# they are, and so do the NCI's `Remote*` files and the rate audit's `RateAuditRemote` modules.
+
+[words]
+"Definitions.Accounting.Assumptions.Remote" = "Definitions.Accounting.Assumptions.Poub"
+"Definitions.Accounting.Guarantees.Remote" = "Definitions.Accounting.Guarantees.Poub"
+"Accounting/Assumptions/Remote" = "Accounting/Assumptions/Poub"
+"Accounting/Guarantees/Remote" = "Accounting/Guarantees/Poub"
+"Accounting/Remote" = "Accounting/Poub"
+"Accounting.Remote" = "Accounting.Poub"
+
+# Whole names only: `Accounting.Guarantees.RemoteSessionConservation` and its kin are the rate audit's declarations.
+[[words_in]]
+files = ["**"]
+words = { "Accounting.Guarantees.Remote" = "Accounting.Guarantees.Poub", "Accounting.SecurityProofs.Remote" = "Accounting.SecurityProofs.Poub" }
+
+# Inside `namespace Accounting`, the analysis is named relative to it.
+[[words_in]]
+files = ["Security/Definitions/Accounting/**", "Security/Proofs/Accounting/**"]
+words = { "Remote." = "Poub.", "RemoteBinding" = "PoubBinding" }
+
+[[words_in]]
+files = ["verity/core/protocols/poub/tests/test_line.py"]
+words = { "RemoteHeld.lean" = "PoubHeld.lean" }
+
+[rewrite]
+# Never rewritten: the maps, records of what was (changelogs, the rulings, a test's recorded PR title), the frozen
+# backends, and files whose bytes a digest pins.
+exclude = ["tools/move/poub_accounting_map.toml", "tools/move/poub_lean_map.toml", "archive/**", "tools/research/tests/**",
+           ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
