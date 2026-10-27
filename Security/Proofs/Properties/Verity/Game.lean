@@ -34,7 +34,7 @@ theorem wipeSound_of_streamed (h : Pous.Guarantees.StreamedWipeMeetsServer) (hc 
   intro θ F c σ s
   refine (hc θ F c σ s).trans ?_
   unfold WipeVocab.error
-  refine add_le_add (add_le_add ?_ le_rfl) le_rfl
+  refine add_le_add ?_ le_rfl
   exact h (512 * W.n θ s + W.R θ s) (W.n θ s) (W.R θ s) rfl (W.n_pos θ s) (W.r θ s) (W.k θ s) (W.r_pos θ s)
     (W.reads θ s) (W.keepBound θ s + W.egressBound θ s) (W.egressBound θ s) (W.κ θ s) (W.prf θ s)
     (W.prover θ F c σ s) le_rfl
