@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """The e2e demo's two phases at the loop's EPS, 1e-5: Phase 1's row (width 128) as one unit, and Phase 2's (width 16,384) in
+    """The e2e demo's two phases at EPS = 1e-5: Phase 1's row (width 128) as one unit, and Phase 2's (width 16,384) in
     the two-level form, chunks of 128 words and groups of 64 chunk sums, so G = 2; and the fused output unit at Phase 2's
     chunk (C = 128, its 128 chunk sums in G = 2 groups), with the chunk sums 32 a unit (C = 4096, K = 128)."""
     from verity.ml.circuits.defs import bind

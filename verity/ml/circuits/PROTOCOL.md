@@ -2,7 +2,7 @@
 
 This is the byte format of a Program and the rules that turn it into a circuit: from the canonical bytes of a descriptor, a
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
-implementation (the Lean port of `Q_word` first). It describes the bytes the codec already writes and moves no digest.
+implementation, such as the Lean port of `Q_word` (`verity/core/service/sampled_proofs/`). It describes the bytes the codec writes and moves no digest.
 
 - Reference: `verity.ml.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
@@ -278,7 +278,7 @@ key, Input nodes, Input gate count and Calls); `binding_ids` (id, its binding ti
 ### 5.3 What a Program holds
 
 An operation's own definition is gates: the constants of the floating-point formats, the round constants of SHA-512 and
-Keccak-f, and every measured MUFU table (exp2, rcp, sqrt, rsq and tanh). Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
+Keccak-f, and every measured MUFU table (exp2, rcp, sqrt, rsq, tanh and lg2). Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
 epsilon, the attention scale, a softcap, `gelu_tanh_bf16`, `tanh_rn`) are registered inputs, and a request's data and parameters
 (temperature, top-p, the Philox positions) are run inputs. A constant primitive (`Const<w>[0x…]_v1`) is therefore an operation's
 own bits, and a Program holds no data.
@@ -300,11 +300,10 @@ composites are no operations and their constants are listed.
 
 The guard therefore runs at registration, on the producer's registry. A verifier that receives a descriptor cannot run it: a
 decoded Program matches no operation, since the match is the registry's own Definition object, not a descriptor. A
-verifier-side check needs operations matched by descriptor digest, under a new `verity/operations` version; that is a later
-step.
+verifier-side check would need operations matched by descriptor digest, under a new `verity/operations` version.
 
 No statement or table claims that a Program's values are always hidden until the guard returns {} for it.
-`Program(fn, strict=guard)` refuses a Program that holds data; it is off by default until programs move their data to inputs.
+`Program(fn, strict=guard)` refuses a Program that holds data; it is off by default.
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
 to registered inputs under new ids.
 
@@ -388,7 +387,7 @@ changing any of them is a new version of the query.
   - takes its own recompute token, so it is never a recompute of an earlier gate and no later gate is a recompute of it;
   - is never folded into a constant.
 
-  This is v1 behaviour, not a property of the circuit, and should go when the query is next revised. `cut.WIDE_FAN_IN` is the
+  This is v1 behaviour, not a property of the circuit. `cut.WIDE_FAN_IN` is the
   query's own constant, not the layout's lazy-operand threshold (`layout.WIDE_FAN_IN`, which has no effect on operands).
 
 `WIRING` and `WIDE_FAN_IN` are pinned as data in `verity/ml/circuits/tests/qword_vectors.json`, with vectors for every step of the algorithm, every
@@ -457,8 +456,8 @@ only for `gate-recomputed` (two members of one Call each computing `x0 + x1`), w
 ## 11. `Q_call` v1
 
 `Q_call` v1 (`partition_object.QUERIES`, `call_query`; the algorithm in `verity.ml.circuits.cut`'s docstring, `cut.evaluate_call`) is a
-query of its own, `{"name": "Q_call", "version": 1, "params": {"X": X}}`, with one parameter: X, an integer in 1..2^16 (32 is the
-agreed value). It reads a Program through §1–§7. A *proof block* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
+query of its own, `{"name": "Q_call", "version": 1, "params": {"X": X}}`, with one parameter: X, an integer in 1..2^16 (32 in
+use). It reads a Program through §1–§7. A *proof block* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
 defines them, counted in bits at any gate width. The one rule is w_out(S) ≤ X; inputs are unbounded. This section is a delta
 on §8 and §10.
 

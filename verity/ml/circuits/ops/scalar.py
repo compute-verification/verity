@@ -95,8 +95,7 @@ def F32Sat(a: int) -> int:
 @primitive("F32ToS8RniSat", 1, [("x", F32)], S8, conformance="exact-model-tested")
 def F32ToS8RniSat(x: int) -> int:
     """`cvt.rni.sat.s8.f32`: x rounded to the nearest integer, ties to even, saturated to [-128, 127] (the infinities too),
-    NaN 0; the s8 code. The same as torch's ``round(x).clamp(-128, 127).to(torch.int8)`` on CPU, NaN included
-    (`verity_torch_loop`'s tests)."""
+    NaN 0; the s8 code. The same as torch's ``round(x).clamp(-128, 127).to(torch.int8)`` on CPU, NaN included."""
     u = x & 0xFFFFFFFF
     if f32_is_nan(u):
         return 0

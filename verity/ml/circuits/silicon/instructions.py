@@ -5,7 +5,7 @@ The ontology of the silicon campaign has three code objects and two store object
 
     Instruction   one PTX instruction class on one architecture (this module)        code
     Model         the executable accumulator-step semantics (``models.py``)          code
-    Target        a frozen relation over one instruction (``verification.target``)   code
+    Target        a frozen relation over one instruction (``targets.target``)        code
     Evidence      recorded hardware runs                                             store (``tc-evidence/v1``)
     Pin           the decision that evidence validates a model for an instruction    store
 

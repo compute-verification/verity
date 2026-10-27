@@ -6,7 +6,7 @@ a public power of two from 16 to 262,144 bits):
     RowAbsMax_v1{N, RELU}       (x: bf16[N]) -> bf16: max |x_k| over the row, relu'd first under RELU
     QuantChunkS8_v1{N, RELU}    (x: bf16[N], amax: bf16) -> (s8[N], f32): a chunk's codes under the row's amax, and the scale
 
-**The function** is the torch loop's ``quantize`` (`verity_torch_loop.loop`) of its row, relu'd first under ``RELU``:
+**The function** is torch's per-row s8 quantize of its row, relu'd first under ``RELU``:
 
 * ReLU on bf16, ``x < 0 ? +0 : x`` (``torch.relu``: -0 and a NaN are themselves), then the exact widening to f32;
 * amax = max |x_k| over the row, NaN when any |x_k| is (``amax``'s propagation): the integer max of the f32 encodings with their
@@ -25,7 +25,7 @@ unit fits the proof system's block. A wider row is ``RowAbsMax_v1`` over the who
 each reading the chunk and that amax; chunk k's codes are the row's codes k * N .. k * N + N - 1, and every chunk's scale is the
 row's. The amax can be taken in parts: a part's amax is its own ReLU and magnitude, so ``RowAbsMax_v1{m + j, RELU}`` over the
 last part's m values and the other j parts' amaxes is the row's (a combine that reads a part's values, for a proof system that
-refuses a unit all of whose rows are short). In the torch loop ``RELU`` is true on the up_proj -> down_proj edge and false on
+refuses a unit all of whose rows are short). ``RELU`` is true on a ReLU MLP's up_proj -> down_proj edge and false on
 down_proj -> the next step's up_proj, which has no ReLU; the units of a row take the same ``RELU``.
 """
 from __future__ import annotations

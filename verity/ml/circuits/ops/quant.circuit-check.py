@@ -5,7 +5,7 @@ from typing import Any
 
 
 def _core_roots() -> list[Any]:
-    """Phase 1: the row unit at the torch loop's width, H = 128, with and without the ReLU, and at 512; the amax of a row of 128
+    """Phase 1: the row unit at H = 128, with and without the ReLU, and at 512; the amax of a row of 128
     and over four partial maxima; a chunk of 128. Phase 2, each in a form whose unit fits a C-Flock block of 2^27:
 
     * a 16,384-wide row without the ReLU (an RMSNorm's or attention's output): its amax, and the two chunks of 8,192;
