@@ -58,13 +58,15 @@ appear).
 | cost(C), T_𝒢(η; 𝒜) | The server-time C occupies (the Φ-calibrated size of its unrolling), not wall-clock; the threshold inf{cost(C) : Pr[(C, x) ∈ 𝒜 ∧ C(x) ∈ 𝒴] > η}, the least cost at which allowed success can exceed η. | not yet in Lean |
 | overhead(𝒢, 𝒜′, η) | T_𝒢(η; 𝒜′)/T_𝒢(η; 𝒜_phys), with the same initial information and Λ in both, defined when the denominator is in (0, ∞). A reference construction bounds the denominator. | not yet in Lean |
 | slowdown | Wall-clock time only, never overhead: reaching the task takes at least T_𝒢(η; 𝒜′) of server-time spread over the fleet's servers. | — |
+| declared utilization | The declared work's counted operations per second over the location's ceiling rate for those operations, at each SKU's ceiling (a GEMM's MACs over the tensor pipe's MAC rate, say); in ML terms, the declared work's MFU. It is the same work's utilization without the protocol over γ. A cost to the honest developer, not a share of the bound: the protocol's own work is certified (ε_undecl). | not yet in Lean |
+| γ | The prover overhead: the honest prover's time for the declared work over the same work's time without the protocol. A cost, read by no bound; γ ≤ 10 allowed (ε_undecl). | not yet in Lean |
 
 **Unaccounted capacity**, each a share with its denominator stated, an overlap counted once:
 
 | Symbol | Meaning | Lean |
 |---|---|---|
 | ε_dark | The dark leaves' share of the fleet's capacity, Φ(L_dark) = ε_dark·Φ_total; mainline 10^-3, range 10^-4 to 10^-2. | `Nci.Dampener.unmonitoredShare` |
-| ε_undecl | Monitored capacity running no certified declared work, 1 − W_cert/C_X, C_X the location's capacity in 𝓜's resources at each SKU's ceiling, reported as counted operations (Φ_X, in gates per second, stays for the partition, c_S and the counting): model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. ε_skip + ε_undecl is the number driven to 0; a prover's overhead is certified work, in neither, with γ ≤ 10 allowed. | `Nci.Dampener.residualShare` |
+| ε_undecl | Monitored capacity running no certified declared work, 1 − W_cert/C_X, C_X the location's capacity in 𝓜's resources at each SKU's ceiling, reported as counted operations (Φ_X, in gates per second, stays for the partition, c_S and the counting): model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. ε_skip + ε_undecl, the unaccounted share, is the number driven to 0; a prover's overhead is certified work at the public best's cost (the protocol's noise, commitments and hashing), in neither, with γ ≤ 10 allowed, and only its excess over the public best is model slack. | `Nci.Dampener.residualShare` |
 | ε_skip | Certified work not done: PoUW's ε_W of the certified share, ε_W·(1 − ε_undecl), and the wrong certificates. | `Accounting.Compose` (ε_♭ = ε_skip + ε_cert + ε_route) |
 | ε_break | The gates of the faulty proof blocks F. | `Nci.Guarantees.Dampener` (its χ) |
 
@@ -179,6 +181,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝒜_phys, 𝒜_a, δ_a, 𝒜′; the physical model, protocol soundness, the exclusion bound |
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until they are renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | ε_undecl + ε_skip at that GPU; the exchanged bits are an input term (k_S's r_in and r_side), reported beside it in bits |
+| "certified share" or "share of the card" for the declared work's throughput over the card's ceiling, which leaves out the protocol's own work; "ε_undecl" for its complement | declared utilization; the certified share is 1 − ε_undecl, which counts the protocol's own work at the public best's cost |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
 | θ for a card's numbers | the card table (θ is the registered inputs) |
 | "envelope ISA", "envelope op" for the ACCEL model's instruction kinds; `machine_model`'s `cover` command and its `envelope` key, until they are renamed | the ACCEL ops (envelope is 𝒜_a only) |
