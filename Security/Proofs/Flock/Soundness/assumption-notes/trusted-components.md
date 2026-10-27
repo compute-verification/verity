@@ -40,7 +40,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
     `CompiledSound.lean`, `CompiledLock.lean`).
   - The audit fails when a signature or a definition it reads changes, until `check.py --update` rewrites the record.
     A rewritten record is shown when it lands on `main`; nobody signs off and nothing
-    waits on it. A theorem cited but not pinned (`../ASSUMPTIONS.md` names them) is read in
+    waits on it. A theorem cited but not listed (`../ASSUMPTIONS.md` names them) is read in
     its source.
 - **Pinned dependencies.** ArkLib `b2e456fc`; through its manifest, VCVio `d7089e46`, CompPoly `df591bb8`
   (`v4.34.0-patch2`) and Mathlib `5ed29652` (`v4.34.0`). Lean 4.34.0. The definitions used from them (Reed–Solomon
