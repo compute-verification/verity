@@ -27,7 +27,7 @@ from __future__ import annotations
 import numpy as np
 
 import window as WD
-from window import SG, Coins, Draw, Honest, Round, Shape, Tree, Window, label, tile_rows
+from window import SG, Coins, Draw, Honest, Round, Refused, Shape, Tree, Window, label, tile_rows
 
 M32 = WD.M32
 KA, KK, ROT = SG.KA, SG.KK, SG.ROT

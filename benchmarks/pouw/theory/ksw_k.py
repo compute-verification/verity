@@ -199,6 +199,7 @@ def part_b(ck, rng, mutate_even=False):
     ball = np.array(ball, dtype=np.uint64)
     pos = {int(p): i for i, p in enumerate(ball)}
     Eb = lay.bits_of("EL") + lay.bits_of("ER")
+    Fb = lay.bits_of("FL") + lay.bits_of("FR")
     for name, (A, B) in {"zero": (np.zeros((n, n), np.int64),) * 2,
                          "random": (rng.integers(-128, 128, (n, n)), rng.integers(-128, 128, (n, n)))}.items():
         W = words_at(lay, ball, {}, np.asarray(A, np.int64), np.asarray(B, np.int64), L)

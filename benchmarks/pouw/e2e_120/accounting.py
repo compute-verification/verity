@@ -43,7 +43,7 @@ class Headline:
 
 def headline(vector: str = VECTOR, q: float = Q_STAR) -> Headline:
     """H1 + fx1's ε (100% checking) and γ from the machine model, the free-operand reading at q* (decision 89)."""
-    import eps_budget as EB
+    import eps_budget as EB     # noqa: E402  (benchmarks/pouw/eps_budget.py, the suite's own)
 
     pi = E.machine(vector)
     base = replace(E.design("dither-c-peel"), name="h1-fx1", honest="c-fx1",

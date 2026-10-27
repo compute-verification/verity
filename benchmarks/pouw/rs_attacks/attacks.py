@@ -11,6 +11,7 @@ Run: python3 attacks.py check | table [--json OUT]
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import math
 import sys

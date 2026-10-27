@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import emu8
+import emu8  # noqa: E402
 
 U_RANGES = {"±1..±64": [v for v in range(-64, 65) if v], "±1..±16": [v for v in range(-16, 17) if v],
             "one limb [-8, 7]": [v for v in range(-8, 8) if v]}

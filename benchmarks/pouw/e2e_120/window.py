@@ -497,6 +497,7 @@ class Honest:
         return P[draw.tile, pl["w"] * self.shape.S:pl["w"] * self.shape.S + self.shape.S + 1, draw.thread].astype(np.int64).tolist()
 
     def run(self, rd: Round) -> Opened:
+        sh = self.shape
         xt = self.x_tree(rd.rnd, self.window.X)
         coins = Coins(rd.operands(xt.root))
         P = self.products(coins)
