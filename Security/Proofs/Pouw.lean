@@ -119,6 +119,7 @@ import Proofs.Pouw.PearlC.PeelExactProofs
 import Proofs.Pouw.PearlC.PeelExactProofsP
 import Proofs.Pouw.PearlC.PeelFp4Checks
 import Proofs.Pouw.PearlC.PeelFp4Proofs
+import Proofs.Pouw.PearlC.Rev1Witness
 import Proofs.Pouw.PearlC.RowCircuit
 import Proofs.Pouw.PearlC.Row4Words
 import Proofs.Pouw.PearlC.RowPrimChecks
@@ -172,6 +173,7 @@ import Proofs.Pouw.TileBound.AlignedExact
 import Proofs.Pouw.TileBound.Fp8
 import Proofs.Pouw.TileBound.Fp8Depth
 import Proofs.Pouw.TileBound.Proofs
+import Proofs.Pouw.TileBound.Witness
 import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
 
