@@ -196,7 +196,7 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
   let h ← Json.parse line
   let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
-  let .arr ds := getD (getD (← Json.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
+  let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
   let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
@@ -293,7 +293,7 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
   match st with
   | .ok (spec, _, _) =>
     if spec.coinTree.isNone then none
-    else (Json.parse record).toOption.bind fun j =>
+    else (Flock.JsonParse.parse record).toOption.bind fun j =>
       (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
   | .error _ => none
 
@@ -408,7 +408,7 @@ begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`
 record's order, of family `slot/<slot>/<stream>` after the round's `msg_sha512` (`Round.sha`); `⌈n/4⌉` coins of 64
 bytes for `n` F128s. -/
 def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
-  let j ← (Json.parse record).mapError (s!"record: not JSON: {·}")
+  let j ← (Flock.JsonParse.parse record).mapError (s!"record: not JSON: {·}")
   let link := getD j "link"
   let .arr ps := getD link "points" | throw "record: link.points is not a list"
   let pts ← ps.foldlM (fun acc p => return acc ++ (← hexes p "a link point")) #[]
