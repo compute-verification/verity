@@ -2,14 +2,15 @@
 
     verity check [ARGS]             the whole check, run on `main` after each landing (check/check.py)
     verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in check/ci.toml)
-    verity check --remote [ARGS]    the check recorded as an Attempt, on a free pod unless --on POD names one
+    verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity run CONFIG [--party ROLE ...] [--machine NAME] [--periods N] [--replay DIR] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
     verity config new|check|hash    write, check or hash a deployment configuration (run.py)
-    verity example NAME [ARGS]      examples/NAME: `verity run` its config.toml, else its run.py or run.sh
-    verity example --status         every example's protocol, workload, level and next missing evidence (examples.py)
+    verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
+                                    workload on its placement
+    verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE [--on NODE] [--pool P] [--as LANE]
                                     elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
                                     print Lean's output: the edit loop (default vy-nebius-cpu-1, pool research)

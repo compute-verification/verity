@@ -1,8 +1,10 @@
-# The toy network example's rung on the ladder (examples/README.md). Every party is on one CPU machine (config.toml's
-# `local`), so level 2 needs the challenger, the network certifier and the verifier moved off it.
+# The toy network example's doneness (examples/README.md). Every party is on one CPU machine (config.toml's `local`), so
+# placed needs the challenger, the network certifier and the verifier moved off it. Its proof is none: no guarantee is
+# stated yet over the verdict the product composes.
 protocol = ["sampled_proofs", "certifier"]
 workload = "torch_loop"
-level = 1
+run = "runs"
+proof = "none"
 
 [placement]
 prover = "local"      # the workers and the firewall
