@@ -38,8 +38,8 @@ commit of `next` runs, drive's or a hand one of its run registry (`_running_lean
 member up to it has its ready mark and a land verdict (`_landable`), until it lands.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
-`after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
+time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
+--circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (25-26 Oct:
 cancels 1-63 min into ~4 h runs left the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
@@ -197,14 +197,14 @@ def authed(auth: tuple[str, ...]):
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
-                 detached: bool = False) -> tuple[list[str], str] | dict:
+                 detached: bool = False, circuit_cache: bool = False) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail); ``detached``,
     started in the background (`detach`) from a copy of train.sh, which reads nothing by its own path (``$0`` only for its
     usage) and finds the tree from its working directory, and returned at once as the record `launched` reads.  Git never
     prompts (12 Oct: train.sh's fetch in the queue's clone, which has no credential helper, waited on a password at the tty)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
             *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
-            *(["--no-regenerate"] if no_regenerate else [])]
+            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
     if detached:
         return detach(repo, argv, env, script=argv[1])
@@ -669,7 +669,8 @@ class Driver:
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
         self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
         #: each member lands on a reviewer's verdict, a Lean change once a Lean check passed, and the full check runs after
-        #: landing (`_review`; Daniel, 24 Oct 06:05Z), reusing no pass with ``after_landing_no_cache``
+        #: landing (`_review`; Daniel, 24 Oct 06:05Z), reusing no pass with ``after_landing_no_cache`` but circuit-check's
+        #: per-target ones (`--circuit-cache`)
         self.after_landing_no_cache = after_landing_no_cache
         #: the `reviewed` labels on a PR's head (`StoreLabels.reviews`)
         self.reviews: Callable[[int, str], list] = reviews or (lambda pr, head: StoreLabels(q.store, q.log).reviews(pr, head))
@@ -680,9 +681,9 @@ class Driver:
         #: the after-landing run on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
-            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, no_regenerate=False:
+            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
-                          no_regenerate=no_regenerate, detached=True))
+                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a Lean change's Lean check before a review landing: `train.sh TOP MACHINES --deferred lean-audit`, detached
         self.launch_lean: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
@@ -1273,11 +1274,12 @@ class Driver:
         steps = ",".join(pl["steps"])
         # the run checks `main` against itself, so it sends the upstream build only when told to: when the landings since
         # the last verified `main` change what lean-agreement checks; lean-changed has no cache to compare with under --no-cache;
-        # lean-audit fails on a record difference, since nothing commits a regenerated record after landing
+        # lean-audit fails on a record difference, since nothing commits a regenerated record after landing; circuit-check
+        # reuses its per-target passes all the same, since a cold `--all` (~4 h) outlasted every after-landing run (24-27 Oct)
         from .merge import required_steps
 
         extra = {"agreement": base or "lean-agreement" in required_steps(self.repo, pl["verified"], main, "check"),
-                 "no_cache": self.after_landing_no_cache, "no_regenerate": True}
+                 "no_cache": self.after_landing_no_cache, "circuit_cache": self.after_landing_no_cache, "no_regenerate": True}
         skip = [s for s, off in (("lean-agreement", not extra["agreement"]), ("lean-changed", extra["no_cache"])) if off]
         flags = "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
         if self.dry_run or q.shadow:
@@ -1708,7 +1710,8 @@ class Driver:
             return
         mid = (b["good"] + b["bad"]) // 2
         c = cands[mid].commit
-        extra = {"agreement": "lean-agreement" in b["steps"], "no_cache": b["no_cache"], "no_regenerate": True}
+        extra = {"agreement": "lean-agreement" in b["steps"], "no_cache": b["no_cache"], "circuit_cache": b["no_cache"],
+                 "no_regenerate": True}
         if self.dry_run or self.q.shadow:
             self.q.log(f"research queue drive: would launch train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])} to bisect")
             return
