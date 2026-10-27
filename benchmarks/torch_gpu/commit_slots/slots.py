@@ -19,11 +19,12 @@ A row's leaf, row g of slot s (rows numbered in the layout's order within a slot
 
 The layout (:class:`Layout`) is the step's public structure: groups (what one ``add`` commits, e.g. a layer), each of units,
 each of rows, each row the concatenation of byte ranges (:class:`Part`) of the slot's row of the group's tensors. Every slot
-has the same layout. Its parts, rows and groups, with their checks, are ``verity.ml.commitments.layout``'s, which also
-reads a layout file (:func:`load`) in the form :func:`_layout_json` writes. A unit and a slot tree's domain don't name the
-slot or the step: the step tree's leaf index fixes the slot, and the step domain the step. :func:`commit` is the reference
-commitment; :func:`open_unit` opens one unit of one slot from that slot's rows alone (a replay of its request), and
-:func:`verify_unit` checks an opening against the step's root.
+has the same layout. A unit and a slot tree's domain don't name the slot or the step: the step tree's leaf index fixes the
+slot, and the step domain the step. :func:`commit` is the reference commitment; :func:`open_unit` opens one unit of one slot
+from that slot's rows alone (a replay of its request), and :func:`verify_unit` checks an opening against the step's root.
+
+Parts, rows and groups, with their checks, are ``verity.ml.commitments.layout``'s, which also reads a layout file
+(:func:`load`) in the form :func:`_layout_json` writes.
 """
 from __future__ import annotations
 
