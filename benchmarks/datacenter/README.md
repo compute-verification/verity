@@ -22,7 +22,7 @@ a placement and records what the trusted devices see.
 
 The covert budget is only what goes beyond the committed computation. Beside it, the account reports the export, λ_out
 (`Account.export_bits`): the committed bits that crossed a certified boundary out of a block, by egress port, from the
-declared crossings (`Profile.exported`). It counts as novel information read by its receivers once the declaration's
+declared crossings (`Profile.exported`). It counts as fresh input read by its receivers once the declaration's
 certifiers cover every link, so that `Datacenter.uncovered_links()`, the links no trusted device ends (a
 switch-to-switch link, an outside host's link to a switch), is empty; until then it is reported as not applicable, with
 those links named. With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default; the certifier's

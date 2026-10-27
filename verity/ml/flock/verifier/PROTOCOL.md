@@ -1192,7 +1192,7 @@ moved onto its bits: leaf `j` of an output is bit Σ of its first `j` leaf width
 reads another in the Boolean root exactly when its word Call reads the word one (`Sigma.reads_lift`), so the units of a
 partition read each other in the same graph and `unit-cycle` on the word partition is `unit-cycle` on its lift
 (`Sigma.acyclic_lift`). A `Q_call` cut inside a leaf word Call does not carry across (inside a leaf Boolean Definition its own
-cut applies), and that σ(f) computes f stays a Python conformance fact, since credited work reads Boolean gate counts only.
+cut applies), and that σ(f) computes f stays a Python conformance fact, since credit reads Boolean gate counts only.
 
 ### 16.8 Objects by content
 

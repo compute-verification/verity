@@ -11,9 +11,10 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
     package per protocol: sampled proofs, PoUW, PoUS, the bandwidth audit, the remote bandwidth audit and the network
-    certifier, each a Python verifier until its Lean verifier (its `lean/`) replaces it; NCI is Lean only. `claims`
-    holds the security claims' ids, `service/flock/` C-Flock's Lean verifier and the ZK server
-    (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the Python held to each Lean.
+    certifier, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the inference-only policy
+    (`network/nci/`) is Lean only. `claims` holds the security claims' ids, `service/flock/` C-Flock's Lean verifier
+    and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the Python
+    held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
@@ -169,9 +170,9 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
-  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the NCI check and the remote bandwidth
-  audit's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
-  computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
+  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check
+  (`NciCheck`) and the remote bandwidth audit's verifier, each in its protocol's `lean/` with a difftest. Under
+  `FC_FIREWALL=1` every byte that leaves is computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
   statements a reader checks), properties (`Properties/`, `security_properties`: statements about the code's Lean

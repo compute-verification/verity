@@ -1071,17 +1071,17 @@ its bucket fails the connection there with one fail cell that carries no reason,
 scheduled end. So the client's view of the server side is the schedule, each connection's fail cell or none, and the
 data in the cells: the server's accept time, send timing, ACKs and flow control reach it only through the fail cells.
 One run of the network certifier's code gives both the cells the client receives and its record of them
-(`Security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). NCI's transfer gates are these cells' bits,
-whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
+(`Security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). The inference-only policy's transfer gates
+are these cells' bits, whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
 depend on the server is still counted. The content term comes from the audits, not from a premise:
 `SecurityProofs.PeriodLeakAccepted` composes each window's sampled leak bound at the network certifier's rows with the
-client's view read back from its record, over a monitoring period of sampled audits. Each window adds its unregistered
-inputs' bits, log2 of its possible faulty sets, their committed bits and the timing, and each window's audit fails with
+client's view read back from its record, over a monitoring period of sampled audits. Each window adds its fresh
+input's bits, log2 of its possible faulty sets, their committed bits and the timing, and each window's audit fails with
 probability at most δ + ε_ks + ε_bind + Pr[B_tap].
 
-The inference-only policy charges an isolation block the ingress covert capacity from the last wipe before it starts,
+The inference-only policy charges an inference block the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
-(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
+(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
 
 Every statement in the table's Lean column is a guarantee in `Security/lean-audit.json`, frozen as no-function: each is

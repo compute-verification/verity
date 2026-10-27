@@ -21,18 +21,18 @@ posted on 25 Oct at 06:17Z, and what PRs have done since.
 | Bandwidth (over PoUS's store) | all | none with a session layer | item 11, E2EMAP: Thu 29 Oct |
 | Remote bandwidth | all | none with a session layer | item 11, E2EMAP: Thu 29 Oct |
 | Network certifier | all | none: `SampledAuditAccepted` stated, unproved | item 10, FINTAU: proved on main (#4054), and listed in the lock since #4090, which landed #4083's lock entry. The leak step is proved and listed on main (#4055, #4044), at the registered inputs pinned since #4090 (option A, NET-68's P1a): c = #(`freeInputs` \ `reg`). P1b, that the trace's values at `reg` are the registration's, is on proofs' branches, with no PR yet |
-| NCI | all | none with a session layer; it rests on the assumption `PouwSound`, which no PoUW guarantee instantiates | item 11's NCI part: `PouwSound` replaced by item 9's e2e, Fri 30 Oct, after item 9 |
+| The inference-only policy | all | none with a session layer; it rests on the assumption `PouwSound`, which no PoUW guarantee instantiates | item 11's part for the policy: `PouwSound` replaced by item 9's e2e, Fri 30 Oct, after item 9 |
 | Accounting (top layer) | — | Already modular: the pattern every lower layer should copy | — |
 
 Items 1 and 9–12 are the statement-changing steps of the note's refactor sketch: KS to sampling once (1), PoUW's headline
-from `SessionSoundAt` (9), the certifier's property (10), PoUS, bandwidth, remote bandwidth and NCI over sampling (11),
-and recursion's knowledge form (12). The rest (2–6, 8 and 13) are E2EMAP's; item 2 is #4043. E2EMAP turns the map into
-a refactor plan by 22:00Z 25 Oct, with the first refactor PR marked Mon 26 Oct.
+from `SessionSoundAt` (9), the certifier's property (10), PoUS, bandwidth, remote bandwidth and the inference-only
+policy over sampling (11), and recursion's knowledge form (12). The rest (2–6, 8 and 13) are E2EMAP's; item 2 is #4043.
+E2EMAP turns the map into a refactor plan by 22:00Z 25 Oct, with the first refactor PR marked Mon 26 Oct.
 
 **Premises in `Proofs/`.** `trees.except` (`Security/lean-audit.json`) exempts 33 module prefixes from the tree rule
 until C-Flock's spec is extracted (RECKSLOCK, Wed 4 Nov). 31 are C-Flock's; the other two, `Proofs.Accounting.TS.Session`
 and `Proofs.Pouw.PearlC.FlockTile`, are on PoUW's chain. None is PoUS's, bandwidth's, remote bandwidth's, the
-certifier's, NCI's or accounting's, so this is a C-Flock question, plus one PoUW definition.
+certifier's, the inference-only policy's or accounting's, so this is a C-Flock question, plus one PoUW definition.
 - **lean's list** (run r20261025-031300-0fcc, in CHAINMAP's note): 40 `Prop`-valued definitions under `trees.except`
   that a locked statement takes without a lock entry. 39 are C-Flock's, and one, `SoundAtBridge.RowsSession.CanonRead`,
   is PoUW's. CHAINMAP's list was due by 12:00Z 25 Oct and came out at 04:20Z.

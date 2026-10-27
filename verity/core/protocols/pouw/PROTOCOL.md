@@ -146,8 +146,8 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
      the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
      least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like
      any other but credited nothing. `window.sampling` registers the law `{"law": "subset", "k": K′}`, the registration's
-     `population` being N, with K′ = `window.k_prime(ε, δ, W, N, w_max)` and W = g_ℓ·w_max the credited work: the
-     smallest K >= 1 with (1 − ε·W/(N·w_max))^K <= δ, compared exactly in rationals (`window.miss_at_most`), N if no
+     `population` being N, with K′ = `window.k_prime(ε, δ, W, N, w_max)` and W = g_ℓ·w_max the work the window
+     credits: the smallest K >= 1 with (1 − ε·W/(N·w_max))^K <= δ, compared exactly in rationals (`window.miss_at_most`), N if no
      K <= N has it, and 1 when ε·W/(N·w_max) = 1. A wrong set holding a share ε of W has at least ε·W/w_max tiles, so
      the draw misses it with probability at most δ.
    - **The draw.** The challenger opens the epoch's draw coin once, after the registration (its digest), and keys the
