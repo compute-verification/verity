@@ -4,21 +4,45 @@ import Definitions.Nci.Assumptions.Ldl
 /-!
 # Priced reads: the guarantees
 
+* `FanOutBlockCap`: Corollary 4b per block, the per-block cap `q(c, k) = e (k + Λ) / β` on the products a block of
+  at most `c` gates reading at most `k` unregistered input bits computes whole, under `Priced` at `β` per activation
+  occurrence: the cap the serving-block bound sums over serving blocks.
 * `FanOutBoundPriced`: Corollary 4b under `Priced` at `β` per activation occurrence, with no decoder and no Lemma 1.
 * `PricedOfActivationRate`: the local-description-length route, `ActivationRate` with `EvaluatesBlocks`, gives
   `Priced`'s inequality at every block of the registered partition, at deficit `Λ + ⌈log₂ B⌉ + aBlk`, so Corollary 4b
   as `Nci.Ldl.Guarantees.FanOutBound` states it is a corollary of the priced bound.
+
+The overhead `|C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` a
+reference construction's size, which bounds the threshold.
 -/
 
 namespace Nci.Hardness.Guarantees
 
 open Verity Nci.Ldl
 
+/-- **Corollary 4b per block** (the per-block cap): let `J` be counted products, each reading one activation
+occurrence `act p`, each activation occurrence read by at most `e` of them. If they are `Priced` at `β > 0` per
+activation occurrence (`Operations.ofActs`), deficit `Λ` and block size `c`, with no side information, then every
+block `I` of at most `c` operation gates reading at most `k` unregistered input bits computes at most
+`q(c, k) = e (k + Λ) / β` of them whole.
+
+`Priced` at `I` gives `β |Ops(I)| − Λ ≤ |in(I) \ θ| ≤ k`, so `I`'s products read at most `(k + Λ) / β` activation
+occurrences, and fan-out gives at most `e` products for each. It is the serving-block bound's per-block cap (a) at unit
+weights: a cap on every block of the size, not only on a partition's, so it needs no partition, no decoder and no
+Lemma 1. -/
+def FanOutBlockCap : Prop :=
+  ∀ (d : Declaration) {ι V : Type} [DecidableEq V] (J : Finset ι) (gates : ι → Finset (Fin d.D.N)) (act : ι → V)
+    (e c k : ℕ) (β Λ : ℝ),
+    (Operations.ofActs d.D J gates act).FanOut e → 0 < β →
+    Assumptions.Priced d (Operations.ofActs d.D J gates act) (fun _ => β) Λ c (fun _ => ∅) →
+      ∀ I ⊆ d.D.computed, d.D.size I ≤ c → d.D.width (d.D.into I \ d.θ) ≤ k →
+        (((Operations.ofActs d.D J gates act).whole I).card : ℝ) ≤ e * (k + Λ) / β
+
 /-- **Corollary 4b under `Priced`**: let `P` be a `(c,k)`-partition of `d` with `B = n` blocks, and `J` counted
 products, each reading one activation occurrence `act p` and lying whole in one block, each activation occurrence read
 by at most `e` of them. If the products are `Priced` at `β` per activation occurrence (`Operations.ofActs`), deficit
-`Λ` and block size `c`, with no side information, then for `h = k + Λ` and a reference size `T₀ > 0`,
-`ρ = |C| / T₀ ≥ c β M / (T₀ e h)`, `M = #J`.
+`Λ` and block size `c`, with no side information, then for `h = k + Λ` and a reference size `T₀ > 0`, the overhead
+`|C| / T₀ ≥ c β M / (T₀ e h)`, `M = #J`.
 
 A block is a set of `c` operation gates handed at most `k` bits, so `β |V_I| − Λ ≤ k`, `|V_I| ≤ h / β`; fan-out gives
 `|𝓙_I| ≤ e |V_I|`; summing over the blocks with `|C| = c B` (Theorem 3's count) gives the bound. No decoder, no Lemma 1

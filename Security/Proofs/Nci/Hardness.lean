@@ -49,7 +49,7 @@ theorem fanOut_ofActs [DecidableEq V] {e : ℕ} (h : (Operations.ofActs C J gate
 end OfActs
 
 /-- **Corollary 4b's count**: from `β |Ops(I)| ≤ h` at every block of an exact partition, with every product whole in a
-block and fan-out at most `e`, `ρ ≥ c β M / (T₀ e h)`. -/
+block and fan-out at most `e`, the overhead `|C| / T₀ ≥ c β M / (T₀ e h)`. -/
 theorem bound_of_blocks {d : Declaration} {n c : ℕ} {P : Partition d.D n} {ι V : Type*} [DecidableEq V]
     {J : Finset ι} {gates : ι → Finset (Fin d.D.N)} {act : ι → V} {e : ℕ} {β h T₀ : ℝ} (hc : Exact P c)
     (hwhole : (Operations.ofActs d.D J gates act).WholeIn P) (hfan : (Operations.ofActs d.D J gates act).FanOut e)
@@ -99,6 +99,25 @@ theorem bound_of_blocks {d : Declaration} {n c : ℕ} {P : Partition d.D n} {ι 
       exact mul_nonpos_of_nonneg_of_nonpos hT.le (not_lt.1 hpos)
 
 namespace SecurityProofs
+
+theorem FanOutBlockCap : Guarantees.FanOutBlockCap := by
+  intro d ι V _ J gates act e c k β Λ hfan hβ hpr I hI hsize hk
+  classical
+  set O := Operations.ofActs d.D J gates act with hO
+  have h1 := hpr I hI hsize
+  simp only [Finset.sum_const, nsmul_eq_mul, Finset.union_empty] at h1
+  have h2 : (d.D.width (d.D.into I \ d.θ) : ℝ) ≤ k := by exact_mod_cast hk
+  have hW : ((O.whole I).card : ℝ) ≤ e * (O.ops I).card := by
+    rw [hO, ops_ofActs]
+    exact_mod_cast Finset.card_le_mul_card_image _ e fun v _ =>
+      (Finset.card_le_card (Finset.filter_subset_filter _ (Finset.filter_subset _ _))).trans
+        (fanOut_ofActs J gates act hfan v)
+  rw [le_div_iff₀ hβ]
+  have he : (0 : ℝ) ≤ e := Nat.cast_nonneg e
+  have : (O.ops I).card * β ≤ k + Λ := by linarith
+  calc ((O.whole I).card : ℝ) * β ≤ e * (O.ops I).card * β := mul_le_mul_of_nonneg_right hW hβ.le
+    _ = e * ((O.ops I).card * β) := by ring
+    _ ≤ e * (k + Λ) := mul_le_mul_of_nonneg_left this he
 
 theorem FanOutBoundPriced : Guarantees.FanOutBoundPriced := by
   intro d n c k P ι V _ J gates act e β Λ T₀ hck hwhole hfan hβ hT hpr
