@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.ExecFlatClass
 import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Properties.Flock.Circuit.Keys
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)
@@ -244,9 +245,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
 
 /-! ## A net's input port bits -/
 
-/-- A net's input port bits, port by port: each port's columns. -/
-def portBits (gs : Array Group) : List ℕ := (portCols gs).toList.flatMap fun q => List.range' q.1 q.2
-
 /-- Distinct input port bits are distinct columns. -/
 theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' : ℕ} (hp : p < (portCols gs).size)
     (hp' : p' < (portCols gs).size) (ht : t < (portCols gs)[p]!.2) (ht' : t' < (portCols gs)[p']!.2)
@@ -269,10 +267,6 @@ theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' :
   · exact absurd he (key p p' hp hp' h t t' ht ht')
   · exact ⟨rfl, by omega⟩
   · exact absurd he.symm (key p' p hp' hp h t' t ht' ht)
-
-/-- The port a column of the input rows is a bit of: the first whose columns hold it. -/
-def portOf (pc : Array (ℕ × ℕ)) (off : ℕ) : ℕ :=
-  ((List.range pc.size).find? fun p => decide (pc[p]!.1 ≤ off ∧ off < pc[p]!.1 + pc[p]!.2)).getD 0
 
 theorem portOf_eq {gs : Array Group} (hnd : (portBits gs).Nodup) {p t : ℕ} (hp : p < (portCols gs).size)
     (ht : t < (portCols gs)[p]!.2) : portOf (portCols gs) ((portCols gs)[p]!.1 + t) = p := by
@@ -415,7 +409,9 @@ theorem ne_unit_at {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
 theorem port_lt {p t : ℕ} (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2) :
     (portCols st.c.unit.inGroups)[p]!.1 + t < st.c.unit.inWords * Flock.WORD := by
-  have := built_ports L.unit_built _ (getElem_mem_toList' hp)
+  have := built_ports L.unit_built (portCols st.c.unit.inGroups)[p]!
+    (by rw [L.unit_at.groups]; exact getElem_mem_toList' hp)
+  rw [L.unit_at.in_eq] at this
   omega
 
 theorem port_lt_slot {p t : ℕ} (hp : p < (portCols st.c.unit.inGroups).size)
@@ -817,7 +813,7 @@ theorem setupH_flatFacts (ht : tags.typed = true)
         (by rw [← P.recNet]; exact RecOpen.check_congr rfl rfl rfl rfl rfl rfl rfl),
         (by rw [← P.recResiduals]; exact RecResiduals.check_congr rfl rfl),
         (by rw [← P.recSparse]; exact RecSparse.check_congr rfl rfl),
-        (by rw [← P.recOpening]; exact RecOpening.check_congr rfl rfl), P.typed⟩
+        (by rw [← P.recOpening]; exact RecOpening.check_congr rfl rfl), P.typed, P.tmpl⟩
     obtain ⟨ls, hcheck⟩ := P'.check
     have h0 : c'.nets[0]? = some ("unit", net) := by
       rw [← Array.getElem?_toList, hmore]
@@ -901,9 +897,9 @@ theorem setupH_flatInput (ht : tags.typed = true)
     · simp [hj, Ne.symm hj]
   have hlk : st.c.unit.lookup = none := L.unit_lookup
   refine L.placed_port P C hΔ hsha hhm hnd hs₀ hp' ht' (fun j' => ?_) (fun j' => ?_) r j (by rw [hr', hoff])
-  · rw [← hoff, sparseEntry_built_a L.unit_built, hunit, hra, ite_eq_left hcs, hgd]
+  · rw [← hoff, sparseEntry_built_a (by rw [hunit]; exact netOfD_built hnet), hunit, hra, ite_eq_left hcs, hgd]
     exact hself j'
-  · rw [← hoff, sparseEntry_built_b L.unit_built, hlk, hunit, hrb, ite_eq_left hcs, hgd]
+  · rw [← hoff, sparseEntry_built_b (by rw [hunit]; exact netOfD_built hnet), hlk, hunit, hrb, ite_eq_left hcs, hgd]
     show _ + 0 = _
     rw [add_zero]
     exact hself j'
@@ -925,8 +921,8 @@ theorem setupH_flatZero (ht : tags.typed = true)
   rw [ite_eq_right hpast] at hra hrb
   have hlk : st.c.unit.lookup = none := L.unit_lookup
   refine L.placed_zero hs₀ C.unit_zero (by rw [hunit]; omega) (fun j' => ?_) (fun j' => ?_) r j hr'
-  · rw [sparseEntry_built_a L.unit_built, hunit, hra]; rfl
-  · rw [sparseEntry_built_b L.unit_built, hlk, hunit, hrb]; rfl
+  · rw [sparseEntry_built_a (by rw [hunit]; exact netOfD_built hnet), hunit, hra]; rfl
+  · rw [sparseEntry_built_b (by rw [hunit]; exact netOfD_built hnet), hlk, hunit, hrb]; rfl
 
 
 /-! ## The flat class's table class -/

@@ -19,7 +19,7 @@ from verity.core.protocols.sampled_proofs import parties as P
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.wire import Refused
 
-SP, CERT = P.ID, P.IDS["certifier"]
+SP, CERT = P.IDS["sampled-proofs"], P.IDS["certifier"]
 ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
 SHA = "5a" * 64
 CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}

@@ -62,13 +62,14 @@ from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 
 from .one_stage import registration as R
+from .one_stage.proofs import V2
 
 ID = R.PROTOCOL
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: a configuration's component names and their protocol ids, the ones `Core.Onsite.components` holds
 IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0", "pous": "verity/pous/p2/v4/run",
-       "pouw": "verity/pouw/v1", "sampled-proofs": ID}
+       "pouw": "verity/pouw/period/v1", "sampled-proofs": V2, "wipe": "verity/wipe/v0"}
 COMPONENT = "sampled-proofs"
 #: what a run's coins are (module docstring)
 COINS = ("simulated", "development")
