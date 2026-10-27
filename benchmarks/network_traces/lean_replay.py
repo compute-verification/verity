@@ -63,7 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import replay  # noqa: E402
 from verity.core.protocols.certifier import audit as py_audit  # noqa: E402
-from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, Issuer,  # noqa: E402
+from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction,  # noqa: E402
                                                           certificate_message, parameters_digest)
 from verity.core.protocols.certifier.commitment import commit  # noqa: E402
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Record, Status  # noqa: E402
@@ -247,8 +247,7 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
         flipped = [dataclasses.replace(c, digest=_flip_hex(c.digest)) if c.window == w else c for c in committed]
         tests.append(("committed-digest-byte", "mismatch",
                       [("egress", (link, flipped, frames, syncs, sync_set, params, None))]))
-        issuer = Issuer(signer, replay.REPLAY_SESSION)
-        certified = [issuer.certify(r, Direction.EGRESS, params, parameters) for r in raw]
+        certified = replay.certify(raw, Direction.EGRESS, params, parameters, signer)
         for name, change in (("certificate-other-window", _other_window_certificate),
                              ("certificate-other-session", _other_session_certificate)):
             swapped = [change(c, signer) if c.window == w else c for c in certified]
