@@ -33,7 +33,9 @@ judgement; `check.py` holds the policy.
   before that application (`negated`) and the binders on the way (`binders`: `∀`, `→` for a proposition, `∃`), read as
   written: nothing is unfolded; and its `conclusion`, split at `∧`, with what each conjunct applies (`conclusionOf`). A
   statement that is a definition under `meaning` applied under binders has the same read of it with that definition
-  unfolded once (`lifted`, `liftOf`), as `shape` reads it.
+  unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `meaning` the head unfolds
+  through (`chain`, `headChain`); and each pin's `accept_all`, the verifiers accepting everything it applies
+  (`acceptAllOf`).
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -758,6 +760,55 @@ partial def bodyHead (t : Expr) : MetaM (Option Name × Bool × Array String) :=
     else
       return (b.getAppFn.constName?, false, kinds)
 
+/-- The definitions declared under `meaning` that a statement's head unfolds through: past its `∀` and `∃` binders and a
+`¬`, its head when it is one, then the head of its value at the arguments (`Expr.beta`, as `liftOf` unfolds), and so on,
+at most `n` deep, so that `¬ G' …` can be read against a `G` that unfolds to `G'`. -/
+partial def headChain (env : Environment) (meaning : Array Name) (t : Expr) : Nat → MetaM (Array Name)
+  | 0 => return #[]
+  | n + 1 => forallTelescope t fun _ b => do
+    let b := b.consumeMData
+    if b.isAppOfArity ``Exists 2 then
+      match b.appArg!.consumeMData with
+      | .lam x ty body bi => withLocalDecl x bi ty fun y => headChain env meaning (body.instantiate1 y) (n + 1)
+      | _ => return #[]
+    else
+      let b := if b.isAppOfArity ``Not 1 then b.appArg!.consumeMData else b
+      let .const g us := b.getAppFn | return #[]
+      let some (.defnInfo v) := env.find? g | return #[]
+      let some i := env.getModuleIdxFor? g | return #[]
+      unless us.length == v.levelParams.length && under meaning (moduleName env i) do return #[]
+      return #[g] ++ (← headChain env meaning ((v.value.instantiateLevelParams v.levelParams us).beta b.getAppArgs) n)
+
+partial def lamBody : Expr → Expr
+  | .lam _ _ b _ => lamBody b
+  | .mdata _ e => lamBody e
+  | e => e
+
+partial def binderNames : Expr → Array Name
+  | .forallE n _ b _ => #[n] ++ binderNames b
+  | _ => #[]
+
+/-- The verifiers accepting everything that a statement applies: a constant named `acceptAll…` or `accept_all…`, and a
+definition whose value is a structure instance with a field named `…accept…` that is `fun … => True` (or `true`), as
+`constant.field`. -/
+def acceptAllOf (env : Environment) (t : Expr) : Array String := Id.run do
+  let mut out := #[]
+  for c in t.getUsedConstants do
+    if let .str _ s := c then
+      if s.startsWith "acceptAll" || s.startsWith "accept_all" then out := out.push c.toString
+    let some (.defnInfo v) := env.find? c | continue
+    let b := lamBody v.value
+    let .const k _ := b.getAppFn | continue
+    let some (.ctorInfo cv) := env.find? k | continue
+    let args := b.getAppArgs
+    let names := binderNames cv.type
+    for i in [cv.numParams:args.size] do
+      let some f := names[i]? | continue
+      let a := lamBody args[i]!
+      if (f.toString.toLower.splitOn "accept").length > 1 && (a.isConstOf ``True || a.isConstOf ``Bool.true) then
+        out := out.push s!"{c}.{f}"
+  return out
+
 /-- A statement's conclusion past its `∀`, `→` and `∃` binders, split at its `∧`s, each conjunct again past its own: for
 each conjunct its head constant (`head`), the definitions declared under `meaning` it applies itself (`defs`, followed no
 further), whether it is a reflexivity (`a = a`, `a ↔ a`, `HEq a a`: `refl`) and whether it is a hypothesis in scope, the
@@ -825,12 +876,14 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
       let read (t : Expr) : MetaM (List (String × Json)) := do
         let (h, neg, ks) ← bodyHead t
         let (cs, absurd) ← conclusionOf env meaning t
+        let chain ← headChain env meaning t 8
         return [("head", toJson (h.map toString)), ("negated", toJson neg), ("binders", toJson ks),
-          ("conclusion", toJson cs), ("absurd", toJson absurd)]
+          ("chain", toJson (chain.map toString)), ("conclusion", toJson cs), ("absurd", toJson absurd)]
       let lifted ← (do
         let some (_, t) := liftOf env meaning ci.type | return Json.null
         return Json.mkObj (← read (← plain t))) <|> pure Json.null
       return Json.mkObj ((← read ci.type) ++ [("lifted", lifted)])) <|> pure Json.null),
+    ("accept_all", toJson (acceptAllOf env ci.type)),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
