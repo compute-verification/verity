@@ -147,7 +147,9 @@ device, written with `O_DIRECT` and synced before the prover acknowledges the fi
 are declared, with `spare_bytes` for each drive's spare area and cache, so what the fill doesn't overwrite (the used
 filesystem, its metadata, the reserve, the spare area) counts in `R`. That is `Pous.Guarantees.StreamedWipeMeetsDisk`.
 A virtual disk's backing store, an undeclared spare area, buffered I/O and the disks outside the targets go in
-`uncertified`.
+`uncertified`. `wipe.dram` puts the host's DRAM in that session too, after the card (`demo.sh --dram`): the fill takes
+what `MemAvailable` says less a reserve, and the whole DRAM is declared (`wipe_store.HostMemory(whole=True)`), so the
+rest counts in `R`.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with

@@ -78,15 +78,19 @@ class Memory(Protocol):
 
 
 class HostMemory:
-    """The device's stand-in on a CPU node: the same calls on host memory."""
+    """The device's stand-in on a CPU node: the same calls on host memory. With `whole`, the host's DRAM as a tier of
+    its own, declared at all its physical memory (`info`'s `total_bytes`), so that what the fill doesn't reach counts in
+    `R`."""
 
     tier = "host-dram"
 
-    def __init__(self) -> None:
+    def __init__(self, whole: bool = False) -> None:
+        self.whole = whole
         self._held: dict[int, ctypes.Array[ctypes.c_char]] = {}
 
     def info(self) -> dict[str, Any]:
-        return {"backend": "host", "host": socket.gethostname(), "tier": self.tier}
+        out = {"backend": "host", "host": socket.gethostname(), "tier": self.tier}
+        return out | {"total_bytes": self.mem_info()[1]} if self.whole else out
 
     def mem_info(self) -> tuple[int, int]:
         """`(free, total)` bytes."""

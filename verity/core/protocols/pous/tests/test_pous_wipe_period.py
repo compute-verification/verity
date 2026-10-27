@@ -320,6 +320,12 @@ def test_the_disks_are_the_block_device_filesystems_once(tmp_path) -> None:
     assert W.disks(tmp_path / "missing") == 0
 
 
+def test_the_dram_a_fill_can_take_is_memavailable(tmp_path) -> None:
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:  100 kB\nMemFree:  10 kB\nMemAvailable:  75 kB\n")
+    assert W.dram_available(meminfo) == 75 * 1024 and W.dram_available(tmp_path / "missing") > 0
+
+
 def test_the_config_and_the_device_fit() -> None:
     assert W.config({}) == W.CONFIG and W.config({"wipe": {"store": "cuda"}})["store"] == "cuda"
     with pytest.raises(ValueError, match="unknown keys"):
@@ -338,6 +344,15 @@ def test_the_config_and_the_device_fit() -> None:
             W.config({"wipe": {"store": "disk", "disk": bad}})
     with pytest.raises(ValueError, match="wipe.disk takes"):
         W.config({"wipe": {"store": "disk", "disk": {"paths": ["/s"], "size": 1}}})
+    assert W.config({"wipe": {"store": "cuda", "dram": {"bytes": 1 << 30}}})["dram"] == W.DRAM | {"bytes": 1 << 30}
+    for bad in ({"store": "host", "dram": {}}, {"dram": {}}, {"store": "cuda", "tier": "x", "dram": {}}):
+        with pytest.raises(ValueError, match="wipe.dram joins a cuda or disk store"):
+            W.config({"wipe": bad})
+    for bad in ({"bytes": 0}, {"bytes": "1"}, {"reserve_bytes": -1}):
+        with pytest.raises(ValueError, match="wipe.dram: bytes null"):
+            W.config({"wipe": {"store": "cuda", "dram": bad}})
+    with pytest.raises(ValueError, match="wipe.dram takes"):
+        W.config({"wipe": {"store": "cuda", "dram": {"size": 1}}})
     for bad in ({"foreign_bytes": -1}, {"foreign_bytes": "f"}, {"foreign_bytes": 1.5}, {"placement": "far"},
                 {"egress_bits": -1}, {"egress_bits": "0"}):
         with pytest.raises(ValueError, match="foreign_bytes is a byte count"):

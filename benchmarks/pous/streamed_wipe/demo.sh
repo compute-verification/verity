@@ -44,6 +44,12 @@
 #   --disk-reserve-gib G free space each directory target keeps (default 10)
 #   --disk-spare-gb G    the drives' spare area and cache, from their datasheets, declared so they count in R (default
 #                        0, which the record names undeclared on a physical drive)
+#   --dram               the host's DRAM in the same session, after the store (cuda or disk): the DRAM available
+#                        (MemAvailable) less --dram-reserve-gib, the whole DRAM declared, so what the fill doesn't
+#                        reach counts in R. Launch it with research run --mem-gb near the fill, so no admitted run
+#                        takes the memory meanwhile
+#   --dram-gb G          the fill on the DRAM, in GB (implies --dram; default: what's available less the reserve)
+#   --dram-reserve-gib G DRAM left out of the fill (default 16)
 #   --lease-min M        gpu-lease's --max-min (default 60; a fill of the disks too takes longer)
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
 #   --node NAME          the prover's node, the wiped server's id (default: hostname)
@@ -69,6 +75,7 @@ if [ "${1:-}" = leased ]; then
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
   SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
+  DRAM=0 DRAM_GB= DRAM_RESERVE=16
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -90,6 +97,9 @@ else
       --disk-gb) DISK_GB=$2; shift ;;
       --disk-reserve-gib) DISK_RESERVE=$2; shift ;;
       --disk-spare-gb) DISK_SPARE=$2; shift ;;
+      --dram) DRAM=1 ;;
+      --dram-gb) DRAM=1 DRAM_GB=$2; shift ;;
+      --dram-reserve-gib) DRAM_RESERVE=$2; shift ;;
       --lease-min) LEASE_MIN=$2; shift ;;
       --gpu) GPU=$2; shift ;;
       --node) NODE=$2; shift ;;
@@ -110,6 +120,7 @@ else
   [ -n "$EXPECT" ] || { [ "$FOREIGN" = 0 ] && EXPECT=accept || EXPECT=reject; }
   [ "$DRY" = 1 ] && [ -z "$SEGMENTS" ] && SEGMENTS=64
   [ "$STORE" = disk ] && [ ${#DISKS[@]} = 0 ] && { echo "demo.sh: --store disk takes --disk PATH"; exit 2; }
+  [ "$DRAM" = 1 ] && [ "$STORE" = host ] && { echo "demo.sh: --dram joins a cuda or disk store; --store host is the DRAM"; exit 2; }
   S=$(mktemp -d)
   MADE=()
   trap 'rm -rf "$S" "${MADE[@]}"' EXIT
@@ -142,6 +153,14 @@ print(json.dumps(None if not paths else {"paths": paths, "bytes": int(Fraction(g
                                          "spare_bytes": int(Fraction(spare) * 10 ** 9), "direct": True}))
 EOF
 )
+  DRAM_JSON=$(python3 - "$DRAM" "$DRAM_GB" "$DRAM_RESERVE" <<'EOF'
+import json, sys
+from fractions import Fraction
+on, gb, reserve = sys.argv[1:]
+print(json.dumps(None if on != "1" else {"bytes": int(Fraction(gb) * 10 ** 9) if gb else None,
+                                         "reserve_bytes": int(Fraction(reserve) * 2 ** 30)}))
+EOF
+)
   { echo "commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)"; echo "args: ${ARGS[*]:-}"; date -u +%FT%TZ; hostname
     lscpu | grep -E "Model name|^CPU\(s\)|NUMA node\(s\)"; free -g; df -h /tmp; uptime
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
@@ -160,11 +179,11 @@ EOF
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
     "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
-    "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" <<'EOF'
+    "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" <<'EOF'
 import json, shlex, sys
 from fractions import Fraction
 (path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, reads, dev, src, mbps,
- specs, disk) = sys.argv[1:]
+ specs, disk, dram) = sys.argv[1:]
 links = [] if not dev else [{"name": "control", "to": "outside", "via": f"{dev} {src}: the node's own NIC (ssh, research run)",
                              "mbps": int(mbps) if mbps.strip().isdigit() and int(mbps) > 0 else None}]
 for spec in filter(None, specs.splitlines()):
@@ -178,7 +197,7 @@ doc = {"tools": json.loads(tools),
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
                 "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
-                "reads": json.loads(reads), "links": links, "disk": json.loads(disk)}}
+                "reads": json.loads(reads), "links": links, "disk": json.loads(disk), "dram": json.loads(dram)}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))

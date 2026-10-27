@@ -24,8 +24,8 @@ names each gap. `EXPERIMENTAL` says what the bound rests on.
 
 `leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
 (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
-device declared so that its memory outside the fill counts in `R`, and the server's disks ahead of it in the same
-session, `wipe.disk`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by
+device declared so that its memory outside the fill counts in `R`, the server's disks ahead of it in the same
+session, `wipe.disk`, and the host's DRAM after it, `wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by
 default, a process whose key and session log are beside the periods). No network certifier counts the session's
 egress yet, so the challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its
 quantity isn't. The leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an
@@ -282,13 +282,14 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
 
 CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 << 30, "tier": None,
           "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None,
-          "egress_bits": None, "reads": None, "links": [], "disk": None}
+          "egress_bits": None, "reads": None, "links": [], "disk": None, "dram": None}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
 through `wipe_store`; `cuda`, GPU `device`'s memory, declared whole, so that what the fill doesn't reach counts in `R`;
 `disk`, the server's disks alone), the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills the device's free
 memory less `reserve_bytes`), the disks (`disk`, `DISK`: in the same session as a `host` or `cuda` store, ahead of it,
-`wipe_store.Joint`), the declared `tier` (the store's own by default; a joint store's are its parts'), the deadline a
-read, and the fill's streamer (`native`, `wipe_stream` on
+`wipe_store.Joint`), the host's DRAM (`dram`, `DRAM`: in the same session as a `cuda` or `disk` store, after it), the
+declared `tier` (the store's own by default; a joint store's are its parts'), the deadline a read, and the fill's
+streamer (`native`, `wipe_stream` on
 `threads` CPUs, or `python`) when the challenger runs on this node. A challenger on its own host streams as its
 `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat that keeps that much prior content in place
 of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound at the expected reads), and `placement`
@@ -305,6 +306,10 @@ DISK = {"paths": None, "bytes": None, "reserve_bytes": wipe_store.DISK_RESERVE, 
 written raw, `wipe_store.Disk`), the fill's bytes on them (`None`: all their room, each directory's free space less
 `reserve_bytes`; whole segments either way), the drives' `spare_bytes` (spare area and cache, from their datasheets,
 declared so they count in `R`) and `direct` (`O_DIRECT`; `None` falls back to buffered I/O where it is refused)."""
+DRAM = {"bytes": None, "reserve_bytes": 16 << 30}
+"""`wipe.dram` and its defaults: the fill's `bytes` on the host's DRAM (`None`: what `dram_available` says less
+`reserve_bytes`; whole segments either way), the DRAM declared whole (`wipe_store.HostMemory(whole=True)`), so that
+what the fill doesn't reach counts in `R`."""
 
 
 def config(doc: Mapping[str, Any]) -> dict[str, Any]:
@@ -330,6 +335,17 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
             or c["disk"] is not None and c["tier"] is not None):
         raise ValueError(f"period.json's wipe: store disk takes wipe.disk, which joins a host or cuda store too (never "
                          f"python), and a store with disks declares its parts' tiers (no wipe.tier), not {got}")
+    if (h := c["dram"]) is not None:
+        if not isinstance(h, dict) or (unknown := set(h) - set(DRAM)):
+            raise ValueError(f"period.json's wipe.dram takes {sorted(DRAM)}, not {h!r}")
+        c["dram"] = h = DRAM | h
+        if not ((h["bytes"] is None or type(h["bytes"]) is int and h["bytes"] > 0)
+                and type(h["reserve_bytes"]) is int and h["reserve_bytes"] >= 0):
+            raise ValueError(f"period.json's wipe.dram: bytes null or a positive byte count and reserve_bytes a byte "
+                             f"count, not {h!r}")
+        if c["store"] not in ("cuda", "disk") or c["tier"] is not None:
+            raise ValueError(f"period.json's wipe: wipe.dram joins a cuda or disk store (a host store is the DRAM "
+                             f"already), which declares its parts' tiers (no wipe.tier), not {got}")
     f, e, k = c["foreign_bytes"], c["egress_bits"], c["reads"]
     if not (f == "fM" or type(f) is int and f >= 0) or c["placement"] not in (None, "simulated") or not (
             e is None or type(e) is int and e >= 0) or not (k is None or type(k) is int and 1 <= k < 1 << 32):
@@ -352,28 +368,57 @@ def foreign_labels(foreign_bytes: int | str, p: sw.WipeParams) -> int:
     return min(p.labels, -(-int(foreign_bytes) // sw.LABEL_BYTES))
 
 
+def dram_available(meminfo: Path = Path("/proc/meminfo")) -> int:
+    """The host's DRAM a fill can take without swapping or reclaiming anyone's working set: `MemAvailable` (free
+    memory and the page cache the kernel would drop), else the free pages."""
+    try:
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+
+
 def store_of(c: Mapping[str, Any]) -> wipe_store.Memory | None:
-    """The prover's store as `c` says (`CONFIG`): none for `python`; with `disk`, a `wipe_store.Joint` whose first part
-    is the disks (whole segments of their room, or `disk.bytes`), so that the fill's first labels, the ones a cheat keeps
-    its own content in place of, are on the disks, and whose second is the `host` or `cuda` store at `segments_of`."""
+    """The prover's store as `c` says (`CONFIG`): none for `python`; with `disk` or `dram`, a `wipe_store.Joint` whose
+    parts are in order the disks (whole segments of their room, or `disk.bytes`), so that the fill's first labels, the
+    ones a cheat keeps its own content in place of, are on the disks, the `host` or `cuda` store at `segments_of`, and
+    the host's DRAM declared whole (whole segments of `dram_available` less `dram.reserve_bytes`, or `dram.bytes`)."""
     memory = {"python": lambda: None, "disk": lambda: None, "host": wipe_store.HostMemory,
               "cuda": lambda: wipe_store.Cuda(c["device"])}[c["store"]]()
-    if (d := c["disk"]) is None:
+    if c["disk"] is None and c["dram"] is None:
         return memory
-    disk = None
+    disk = dram = None
     try:
-        disk = wipe_store.Disk(d["paths"], reserve_bytes=d["reserve_bytes"], spare_bytes=d["spare_bytes"],
-                               direct=d["direct"])
-        room = disk.mem_info()[0]
-        if d["bytes"] is not None and d["bytes"] > room:
-            raise RuntimeError(f"wipe.disk.bytes is {d['bytes']}, past the {room} bytes the disk targets have room for")
-        n = (room if d["bytes"] is None else d["bytes"]) // SEGMENT_BYTES * SEGMENT_BYTES
-        if n < SEGMENT_BYTES:
-            raise RuntimeError(f"the disk targets have room for {room} bytes, less than one segment")
-        return wipe_store.Joint([(disk, n)] + ([] if memory is None else
-                                               [(memory, segments_of(c, memory) * SEGMENT_BYTES)]))
+        parts: list[tuple[wipe_store.Memory, int]] = []
+        if (d := c["disk"]) is not None:
+            disk = wipe_store.Disk(d["paths"], reserve_bytes=d["reserve_bytes"], spare_bytes=d["spare_bytes"],
+                                   direct=d["direct"])
+            room = disk.mem_info()[0]
+            if d["bytes"] is not None and d["bytes"] > room:
+                raise RuntimeError(f"wipe.disk.bytes is {d['bytes']}, past the {room} bytes the disk targets have room "
+                                   "for")
+            n = (room if d["bytes"] is None else d["bytes"]) // SEGMENT_BYTES * SEGMENT_BYTES
+            if n < SEGMENT_BYTES:
+                raise RuntimeError(f"the disk targets have room for {room} bytes, less than one segment")
+            parts.append((disk, n))
+        if memory is not None:
+            parts.append((memory, segments_of(c, memory) * SEGMENT_BYTES))
+        if (h := c["dram"]) is not None:
+            dram = wipe_store.HostMemory(whole=True)
+            room = dram_available() - h["reserve_bytes"]
+            if h["bytes"] is not None and h["bytes"] > room:
+                raise RuntimeError(f"wipe.dram.bytes is {h['bytes']}, past the {room} bytes of DRAM available less "
+                                   "the reserve")
+            n = (room if h["bytes"] is None else h["bytes"]) // SEGMENT_BYTES * SEGMENT_BYTES
+            if n < SEGMENT_BYTES:
+                raise RuntimeError(f"the host has {room} bytes of DRAM available past the reserve, less than one "
+                                   "segment")
+            parts.append((dram, n))
+        return wipe_store.Joint(parts)
     except BaseException:
-        for m in (disk, memory):
+        for m in (disk, memory, dram):
             if m is not None:
                 m.close()
         raise
@@ -422,9 +467,9 @@ def _parts(store: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
 def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     """The memory this host holds outside the declared tier `tier` (`declared_bytes` of it), which `M` doesn't count:
     the device's memory outside the tier (from `store`, `wipe_store`'s `info`, when it gives `total_bytes` past the
-    tier), the host's DRAM (outside the tier when it is the tier) and its local disks (`disks`). A joint store's
-    (`wipe_store.Joint`) tiers are its parts', each at its declared bytes, and the disks a `disk` part declares are
-    no one's undeclared memory."""
+    tier), the host's DRAM (outside the tier when it is the tier; none when it is declared whole) and its local disks
+    (`disks`). A joint store's (`wipe_store.Joint`) tiers are its parts', each at its declared bytes, and the disks a
+    `disk` part declares are no one's undeclared memory."""
     out, parts = [], _parts(store)
     if store is not None and "parts" in store:
         declared = {p["tier"]: p.get("total_bytes") or p["bytes"] for p in parts}
@@ -434,8 +479,9 @@ def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None =
             out.append({"tier": store["tier"], "bytes": store["total_bytes"] - declared_bytes,
                         "what": f"{store.get('device', 'the device')}'s memory outside the declared tier"})
     dram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-    out.append({"tier": "host-dram", "bytes": dram - declared.get("host-dram", 0),
-                "what": "the host's DRAM outside the declared tier" if "host-dram" in declared else "the host's DRAM"})
+    if (rest := dram - declared.get("host-dram", 0)) > 0:
+        out.append({"tier": "host-dram", "bytes": rest, "what": "the host's DRAM outside the declared tier"
+                    if "host-dram" in declared else "the host's DRAM"})
     skip = {d for p in parts for d in p.get("disks") or {}}
     if d := disks(skip=skip):
         out.append({"tier": "disk", "bytes": d, "what": "the host's filesystems on block devices" + (
@@ -599,9 +645,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0 if answer["verdict"] == a.expect else 1
 
 
-__all__ = ["CONFIG", "COUNT_BITS", "DISK", "EPS", "EXPERIMENTAL", "LIMIT_NS", "LINK_KEYS", "MAX_READS", "PROTOCOL",
-           "READS", "SAMPLING_BITS", "SEGMENTS", "SEGMENT_BYTES", "UNCOUNTED", "Keeping", "Wipe", "answer", "case",
-           "certify", "config", "digest", "disk_gaps", "disks", "foreign_bits", "foreign_labels", "gaps", "keeping", "leg",
+__all__ = ["CONFIG", "COUNT_BITS", "DISK", "DRAM", "EPS", "EXPERIMENTAL", "LIMIT_NS", "LINK_KEYS", "MAX_READS",
+           "PROTOCOL", "READS", "SAMPLING_BITS", "SEGMENTS", "SEGMENT_BYTES", "UNCOUNTED", "Keeping", "Wipe", "answer",
+           "case", "certify", "config", "digest", "disk_gaps", "disks", "dram_available", "foreign_bits",
+           "foreign_labels", "gaps", "keeping", "leg",
            "main", "memory_bits",
            "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_of", "summary",
            "timing", "uncertified", "undeclared"]

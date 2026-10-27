@@ -293,3 +293,29 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     dram = [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "host-dram"]
     assert dram[0]["what"] == "the host's DRAM outside the declared tier"
     assert _fills(target) == []
+
+
+def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
+    """wipe.dram after a disk store: the DRAM is a tier declared at all the host's physical memory, so none of it is
+    undeclared, and the fill's last segment is in it."""
+    period = tmp_path / "periods" / "p0"
+    period.mkdir(parents=True)
+    target = tmp_path / "disk"
+    target.mkdir()
+    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
+        "store": "disk", "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None},
+        "dram": {"bytes": 1 << 25, "reserve_bytes": 0}}}))
+    device = tmp_path / "device"
+    device.mkdir()
+    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    out = tmp_path / "out"
+    answer = W.leg(period, "n0", out)
+    assert answer["verdict"] == "accept", answer
+    record = json.loads((out / "wipe.json").read_text())
+    whole = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    disk_total = record["prover"]["store"]["parts"][0]["total_bytes"]
+    assert answer["profile"]["tiers"] == [["disk", disk_total], ["host-dram", whole]]
+    assert record["wipe"]["tier"] == "disk+host-dram" and record["wipe"]["segments"] == 2
+    assert [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "host-dram"] == []
+    assert _fills(target) == []
