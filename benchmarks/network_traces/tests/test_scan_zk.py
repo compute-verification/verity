@@ -385,7 +385,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     refused = {r: PC.reference(SP.rows_case(run, scan, *r)) for r in ((), ("forged",), ("tampered",), ("chain",))}
     answer = ("reject", "window 0: the scan's answer: the check takes no answer for a link-window")
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
-        (): answer, ("forged",): ("reject", "window 0: certificates"),
+        (): answer, ("forged",): ("reject", "window 0: certificates (none of a window in which the network certifier "
+                                  "refused a connection)"),
         ("tampered",): ("reject", "window 0: registration"), ("chain",): answer}
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
