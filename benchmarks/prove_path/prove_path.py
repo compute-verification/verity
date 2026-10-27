@@ -136,7 +136,7 @@ the compiler listing none and under it less each one gate (`more_negatives`).
 **Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local|gate:USER@HOST --main
 FILE`` on the auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is
 read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
-history; ``gate:USER@HOST`` is vy-challenger-1 through infra's gate with the lane's gate key ``--gate-key``, its challenger on
+history; ``gate:USER@HOST`` is vy-challenger-1 through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
 a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
 `advice_before_draw` holds the advice to the receipt of the stream that drew.
@@ -609,7 +609,7 @@ def served_identity() -> tuple[str, str]:
     try:
         from verity_vllm.pipeline import advice as ADV
     except ImportError:
-        raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice, #3619), "
+        raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), "
                          "which this tree lacks") from None
     inner = getattr(ADV.registered_compiler(), "inner", None)
     if inner is None:
@@ -1527,11 +1527,11 @@ def main(argv: list[str] | None = None) -> int:
                    "stratified:K, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
                    "(a5_coins), not the verifier's own: local (a development session on this machine), or gate:USER@HOST "
-                   "(vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+                   "(vy-challenger-1 through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
-                   "(infra's challenger-key/v1), never the session's key.json")
+                   "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
