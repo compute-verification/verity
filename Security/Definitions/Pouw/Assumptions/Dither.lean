@@ -60,7 +60,10 @@ against that precomputation (O-IO's lookup routes):
   preprocess one operand (the matrix–vector-with-preprocessing class). The known speedups are log-factor tables, and
   they lose at int8 width (A4, A11);
 * **the cheapest registrable instance**: `Reg` is every instance the protocol lets a prover register (RT-LEAN-2 L27),
-  so a prover that registers the instance whose words are cheapest at `μ` gets that instance's `pub`, no less;
+  so a prover that registers the instance whose words are cheapest at `μ` gets that instance's `pub`, no less.
+  `WorkSound` reads it per sampling block, at the block's registrable instances `Reg w` and constant `pub`: a block's
+  fresh operands are committed in its commit phase, after the earlier blocks' coins (RT-POOL RP26), so `Reg w` holds
+  every instance a prover may commit for it;
 * **D5's menu with advice** (ASK-147 item 4): `pub` is the cheapest of D5's public programs priced with their advice,
   at the dual prices.
 
@@ -81,12 +84,13 @@ def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Ins
 /-- `pouw-sha512-speed` (proposed; R-ACCEL-7, Daniel 25 Oct: "sure"). **Nobody computes SHA-512 meaningfully faster
 than the best public implementation**, on a round's commitment, in sampling form and per prover (RT-LEAN-2 L37): in
 the model at its device premises (with (G3): an oracle call is a step priced at the public implementation's use), for
-every prover `A` on the registered instances `reg`, every advice of at most `B`
-bits on which each round's programs read nothing of that round's coins or later, and every words and commitment
-program of each round that exchange no bits with outside machines, where the commitment program's output is `A`'s
-root as an equation (condition 1), the probability over the oracle and the verifier's coins that some round's
-commitment moment exceeds 1 outside every set of dithers of probability at most `κdeg B` is at most `κsha A`
-(condition 3: the oracle's luck, per prover).
+every prover `A`, every advice of at most `B` bits on which each sampling block's programs read nothing of that
+block's coins or later, and every words and commitment program of each block that exchange no bits with outside
+machines, where the commitment program's output is `A`'s root as an equation (condition 1), the probability over the
+oracle and the verifier's coins that some block's instance is one of its registrable ones (`Reg w`) and its commitment
+moment at that instance exceeds 1 outside every set of dithers of probability at most `κdeg B` is at most `κsha A`
+(condition 3: the oracle's luck, per prover). The instance is the block's commit phase's (`Prover.inst`), adapted:
+fixed before the block's coins. `pub w` and `η w` are the block's.
 
 The commitment moment is the sampling form (`commitMoment`): the average over the round's coins of
 `1_{d ∉ Deg ∧ pass ∧ opens} · e^{η (pub − cost_μ(Mh))₊}`, where `opens` is the verifier's opening check of the cells the
@@ -95,13 +99,14 @@ hashes part of the tree is caught where the check selects a cell outside that pa
 `1 − f` of the leaves passes with probability about `(1 − f π)^s`, so the premise holds only at `η · pub ≤ π s`
 (condition 4), `π` the round's selection probability.
 
-`pub a` is the pinned public implementation's priced cost of the instance's commitment at the period's dual prices.
+`pub w` is the pinned public implementation's priced cost of block `w`'s commitment at the period's dual prices, at
+every instance of `Reg w`.
 Under the random oracle it is ABSORB-THM's realization: each oracle query costs at least the public implementation's,
 so the honest prover meets it with shortfall 0. MODEL-SPEC's θ floors (RT-MODEL M12, on `Open.sync`, `b1` and `madHi`)
 are what keep the model from hashing faster than the card. The premise is meant for models whose programs reach the
 oracle only through their calls (`Accel.OracleCalls` at the round's table, RT-LEAN-2 L28): where a program reads the
 table as data it is false, and the headline says nothing. -/
-def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) (μ : G.Res → ℝ) (pub η : P.Inst → ℝ)
+def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (μ : G.Res → ℝ) (pub η : Fin k → ℝ)
     (κdeg : ℕ → ℝ) (κsha : Prover G P k → ℝ) : Prop :=
   G.G1 → G.G2 → G.G3 → G.P1 → G.P2 → ∀ (A : Prover G P k) (B : ℕ) (Adv : Type),
     (∃ e : Adv → Fin (2 ^ B), Function.Injective e) →
@@ -110,14 +115,15 @@ def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) (μ
     ∀ (Mw : Fin k → G.Mc.Alg (Adv × P.Draw) P.Tr) (Mh : Fin k → G.Mc.Alg (P.Orc × (Adv × P.Draw) × P.Tr) P.Root),
     (∀ w i, G.ext (Mw w) i = 0) → (∀ w i, G.ext (Mh w) i = 0) →
     (∀ o x w, G.Mc.eval (Mh w) (o, (adv o x w, (x w).1), G.Mc.eval (Mw w) (adv o x w, (x w).1)) = A.root o x w) →
-    prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => ∃ w, ¬ ∃ Deg : P.Draw → Prop, prob Deg ≤ κdeg B ∧
-      commitMoment G P μ (pub (reg w)) (η (reg w)) ox.1 (reg w) (adv ox.1 ox.2 w) (Mw w) (Mh w) Deg ≤ 1) ≤ κsha A
+    prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => ∃ w, A.inst ox.1 ox.2 w ∈ Reg w ∧
+      ¬ ∃ Deg : P.Draw → Prop, prob Deg ≤ κdeg B ∧
+        commitMoment G P μ (pub w) (η w) ox.1 (A.inst ox.1 ox.2 w) (adv ox.1 ox.2 w) (Mw w) (Mh w) Deg ≤ 1) ≤ κsha A
 
 /-- `pouw-outsource-egress` (proposed; class L, conditional on the network certifier streaming the call's coin side
 `b` itself, RT-PROTO-2 P2 and P18; RT-LEAN-2 L32). **An exchanged bit replaces at most `β` of priced work**: in the
 model at its device premises, every program has one that computes the same thing on every input, exchanges no bits
 with outside machines, and costs at most its cost plus `β` a bit it exchanged (`Accel.ext`, in either direction,
-other than the certifier's own coin stream).
+other than the challenger's signed coin stream, RT-POOL RP27).
 
 A node that forwards a call's `b` (`m K` bits) and gets back only the root has the outside machine do the call's
 `m K N` MACs, so `β = n_max · H/macs` with `n_max = N` for a static call and `d_v` for PV, `H = H_mm + H_sha + H_o`
@@ -130,20 +136,21 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
     G.Mc.eval f' i = G.Mc.eval f i ∧ G.ext f' i = 0 ∧ G.cost μ f' i ≤ G.cost μ f i + β * G.ext f i
 
 /-- `pouw-nofold-service` (proposed; `pouw-rs-staged-service`'s form, per prover, on a period of rounds). **The proof
-service's verdict accepts only periods whose rounds' checks pass** on the registered instances `reg`, but with
-probability `κ_S` over the oracle and the verifier's coins, for every prover: the rounds' checks run inside C-Flock's
-zero-knowledge proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each round's
-commitment (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
+service's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
+with probability `κ_S` over the oracle and the verifier's coins, for every prover: every block's committed instance is
+one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside C-Flock's zero-knowledge
+proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each block's commitments
+(`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code (RT-LEAN-2 L29). It assumes nothing of the prover's algorithms. -/
-def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) {Obs : Type}
+def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-    A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted reg ox.1 ox.2) ≤ κS
+    A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted Reg ox.1 ox.2) ≤ κS
 
 /-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted
 period exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the
 prover doesn't control, and signs the bits that cross them in either direction (its readings `dev`); the period's
-verdict reads its signed count and refuses a period past `K`. The certifier's own coin stream isn't counted
+verdict reads its signed count and refuses a period past `K`. The challenger's signed coin stream isn't counted
 (RT-PROTO-2 P18). Open (RT-PROTO P2, O-IO): the per-period form from the certifier's counts with `n_max · E_out`. -/
 def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=

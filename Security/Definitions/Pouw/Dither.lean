@@ -19,12 +19,15 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
 * **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
   `SAKMatmul`, `ShaSpeed`), in units of priced cost, outside a degenerate set of dithers;
-* **a monitoring period's prover** sampling block by sampling block on instances registered before the period
-  (`Prover`), what it sends (`Prover.transcript`), its timed use and oracle calls (`Prover.timedUse`, `Prover.calls`:
-  its sampling blocks' work, from each block's dither coins to its commitment), and the service's
-  verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`, `Prover.Passes`);
+* **a monitoring period's prover** sampling block by sampling block, in the commit, challenge and response phases
+  (`Prover`): each block's operands committed before its coins (its instance, adapted: chosen after the earlier
+  blocks' coins), what it sends (`Prover.transcript`), its timed use and oracle calls (`Prover.timedUse`,
+  `Prover.calls`: its sampling blocks' commit phases and work), the cap on its calls (`Prover.WithinCap`, the
+  selected blocks' answers among them), and the service's verdict on the transcript and the auditor's devices'
+  readings (`Verdict`, `Readings`, `Prover.Passes`);
 * **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): R-ACCEL-1's definition, kept in
-  this one place, and its probability form, the headline's conclusion;
+  this one place, and its probability form, the headline's conclusion, with the selected blocks' answers within the
+  period (`AnswersFit`);
 * **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
   luck (`fleetLuck`; CMP-152);
 * the error (`epsWorkSound`, `ε_skip`).
@@ -61,7 +64,8 @@ structure Accel where
   /-- A run's wall time, seconds. -/
   wall : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The bits a run exchanges with machines outside the period's devices, in either direction (what the network
-  certifier counts, into and out of the devices), other than the certifier's own coin stream (RT-PROTO-2 P18). -/
+  certifier counts, into and out of the devices), other than the challenger's signed coin stream (RT-PROTO-2 P18,
+  RT-POOL RP27). -/
   ext : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The oracle calls a run makes: SHA-512 evaluations through the machine's oracle-call step. -/
   calls : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
@@ -256,34 +260,42 @@ end Moments
 section Prover
 
 /-- **The prover of a monitoring period of `nsb` sampling blocks**, one sampling block at a time (RT-LEAN L1 and
-L18). The sampling blocks' instances are registered before the period (`reg : Fin nsb → P.Inst`, an argument of what
-reads the prover: RT-LEAN-2 L27), so the prover never chooses one. It keeps a state `St` across sampling blocks,
+L18), each in three phases: the commit phase, the challenge phase and the response phase, every commitment of a
+block bound before any of its coins (Daniel, 26 Oct, 11:09 AM PDT). It keeps a state `St` across sampling blocks,
 starting from `start`, fixed before the period. Every program reads the oracle `P.Orc` (the block's hash, RT-LEAN L26),
-so its queries are inside priced programs. The challenger issues every live coin. Sampling block `b`, in the order of
-its coins:
+so its queries are inside priced programs. The challenger issues every live coin; the network certifier only watches
+the boundary. Sampling block `b`, in the order of its coins:
 
-* the challenger issues the block's dither coins `d`; `work b` is everything the prover computes between them and the
-  block's commitment, and returns the commitment and the state the next block starts from;
-* the challenger issues the block's check coin `c` (whether the block is selected, and which of its proof blocks a
+* **the commit phase**: `commit b` is everything the prover computes between the previous block's work and the
+  block's operand root, and returns the block's instance (`Inst`: its operands, the instance the operand root binds,
+  RT-POOL RP23, RP26) and the state its work starts from. Its oracle calls are the operand root's hashing, logged
+  with the work's. The instance is adapted: it reads the earlier blocks' coins, through the state, and none of its
+  own. The verdict refuses a block whose operand root wasn't in before its dither coins (`Timed`), and the service
+  refuses an instance outside the block's registrable set (`Accepted`);
+* **the challenge phase**: the challenger issues the block's dither coins `d`; `work b` is everything the prover
+  computes between them and the block's commitment, and returns the commitment and the state after it. The
+  challenger then issues the block's check coin `c` (whether the block is selected, and which of its proof blocks a
   selected block proves), and `absorb b` writes it into the state. `absorb` is a function, not a program: it reads no
-  oracle and uses nothing. Whatever it computes is advice to later blocks' work, and `SAKMatmul` and `ShaSpeed` hold
-  at every advice of the size `ExtractAdv` gives, so it buys the prover nothing they don't already allow;
-* `answer b` answers the check from the state after the block's work and every coin of the period (CMP-154). It is off
-  the state path, since no later program reads it, so it may run beside later sampling blocks and arrive after their
-  coins. An answer only opens committed values, which binding fixes (`ExtractAdv`), so what it reads changes only
-  whether it is accepted.
+  oracle and uses nothing. Whatever it computes is advice to later blocks' programs, and `SAKMatmul` and `ShaSpeed`
+  hold at every advice of the size `ExtractAdv` gives, so it buys the prover nothing they don't already allow;
+* **the response phase**: `answer b` answers the check from the state after the block's work and every coin of the
+  period (CMP-154). It is off the state path, since no later program reads it, so it may run beside later sampling
+  blocks and arrive after their coins. An answer only opens committed values, which binding fixes (`ExtractAdv`), so
+  what it reads changes only whether it is accepted.
 
 **A sampling block is the set of calls whose coins go out together** (RT-PROTO-2 P13): block `b + 1`'s coins go out
-only after every root of block `b` is in. Calls that overlap in time but whose coins went out separately are separate
-sampling blocks, in the order their coins went out. A block's work sees the earlier blocks' coins only through the
-state, so nothing before block `b`'s commitment depends on its check coin or on any later coin.
+only after every root of block `b` and block `b + 1`'s operand root are in. Calls that overlap in time but whose coins
+went out separately are separate sampling blocks, in the order their coins went out. A block's programs see the earlier
+blocks' coins only through the state, so nothing before block `b`'s commitment depends on its check coin or on any
+later coin, and nothing before its operand root on any of its coins.
 
-**The challenger times the work** (`timedUse`, `calls`): each block's work runs from its dither coins to its
-commitment, inside the period on its devices, one block at a time. Only selected blocks are answered, beside later
-blocks. No later program reads an answer, and an honest answer's cost is in the honest cost's `W_ans` (`WorkSound`'s
-`H_o`), which the headline's `ε` charges at full weight, so no answer's use or calls are credited or counted against
-the period. Its exchanged bits are (`ext`): an answer that runs beside later blocks holds their coins, and what it
-sends out crosses the boundary the network certifier watches (RT-POOL RP21).
+**The challenger times the commit phases and the work** (`timedUse`, `calls`): they run inside the period on its
+devices, one block at a time, from the previous block's work to the next block's commitment. Only selected blocks are
+answered, beside later blocks. No later program reads an answer, and an honest answer's cost is in the honest cost's
+`W_ans` (`WorkSound`'s `H_o`), which the headline's `ε` charges at full weight, so no answer's use is credited or
+counted against the period. A selected answer's oracle calls are under the cap (`WithinCap`), since it runs within the
+period (`AnswersFit`, RT-POOL RP20), and its exchanged bits are counted (`ext`): an answer that runs beside later
+blocks holds their coins, and what it sends out crosses the boundary the network certifier watches (RT-POOL RP21).
 
 The sampling blocks of a period are one sequence in the order their coins went out: a fleet whose replicas' coins
 aren't serialized is one prover per replica (RT-PROTO-2 P16; the fleet's bound is
@@ -291,6 +303,7 @@ aren't serialized is one prover per replica (RT-PROTO-2 P16; the fleet's bound i
 structure Prover (G : Accel) (P : RoundProto) (nsb : ℕ) where
   St : Type
   start : St
+  commit : Fin nsb → G.Mc.Alg (P.Orc × St) (St × P.Inst)
   work : Fin nsb → G.Mc.Alg (P.Orc × St × P.Draw) (St × P.Root)
   absorb : Fin nsb → St → P.Chk → St
   answer : Fin nsb → G.Mc.Alg (P.Orc × St × (Fin nsb → P.Draw × P.Chk)) P.Ans
@@ -299,20 +312,31 @@ namespace Prover
 
 variable {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k)
 
-/-- The state at the start of sampling block `b` (it stays put past the last block), at the oracle `o` and the
-verifier's coins `x`: the previous block's work's, with its check coin absorbed. No answer is on this path. -/
+/-- The state at the start of sampling block `b`, before its commit phase (it stays put past the last block), at
+the oracle `o` and the verifier's coins `x`: the previous block's commit phase's and work's, with its check coin
+absorbed. No answer is on this path. -/
 def state (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℕ → A.St
   | 0 => A.start
   | b + 1 =>
     if h : b < k then
-      A.absorb ⟨b, h⟩ (G.Mc.eval (A.work ⟨b, h⟩) (o, state o x b, (x ⟨b, h⟩).1)).1 (x ⟨b, h⟩).2
+      A.absorb ⟨b, h⟩ (G.Mc.eval (A.work ⟨b, h⟩)
+        (o, (G.Mc.eval (A.commit ⟨b, h⟩) (o, state o x b)).1, (x ⟨b, h⟩).1)).1 (x ⟨b, h⟩).2
     else state o x b
 
-/-- Round `w`'s state with its dither coins. -/
-def wordsIn (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : A.St × P.Draw :=
-  (A.state o x w, (x w).1)
+/-- Sampling block `b`'s input to `commit`: the oracle and the state at the block's start. -/
+def commitIn (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (b : Fin k) : P.Orc × A.St :=
+  (o, A.state o x b)
 
-/-- Round `w`'s input to `work`: the oracle, the state at the round's start, and its dither coins. -/
+/-- **Sampling block `b`'s instance**: what its commit phase commits, the instance its operand root binds. It reads
+no coin of block `b` or later. -/
+def inst (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (b : Fin k) : P.Inst :=
+  (G.Mc.eval (A.commit b) (A.commitIn o x b)).2
+
+/-- Sampling block `w`'s state after its commit phase, with its dither coins. -/
+def wordsIn (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : A.St × P.Draw :=
+  ((G.Mc.eval (A.commit w) (A.commitIn o x w)).1, (x w).1)
+
+/-- Sampling block `w`'s input to `work`: the oracle, the state after its commit phase, and its dither coins. -/
 def workIn (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : P.Orc × A.St × P.Draw :=
   (o, A.wordsIn o x w)
 
@@ -321,41 +345,51 @@ blocks' among them. -/
 def answerIn (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (b : Fin k) : P.Orc × A.St × (Fin k → P.Draw × P.Chk) :=
   (o, (G.Mc.eval (A.work b) (A.workIn o x b)).1, x)
 
-/-- Round `w`'s commitment. -/
+/-- Sampling block `w`'s commitment. -/
 def root (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : P.Root := (G.Mc.eval (A.work w) (A.workIn o x w)).2
 
 /-- Sampling block `b`'s answer. -/
 def ans (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (b : Fin k) : P.Ans :=
   G.Mc.eval (A.answer b) (A.answerIn o x b)
 
-/-- **The transcript**: every round's commitment and answer, what the prover sends. -/
-def transcript (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Fin k → P.Root × P.Ans :=
-  fun w => (A.root o x w, A.ans o x w)
+/-- **The transcript**: every sampling block's instance (its operand root, which the model reads as the instance it
+binds), commitment and answer, what the prover sends. -/
+def transcript (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Fin k → P.Inst × P.Root × P.Ans :=
+  fun w => (A.inst o x w, A.root o x w, A.ans o x w)
 
-/-- **Accepted by the rounds' checks** on the registered instances `reg`: every round's answer passes the verifier's
-check against its commitment. -/
-def Accepted (reg : Fin k → P.Inst) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
-  ∀ w, P.accept o (reg w) (x w).1 (x w).2 (A.root o x w) (A.ans o x w)
+/-- **Accepted by the sampling blocks' checks** at the registrable instances `Reg`: every block's instance is one of
+its registrable ones, and its answer passes the verifier's check against its commitment at that instance. -/
+def Accepted (Reg : Fin k → Set P.Inst) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
+  ∀ w, A.inst o x w ∈ Reg w ∧ P.accept o (A.inst o x w) (x w).1 (x w).2 (A.root o x w) (A.ans o x w)
 
-/-- **The sampling blocks' timed use** of resource `r`: every block's `work` at its input, from its dither coins to
-its commitment, the phase the challenger times, one block at a time (CMP-154). An answer's use isn't counted: no
-later program reads it, and the honest answers' cost is charged in `ε` through the honest cost's `W_ans`. -/
+/-- **The sampling blocks' timed use** of resource `r`: every block's `commit` and `work` at their inputs, the phases
+the challenger times, from the previous block's work to the block's commitment, one block at a time (CMP-154, RT-POOL
+RP23). An answer's use isn't counted: no later program reads it, and the honest answers' cost is charged in `ε`
+through the honest cost's `W_ans`. -/
 noncomputable def timedUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Res) : ℝ :=
-  ∑ b, G.use (A.work b) (A.workIn o x b) r
+  ∑ b, (G.use (A.commit b) (A.commitIn o x b) r + G.use (A.work b) (A.workIn o x b) r)
 
-/-- **The sampling blocks' oracle calls**: every block's `work` at its input (RT-LEAN-2 L39), the calls on the state
-path that reaches the roots. On a run whose timed use fits the period's devices, (G3) caps them at a resource's
-capacity over a call's use of it. -/
+/-- **The sampling blocks' oracle calls**: every block's `commit` and `work` at their inputs (RT-LEAN-2 L39, RT-POOL
+RP23), the calls on the state path that reaches the roots. On a run whose timed use fits the period's devices, (G3)
+caps them at a resource's capacity over a call's use of it. -/
 noncomputable def calls (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
-  ∑ b, G.calls (A.work b) (A.workIn o x b)
+  ∑ b, (G.calls (A.commit b) (A.commitIn o x b) + G.calls (A.work b) (A.workIn o x b))
 
-/-- **The sampling blocks' exchanged bits** (`Accel.ext`): every block's `work` and `answer` at their inputs (CMP-154,
-RT-POOL RP21). An answer reads every coin of the period, so it could send a later block's coins out, and an outside
-machine could return that block's root to its work; the bits are counted here whichever program sends them. An
-unselected block's answer never runs, and the prover that stands for a node answers it with a constant program, which
-exchanges nothing. -/
+/-- **A run within the cap `Q`** (RT-LEAN-2 L39, RT-POOL RP20): the sampling blocks' commit phases and work make at
+most `Q` oracle calls in all (`calls`), and each selected block's answer (`sel` of its check coin) at most `Q`. Both
+follow from the machine model's rate on a run inside the period (G2, G3, `cap_r ≤ Q callUse_r`): the work's from its
+timed use fitting the devices, an answer's from its running within the period (`AnswersFit`). -/
+def WithinCap (sel : P.Chk → Prop) (Q : ℝ) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
+  A.calls o x ≤ Q ∧ ∀ b, sel (x b).2 → G.calls (A.answer b) (A.answerIn o x b) ≤ Q
+
+/-- **The sampling blocks' exchanged bits** (`Accel.ext`): every block's `commit`, `work` and `answer` at their inputs
+(CMP-154, RT-POOL RP21). An answer reads every coin of the period, so it could send a later block's coins out, and an
+outside machine could return that block's root to its work; the bits are counted here whichever program sends them.
+An unselected block's answer never runs, and the prover that stands for a node answers it with a constant program,
+which exchanges nothing. -/
 noncomputable def ext (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
-  ∑ b, (G.ext (A.work b) (A.workIn o x b) + G.ext (A.answer b) (A.answerIn o x b))
+  ∑ b, (G.ext (A.commit b) (A.commitIn o x b) + G.ext (A.work b) (A.workIn o x b) +
+    G.ext (A.answer b) (A.answerIn o x b))
 
 end Prover
 
@@ -364,7 +398,7 @@ coins, the transcript (`Prover.transcript`) and the readings `Obs` of the audito
 signed counts). It reads no code: the rounds' checks run inside C-Flock's zero-knowledge proofs (`ServiceSound` ties
 it to `Prover.Accepted`). -/
 abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
-  P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Root × P.Ans) → Obs → Prop
+  P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop
 
 /-- **The auditor's devices' readings** of a prover's period (the network certifier's counts), at the oracle and the
 coins. They are the devices' and depend on what the prover's programs exchange (`ImportWithinCertifier`). -/
@@ -393,9 +427,9 @@ section Freed
 /-- **A monitoring period's devices and the other work they could do**, in resource units: the period's length `T`
 (seconds), the other jobs `J`, each with its value `val` per unit and its use `needs` per unit, and the honest use
 `hon` of the credited work and its value `rv` (R-ACCEL-1's credit, in the jobs' units: its honest cost at the dual
-price; RT-LEAN L25). `WorkSound` reads it at `W = 1` credited unit: `hon` is the registered sampling blocks' total
-honest use, their work and the selected blocks' answers beside it, whose blocks differ (RT-LEAN-2 L27, RT-PROTO-2
-P15), and `rv` their credit. -/
+price; RT-LEAN L25). `WorkSound` reads it at `W = 1` credited unit: `hon` is the period's sampling blocks' total
+honest use, their commit phases, their work and the selected blocks' answers beside it, whose blocks differ (RT-LEAN-2
+L27, RT-PROTO-2 P15), and `rv` their credit. -/
 structure Period (G : Accel) where
   T : ℝ
   J : Type
@@ -414,8 +448,8 @@ variable {G : Accel} (Pd : Period G)
 /-- What the devices can do in the period (G2): `ρ_r T` of resource `r`. -/
 def cap (r : G.Res) : ℝ := G.rate r * Pd.T
 
-/-- A strategy fits the devices: its credited part (its sampling blocks' timed work, `Prover.timedUse`) uses `X`,
-its other work `z ≥ 0` units of each job, and the two together use no resource past its capacity. -/
+/-- A strategy fits the devices: its credited part (its sampling blocks' commit phases and work, `Prover.timedUse`)
+uses `X`, its other work `z ≥ 0` units of each job, and the two together use no resource past its capacity. -/
 def Fits (X : G.Res → ℝ) (z : Pd.J → ℝ) : Prop := (∀ j, 0 ≤ z j) ∧ ∀ r, X r + ∑ j, z j * Pd.needs j r ≤ Pd.cap r
 
 /-- A strategy's value: its `W` credited rounds at `rv` each, plus its other work's. -/
@@ -438,6 +472,17 @@ def DualOpt (μ : G.Res → ℝ) (W : ℝ) : Prop :=
     ∃ z' : Pd.J → ℝ, Pd.Fits (fun r => W * Pd.hon r) z' ∧ ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r)
 
 end Period
+
+/-- **An accepted period's selected answers run within it** (RT-POOL RP20): for every prover whose period the verdict
+accepts, each selected sampling block's answer (`sel` of its check coin) uses, resource by resource, at most the
+period's capacity `Period.cap`. With (G3) and `cap_r ≤ Q callUse_r` it puts the answer's oracle calls under the cap
+(`Prover.WithinCap`). It is what the deadlines buy on the card (`Definitions.Pouw.Guarantees.DitherInstance`: an
+answer reads its block's work, which reads coins issued inside the period, and arrives before its end), not a
+hypothesis on the prover's queries. -/
+def AnswersFit (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
+    (dev : Readings G P k Obs) (sel : P.Chk → Prop) (Pd : Period G) : Prop :=
+  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x →
+    ∀ b, sel (x b).2 → ∀ r, G.use (A.answer b) (A.answerIn o x b) r ≤ Pd.cap r
 
 /-- **Freed compute at most `ε C`, prover by prover** (R-ACCEL-1's probability form): for every prover, the
 probability over the oracle and the verifier's coins that the service accepts its period (`Prover.Passes`, on its
