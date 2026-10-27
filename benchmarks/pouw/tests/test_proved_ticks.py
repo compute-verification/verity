@@ -2,7 +2,7 @@
 8 IMAD warp instructions a unit, B_♭ with ε_skip's work is Lean's 17.097571, and a GPU-second of linears at a cycle a
 unit is (1 − 5.860%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. A block where the datacenter
 places PoUW's compiled Program is its tiles' `z` products, a linear's each at the tile's K, of the int8 products census/v1
-and Lean's `h1Rows` count there, r·c·(2K + 32m) a tile (benchmarks/datacenter's test of that Program credits this figure
+and Lean's `h1Rows` count there, r·c·(2K + 32m) a tile (examples/network's test of that Program credits this figure
 as the block's compute)."""
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
     from verity.core.protocols.pouw.circuit import h1tile
 
     assert (h1tile.SCHEME, h1tile.FOLD) == (P.SCHEME, "fx1") and all("S8" in k for k in h1tile.KINDS)
-    # benchmarks/datacenter's compiled s8 grid on its block, one 4 × 16 tile at K = 64 (test_datacenter's `work["a"]`):
+    # examples/network's compiled s8 grid on its block, one 4 × 16 tile at K = 64 (test_datacenter's `work["a"]`):
     # census/v1's int8 products are z's and the lanes' segment dots', 4·16·(64 + 64 + 32·2), of which z's 4·16·64 credit
     grid = {P.Tile(4, 16, 64, 64): 1}
     block = {"cuda:gate": 9455977, "mac:int8": 4 * 16 * (64 + 64 + 32 * 2)}

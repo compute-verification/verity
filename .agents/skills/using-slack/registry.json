@@ -424,9 +424,9 @@
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
-        "benchmarks/network_e2e/",
-        "benchmarks/datacenter/",
-        "benchmarks/network_sim/",
+        "benchmarks/network_certifier/e2e/",
+        "examples/network/",
+        "benchmarks/network_certifier/sim/",
         "benchmarks/prove_path/"
       ],
       "branch_suffixes": [

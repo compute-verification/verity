@@ -35,7 +35,7 @@ record's on those bytes (`lean_draw`: C-Flock's `flock-verify draw --population 
 draw is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
 proved are exactly that draw's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever units the draw object it is
 handed lists. Selection `All` (K None) draws every window and reads no coin, and K = n leaves nothing to draw.
-The datacenter model (`benchmarks/datacenter`, a Python model) builds no
+The datacenter model (`examples/network`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
 
@@ -78,7 +78,7 @@ The count check is the part of the egress grid check that needs no frame's bytes
 It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
 with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
-N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service Spec, is
+N3, the content check, a prototype in `benchmarks/network_certifier/sim` evaluated in the clear and in no proof-service Spec, is
 retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 

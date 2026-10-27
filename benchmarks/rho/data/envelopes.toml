@@ -53,7 +53,7 @@ prf_advantage = { value = 2.938735877055719e-39, source = "Adv_PRF of the stream
 declared = false
 intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "draft:declared-ingress: a server's ingress carries only its inference blocks' declared inputs, at most alpha Phi at full use (benchmarks/nci/tiers.py DEFAULTS intake_x); high: line rate, the upper end until Lean states the per-server bits", status = "derived" }
 timing = { value = 860, unit = "bit/s/host", low = 61.3, high = 1e4, source = "benchmarks/nci/tiers.py DEFAULTS tau: the network appendix's program format; low: the llama8b-node1 calibration's requests (51.3) and coin (10) links", status = "derived" }
-side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "ruled: 1 kb/s per server (benchmarks/datacenter account.py DEDICATED_RACKS sigma); range: the plausible covert channels", status = "ruled" }
+side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "ruled: 1 kb/s per server (examples/network account.py DEDICATED_RACKS sigma); range: the plausible covert channels", status = "ruled" }
 form = "certified"
 
 # The onsite envelopes with each server's ingress at its inference blocks' declared inputs at the warden form's W63

@@ -2411,7 +2411,7 @@ provides-extras = ["torch"]
 [[package]]
 name = "verity-network-e2e"
 version = "0.0.0"
-source = { virtual = "benchmarks/network_e2e" }
+source = { virtual = "benchmarks/network_certifier/e2e" }
 dependencies = [
     { name = "verity" },
 ]
@@ -2422,7 +2422,7 @@ requires-dist = [{ name = "verity", editable = "." }]
 [[package]]
 name = "verity-network-sim"
 version = "0.0.0"
-source = { virtual = "benchmarks/network_sim" }
+source = { virtual = "benchmarks/network_certifier/sim" }
 dependencies = [
     { name = "verity" },
 ]
