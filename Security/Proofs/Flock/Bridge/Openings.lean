@@ -514,12 +514,15 @@ theorem rowMsg_sha512 (p : Flock.Port) (b : List Bool) :
     Verity.sha512 (rowMsg p b) = (formatOf p).digest Verity.sha512 b := by
   unfold rowMsg formatOf
   split_ifs
-  · show _ = Hash.RowSeg.digest _ _
-    rw [Hash.RowSeg.digest, encSeg_eq]
-  · show _ = Hash.RowV2.digest _ _
-    rw [Hash.RowV2.digest, enc_eq]
-  · show _ = Hash.RowV1.digest _ _
-    rw [Hash.RowV1.digest, encV1_eq]
+  · simp only [Hash.RowLeaf.Format.digest]
+    rw [encSeg_eq]
+    rfl
+  · simp only [Hash.RowLeaf.Format.digest]
+    rw [enc_eq]
+    rfl
+  · simp only [Hash.RowLeaf.Format.digest]
+    rw [encV1_eq]
+    rfl
 
 theorem rowDep_port {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt} {c : Flock.Circuit}
     {o : Opening Bool} {r : RowAt} {p : Flock.Port} (hr : rowOfPos C rows o.pos = some r)
@@ -743,7 +746,11 @@ theorem place_opens {r : Flock.Bridge.Parsed} {kd K₀ : ℕ} {desc : Claims.Msg
     rw [← h1, rootsOf_getD r.D.unroll A.pub r.n x.2.1.isLt, Claims.Sampling.bytes_bs]
     rfl
   obtain ⟨ro, hacc, hrow⟩ := ha (by rw [hplace]; exact hw x.2.1)
-  refine ⟨_, by rw [Verity.placeAt, hx]; rfl, ro, ?_, ?_⟩
+  refine ⟨_, by
+    first
+    | exact Option.map_eq_some_iff.mpr ⟨x, hx, rfl⟩
+    | (delta Verity.placeAt; rw [hx]; rfl)
+    | simp only [Verity.placeAt, hx, Option.map_some], ro, ?_, ?_⟩
   · rw [hroot] at hacc
     exact hacc
   · rw [hplace] at hrow
