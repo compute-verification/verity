@@ -33,8 +33,9 @@ verity-exact-kit = { workspace = true }
 # which holds no table (`contents.py` prints them). test_dither_zy_h1zy imports int8_exact, which imports
 # verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
 # (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
-# CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose
-# ChaCha20 is verity.ml.windows.rows' (the commit files named below: serving_rows and what it imports).
+# CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's
+# H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.ml.windows.rows'
+# (the commit files named below: serving_rows and what it imports).
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
