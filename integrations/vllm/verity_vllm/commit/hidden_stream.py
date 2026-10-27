@@ -52,7 +52,7 @@ class StreamLayout:
 
     Tap layout v8: the layout is arithmetic in the kernel tile -- `BN` = kBlockN of the launched kernel (128 for head
     dim 64, 64 for 96/128/256 on the num_splits == 1 kernel; `hidden_source.fa2_kblock_n`) and `D` = head_dim (the O plane's row
-    width).  The defaults reproduce the R9 hd-64 layout, digest and chunk header word for word; other tiles enter the digest and the
+    width).  The defaults reproduce the legacy hd-64 layout, digest and chunk header word for word; other tiles enter the digest and the
     spare header words 8/9, so a chunk of a (64, 128) stream can never verify against a (128, 64) declaration.  `ms` appends the MS
     class after FIN (and enters the digest); without it every offset, the total and the digest are the six classes'."""
 
