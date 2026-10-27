@@ -20,7 +20,7 @@ A single-GPU row's Build of record needs no trace at all (`write_row`, `predict 
 Program with the names its trace gives it (`naming.write_build`, `build_request_<shape>/`), GP-01's workload over them
 (`build_workload/workload_program.json`: its digest, and the `lag` and `applicability.engine.async_scheduling` the declared target
 resolves), the row's required-value manifest over them (`manifest.json`, the row's own query and policies, `row_build`) and
-`predicted.json`, what predicted it. That is the Build the served Commit binds (`serve_seal`). `compare --predicted DIR` holds it to
+`predicted.json`, what predicted it and the manifest's sha256. That is the Build the served Commit binds (`serve_seal.row_refusal`). `compare --predicted DIR` holds it to
 a traced Build of the same row: every Program digest, and the manifest's digest, Program digest and identities.
 
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR (--wrapper step --M N --pos0 N |
@@ -261,11 +261,12 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
         man = MN.build(os.path.join(out, next(iter(requests))), workload=w, **policy)
     if MN.incomplete_rc(man):
         raise UsageError(f"{row}: the predicted Build's manifest is incomplete (unmodelled {sorted(man.get('unmodelled') or {})[:3]})")
-    Path(out, "manifest.json").write_text(json.dumps(man, separators=(",", ":")))
+    raw = json.dumps(man, separators=(",", ":")).encode()
+    Path(out, "manifest.json").write_bytes(raw)
     rec = {"schema": ROW_SCHEMA, "row": row, "config": str(config), "code_version": S.code_version(), "requests": requests,
            "workload_digest": wp["digest"], "lag": wp["lag"], "manifest_digest": man["manifest_digest"],
-           "program_digest": man["program_digest"], "identities": man["populations"]["identities"],
-           "secs": round(time.time() - t0, 1)}
+           "manifest_sha256": hashlib.sha256(raw).hexdigest(), "program_digest": man["program_digest"],
+           "identities": man["populations"]["identities"], "secs": round(time.time() - t0, 1)}
     Path(out, PREDICTED).write_text(json.dumps(rec, indent=1) + "\n")
     return rec
 
