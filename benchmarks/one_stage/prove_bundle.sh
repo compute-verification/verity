@@ -101,6 +101,7 @@ else
 fi
 if [ -n "$STEP" ]; then
   cp "$STEP/step-registration.json" "$STEP/receipt.json" "$STEP/draw.json" "$O/" 2>/dev/null
+  cp "$STEP/coin.json" "$O/" 2>/dev/null || cp "$STEP/coin/coin.json" "$O/" 2>/dev/null
   log "prove: each drawn block held to the registered step, then proved, then the negatives"
   COIN=()
   if [ -n "${PB_IN_ART:-}${PB_IN:-}" ]; then
