@@ -6,6 +6,9 @@
 # VF3p-16 by decision 73, a uniform instruction on the issue rows; VF3q-16 by the compute-accounting coordinator, 17 Oct,
 # FACET-BREAK's refit of every row its programs beat, once its solve and check passed; VF3r-16 by the
 # compute-accounting coordinator, 17 Oct, FACET-BREAK's 2-3-accumulator refit on the per-form classes of decision 81).
+# The card file, verity/hardware/cards/rtx-pro-6000-server.toml: θ, the data sheet and the table route read each ceiling
+# it states from it (`card = "EXPR"`, verity_machine_model/card.py).
+card = "rtx-pro-6000-server"
 current = "VF3r-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"

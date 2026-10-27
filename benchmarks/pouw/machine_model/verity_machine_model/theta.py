@@ -3,9 +3,9 @@ the model reads, each with the vendor document that states it (`sheet`, `grade`,
 measured run (`measured`, `runs`), or the run that would measure it (`gap`); the card's exact paths; its FP8 atoms'
 semantics; and the units that write registers (`[[writer]]`, with the census's joint issue rows, `[[joint]]`).
 
-A number the device's card file (`card = "SKU"`, `verity.hardware`) states as a ceiling is read from it: the entry gives
-`card = "EXPR"` (`card.py`) in place of its number, grade and source, and the SM count is the card's. θ keeps what the
-card doesn't hold: the forms and rates it has no entry for, the clocks a document quotes its figures at, the figures
+A number the device's card file (`model.toml`'s `card`, `verity.hardware`) states as a ceiling is read from it: the
+entry gives `card = "EXPR"` (`card.py`) in place of its number, grade and source, and the SM count is the card's. θ
+keeps what the card doesn't hold: the forms and rates it has no entry for, the clocks a document quotes its figures at, the figures
 themselves (each still checked at 2 · sheet · SMs · clock), and every measured value, a sanity check on the ceiling.
 
 Each derivation is read twice: on the data sheet (every rate its `sheet` value) and measured (every rate its measured
@@ -203,14 +203,13 @@ def theta(data: Path) -> Theta:
     if not p.is_file():
         raise SystemExit(f"{data}: no {THETA}; the devices with one are sm_120 (data/) and sm_90")
     t = tomllib.loads(p.read_text())
-    c = K.card(t["card"]) if "card" in t else None
+    c = K.of(data)
 
     def sourced(v: dict, field: str, where: str) -> tuple:
         """(number, grade, source): the card's where `card` names an expression, else the entry's own."""
         if "card" not in v:
             return v.get(field), v["grade"], v["source"]
-        if c is None:
-            raise SystemExit(f"{p}: {where} reads the card, and {THETA} names none; add card = \"SKU\" at its top")
+        K.need(c, f"{p}: {where}", data)
         if dup := [f for f in (field, "grade", "source") if f in v]:
             raise SystemExit(f"{p}: {where} reads {v['card']!r} from the card, which holds its number and source; "
                              f"drop {', '.join(dup)}")

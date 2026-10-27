@@ -6,7 +6,6 @@
 # document prints there (dense), which 2 · sheet · SMs · clock reproduces (`machine-model theta --check`). `machine-model
 # theta` derives d, the exchange rate, B_RF and r_H against r_min from it; `machine-model render theta` tabulates it.
 gpu = "H200 SXM 141 GB (sm_90a)"
-card = "h200-sxm-141gb"
 # Duo (provisional), LI (provisional), and RT-HOPPER's measured LI loop that folds its own wgmma accumulators.
 honest = ["dc90-l32", "dc90-li-l32", "dc90-licpw-redux-l32"]
 documents = [

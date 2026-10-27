@@ -1,6 +1,6 @@
 """A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`Accounting.TS.Sheet`)
 reads, its value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor
-form or its pipe. A constant the device's card file states as a ceiling (`card = "SKU"`, `verity.hardware`) gives
+form or its pipe. A constant the device's card file states as a ceiling (`model.toml`'s `card`, `verity.hardware`) gives
 `card = "EXPR"` (`card.py`) in place of its number, and keeps the grade and source the Lean module prints.
 
 `lines` derives the DS lines from it, exactly: issue 1 for every class (A2, and A2u for the uniform datapath's), a tensor
@@ -100,14 +100,13 @@ def sheet(data: Path) -> Sheet:
     if not p.is_file():
         raise SystemExit(f"{data}: no {SHEET}; a device with a data sheet has one (README \"Devices\")")
     t = tomllib.loads(p.read_text())
-    c = K.card(t["card"]) if "card" in t else None
+    c = K.of(data)
 
     def num(v: dict, key: str, where: str) -> Fraction:
         """The card's number where `card` names an expression, else the entry's own `key`."""
         if "card" not in v:
             return Fraction(v[key])
-        if c is None:
-            raise SystemExit(f"{p}: {where} reads the card, and {SHEET} names none; add card = \"SKU\" at its top")
+        K.need(c, f"{p}: {where}", data)
         if key in v:
             raise SystemExit(f"{p}: {where} reads {v['card']!r} from the card, which holds its number; drop {key}")
         return K.value(c, v["card"])

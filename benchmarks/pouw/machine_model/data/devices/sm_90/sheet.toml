@@ -8,7 +8,6 @@
 # channels don't list it (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
 name = "H200"
 gpu = "H200 SXM (sm_90a)"
-card = "h200-sxm-141gb"
 vector = "DS-90"
 lean = "Security/Definitions/Accounting/Sheets/H200.lean"
 

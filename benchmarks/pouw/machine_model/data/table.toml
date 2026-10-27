@@ -12,5 +12,7 @@ source = "SCALAR-ROUTE restated (coordinator 06:10Z, a named assumption for Dani
 q = 1.22
 bytes = 3.5
 l2 = 7.244e12
-sms = 188
-mhz = 2092
+mhz = 2092                # the node's lock, at which the census and l2 are measured
+
+[card]                    # read from the card file (model.toml's `card`)
+sms = "sm.count"

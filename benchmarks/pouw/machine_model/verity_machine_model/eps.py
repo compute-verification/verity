@@ -74,6 +74,7 @@ from pathlib import Path
 
 from scipy.optimize import linprog
 
+from verity_machine_model import card as K
 from verity_machine_model.model import DATA, census, model, vector
 
 LANES = 32
@@ -419,7 +420,13 @@ class Table:
 
 
 def table(data: Path = DATA, q: float | None = None, l2: float | None = None, nbytes: float | None = None) -> Table:
+    """`[card]` names the keys the device's card file holds (`sms = "sm.count"`), each read from it."""
     t = tomllib.loads((data / "table.toml").read_text())
+    if dup := set(t.get("card", {})) & set(t):
+        raise SystemExit(f"{data / 'table.toml'}: {', '.join(sorted(dup))} read the card ([card]); drop the numbers")
+    if t.get("card"):
+        c = K.need(K.of(data), f"{data / 'table.toml'}: [card]", data)
+        t |= {k: K.number(c, expr) for k, expr in t["card"].items()}
     return Table(q=t["q"] if q is None else q, bytes=t["bytes"] if nbytes is None else nbytes,
                  l2=t.get("l2") if l2 is None else l2, sms=t["sms"], mhz=t["mhz"], source=t["source"])
 
