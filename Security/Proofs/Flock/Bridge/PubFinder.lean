@@ -47,11 +47,16 @@ theorem H512_eq_iff (u v : List UInt8) :
   · intro h
     exact Subtype.ext (bs_inj h)
 
-set_option diagnostics true in
-set_option maxHeartbeats 1000000 in -- probe: the default 200000 times out at `whnf` here
 /-- A strict-time finder of C-Flock's on its tape, at the constant cost `⌈q⌉`. -/
 noncomputable def strictComp (Fd : StrictCR.Finder StrictCR.Pair) (q : ℝ) : Claims.Finder :=
   Game.tapeFinder Fd.g Fd.s id (fun _ => ⌈q⌉₊)
+
+/-- A finder's output is a SHA-512 collision exactly when it is one of `H512`. -/
+theorem isColl_sha512 :
+    (fun b : StrictCR.Pair => ∃ u v, (id : StrictCR.Pair → Option (Claims.Msg × Claims.Msg)) b = some (u, v) ∧
+      Claims.Collision Claims.Sampling.sha512Msg u v) = StrictCR.IsColl H512 := by
+  funext b
+  simp only [StrictCR.IsColl, Claims.Collision, H512_eq_iff, id]
 
 /-- **A strict-time finder succeeds as its tape finder does**: its probability of outputting a collision of `H512` is
 its tape finder's of outputting a SHA-512 collision. -/
@@ -59,9 +64,8 @@ theorem strictComp_Pr (Fd : StrictCR.Finder StrictCR.Pair) (c : ℝ) :
     (strictComp Fd c).Pr Claims.Sampling.sha512Msg = Fd.ev (Game.ind (StrictCR.IsColl H512)) := by
   unfold strictComp
   rw [Game.tapeFinder_Pr, StrictCR.Finder.ev, ← Game.prob_toReal]
-  congr 2
-  funext b
-  simp only [StrictCR.IsColl, Claims.Collision, H512_eq_iff, id]
+  -- `congr` here would try to close the predicates' equality by unfolding SHA-512.
+  exact congrArg (fun q => (Game.prob q Fd.g Fd.s).toReal) isColl_sha512
 
 /-- **A table's knowledge finders**: level `ℓ + 1`'s rewinding finder of rep `r`, the pads' and `τ`'s of rep `r`, level
 0's and the self-clash finder. -/
