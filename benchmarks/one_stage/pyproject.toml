@@ -4,9 +4,7 @@
 # lowered), R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.scan`), on toy
 # files, a5_warden's transfer-gate window over a network certifier run's cells, and a5_tp_gates' two TP2 ranks' windows
 # over each other's registered partials, and the proof leg's served shapes (`prove_leg.served`), and served_verdicts'
-# window pick, missing pieces and block record on toy serve dirs (nothing is lowered or proved), and a5_tp.sh's store of
-# each session's circuits and tables on a dry run's toy scratch (`test_a5_tp_store`, through `integrations/vllm/verity_vllm`'s
-# `ops/store_trees.sh`).
+# window pick, missing pieces and block record on toy serve dirs (nothing is lowered or proved).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
