@@ -341,6 +341,13 @@
      "Properties.RemoteAudit.Component.lineHeld_honest",
      "Properties.RemoteAudit.Component.lineHeldAtComponent_honest"
     ]
+   },
+   "Properties.RemoteAudit.Component.PublishedEpsFor": {
+    "fails": "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+    "meets": [
+     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+    ]
    }
   },
   "not": {
@@ -348,7 +355,8 @@
    "Properties.RemoteAudit.Component.LineHeldAtComponent": "a closed statement: the `LineHeldAtComponentBy` form at the deployed verifier (`Properties.RemoteAudit.Component.lineHeldAtComponent_iff`, `Iff.rfl`), whose witnesses are this statement's",
    "Properties.RemoteAudit.Component.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtComponent` reads in its event: an event, no claim",
    "Properties.RemoteAudit.Component.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtComponent_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Component.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtComponentBy` read in their event: an event, no claim"
+   "Properties.RemoteAudit.Component.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtComponentBy` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Component.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Component.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
   }
  },
  "layers": {
@@ -2247,6 +2255,9 @@
    "type_hash": "990c4c47d19df2f440fdc69fd16e30334c6e6657de1b6b6d75b2a5e29e6763d4"
   },
   "Properties.RemoteAudit.Component.publishedEps": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Component.publishedEps_nontrivial": {
    "owner": "@memory-accounting"
   },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {

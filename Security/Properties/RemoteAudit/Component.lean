@@ -34,14 +34,15 @@ windows a draw and the record's coins, append coins, clock floor and events. It 
 that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
 
 Each property is its verifier's instance of a form over the verifier, so that its witnesses can say what the verifier
-contributes. `AcceptIsVerifiedFor chk` is `AcceptIsVerified` at a check `chk`, and `LineHeldAtComponentBy acc ver sum`
-is `LineHeldAtComponent` at an acceptance `acc` in the event, a verdict `ver` the trace reads and a record `sum` the
-line reads: at `RemoteAudit.Protocol.check`, and at `Plays`, `Verified` and `Record.summary`, they are the two
-properties. `LineHeldBy ver sum` is `LineHeld` at a verdict `ver` in the event and the trace and a record `sum`: at
-`Verified` and `Record.summary` it is `LineHeld`. The honest instance the witnesses read is the deployed period's
-parameters with no event yet (`honestParams`, `honestEvidence`) and a node that holds its whole store in memory
-throughout (`honestTrace`), with no outside device (`noOutside`) and nothing but the verifier's messages entering it,
-as its certifiers count (`quietIngress`), on a schedule that runs each pass inside its window (`HonestSchedule`).
+contributes. `AcceptIsVerifiedFor chk` and `PublishedEpsFor chk` are `AcceptIsVerified` and `PublishedEps` at a check
+`chk`, and `LineHeldAtComponentBy acc ver sum` is `LineHeldAtComponent` at an acceptance `acc` in the event, a verdict
+`ver` the trace reads and a record `sum` the line reads: at `RemoteAudit.Protocol.check`, and at `Plays`, `Verified`
+and `Record.summary`, they are the three properties. `LineHeldBy ver sum` is `LineHeld` at a verdict `ver` in the event
+and the trace and a record `sum`: at `Verified` and `Record.summary` it is `LineHeld`. The honest instance the witnesses
+read is the deployed period's parameters with no event yet (`honestParams`, `honestEvidence`) and a node that holds its
+whole store in memory throughout (`honestTrace`), with no outside device (`noOutside`) and nothing but the verifier's
+messages entering it, as its certifiers count (`quietIngress`), on a schedule that runs each pass inside its window
+(`HonestSchedule`).
 -/
 
 namespace Properties.RemoteAudit.Component
@@ -141,6 +142,24 @@ def AcceptIsVerifiedFor (chk : RemoteAudit.Protocol.Params → RemoteAudit.Regis
       RemoteAudit.Shared.run g (RemoteAudit.Session.State.init params reg coins appendCoins notBeforeNs) events =
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
+
+/-- **`PublishedEps` at a check `chk`**: whenever `chk` accepts parameters `p`, a registration `reg` and a log `e` with
+public outputs `pub`, they decode to a session, and either `pub` certifies nothing or its `eps` is the draw term
+`δ + Σ_c s/2^64` at every node of the session's parameters and g whose δ is `RemoteAudit.Protocol.DELTA`.
+`PublishedEps` is it at `RemoteAudit.Protocol.check`. -/
+def PublishedEpsFor (chk : RemoteAudit.Protocol.Params → RemoteAudit.Registration → RemoteAudit.Protocol.Evidence →
+    Core.Outcome RemoteAudit.Protocol.Public Lean.Json) : Prop :=
+  ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
+    (pub : RemoteAudit.Protocol.Public) (prof : Lean.Json),
+    chk p reg e = .accept pub prof →
+    ∃ (params : RemoteAudit.Session.Params) (g : ℕ) (coins appendCoins : Array ByteArray) (notBeforeNs : ℕ)
+      (events : Array RemoteAudit.Session.Event),
+      RemoteAudit.Protocol.sessionOf p e = .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
+      ((pub.eps = ⟨0, 1⟩ ∧ pub.qBytes = 0) ∨
+        ∀ node : Node, node.params = params → node.groupsPerCoin = g →
+          (node.delta : ℚ) = RemoteAudit.Protocol.DELTA →
+          (pub.eps.num : ℚ) / pub.eps.den =
+            (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
 
 /-- The groups the line reads of record `r` on the node, when a verifier records it as `sum node r`: `Record.groups`
 at `sum = Record.summary`. -/

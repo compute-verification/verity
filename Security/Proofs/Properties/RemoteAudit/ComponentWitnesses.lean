@@ -5,15 +5,19 @@ import Proofs.Pouw.Prob
 /-!
 # The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything
 
-Each of `Properties.RemoteAudit.Component`'s two properties, and the memory line `Properties.RemoteAudit.Line.LineHeld`,
-is its form over the verifier at the deployed one (`acceptIsVerified_iff`, `lineHeldAtComponent_iff`,
-`lineHeld_iff`), and each form has its witnesses:
+Each of `Properties.RemoteAudit.Component`'s three properties, and the memory line
+`Properties.RemoteAudit.Line.LineHeld`, is its form over the verifier at the deployed one (`acceptIsVerified_iff`,
+`publishedEps_iff`, `lineHeldAtComponent_iff`, `lineHeld_iff`), and each form has its witnesses:
 
 * **AcceptIsVerified** (`AcceptIsVerifiedFor`). Honest: the deployed period's parameters and log decode to its session
   at one window a draw, which the check leaves undecided until its windows verify (`acceptIsVerified_honest`), and the
   check accepts, publishing `certify`'s outputs, wherever `Shared.run g` accepts the session it decodes
   (`acceptIsVerified_complete`). Nontrivial: a check that accepts everything accepts a log that decodes to no session
   (`acceptIsVerified_nontrivial`).
+* **PublishedEps** (`PublishedEpsFor`), whose antecedent is the same acceptance, so its honest witnesses are
+  `AcceptIsVerified`'s. Nontrivial: a check that accepts every session it decodes, certifying a byte read at eps 0,
+  accepts the deployed period's log, and 0 is below the draw term at every node of positive δ (`drawTerm_pos`,
+  `publishedEps_nontrivial`).
 * **LineHeld** (`LineHeldBy`) and **LineHeldAtComponent** (`LineHeldAtComponentBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
   outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
@@ -45,6 +49,8 @@ open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting
   Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
 
 theorem acceptIsVerified_iff : AcceptIsVerified ↔ AcceptIsVerifiedFor RemoteAudit.Protocol.check := Iff.rfl
+
+theorem publishedEps_iff : PublishedEps ↔ PublishedEpsFor RemoteAudit.Protocol.check := Iff.rfl
 
 theorem lineHeldAtComponent_iff : LineHeldAtComponent ↔ LineHeldAtComponentBy Plays Verified Record.summary :=
   Iff.rfl
@@ -690,5 +696,33 @@ theorem acceptIsVerified_complete {p : RemoteAudit.Protocol.Params} {reg : Remot
   unfold RemoteAudit.Protocol.check
   rw [hrep]
   simp only [ho, hsm]
+
+/-! ## `PublishedEps` at a check that publishes reads at eps 0 -/
+
+/-- A node's draw term is positive at a positive δ. -/
+theorem drawTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
+    0 < (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
+  add_pos_of_pos_of_nonneg hδ (by positivity)
+
+/-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every session it decodes,
+publishing one byte read at eps 0, accepts the deployed period's log, and 0 is below the draw term at every node. -/
+theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun p _ e => match RemoteAudit.Protocol.sessionOf p e with
+    | .ok _ => .accept ⟨⟨0, 1⟩, 1⟩ Lean.Json.null
+    | .error why => .reject why) := by
+  intro h
+  obtain ⟨_, _, hs, -⟩ := (acceptIsVerified_honest Toy.reg).1
+  obtain ⟨params, g, _, _, _, _, -, hd⟩ :=
+    h honestParams Toy.reg honestEvidence ⟨⟨0, 1⟩, 1⟩ .null (by simp [hs])
+  have hpos : (0 : ℚ) < RemoteAudit.Protocol.DELTA := by
+    unfold RemoteAudit.Protocol.DELTA
+    positivity
+  rcases hd with ⟨-, hq⟩ | hn
+  · exact absurd hq (by decide)
+  · have he := hn { Toy.node with params := params, groupsPerCoin := g,
+      delta := ⟨RemoteAudit.Protocol.DELTA, hpos.le⟩ } rfl rfl rfl
+    have hr := drawTerm_pos { Toy.node with params := params, groupsPerCoin := g,
+      delta := ⟨RemoteAudit.Protocol.DELTA, hpos.le⟩ } hpos
+    have h0 := lt_of_lt_of_eq hr he.symm
+    norm_num at h0
 
 end Properties.RemoteAudit.Component
