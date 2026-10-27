@@ -48,7 +48,8 @@ component accepts its own case, and the commitment is `bind` of the components' 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | the network certifier (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| PoUW (its period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
+| PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | the remote bandwidth audit (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
@@ -96,12 +97,12 @@ adds nothing to what is public or kept.
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule (vendored, with its source files named), over the harness's framing
 of the core interface (`verity_difftest.protocol.answer`), and
-each component's own Python (PoUW's `core_check.case`; for sampled proofs, v2's framing over sampled proofs' one-stage
-difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a session's proof; the network
-certifier's period difftest's `reference`, its Python mirror over the certifier's certificates and one-stage's answers, on
-small signed periods from its `build`; the wipe's mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`),
-which that component's own difftest holds its Lean to; for PoUS and the remote bandwidth audit, their Python verifiers'
-answers on small periods of their hooks
+each component's own Python (PoUW's `core_check.case`, and for its period `period_check.case`; for sampled proofs, v2's
+framing over sampled proofs' one-stage difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides
+without a session's proof; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
+certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
+`wipe_protocol_case.answer`, on signed wipes from its `case`), which that component's own difftest holds its Lean to; for
+PoUS and the remote bandwidth audit, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
 `remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
 verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
