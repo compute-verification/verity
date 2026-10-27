@@ -24,7 +24,9 @@ circuit-check's budget, so two checks' circuit-checks never each budget all the 
 20:06Z: two cold ones, each at its six 125-151 GiB targets, filled the 1600 GiB slice); while the check runs, the slot holds a
 research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what the check may still take.
 With every slot busy it retries every POLL_S, reading
-SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
+SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
+CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (vy-nebius-1, 27 Oct: a run sent to a
+pool the node lacked ran unpinned beside its GPU jobs; INF-278). A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
@@ -145,13 +147,42 @@ def lane_pools(slots_file: Path) -> list[Path]:
     return out
 
 
+#: where a Nebius node caps each login session's memory (deploy.toml's 50-vy-job-memory.conf; research.telemetry.cgroup reads the
+#: same files)
+SESSION_DROPINS = Path("/etc/systemd/system/session-.scope.d")
+
+
+def session_cap(dropins: Path | None = None) -> str | None:
+    """The MemoryMax= every login session scope gets here (the last one set, as systemd reads the drop-ins), or None."""
+    cap = None
+    try:
+        files = sorted((dropins or SESSION_DROPINS).glob("*.conf"))
+    except OSError:
+        return None
+    for f in files:
+        try:
+            lines = f.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            k, _, v = line.strip().partition("=")
+            if k.strip() == "MemoryMax":
+                cap = v.strip() or None
+    return None if cap in (None, "infinity") else cap
+
+
 def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
     """CMD in a transient systemd user scope of its own (`scope=1` on its slot), and the scope's unit name. `--scope` registers
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
-    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over)."""
+    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over). On a node that
+    caps each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
+    to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
+    a scoped check (exit 75, 26 Oct)."""
     unit = f"check-{slot}-{run_id}"
-    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--", *cmd], unit
+    cap = session_cap()
+    props = [f"--property=MemoryMax={cap}"] if cap else []
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *props, "--", *cmd], unit
 
 
 def scope_refusal(run=subprocess.run) -> str | None:
@@ -724,6 +755,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     priority, by, wait_max, run_max, pair, rank = options(opts)
     if not cmd:
         sys.exit(USAGE)
+    if not SLOTS.exists() and os.environ.get("CHECK_SLOTS"):
+        pools = ", ".join(p.parent.name for p in lane_pools(SLOTS.parent.parent / "slots")) or "none"
+        print(f"slot: not started: CHECK_SLOTS names {SLOTS}, which this machine doesn't have, and CMD would run on any core "
+              f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --pool "
+              f"NAME`): {pools}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
@@ -745,7 +782,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         pools = lane_pools(SLOTS)
         where = ("a lane check takes a lane pool here: " + ", or ".join(
             f"`CHECK_SLOTS={p} python3 tools/verity/check/slot.py --by LANE -- CMD...`" for p in pools)
-            + " (`research run --pool NAME` sends one by its directory's name, for the pools `research run --help` names)"
+            + " (`research run --pool NAME` sends one by its directory's name, and `check.py --record --on MACHINE --pool NAME` a "
+              "recorded check, for the pools `research run --help` names)"
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
                  f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")

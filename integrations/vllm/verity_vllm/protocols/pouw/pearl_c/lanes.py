@@ -88,12 +88,13 @@ def splits_at(kernel: Any, m16: int, n: int, k: int) -> bool:
 
 def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: bool, whole_fork_stats: bool,
                   whole_tree_sm: bool, lag_ends: bool = False, aside_ends: bool = False,
-                  whole_prefetch_b: bool = False) -> None:
+                  whole_prefetch_b: bool = False, whole_shape_joins: bool = False) -> None:
     """Refuse a whole capture's options, and a pass end's, where `kernel` or the others can't run them.  `whole_defer_a`
     (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A tree within a whole
     capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A scales there beside its
     A commitment; `whole_tree_sm` (with `whole_defer_a`) launches the call's GEMMs beside its A tree with one persistent CTA
-    fewer, leaving the tree's CTA its SM; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;
+    fewer, leaving the tree's CTA its SM; `whole_shape_joins` (with `whole_defer`) joins a call's side steps only before
+    the next call of its shape; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;
     `whole_prefetch_b` (with `whole_defer`) prefetches each call's B̃ into L2 beside its A commitment (`run.Pipeline.prefetch_b`,
     which writes nothing)."""
     if whole_defer_a and not (whole_defer and splits(kernel)):
@@ -101,6 +102,8 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
                          f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
     if whole_fork_stats and not whole_defer:
         raise ValueError(f"{entry}: whole_fork_stats forks A's scales within a deferred whole capture (whole_defer)")
+    if whole_shape_joins and not whole_defer:
+        raise ValueError(f"{entry}: whole_shape_joins joins the side steps of a deferred whole capture (whole_defer)")
     if whole_tree_sm and not (whole_defer_a and hasattr(kernel.run.Pipeline, "beside")):
         raise ValueError(f"{entry}: whole_tree_sm leaves a deferred A tree (whole_defer_a) its SM, on a kernel whose "
                          f"pipeline's GEMMs take `Pipeline.beside`")
@@ -211,11 +214,16 @@ class LaneCalls:
 
     def _stage_a(self, sh: Any, x2: Any, m: int, filled: int) -> None:
         """A call's A words on the current stream: x2's m rows widened to FP32 into ``sh.xa`` and its rows m to `filled` - 1
-        zeroed, in one launch where the kernel has widen_a and x2 is aligned, contiguous BF16; else torch's copy and fill."""
+        zeroed, in one launch where the kernel has widen_a and x2 is aligned, contiguous BF16; else torch's copy and fill.
+        Inside a whole capture forking A's scales (`GraphCalls._widen_later`) that launch is left to the call's `_into`
+        (``_widening``), which runs it beside A's commitment where the commitment reads x2 itself, else first."""
         import torch
         dev, k = self.kernel.dev, x2.shape[-1]
         if (self.device.type == "cuda" and x2.dtype == torch.bfloat16 and x2.is_contiguous() and x2.data_ptr() % 16 == 0
                 and k % 8 == 0 and getattr(dev, "has", lambda _: False)("widen_a")):
+            if self._widen_later(sh):
+                self._widening = (sh, x2.data_ptr(), m, max(filled, m))
+                return
             self.kernel.run.widen_a(dev, x2.data_ptr(), sh.xa.data_ptr(), m, max(filled, m), k, stream=_stream(self.device))
             return
         sh.xa[:m].copy_(x2)

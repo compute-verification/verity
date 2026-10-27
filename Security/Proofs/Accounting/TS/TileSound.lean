@@ -5,8 +5,8 @@ import Proofs.Accounting.TS.HeldSound
 # A tile unit's proof layer with its Definition's checks is sound through its C-Flock sessions (the proof)
 
 `Accounting.SecurityProofs.TS.TileSessionSound`, as `Accounting.SecurityProofs.TS.HeldSessionSound` is proved. The tile
-layer accepts where the checked layer does and flock-verify's known-content check passes, and opens the same rows, so
-`AcceptedLive` is its acceptance's first half. Its unsound event is inside the checked layer's
+layer accepts where the checked layer does and flock-verify's known-content and complete checks pass, and opens the
+same rows, so `AcceptedLive` is its acceptance's first conjunct. Its unsound event is inside the checked layer's
 (`Pouw.RelativeSecurity.prob_mono`), because on every path an accepted proof whose rows meet `CheckedRel` meets
 `TileRel` (`tile_of_checked`): each `ok` wire is at the `ok` row unless the `ok` tie collides
 (`Accounting.TS.Held.tie_ok`), the checked relation's assignment is the opened rows there, and
@@ -45,15 +45,14 @@ end Accounting.TS.Tile
 
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Tile in
 theorem Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS.TileSessionSound := by
-  intro Ω _ S nπ R C K P sess out ok known form dqW rd right δ hCR hLaw hk hS hok _hComplete hKn hK32 hK hT hδ
-    hδ0
+  intro Ω _ S nπ R C K P sess out ok known form dqW rd right δ hCR hLaw hk hS hok hKn hK32 hK hT hδ hδ0
   refine ⟨fun _ _ _ h => h.1, fun w i => ?_⟩
   have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hLaw hk hS hok hδ
     hδ0).2.2.2
   have hsub : ∀ x, (tileLayer sess out ok known (Lanes.dqOf dqW) (fun x w i v u => tileView (rd x w i v u))
       right).Unsound x w i → (checkedLayer sess out ok right).Unsound x w i := by
     intro x hx
-    obtain ⟨⟨hacc, hkn⟩, hnot⟩ := hx
+    obtain ⟨⟨hacc, hkn, -⟩, hnot⟩ := hx
     refine ⟨hacc, fun hc => hnot ?_⟩
     obtain ⟨ks, hm, hks⟩ := hKn x w i
     exact tile_of_checked (sess x w i) (out x w i) ok (known x w i) hkn hm hks (hS x w i)

@@ -27,7 +27,7 @@ from tests.pipeline.test_gpu_lease import fake_lease, released
 from tests.pipeline.test_row import TP_DENSE, _tp_row
 from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine import hooks
-from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline.tp import lease as TPL
 

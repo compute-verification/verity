@@ -454,6 +454,64 @@ def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path):
     assert LA.shared_bundles(store, limit=1) == ["c" * 64]
 
 
+def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
+    """A store index holding ``rows`` (id, tool, state, argv), the newest first, as the store's `attempts` table has them."""
+    import sqlite3
+
+    db = sqlite3.connect(tmp / "index.sqlite")
+    db.execute("CREATE TABLE attempts(id TEXT PRIMARY KEY, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL, manifest_json TEXT)")
+    for i, (rid, tool, state, argv) in enumerate(rows):
+        db.execute("INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)",
+                   (rid, tool, state, f"2026-10-26T{20 - i:02d}:00:00Z", 60.0, json.dumps({"id": rid, "params": {"argv": argv}})))
+    return types.SimpleNamespace(sql=lambda q, a=(): db.execute(q, a).fetchall())
+
+
+#: drive's Lean check as the store records it: `slot.py` runs the check, so its tool is `python3`
+DEFERRED = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "ci", "--", "uv", "run", "--locked", "python",
+            "tools/verity/check/check.py", "--keep-going", "--deferred", "lean-audit"]
+
+
+def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_taken(tmp_path, monkeypatch):
+    """Since checks run under `slot.py` (23 Oct) the store records drive's trains, Lean checks and after-landing runs with tool
+    `python3`, and `shared_bundles` and `gathered_packs` selected only tool `check`: no node took another's built modules or
+    replay verdicts, so most trains' `Security/Proofs` built cold (700 to 1,300 s) and replayed some 2,000 modules again."""
+    index = _attempts(tmp_path, [("r-lean", "python3", "failed", DEFERRED), ("r-other", "python3", "done", ["python3", "x.py"]),
+                                 ("r-lean-tool", "python3", "done", ["python3", "tools/verity/lean/check.py", "--build"]),
+                                 ("r-check", "check", "done", ["check"]), ("r-running", "python3", "running", DEFERRED)])
+    runs = {r: [("lean-audit/lean-artifacts.tar.gz", r[2] * 64, True)] for r in ("r-lean", "r-other", "r-lean-tool", "r-check", "r-running")}
+    store = types.SimpleNamespace(remote=None, index=index, get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
+                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
+    assert LA.shared_bundles(store) == ["l" * 64, "c" * 64]
+    monkeypatch.setattr(CHECK, "attempt_pack", lambda store, rid, d, name="verdicts.tar.gz": d / rid)
+    monkeypatch.setattr(CHECK.VERDICTS, "refusal", lambda pack: None)
+    assert [rid for rid, _ in CHECK.gathered_packs(tmp_path, store)] == ["r-lean", "r-check"]
+
+
+def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_path, monkeypatch):
+    """The bundle was written only when `RESEARCH_RUN_DIR` was set, which `check.env()` never passes to a step: no recorded
+    check ever wrote one. `check.py` now says so with `--bundle`, inside a recorded run alone."""
+    _tree(tmp_path, monkeypatch)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+
+    def put(self, pkgs):
+        self.added = [(f"outputs/p/{'1' * 16}.json", ["e" * 16 + ".olean"])]
+        return 1
+
+    monkeypatch.setattr(LA.LakeArtifacts, "put", put)
+    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, cap=0: dest.write_bytes(b"") or 1)
+    for n, bundle in enumerate((False, True)):
+        shutil.rmtree(tmp_path / "cache", ignore_errors=True)
+        assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                      log=lambda s: None, bundle=bundle) == 1
+        assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
+    out = tmp_path / "steps"
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    step = lambda: dict((name, argv) for name, argv, _ in CHECK.lean_steps(out))["lean-audit"]
+    assert "--bundle" not in step()
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261026-000000-abcd")
+    assert "--bundle" in step()
+
+
 def test_a_package_whose_sources_sit_beside_it_keeps_its_build(tmp_path):
     """`Security/Proofs` has `srcDir = ".."`. Pruning looked for each kept output's source inside the package, found none,
     and deleted the whole kept build on every warm take, so each check's audit rebuilt `Security/Proofs` from scratch."""
@@ -885,8 +943,11 @@ def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch
     signed = []
     remote = types.SimpleNamespace(presign=lambda key, ttl: signed.append((key, ttl)) or f"https://r2/{key}?sig")
     monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote", lambda: remote)
+    monkeypatch.setattr(LA, "shared_bundles", lambda: ["ef" * 32])
     p = LA.url_file(tmp_path, ttl_s=60)
-    assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig"} and signed == [(f"objects/sha256/{'ab' * 32}", 60)]
+    assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig",
+                                         LA.SHARED + "ef" * 32: f"https://r2/objects/sha256/{'ef' * 32}?sig"}
+    assert signed == [(f"objects/sha256/{'ab' * 32}", 60), (f"objects/sha256/{'ef' * 32}", 60)]
     assert p.name == LA.URLS and p.stat().st_mode & 0o777 == 0o600
 
 
@@ -986,7 +1047,27 @@ def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_
     with open(store / "held" / ".lock", "w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         os.utime(store / "held" / ".lock", (1001, 1001))
-        assert LA.prune_records(store, kept=1) == 2
+        assert LA.prune_records(store, kept=1, slots=0) == 2
     assert sorted(p.name for p in store.iterdir()) == ["held", "recent"] and not (away / "linked").exists()
-    assert LA.prune_records(store, kept=1) == 1 and [p.name for p in store.iterdir()] == ["recent"]
-    assert LA.prune_records(tmp_path / "absent") == 0
+    assert LA.prune_records(store, kept=1, slots=0) == 1 and [p.name for p in store.iterdir()] == ["recent"]
+    assert LA.prune_records(tmp_path / "absent", slots=0) == 0
+
+
+def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_and_its_passes(tmp_path):
+    """vy-nebius-cpu-1, 26 Oct: four trees seeded for `build 8` kept their source's old `.who`, and the hourly prune, which
+    kept 3, took two of them, so a waiting run built Mathlib from scratch on the root disk. The slots' own trees stay, the
+    ones a lowered cap left (`build-8`) go first whatever their use, and `passes/` is not a tree."""
+    store = tmp_path / "lean-records"
+    for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes"]):
+        (store / name).mkdir(parents=True)
+        (store / name / ".who").write_text("r")
+        t = 2000 - 100 * (name != "build-8") - i
+        os.utime(store / name / ".who", (t, t))
+    slots = tmp_path / "lean-slots"
+    slots.write_text("check 4\nbuild 8   # one per tree\n")
+    assert LA.build_slots(slots) == 8 and LA.build_slots(tmp_path / "absent") == 0
+    assert LA.prune_records(store, slots=8) == 1
+    assert sorted(p.name for p in store.iterdir()) == sorted([*(f"build-{j}" for j in range(8)), "passes"])
+    slots.write_text("build 2\n")
+    assert LA.prune_records(store, slots=LA.build_slots(slots)) == 5
+    assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "passes"]

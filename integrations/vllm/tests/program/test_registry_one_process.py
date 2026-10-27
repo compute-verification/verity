@@ -23,9 +23,10 @@ from verity.ml.circuits.ops import fp32 as F, gemm as G, mufu as M, prims as C, 
 from verity.ml.definitions.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM
 from verity_vllm.program.frontend import targets as T
 from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.types import Value
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,
         C.HopperE4m3QgmmaDot32, C.ZERO32, G.DotBf16, G.GemmCoordinate, G.Gemm]
-core += [getattr(S, n) for n in S.__all__ if n not in ("BIT", "BF16", "F32", "I32")]
+core += [d for n in S.__all__ if not isinstance(d := getattr(S, n), Value)]
 fp32 = {n: getattr(F, n) for n in F.__all__ if isinstance(getattr(F, n), PrimitiveDefinition)}
 core += fp32.values()
 mufu = [M.MufuEx2Ftz, M.MufuRcpFtz, M.Fa2InvSum, M.MufuSqrtFtz, M.DivFullRcp, M.DivFullScaleA, M.RsqrtApprox, M.MufuTanh]

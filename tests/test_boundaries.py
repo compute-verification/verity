@@ -50,7 +50,7 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
-    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-unit cut, which no verifier reads
+    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
     "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
     # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
@@ -69,8 +69,10 @@ ALLOWED = {
     # 2026-10-12 (memory accounting's remote bandwidth program): the remote audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
+    # 2026-10-26 (memory accounting, the owner's ruling of 25 Oct, 6:47 PM PDT: the real bandwidth audit is over the
+    # P2-encoded weights store): a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.sampled_proofs"},
+                                        "core.protocols.sampled_proofs", "core.protocols.pous"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
@@ -90,11 +92,10 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), the differential test of the Lean against
-#: its Python (``verity_difftest``, which their tests import, on Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is
-#: run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
+#: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
+#: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
-SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "core/difftest", "core/protocols/pous/check")
+SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
@@ -106,6 +107,8 @@ ML_IMPORTS_CORE = {
     "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.core.claims`",
     "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
                                                 "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
+    "ml/windows/tests/test_blocks.py": "holds CMP-92's class circuit to network accounting's check of its servers "
+                                       "(`certifier.blocks.server_blocks`), which refuses its two-server split (NET-92)",
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
@@ -153,6 +156,14 @@ TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
                          "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
+}
+
+#: Modules of ``verity.ml`` that only a prover's or developer's build turns on, which nothing in ``verity/core`` names (an
+#: import, an attribute or a string), each with the module and why a verifier must not read it.
+PROVER_ONLY = {
+    "trace_cache": ("verity/ml/circuits/ops/boolean/trace_cache.py",
+                    "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
+                    "entry for a Definition's gates"),
 }
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
@@ -420,6 +431,20 @@ def test_a_use_past_a_guard_is_found() -> None:
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
     assert _is_test("verity/ml/circuits/tests/test_partition_v2.py") and not _is_test("verity/ml/circuits/partition_v2.py")
+
+
+def test_core_never_names_a_prover_only_module() -> None:
+    """No file of ``verity/core`` (its tests included) names a module of ``PROVER_ONLY``, and each still exists."""
+    offenders = []
+    for path in sorted((SRC / "core").rglob("*.py")):
+        if {".lake", "__pycache__"} & set(path.relative_to(SRC).parts):
+            continue
+        hits = _uses(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)), set(PROVER_ONLY))
+        hits += [(name, line) for name, line, _ in _imports(path) if set(name.split(".")) & set(PROVER_ONLY)]
+        offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line in hits]
+    assert not offenders, "a verifier reads no prover-only module (PROVER_ONLY):\n" + "\n".join(offenders)
+    missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
+    assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
 
 
 def _docstrings(tree: ast.AST) -> set[int]:

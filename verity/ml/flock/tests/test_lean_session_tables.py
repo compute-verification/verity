@@ -83,7 +83,7 @@ def _draw(**kw):
 DRAWS = {
     "a table's part as the session's draw": (_draw(k=2, units=[3, 4]), SUBSET),
     "a Bernoulli draw": (lambda rec: rec.update(unit_draw={"law": "bernoulli", "population": 8, "p": "1/1", "units": list(range(8))}),
-                         "setup: tables: several tables need a subset draw"),
+                         "setup: tables: several tables need a subset or stratified draw"),
     "an odd count": (_draw(k=3, units=[0, 1, 2]), "setup: tables: 3 units do not split into 2 equal tables"),
     "another population": (_draw(population=9), "setup: U: the draw's population is not this registered population"),
 }
