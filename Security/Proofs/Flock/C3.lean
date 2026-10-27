@@ -10,6 +10,8 @@ import Proofs.Flock.C3.Compose.RsFacts
 import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
+import Proofs.Flock.C3.Compose.LaterHeldW
+import Proofs.Flock.C3.Compose.LaterHolo
 import Batteries.Recycling.MonadSatisfying.Array
 import Proofs.Flock.Recursive.HoloSchedCheck
 import Proofs.Flock.Recursive.ValueChecked
@@ -31,6 +33,7 @@ import Proofs.Flock.C3.Sparse.SrcSessions
 import Proofs.Flock.C3.Sparse.MsgsLayers
 import Proofs.Flock.C3.Sparse.PubTie
 import Proofs.Flock.C3.Sparse.PubLift
+import Proofs.Flock.C3.Sparse.HeldStages
 import Proofs.Flock.C3.Sparse.PubChecked
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
@@ -72,6 +75,7 @@ import Proofs.Flock.C3.Opening.SessionPartsL
 import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
+import Proofs.Flock.C3.Opening.ClaimTie
 import Proofs.Flock.C3.Opening.SrcLayer
 import Proofs.Flock.C3.Opening.SrcCover
 import Proofs.Flock.C3.RegLevels.SrcTie
@@ -97,7 +101,14 @@ import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.TopRead
+import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.Sparse.SessionReg
+import Proofs.Flock.C3.Sparse.SessionZero
+import Proofs.Flock.C3.Sparse.HCols
+import Proofs.Flock.C3.RegLevels.LgCoins
+import Proofs.Flock.C3.RegLevels.RRounds
+import Proofs.Flock.C3.RegLevels.LgHeld
+import Proofs.Flock.C3.Reps.HAlgRows
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces

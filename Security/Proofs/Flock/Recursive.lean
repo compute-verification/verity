@@ -31,6 +31,7 @@ import Proofs.Flock.Recursive.Sessions
 import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.OuterSessionZK
 import Proofs.Flock.Recursive.FirewallRun
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
@@ -58,6 +59,7 @@ import Proofs.Flock.Recursive.ValueBridge
 import Proofs.Flock.Recursive.LeafFinder
 import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.Recursive.ValueInner
+import Proofs.Flock.Recursive.PartTie
 import Proofs.Flock.C3.RegLevels.VRows
 import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.Recursive.HPortTie
