@@ -1,6 +1,7 @@
 """`verity.ml.circuits.ops.boolean.gemm`: the Boolean BF16 steps, cast, dot and coordinate agree with their word Definitions (`word_of`) on
 sampled and special words and on every hardware capture the word Definitions replay, carry exactly their builders' live ANDs,
-and are pinned by gate count and program digest."""
+and are pinned by gate count and program digest.  The k16 step without its finite stand-ins (`HopperBF16WgmmaDot16_v3`, and
+`fp.tc_dot16`'s ``stand_ins=False`` at two groups) is the step with them on every special class of each input."""
 from __future__ import annotations
 
 import gzip
@@ -22,14 +23,17 @@ from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
+from verity.ml.circuits.silicon import fp
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 AMPERE_K64 = bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE)
 HOPPER_K64 = bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER)
+HOPPER_V3_K64 = bind(BG.GemmCoordinate, K=64, DOT=BG.HopperBF16WgmmaDot16V3)
 DOTS = [bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=48, **BG.GEMM_HOPPER)]
-STEPS = [bind(BG.AmpereBF16TcDot16), bind(BG.HopperBF16WgmmaDot16)]
-GEMMS = [bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER)]
+STEPS = [bind(BG.AmpereBF16TcDot16), bind(BG.HopperBF16WgmmaDot16), bind(BG.HopperBF16WgmmaDot16V3)]
+GEMMS = [bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
+         bind(BG.Gemm, K=32, N=3, DOT=BG.HopperBF16WgmmaDot16V3)]
 FP8_STEPS = [bind(BG.HopperE4m3QgmmaDot32), bind(BG.BlackwellE4m3QmmaDot32), bind(BG.HopperE4m3MmaV2Dot32)]
 FP8_COORDS = [bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
               bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3_MMAV2)]
@@ -49,6 +53,9 @@ PINS = {
     "F2fpBf16_v2": (66, 98, 15, "dc436e6bda068001621acaa798474d37bd955392fd5ae065c6ca6604141cef3a9cff1cfa08fdd43a8d3c3d2989e9acd69285c46e8b7333af6fe78fda5cb34105"),
     "AmpereBF16TcDot16_v3": (8260, 15717, 860, "e679c3424c6b0e1109eb340eb73b7558f1d5c221eaced8fb7b5db6f67c6b455d4474d90042e4ab83d1c048d2bbd635060e12a385a7fcd09a7a08f748bb2ab984"),
     "HopperBF16WgmmaDot16_v2": (7872, 15049, 761, "52c6a2d6ff6a794455edbdfe52486b0c462623883ba079daf68804655826747179940195147309470bef9823bdb1b634849cc849c96ee032f3c266aabbf40aee"),
+    "HopperBF16WgmmaDot16_v3": (6887, 14109, 728, "324f525bdf51797bbcded8b90809e5987349bf7894fa3c10cd74dd574a5ba4fecbc72b36e10736cd9f5de3d0a750636ad1c3b2aea1a0775e2da76417a0b98e15"),
+    HOPPER_V3_K64.id: (27614, 56534, 2927, "bd210a769d585a5e7458e29430fc3727e113c162bb6431fe5580ed2dc91d12c3fc1fa384bca6f59cf6f510a0b35b77d43bd30fcd8e6cb92e0b361ed8bc2959b5"),
+    GEMMS[2].id: (41520, 84948, 4413, "588986891c25204d57c4dfba8b9d35429a3422864f3f1c4953811deca7e448177d7ef69e7703d27f41865cc85160bc7931978b6b8940ad617a3e5559431b2761"),
     AMPERE_K64.id: (33106, 62966, 3455, "fa33a65f8a8bb6490c313f48ead1ec9429912630f4d8805706723238fc6abe52770f3be0e6530e4d4e5bc6391c79c514e47b54b58b3760475cd7567c0d179e3a"),
     HOPPER_K64.id: (31554, 60294, 3059, "d4d47a68284c26cc2768e6d75f6b7fb13bec5c66e96d3222a23983bbf71f0915c88c102d3fb23382209a745fcd3f3a6c4dd4b97e7f1d620fc2bf1182e4d448df"),
     DOTS[0].id: (33040, 62868, 3440, "58ea76fb86ac8d3886074f8063e0671e833c8ddd7123cb4a093408dcf8b718e0965d3753d7b26e67825ff7d6d8179131af090d231134c4fc5a0c26dea93d133d"),
@@ -79,7 +86,7 @@ PINS = {
     PVROWS[2].id: (1011840, 1932544, 98368, "52c7bce9fe1c63421d9a49037aa7585fb5e4a2c5fe93e1744ebdcfb28250da30ce33367174aa2489d4a4a660213c9466185d2a32d5c1998302a6f8aba3f3b55a"),
     PVROWPAD.id: (1046175, 2002233, 99424, "26bdff43d4ddbf9f867054015d45e79557aad78f57346b82e5b48785f517360c54af59f1a89268d75dcd5834f298bb45b0dd54c076944e43cf58d7c4d3610ee7"),
 }
-TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
+TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, HOPPER_V3_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
            *(t for t, _ in FP4), *S8, *PADS, ROWS, RESIDUAL, *PVROWS, PVROWPAD]
 
 
@@ -134,9 +141,10 @@ def test_the_s8_composites_bind_their_largest_k_to_its_recorded_digest(spec) -> 
     assert (spec.gates, codec.program_digest(codec.encode_program(prog))) == S8_EDGE[spec]
 
 
-@pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,
-                               BG.HopperE4m3MmaV2Dot32, BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32, BG.BlackwellNvf4OmmaDot64,
-                               BG.BlackwellMxf4OmmaDot64, BG.BlackwellS8ImmaDot32, BG.S32ToF32Rn], ids=lambda d: d.name)
+@pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperBF16WgmmaDot16V3,
+                               BG.HopperE4m3QgmmaDot32, BG.HopperE4m3MmaV2Dot32, BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32,
+                               BG.BlackwellNvf4OmmaDot64, BG.BlackwellMxf4OmmaDot64, BG.BlackwellS8ImmaDot32, BG.S32ToF32Rn],
+                         ids=lambda d: f"{d.name}_v{d.version}")
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`),
     but for its commits (`Circuit.commit`, a row with B = 1 and no gate; `AND` folds every other constant operand)."""
@@ -170,6 +178,93 @@ def test_the_cast_agrees_with_f2fp_v1() -> None:
 def test_the_steps_agree_with_their_word_steps(target) -> None:
     params, _ = E.batch.signature_of(TR.word_of(target))
     _agree(target, K.sample_tc(np.random.default_rng(12), 20_000, params))
+
+
+#: one word of each special class in both signs: NaNs (quiet, signalling, all-ones payload), the infinities, the zeros, the least
+#: and largest subnormals, and the largest finite word (the last two)
+SPECIAL_BF16 = np.array([0x7FC0, 0x7F81, 0x7FFF, 0xFFC0, 0xFF81, 0x7F80, 0xFF80, 0x0000, 0x8000, 0x0001, 0x007F, 0x8001,
+                         0x807F, 0x7F7F, 0xFF7F], np.uint16)
+SPECIAL_F32 = np.array([0x7FC00000, 0x7F800001, 0x7FFFFFFF, 0xFFC00000, 0xFF800001, 0x7F800000, 0xFF800000, 0x00000000,
+                        0x80000000, 0x00000001, 0x007FFFFF, 0x80000001, 0x807FFFFF, 0x7F7FFFFF, 0xFF7FFFFF], np.uint32)
+#: `fp.tc_dot16`'s ``stand_ins=False`` at the Ampere step's two groups (8, 8), where an earlier group's overflow meets a later
+#: group's non-finite operand; not registered, it computes `AmpereBF16TcDot16_v3`'s function or this test fails
+AMPERE_RAW = TR.definition("AmpereBF16TcDot16Raw", 1,
+                           lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), stand_ins=False),
+                           (("acc", BG.F32), ("a", BG.A16), ("b", BG.A16)), BG.F32, word=P.AmpereBF16TcDot16, register=False)
+
+
+def _finite_words(rng, shape, bits: int) -> np.ndarray:
+    """Finite words of ``bits`` (16 or 32): a random sign and mantissa, the exponent uniform over the finite ones for half the
+    words and within 8 of the bias for the rest."""
+    man = 7 if bits == 16 else 23
+    e = np.where(rng.random(shape) < 0.5, rng.integers(0, 255, shape), rng.integers(119, 136, shape)).astype(np.uint64)
+    w = (rng.integers(0, 2, shape).astype(np.uint64) << np.uint64(bits - 1)) | (e << np.uint64(man)) \
+        | rng.integers(0, 1 << man, shape).astype(np.uint64)
+    return w.astype(np.uint16 if bits == 16 else np.uint32)
+
+
+def _backgrounds(rng, n: int, n_max: int) -> list[np.ndarray]:
+    """[acc, a, b]: n rows of finite words, then n_max rows of the largest finite words in random signs, whose products
+    overflow every group (an infinity from finite operands)."""
+    return [np.concatenate([_finite_words(rng, (n, *s), bits), rng.choice(sp[-2:], (n_max, *s))])
+            for s, bits, sp in (((), 32, SPECIAL_F32), ((16,), 16, SPECIAL_BF16), ((16,), 16, SPECIAL_BF16))]
+
+
+def _special_cases(rng) -> list[np.ndarray]:
+    """[acc, a, b] of the stand-in equivalence: each special word at each of the 33 inputs over 16 finite and 4 overflowing
+    rows; every pair of special words at one lane (a[i], b[i]) for three lanes, at two lanes of a in different Ampere groups,
+    and at the accumulator and a lane, each over 4 finite and 2 overflowing rows; then 25,600 rows whose words are each
+    special at a rate of 0, 2, 10 or 30%, and otherwise uniform or finite."""
+    rows: list[list[np.ndarray]] = []
+    for s in SPECIAL_F32:
+        acc, a, b = _backgrounds(rng, 16, 4)
+        rows.append([np.full_like(acc, s), a, b])
+    for pos in range(32):
+        for s in SPECIAL_BF16:
+            acc, a, b = _backgrounds(rng, 16, 4)
+            (a if pos < 16 else b)[:, pos % 16] = s
+            rows.append([acc, a, b])
+    for s in SPECIAL_BF16:
+        for t in SPECIAL_BF16:
+            for i, j in ((0, 16), (9, 25), (15, 31), (2, 13)):
+                acc, a, b = _backgrounds(rng, 4, 2)
+                ab = np.concatenate([a, b], axis=1)
+                ab[:, i], ab[:, j] = s, t
+                rows.append([acc, ab[:, :16], ab[:, 16:]])
+    for s in SPECIAL_F32:
+        for t in SPECIAL_BF16:
+            acc, a, b = _backgrounds(rng, 4, 2)
+            acc[:], b[:, 5] = s, t
+            rows.append([acc, a, b])
+    n = 25_600
+    rate = np.repeat([0.0, 0.02, 0.1, 0.3], n // 4)
+    drawn = []
+    for shape, bits, sp in (((n,), 32, SPECIAL_F32), ((n, 16), 16, SPECIAL_BF16), ((n, 16), 16, SPECIAL_BF16)):
+        uniform = rng.integers(0, 1 << bits, shape, dtype=np.uint64).astype(sp.dtype)
+        w = np.where(rng.random(shape) < 0.5, uniform, _finite_words(rng, shape, bits))
+        drawn.append(np.where(rng.random(shape) < rate.reshape(-1, *([1] * (len(shape) - 1))), rng.choice(sp, shape), w))
+    rows.append(drawn)
+    return [np.concatenate([r[k] for r in rows]) for k in range(3)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("stand_in,raw", [(STEPS[1], STEPS[2]), (STEPS[0], bind(AMPERE_RAW))],
+                         ids=["HopperBF16WgmmaDot16_v3", "tc_dot16-raw-at-groups-8-8"])
+def test_the_step_without_its_stand_ins_is_the_step_on_every_special_class(stand_in, raw) -> None:
+    """`fp.tc_dot16`'s argument that the finite stand-ins never reach the output, on words: without them the step equals the
+    step with them, and its word step, on every special class of each input (`_special_cases`).  The cases reach each branch
+    of the special select: the NaN, both infinities, an infinity from finite operands alone, and finite outputs."""
+    acc, a, b = _special_cases(np.random.default_rng(41))
+    got = BS.evaluate_words(raw, acc, a, b).astype(np.uint64)
+    want = BS.evaluate_words(stand_in, acc, a, b).astype(np.uint64)
+    bad = np.flatnonzero(got.reshape(len(acc)) != want.reshape(len(acc)))
+    assert not bad.size, f"{raw.id}: {bad.size} of {len(acc)} differ from {stand_in.id}, first {bad[:5]}"
+    _agree(raw, [acc, a, b])
+    out = got.reshape(len(acc)).astype(np.uint32)
+    finite = ((acc & 0x7F800000) != 0x7F800000) & ((a & 0x7F80) != 0x7F80).all(1) & ((b & 0x7F80) != 0x7F80).all(1)
+    inf = (out & 0x7FFFFFFF) == 0x7F800000
+    assert {0x7FFFFFFF, 0x7F800000, 0xFF800000} <= set(out.tolist())
+    assert (finite & inf).sum() > 5000 and (~inf & (out != 0x7FFFFFFF)).sum() > 3000
 
 
 def _finite_e4m3(rng, inputs: list[np.ndarray]) -> list[np.ndarray]:
@@ -374,7 +469,7 @@ def test_the_dot_agrees_with_dot_bf16_v2(target) -> None:
     _agree(target, K.sample_tc(np.random.default_rng(15), 4000, params))
 
 
-@pytest.mark.parametrize("target", [AMPERE_K64, HOPPER_K64], ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [AMPERE_K64, HOPPER_K64, HOPPER_V3_K64], ids=lambda t: t.id)
 def test_the_coordinate_agrees_with_gemm_coordinate_v2(target) -> None:
     word = TR.word_of(target)
     assert word.id == f"GemmCoordinate_v2{{K=64,DOT={TR.word_of(target.bindings['DOT']).id}}}"
@@ -426,17 +521,18 @@ def test_the_ampere_step_replays_the_a100_and_rtx4090_special_value_records() ->
         _replay_steps(STEPS[0], doc["cases"] + doc["pos"])
 
 
-def test_the_hopper_step_replays_the_h100_records() -> None:
+@pytest.mark.parametrize("step", STEPS[1:], ids=lambda t: t.id)
+def test_the_hopper_step_replays_the_h100_records(step) -> None:
     with gzip.open(FIXTURES / "tc-hopper-2026-09-07" / "special.reduced.json.gz", "rt") as f:
         doc = json.load(f)
-    _replay_steps(STEPS[1], [c for cases in doc["families"].values() for c in cases])
+    _replay_steps(step, [c for cases in doc["families"].values() for c in cases])
     with gzip.open(FIXTURES / "tc-hopper-wgmma-bf16-2026-09-26" / "records.json.gz", "rt") as f:
         records = json.load(f)["records"]
     by_steps: dict[int, list] = {}
     for r in records:
         by_steps.setdefault(r["steps"], []).append(r)
     for cases in by_steps.values():
-        _replay_steps(STEPS[1], cases)
+        _replay_steps(step, cases)
 
 
 def test_the_coordinate_replays_the_rtx4090_gemm_captures() -> None:
