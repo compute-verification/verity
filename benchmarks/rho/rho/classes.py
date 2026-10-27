@@ -17,10 +17,10 @@ be chained, the layers whose inputs aren't cheap) the count is divided by that s
 conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
 
 **Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
-(`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion layer's per-block cap
-`q_T(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which ρ is
-normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×` (`data/exclusion.toml`), with
-`s_×` and `Units.gates_per_flop` from one source (`Structure.check`).
+(`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion bound's per-block cap
+`q_T(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which the
+overhead is normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×`
+(`data/exclusion.toml`), with `s_×` and `Units.gates_per_flop` from one source (`Structure.check`).
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def per_block(a: Allowance, units: Units) -> Cap:
 
 def weight_per_gate(p: Profile, units: Units) -> float:
     """`w = κ / 2G`, the reference's counted weight per gate (its counted products, `κ/2` a FLOP, over its gates): what
-    ρ is normalized by. The most a gate holds under a bound is `Structure.weight`."""
+    the overhead is normalized by. The most a gate holds under a bound is `Structure.weight`."""
     return p.kappa / (2 * units.gates_per_flop)
 
 

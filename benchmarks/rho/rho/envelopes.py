@@ -1,12 +1,15 @@
-"""Layer 2, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the working draft's §8).
+"""Protocol soundness, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the
+working draft's §8).
 
-An envelope `E_i` narrows the prior if its verifier accepts, except with probability `δ_i(S)` per serving block. Each
-one here carries its parameters, the slack it leaves (shares of capacity by route, the uncertified gates `U` no
-inference block constrains) and its `delta`, split into the coins' draws and the cryptography's advantage:
+An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
+summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
+uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' draws and the
+cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (the host CPUs, known compute running no declared work), `gap` (its floor credit `residual` and the clock above the
-  credited one; with `undecl`, the audited residual `r̂`) and `skip` (its deficit `ε_W` and the certificate slack `ε'`).
+  (monitored capacity running no certified declared work: the host CPUs, the GPUs outside the floor credit `residual`
+  and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
+  certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
@@ -48,9 +51,9 @@ from rho.hardware import Fleet, Horizon, Location, Units
 from rho.params import Registry
 from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
 
-#: the routes of the uncertified gates, the prefix of each slack term's key (the working draft's §8: `ε_undecl`,
-#: `ε_gap`, `ε_skip`, `ε_break`, and Lean's `χ` as `exfil`)
-ROUTES = ("undecl", "gap", "skip", "break", "exfil")
+#: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
+#: Lean's `χ` as `exfil`)
+ROUTES = ("undecl", "skip", "break", "exfil")
 
 
 @dataclass(frozen=True)
@@ -62,7 +65,7 @@ class Policy:
     gamma: float
     k: float
     #: the inference overhead: the honest inference workload's circuit under this partition over its unpartitioned
-    #: size, a factor beside the training overhead ρ. NaN where it isn't modeled (its source says so).
+    #: size, a factor beside the training overhead. NaN where it isn't modeled (its source says so).
     inference_overhead: float = math.nan
 
 
@@ -87,8 +90,8 @@ class Context:
 
 @dataclass(frozen=True)
 class Delta:
-    """`Σ_i Σ_S δ_i(S)`, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the devices' logged coins (LMS), is
-    named beside it and not bounded here."""
+    """`Σ_a δ_a`, over envelopes and serving blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
+    devices' logged coins (LMS), is named beside it and not bounded here."""
 
     by: Mapping[str, tuple[float, float]]
 
@@ -132,8 +135,8 @@ class Pouw:
 
     def slack(self, loc: Location) -> dict[str, float]:
         r = self.audited(loc)
-        return {"undecl.host": self.host * loc.host_phi / loc.phi, "gap.floor": self.residual,
-                "gap.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
+        return {"undecl.host": self.host * loc.host_phi / loc.phi, "undecl.gpu": self.residual,
+                "undecl.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
 
     def delta(self, ctx: Context) -> tuple[float, float]:
         return self.window_delta_coin / self.eps_agg, self.window_delta_crypto / self.eps_agg
@@ -330,8 +333,8 @@ class Certifier:
         return self.outputs * self.id_bits + math.ceil(math.log2(self.outputs + 1))
 
     def period_bits(self, buckets: float) -> tuple[float, float]:
-        """`(ingress_bits, egress_bits)` of one server over `buckets` buckets (a period's `m T`), at the most requests it
-        anchors, `N = lanes ⌈buckets / (D + 1)⌉`."""
+        """`(ingress_bits, egress_bits)` of one server over `buckets` buckets (a period's `m T`), at the most requests
+        it anchors, `N = lanes ⌈buckets / (D + 1)⌉`."""
         n = self.lanes * math.ceil(buckets / (self.hold + 1))
         return n * self.request_in, n * self.request_out
 
@@ -385,7 +388,7 @@ def _dark(ctx: Context) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class Unmonitored:
-    """No protocol: every serving block is unconstrained (`g = 1`, `ρ = μ`)."""
+    """No protocol: every serving block is unconstrained (`g = 1`, overhead `μ`)."""
 
     name: str
 
@@ -410,7 +413,7 @@ class Remote:
     #: premises, and the registration
     CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.BaselineRegistered",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
-    ABIDING = ("undecl.host", "gap.floor", "gap.clock", "skip.pouw")
+    ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
     def envelopes(self) -> dict[str, Any]:
         return {"pouw": self.pouw, "detection": self.detection}

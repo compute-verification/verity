@@ -40,7 +40,7 @@ def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alon
 def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound():
     """Refuting E1's activation rate at every block size takes fanout-priced and fanout-split (which cite it) out of
     the lower bound: onsite H200's is then exactly the lower bound without them, and both are still reported alone,
-    tagged refuted, at the ρ they had."""
+    tagged refuted, at the overhead they had."""
     name, premise = "reference-onsite-h200", "premise.e1-activation-rate"
     base = evaluate_named(REG, name).families[0]
     refuted = REG.override({f"{premise}.standing": "refuted", f"{premise}.beyond": "refuted"})
@@ -147,10 +147,10 @@ def test_rho_and_the_time_to_the_target_do_not_depend_on_gates_per_flop(name):
 
 
 def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise():
-    """`structure.reference` is `s_×` at the reference's gates per counted product (`2G/κ`, so `u = w` and ρ is what it
-    was), and every bound that counts uncertified or dark gates there cites `draft:no-straddle`. The elementary cap
-    (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower bound down by
-    `2G/κ` (inference is 0.0% of it), and is what `upto("conditional")` falls back to."""
+    """`structure.reference` is `s_×` at the reference's gates per counted product (`2G/κ`, so `u = w` and the overhead
+    is what it was), and every bound that counts uncertified or dark gates there cites `draft:no-straddle`. The
+    elementary cap (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower
+    bound down by `2G/κ` (inference is 0.0% of it), and is what `upto("conditional")` falls back to."""
     r, e = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-remote-h200-elementary")
     st, f = r.scenario.structure, r.families[0]
     w = classes.weight_per_gate(f.profile, r.scenario.context.units)
@@ -163,9 +163,9 @@ def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise(
 
 
 def test_the_comparator_is_the_unmonitored_adversary_at_its_mfu():
-    """`Result.unmonitored` is `μ / MFU`, the best construction's ρ with no protocol at all; a lower bound below it is
-    vacuous, as remote's is under PoUW as deployed on the H200 and isn't with the floor credit at the card table's clock
-    (2.75 against 2.5), or onsite."""
+    """`Result.unmonitored` is `μ / MFU`, the best construction's overhead with no protocol at all; a lower bound below
+    it is vacuous, as remote's is under PoUW as deployed on the H200 and isn't with the floor credit at the card table's
+    clock (2.75 against 2.5), or onsite."""
     u = evaluate_named(REG, "unmonitored-h200-kimi")
     assert u.unmonitored == pytest.approx(u.attack, rel=1e-12)
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")

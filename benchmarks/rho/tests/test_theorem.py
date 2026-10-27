@@ -23,7 +23,7 @@ def block(*cuts, layout=None, gates=1000.0, name="s", mfu=1.0):
 
 
 def test_a_serving_block_contributes_its_least_cut_and_never_more_than_its_capacity():
-    a = Cut("a", (Blocks("x", Budget(200, 10), 4),), {"gap.floor": 200})
+    a = Cut("a", (Blocks("x", Budget(200, 10), 4),), {"undecl.gpu": 200})
     b = Cut("b", (Blocks("y", Budget(1000, 50), 1),))
     s = local(block(a, b), lambda bud: bud.inputs, W)
     # a: 4 blocks of min(10, w·200 = 100) plus w·200 uncertified = 140; b: min(50, 500) = 50; capacity w·1000 = 500
@@ -35,9 +35,9 @@ def test_the_local_minimum_beats_the_minimum_of_global_bounds_when_blocks_bind_d
     """Two serving blocks: the first's inference cut binds (few prompt bits), the second's serving cut (a small `k_S`).
     The local minimum takes each one's own least cut; the aggregate-only bound must pick one cut for both."""
     cap = lambda bud: bud.inputs
-    one = block(Cut("inference", (Blocks("inference", Budget(100, 10), 9),), {"gap.floor": 100}),
+    one = block(Cut("inference", (Blocks("inference", Budget(100, 10), 9),), {"undecl.gpu": 100}),
                 Cut("serving", (Blocks("serving", Budget(1000, 500), 1),)), name="one")
-    two = block(Cut("inference", (Blocks("inference", Budget(100, 90), 9),), {"gap.floor": 100}),
+    two = block(Cut("inference", (Blocks("inference", Budget(100, 90), 9),), {"undecl.gpu": 100}),
                 Cut("serving", (Blocks("serving", Budget(1000, 200), 1),)), name="two")
     part = Partition((one, two), 0.0)
     w = 1.0
@@ -53,7 +53,7 @@ def test_the_local_minimum_beats_the_minimum_of_global_bounds_when_blocks_bind_d
 
 def test_the_aggregate_bound_is_never_tighter_than_the_local_one():
     cap = lambda bud: bud.inputs ** 1.5
-    blocks = tuple(block(Cut("inference", (Blocks("inference", Budget(100, k), 9),), {"gap.floor": 50}),
+    blocks = tuple(block(Cut("inference", (Blocks("inference", Budget(100, k), 9),), {"undecl.gpu": 50}),
                          Cut("serving", (Blocks("serving", Budget(1000, 40 * k), 1),)), name=f"b{k}")
                    for k in (1, 3, 10, 30))
     part = Partition(blocks, 0.01)
@@ -62,7 +62,7 @@ def test_the_aggregate_bound_is_never_tighter_than_the_local_one():
 
 def test_an_attack_takes_the_layout_at_its_mfu_and_ignores_the_cuts():
     cut = Cut("tight", (Blocks("x", Budget(1000, 1), 1),))
-    layout = Cut("layout", (Blocks("x", Budget(1000, 1), 1),), {"gap.floor": 200})
+    layout = Cut("layout", (Blocks("x", Budget(1000, 1), 1),), {"undecl.gpu": 200})
     s = local(block(cut, layout=layout), lambda bud: 0.0, W, side="attack")
     assert s.cut == "layout" and math.isclose(s.value, 0.2)
     assert local(block(cut, mfu=0.4), lambda bud: 0.0, W, side="attack").value == 0.4
@@ -87,10 +87,10 @@ def test_a_bound_holds_uncertified_and_dark_gates_and_every_block_at_u_and_an_at
     block holds more than `u c`, and a serving block at most `u/w` of the reference's weight in it. An attack is a
     construction of the reference's operations, so `u` doesn't move it."""
     w, u = 0.5, 2.0
-    part = Partition((block(Cut("c", (Blocks("x", Budget(200, 1e9), 1),), {"gap.floor": 100}), mfu=0.4),), 0.01)
+    part = Partition((block(Cut("c", (Blocks("x", Budget(200, 1e9), 1),), {"undecl.gpu": 100}), mfu=0.4),), 0.01)
     s = overhead(part, lambda b: b.inputs, w, u=u)
-    # x: min(1e9, u·200) / (w·1000) = 0.8; gap.floor: u·100 / 500 = 0.4; dark: (u/w)·0.01
-    assert dict(s.terms) == pytest.approx({"x": 0.8, "gap.floor": 0.4}) and s.dark == pytest.approx(0.04)
+    # x: min(1e9, u·200) / (w·1000) = 0.8; undecl.gpu: u·100 / 500 = 0.4; dark: (u/w)·0.01
+    assert dict(s.terms) == pytest.approx({"x": 0.8, "undecl.gpu": 0.4}) and s.dark == pytest.approx(0.04)
     assert s.rho == pytest.approx(1 / (0.04 + 0.99 * 1.2))
     assert local(block(), lambda b: math.inf, w, u=u).value == pytest.approx(u / w)
     assert overhead(part, lambda b: 0.0, w, side="attack", u=u) == overhead(part, lambda b: 0.0, w, side="attack")

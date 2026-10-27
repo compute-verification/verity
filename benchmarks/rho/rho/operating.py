@@ -1,9 +1,10 @@
-"""Operating points: what ρ means in time, at the work and exfiltration references (`work.*`, `exfil.*` in the registry).
+"""Operating points: what the overhead means in time, at the work and exfiltration references (`work.*`, `exfil.*` in
+the registry).
 
 * **Work** (`work.<name>.flops`, reference-algorithm FLOPs, `T_0` gates through `hardware.Units`): the inventory does it
-  in at least `ρ T_0 / Φ_total` seconds at the overhead's lower bound, and in that at the best known attack's ρ
-  (`Scenario.seconds`, the idealized normalization); the reference itself in `T_0 / (MFU₀ Φ_total)` (`unencumbered`, at
-  the training MFU), and the dark leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
+  in at least the overhead times `T_0 / Φ_total` seconds at the overhead's lower bound, and in that at the best known
+  attack's (`Scenario.seconds`, the idealized normalization); the reference itself in `T_0 / (MFU₀ Φ_total)`
+  (`unencumbered`, at the training MFU), and the dark leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark leaves only through
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the declared circuit's output, fixed by its registered inputs), from one location or from every

@@ -13,7 +13,7 @@ NAMES = REG.names("scenario")
 
 
 def synthetic(monkeypatch, rho):
-    """A registry of four ranged parameters `a`, `b`, `c`, `d` (each 1.0 today), whose ρ is `rho(values)`."""
+    """A registry of four ranged parameters `a`, `b`, `c`, `d` (each 1.0 today), whose overhead is `rho(values)`."""
     reg = Registry({k: Param(k, 1.0, low=lo, high=hi) for k, lo, hi in
                     (("a", 0.1, 10.0), ("b", 0.5, 2.0), ("c", 0.0, 2.0), ("d", 0.5, 2.0))})
 
@@ -122,8 +122,8 @@ def test_threshold_on_a_scenario_lands_where_the_scenario_crosses(name):
         x = analysis.threshold(REG, name, s.key, target, s.low, s.high, rtol=1e-6)
         assert x is not None
         if analysis.at(REG, name, {s.key: x}) != pytest.approx(target, rel=1e-3):
-            # ρ jumps over the target at x (a premise share reaching its end, as `classes.expensive_share` at the last
-            # layer): the crossing is the jump
+            # the overhead jumps over the target at x (a premise share reaching its end, as `classes.expensive_share` at
+            # the last layer): the crossing is the jump
             d = 1e-5 * (x if s.low > 0 else max(abs(s.low), abs(s.high)))
             near = [analysis.at(REG, name, {s.key: v}) for v in (x - d, x + d)]
             assert min(near) <= target <= max(near), (s.key, x, near)
@@ -168,7 +168,8 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", NAMES[0]])
     run.main()
     text = capsys.readouterr().out
-    assert text.startswith("# ρ") and "## Where ρ falls below target" in text and "**Corner:**" in text
+    assert text.startswith("# The overhead") and "## Where the overhead falls below target" in text
+    assert "**Corner:**" in text
     assert (tmp_path / "rho.md").read_text() == text
     record = json.loads((tmp_path / "rho.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
     assert set(record["scenarios"]) == {NAMES[0]}
@@ -176,7 +177,8 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     assert drawn == [(tmp_path / "figures", [10.0])]
 
 
-def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch, capsys):
+def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
+capsys):
     """One number a scenario, the lower bound, flagged vacuous against `μ / MFU`, with the inference overhead beside
     it (not modeled); the best known attack only in the attacks table, never as an interval's end."""
     monkeypatch.setattr(sys, "path", list(sys.path))
@@ -197,7 +199,7 @@ def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_o
     attack = record["attack"]
     assert f"| reference-remote-h200 | {attack['argument']} | {attack['family']} | {attack['status']} | " in attacks
     assert run.fmt(attack["rho"]) not in row.split("|")[2]
-    assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
+    assert "With no protocol the adversary sits at **overhead 2.5**" in text and "**vacuous**" in text
     assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
     assert record["overhead"] < record["unmonitored"] <= attack["rho"]
     assert record["inference_overhead"]["value"] is None and record["inference_overhead"]["source"].startswith(

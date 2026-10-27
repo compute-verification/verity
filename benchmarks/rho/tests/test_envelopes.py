@@ -76,10 +76,11 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     assert slack["exfil.faulty"] == pytest.approx(t5["cheat"], rel=1e-7)
 
 
-def test_with_nothing_else_bounding_rho_is_lean_remote_dampener_at_full_capacity():
-    """DampenerRemote with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`, against an
-    unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at capacity, so its ρ
-    is the dampener at `MFU₀ = 1`; tiers' dampener at its own MFU is 1 at today's defaults."""
+def test_with_nothing_else_bounding_the_overhead_is_lean_dampener_remote_at_full_capacity():
+    """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
+    against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
+    capacity, so its overhead is `DampenerRemote`'s at `MFU₀ = 1`; tiers' `dampener` at its own MFU is 1 at today's
+    defaults."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
     remote = envelopes.regime(reg, "remote")
@@ -113,7 +114,7 @@ def test_the_layout_gets_only_what_an_abiding_strategy_gets():
     assert set(sampled.slack(ctx)) - set(layout.uncertified) == {"skip.certs", "break.lag", "break.escape",
                                                                  "exfil.faulty"}
     used = ctx.location.phi * ctx.horizon.seconds * ctx.fleet.mfu_train
-    assert layout.uncertified["gap.floor"] == pytest.approx(sampled.pouw.residual * used)
+    assert layout.uncertified["undecl.gpu"] == pytest.approx(sampled.pouw.residual * used)
 
 
 def test_a_regime_inherits_its_base_and_overrides_what_differs():
@@ -325,7 +326,7 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
 @pytest.mark.parametrize(("scenario", "per"), [("reference-onsite-h200", "hosts"),
                                                ("reference-onsite-nvl72-per-device", "devices")])
 def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scenario, per):
-    """`Σ_i Σ_S δ_i(S)`: PoUW's `p/ε'` over all windows, and the wipe's `2⁻¹²⁸ + Adv_PRF` once per game, a game per
+    """`Σ_a δ_a`: PoUW's `p/ε'` over all windows, and the wipe's `2⁻¹²⁸ + Adv_PRF` once per game, a game per
     server (or, per device, per device) per wipe over the horizon; the certifier adds nothing (it is the auditor's)."""
     s = build(REG, scenario)
     ctx, r = s.context, s.regime

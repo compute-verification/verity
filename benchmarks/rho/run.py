@@ -1,4 +1,4 @@
-"""`verity bench rho`: the overhead ρ for every scenario, how it moves, and where it falls below a target.
+"""`verity bench rho`: the overhead for every scenario, how it moves, and where it falls below a target.
 
     uv run python benchmarks/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]
@@ -65,8 +65,8 @@ def best_attack(r: Result) -> tuple[FamilyResult, Estimate] | None:
 
 
 def setter(f: FamilyResult) -> Estimate | None:
-    """The bound that sets the lower bound: of those it admits, the one with the most ρ alone at a standing short of
-    refuted."""
+    """The bound that sets the lower bound: of those it admits, the one with the most overhead alone at a standing
+    short of refuted."""
     met = [e for e in f.bounds if e.overhead and e.premise != "refuted" and e.argument not in f.combined.excluded]
     return max(met, key=lambda e: e.rho, default=None)
 
@@ -103,16 +103,16 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
         return ""
     t, st = terms[0], r.scenario.structure
     if t.name == "dark" and st.s_times == REFERENCE:
-        what = ("the dark hardware's datasheet product rate (Layer 1: `s_×` is the reference's `2G / κ`, so `G` "
-                "cancels and the dark leaves, `ε_dark` of `Φ_total`, count at `κ/2` products a datasheet FLOP), not a "
-                "Boolean structural minimum")
+        what = ("the dark hardware's datasheet product rate (the physical model: `s_×` is the reference's `2G / κ`, so "
+                "`G` cancels and the dark leaves, `ε_dark` of `Φ_total`, count at `κ/2` products a datasheet FLOP), "
+                "not a Boolean structural minimum")
     elif t.name == "dark":
         what = (f"the dark leaves at `s_×` = {fmt(st.gates(weight_per_gate(f.profile, r.scenario.context.units)))} "
                 f"gates a counted operation (`structure.{st.name}`)")
     else:
         what = f"its largest term, `{t.name}`"
     straddle = straddles(f)
-    return (f"**The lower bound rests on** {what}: {t.share:.1%} of the bound's weight per gate, and ρ ≤ "
+    return (f"**The lower bound rests on** {what}: {t.share:.1%} of the bound's weight per gate, and the overhead ≤ "
             f"{fmt(t.ceiling)} while it remains" + (f"; and on `{'`, `'.join(straddle)}`" if straddle else "") + ".")
 
 
@@ -176,7 +176,7 @@ def estimates_md(f: FamilyResult, fu: float) -> list[str]:
     def cut(e: Estimate) -> str:
         return ", ".join(f"{k}: {v.cut}" for k, v in e.overhead.serving.items())
 
-    out = ["| bound | status | premises | ρ | g | ρ in one inference block | binding cut |",
+    out = ["| bound | status | premises | overhead | g | overhead in one inference block | binding cut |",
            "|---|---|---|---|---|---|---|"]
     for e in f.bounds:
         if e.overhead is None:
@@ -191,7 +191,8 @@ def estimates_md(f: FamilyResult, fu: float) -> list[str]:
     if c.excluded:
         out += [(f"Left out of the lower bound at the block that binds, their premises refuted there: "
                  f"{', '.join(c.excluded)}."), ""]
-    out += ["| attack | status | ρ | g | ρ in one inference block | layout |", "|---|---|---|---|---|---|"]
+    out += ["| attack | status | overhead | g | overhead in one inference block | layout |",
+            "|---|---|---|---|---|---|"]
     for e in f.attacks:
         if e.overhead is None:
             out.append(f"| {e.argument} | outside | | | | {e.outside} |")
@@ -223,20 +224,20 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
                if st.s_times == REFERENCE else f"{gates} gates")
     premise = f", under {', '.join(st.cites())}." if st.cites() else ", which needs no straddling premise."
     sets = setter(best) if best else None
-    claim = (f"**Overhead ρ ≥ {lower(r.lo, un)}** ({best.combined.status}; premises {best.combined.premise or '—'}), "
+    claim = (f"**Overhead ≥ {lower(r.lo, un)}** ({best.combined.status}; premises {best.combined.premise or '—'}), "
              f"the circuit's size over the reference's: every bound met at once"
              + (f", set by {sets.argument}" if sets else "") if best else "**Overhead:** no family")
     attack = best_attack(r)
-    attack_md = (f"**Best known attack:** {attack[1].argument} on {attack[0].family} ({attack[1].status}) at ρ = "
+    attack_md = (f"**Best known attack:** {attack[1].argument} on {attack[0].family} ({attack[1].status}) at overhead "
                  f"{fmt(attack[1].rho)}, {when(s, attack[1].rho)} to the target: a construction, beside the bound."
                  if attack else "**Best known attack:** none applies.")
     out = [f"## {s.name}", "", setting, "",
-           (f"{claim}. **Time to the target ≥ {when(s, r.lo)}** (the slowdown, `ρ T_0 / Φ_total`, the reference at the "
-            f"inventory's full capacity). **Inference overhead:** {inference(s)}."),
+           (f"{claim}. **Time to the target ≥ {when(s, r.lo)}** (wall-clock, the overhead times `T_0 / Φ_total`, the "
+            f"reference at the inventory's full capacity). **Inference overhead:** {inference(s)}."),
            "",
-           (f"With no protocol the adversary sits at **ρ = {fmt(un)}** (`μ / MFU`, its circuit padded to capacity at "
-            f"MFU {fmt(s.mfu)}): {verdict}. A bound counts each uncertified or dark gate at `ω_max / s_×` with `s_×` "
-            f"{s_times} (`structure.{st.name}`){premise}"),
+           (f"With no protocol the adversary sits at **overhead {fmt(un)}** (`μ / MFU`, its circuit padded to capacity "
+            f"at MFU {fmt(s.mfu)}): {verdict}. A bound counts each uncertified or dark gate at `ω_max / s_×` with "
+            f"`s_×` {s_times} (`structure.{st.name}`){premise}"),
            "", rests_md(r, terms), "", attack_md, "",
            (f"The envelopes fail, summed over subprotocols and serving blocks, with probability at most δ_coin = "
             f"{fmt(delta.coin)} (the coins' draws) plus δ_crypto = {fmt(delta.crypto)} (binding, knowledge soundness"
@@ -244,13 +245,14 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
             f"crypto: {by or 'none'}."), "",
            "The lower bound from only the bounds and cuts at least as strong as: "
            + ", ".join(f"{st} {lower(v, un)}" for st, v in by_status.items()) + ".", "",
-           "What sets ρ (each part's share of the bound's weight per gate `dark + (1 − ε_dark) g`, and the most ρ can be "
-           "while it remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
+           "What sets the overhead (each part's share of the bound's weight per gate `dark + (1 − ε_dark) g`, and the "
+           "most it can be while it remains): "
+           + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
            f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
     out += certified_md(certified(s)) + operating_md(points) + faulty
     for f in r.families:
         fu = f.profile.efficiency / s.mfu
-        out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)}; no protocol: ρ = {fmt(fu)})", ""]
+        out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)}; no protocol: {fmt(fu)})", ""]
         out += estimates_md(f, fu)
         terms_ = f.combined.overhead.terms
         out += ["g's terms (lower bound): " + ", ".join(f"{k} {fmt(v)}" for k, v in terms_.items() if v), ""]
@@ -260,12 +262,12 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
 
 
 def crossings(ds: list[analysis.Danger]) -> str:
-    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (ρ {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
+    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (overhead {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
 
 
 def below_md(name: str, base: float, un: float, by_status: dict[str, float], corner: analysis.Corner,
                dangers: dict[float, list[analysis.Danger]], rescues: dict[float, list[analysis.Danger]]) -> list[str]:
-    out = [f"### {name} (ρ ≥ {lower(base, un)} today; no protocol: {fmt(un)})", ""]
+    out = [f"### {name} (overhead ≥ {lower(base, un)} today; no protocol: {fmt(un)})", ""]
     if corner.path:
         prev, steps, rest = base, [], 0
         for k, v in corner.path:
@@ -275,8 +277,8 @@ def below_md(name: str, base: float, un: float, by_status: dict[str, float], cor
                 rest += 1
             prev = v
         more = f", and {rest} more that each move it under 0.5%" if rest else ""
-        out.append(f"- **Corner:** ρ ≥ {fmt(corner.rho)} with every ranged parameter at the worse end of its range "
-                   f"at once; one at a time, worst first: {', '.join(steps)}{more}"
+        out.append(f"- **Corner:** overhead ≥ {fmt(corner.rho)} with every ranged parameter at the worse end of its "
+                   f"range at once; one at a time, worst first: {', '.join(steps)}{more}"
                    + ("." if corner.joint == corner.rho else f" (all at once: {fmt(corner.joint)})."))
     else:
         out.append("- **Corner:** no ranged parameter lowers the lower bound.")
@@ -286,21 +288,24 @@ def below_md(name: str, base: float, un: float, by_status: dict[str, float], cor
                 found = f"falls below it within a plausible range: {crossings(dangers[t])}."
             else:
                 found = ("no single parameter's plausible range takes it below; "
-                         + (f"the corner does (ρ ≥ {fmt(corner.rho)})." if corner.rho < t else "nor does the corner."))
+                         + (f"the corner does (overhead ≥ {fmt(corner.rho)})." if corner.rho < t
+                            else "nor does the corner."))
             weaker = [st for st, v in by_status.items() if v < t]
             if weaker:
-                found += f" From only {weaker[-1]} or stronger bounds and cuts, ρ ≥ {fmt(by_status[weaker[-1]])}."
+                found += (f" From only {weaker[-1]} or stronger bounds and cuts, overhead ≥ "
+                          f"{fmt(by_status[weaker[-1]])}.")
         else:
             found = "already below it today; " + (f"lifted above it by: {crossings(rescues[t])}." if rescues[t]
                                                   else "no single parameter's plausible range lifts it there.")
-        out.append(f"- **ρ = {fmt(t)}:** {found}")
+        out.append(f"- **Overhead {fmt(t)}:** {found}")
     return out + [""]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", action="append", help="scenario names (default: all)")
-    ap.add_argument("--target", action="append", type=float, help="ρ targets for the danger scan (default: 10, 100)")
+    ap.add_argument("--target", action="append", type=float, help="overhead targets for the danger scan "
+                    "(default: 10, 100)")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
     ap.add_argument("--out", default=os.environ.get("OUT"), help="write rho.md, rho.json and figures/ here ($OUT)")
     ap.add_argument("--figures", help="write the figures (PNG and the JSON they plot) here")
@@ -313,22 +318,23 @@ def main() -> None:
     targets = sorted(args.target or [10.0, 100.0])
 
     md: list[str] = []
-    head = ("| scenario | overhead ρ ≥ | status, premises | set by | no protocol (`μ / MFU`) | inference overhead | "
+    head = ("| scenario | overhead ≥ | status, premises | set by | no protocol (`μ / MFU`) | inference overhead | "
             "time to the target ≥ | from conditional or stronger bounds and cuts | on monitored gates | rests on | "
             "at the corner |")
-    summary = ["# ρ, the overhead", "",
-               ("ρ is the overhead, `|A| / T_0`: the size of the actual circuit that reaches the target over the "
+    summary = ["# The overhead", "",
+               ("The overhead is `|A| / T_0`: the size of the actual circuit that reaches the target over the "
                 "reference's, a factor. The claim is its lower bound, every bound met at once; a bound whose premises "
                 "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted. A lower "
-                "bound below the adversary no protocol encumbers (`μ / MFU`) is vacuous. The slowdown is time, "
-                "`T ≥ ρ T_0 / Φ_total`."), "", head, "|---|---|---|---|---|---|---|---|---|---|---|"]
+                "bound below the adversary no protocol encumbers (`μ / MFU`) is vacuous. The time to the target, "
+                "wall-clock, is at least the overhead times `T_0 / Φ_total`."), "", head,
+               "|---|---|---|---|---|---|---|---|---|---|---|"]
     attacks = ["## Attacks", "",
                ("The best known attack on each scenario: a construction, and the time it takes, beside the lower bound "
                 "rather than an end of it. A bound above it is a contradiction: one of the bound's premises is false "
                 "there."), "",
-               "| scenario | attack | family | status | ρ | time to the target | contradictions |",
+               "| scenario | attack | family | status | overhead | time to the target | contradictions |",
                "|---|---|---|---|---|---|---|"]
-    below = ["## Where ρ falls below target", ""]
+    below = ["## Where the overhead falls below target", ""]
     record: dict = {"targets": targets, "scenarios": {}}
     for name in names:
         r = analysis.result(reg, name)
@@ -339,8 +345,9 @@ def main() -> None:
         md += scenario_md(r, by_status, terms, points, faulty_md(reg, fo))
         swings = analysis.tornado(reg, name)
         un = r.unmonitored
-        md += [f"Tornado (the lower bound at each parameter's plausible ends; no protocol: ρ = {fmt(un)}):", "",
-               "| parameter | low | high | ρ ≥ at low | ρ ≥ at high | decades |", "|---|---|---|---|---|---|"]
+        md += [f"Tornado (the lower bound at each parameter's plausible ends; no protocol: {fmt(un)}):", "",
+               "| parameter | low | high | overhead ≥ at low | overhead ≥ at high | decades |",
+               "|---|---|---|---|---|---|"]
         md += [f"| {s.key} | {fmt(s.low)} | {fmt(s.high)} | {lower(s.at_low, un)} | {lower(s.at_high, un)} | "
                f"{fmt(s.size)} |" for s in swings[:12]]
         md.append("")

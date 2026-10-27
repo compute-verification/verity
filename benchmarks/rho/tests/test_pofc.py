@@ -191,9 +191,9 @@ def test_an_update_leaves_an_episode_only_through_its_outputs():
 
 
 def test_in_episode_training_is_no_longer_the_best_attack_where_its_update_cant_leave():
-    """At `n_max = 1e8` training the top layer inside an episode reached the unencumbered `ρ = 1/MFU₀` (the construction
-    at the training MFU, padded to capacity) when its update persisted for free; under `outputs` its 2e11-bit state
-    can't leave through `Y`, so the best attack is the scenario's own attacks'."""
+    """At `n_max = 1e8` training the top layer inside an episode reached the unencumbered overhead `1/MFU₀` (the
+    construction at the training MFU, padded to capacity) when its update persisted for free; under `outputs` its
+    2e11-bit state can't leave through `Y`, so the best attack is the scenario's own attacks'."""
     s = build(REG, "reference-onsite-h200")
     f = s.context.fleet
     unencumbered = 1 / (f.eps_dark * f.dark_mfu + (1 - f.eps_dark) * f.mfu_train)

@@ -1,4 +1,4 @@
-"""Figures of ρ: what `analysis` finds, drawn. Matplotlib is imported only when a figure is drawn.
+"""Figures of the overhead: what `analysis` finds, drawn. Matplotlib is imported only when a figure is drawn.
 
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):
@@ -7,11 +7,12 @@ Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an
   gates and at the serving block's (one server between two wipes), and where each becomes vacuous.
 * `overheads`: the overhead per scenario and family: its lower bound from the bounds at each status, each bound alone,
   and each attack beside it.
-* `dark`: ρ's lower bound, and the best known attack's, against the dark share, per scenario.
-* `phase`: ρ over pairs of parameters (`PHASES`), with its contours and frontier at each target.
+* `dark`: the overhead's lower bound, and the best known attack's, against the dark share, per scenario.
+* `phase`: the overhead over pairs of parameters (`PHASES`), with its contours and frontier at each target.
 * `tornado`: each scenario's tornado.
-* `vulnerability`: each parameter's plausible range against ρ across a window around it, and where ρ crosses each target.
-* `corner`: ρ as the ranged parameters move to their adversarial ends one at a time, down to all at once.
+* `vulnerability`: each parameter's plausible range against the overhead across a window around it, and where it crosses
+  each target.
+* `corner`: the overhead as the ranged parameters move to their adversarial ends one at a time, down to all at once.
 
 Scenario names here are defaults: a figure falls back to the first scenario that has what it needs, and skips itself
 (saying so in `render`'s result) when none does.
@@ -116,7 +117,7 @@ def _short(key: str) -> str:
 
 def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
     for t, (ls, c) in zip(targets, TARGET_STYLES * len(targets), strict=False):
-        (ax.axhline if axis == "y" else ax.axvline)(t, ls=ls, c=c, lw=1, label=f"target ρ = {t:g}")
+        (ax.axhline if axis == "y" else ax.axvline)(t, ls=ls, c=c, lw=1, label=f"target overhead {t:g}")
 
 
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
@@ -174,8 +175,8 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                 if first is not None:
                     lines[f"attack {arg.name}"] = ax.axvline(
                         first, c="k", ls=(0, (1, 2)), lw=1.2,
-                        label=f"attack {arg.name} ({status}): ρ_block = {overhead(first * 1.0001):.3g} from k = "
-                              f"{first:.2g}")
+                        label=f"attack {arg.name} ({status}): overhead in the block "
+                              f"{overhead(first * 1.0001):.3g} from k = {first:.2g}")
                 continue
             vacuous = next((j for j, y in enumerate(ys) if y <= 1), None)
             k_vac = None
@@ -288,13 +289,13 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
                         label=label(f"an attack ({e['status']})"))
         by = ", ".join(f"{st} {num(v)}" for st, v in row["lo_by_status"].items())
         attack = f"attack {row['attack']['argument']} {num(row['attack']['rho'])}" if row["attack"] else "no attack"
-        ax.text(xmax * 1.05, y, f"ρ ≥ {num(row['lo'])}; {attack}\nby status: {by}", va="center", fontsize=8)
+        ax.text(xmax * 1.05, y, f"overhead ≥ {num(row['lo'])}; {attack}\nby status: {by}", va="center", fontsize=8)
     _targets(ax, targets, "x")
     ax.set_yticks(range(len(rows)), [f"{r['scenario']}\n{r['family']}" for r in reversed(rows)], fontsize=9)
     ax.set_xscale("log")
     ax.set_xlim(min([0.8, *finite]) / 2, xmax)
     ax.set_ylim(-0.7, len(rows) - 0.3)
-    ax.set_xlabel("ρ, the overhead on the target run (∞ drawn at the right edge)")
+    ax.set_xlabel("the overhead on the target run (∞ drawn at the right edge)")
     ax.set_title("The overhead: its lower bound by status, each bound alone, and the attacks beside it", fontsize=11)
     ax.grid(True, axis="x", which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.12 - 0.25 / len(rows)), ncol=3)
@@ -303,8 +304,8 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
 
 def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
          grid: int = 30) -> list[Path]:
-    """ρ's lower bound (solid) and the best known attack's ρ (dashed) against the dark share `ε_dark` (`grid + 11`
-    points), per scenario, with `μ/ε_dark`, the most the dark pool alone allows."""
+    """The overhead's lower bound (solid) and the best known attack's (dashed) against the dark share `ε_dark`
+    (`grid + 11` points), per scenario, with `μ/ε_dark`, the most the dark pool alone allows."""
     points = grid + 11
     plt = _plt()
     names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_dark"))]
@@ -335,8 +336,8 @@ def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targ
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("dark share ε_dark (the dark leaves' share of the inventory's capacity)")
-    ax.set_ylabel("ρ")
-    ax.set_title("ρ̄ against the dark share, per scenario (• at today's ε_dark)", fontsize=11)
+    ax.set_ylabel("overhead")
+    ax.set_title("The overhead against the dark share, per scenario (• at today's ε_dark)", fontsize=11)
     ax.grid(True, which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
     return _save(fig, out, "dark", data)
@@ -344,8 +345,9 @@ def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targ
 
 def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
           grid: int = 30, metric: Metric = LO, specs: Iterable = PHASES) -> list[Path]:
-    """ρ over each pair of parameters in `specs` (a window around both plausible ranges), with its contours at each
-    target (from the grid) and the frontier (by bisection, dots), today's values (★) and the plausible box (dashed)."""
+    """The overhead over each pair of parameters in `specs` (a window around both plausible ranges), with its
+    contours at each target (from the grid) and the frontier (by bisection, dots), today's values (★) and the
+    plausible box (dashed)."""
     from matplotlib.colors import LogNorm
     from matplotlib.lines import Line2D
 
@@ -385,11 +387,11 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
                 ax.contour(p["xs"], p["ys"], z, levels=[t], colors=c, linewidths=1.4, linestyles=ls)
             pts = [(xv, yv) for xv, yv in p["frontier"][str(t)] if yv is not None]
             ax.plot([q[0] for q in pts], [q[1] for q in pts], "o", c="white", mec=c, mew=1.2, ms=4)
-            handles.append(Line2D([], [], c=c, ls=ls, marker="o", mfc="white", mec=c, ms=4, label=f"ρ = {t:g}"))
+            handles.append(Line2D([], [], c=c, ls=ls, marker="o", mfc="white", mec=c, ms=4, label=f"overhead {t:g}"))
         ax.legend(handles=handles, fontsize=8, loc="lower left", framealpha=0.85)
         p["not_reached"] = [t for t in targets if t not in levels]
         if p["not_reached"] and flat:
-            ax.text(0.02, 0.98, "\n".join(f"ρ {'<' if max(flat) < t else '>'} {t:g} everywhere here "
+            ax.text(0.02, 0.98, "\n".join(f"overhead {'<' if max(flat) < t else '>'} {t:g} everywhere here "
                                           f"({min(flat):.3g} to {max(flat):.3g})" for t in p["not_reached"]),
                     transform=ax.transAxes, va="top", fontsize=8, bbox={"fc": "white", "alpha": 0.8, "lw": 0})
         (xl, xh), (yl, yh) = p["box"]
@@ -401,16 +403,18 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
         ax.set_xlabel(_short(p["x"]) + _unit(registry, p["x"]))
         ax.set_ylabel(_short(p["y"]) + _unit(registry, p["y"]))
         ax.set_title(p["scenario"], fontsize=10)
-    fig.colorbar(mesh, ax=axes[0].tolist(), label="ρ (lower bound)" if metric is LO else "ρ", shrink=0.9)
-    fig.suptitle("ρ over pairs of parameters: contours from the grid and frontier dots by bisection at the targets, "
-                 "★ today's values, dashed box the plausible ranges", fontsize=10)
+    fig.colorbar(mesh, ax=axes[0].tolist(), label="overhead (lower bound)" if metric is LO else "overhead",
+                 shrink=0.9)
+    fig.suptitle("The overhead over pairs of parameters: contours from the grid and frontier dots by bisection at the "
+                 "targets, ★ today's values, dashed box the plausible ranges", fontsize=10)
     return _save(fig, out, "phase", {"metric": getattr(metric, "__name__", str(metric)), "targets": list(targets),
                                      "panels": panels})
 
 
 def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
             grid: int = 30, top: int = 10, metric: Metric = LO) -> list[Path]:
-    """Each scenario's tornado (those where some parameter moves ρ): ρ at each parameter's low and high ends."""
+    """Each scenario's tornado (those where some parameter moves the overhead): the overhead at each parameter's low
+    and high ends."""
     plt = _plt()
     names = list(names or registry.names("scenario"))
     swings = {n: analysis.tornado(registry, n, None, metric)[:top] for n in names}
@@ -434,8 +438,8 @@ def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, t
         ax.set_yticks(range(len(ss)), [f"{_short(s.key)}  [{s.low:.3g}, {s.high:.3g}]{_unit(registry, s.key)}"
                                        for s in reversed(ss)], fontsize=8)
         ax.set_xscale("log")
-        ax.set_xlabel("ρ (lower bound)" if metric is LO else "ρ")
-        ax.set_title(f"{name}: ρ = {base:.3g} at today's values", fontsize=10)
+        ax.set_xlabel("overhead (lower bound)" if metric is LO else "overhead")
+        ax.set_title(f"{name}: overhead {base:.3g} at today's values", fontsize=10)
         ax.grid(True, axis="x", which="major", alpha=0.3)
         ax.legend(fontsize=8, loc="lower right")
     fig.tight_layout()
@@ -445,9 +449,9 @@ def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, t
 def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = None,
                   targets: Sequence[float] = (10.0, 100.0), grid: int = 30, top: int = 12,
                   metric: Metric = LO) -> list[Path]:
-    """For each parameter that moves ρ: ρ across a window around its plausible range (the colored strip of `grid + 1`
-    points, on the plausible range's own scale: 0 its low end, 1 its high end), the range (black box), today's value (|)
-    and where ρ crosses each target (filled inside the range)."""
+    """For each parameter that moves the overhead: the overhead across a window around its plausible range (the
+    colored strip of `grid + 1` points, on the plausible range's own scale: 0 its low end, 1 its high end), the range
+    (black box), today's value (|) and where it crosses each target (filled inside the range)."""
     points = grid + 1
     from matplotlib.colors import LogNorm
 
@@ -486,7 +490,8 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
                     marker = markers[i % 3] if shown == u else ("<" if u < xlo else ">")
                     ax.plot([shown], [y], marker, ms=7, mec="k", mew=1,
                             c=TARGET_STYLES[i % 3][1] if 0 <= u <= 1 else "white")
-                    ax.annotate(f"ρ={t:g} at {xv:.2g}", (shown, y + (0.36 if i % 2 == 0 else -0.36)), fontsize=6.5,
+                    ax.annotate(f"overhead {t:g} at {xv:.2g}", (shown, y + (0.36 if i % 2 == 0 else -0.36)),
+                                fontsize=6.5,
                                 ha="center", va="bottom" if i % 2 == 0 else "top")
         ax.set_yticks(range(len(ms)), [f"{_short(m.key)}\n[{m.low:.3g}, {m.high:.3g}]{_unit(registry, m.key)}"
                                        for m in reversed(ms)], fontsize=7.5)
@@ -494,18 +499,18 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
         ax.set_xlim(xlo, xhi)
         ax.set_xlabel("position relative to the plausible range (0 = low end, 1 = high end; log scale for positive "
                       "ranges; ◁ ▷ beyond the view)")
-        ax.set_title(f"{name}: ρ = {analysis.at(registry, name, None, metric):.3g} at today's values", fontsize=10)
+        ax.set_title(f"{name}: overhead {analysis.at(registry, name, None, metric):.3g} at today's values", fontsize=10)
     handles = [Line2D([], [], marker=markers[i % 3], ls="", mec="k", c=TARGET_STYLES[i % 3][1], ms=7,
-                      label=f"ρ = {t:g} crossed inside the plausible range") for i, t in enumerate(targets)]
+                      label=f"overhead {t:g} crossed inside the plausible range") for i, t in enumerate(targets)]
     handles += [Line2D([], [], marker=markers[i % 3], ls="", mec="k", c="white", ms=7,
-                       label=f"ρ = {t:g} crossed outside it") for i, t in enumerate(targets)]
+                       label=f"overhead {t:g} crossed outside it") for i, t in enumerate(targets)]
     handles += [Line2D([], [], c="k", lw=1.2, label="plausible range"), Line2D([], [], c="k", lw=2.2, ls="",
                                                                                marker="|", ms=12, label="today")]
     axes[0][0].legend(handles=handles, fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
-    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="ρ (lower bound)" if metric is LO else "ρ",
+    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="overhead (lower bound)" if metric is LO else "overhead",
                  location="bottom", shrink=0.5)
-    fig.suptitle("How far each parameter is from where ρ crosses a target: ρ along a window around its plausible range",
-                 fontsize=11)
+    fig.suptitle("How far each parameter is from where the overhead crosses a target: the overhead along a window "
+                 "around its plausible range", fontsize=11)
     return _save(fig, out, "vulnerability", {
         "targets": list(targets),
         "scenarios": {n: [{"key": m.key, "value": m.value, "low": m.low, "high": m.high, "window": m.window,
@@ -515,8 +520,8 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
 
 def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
            grid: int = 30, metric: Metric = LO) -> list[Path]:
-    """Each scenario's adversarial corner (`analysis.corner`): ρ as its ranged parameters move to their worse ends one
-    at a time, the worst alone first, down to all of them at once."""
+    """Each scenario's adversarial corner (`analysis.corner`): the overhead as its ranged parameters move to their
+    worse ends one at a time, the worst alone first, down to all of them at once."""
     plt = _plt()
     names = list(names or registry.names("scenario"))
     found = {n: c for n in names if (c := analysis.corner(registry, n, metric=metric)).path}
@@ -534,7 +539,7 @@ def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, ta
                       rotation=60, ha="right", fontsize=7.5)
         _targets(ax, targets)
         ax.set_yscale("log")
-        ax.set_ylabel("ρ (lower bound)" if metric is LO else "ρ")
+        ax.set_ylabel("overhead (lower bound)" if metric is LO else "overhead")
         note = "" if c.joint == c.rho else f" (all at once: {c.joint:.3g})"
         ax.set_title(f"{name}: {c.base:.3g} today → {c.rho:.3g} at the corner{note}", fontsize=10)
         ax.grid(True, which="major", alpha=0.3)

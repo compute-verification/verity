@@ -1,4 +1,4 @@
-"""Attacks: constructions that finish counted products in a block, reported beside ρ's lower bound.
+"""Attacks: constructions that finish counted products in a block, reported beside the overhead's lower bound.
 
 An attack is an `Argument` on the `attack` side: `allowance(profile)` is what the construction finishes in a block with
 that budget (never more than the block's compute, which `theorem.terms` caps), in the FLOP model as the classes are

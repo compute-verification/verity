@@ -1,4 +1,5 @@
-"""The proof of forward computation (PoFC): Daniel's Notion page "Proof of forward computation", in ρ's layers.
+"""The proof of forward computation (PoFC): Daniel's Notion page "Proof of forward computation", in the overhead's
+layers.
 
 The prover commits to a chain of operators `F_1 → … → F_k` (one a transformer layer, say) with parameters `θ_j`
 (`|θ_j| ≤ p`, `Σ |θ_j| ≤ P`) and works in isolated **episodes** of at most `n_max` tokens: `F_j` reads only `θ_j`, its
@@ -23,7 +24,7 @@ computation: onsite, the server, until its wipe, which the serving cut bounds wi
 holds (other servers learn only its certified outputs, timing and side channels); remote, the prover, whose covert
 computation only the uncertified gates bound. Both are cuts the wrapped regime already has.
 
-PoFC enters ρ beside the layers it touches, never in them:
+PoFC enters the overhead beside the layers it touches, never in them:
 
 * `Pofc` wraps any regime: every cut with inference blocks gains a copy whose declared work runs as episodes
   (`episode`), and so does the layout. With `link`, the physical instantiation (forward-only links, each GPU reading only
@@ -35,7 +36,7 @@ PoFC enters ρ beside the layers it touches, never in them:
   `FAMILIES` says where its other attacks, algorithms with their own efficiency, enter the families layer.
 
 The arguments read a `Trained` (`trained`: a `Profile`, a model and the `Rules`) rather than new `Profile` fields, and
-`versus` gives ρ against `n_max` at a scenario.
+`versus` gives the overhead against `n_max` at a scenario.
 """
 
 from __future__ import annotations
@@ -490,8 +491,8 @@ class Top:
 
 @dataclass(frozen=True)
 class Point:
-    """ρ for one family at one `n_max` on the scenario under PoFC: every bound at once (`lo`, the lower bound),
-    `pofc-backprop` alone and with its signal premise, the best known attack's (`attack`), and `lo` without PoFC
+    """The overhead for one family at one `n_max` on the scenario under PoFC: every bound at once (`lo`, the lower
+    bound), `pofc-backprop` alone and with its signal premise, the best known attack's (`attack`), and `lo` without PoFC
     (`unwrapped`); `toll` is one episode's, at the depth the gradient reaches (`depth`, the whole model for full
     training)."""
 
@@ -515,8 +516,8 @@ N_MAX = (1e4, 3e4, 1e5, 3e5, 1e6, 3e6, 1e7, 3e7, 1e8)
 def versus(registry: Registry, scenario: str = "reference-onsite-h200", n_maxes: Iterable[float] = N_MAX,
            depths: Iterable[int | None] = (None, 1, 4, 16), rules_name: str = "reference",
            physical: bool = False) -> list[Point]:
-    """ρ against `n_max` on `scenario` under PoFC, for its families' full training (`None`) and for training their top
-    `depth` layers (`Top`), with PoFC's bounds and attacks beside the scenario's."""
+    """The overhead against `n_max` on `scenario` under PoFC, for its families' full training (`None`) and for training
+    their top `depth` layers (`Top`), with PoFC's bounds and attacks beside the scenario's."""
     from rho.scenario import build, evaluate  # scenario may import this module
 
     base = build(registry, scenario)

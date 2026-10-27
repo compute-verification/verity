@@ -1,4 +1,4 @@
-# Layer 1, the prior: the conversion to gates, locations, fleets (the inventory), horizons (rho/hardware.py).
+# The physical model: the conversion to gates, locations, fleets (the inventory), horizons (rho/hardware.py).
 
 # The one conversion from the FLOP model's inputs to Boolean gates (hardware.Units). rho and the time to the target
 # don't depend on it (tests/test_hardware.py); what it sets is the gate counts printed beside them. basis says where it
