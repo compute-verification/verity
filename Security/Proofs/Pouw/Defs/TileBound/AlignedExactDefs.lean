@@ -2,7 +2,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Rat.Cast.Order
 
 /-!
-# Aligned exactness: the definitions (trusted)
+# Aligned exactness: the definitions
 
 For `AlignedExact.lean`: word `(i, j)`'s exactness over a window as a predicate `f i j` of row `i`'s seed and column `j`'s
 seed, the one-row hypothesis `RowCompat`, and the event `HasRegion` that some `a × b` block is exact everywhere.

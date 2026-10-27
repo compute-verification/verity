@@ -1,7 +1,7 @@
 import Definitions.Pouw.NCP.Defs
 
 /-!
-# Noise that cancels inside one checked product: pinned statements (trusted)
+# Noise that cancels inside one checked product: pinned statements
 
 Algebra of the lead only; no game instance (the red team has not cleared the lead).
 -/

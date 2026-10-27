@@ -1,7 +1,7 @@
 import Definitions.Pouw.NCP.Protocol
 
 /-!
-# An admissible R with a checkpoint identity other than the final one (trusted)
+# An admissible R with a checkpoint identity other than the final one
 
 A finding against `FinalOnly` for NCP (the R_word-NCP witness, `Pouw.NCP.Word`). At zero input the checked value at
 depth `τ` is `Σ_{l < τ} X_{il}·Y_{lj}` with `X = stackX k 0 E₁ R` and `Y = stackY k 0 R F₁`. The statement below says

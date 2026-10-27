@@ -2,7 +2,7 @@ import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.Assumptions.NCP.GamePinned
 
 /-!
-# The chain end to end: the wrap link and the lead with independence (trusted)
+# The chain end to end: the wrap link and the lead with independence
 
 `Params.Y`, the protocol's checked values, are the running sums of the stacked product mod `2^32` (`mmW`, the int32
 accumulator). `ParamsYLink` states that the checked value of block `t`, entry `(i, j)` is `wrap32` of the integer

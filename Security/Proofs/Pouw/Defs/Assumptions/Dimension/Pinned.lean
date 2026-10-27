@@ -3,7 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.Assumptions
 import Proofs.Pouw.Defs.Assumptions.NCP.Chain
 
 /-!
-# Theorem D's residue: pinned statements (trusted)
+# Theorem D's residue: pinned statements
 
 The witnesses for A1 and A2, and the step of the reduction chain (survey §2.7) that composes A2 with Theorem D:
 TT_NCP for a machine from A2 into AlgM_16. The step through AlgM_4090 (the mixing lemma, survey §2.4) and the

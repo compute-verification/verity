@@ -4,7 +4,7 @@ import Definitions.Pouw.Assumptions.NCP.Assumptions
 import Definitions.Pouw.Game.Params
 
 /-!
-# NCP's game instance on route U: pinned statements (trusted)
+# NCP's game instance on route U: pinned statements
 
 `G_γ` from `TT_NCP_U` for route U's protocol at bias `β` and its honest reference `wrefU f = 3·m·k·n + f·m·k`,
 whose ratio to the credited `3·m·k·n` is `1 + f/(3n)`, its two instances (ncp-v1: `β = 128`, `f = 24`, `1 + 8/n`;

@@ -2,7 +2,7 @@ import Definitions.Pouw.H1Zy.Chain
 import Definitions.Pouw.H1Zy.Tile
 
 /-!
-# `PouwH1LaneZy_v1{PouwH1Tile_v3}` on words (trusted)
+# `PouwH1LaneZy_v1{PouwH1Tile_v3}` on words
 
 `h1zy.PouwH1LaneZy` takes its leaf's tile as `PouwH1Tile_v1` (z its EXACT, `laneOk`) or `PouwH1Tile_v3`, whose z is
 `h1tile._cell_z` on the lane's chain words (`h1zy._lane_body`). On words, v3's z of lane `l`'s cell `(s, t)` is

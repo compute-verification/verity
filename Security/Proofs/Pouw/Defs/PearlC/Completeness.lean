@@ -1,7 +1,7 @@
 import Definitions.Pouw.PearlC.Tile
 
 /-!
-# The sampled audit's completeness on a population of activations (trusted)
+# The sampled audit's completeness on a population of activations
 
 The honest prover commits the honest transcript (`honestTranscript`). The sampled audit (`GγSampled`'s `AuditAccepts`)
 accepts it when every drawn tile is good or of a blank unit. A drawn tile of a committed unit is good when its weight

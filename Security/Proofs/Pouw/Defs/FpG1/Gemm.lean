@@ -2,7 +2,7 @@ import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.FpG1.Encoding
 
 /-!
-# FP8-g1 and W4A8-g1: the int8 GEMM, the coin's rank-one terms and the epilogue (trusted)
+# FP8-g1 and W4A8-g1: the int8 GEMM, the coin's rank-one terms and the epilogue
 
 The int8 MMA multiplies the entries' integers (`Entry.int`); the served model multiplies their centred values
 (`Entry.served`), dequantized by a row scale for the activations and a column scale for the weights. With every
