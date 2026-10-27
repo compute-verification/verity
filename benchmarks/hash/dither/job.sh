@@ -45,7 +45,7 @@
 #
 # Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref h1c" and
 # kb_pg on sm_100a; set empty, only the variants), NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the
-# SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
+# SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
@@ -254,7 +254,7 @@ if [ -n "${GPU_LEASE_UUID:-}" ]; then
   bash -c "$bench"
 else
   read -r -a lease <<< "${LEASE:---max-min 14}"
-  GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
+  GPU_LEASE_WHO=${HB_WHO:-dither/${RESEARCH_RUN_ID:-local}} gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
 fi
 rc=$?
 echo "lease rc $rc"

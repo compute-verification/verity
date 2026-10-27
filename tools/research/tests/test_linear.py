@@ -305,7 +305,7 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
 
 
 def test_a_dry_run_writes_nothing_to_linear_and_prints_what_it_would_do(fake, registry, routes_dirs, capsys, lin):
-    """27 Oct 05:17Z (INF-285): a triage worker's --dry-run posted 58 comments, since only Slack sends were suppressed."""
+    """--dry-run suppresses Linear's writes as well as Slack's sends: suppressing Slack's alone lets a dry run comment."""
     lin.subscribers["I1"] = []
     infra = inbox(fake, routes_dirs, "infra")
     rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress", "--dry-run")
@@ -317,7 +317,7 @@ def test_a_dry_run_writes_nothing_to_linear_and_prints_what_it_would_do(fake, re
     assert rc == 0 and out.strip() == "dry-run: would place INF-1 in Runs"
 
 def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
-    """No one subscribes to Linear comments (each would echo its author), so a lane polled its issues instead (COMM-30)."""
+    """No one subscribes to Linear comments (each would echo its author), so without this ring a lane would poll its issues."""
     lin.subscribers["I1"] = []
     infra, circuits = inbox(fake, routes_dirs, "infra"), inbox(fake, routes_dirs, "circuits")
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "@circuits the trace is up", "--as", "compute-accounting")
@@ -543,8 +543,8 @@ def test_audit_prints_each_lanes_findings_and_their_counts_and_exits_1_on_any(fa
 
 
 def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_them(fake, registry, capsys, lin):
-    """The app couldn't read HASH or TRN on 27 Oct, and Linear answers a filter on such a team with no issues, so a lane
-    would read its unread team as clean."""
+    """The app may lack access to a team, and Linear answers a filter on such a team with no issues, so a lane would read
+    its unread team as clean."""
     reg = json.loads(registry.read_text())
     for h in reg["handles"]:
         if h["handle"] in ("kernels", "training"):
@@ -622,7 +622,7 @@ def test_edit_from_the_cli_replaces_the_description_with_the_file_and_a_dry_run_
 
 def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no_one(fake, registry, routes_dirs, capsys, lin,
                                                                                      monkeypatch, tmp_path):
-    """Workers hold no handle, so `--as` refuses them; they commented through the Linear MCP connector and showed as Daniel."""
+    """Workers hold no handle, so `--as` refuses them; the Linear MCP connector, their other way to comment, acts as Daniel."""
     monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
     monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
     monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
@@ -648,7 +648,7 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
 
 
 def stateless(fake: FakeLinear) -> bool:
-    """No request sent a state or a status: a bulk edit that sent one reset COMM-65 from Done to Todo (27 Oct)."""
+    """No request sent a state or a status: an edit that sends one can reset an issue's state (Done back to Todo)."""
     return not any(k in json.dumps(v) for q, v, _ in fake.calls if q != "grant" for k in ("stateId", "statusId"))
 
 
