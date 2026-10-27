@@ -91,7 +91,7 @@ horizon = "year"
 run = "v4-pretrain"
 families = ["full"]
 
-# reference-onsite-h200 with each server's ingress at its declared inputs at W63's toy cadence (NET-92).
+# reference-onsite-h200 with each server's ingress at its declared inputs at W63's toy cadence.
 [scenario.onsite-w63]
 fleet = "world-h200"
 regime = "onsite-w63"
