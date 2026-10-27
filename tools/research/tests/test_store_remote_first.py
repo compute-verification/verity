@@ -256,33 +256,6 @@ def test_parity_never_downloads_an_evicted_blob_and_catches_a_same_size_corrupti
     assert not rep["ok"] and any("ETag" in u and "local blob's MD5" in u for u in rep["unexplained"])
 
 
-def test_the_render_goes_through_a_view_that_writes_nothing_to_the_store_under_test(env, monkeypatch):
-    here = LocalStore()
-    art = here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"rendered"))
-    here.push(art)
-    blob = json.loads(here.manifest_path(art[4:]).read_text())["payload"]["sha256"]
-    here.object_path(blob).chmod(0o644)
-    here.object_path(blob).unlink()
-    def records():                                                    # the store under test's records (its blob cache may fill, as the daily render's does)
-        return sorted((p.relative_to(here.root).as_posix(), p.stat().st_mtime_ns) for d in ("manifests", "attempts", "labels")
-                      for p in (here.root / d).rglob("*") if p.is_file())
-    before = records()
-    gets: list[str] = []
-    real_get = FsRemote.get
-    monkeypatch.setattr(FsRemote, "get", lambda self, key, path: gets.append(key) or real_get(self, key, path))
-
-    def fake_render(root, timeout, source=None):                      # what bench.tables does: catalog query + payload reads
-        st = LocalStore(root)
-        return "".join(st.fetch(a["id"]).read_text() for a in st.index.artifacts()), None
-
-    monkeypatch.setattr(PA, "_render", fake_render)
-    rep = PA.run(here.root, env / "fresh", render=True)
-    assert rep["ok"] and rep["render"]["identical"], rep["unexplained"]
-    assert gets.count(f"objects/sha256/{blob}") <= 2, "once for the views, at most once more for the store under test's own render"
-    assert records() == before, "the store under test's records were written"
-    assert rep["render"]["view_matches_real"] is True
-
-
 def test_progress_lines_come_on_schedule(capsys):
     lines: list[str] = []
     ticked = threading.Event()
@@ -298,25 +271,6 @@ def test_progress_lines_come_on_schedule(capsys):
     ticked.wait()                                                  # a periodic line reports the phase's progress
     prog.stop()
     assert any(x.startswith("parity: replicas (10) at ") for x in lines)
-
-
-def test_the_render_sees_remote_only_records_on_both_sides(env, monkeypatch):
-    here = LocalStore()
-    here.push(here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"mine")))
-    pod = LocalStore(env / "pod-store")
-    art = pod.put_artifact("fixture/v1", {"s": 2}, file=_file(env / "pod", "p.bin", b"pods"))
-    pod.add_label(art, "verified", "accepted", "red-team-1")
-    pod.push(art)
-    pod.push_labels([art])
-
-    def fake_render(root, timeout, source=None):                      # catalog rows and labels: what a table is built from
-        st = LocalStore(root)
-        return "\n".join(f"{a['id']} {[(l['key'], l['value']) for l in st.index.labels(a['id'])]}" for a in st.index.artifacts()), None
-
-    monkeypatch.setattr(PA, "_render", fake_render)
-    rep = PA.run(here.root, env / "fresh", render=True)
-    assert rep["artifacts"]["not_pulled"] == [art[4:]] and rep["labels"]["not_pulled"]
-    assert rep["ok"] and rep["render"]["identical"] and rep["render"]["records"]["only_remote"] == 2, rep["unexplained"]
 
 
 def test_a_divergent_local_attempt_is_named_refused_by_preserved_and_reconciled_with_an_audit_log(env, capsys):
@@ -344,47 +298,6 @@ def test_a_divergent_local_attempt_is_named_refused_by_preserved_and_reconciled_
     assert log[0]["run"] == RUN and log[0]["action"] == "superseded-by-remote" and "write-once" in log[0]["reason"]
     assert main(["reconcile-attempts", "--all"]) == 0
     assert PA.run(st.root, env / "fresh-2")["ok"]
-
-
-def test_records_written_during_the_run_are_concurrency_not_a_difference(env, monkeypatch):
-    here = LocalStore()
-    art = here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"x"))
-    here.push(art)
-    calls = []
-
-    def fake_render(root, timeout, source=None):
-        if not calls:                                                  # verify-po labels while parity runs, write-through off
-            LocalStore(os.environ["RESEARCH_STORE"]).add_label(art, "verified", "accepted", "verify-po")
-        calls.append(root)
-        st = LocalStore(root)
-        return "\n".join(f"{a['id']} {[(l['key'], l['value']) for l in st.index.labels(a['id'])]}" for a in st.index.artifacts()), None
-
-    monkeypatch.setattr(PA, "_render", fake_render)
-    rep = PA.run(here.root, env / "fresh", render=True)
-    assert rep["ok"], rep["unexplained"]
-    assert rep["render"]["identical"] and rep["written_during_run"] == {"manifests": 0, "attempts": 0, "labels": 1}
-    assert rep["render"]["view_matches_real"] is False and "concurrency" in rep["render"]["view_vs_real_cause"]
-    assert any(x.startswith("during run") for x in PA.format_report(rep))
-
-
-def test_the_render_is_the_daily_renders_command_from_the_steward_source(tmp_path, monkeypatch):
-    src = tmp_path / "src"
-    for mod in ("tables", "drilldown"):
-        d = src / "benchmarks" / "numerical" / "python" / "verity_numerical" / "bench"
-        d.mkdir(parents=True, exist_ok=True)
-        (d.parent / "__init__.py").write_text("")
-        (d / "__init__.py").write_text("")
-        (d / f"{mod}.py").write_text(f"import os, sys\nprint('{mod} from', os.getcwd(), sys.argv[1:])\n")
-    (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["benchmarks/numerical"]\n')
-    (src / "benchmarks" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
-    notes = tmp_path / "notes"
-    notes.mkdir()
-    (notes / "steward.toml").write_text(f'[[render]]\nat = "13:00Z"\nsource = "{src}"\nout = "renders/daily"\n')
-    assert PA.render_source(notes_root=notes) == (src.resolve(), f"{notes / 'steward.toml'} [[render]] source")
-    assert PA.render_source(tmp_path, notes_root=notes)[1] == "--render-source"
-    text, err = PA._render(tmp_path / "store", 60, src.resolve())
-    assert err is None and f"tables from {src.resolve()} ['--root', '{tmp_path / 'store'}', '--format', 'md']" in text
-    assert "<!-- drilldowns -->" in text and "drilldown from" in text
 
 
 def test_replica_rows_are_confirmed_from_the_listing_not_a_head_per_blob(env, monkeypatch):

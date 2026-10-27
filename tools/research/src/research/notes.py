@@ -71,9 +71,8 @@ report cites is preserved on the remote (`preserved.check`; R2 credentials from 
 run launched on the pod has preserved.json (`research fetch --all`) or is in the store: `REAPED`, else `REAP-BLOCKED <lane> <pod>:
 <first reason>` at most every 30 min, both in reaper.log.  `OVERDUE <lane>`, once: not done 30 min after its binding's `final` (the
 first such HH:MMZ after the binding was written).  With `--pods`, `OVER-BUDGET <lane>`, once: its pods' $/h x time, accumulated per
-pass, passed the binding's budget (its first `$<number>`).  `RENDERED <path>` / `RENDER-FAILED <entry>: <why>`: the `[[render]]`
-entries of `<root>/steward.toml` (daily at `at`, `render_lines`).  `LAUNCHED <name> <run id> on <machine>` / `RUN-FAILED <name>: <why>`:
-its `[[run]]` entries, each a recorded `research run --on MACHINE` launched daily at `at`, or weekly with `weekday` (`run_lines`).
+pass, passed the binding's budget (its first `$<number>`).  `LAUNCHED <name> <run id> on <machine>` / `RUN-FAILED <name>: <why>`: the
+`[[run]]` entries of `<root>/steward.toml`, each a recorded `research run --on MACHINE` launched daily at `at`, or weekly with `weekday` (`run_lines`).
 `ROUTED <lane> <n>`: new KILLED lines of the laptop guardian's log
 (`--guardian-log`) went to the lane that owns them (`--on <machine>`, or the killed process's cwd under a bound worktree) as one
 handoff per lane per pass (a final lane's to `lanes/coordinator/`); `KILLED-UNOWNED <line>` when no lane does.  A rule that fails
@@ -1071,7 +1070,7 @@ def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float,
     return lines
 
 
-# ---- the steward: duties the watcher carries out itself (stale-lane pods, deadlines, budgets, renders, guardian kills) ---------------------
+# ---- the steward: duties the watcher carries out itself (stale-lane pods, deadlines, budgets, scheduled runs, guardian kills) ---------------------
 
 STATE_FILE = "steward-state.json"
 STEWARD_TOML = "steward.toml"
@@ -1079,14 +1078,8 @@ R2_ENV = Path.home() / ".config" / "verity" / "r2.env"
 GUARDIAN_LOG = Path.home() / ".veritor" / "mem_guardian.log"
 REAP_RETRY_S = 30 * 60
 OVERDUE_GRACE_MIN = 30
-RENDER_TIMEOUT_S = 600
-RENDER_REFRESH_TIMEOUT_S = 600
 RUN_LAUNCH_TIMEOUT_S = 600
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-#: The artifact kinds whose payloads the render's readers parse (instance-equiv/v1 documents; payload-only bench-result/v1
-#: envelopes): a render entry's store refresh makes them local unless the entry names its own `payloads`.
-RENDER_PAYLOAD_KINDS = ("instance-equiv/v1", "bench-result/v1")
-RENDERS_ENV = "RESEARCH_RENDERS"
 NEVER_RAN = ("refused", "resolving", "shipping")        # remote.json phases of a launch that never reached the machine's runner
 BUDGET_RE = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
 HHMMZ_RE = re.compile(r"(\d{1,2}):(\d{2})Z")
@@ -1329,7 +1322,7 @@ def budget_lines(root: Path, fleet: Fleet, now: dt.datetime, state: dict) -> lis
     return lines
 
 
-def _render_run(cmd: list[str], env: dict, cwd: Path, timeout: float) -> tuple[int | None, str, str]:
+def _run_command(cmd: list[str], env: dict, cwd: Path, timeout: float) -> tuple[int | None, str, str]:
     try:
         r = subprocess.run(cmd, env=env, cwd=cwd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -1366,90 +1359,14 @@ def due_period(at: re.Match, now: dt.datetime, weekday: str | None = None) -> st
     return f"{year}-W{week:02d}" if now >= start else None
 
 
-def renders_root() -> Path:
-    """Where a render entry's relative `out` lands: `$RESEARCH_RENDERS`, else ~/.research/renders.  Never the notes: they are Git."""
-    return Path(os.environ.get(RENDERS_ENV) or Path.home() / ".research" / "renders").expanduser()
-
-
-def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None,
-                 run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _render_run,
-                 timeout_s: float = RENDER_TIMEOUT_S) -> list[str]:
-    """Scheduled renders, from `[[render]]` entries of <root>/steward.toml (re-read every pass): `at` (HH:MMZ, daily), `source` (a tree
-    with benchmarks/numerical and tools/research), `out` (a directory outside the notes: absolute, or relative to :func:`renders_root`;
-    one inside the notes is an invalid entry, since renders never go to Git), `store` (default ~/.research/store).  Once per UTC day
-    at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source tree's
-    workspace import roots and root on PYTHONPATH (`research env --source`, `pythonpath.tree_pythonpath`) into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
-    within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
-    never the published numbers) into <stamp>-tables-preview.md.  An entry with `published = "views"` (the switch, kb/TABLES.md) publishes
-    `.views --published` as <stamp>-tables.md, with its entities render (`--format entities`, the docs site's input) as <stamp>-tables.json,
-    and keeps the frozen `.tables` as the drill-down <stamp>-tables-frozen.md (`preview` is
-    then moot).  `published = "entities"` (the docs site replaced the markdown tables, Daniel 2026-09-26) renders only the entities JSON
-    as <stamp>-tables.json and the parity check (`.views --parity`, an internal correctness gate that publishes nothing: a
-    difference is a RENDER-FAILED line) as <stamp>-parity.md.  `published = "tables"` is the default.  Before rendering, the entry's store is caught up from the remote
-    with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
-    that did not write the records (the control pod) reads what the pods published, payloads included; `refresh = false` skips it,
-    and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  A render is
-    regenerated from the store on demand, so it is output, not evidence: nothing commits or stores it."""
-    entries, lines = steward_entries(config or root / STEWARD_TOML, "render", now, state, "RENDER-FAILED")
-    if not entries:
-        return lines
-    done = state.setdefault("render", {})
-    for e in entries:
-        at, out = str(e.get("at", "")), str(e.get("out", ""))
-        key, m = f"{out}@{at}", HHMMZ_RE.fullmatch(at)
-        dest = renders_root() / Path(out).expanduser()                      # an absolute `out` stays itself
-        bad = ("an entry needs at = \"HH:MMZ\", source and out" if not (m and out and e.get("source")) else
-               f"published = {e['published']!r}: \"tables\", \"views\" or \"entities\"" if e.get("published", "tables") not in ("tables", "views", "entities") else
-               f"out {out!r} is inside the notes ({root}): renders never go to Git; use an absolute path outside them, or one relative "
-               f"to ${RENDERS_ENV} (default ~/.research/renders)" if dest.resolve().is_relative_to(Path(root).resolve()) else None)
-        if bad:
-            if done.get(key) != "invalid":
-                done[key] = "invalid"
-                lines.append(f"{now:%H:%MZ} RENDER-FAILED {key}: {bad}")
-            continue
-        if (period := due_period(m, now)) is None or done.get(key) == period:
-            continue
-        done[key] = period
-        src = Path(str(e["source"])).expanduser()
-        store = Path(str(e.get("store") or "~/.research/store")).expanduser()
-        env = {**os.environ, "PYTHONPATH": tree_pythonpath(src)}
-        if e.get("refresh", True) is not False:
-            kinds = e.get("payloads") if isinstance(e.get("payloads"), list) else list(RENDER_PAYLOAD_KINDS)
-            cmd = [sys.executable, "-m", "research", "data", "refresh", "--store", str(store), *(["--payloads", *map(str, kinds)] if kinds else [])]
-            rc, stdout, stderr = run(cmd, env, src, RENDER_REFRESH_TIMEOUT_S)
-            if rc != 0:
-                lines.append(f"{now:%H:%MZ} RENDER-REFRESH-FAILED {key}: {' '.join((stderr or stdout).split())[-200:] or f'rc {rc}'}")
-        deadline = time.monotonic() + timeout_s
-        if e.get("published") == "entities":
-            mods = [("views", "tables", ["--published"], "entities"), ("views", "parity", ["--parity"], "md")]
-        elif e.get("published", "tables") == "views":
-            mods = [("views", "tables", ["--published"], "md"), ("views", "tables", ["--published"], "entities"),
-                    ("tables", "tables-frozen", [], "md"), ("drilldown", "drilldowns", [], "md")]
-        else:
-            mods = [("tables", "tables", [], "md"), ("drilldown", "drilldowns", [], "md")] + (
-                [("views", "tables-preview", [], "md")] if e.get("preview") is True else [])
-        for mod, suffix, extra, fmt in mods:
-            left = deadline - time.monotonic()
-            cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", fmt, *extra]
-            rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")
-            if rc == 0:
-                f = dest / f"{now:%Y%m%dT%H%MZ}-{suffix}.{'md' if fmt == 'md' else 'json'}"
-                f.parent.mkdir(parents=True, exist_ok=True)
-                f.write_text(stdout)
-                lines.append(f"{now:%H:%MZ} RENDERED {_tilde(f)}")
-            else:
-                lines.append(f"{now:%H:%MZ} RENDER-FAILED {key} ({mod}): {' '.join(stderr.split())[-200:] or f'rc {rc}'}")
-    return lines
-
-
 def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None,
-              run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _render_run,
+              run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _run_command,
               timeout_s: float = RUN_LAUNCH_TIMEOUT_S, new_id: Callable[[], str] = new_run_id) -> list[str]:
     """Scheduled recorded runs, from `[[run]]` entries of <root>/steward.toml (re-read every pass): `name`, `at` (HH:MMZ), `weekday`
     (`mon` ... `sun`: weekly; daily without), `source` (the tree it is launched from) and `args`, the arguments of `research run`, which
     put it on a machine (`["--on", MACHINE, ..., "--", CMD...]`).  Once per UTC day (per ISO week with `weekday`) at or after `at`,
-    `python -m research run --id <run id> <args>` runs in `source` with the tree's workspace on PYTHONPATH, as a render's commands
-    do.  It returns once the machine has started the workload detached, so the pass waits for the launch only (at most 10 min),
+    `python -m research run --id <run id> <args>` runs in `source` with the tree's workspace on PYTHONPATH.
+    It returns once the machine has started the workload detached, so the pass waits for the launch only (at most 10 min),
     never for the run: `LAUNCHED <name> <run id> on <machine>`, else `RUN-FAILED <name> <run id>: <stderr tail>`, and the next
     launch is the next period's.  The run's Attempt records the rest (`research inspect <run id>`).  An invalid entry is one
     `RUN-FAILED <name>: <why>` line."""
@@ -2127,7 +2044,7 @@ def _main(argv: list[str]) -> int:
             return 2
         if not held and not ns.standby:
             print(f"research notes watch: REFUSED: the steward lease ({lease.backend.describe()}) is held by {steward.holder(doc)}; "
-                  "only the holder reaps, routes, renders and commits the notes (--standby waits for it)", file=sys.stderr)
+                  "only the holder reaps, routes, launches and commits the notes (--standby waits for it)", file=sys.stderr)
             return 2
         import signal  # noqa: PLC0415
 
@@ -2140,7 +2057,7 @@ def _main(argv: list[str]) -> int:
 
 
 def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[[Fleet | None], list[dict]], lease) -> int:
-    """The watch loop.  With a lease, the steward rules (reaping, budget/overdue memory, guardian routing, renders, the state file,
+    """The watch loop.  With a lease, the steward rules (reaping, budget/overdue memory, guardian routing, scheduled runs, the state file,
     the notes commit) run only in a pass that renewed it; the alerts print either way."""
     prev: set[str] = set()
     prev_mail: dict[str, set[str]] | None = None
@@ -2199,7 +2116,6 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
         if acting:
             more += steward_rule("overdue", overdue_lines, root, rows, now, state)
             more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
-            more += steward_rule("render", render_lines, root, now, state)
             more += steward_rule("run", run_lines, root, now, state)
             from .approaches import steward_lines as approaches_lines  # noqa: PLC0415
 

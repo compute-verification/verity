@@ -13,13 +13,13 @@ KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
     "bench-point/v1": "a sweep harness's raw result for its chosen point (a result.json with kind bench-point/v1): the run's attempt keeps "
                       "it and its run files; `bench.cell register` turns it into the cell's one bench-result/v1",
-    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the canonical tables' 'native dense peak, "
+    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the frozen tables' 'native dense peak, "
                       "measured' column): meta {device, dtype, accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, "
                       "sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
                       "seed, n}; payload tree = probe_results.json, capture_sample.json, tiles_*.npz",
     "dataset-snapshot/v1": "meta {name, note, query?}; refs.members = [art:...]; payload null",
-    "tables-parity/v1": "the switch's parity render (verity_numerical.bench.views --parity --record): meta {schema, rules, ok, differences, "
+    "tables-parity/v1": "the frozen tables' parity render: meta {schema, rules, ok, differences, "
                         "snapshot, tables_cells, cells: [{line, column, artifact, views_overhead, tables_overhead, printed}]}; refs.snapshot "
                         "(the tables --snapshot compared with), refs.cells; payload null",
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
