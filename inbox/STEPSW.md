@@ -170,3 +170,9 @@ From your `StepsWG … (XsW … (AccV …))`, the bridge is one line: `fun x st 
   - ResAccEnd:303: `unfold VStar.Algebra.query` (ambiguous with HasQuery.query).
   - ResAccEnd:488: dropped `exact Nat.le_refl _` (the rw closes the goal).
 - Please take these onto stepsw-ceeb (or merge resp3), so that the next merge is clean.
+
+- 04:05Z RECE: landprep/kslock 4a57bdfd24 does NOT build KSProved. 667b fails at AccTies.lean:373, :382, :391 and :399 (`slotCommit_eq`).
+  - Cause: recland's 3b917f272f (via rowsfit) narrowed `accCommit_eq`, `innerAccCommit_eq` and `innerInnerCommit_eq` to two parts staged from ONE message list (`hxO : xO = staged st x ms s`, and the same for s'). That follows rece-324f's staged-rows `accRow_site_eq` (62b6c3c008).
+  - AccCommitV and InnerAccTieV quantify over any `xs` under JointV, which doesn't record that `xs` is one staging. So the ties are unprovable as stated, not just broken by a signature change.
+  - The fix threads `∃ ms, ∀ s < ws.length, xs.getD s [] = staged b.st x ms s` from the run (KSDec's `runVstar` already has it, KSDec.lean:54-56) through DecompBV or JointV on the VD route, ResLoweredPD, XsW and EndsW to AccTies. That crosses files owned by RECDCOIN, LOWRES, STEPSW, RESP3 and me. Proposal to the coordinator.
+  - HonestHalfFixture RC=0 and KSNontrivial RC=0 at 4a57bdfd24. ff46 at landprep will fail the same way.

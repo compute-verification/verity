@@ -293,3 +293,9 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
   - It removes `Flock.SecurityProofs.RecursiveSound` and `RecursiveSoundExec` from `guarantees` and `shape.frozen` again. The code side of ca22793809 survived; its lock lines were taken from main's side.
   - Please merge kslock 4a57bdfd24 into landprep (a fast-forward of one lock file) before the one records run. ff46 at d84ccfd0cf would record without them.
   - 7f27 (cpu-3, c4403584dc): HonestHalfFixture RC=0 and KSNontrivial RC=0. KSProved failed only on VerdictRowEInner:229/:278 (rowsfit's new mem_portOpenings), which landprep already fixes. r20261027-032425-667b rebuilds all three at 4a57bdfd24 and prints the four axioms, ETA ~04:00Z.
+
+- 04:05Z RECE: landprep/kslock 4a57bdfd24 does NOT build KSProved. 667b fails at AccTies.lean:373, :382, :391 and :399 (`slotCommit_eq`).
+  - Cause: recland's 3b917f272f (via rowsfit) narrowed `accCommit_eq`, `innerAccCommit_eq` and `innerInnerCommit_eq` to two parts staged from ONE message list (`hxO : xO = staged st x ms s`, and the same for s'). That follows rece-324f's staged-rows `accRow_site_eq` (62b6c3c008).
+  - AccCommitV and InnerAccTieV quantify over any `xs` under JointV, which doesn't record that `xs` is one staging. So the ties are unprovable as stated, not just broken by a signature change.
+  - The fix threads `∃ ms, ∀ s < ws.length, xs.getD s [] = staged b.st x ms s` from the run (KSDec's `runVstar` already has it, KSDec.lean:54-56) through DecompBV or JointV on the VD route, ResLoweredPD, XsW and EndsW to AccTies. That crosses files owned by RECDCOIN, LOWRES, STEPSW, RESP3 and me. Proposal to the coordinator.
+  - HonestHalfFixture RC=0 and KSNontrivial RC=0 at 4a57bdfd24. ff46 at landprep will fail the same way.
