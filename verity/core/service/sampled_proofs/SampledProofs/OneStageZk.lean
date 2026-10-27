@@ -327,8 +327,8 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
       throw s!"session {s.name}'s verdict names program {programSha.getD "none"}, not the partition object's {want.compress}"
     else do
       let units ← provedUnits I.publicFile record
-      pure { r with coinKeys, proved := r.proved ++ units,
-             out := r.out.push (verdictJson rd programSha s st true "" units) }
+      let out := r.out.push (verdictJson rd programSha s st true "" units)
+      pure { r with coinKeys, proved := r.proved ++ units, out }
 
 /-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own draw
 (`setupAt`, once per draw: a draw `r` has set up reuses its setup), its rep files the blobs its `reps` name, its

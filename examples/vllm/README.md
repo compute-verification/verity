@@ -8,7 +8,9 @@ commands. What attaches Verity to vLLM is `integrations/vllm/`, and the chain an
 
 ## Workload
 
-- The one file in `workloads/`: its requests, its model and revision, and its pinned engine. The integration finds it only
+- The one workload `workloads/SHA256SUMS` lists: its requests, its model and revision, and its pinned engine. Its bytes are
+  a fixture in the evidence store (registered in `fixtures/artifacts.json`, gitignored here), fetched and checked against
+  that digest by `run.sh` and by the integration (`verity_vllm.config.workload_file`). The integration finds it only
   through `VERITY_WORKLOADS`, which `commit.sh` sets (`verity_vllm.config.row_file`); its Build's manifest is what the
   endpoint commits under.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one sampling period of varied requests (`--varied`), or `serve.sh`'s

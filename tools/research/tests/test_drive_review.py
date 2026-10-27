@@ -89,7 +89,8 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert _subject(world, "main").startswith("Queue: #2") and _subject(world, "main^1").startswith("Queue: #1")
     assert _subject(world, "next").startswith("Queue: #3") and _git(world.origin, "rev-parse", "next^1") == main
     assert h.launched == []                                     # no Lean check: no Lean changes
-    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": False, "no_cache": True, "no_regenerate": True})]
+    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": False, "no_cache": True, "circuit_cache": True,
+                                                            "no_regenerate": True})]
     assert h.after and h.after[0][1] == {main: "", _git(world.origin, "rev-parse", "main^1"): ""}
     pl = h.postland()
     assert pl["pending"] == [main] and pl["run"]["skip"] == ["lean-agreement", "lean-changed"]
@@ -627,6 +628,97 @@ def test_members_that_change_no_lean_go_below_a_lean_change_and_land_while_its_l
     assert [m.pr for m in h.q.chain()] == [1] and h.launched == [(_tip(world), "m1", False)]
 
 
+def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_go_below_it_before_its_check_runs(
+        world, monkeypatch):
+    """CI-172, 27 Oct: #4828, a Lean change already at the bottom of `next`, held every reviewed member above it for its Lean
+    check, 10:52Z-12:20Z: non-Lean first orders only what a sync merges anyway, and the check launched on the reviewed prefix's
+    top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
+    what is left.  Once it runs, nothing moves below it: one reviewed after waits above it, and lands on its pass."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3] and h.launched == []        # #1, kept at the bottom, holds #2 and #3
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #3"), world.logs
+    assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1] and h.launched == [(_tip(world), "m1", False)] and h.cancelled == []
+    assert any("#2 #3 (reviewed, no Lean change) go to the bottom" in x for x in world.logs), world.logs
+    world.gh.put(4, world.change({"c.txt": "4\n"}))
+    h.review(4)
+    assert not h.tick().startswith("landed")
+    assert [m.pr for m in h.q.chain()] == [1, 4] and h.cancelled == [] and len(h.launched) == 1
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #4"), world.logs
+    assert len(h.launched) == 1
+
+
+def test_a_lift_leaves_an_unreviewed_member_a_pr_stacked_on_the_lean_change_and_a_lean_change_whose_own_check_failed(
+        world, monkeypatch):
+    """Only what lands at once goes below the Lean change: an unreviewed member there would keep it from its check, a PR
+    stacked on it contains it, and a Lean change whose own check failed waits for its owner's fix or hold, not a check
+    again on every lift."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.tick()
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}, base=world.gh.prs[1].head))
+    world.gh.put(4, world.change({"c.txt": "4\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4]
+    for n in (3, 4):
+        h.review(n)
+    assert h.tick().startswith("landed #4"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3] and h.launched == []
+    h.review(1)
+    h.tick()
+    (rid,) = h.lean_ids()
+    assert h.launched == [(h.q.chain()[0].commit, "m1", False)]                  # #1's own: #2 is unreviewed
+    h.run_state[rid] = ("done", 1, None)
+    h.tick()
+    assert h.d.q.load_state()["drive"]["lean"][h.q.chain()[0].commit]["state"] == "failed"
+    h.review(2)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3] and len(h.launched) == 1, world.logs
+
+
+@pytest.mark.parametrize("fault", ["enospc", "after-audit"])
+def test_a_lean_check_failed_by_its_machine_runs_again_once_on_another_machine(world, monkeypatch, tmp_path, fault):
+    """27 Oct: #4828's Lean check hit ENOSPC after every audit passed, was counted as #4828's failure, and drive held `next`.
+    A check whose step ran out of disk, or that failed after its lean-audit passed, runs again once, on the machines it didn't
+    run on; failed by its machine again, it is the change's."""
+    h = Review(world, monkeypatch)
+    h.d.on = "vy-a,vy-b,vy-c"
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    top = _tip(world)
+    (rid,) = h.lean_ids()
+    d = tmp_path / rid
+    d.mkdir()
+    if fault == "enospc":
+        (d / "steps.jsonl").write_text(json.dumps({"step": LEAN_STEP, "status": "failed", "rc": 1, "log": "lean-audit.log"}) + "\n")
+        (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/pkg: PASS\nOSError: [Errno 28] No space left on device\n")
+    else:
+        (d / "steps.jsonl").write_text(json.dumps({"step": LEAN_STEP, "status": "passed"}) + "\n")
+    h.evidence = [d]
+    h.run_state[rid] = ("done", 1, None, None, "vy-b")
+    assert not h.tick().startswith("landed")
+    assert h.launched == [(top, "vy-a,vy-b,vy-c", False), (top, "vy-a,vy-c", False)], world.logs
+    assert any("a machine's fault: again, once, on vy-a,vy-c" in x for x in world.logs), world.logs
+    again = h.lean_ids()[1]
+    h.run_state[again] = ("done", 1, None, None, "vy-a")
+    h.tick()
+    assert len(h.launched) == 2 and h.d.q.load_state()["drive"]["lean"][top]["state"] == "failed"
+    (post,) = [p for p in h.posts if "of its own commit" in p]
+    assert "rc=1" in post, post
+
+
 def test_an_ejection_during_a_lean_check_of_its_prefix_waits_to_rebuild_next_and_lands_nothing_from_it_up(
         world, monkeypatch, capsys):
     """An eject synced `next` at once, so the running Lean check's commit left it and the check was cancelled."""
@@ -773,7 +865,8 @@ def test_nothing_lands_before_the_after_landing_run_of_main_itself_and_a_red_mai
     main = _main(world)
     out = h.tick()
     assert out.startswith("nothing lands before an after-landing run of `main`"), out
-    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": True, "no_cache": False, "no_regenerate": True})]
+    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": True, "no_cache": False, "circuit_cache": False,
+                                                            "no_regenerate": True})]
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_steps_run(world.tmp, "r-post-0", {**{s: "passed" for s in AFTER_LANDING}, "lean-suites": "failed"})]
     assert h.tick().startswith("landed #2"), world.logs
@@ -1189,7 +1282,8 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     h.review(4)
     out = h.tick()
     assert out.startswith("landed #4"), out
-    assert h.posted[1] == (one, "lean-suites", {"agreement": False, "no_cache": False, "no_regenerate": True})
+    assert h.posted[1] == (one, "lean-suites", {"agreement": False, "no_cache": False, "circuit_cache": False,
+                                                   "no_regenerate": True})
     assert h.posted[2][0] == _main(world)                                        # #4's after-landing run
     (ring,) = [p for p in h.posts if "is red on" in p]
     assert "#1 #2 each touch it" in ring and "drive bisects them" in ring, ring
