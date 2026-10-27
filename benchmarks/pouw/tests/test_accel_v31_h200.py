@@ -33,6 +33,20 @@ def test_step_counts_each_call_of_52_layers_and_the_head(tmp_path):
     assert st[(512, 8, 1024, "row1024")]["mhz"] == (1980, 1980)
 
 
+def test_the_8b_step_is_32_layers_of_its_four_linears_against_cublaslt(tmp_path, capsys, monkeypatch):
+    calls = h200_step.MODELS["8b"]
+    f = tmp_path / "bench-row16384.jsonl"
+    f.write_text("\n".join(_line(n, k, 2.0, lp=128, row=16384) for n, k in calls) + "\n")
+    st = h200_step.steps(h200_step.rows([str(f)]), calls=calls)
+    assert st[(128, 8, 16384, "row16384")]["s"]["ovl"] == pytest.approx(128 * 2e-3)
+    assert st[(128, 8, 16384, "row16384")]["macs"] == 32 * 16384 * (6144 * 4096 + 4096 * 4096 + 28672 * 4096 + 4096 * 14336)
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
+    assert h200_step.main() == 0
+    out = capsys.readouterr().out
+    assert "summary: 8b L 1024 row 16384 row16384: step 0.256 s overlapped, gamma_lt 1.000 against cuBLASLt's 0.256 s" in out
+    assert "mqa16k52" not in out
+
+
 def test_a_missing_call_or_another_m_gives_no_step(tmp_path, capsys, monkeypatch):
     calls = list(h200_step.CALLS)
     f = tmp_path / "bench-row1024.jsonl"

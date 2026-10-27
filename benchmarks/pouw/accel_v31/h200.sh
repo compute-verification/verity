@@ -1,28 +1,38 @@
 #!/usr/bin/env bash
-# ACCEL's no-fold receipt (v31.cu) on the H200, sm_90a, at the PoUW filler's segments (HASH-27, CMP-172): L' 512 at t 8
-# and 16, L = 4,096 and 8,192. run.sh as it stands, with GENCODE sm_90a and no CUTLASS baseline. For each t, its gates
-# (one lease) and its bench (another):
+# ACCEL's no-fold receipt (v31.cu) on the H200, sm_90a, at the PoUW filler's segments (HASH-27, CMP-172): each of CONFIGS,
+# an L':t pair (default L' 512 at t 8 and 16, L = 4,096 and 8,192). run.sh as it stands, with GENCODE sm_90a and no
+# CUTLASS baseline. For each pair, its gates (one lease) and its bench (another):
 #   gates  run.sh's own at L' 256 t 3, then at L' 512 t 8 and 16: one and several whole segments, a partial last one,
 #          wrap-heavy and all-127 operands, a third Z digit, 8 KiB rows, and the three cheats (skip, forge, forgeO);
-#          the first t runs them all, the second its own whole-segment gate (QUICK=1: each t its own gate and skip
-#          cheat alone, for a knob sweep whose variants the bench's sampled tiles check)
-#   bench  the frozen shape's calls at M = 16,384 (q, standing for o too, kv, up, down and the head) at ROW 1 KiB (the
-#          protocol's leaf) and 8 KiB
-# then h200_step.py's step (52 layers plus the head) a t and a ROW, gamma_u against wgmma.linear's 3.06 s (HASH-22).
+#          the first pair runs them all and its own whole-segment gate, the others that gate alone (QUICK=1: each pair
+#          its own gate and skip cheat alone, for a knob sweep whose variants the bench's sampled tiles check)
+#   bench  MODEL's calls at M = 16,384: mqa16k52 (default), the frozen shape's q (standing for o too), kv, up, down and the
+#          head; 8b, HIGHUTIL's QKV, O, gate and up, and down; both, the two
+# then h200_step.py's step a pair, ROW and variant: gamma_u against wgmma.linear's 3.06 s (HASH-22) for mqa16k52, and
+# against the run's own cuBLASLt for each.
 #
 #   research run --on vy-dc-h200 --project verity --campaign cmp-172 --source . --cwd source --timeout 120m \
 #     --env GPU_LEASE_WHO=kernels-kcommitfb -- bash benchmarks/pouw/accel_v31/h200.sh
 #
-# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, and run.sh's
-# (NVFLAGS=-DV31_WG=1: the GEMM on warpgroup MMAs).
+# Env: CONFIGS (default "512:8 512:16"), MODEL, VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES
+# (in place of MODEL's), and run.sh's (NVFLAGS=-DV31_WG=1: the GEMM on warpgroup MMAs; -DV31_WG_BN=256 beside it: 128 x
+# 256 tiles a CTA).
 set -uo pipefail
 D=benchmarks/pouw/accel_v31
 O=${OUT:?}
 PY=${PY:-uv run -q --no-project --with numpy python}
-export GENCODE=arch=compute_90a,code=sm_90a CUTLASS=${CUTLASS:-0} LP=512 ROW=1024
+export GENCODE=arch=compute_90a,code=sm_90a CUTLASS=${CUTLASS:-0} ROW=1024
 export VARIANTS=${VARIANTS:-row=1024 row=8192} REPS=${REPS:-5}
-export SHAPES=${SHAPES:-"h200-q:16384:16384:16384 h200-kv:16384:128:16384 h200-up:16384:65536:16384
-h200-down:16384:16384:65536 h200-head:16384:256:16384"}
+MQA="h200-q:16384:16384:16384 h200-kv:16384:128:16384 h200-up:16384:65536:16384 h200-down:16384:16384:65536
+h200-head:16384:256:16384"
+B8="h200-qkv:16384:6144:4096 h200-o:16384:4096:4096 h200-gu:16384:28672:4096 h200-down8b:16384:4096:14336"
+case ${MODEL:-mqa16k52} in
+  mqa16k52) s=$MQA ;;
+  8b) s=$B8 ;;
+  both) s="$MQA $B8" ;;
+  *) echo "MODEL: mqa16k52, 8b or both" >&2; exit 2 ;;
+esac
+export SHAPES=${SHAPES:-$s}
 ALL="
 g-llm 256 256 1536 llm none 256 3 1024
 g-uniform 256 384 1280 uniform none 256 3 1024
@@ -44,21 +54,25 @@ c-t8-skip 256 256 8192 llm skip:3 512 8 1024
 c-t16-forge 256 256 16384 llm forge:1:0.25 512 16 1024
 c-t16-forgeO 256 256 16384 llm forgeO:0.25 512 16 1024
 "
+CONFIGS=${CONFIGS:-512:8 512:16}
 first=1
-for t in ${TS:-8 16}; do
-  mkdir -p "$O/t$t"
-  g="g-t$t 256 256 16384 llm none 512 $t 1024"
+for c in $CONFIGS; do
+  lp=${c%%:*} t=${c##*:} tag="lp${c%%:*}-t${c##*:}"
+  mkdir -p "$O/$tag"
+  g="g-$tag 256 256 16384 llm none $lp $t 1024"
   if [ "${QUICK:-0}" = 1 ]; then g="$g
-c-t$t-skip 256 256 16384 llm skip:3 512 $t 1024"
-  elif [ "$first" = 1 ]; then g=$ALL; fi
-  OUT="$O/t$t" T=$t GATES="$g" bash $D/run.sh > "$O/t$t/run.log" 2>&1
-  echo "t$t run.sh rc $?" >> "$O/rc.txt"
+c-$tag-skip 256 256 16384 llm skip:3 $lp $t 1024"
+  elif [ "$first" = 1 ]; then g="$ALL
+$g"; fi
+  OUT="$O/$tag" LP=$lp T=$t GATES="$g" bash $D/run.sh > "$O/$tag/run.log" 2>&1
+  echo "$tag run.sh rc $?" >> "$O/rc.txt"
   first=0
 done
-$PY $D/h200_step.py "$O"/t*/bench-*.jsonl > "$O/step.md" 2> "$O/step.err"
+$PY $D/h200_step.py "$O"/lp*/bench-*.jsonl > "$O/step.md" 2> "$O/step.err"
 echo "step rc $?" >> "$O/rc.txt"
-for t in ${TS:-8 16}; do
-  echo "== t$t"; cat "$O/t$t/rc.txt" 2>/dev/null; cat "$O/t$t/verdicts.txt" 2>/dev/null; cat "$O/t$t/table.md" 2>/dev/null
+for c in $CONFIGS; do
+  tag="lp${c%%:*}-t${c##*:}"
+  echo "== $tag"; cat "$O/$tag/rc.txt" 2>/dev/null; cat "$O/$tag/verdicts.txt" 2>/dev/null; cat "$O/$tag/table.md" 2>/dev/null
 done
 cat "$O/step.md"
 cat "$O/rc.txt"
