@@ -409,8 +409,7 @@ def test_onsite_bound_sums_each_components_published_error(recorded, tmp_path_fa
     """`onsite bound` on onsite's accepted answers (`accepted`, from each component's own accepted answer) gives
     each block's terms where `ERRORS` reads them, their sum, the run's total and a horizon's ``B`` times the largest
     block, and beside it the pooled figures' inputs read from the same answers, integrity's faulty proof blocks and the
-    certifier's leak as their statements count them: the figures `verity bench all-protocols` prints for its
-    monitoring periods."""
+    certifier's leak as their statements count them."""
     exe = D.build(PROTOCOLS / "onsite", "onsite")
     assert [C.id for C in R.ONSITE.product.components] == list(ERRORS)
 
