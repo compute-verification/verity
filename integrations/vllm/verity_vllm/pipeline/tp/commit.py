@@ -39,7 +39,7 @@ from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.component_programs import post_load_tensors
-from verity_vllm.config import group, option
+from verity_vllm.config import group, option, workload_arg
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import commit_coins as CC, replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
@@ -124,7 +124,7 @@ def _build_dirs(args) -> dict[int, str]:
 
 @dataclass(kw_only=True)
 class Options:
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)

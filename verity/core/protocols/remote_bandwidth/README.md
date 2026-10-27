@@ -14,13 +14,13 @@ receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
 `Security/Properties/RemoteAudit.lean`.
 
-`benchmarks/remote_session/verifier.py` runs both, by its one switch line `VERDICT` (`--verdict`). Under `lean`, the
-default, the Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`) is the verifier of record: it decides
-each registration, event and window, an accepted session's record is the one it returns, and the ledger reads that
-record. `audit.Session` keeps the books beside it as the reference, and a registration, event, window verdict or record
-field on which they differ refuses the session at that window as `disagreement`. Under `both` `audit.Session` checks
-every window's openings too; under `python` there is no Lean. The default went to `lean` under the 8 Oct ruling (the
-friction skill), on these grounds:
+`benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
+is the verifier of record: it decides each registration, event and window, an accepted session's record is the one
+it returns, and the ledger reads that record. `audit.Session` keeps the books beside it as the reference, and a
+registration, event, window verdict or record field on which they differ refuses the session at that window as
+`disagreement`. The books check no openings: a window's verdict is the Lean's, and the Python check of its openings
+runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean became the verifier of record under
+the 8 Oct ruling (the friction skill), on these grounds:
 
 - the gap list is empty. A registration that binds PoUW's tiles is refused by both registries. A paced window's
   (k + 1)-th root is refused as `order` by both sessions. A transcript carries its session's pace. The Lean's record
@@ -61,8 +61,9 @@ rates and bursts and the wrong receipts, in exact rationals. The Lean computes i
 W from `Pooled.lean`), as the verifier process's `line_record` request, off the Lean verifier's record of the session
 (`lineOfRecordAt`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
 window's draws refused unless `min(s, U_t)`; drawn g > 1 windows a coin, its draws' receipts and draws, each `g`
-windows' summed and refused unless `min(s, U)` and below 2^64, and at one window in flight no line), with the
-auditor's times and each group's reads by kind beside it; and
+windows' summed and refused unless `min(s, U)` and below 2^64, and at one window in flight no line), refused unless
+the record is of the node's registration given with it (`lineOfRegistered`), with the auditor's times and each
+group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is

@@ -21,7 +21,7 @@ XOR8 = PrimitiveDefinition("ServedTestXor8", 1, (("a", Value(8)), ("b", Value(8)
                            register=False)
 MIX = bind(CompositeDefinition("ServedTestMix", 0, (), lambda S: ((("x", Array(2, Value(8))), ("w", Array(2, Value(8)))), Value(8)),
                                lambda B, S, x, w: B.call(XOR8, B.call(XOR8, x[0], w[0]), B.call(XOR8, x[1], w[1])), register=False))
-#: the row of the served tree W each unit reads
+#: the row of the served tree W each proof block reads
 POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -122,7 +122,7 @@ def test_a_32_bit_tree_names_its_width():
 
 
 def test_an_earlier_outputs_tree_keeps_its_port():
-    """#2929: a tree that is an earlier record's port registers under that port's domain and root, R7 accepts it with the
+    """A tree that is an earlier record's port registers under that port's domain and root, R7 accepts it with the
     returned `outputs`, and the file opens the reads against the port's domain."""
     prog = _program()
     reg, _ = _tree(prog)
@@ -339,7 +339,7 @@ def test_a_tree_the_log_registered_under_another_root_is_refused():
 
 
 def test_a_fixed_name_served_again_without_the_windows_root_is_refused():
-    """PRF-127, fail closed: without the window's open root every window's domain is the same, so a value the log
+    """Fail closed: without the window's open root every window's domain is the same, so a value the log
     registered that the verifier doesn't hold is a fixed-name per-window value from its second window on, and both
     `register_served` and R7's verifier refuse their inputs, naming `window_root` and `held`, whatever the root: the first
     window's (a replay) or a fresh one. The first window, and a window whose values take fresh names, need no root."""
@@ -362,7 +362,7 @@ WINDOWS = ("a1" * 64, "b2" * 64)
 
 
 def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once():
-    """PRF-127: under the window's open root a window-independent program's per-window tree (x) is served afresh every
+    """Under the window's open root a window-independent program's per-window tree (x) is served afresh every
     window under the same name, R7 accepts each window's record with the returned copies, and the weights (W, `held`)
     keep their window-independent domain and first root. A second window that serves the first window's x tree is
     refused: its domain is the first window's."""
@@ -391,7 +391,7 @@ def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once
 
 
 def test_a_served_tree_cannot_hold_itself_across_windows():
-    """PRF-127: which values are held across windows is the verifier's (`held`), never the served tree's. A per-window tree
+    """Which values are held across windows is the verifier's (`held`), never the served tree's. A per-window tree
     committed under the window-independent domain, as if held, is refused under the window's root, and the `--registered`
     file names each port's domain as the verifier derived it, with no window root or held values of its own."""
     prog = _program()

@@ -1,29 +1,25 @@
 import Definitions.Accounting.Compose
 
 /-!
-# PoUW's work over an accounting period of `n` windows (trusted)
+# PoUW's work over a monitoring period of `n` windows (trusted)
 
-The vocabulary of `Definitions.Accounting.Guarantees.ComposePeriod` (INT-PERIOD,
-note:compute-accounting/20261019T0739Z-draft-int-period), answering RT-INT-1
-(note:compute-accounting/20261019T0528Z-draft-rt-int): `CircuitWork`'s one window reaches `ε < 1%` only at about
-10,552 equal live rounds, and a served window has 18. A period is up to `n` windows of one declared circuit, run in
-order, each with its own live coins and its own draw, the cheater's play in each window any function of the earlier
-windows' coins. Each window is one round of the period's game, so `ServiceBudget`'s per-window budget composes over
-the period (`Guarantees.ComposePeriod.PeriodBudget`) and the tail is taken once for the period: the logical term is
-divided by the number of windows credited.
+The vocabulary of `Definitions.Accounting.Guarantees.ComposePeriod`. `CircuitWork`'s one window reaches `ε < 1%` only
+at about 10,552 equal live rounds, and the served H1 window has 18. A period is up to `n` windows of one declared
+circuit, run in order, each with its own live coins and its own draw, the cheater's play in each window any function
+of the earlier windows' coins. Each window is one round of the period's game, so `ServiceBudget`'s per-window budget
+composes over the period (`Guarantees.ComposePeriod.PeriodBudget`) and the tail is taken once for the period: the
+logical term is divided by the number of windows credited.
 
-Each window says which of its tiles are live (RT2-INT-1, note:compute-accounting/20261019T1100Z-draft-rt2-int). On
-SERVE-H1's masked unit (`PouwH1Tile_v2`, #2639) a tile whose rows are all the canonical empty row is dead: its receipt
-is the canonical empty receipt at every coin, so no guess bound holds of it, and 52.8% of a served window's units are
-dead. A dead tile's words count for nothing: its share weight is `0` (`liveCone`), the period's proofs read it as
-skipped whole (`periodMode`), and the conclusion counts live words only (`creditedLive`, `LiveWorkAt`). Weights stay
-over the declared circuit's words (`wordsOf`), so the static premises on `ρ`, the stage share and the lucks are
-`CircuitWork`'s, and a period of unequal loads is bounded as a share of its total words.
+Each window says which of its tiles are live. On a masked tile Definition a dead tile's receipt is the canonical empty
+receipt at every coin, so no guess bound holds of it. A dead tile's words count for nothing: its share weight is `0`
+(`liveCone`), the period's proofs read it as skipped whole (`periodMode`), and the conclusion counts live words only
+(`creditedLive`, `LiveWorkAt`). Weights stay over the declared circuit's words (`wordsOf`), so the static premises on
+`ρ`, the stage share and the lucks are `CircuitWork`'s, and a period of unequal loads is bounded as a share of its
+total words.
 
-A period is credited up to its first window with a refused proof (RT3-INT-7,
-note:compute-accounting/20261019T1700Z-draft-rt3-int): `n` is the most windows it may hold, and the windows from the
-first failure on count as skipped whole, as dead tiles do. That window is a stopping time of the period's coins, which
-the cheater may steer, and the tail at a stopping time is `budget_tail`'s maximal form
+A period is credited up to its first window with a refused proof: `n` is the most windows it may hold, and the
+windows from the first failure on count as skipped whole, as dead tiles do. That window is a stopping time of the
+period's coins, which the cheater may steer, and the tail at a stopping time is `budget_tail`'s maximal form
 (`Guarantees.ComposePeriod.PeriodTailMax`, over the game's prefixes: `RoundGame.acceptsUpTo`,
 `RoundGame.deficiencyUpTo`).
 
@@ -44,14 +40,14 @@ the cheater may steer, and the tail at a stopping time is `budget_tail`'s maxima
 * `Declared.periodLayer`: the period's proofs as one `Accounting.TS.DrawnLayer` over `n` rounds, each window
   `Declared.layer`'s: positions are `(window, gate)`, so each window's positions are its own, cut at its own coins (a
   registered input at its window's first coin, which binds no earlier than the service does) and written by its own
-  units; the draw is each window's; only the run-dependent half (`PeriodRun`) is abstract.
+  proof blocks; the draw is each window's; only the run-dependent half (`PeriodRun`) is abstract.
 * `PrefixOf`: `DrawnLayer.Of`'s game clause on every prefix: right drawn tiles in the first `j` windows pass the
   game's first `j` rounds.
 * `creditedLive`, `LiveWorkAt`, `rOfPrefix`: the credited windows' live words; `WorkAt` on live words, with the
   shares over the declared words; the period's logical bound over its accepted prefix of `j` windows,
   `Λ·ln(1/δ_s) + j·min(a, b)·D₀`.
 * `epsPrefix`, `creditPrefix`: that bound as a share `ε(j)` of the prefix's live words, and the period's credit in
-  live words, `(1 − ε(j))₊` of them (RT4-INT-8, note:compute-accounting/20261019T2300Z-draft-rt4-int).
+  live words, `(1 − ε(j))₊` of them.
 -/
 
 namespace Accounting.Compose
@@ -85,9 +81,9 @@ def deficiencyUpTo : {n : ℕ} → RoundGame Ω n → ℕ → Paths Ω n → ℝ
 end RoundGame
 
 /-- **The cheater's play over a period of `n` windows** of one circuit of `M` rounds: window by window, its live tiles
-`live` (fixed before the window's first coin: on SERVE-GATE's served gate, the tiles whose row block holds an admitted
-slot, so a window's gate admits every slot before its first coin, as FILL's does in round 0; a window that admits in a
-later round is not of this form, RT4-INT-22), its split stages (`SplitStages`: each tile's mode, rightness and
+`live` (fixed before the window's first coin: on the served gate, the tiles whose row block holds an admitted slot, so
+a window's gate admits every slot before its first coin; a window that admits in a later round is not of this form),
+its split stages (`SplitStages`: each tile's mode, rightness and
 checked values per stage, on the window's rounds' coins), then the rest of the period as a function of the window's
 coins `Ω` (its rounds' coins, its draw and its proofs' coins). -/
 inductive Period (C Ω V : Type) (M : ℕ) : ℕ → Type
@@ -183,8 +179,8 @@ noncomputable def periodMode {ι C B V : Type} {s Np n : ℕ} (Cd : Declared ι)
   else .whole
 
 /-- **A claim of every live credited tile at its stage, whatever the past**: `PerTile` on the tiles `live` names. A
-dead tile carries no claim: on SERVE-H1's masked unit its whole skip passes at every coin, so no guess bound holds of
-it (RT2-INT's `guess_false_dead`). -/
+dead tile carries no claim: on a masked tile Definition its whole skip passes at every coin, so no guess bound holds
+of it. -/
 def PerLiveTile {ι K C : Type} {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι) (live : Fin Np → Bool)
     (W : SplitStages C (Fin Np) M) (P : Kind → ReceiptGame C 1 → ReceiptGame C 1 → Prop) : Prop :=
   W.EveryStage fun j mode right same => ∀ t : Fin Np, live t = true → tileStage Cd Np t = j → ∀ k,
@@ -195,12 +191,12 @@ def PerLiveTile {ι K C : Type} {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι) 
 
 /-- **The period's proofs as the IR defines them**: `Declared.layer` in every window, its positions tagged by their
 window. Window `w`'s tile `t` reads `(w, ℓ)` for each of its slots `ℓ`, its noise reads window `w`'s coin of its round,
-position `(w, ℓ)` is cut at window `w`'s coin `Declared.layer` cuts `ℓ` at and written by window `w`'s unit of `ℓ`, and
-window `w`'s draw is its own (`drawOf`). No position crosses windows: a value one window hands the next (decode
-feedback, a KV cache) is the next window's input, cut where that window's IR cuts it, so the period's late cones stay
-inside their windows. A registered input is cut at its window's first coin, no earlier than the service commits it.
-The draw is uniform over every tile, dead ones included, as the served gate's is; a drawn dead tile is proved like any
-other, and its words count for nothing (`periodMode`, `liveCone`). -/
+position `(w, ℓ)` is cut at window `w`'s coin `Declared.layer` cuts `ℓ` at and written by window `w`'s proof block of
+`ℓ`, and window `w`'s draw is its own (`drawOf`). No position crosses windows: a value one window hands the next
+(decode feedback, a KV cache) is the next window's input, cut where that window's IR cuts it, so the period's late
+cones stay inside their windows. A registered input is cut at its window's first coin, no earlier than the service
+commits it. The draw is uniform over every tile, dead ones included, as the served gate's is; a drawn dead tile is
+proved like any other, and its words count for nothing (`periodMode`, `liveCone`). -/
 def Declared.periodLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V) :
     DrawnLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V where
