@@ -236,7 +236,7 @@ for name in $(printf '%s\n' "${NEED[@]}" | sort -u); do
   [ -n "$h" ] && [ "$(srchash $paths)" = "$h" ] || {
     echo "job.sh: $name.so was built (commit $bsha) from sources that differ at $SHA: rebuild" >&2; exit 2; }
 done
-export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$PWD/integrations/vllm:$PWD:$PWD/tools/config${PYTHONPATH:+:$PYTHONPATH}
 printf '%s\n' "${CMDS[@]}" > "$OUT/env/cmds.txt"
 bench='
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid

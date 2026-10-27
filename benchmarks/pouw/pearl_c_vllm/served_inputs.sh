@@ -13,7 +13,7 @@
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 PASS=$WORK/passes/${1:?the pass run id}; LABEL=${2:?a label}; JOBS=${3:-12}; SOURCE=${4:-}; OUT=${RESEARCH_RUN_DIR:-.}/out
-export PYTHONPATH=$PWD:$PWD/verity/core/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/verity/core/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 FRESH=(--cross-check 128); [ -n "$SOURCE" ] && FRESH=(--fresh-draws 384 --fresh-source "$SOURCE" --cross-check 384)
 "$PY" -u benchmarks/pouw/pearl_c_vllm/served_debit.py "$PASS/decode/manifest.json" "$PASS/prefill/manifest.json" \
   --per-input 2 --seed 20261002 --census-max 128 --draws 64 --jobs "$JOBS" "${FRESH[@]}" \

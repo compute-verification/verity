@@ -17,7 +17,7 @@ NSYS=${NSYS:-$CUDA/bin/nsys}
   || { echo "sh1prof: NVCC_FAIL"; tail -20 "$OUT/nvcc.txt"; exit 11; }
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f
 echo "sh1prof: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --max-min 28 -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \

@@ -47,7 +47,7 @@ grep -E "pd_|spill|stack" "$OUT/ptxas_pd.txt" | head -80 || true
 
 g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.so" \
   "$ROOT/benchmarks/pouw/pearl_c_sm120/hash_decode_host.cpp"
-PYTHONPATH="$ROOT" python3 "$HERE/host_check.py" "$SCR/pd_host.so" > "$OUT/host_check.txt" 2>&1
+PYTHONPATH="$ROOT:$ROOT/tools/config" python3 "$HERE/host_check.py" "$SCR/pd_host.so" > "$OUT/host_check.txt" 2>&1
 tail -3 "$OUT/host_check.txt"
 
 export PD_SIDE=${PD_SIDE:-19,211,339,467,851,979}

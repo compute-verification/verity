@@ -20,13 +20,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shlex
 import subprocess
 import sys
 from pathlib import Path
 
+from verity_config.settings import of
+
+settings = of(__file__)
 PANEL = "/cursor/stores/bc-b729c175-2ef6-418e-98fe-10896709028b/internal/pouw/panel/panel.py"
 #: the decode shape's suffix for the row over eager stock FP8, beside the headline over graphed FP8
 EAGER_SUFFIX = "-eager"
@@ -43,7 +45,7 @@ def interleaving(summary: dict) -> str:
 
 
 #: the lane that appends the rows
-BY = os.environ.get("PANEL_BY", "bc-dd22acf8")
+BY = settings.PANEL_BY
 
 
 def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[float, str] | None = None) -> list[list[str]]:
