@@ -1,12 +1,12 @@
 """The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time: the reference the GPU tagger and the
-benchmarks that measure its tags are held to.  Its protocol, deleted from the tree, is
-`git show b19372fa9e:verity/core/protocols/bandwidth/PROTOCOL.md` (`PROTOCOL.md` below).  Each device's store is set up under a salt with its identity bound in (`draw_salt`, its GPU's
-16-byte UUID, `device_id`, which the on-node challenger reads from the driver, `read_device`), so devices holding one
-`W` hold different stores, and the verifier refuses a store whose salt is not its device's (`Verifier`).
+benchmarks that measure its tags are held to, kept after its protocol was retired.  Each device's store is set up
+under a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_id`, which the on-node challenger
+reads from the driver, `read_device`), so devices holding one `W` hold different stores, and the verifier refuses a
+store whose salt is not its device's (`Verifier`).
 
 The verifier (`Verifier`, `Window`, `ChallengerState`) is the auditor's hardware, on a machine the prover doesn't
 control; whatever runs on the GPU's node (`read_device`, the tagger's host) is the prover's, and every bound holds if it
-is adversarial, except that the device id it reads is the prover's word (`PROTOCOL.md` §0).
+is adversarial, except that the device id it reads is the prover's word.
 
 1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk
    (`Window.open`); then it derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and
@@ -26,8 +26,8 @@ verifier of a store, whatever its tag, and across restarts, because all of them 
 `ChallengerState`, a file named by the store in the verifier's state directory that fails closed.  The verdict
 publishes only whether the window was accepted (`Verdict.public`).  `Params` refuses `T + RTT` at or past
 `regen_floor_ns`, the fastest cooperating P2 root (`2 · ROOT_CALL_NS`), so no block is rebuilt from `W` within a window
-(SeqRoot).  What an accepted window certifies, and on what, is `PROTOCOL.md`; `bound` computes it, for a certified tag
-only (`tags.Tag.certified`).
+(SeqRoot).  What an accepted window certifies, and on what, is `bound`'s statement, for a certified tag only
+(`tags.Tag.certified`).
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ def nvidia_smi(args: Sequence[str]) -> str:
 
 
 def read_device(gpu: str, *, smi: Callable[[Sequence[str]], str] | None = None) -> bytes:
-    """The id of GPU `gpu` as the on-node challenger reads it on the GPU's node, the prover's word (`PROTOCOL.md` §0):
+    """The id of GPU `gpu` as the on-node challenger reads it on the GPU's node, the prover's word:
     the UUID the driver reports, `GPU-…` as nvidia-smi prints it (`smi`, by default `nvidia_smi`), through `device_id`.
     `gpu` is what nvidia-smi's `-i` takes: an index, the GPU's UUID or its PCI bus id.  A MIG slice is refused, whether
     `gpu` names one or the GPU is in MIG mode, whose CUDA devices are its slices, each with a UUID of its own: a slice
@@ -300,7 +300,7 @@ class ChallengerState:
     object left it.  Nothing here rewrites or truncates the file.  A state restored from a snapshot, or copied to another
     directory or host, is past what the directory can see; that the verifier keeps one state directory and never rolls
     back or forks a state rests on its host (`trusted-host`), and neither repeats a key while the nonces are
-    fresh (PROTOCOL.md §3)."""
+    fresh."""
 
     def __init__(self, directory: str | os.PathLike, vk: VerifierKey, *,
                  nonces: Callable[[int], bytes] = secrets.token_bytes) -> None:
@@ -621,7 +621,7 @@ class Bound:
 def bound(params: Params, blocks: int, block_bytes: int, *, chip_bytes: int, side_bytes_per_s: float,
           epsilon: Fraction = EPSILON, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2) -> Bound:
     """`ingress ≥ k·b − S − c − G·b − λ` bits with `k = ⌈(1 − ε_s)·N⌉`, except with probability
-    `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` (`Bandwidth.Guarantees.AuditRO`, PROTOCOL.md §5).  `S` is the chip's storage,
+    `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` (`Bandwidth.Guarantees.AuditRO`).  `S` is the chip's storage,
     `c = cap_side·(T + RTT)`, `G = 0` because `Params` refuses a window as long as a rebuild, `q ≤ 2^queries_log2` and
     `λ = queries_log2·k + slack_log2`, so `C(q, k)/2^λ ≤ q^k/2^λ = 2^-slack_log2`.  Only a certified tag has a bound."""
     tag = tags.get(params.tag)

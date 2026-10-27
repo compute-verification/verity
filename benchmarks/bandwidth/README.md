@@ -1,8 +1,8 @@
 # The bandwidth audit's GPU tagger
 
-The honest prover's step of the bandwidth audit v0 (its protocol, deleted from the tree, is
-`git show b19372fa9e:verity/core/protocols/bandwidth/PROTOCOL.md`, `PROTOCOL.md` below) on an RTX PRO 6000: every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
-constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
+The honest prover's step of the bandwidth audit v0, a retired protocol, on an RTX PRO 6000: every block's tag over the
+store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag constructions: `ro-blake3/v1`
+and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
 
 The audit's Python reference, which the tagger and the benchmarks that measure its tags are held to, is here too:
 `audit.py` (the window, the verifier, the prover's reference and `bound`) and `tags.py` (the three tags and their tree),
@@ -32,7 +32,7 @@ when the protocol was retired; the served bandwidth audit is `verity.core.protoc
   under a salt (`store_leaves`), which `gpu.py windows` calls under the lease, once the GPU is known.
 - The harness runs the verifier and its state on the GPU's node too, to measure. In a deployment the verifier is the
   auditor's hardware, on a machine the prover doesn't control, and what runs on the GPU's node (`challenger_device`,
-  `Prover`) is the prover's (`PROTOCOL.md` §0).
+  `Prover`) is the prover's.
 - `run.sh` is one Attempt on vy-nebius-2. It builds and runs the reference outside the lease, then under
   `gpu-lease 1 --wait` runs `bwtag`'s gates, its timing and `gpu.py windows`. A failed gate times nothing. Its header
   lists the outputs.

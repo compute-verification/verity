@@ -79,7 +79,7 @@ Not yet:
 - GLM-5.3 and DeepSeek-V4-Pro through sampled proofs and the Lean verifier.
 - Coverage counted in AND gates, as a share of the served computation.
 - The whole served run's circuit committed and proved, and the weights tied to a checkpoint in zero knowledge.
-- PoUW, PoUS, the bandwidth audits and the network certifier composed on one served engine.
+- PoUW, PoUS, the remote bandwidth audit and the network certifier composed on one served engine.
 
 ## Where to start
 
@@ -107,7 +107,7 @@ GPU machine.
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
 | The toy | A two-layer W8A8 MLP on CPU. Each run is audited by every subprotocol, and the verdicts are composed. | `verity bench all-protocols` | `benchmarks/all_protocols/README.md` |
-| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the bandwidth audit, the network certifier and the wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the remote bandwidth audit, the network certifier and the wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
 | vLLM | Llama-3.2-1B in int8, served by vLLM on one H200 through the committing endpoint. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `examples/vllm/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
 

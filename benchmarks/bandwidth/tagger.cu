@@ -1,6 +1,5 @@
-// The bandwidth audit's GPU tagger (§3-4 of its deleted protocol, git show b19372fa9e:verity/core/protocols/bandwidth/
-// PROTOCOL.md): every block's tag over the store E in device memory, the tags' leaves and the RFC 6962 root, for the
-// three tag constructions.
+// The bandwidth audit's GPU tagger: every block's tag over the store E in device memory, the tags' leaves and the
+// RFC 6962 root, for the three tag constructions.
 //
 //   ro-blake3/v1  two lanes per block, one per 1,024-byte chunk of the message u64be j ‖ E_j (16 compressions each under
 //                 the window's key K), the warp staging each 64-byte message block of its 32 chunks through shared memory
