@@ -650,4 +650,16 @@ theorem IntegrityBlockCarried : Flock.Guarantees.IntegrityBlockCarried := by
     ((S.integrity_on s (S.sessions b) hq hqt hA3 hs hA2 ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
   exact add_le_add (add_le_add (one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)) le_rfl) le_rfl
 
+/-- **`IntegrityBlockCarried` is `IntegrityBlock` with no carried leaf**: at `CarriedBlocks.ofServer S` the run is
+`S.run` (`CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous. -/
+theorem IntegrityBlock_of_IntegrityBlockCarried (h : Flock.Guarantees.IntegrityBlockCarried) :
+    Flock.Guarantees.IntegrityBlock := by
+  intro S b q δ hq hδ hqt hA3 s hT hL
+  have hc := h (CarriedBlocks.ofServer S) b q δ hq hδ hqt hA3 s hT hL fun x => absurd x.2 (Nat.not_lt_zero _)
+  rw [CarriedBlocks.run_ofServer] at hc
+  have h0 : (CarriedBlocks.ofServer S).carry b = 0 :=
+    Finset.sum_eq_zero fun x _ => absurd x.2 (Nat.not_lt_zero _)
+  rw [h0, add_zero] at hc
+  exact hc
+
 end Flock.SecurityProofs
