@@ -156,8 +156,9 @@ ResidualAdd = CompositeDefinition("ResidualAdd", 1, ("N",),
 
 
 @composite("Bf16MulScalarTensor", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, BF16))), Array(S.N, BF16)),
-           conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S (lane dense, "
-                       "R13 X-08) and the wave-1 exhaustive probe: bf16(f32(x) * 48) on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
+           conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S "
+                       f"({EVIDENCE['bf16_mul_scalar_tensor_difftest']['by']}) and the wave-1 exhaustive probe: bf16(f32(x) * 48) "
+                       "on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
 def Bf16MulScalarTensor(B, S, x, s):
     """`aten.mul.Tensor(x bf16 [.., N], s bf16 0-d TENSOR)`: ATen's CUDA
     `mul_kernel` for bf16 computes in opmath float — `f32(x_j) * f32(s)` (exact widenings, one RN multiply) — and stores with
