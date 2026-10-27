@@ -21,12 +21,6 @@ def s8_words(K: int) -> int:
     return K // 2 + 2
 
 
-def fields(tp: Any) -> list[Any]:
-    """Template ``tp``'s return fields in order, `UnitStager`'s output ports ``o<j>``."""
-    ret = tp.fn.signature()[1]
-    return [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
-
-
 #: the whole-row templates whose MUFU table reads `reads` lays out in lookup slots: the attention rows (in neither ``CUT`` nor
 #: ``SPLITS``, so the whole row is the unit), and the per-key-block Calls the window circuit cuts their heads into
 #: (`window_circuit.CUTS`: FA2's v18 by `AttentionHead_v19`, FA3's v4 by `AttentionHead_v20`), each reading EX2 a score or
