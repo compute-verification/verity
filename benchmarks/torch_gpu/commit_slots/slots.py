@@ -13,7 +13,7 @@ A step's tree is three levels of trees, each a ``frame-v3-sha512`` tree padded t
 A row's leaf, row g of slot s (rows numbered in the layout's order within a slot) and rank r in its unit::
 
   x    = SHA-512(P(8 len(row)) || row)                       rowleaf.sha512_row_v2_digest
-  y    = ChaCha20 blocks 3g, 3g+1, 3g+2, key the step's salt key, nonce s      C-Flock's hm96_salt
+  y    = ChaCha20 chunks 3g, 3g+1, 3g+2, key the step's salt key, nonce s      C-Flock's hm96_salt
   b||c = hm96.SHA512.commit_string(KEY, x, y)                public, 128 bytes
   leaf = unit_domain(u).leaf(r, r, "hm96-sha512/row/v2", hm96.SHA512.tree_leaf(KEY, b||c))
 
@@ -262,7 +262,7 @@ def fresh_salt_key() -> bytes:
 
 
 def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
-    """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 blocks 3g .. 3g + 2 under the step's
+    """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 chunks 3g .. 3g + 2 under the step's
     salt key with nonce ``slot`` (C-Flock's ``hm96_salt``, ``verity.core.protocols.pouw.audit.hm96_salt``)."""
     return keystream(salt_key, slot, 3 * first, 3 * n)
 
@@ -450,8 +450,8 @@ def _rows(source: int, *sizes: int) -> tuple[Row, ...]:
 
 
 def edge_layout() -> Layout:
-    """A small layout over SHA-512's block edges: rows of 1 to 240 bytes, a unit of 4 rows (no pad), one of 3 (a pad), one of 1,
-    a row of two parts (64 s8 codes, then their f32 scale) and one of 3 bytes; 5 units, so the slot tree pads 3."""
+    """A small layout over SHA-512's chunk edges: rows of 1 to 240 bytes, a proof block of 4 rows (no pad), one of 3 (a pad), one of 1,
+    a row of two parts (64 s8 codes, then their f32 scale) and one of 3 bytes; 5 proof blocks, so the slot tree pads 3."""
     g0 = Group((961,), (_rows(0, 1, 111, 112, 113), tuple(Row((Part(0, 337 + a, n),)) for a, n in ((0, 127), (127, 128), (255, 129))),
                         (Row((Part(0, 721, 240),)),)))
     g1 = Group((64, 4), ((Row((Part(0, 0, 64), Part(1, 0, 4))),), (Row((Part(1, 1, 3),)),)))
