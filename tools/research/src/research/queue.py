@@ -916,8 +916,8 @@ class Queue:
         return consistent, waiting
 
     def _head_from_branch(self, p: PR) -> bool:
-        """Take ``p``'s head from its branch when the branch's tip is the API head: GitHub can leave refs/pull/N/head behind for
-        hours (27 Oct: #5279's stayed at befd66a1 from 12:33Z while its branch and API head were 448698f3)."""
+        """Take ``p``'s head from its branch when the branch's tip is the API head: GitHub can leave refs/pull/N/head behind its
+        branch and API head for hours."""
         ref = f"refs/queue/branch/{p.number}"
         r = self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{p.branch}:{ref}", ok=None)
         tip = _git(self.workdir, "rev-parse", "-q", "--verify", ref, check=False).stdout.strip() if not r.returncode else ""

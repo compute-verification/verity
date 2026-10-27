@@ -218,8 +218,8 @@ def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(worl
 
 
 def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_branch_is_at_the_api_head(world):
-    """27 Oct: #5279's refs/pull/5279/head stayed at befd66a1 for hours after its branch and API head moved to 448698f3, so it
-    waited every sync. A branch whose tip is the API head stands in for the pull ref; one at any other commit doesn't."""
+    """GitHub can leave a PR's refs/pull/N/head behind its branch and API head for hours, and the PR waited every sync. A
+    branch whose tip is the API head stands in for the pull ref; one at any other commit doesn't."""
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, old := world.change({"b.txt": "old\n"}))
     q = world.queue()
