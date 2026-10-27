@@ -1,10 +1,12 @@
 """The network certifier's output value (`out_commit`): committed at the registration's shape (`OutShape`) as the
 reading program's pinned registered value under the certifier's salts, its head signed for the egress link-window, and
 the verifier's read of the record refusing a wrong key, session, link, window, width, row count or domain, and any
-flipped byte, by name; at the wired toy's 128 words a row as at one."""
+flipped byte, by name; at the wired toy's 128 words a row as at one. On device-attest the record holds no certificate
+and reads only through the period's check."""
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 
@@ -16,6 +18,7 @@ from verity.ml.circuits.types import Array, Value
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import out_commit as O
 from verity.core.protocols.certifier.certificate import Issuer, LmsKey, LmsSigner, SignerRefused
+from verity.core.protocols.certifier.period_root import PARTY, Entry, PeriodIssuer, refusal
 from verity.core.protocols.certifier.tests import signers as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -246,6 +249,51 @@ def test_signer_refusal(fresh):
         assert O.check_out(_record(out), s.public_key(), S.SESSION, SHAPE, window=w) == out.root
     with pytest.raises(SignerRefused, match="refused the out certificate of out window 2"):
         O.commit_out(VALUES, shape=SHAPE, key=s, session=S.OTHER_SESSION, window=2)
+
+
+def test_on_device_attest_an_out_record_reads_only_through_the_periods_check(tmp_path, fresh):
+    """On device-attest `commit_out` under a `PeriodIssuer` makes the head's digest the egress link-window's entry, the
+    record holds no certificate, and `check_out` reads it under no key through the period's check
+    (`period_root.refusal` over the entry the head names): the root to pin, or `out-period` with the check's reason once
+    the head isn't the period's record. Read under neither a key nor a check, or both, it isn't read, and a certificate
+    on it is refused."""
+    params, deployment = lms.Params(64, 1, 4), hashlib.sha512(b"a deployment").digest()
+    device = lms.Identity.init(tmp_path / "device", params)
+    issuer = PeriodIssuer(device.issue(deployment, PARTY), S.SESSION, O.LINK, 2)
+    outs = [O.commit_out(VALUES, shape=SHAPE, key=issuer, session=S.SESSION, window=w) for w in (0, 1)]
+    lives = [issuer.live(w) for w in (0, 1)]
+    (closed,) = issuer.close()
+    assert [live.entries for live in lives] == [(o.certificate,) for o in outs]
+    assert all(isinstance(o.certificate, Entry) and o.certificate.window == w for w, o in enumerate(outs))
+
+    def period(window: int, liveness=None):
+        blocks = {live.block: live.signature for live in lives} if liveness is None else liveness
+
+        def check(head: O.OutHead) -> str | None:
+            key_id = lms.HssSignature.decode(params, closed.signature).lower[:16]
+            entry = Entry.of(key_id, S.SESSION, O.LINK, O.DIRECTION, window, head.digest())
+            return refusal(closed, blocks, [entry], identity=device.public, deployment=deployment,
+                           attachment=S.SESSION, link=O.LINK, period=0, windows=2, params=params)
+        return check
+
+    docs = [_record(o) for o in outs]
+    assert all("certificate" not in d for d in docs)
+    for w, (o, d) in enumerate(zip(outs, docs)):
+        assert O.check_out(d, None, S.SESSION, SHAPE, window=w, certified=period(w)) == o.root
+    with pytest.raises(O.OutRefused, match="out-period: .*not a record of the period"):
+        O.check_out({**docs[0], "window": 1}, None, S.SESSION, SHAPE, window=1, certified=period(1))
+    with pytest.raises(O.OutRefused, match="out-period: .*its block, 1, has no liveness record"):
+        O.check_out(docs[1], None, S.SESSION, SHAPE, window=1, certified=period(1, {0: lives[0].signature}))
+    _refused("out-session", docs[0], None, session=S.OTHER_SESSION, window=0, certified=period(0))
+    _refused("out-domain", docs[0], None, shape=O.OutShape(SHAPE.program, "outs", WORDS, ROWS), window=0,
+             certified=period(0))
+    signer = fresh()
+    keyed = O.commit_out(VALUES, shape=SHAPE, key=signer, session=S.SESSION, window=0)
+    _refused("out-record", _record(keyed), None, window=0, certified=lambda h: None)
+    _refused("out-record", docs[0], signer.public_key(), window=0)
+    for k, certified in [(None, None), (signer.public_key(), lambda h: None)]:
+        with pytest.raises(TypeError, match="one of the two"):
+            O.check_out(docs[0], k, S.SESSION, SHAPE, window=0, certified=certified)
 
 
 def test_commit_refuses(fresh):
