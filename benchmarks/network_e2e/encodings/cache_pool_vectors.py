@@ -21,8 +21,10 @@ queue. Each eviction removes the blocks of the hashes vLLM evicts. Beside each h
 `drive` also checks, from `_KV` alone, that vLLM evicts a hash's last block only when no descendant of it is cached
 (`dropped_with_descendant`), the fact `cache_step_v2`'s N = NB − 1 rests on.
 
-    python3 cache_pool_vectors.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
-        [--out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json]
+    python3 benchmarks/network_e2e/encodings/cache_pool_vectors.py \\
+        benchmarks/network_e2e/encodings/tests/fixtures/async-prefix-cache.jsonl \\
+        benchmarks/network_e2e/encodings/tests/fixtures/async-crush.json.gz \\
+        [--out verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json]
 """
 from __future__ import annotations
 

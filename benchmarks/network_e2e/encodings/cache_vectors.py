@@ -10,8 +10,10 @@ the same rows and holds the two to each other:
 - at the step's end, each hit's sources (its trail's owners) are `Prefixes.sources`, and the advice's own;
 - the lookup and the computed units in one call give the same table as the two calls.
 
-    python cache_vectors.py --trace tests/fixtures/corpus-smallkv --trace tests/fixtures/sync-crush.json.gz \\
-        --out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
+    python benchmarks/network_e2e/encodings/cache_vectors.py \\
+        --trace benchmarks/network_e2e/encodings/tests/fixtures/corpus-smallkv \\
+        --trace benchmarks/network_e2e/encodings/tests/fixtures/sync-crush.json.gz \\
+        --out verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
 """
 from __future__ import annotations
 
