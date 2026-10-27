@@ -1,9 +1,9 @@
-"""Sloth over one wide word, the tensor-core codec's byte-exact reference (lane `ra-codec-tensor`).
+"""Sloth over one wide word, the tensor-core codec's byte-exact reference.
 
 ~~~text
 field      p = 2^n − c, p ≡ 3 (mod 4), c the smallest such that p is prime: n = 256U − 1 for U = 1 … 5 (a word fills U
            32-byte chunks, the tensor-core squaring's unit; 2^255 − 19 is 1 mod 4, so p255 = 2^255 − 765), m521, and
-           the full-slot p512 = 2^512 − 569, p768 = 2^768 − 825, p1024 = 2^1024 − 105 (ra-word-codec's p1024),
+           the full-slot p512 = 2^512 − 569, p768 = 2^768 − 825, p1024 = 2^1024 − 105 (the word codec's p1024),
            p1536 = 2^1536 − 3453 and p2048 = 2^2048 − 1557
 word       S = ⌈n/8⌉ bytes, little-endian, canonical (< p): 32U, 66 for m521, n/8 for the full-slot fields
 payload    B = ⌊(n − 1)/8⌋ bytes, little-endian (m < 2^(8B) < p): 32U − 1, and 65; a full-slot field's payload is the
@@ -19,7 +19,7 @@ round j    x ↦ ρ(x + c_j + t(i)); encode is rounds 0 … k − 1 from the pay
 K          a masked key's (`key(..., mask=True)`): LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 2)[0 : S]) mod 2^n, not
            reduced mod p
 σ_K(x)     x ⊕ K if that is below p, else x: an involution on [0, p), applied to x before each round j ≥ 1 of a masked
-           word's encode and after each inverted round j ≥ 1 of its decode (`benchmarks/word_codec/kv.py`'s, ra-codec-mix's)
+           word's encode and after each inverted round j ≥ 1 of its decode (`benchmarks/word_codec/kv.py`'s)
 ~~~
 
 The seed is drawn after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each

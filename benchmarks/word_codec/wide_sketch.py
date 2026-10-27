@@ -1,4 +1,4 @@
-"""ro-sketch-blake3/v0 over the wide store, byte-exact: ra-sketch-tag's sketch-then-hash tag (the sign matrix, the
+"""ro-sketch-blake3/v0 over the wide store, byte-exact: the sketch tag's sketch-then-hash tag (the sign matrix, the
 sketch, the tag, the leaves and the root as `benchmarks/sketch_tag/sketch.py` at 1b21bc8f7 states them) on `wide`'s
 records, so the fused GEMM sketches the encoded words it already holds.
 
