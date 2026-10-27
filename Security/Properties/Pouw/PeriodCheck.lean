@@ -12,7 +12,8 @@ The properties of onsite's work component, `PouwCheck.Period.protocol` (`verity/
   its open committed the draw `K` it reports and the table rows `T`, and every window is credited by
   `Credit.windowLayout` at that `K` and `T` (`windowAt`), its credited calls the ones it reports for the window, in
   the close's order. A refused window refuses the period: there's no partial credit.
-* `AcceptMeans`: the same of the check's accept, with its profile the period's name and its number of windows.
+* `AcceptMeans`: the same of the check's accept, of its served credit (`Credited.served`), with its profile the
+  period's name and its number of windows. The fill beside it is read by no decision and no guarantee.
 * `NeverUndecided`: the check accepts or rejects.
 * `Refuses`: the check doesn't accept everything, so `AcceptMeans` says something of it.
 
@@ -58,17 +59,18 @@ def PeriodCreditMeans : Prop :=
           ws.length = pc.windows.length ∧
           ∀ q ∈ ws.zip pc.windows, ∃ layout rows, windowAt key ledger pins main pc.k T q.1 = .ok (q.2, layout, rows)
 
-/-- **What the period check accepts**: `PeriodCreditMeans` at the verifier's key, main and period name, the auditor's
-ledger and the evidence's pins and windows, with the profile the period's name and its number of windows. -/
+/-- **What the period check accepts**: of its served credit `cr.served`, `PeriodCreditMeans` at the verifier's key,
+main and period name, the auditor's ledger and the evidence's pins and windows, with the profile the period's name and
+its number of windows. -/
 def AcceptMeans : Prop :=
-  ∀ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (pc : PeriodCredit) (prof : Period.Profile),
-    Period.protocol.check p c e = .accept pc prof →
-      prof.period = p.name ∧ prof.windows = pc.windows.length ∧
+  ∀ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (cr : Period.Credited) (prof : Period.Profile),
+    Period.protocol.check p c e = .accept cr prof →
+      prof.period = p.name ∧ prof.windows = cr.served.windows.length ∧
       ∃ ws : List Json, windowsOf e.windows = some ws ∧ period p.key c.ledger (.str p.name) (rootsOf ws) = .ok () ∧
-        committedK c.ledger p.name = .ok pc.k ∧ ∃ T : Nat, committedRows c.ledger p.name = .ok T ∧
-          ws.length = pc.windows.length ∧
-          ∀ q ∈ ws.zip pc.windows,
-            ∃ layout rows, windowAt p.key c.ledger e.pins p.main pc.k T q.1 = .ok (q.2, layout, rows)
+        committedK c.ledger p.name = .ok cr.served.k ∧ ∃ T : Nat, committedRows c.ledger p.name = .ok T ∧
+          ws.length = cr.served.windows.length ∧
+          ∀ q ∈ ws.zip cr.served.windows,
+            ∃ layout rows, windowAt p.key c.ledger e.pins p.main cr.served.k T q.1 = .ok (q.2, layout, rows)
 
 /-- **The period check never leaves a period undecided.** -/
 def NeverUndecided : Prop :=
@@ -115,6 +117,6 @@ def WindowVerifies (k : SampledProofs.Challenger.ChallengerKey) (key ledger pins
 falsify `AcceptMeans`, here at evidence whose windows aren't a list. -/
 def Refuses : Prop :=
   ∃ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence),
-    ∀ pc prof, Period.protocol.check p c e ≠ .accept pc prof
+    ∀ cr prof, Period.protocol.check p c e ≠ .accept cr prof
 
 end Properties.Pouw.PeriodCheck

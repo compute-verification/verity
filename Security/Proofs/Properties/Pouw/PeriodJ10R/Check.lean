@@ -14,18 +14,18 @@ open Lean (Json toJson)
 open PouwCheck PouwCheck.Credit Properties.Pouw.PeriodCheck
 
 theorem acceptedWindows : AcceptedWindows := by
-  intro p c e pc prof h
-  obtain ⟨_, hwn, ws, hws, _, hK, T, hT, hlen, hall⟩ := acceptMeans p c e pc prof h
+  intro p c e cr prof h
+  obtain ⟨_, hwn, ws, hws, _, hK, T, hT, hlen, hall⟩ := acceptMeans p c e cr prof h
   refine ⟨ws, hws, by rw [hwn, hlen], hK, T, hT, fun i => ?_⟩
-  have hi : i.val < (ws.zip pc.windows).length := by
+  have hi : i.val < (ws.zip cr.served.windows).length := by
     have := i.isLt
     simp only [List.length_zip]
     omega
-  have hmem : (ws[i], pc.windows[i.val]'(hlen ▸ i.isLt)) ∈ ws.zip pc.windows :=
+  have hmem : (ws[i], cr.served.windows[i.val]'(hlen ▸ i.isLt)) ∈ ws.zip cr.served.windows :=
     List.mem_iff_getElem.mpr ⟨i.val, hi, by simp [List.getElem_zip]⟩
   obtain ⟨layout, rows, hw⟩ := hall _ hmem
-  refine ⟨pc.windows[i.val]'(hlen ▸ i.isLt), ?_⟩
-  show (·.1) <$> windowAt p.key c.ledger e.pins p.main pc.k T ws[i] = _
+  refine ⟨cr.served.windows[i.val]'(hlen ▸ i.isLt), ?_⟩
+  show (·.1) <$> windowAt p.key c.ledger e.pins p.main cr.served.k T ws[i] = _
   rw [hw]
   rfl
 

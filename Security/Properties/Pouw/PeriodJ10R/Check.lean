@@ -46,14 +46,14 @@ def answeredOf (key ledger pins main w : Json) : Answered where
   live := get w "live"
 
 /-- **An accepted period's windows are each credited by `Credit.window`**: on an accept, the evidence's windows are a
-list `ws` of the profile's `n` windows, the open committed `K = pc.k` and some table rows `T`, and `WindowAccepts`
+list `ws` of the profile's `n` windows, the open committed `K = cr.served.k` and some table rows `T`, and `WindowAccepts`
 holds at every window `i`, at `registeredOf K T ws[i]` and `answeredOf … ws[i]`. -/
 def AcceptedWindows : Prop :=
-  ∀ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (pc : PeriodCredit) (prof : Period.Profile),
-    Period.protocol.check p c e = .accept pc prof →
+  ∀ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (cr : Period.Credited) (prof : Period.Profile),
+    Period.protocol.check p c e = .accept cr prof →
       ∃ ws : List Json, windowsOf e.windows = some ws ∧ prof.windows = ws.length ∧
-        committedK c.ledger p.name = .ok pc.k ∧ ∃ T : ℕ, committedRows c.ledger p.name = .ok T ∧
+        committedK c.ledger p.name = .ok cr.served.k ∧ ∃ T : ℕ, committedRows c.ledger p.name = .ok T ∧
           ∀ i : Fin ws.length,
-            WindowAccepts (registeredOf pc.k T ws[i]) (answeredOf p.key c.ledger e.pins p.main ws[i])
+            WindowAccepts (registeredOf cr.served.k T ws[i]) (answeredOf p.key c.ledger e.pins p.main ws[i])
 
 end Properties.Pouw.PeriodJ10R.Check

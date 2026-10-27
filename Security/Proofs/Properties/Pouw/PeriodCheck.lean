@@ -105,27 +105,39 @@ theorem periodCreditMeans : PeriodCreditMeans := by
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
 theorem acceptMeans : AcceptMeans := by
-  intro p c e pc prof h
-  change Period.check p c e = .accept pc prof at h
+  intro p c e cr prof h
+  change Period.check p c e = .accept cr prof at h
   unfold Period.check at h
-  split at h
-  · cases h
-  · split at h
-    · rename_i pc' hpc
+  cases hf : Period.form p.name e.windows with
+  | some why => rw [hf] at h; cases h
+  | none =>
+    rw [hf] at h
+    cases hpc : periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
+    | error err =>
+      obtain ⟨code, why⟩ := err
+      rw [hpc] at h
+      cases h
+    | ok pc =>
+      rw [hpc] at h
       simp only [Core.Outcome.accept.injEq] at h
       obtain ⟨h1, h2⟩ := h
-      subst h1
-      subst h2
+      subst h1 h2
       exact ⟨rfl, rfl, periodCreditMeans _ _ _ _ _ _ _ hpc⟩
-    · cases h
 
 theorem neverUndecided : NeverUndecided := by
   intro p c e r h
   change Period.check p c e = .undecided r at h
   unfold Period.check at h
-  split at h
-  · cases h
-  · split at h <;> cases h
+  cases hf : Period.form p.name e.windows with
+  | some why => rw [hf] at h; cases h
+  | none =>
+    rw [hf] at h
+    cases hpc : periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
+    | error err =>
+      obtain ⟨code, why⟩ := err
+      rw [hpc] at h
+      cases h
+    | ok pc => rw [hpc] at h; cases h
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {a : α} {f : α → Except ε β} (hx : x = .ok a) :
     x >>= f = f a := by
@@ -202,21 +214,24 @@ theorem honestAccepts (p : Period.Params) (c : Period.Commitment) (e : Period.Ev
     (hws : windowsOf e.windows = some ws)
     (hl : LedgerVerifies p.key c.ledger p.name ws K T k)
     (hw : ∀ q ∈ ws.zipIdx, WindowVerifies k p.key c.ledger e.pins p.main p.name K T q.2 q.1) :
-    ∃ pc, Period.protocol.check p c e = .accept pc { period := p.name, windows := pc.windows.length } ∧
-      pc.windows.length = ws.length := by
+    ∃ cr prof, Period.protocol.check p c e = .accept cr prof ∧ prof.period = p.name ∧ prof.windows = ws.length ∧
+      cr.served.windows.length = ws.length := by
   obtain ⟨pc, hpc⟩ := periodCredit_honest _ _ _ _ _ _ ws K T k hws hl hw
   obtain ⟨ws', hws', _, _, _, _, hlen, _⟩ := periodCreditMeans _ _ _ _ _ _ _ hpc
-  have : ws' = ws := Option.some.inj (hws'.symm.trans hws)
-  subst this
-  refine ⟨pc, ?_, hlen.symm⟩
-  change Period.check p c e = _
-  unfold Period.check
-  rw [hf, hpc]
-  rfl
+  have hww : ws' = ws := Option.some.inj (hws'.symm.trans hws)
+  have hacc : ∃ cr prof, Period.protocol.check p c e = .accept cr prof ∧ cr.served = pc := by
+    change ∃ cr prof, Period.check p c e = .accept cr prof ∧ cr.served = pc
+    unfold Period.check
+    rw [hf, hpc]
+    exact ⟨_, _, rfl, rfl⟩
+  obtain ⟨cr, prof, h, hs⟩ := hacc
+  obtain ⟨hp, hn, _⟩ := acceptMeans p c e cr prof h
+  have hcr : cr.served.windows.length = ws.length := by rw [hs, ← hlen, hww]
+  exact ⟨cr, prof, h, hp, hn.trans hcr, hcr⟩
 
 theorem refuses : Refuses := by
   refine ⟨{ key := .null, main := .null, name := "" }, { ledger := .null, bytes := .empty },
-    { pins := .null, windows := .null }, fun pc prof h => ?_⟩
+    { pins := .null, windows := .null }, fun cr prof h => ?_⟩
   obtain ⟨_, _, ws, hws, _⟩ := acceptMeans _ _ _ _ _ h
   simp [windowsOf] at hws
 
