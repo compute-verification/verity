@@ -55,7 +55,7 @@ theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := fun p hp => 
 end RowsFitP
 
 /-- A `RowsFitS` proof where a `RowsFitP` one is asked for (`RowsFitS.toP`). -/
-instance {c : Circuit} : Coe (RowsFitS c) (RowsFitP c) := ⟨RowsFitS.toP⟩
+instance instCoeRowsFitSRowsFitP {c : Circuit} : Coe (RowsFitS c) (RowsFitP c) := ⟨RowsFitS.toP⟩
 
 /-- **The bytes a row's `hm96` slot hashes**, `bytes` its message bytes: `RowSeg.enc` of them at a segmented row, else
 its own prefix (`rowPre`) and them. -/
