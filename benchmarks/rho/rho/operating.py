@@ -35,7 +35,7 @@ class Point:
 
 
 def _inner(regime: Any) -> Any:
-    """The regime a wrapper (`pofc.Pofc`, `analysis.restrict`'s) runs inside."""
+    """The regime a wrapper (`analysis.restrict`'s) runs inside."""
     while hasattr(regime, "regime"):
         regime = regime.regime
     return regime

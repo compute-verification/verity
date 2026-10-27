@@ -7,7 +7,7 @@
 # units.gates_per_flop 250 and family.full's kappa 0.602), so it moves with both and G cancels (u = w): the dark leaves
 # count at the dark hardware's datasheet product rate (kappa/2 a datasheet FLOP, the physical model), not at any
 # Boolean structural minimum, and only under draft:no-straddle. A measured minimum replaces it in gates of one Boolean
-# design, with units.gates_per_flop counted on the same design: #4826's 681 gates a bf16 product (AmpereBF16TcDot16_v3)
+# design, with units.gates_per_flop counted on the same design: 681 gates a bf16 product (AmpereBF16TcDot16_v3)
 # beside G = 250 would lower reference-onsite-h200's bound by about 16% (18%, 1 - 681 w, on the 89% the dark leaves
 # set).
 [structure.reference]

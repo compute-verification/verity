@@ -118,7 +118,7 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
 
 def certified(s: Scenario) -> dict | None:
     """Where a certifier sets the serving cut's link term: the certified prompt ingress into a location (bit/s), as an
-    intake (a multiple of `α Φ`), and with `declared` a server's declared inputs and outputs (NET-92)."""
+    intake (a multiple of `α Φ`), and with `declared` a server's declared inputs and outputs."""
     regime = operating._inner(s.regime)
     cert = getattr(regime, "certifier", None)
     if cert is None or getattr(regime, "form", None) == "links":
@@ -140,11 +140,11 @@ def certified_md(d: dict | None) -> list[str]:
     elif d["declared"]:
         basis = (f"{fmt(d['declared_x'])} × each server's declared inputs, r_in = {fmt(d['r_in'])} bit/s (r_out = "
                  f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket link-window, at the warden "
-                 f"form's public parameters, the honest-δ form of draft:NET-92's bound (a faulty ingress unit's "
+                 f"form's public parameters, the honest-δ form of draft:per-server-ingress's bound (a faulty ingress unit's "
                  f"{fmt(d['faulty_unit_bits'])} bits are excluded until every ingress unit is drawn); line rate, "
-                 f"{fmt(d['links'])} bit/s, is its upper end until NET-92's PR 5")
+                 f"{fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")
     else:
-        basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:NET-92)"
+        basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:declared-ingress)"
     return [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "
              f"{basis}; plus {fmt(d['channels'])} bit/s of timing and side channels."), ""]
 

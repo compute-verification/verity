@@ -60,7 +60,7 @@ def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound(
 
 def test_s_times_and_gates_per_flop_come_from_one_source():
     """The bound holds a gate at `u/w = ω_max 2G / (κ s_×)` of the reference's weight, so the FLOP model's `G` beside
-    a Boolean design's measured `s_×` (#4826: 681 gates a bf16 product) scales every weight counted at `u` (the dark
+    a Boolean design's measured `s_×` (681 gates a bf16 product) scales every weight counted at `u` (the dark
     leaves, most of onsite H200's lower bound) by `681 w`, about 0.82, with nothing to say so. Building refuses the mix;
     with both from that design it builds, and the lower bound moves by that much on the share counted at `u`."""
     design = "boolean:AmpereBF16TcDot16_v3"

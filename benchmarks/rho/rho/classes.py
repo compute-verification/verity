@@ -128,7 +128,7 @@ class Argument(Protocol):
 
     name: str
     side: Literal["bound", "attack"]
-    #: the Lean statement first (or a `note:`/`art:`/`draft:` id), then the named premises
+    #: the Lean statement first (or a `draft:` id), then the named premises
     cites: tuple[str, ...]
 
     def allowance(self, p: Profile) -> Allowance: ...
@@ -325,8 +325,6 @@ def output_premise(k: float, map_width: float, map_width_min: float, b: float, b
     return map_width * k / beta_v if k <= output_cap(map_width_min, b, beta_x, beta_v) else math.inf
 
 
-E1 = "note:training-20261024T2310Z-draft-tvi-e1-sections"
-FINDINGS = "note:training-20261024T2336Z-report-tvi-findings"
 DEPTH = ("layers", "layer_weights")
 
 CLASSES: Mapping[str, Argument] = {a.name: a for a in (
@@ -372,15 +370,15 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
                          "Nci.Assumptions.BaselineRegistered", "Nci.Guarantees.ReferenceThreaded",
                          "Nci.Assumptions.ReferenceLayered"),
             ("b_a", "b_w", "thread_d", "thread_e", "thread_c", "thread_k"), threaded_checked),
-    Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate", E1, FINDINGS),
+    Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate"),
             ("fanout", "beta_x"), fanout_priced, counts="kappa_forward", share=expensive_share,
             share_reads=("layer_bits", "layers")),
-    Formula("fanout-split", ("draft:E1-Prop3-prime", "draft:E1-activation-rate", "draft:E1-H-gamma", E1),
+    Formula("fanout-split", ("draft:E1-Prop3-prime", "draft:E1-activation-rate", "draft:E1-H-gamma"),
             ("fanout", "beta_x", "gamma", "price", "price_max"), fanout_split, counts="kappa_forward",
             share=expensive_share, share_reads=("layer_bits", "layers")),
-    Formula("accumulator", ("draft:E1-Cor4a", "draft:E1-R", E1),
+    Formula("accumulator", ("draft:E1-Cor4a", "draft:E1-R"),
             ("h_eff", "b_ps", "step_tokens"), accumulator, counts="kappa_wgrad"),
-    Formula("output-premise", ("draft:E1-Prop6b", "draft:E1-output-premise", E1, FINDINGS),
+    Formula("output-premise", ("draft:E1-Prop6b", "draft:E1-output-premise"),
             ("map_width", "map_width_min", "b", "beta_x", "beta_v"), output_premise, counts="kappa_forward"),
 )}
 
@@ -389,8 +387,7 @@ STANDINGS = ("supported", "assumed", "contested", "refuted")
 
 
 def premises(registry: Registry | None = None) -> dict[str, dict]:
-    """`data/premises.toml` by the cited name (`lean`): each premise's `standing`, `beyond`, `credible_bits` and
-    `evidence`."""
+    """`data/premises.toml` by the cited name (`lean`): each premise's `standing`, `beyond` and `credible_bits`."""
     reg = registry or Registry.load()
     return {reg[f"premise.{n}.lean"]: reg.table(f"premise.{n}") for n in reg.names("premise")}
 

@@ -13,10 +13,10 @@ rack, or a rack of servers whose certifiers sit only on its uplinks). Its `phi` 
 second (`|A[X,J]| ≤ Φ_X |J|`), `memory` its devices' bits, and its *hosts* (the servers or compute trays, each with its
 own NICs, certifier and side channels) carry host memory, disks, host CPUs and the boundary links whose line rate is
 `links` (`β_X`, `Accounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
-RAM, disks): the capacity the wipe's per-server bound is stated against (Daniel, 26 Oct 12:16 PM PDT).
+RAM, disks): the capacity the wipe's per-server bound is stated against.
 
 A **fleet** is the inventory: the monitored locations, and the dark leaves `L_dark` with `Φ(L_dark) = ε_dark Φ_total`,
-one connected pool outside every monitored location (Daniel, 25 Oct). The physical model bounds every gate at capacity,
+one connected pool outside every monitored location (ruled). The physical model bounds every gate at capacity,
 so the bound counts the dark leaves at `Φ`; `mfu_train` and `mfu_dark` are what a construction (an attack) gets of the
 monitored and the dark gates. A **horizon** is the monitoring period a result is over.
 

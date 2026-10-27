@@ -105,6 +105,13 @@ def test_overhead_weights_serving_blocks_by_their_gates():
     assert math.isclose(sum(s.terms.values()), s.g)
 
 
+def test_with_no_dark_leaves_the_overhead_is_the_inverse_of_the_counted_share_times_the_efficiency():
+    part = Partition((block(Cut("c", (Blocks("x", Budget(200, 30), 2),), {"undecl.gpu": 100})),), 0.0)
+    for efficiency in (1.0, 2.5):
+        s = overhead(part, lambda bud: bud.inputs, W, efficiency=efficiency)
+        assert s.dark == 0.0 and math.isclose(s.rho, efficiency / s.g)
+
+
 def test_least_takes_the_smallest_cap():
     a = least(lambda b: 5.0, lambda b: 3.0, lambda b: math.inf)
     assert a(Budget(1, 1)) == 3.0 and least()(Budget(1, 1)) == math.inf

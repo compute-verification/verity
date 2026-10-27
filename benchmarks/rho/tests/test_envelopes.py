@@ -141,8 +141,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
 
 
 def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server():
-    """`(c_S, k_S) = (⌊Φ_s Δ_wipe⌋, k_wipe + (r_in + r_side) Δ_wipe)`, `k_wipe` of the server's whole memory (Daniel, 26 Oct
-    12:16 PM PDT)."""
+    """`(c_S, k_S) = (⌊Φ_s Δ_wipe⌋, k_wipe + (r_in + r_side) Δ_wipe)`, `k_wipe` of the server's whole memory (ruled)."""
     ctx = context("reference-h200")
     r = envelopes.regime(REG, "onsite")
     loc, pol, w = ctx.location, ctx.policy, r.wipe.wipe_s
@@ -180,16 +179,15 @@ def test_the_links_form_is_what_windows_proves():
     assert lean.weakest(envelopes.regime(REG, "onsite").cites()) == "draft"
 
 
-def test_the_declared_io_bound_at_w63_is_pr_5s_per_window_honest_delta_form():
-    """NET-92's per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 21, KO 64, τ_b
-    100 ms, 32-bucket link-windows), PR 5's `requestBits`, `windowRequests` and `windowBits`
-    (note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee): K = 45 ids a cell; 36,107 bits in a
-    request, the plan's 36,067 and `requestSlack`'s 32 + 1 + 6 + 1; 12 bits a bucket, `lanes ⌈log₂(r + 1)⌉`; and 1,095
-    out (1,088 id bits and the count). A link-window anchors `4 ⌈32 / 22⌉ = 8` requests, so a server takes at most
-    289,240 bits in a 3.2 s window, 90.4 kbit/s in and 2.7 kbit/s out, against the warden's line rate of 655 kbit/s each
-    way. That is never less than the rate over many windows, 65.8 kbit/s, which it equals only at T = D + 1, and at
-    T = 600 it is the note's 67.5 kbit/s. A faulty ingress unit, which this honest-δ form excludes, would free 209,964
-    bits more (8 · 512 · 16 + 4 · 36,107). `regime.onsite` doesn't take it."""
+def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest_delta_form():
+    """The per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 21, KO 64, τ_b
+    100 ms, 32-bucket link-windows), its `requestBits`, `windowRequests` and `windowBits` (`draft:per-server-ingress`):
+    K = 45 ids a cell; 36,107 bits in a request, 36,067 and `requestSlack`'s 32 + 1 + 6 + 1; 12 bits a bucket,
+    `lanes ⌈log₂(r + 1)⌉`; and 1,095 out (1,088 id bits and the count). A link-window anchors `4 ⌈32 / 22⌉ = 8`
+    requests, so a server takes at most 289,240 bits in a 3.2 s window, 90.4 kbit/s in and 2.7 kbit/s out, against the
+    warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 65.8 kbit/s, which it
+    equals only at T = D + 1, and at T = 600 it is 67.5 kbit/s. A faulty ingress unit, which this honest-δ form
+    excludes, would free 209,964 bits more (8 · 512 · 16 + 4 · 36,107). `regime.onsite` doesn't take it."""
     c = envelopes.regime(REG, "onsite-w63").certifier
     assert (c.ids_per_cell, c.request_slack, c.request_in, c.bucket_in, c.request_out, c.window_buckets) == (
         45, 40, 36_107, 12, 1_095, 32)
@@ -215,10 +213,11 @@ def test_the_declared_io_bound_at_w63_is_pr_5s_per_window_honest_delta_form():
 
 
 def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_upper_end():
-    """`regime.onsite`'s certified ingress is `intake · α Φ`, cited to draft:NET-92 (a server's ingress only its
-    declared inputs, at most α Φ at full use). With `declared` (`regime.onsite-w63`) it is `hosts · r_in`, cited to the
-    plan and PR 5 notes too: as an intake `r_in / (α Φ_s)`, 0.0183 at Kimi K2's policy on an H200 server. `declared_x`
-    scales it up to at most the location's links (its high end is line rate, the upper end until NET-92's PR 5)."""
+    """`regime.onsite`'s certified ingress is `intake · α Φ`, cited to draft:declared-ingress (a server's ingress only
+    its declared inputs, at most α Φ at full use). With `declared` (`regime.onsite-w63`) it is `hosts · r_in`, cited to
+    draft:per-server-ingress too: as an intake `r_in / (α Φ_s)`, 0.0183 at Kimi K2's policy on an H200 server.
+    `declared_x` scales it up to at most the location's links (its high end is line rate, the upper end until Lean
+    proves the per-server bound)."""
     line = REG.override({"regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
     on, off, at_line = (envelopes.regime(REG, "onsite-w63"), envelopes.regime(REG, "onsite"),
                         envelopes.regime(line, "onsite-w63"))
@@ -233,9 +232,8 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
         assert off.rate_in(ctx) == pytest.approx(alpha_phi + loc.hosts * (c.timing + c.side))
         assert off.certifier.intake_of(ctx) == 1
     assert c.intake_of(context("reference-h200")) == pytest.approx(0.01827, rel=1e-3)
-    assert {"draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan",
-            "note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee"} <= set(on.cites())
-    assert "draft:NET-92" in off.cites() and not any("NET-35" in c for c in on.cites() + off.cites())
+    assert {"draft:declared-ingress", "draft:per-server-ingress"} <= set(on.cites())
+    assert "draft:declared-ingress" in off.cites() and "draft:per-server-ingress" not in off.cites()
 
 
 def test_onsite_w63_beside_the_reference():

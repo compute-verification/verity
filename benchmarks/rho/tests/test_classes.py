@@ -183,7 +183,6 @@ def test_every_premise_a_class_cites_is_listed_with_a_known_standing():
     for row in table.values():
         assert row["standing"] in STANDINGS and row["beyond"] in STANDINGS
         assert STANDINGS.index(row["beyond"]) >= STANDINGS.index(row["standing"])
-        assert all(e.startswith(("art:", "note:")) for e in row["evidence"])
 
 
 def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
