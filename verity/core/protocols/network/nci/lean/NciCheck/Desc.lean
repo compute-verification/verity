@@ -82,8 +82,10 @@ open Flock.Program
 /-- Half-open intervals `[lo, hi)`, sorted, disjoint and not adjacent. -/
 abbrev Ivs := Array (Nat × Nat)
 
+/-- The intervals of `xs` as `Ivs`, sorted by `List.mergeSort`: `Array.qsort` takes time quadratic in the elements of one
+key, and a body's nodes read the same leaves many times over. -/
 def Ivs.norm (xs : Array (Nat × Nat)) : Ivs :=
-  let ys := (xs.filter fun p => p.1 < p.2).qsort (fun x y => x.1 < y.1)
+  let ys := (xs.filter fun p => p.1 < p.2).toList.mergeSort fun x y => x.1 ≤ y.1
   ys.foldl (init := #[]) fun acc (a, b) =>
     match acc.back? with
     | some (c, e) => if a ≤ e then acc.pop.push (c, max b e) else acc.push (a, b)
@@ -869,7 +871,7 @@ def distinctWidth (ivs : Array (Nat × Nat × Nat)) : Nat :=
 
 /-- The gates of `qs` as intervals with their widths. -/
 def gateIvs (qs : Array Piece) : Array (Nat × Nat × Nat) :=
-  let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).qsort (· < ·) |>.toList.eraseDups
+  let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).toList.mergeSort (· ≤ ·) |>.eraseDups
   ws.toArray.flatMap fun w => (ivsOf (qs.filter (·.tgt == .gate w))).map fun iv => (iv.1, iv.2, w)
 
 /-- Gates `cnt` copies, `period` apart, of `res` (each `(lo, hi, w)` from `lo`, none past `span ≤ period`). -/
@@ -926,8 +928,8 @@ counted as copies times one copy's width, alone in their span, and with what els
 def novelWidth (segs : Array Seg) : Nat :=
   let acc := segs.foldl copiesStep (gateIvs (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps)), #[])
   let ivs := acc.1
-  let frames := (acc.2.qsort fun x y =>
-    x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt < y.cnt)))).foldl frameStep #[]
+  let frames := (acc.2.toList.mergeSort fun x y =>
+    x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt ≤ y.cnt)))).foldl frameStep #[]
   let n := ivs.size
   let items := (ivs.mapIdx fun i x => (x.1, x.2.1, i)) ++
     (frames.mapIdx fun i x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.span, n + i))

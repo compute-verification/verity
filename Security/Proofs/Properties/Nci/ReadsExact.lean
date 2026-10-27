@@ -23,8 +23,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   (`FromRows`), or `carriesRead` gives (`FromCarry`); `Seg.split` reads copies all alike once and one copy piece by
   piece, naming the same positions (`mem_segPos_alike`, `mem_segPos_split`);
 * `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
-* `Array.qsort` by a key sorts by it (`qsort_sorted`), so `Desc.Ivs.norm` keeps exactly its intervals' leaves
-  (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
+* `Array.qsort` by a key sorts by it (`qsort_sorted`), and `Desc.Ivs.norm`, which sorts by `List.mergeSort`, keeps
+  exactly its intervals' leaves (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
 * a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`);
 * on the circuit's side, a gate's operands are its node's references resolved (`operands_mem`), and a gate of a
   primitive root node reads its member's operands in the root activation (`reads_rootPrim`);
@@ -10006,10 +10006,17 @@ def normStep (acc : Array (Nat × Nat)) (p : Nat × Nat) : Array (Nat × Nat) :=
   | none => acc.push p
 
 theorem norm_eq (xs : Array (Nat × Nat)) :
-    Desc.Ivs.norm xs = ((xs.filter fun p => p.1 < p.2).qsort (fun x y => x.1 < y.1)).toList.foldl normStep #[] := by
+    Desc.Ivs.norm xs =
+      ((xs.filter fun p => p.1 < p.2).toList.mergeSort fun x y => decide (x.1 ≤ y.1)).foldl normStep #[] := by
   unfold Desc.Ivs.norm
-  rw [← Array.foldl_toList]
   rfl
+
+/-- `List.mergeSort` by starts sorts by them. -/
+theorem sorted_starts (L : List (Nat × Nat)) :
+    (L.mergeSort fun x y => decide (x.1 ≤ y.1)).Pairwise (fun x y => x.1 ≤ y.1) :=
+  (List.pairwise_mergeSort (le := fun x y : Nat × Nat => decide (x.1 ≤ y.1))
+    (fun a b c hab hbc => by simp only [decide_eq_true_eq] at *; omega)
+    (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) L).imp fun h => by simpa using h
 
 theorem inIvs_push (acc : Array (Nat × Nat)) (p : Nat × Nat) (a : Nat) :
     Width.inIvs (acc.push p).toList a ↔ Width.inIvs acc.toList a ∨ (p.1 ≤ a ∧ a < p.2) := by
@@ -10096,17 +10103,17 @@ theorem norm_sub (xs : Array (Nat × Nat)) (a : Nat) (h : Width.inIvs (Desc.Ivs.
   rcases normFold_sub _ #[] a h with h | ⟨iv, hiv, h⟩
   · obtain ⟨iv, hiv, -⟩ := h; simp at hiv
   · rw [← inIvs_nonempty]
-    exact ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.1 hiv, h⟩
+    exact ⟨iv, (List.mergeSort_perm _ _).mem_iff.1 hiv, h⟩
 
 /-- **`Desc.Ivs.norm` keeps exactly its intervals' leaves.** -/
 theorem norm_mem (xs : Array (Nat × Nat)) (a : Nat) :
     Width.inIvs (Desc.Ivs.norm xs).toList a ↔ Width.inIvs xs.toList a := by
   refine ⟨norm_sub xs a, fun h => ?_⟩
   rw [norm_eq]
-  apply normFold_sup _ #[] (qsort_sorted Prod.fst _) (fun p _ x hx => by simp at hx)
+  apply normFold_sup _ #[] (sorted_starts _) (fun p _ x hx => by simp at hx)
   rw [← inIvs_nonempty] at h
   obtain ⟨iv, hiv, h⟩ := h
-  exact Or.inr ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.2 hiv, h⟩
+  exact Or.inr ⟨iv, (List.mergeSort_perm _ _).mem_iff.2 hiv, h⟩
 
 /-- **What `Desc.Ivs.covers` checks**: every leaf below `n` is in an interval. -/
 theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (ha : a < n) :
