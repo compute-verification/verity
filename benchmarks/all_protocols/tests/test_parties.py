@@ -24,6 +24,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.sampled_proofs import parties as SP_PARTIES
+from verity.core.wire import Message
 from verity_all_protocols import compose as C, parties as P
 
 EXAMPLE = P.ROOT / "examples" / "toy_network" / "config.toml"
@@ -108,6 +110,18 @@ def test_the_deployment_gives_addresses_to_listeners_and_states_its_coins():
     shared = {**config, "party": [{**p, "machine": "prover-1"} if p["name"] == "challenger" else p
                                   for p in config["party"]]}
     assert P.coins_of(shared, False) == "simulated"
+
+
+def test_the_firewalls_pin_is_a_message_the_verifier_takes(tmp_path):
+    exe = tmp_path / "flock-firewall"
+    exe.write_bytes(b"#!/bin/sh\n")
+    exe.chmod(0o755)
+    (tmp_path / "tools.json").write_text(json.dumps({"flock-firewall": str(exe)}))
+    pin = P.Machine(P.config_of(EXAMPLE), tmp_path).pin()
+    msg = Message("Firewall", {"sha512": pin["sha512"], "sessions": pin["sessions"]})
+    registry = SP_PARTIES.MANIFEST.registry
+    assert registry.decode(registry.encode(msg)) == msg
+    assert json.loads((tmp_path / "firewall" / "ready.json").read_text())["sessions"] == 1
 
 
 def test_a_verifier_whose_peers_listen_nowhere_decides_nothing(tmp_path, capsys):

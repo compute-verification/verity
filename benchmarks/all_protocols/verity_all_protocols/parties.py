@@ -144,8 +144,8 @@ class Machine:
         exe = Path(tools(self.state)["flock-firewall"])
         if not os.access(exe, os.X_OK):
             raise RuntimeError(f"{exe} is not an executable")
-        got = {"firewall": str(exe), "sha512": hashlib.sha512(exe.read_bytes()).hexdigest(),
-               "sessions": RN.ONE_AT_A_TIME}
+        got = {"firewall": str(exe), "sha512": hashlib.sha512(exe.read_bytes()).hexdigest(), "sessions": 1,
+               "why": RN.ONE_AT_A_TIME}
         d = self.state / "firewall"
         d.mkdir(parents=True, exist_ok=True)
         (d / "ready.json").write_text(json.dumps(got, sort_keys=True) + "\n")
