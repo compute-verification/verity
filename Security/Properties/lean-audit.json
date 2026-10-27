@@ -347,15 +347,7 @@
   "Definitions.Pouw.Game.Defs",
   "NciCheck.Protocol",
   "PouwCheck.Period",
-  "VStar.Algebra",
-  "VStar.Cap",
-  "VStar.Compose",
-  "VStar.Holo",
-  "VStar.InnerRepCheck",
-  "VStar.Parts",
-  "VStar.Residuals",
-  "VStar.Stage",
-  "VStar.Unit"
+  "VStar"
  ],
  "layers": {
   "Properties.Pouw": {
