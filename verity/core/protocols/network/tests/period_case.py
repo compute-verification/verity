@@ -330,6 +330,28 @@ def _walkable(j: dict) -> bool:
     return (acts + 1) * (depth + 2) <= FUEL // 2 and not empty
 
 
+def _topological(j: dict) -> bool:
+    """`Prog.orderViolation` is none: each argument of a body the root reaches names only the body's parameters and
+    its earlier nodes (an affine or strided part of no leaves names nothing; the returns aren't read)."""
+    defs, callees = j["definitions"], j["callees"]
+    seen, todo = set(), [j["root"]]
+    while todo:
+        fid = todo.pop()
+        if fid in seen or defs[fid]["form"] == "primitive":
+            continue
+        seen.add(fid)
+        body = defs[fid]["body"]
+        for k, x in enumerate(body["nodes"]):
+            for a in x.get("args", ()):
+                for q in _parts(a["refs"], body["nodes"]):
+                    r = q.get("affine") or q.get("strided")
+                    names = [(s, i) for s, i, _ in q["explicit"]] if "explicit" in q else [r[:2]] if r[-1] else []
+                    if any(not i < (len(body["params"]) if s == "p" else k) for s, i in names):
+                        return False
+            todo.append(callees[x["fn"]])
+    return True
+
+
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
     each committing its template's return; a root with no template refused. It reads the descriptor's root nodes and
@@ -352,7 +374,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template argument one input node's leaves (`_input_arg`),
-    and no egress argument an ingress row's. It reads the descriptor's nodes, signatures and returns; C-Flock's
+    no egress argument an ingress row's, and the Program topological (`_topological`). It reads the descriptor's
+    nodes, signatures and returns; C-Flock's
     decoder, which Lean runs on it, refuses no descriptor this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
@@ -407,6 +430,9 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
         raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
                        "depend on the ingress (NetTiming.Layout.Fits)")
+    if not _topological(j):
+        raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
+                       "topological, so a gate's operands could be gates after it")
     return Scan(T, T * bits_of(bf["params"][1][1]), bits_of(bf["ret_type"]), bits_of(be["ret_type"]))
 
 
@@ -1371,8 +1397,9 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress
     template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
     gates (an input node like it appended, keeping the input count); `argument`, egress member 0's first state leaf the
-    last ingress template's first output leaf (a later step's ingress when `T > 1`); and `ingress`, the egress state
-    the last ingress template's row input node (resized, the state's node resized to keep the count)."""
+    last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
+    last ingress template's row input node (resized, the state's node resized to keep the count); and `topological`,
+    the last ingress template's row input node moved after the templates, so the template names a later node."""
     desc = p["scan"]
 
     def parts() -> tuple[dict, list, list[int]]:
@@ -1439,6 +1466,28 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     nodes[ks] = nodes[ks] | {"n": min(R, S), "out": typed(d, ["Array", min(R, S), ["Value", 1]])}
     nodes[ts[-1]]["args"][0]["refs"] = {"affine": ["n", kr, 0, S]}
     out["ingress"] = own(d), "an egress template's argument is an ingress row's input node"
+
+    d, nodes, ts = parts()
+    kr = nodes[ts[-2]]["args"][0]["refs"]["affine"][1]
+    at = lambda i: len(nodes) - 1 if i == kr else i - (i > kr)  # noqa: E731
+
+    def moved(r: dict) -> dict:
+        if "concat" in r:
+            return {"concat": [moved(q) for q in r["concat"]]}
+        if "alias" in r:
+            return {"alias": [at(r["alias"][0]), r["alias"][1]]}
+        if "explicit" in r:
+            return {"explicit": [[s, i if s == "p" else at(i), x] for s, i, x in r["explicit"]]}
+        key = "affine" if "affine" in r else "strided"
+        s, i, *rest = r[key]
+        return {key: [s, i if s == "p" else at(i), *rest]}
+    r = d["definitions"][d["root"]]["body"]
+    for x in nodes:
+        for a in x.get("args", ()):
+            a["refs"] = moved(a["refs"])
+    r["ret"] = moved(r["ret"])
+    nodes.append(nodes.pop(kr))
+    out["topological"] = own(d), "a body names a later node"
     return out
 
 

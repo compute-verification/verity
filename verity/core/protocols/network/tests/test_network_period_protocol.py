@@ -144,7 +144,8 @@ def test_each_fits_check_refuses_its_negative(server):
     """Each of the scan's checks of what `NetTiming.Layout.Fits` asks refuses, in Lean and in the mirror, a scan that
     passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
     an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
-    gate's, one with an egress argument a later ingress output, and one whose egress state is an ingress row's input."""
+    gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, and
+    one whose ingress template names a later root node."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         for name, (bad, fragment) in PC.scan_negatives(case["params"]).items():

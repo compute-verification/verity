@@ -464,8 +464,9 @@ within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot
 every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
 returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); each
 ingress template's row, and every template's argument, is one input node's leaves (`inputArg`), so each ingress gate is
-an input and a template reads only input gates outside its own; and no egress template's argument is an ingress row's
-input node, so no egress gate depends on an ingress gate. -/
+an input and a template reads only input gates outside its own; no egress template's argument is an ingress row's
+input node, so no egress gate depends on an ingress gate; and the Program is topological (`Prog.orderViolation`, as
+`NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -516,6 +517,8 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     "scan: a template's argument is not one input node's leaves"
   need (xe.args.all fun a => !rows.contains (inputArg prog a)) "scan: an egress template's argument is an ingress \
     row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
+  need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
+    is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
 def paramsOf (j : Json) : V Params := do

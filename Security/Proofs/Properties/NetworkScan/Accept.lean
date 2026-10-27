@@ -7,8 +7,8 @@ import Proofs.Properties.Nci.BodiesOk
 `scanOf_accepted` reads `scanOf`'s steps one by one (each check a `need`, so each step a bind) and keeps what
 `NetTiming.Layout.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the egress
 template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves returned by
-the root in one run), and each step's ingress bucket (`Ingress`: a batch member, its first parameter the row, its first
-argument one input node's leaves).
+the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row, its first
+argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
 -/
 
 namespace Properties.NetworkScan.Fits
@@ -50,6 +50,7 @@ structure Accepted (P : Prog) (s : Schedule) : Prop where
   returned : ∃ q ∈ (P.defs[P.root]!).body.ret.parts, ∃ c, q = .affine false (egressNode P) 0 c ∧
     s.window * (callee P (egressNode P)).outLeaves ≤ c
   ingress : ∀ t < s.window, Ingress P s (bucket P t)
+  topo : P.orderViolation = none
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β} (h : (x >>= f) = .ok y) :
     ∃ a, x = .ok a ∧ f a = .ok y := by
@@ -127,7 +128,11 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, h9, h⟩ := bind_ok h
   obtain ⟨_, h10, h⟩ := bind_ok h
   obtain ⟨_, h11, h⟩ := bind_ok h
-  obtain ⟨_, h12, -⟩ := bind_ok h
+  obtain ⟨_, h12, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, h15, -⟩ := bind_ok h
+  replace h15 := Option.isNone_iff_eq_none.1 (need_ok h15)
   replace h3 := need_ok h3
   replace h4 := need_ok h4
   replace h5 := need_ok h5
@@ -183,7 +188,7 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
     have := congrArg Array.size hn1
     rw [Array.size_map] at this
     exact this.trans rfl
-  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_⟩
+  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15⟩
   rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa
