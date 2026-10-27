@@ -88,3 +88,14 @@ def test_an_uncovered_form_is_refused_by_name(name, why):
         assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
         assert why in got["reason"] and PC.GUARANTEE in got["reason"], (name, got["reason"])
         assert PC.case(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
+
+
+@pytest.mark.parametrize("raw", [b"\xff", b"\xed\xa0\x80", b'{"program_fn":"\xc0\xaf"}'])
+def test_a_descriptor_not_utf8_is_left_to_the_credit(raw):
+    """A window whose descriptor isn't UTF-8 (a stray byte, a surrogate, an overlong) is no form of its own, as Lean's
+    `String.fromUTF8?` reads it, and the period is rejected by `credit.period_credit`, not credited."""
+    assert PC._window_form("p", 0, {"descriptor": raw.hex()}) is None
+    d = cases.credit_cases.period_instance(random.Random("utf8"), "honest", **cases.COVERED)
+    d["windows"][0]["descriptor"] = raw.hex()
+    got = PC.case(cases.serve(d))
+    assert got["verdict"] == "reject" and not got["reason"].startswith("form: "), got["reason"]
