@@ -34,9 +34,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b",
-    G.SCHEMA_V2: "art:eedab8e57d1f9c380472fe263ab38d00dc8ec68f1a7e94b035de01d0cb2416db",
-    G.SCHEMA_SEG: "art:d42ad7aedb6b15f351dcddd65fd51ab0e0f91afbbfa48451d192d87273b926e6",
+    G.SCHEMA: "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5",
+    G.SCHEMA_V2: "art:2425aa5eff7e781331bda47d22e1fcd7eb813cbd7e64e39965d851b6f843b0cd",
+    G.SCHEMA_SEG: "art:1a17e14138bb6ab7412ad3ee01c62e49c9f84c666ca0fd9848c2688d6311f403",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified draw of `PLAIN_K`
 #: (stage/draw.json), and session/ a plain session (no --zk, OS coins) drawn by it; vectors/ is vectors.json's live set
