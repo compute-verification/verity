@@ -1,0 +1,53 @@
+# Proofs' examples out of `benchmarks/`: what `tools/move/layout.py --map tools/move/reorg_proofs_map.toml` moves and
+# rewrites (Daniel, 26 Oct 5:26 PM PDT, note:memory-accounting/20261027T0040Z-draft-reorg-examples-benchmarks: `examples/<name>/`
+# holds one end-to-end example each, a protocol or composite, a workload and a placement with its commands; `benchmarks/`
+# holds measurement only).
+#
+# - `benchmarks/one_stage/`, the one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end, becomes
+#   `examples/one_stage/`, whole. Its scripts import each other from their own directory (`sys.path` and `import a0`), and
+#   its cost jobs read the drivers (`zk_cost.py` imports `a0` and `a6`), so the cost jobs come along rather than being cut
+#   off: `zk_cost.py`, `zk_cost.sh`, `zk_cost_cpu.sh`, `a8_cost.py` and `a8_gpu.sh` go back to `benchmarks/` in phase 2,
+#   with code. It is not a package, and its suite is named by its path.
+# - `benchmarks/private_circuit/`, protocol 2 (the private circuit through the universal unit) end to end, becomes
+#   `examples/private_circuit/`.
+# The directories keep their names, with `_`: `verity example NAME` reads a `-` in NAME as `_`, and an example's name is
+# `[a-z0-9_]+` (the ladder, `tools/verity/cli/verity_cli/examples.py`). Neither is pinned by `deploy.toml` or run by a gate
+# script. Nothing is split, edited or deleted, and no file is added. The
+# format is `layout_map.toml`'s.
+#
+# It runs on a tree whose joins off these directories are root-anchored (#4910): `layout.py` doesn't rewrite a single
+# segment off an alias, `HERE.parent / "network_traces"`. The move is 95222028e3 (#4916); carry an open branch across it
+# with `tools/move/restack.py BRANCH --move-commit 95222028e3 --script-arg=--no-lock --script-arg=--map
+# --script-arg="$PWD/tools/move/reorg_proofs_map.toml"`.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"benchmarks/one_stage/" = "examples/one_stage/"
+"benchmarks/private_circuit/" = "examples/private_circuit/"
+
+[retired]
+paths = ["benchmarks/one_stage/", "benchmarks/private_circuit/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+# An old path that names a file at a past commit of another branch, never rewritten: circuits' F3 nonzeros
+# (cursor/f3-nonzero-cost-f253 @76e405893), which never was in this tree.
+keep = ["benchmarks/private_circuit/nonzero_cost.py"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`): neither directory is a package, and nothing names either one
+# as a module
+"benchmarks.one_stage" = "examples.one_stage"
+"benchmarks.private_circuit" = "examples.private_circuit"

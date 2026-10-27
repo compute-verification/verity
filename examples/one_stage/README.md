@@ -4,6 +4,17 @@ The one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to en
 draw, C-Flock's circuit prover (M0) and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
+- **Protocol:** sampled proofs (`verity/core/protocols/sampled_proofs/`), its one-stage audit.
+- **Workload:** vLLM's committed values: Commit windows and serving rows from `integrations/vllm`, Llama-3.2-1B and GLM-5.3
+  TP8. `prove_bundle.py` uses the torch loop's window instead.
+- **Placement:** one CPU pod holds every party: the prover (M0) and the verifier's draw and Lean verifier (`pod.sh`). The
+  GPU halves (`a5_glm53_commit.sh`, `served_verdicts.sh`) run on a GPU host.
+- **Command:** `pod.sh`, below.
+- **Owner:** proofs. Its rung on the ladder is `example.toml`.
+
+The cost jobs (`zk_cost.py`, `zk_cost.sh`, `zk_cost_cpu.sh`, `a8_cost.py`, `a8_gpu.sh`) are measurement. They are here
+while they import or run the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gpu.sh` runs `a8.py`).
+
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
 - `r2_population.py`: the other population every driver's and `replay.py`'s registration-partition-mismatch negative (R2)
@@ -60,8 +71,8 @@ negatives.
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
   few greedy requests from the certifier's traffic generator, and seals each window. On the window holding the most requests,
   none carried, it runs sampled proofs: the window's advice and request Programs, V3b's window circuit at each class of
-  `CLASSES`, then the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
-  and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
+  `CLASSES`, then the records audit (`benchmarks/prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn
+  proof blocks and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and CMP-153's block record. Each step's verdict line is in
   `out/verdicts.txt`.
@@ -105,7 +116,7 @@ negatives.
   with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
   source, so M3's reserved window doesn't spend time on the build.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
-  `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
+  `benchmarks/prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
   spends on one drawn statement of a block's draw (PRF-171).
 - `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),

@@ -4,6 +4,14 @@ Protocol 2 (the private circuit) end to end: the private circuit's description i
 `UniversalUnit_v1{G, N_IN, N_OUT}` (`verity.ml.private_circuits.universal`), proved by C-Flock's circuit prover under `--zk` and
 verified by the Lean verifier.
 
+- **Protocol:** protocol 2, the private circuit. It has no package under `verity/core/protocols/` yet. Its unit is proved
+  and verified like sampled proofs' units are, so `example.toml` names `sampled_proofs`.
+- **Workload:** none. Each circuit is a random hidden netlist, padded to its size class (`CLS`).
+- **Placement:** one CPU node holds both parties, the prover (`flock-circuit prove --zk`) and the Lean verifier
+  (`flock-verify`): `pod.sh` on vy-nebius-1's CPUs.
+- **Command:** `pod.sh`, below.
+- **Owner:** proofs. Its rung on the ladder is `example.toml`.
+
 - `universal.py`: the driver; its docstring says what it builds, what it checks and what a row records.
 - `pod.sh`: the entry point on a CPU node. It builds `flock-circuit` and `flock-verify` once per `FLOCK_WORK`, from this
   checkout:

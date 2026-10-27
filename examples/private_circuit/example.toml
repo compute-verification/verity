@@ -1,0 +1,11 @@
+# Protocol 2's rung on the ladder (examples/README.md). Protocol 2 has no package under verity/core/protocols/ yet; its unit
+# is proved and verified as sampled proofs' units are (C-Flock --zk, the Lean verifier), so it names sampled_proofs.
+protocol = "sampled_proofs"
+workload = "none"
+level = 0
+
+[placement]
+prover = "cpu-node"    # pod.sh on vy-nebius-1's CPUs: flock-circuit prove --zk
+verifier = "cpu-node"  # the same node: the live verifier and the Lean verifier (flock-verify)
+
+[evidence]

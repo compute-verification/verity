@@ -7,3 +7,10 @@ integration's (`integrations/`), and the protocols it runs stay in core (`verity
 
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, each closed Commit window
   audited on the prove path. Its scripts reach the integration by `PYTHONPATH`; it is not a package.
+- `one_stage/`: sampled proofs' one-stage audit end to end, run by run (A0 to A11), on one CPU pod (`pod.sh`). It takes
+  vLLM's committed values through registration, the verifier's draw, C-Flock's circuit prover and the Lean verifier, to
+  the audit record and its negatives. Its cost jobs (`zk_cost*`, `a8_cost.py`, `a8_gpu.sh`) are measurement. They are
+  here while they import or run its drivers.
+- `private_circuit/`: protocol 2, a random hidden netlist run as a value of the public universal unit
+  (`verity.ml.private_circuits.universal`), proved by C-Flock under `--zk` and verified by the Lean verifier on one CPU node
+  (`pod.sh`).
