@@ -131,7 +131,7 @@ def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
 
 def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.Challenger:
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
-    live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
+    live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
     return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,

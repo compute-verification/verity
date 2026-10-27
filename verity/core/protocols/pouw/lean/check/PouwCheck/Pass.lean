@@ -502,8 +502,8 @@ def SEEDED_PINNED : String :=
 
 /-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
 `draw` coin, and are refused (`coin-key`) when the window's parameters pin a challenger key; live ones
-(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from the challenger's signed record with the key it is
-signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
+(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from its draw session's (`PouwWindow.DRAW_FAMILIES`)
+signed record with the key it is signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
 record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
 it (`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
 `pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
@@ -524,7 +524,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
       let record := SampledProofs.getD coins "record"
       if let some why ← port (SampledProofs.Challenger.recordReason want record) then coin why
       let c := (← port (SampledProofs.Challenger.ChallengerRecord.ofJson record)).commitment
-      if let some why := PouwWindow.liveEpochReason c then coin why
+      if let some why := PouwWindow.drawEpochReason c then coin why
       pure (.inr c)
     else match key with
       | .null => .inl <$> (coinsOf coins recorded).mapError malformed

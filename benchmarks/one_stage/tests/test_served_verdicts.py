@@ -115,6 +115,7 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
 
 
 SID = "s20261026T221500Z-ab12"
+DSID = "s20261026T221501Z-cd34"
 GATE = "ssh -i KEY -o BatchMode=yes research@gate"
 
 
@@ -125,7 +126,8 @@ def _h1_serve_dir(tmp_path: Path, coin_source: str = "challenger", tied: bool = 
     _write(d, "windows.jsonl", [{"window": 1, "passed": True, "pouw_h1": {
         "window": 1, "tied": tied, "steps_served": 4, "coin_source": coin_source, "roots1": {"reason": None},
         "gate": {"gate_passed": {"rows": 80}}, "session": {"session": SID, "end": {"closed": True, "complete": True}}}}])
-    (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID}}}))
+    (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID},
+                                                                         "draw_session": {"session": DSID}}}))
     return d
 
 
@@ -148,15 +150,16 @@ def _gate(calls: list):
 
 
 def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing(tmp_path, monkeypatch, capsys):
-    """``pouw``: the window's session fetched from the gate with the ledger and pins, held by the challenger check; it
+    """``pouw``: the window's session and its draw session fetched from the gate with the ledger and pins, held by the
+    challenger check; it
     accepts, its row in the record stays missing with its document (it credits nothing), the record composes pending, and
     the pieces' line says it is a development run's."""
     calls, seen = [], []
     monkeypatch.setattr(S, "_gate_out", _gate(calls))
 
-    def check(calls_file, tree, ledger, pins, main, key, out):
-        seen.append((tree, ledger.read_text(), pins.read_text(), main, key))
-        assert (tree / "out" / "record.json").is_file()
+    def check(calls_file, tree, ledger, pins, main, key, out, draw):
+        seen.append((tree, ledger.read_text(), pins.read_text(), main, key, draw))
+        assert (tree / "out" / "record.json").is_file() and (draw / "out" / "record.json").is_file()
         return {"ok": True, "reason": None, "manifest": None, "rounds": 16,
                 "credit": {"window": ["budget", "the window is in no period"], "manifest": None}}
 
@@ -164,9 +167,11 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=tmp_path / "main.txt", check=check)
     assert (doc["verdict"], doc["reasons"], doc["credited"]) == ("accept", [], False)
     assert doc["credit"]["window"] == ["budget", "the window is in no period"] and doc["check"]["rounds"] == 16
-    assert [w for _g, w in calls] == [("fetch", SID), ("ledger",), ("pins",)] and all(g == GATE for g, _w in calls)
-    (tree, ledger, pins, main, key), = seen
+    assert [w for _g, w in calls] == [("fetch", SID), ("fetch", DSID), ("ledger",), ("pins",)]
+    assert all(g == GATE for g, _w in calls)
+    (tree, ledger, pins, main, key, draw), = seen
     assert tree == tmp_path / "pieces" / "pouw" / "session" / SID and SID in ledger and '"commit"' in pins
+    assert draw == tmp_path / "pieces" / "pouw" / "draw-session" / DSID
     assert (main, key) == (tmp_path / "main.txt", "ff" * 64)
     row = S.piece_row("work", tmp_path / "pieces")
     assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.DEV_WHY, "accept")

@@ -89,10 +89,12 @@ def test_manifest_check_hands_pins_and_main_to_dither_manifest(LA, monkeypatch, 
     (tmp_path / "pins.jsonl").write_text("".join(x + "\n" for x in PINS))
     (tmp_path / "main.txt").write_text("".join(x + "\n" for x in MAIN))
     p = {"manifest": tmp_path / "manifest.json", "session": tmp_path / "session", "ledger": tmp_path / "ledger.jsonl",
-         "key": tmp_path / "key.json", "pins": tmp_path / "pins.jsonl", "main": tmp_path / "main.txt"}
+         "key": tmp_path / "key.json", "pins": tmp_path / "pins.jsonl", "main": tmp_path / "main.txt",
+         "draw": tmp_path / "draw-session"}
     a = types.SimpleNamespace(session="s1", period="p1")
     assert LA.manifest_check(a, p, tmp_path) == {"ok": True}
-    assert got["args"] == (p["manifest"], p["session"], [str(p["ledger"])], PINS, MAIN, "key", "p1", b"r" * 64)
+    assert got["args"] == (p["manifest"], p["session"], [str(p["ledger"])], PINS, MAIN, "key", "p1", b"r" * 64,
+                           p["draw"])
 
 
 def test_dither_manifest_check_hands_pins_and_main_to_coins_check(monkeypatch, tmp_path):
@@ -110,7 +112,8 @@ def test_dither_manifest_check_hands_pins_and_main_to_coins_check(monkeypatch, t
     e = {"rounds": [b"x" * 64], "salts": {0: "00"}, "draw_after": b"y" * 64, "differ": [], "manifest_root_listed": True}
     monkeypatch.setattr(MF, "expect", lambda m: e)
     (tmp_path / "manifest.json").write_text(json.dumps({"coins": {"session": "s1"}, "steps": 3}))
-    out = MF.check(tmp_path / "manifest.json", tmp_path / "session", ["ledger"], PINS, MAIN, "key", "p1", b"r" * 64)
+    out = MF.check(tmp_path / "manifest.json", tmp_path / "session", ["ledger"], PINS, MAIN, "key", "p1", b"r" * 64,
+                   tmp_path / "draw")
     assert out["ok"]
     assert got["args"] == (tmp_path / "session", {"session": "s1"}, ["ledger"], PINS, MAIN, e["rounds"], e["salts"],
-                           e["draw_after"], "key", "p1", b"r" * 64)
+                           e["draw_after"], "key", "p1", b"r" * 64, tmp_path / "draw")

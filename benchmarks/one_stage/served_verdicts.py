@@ -25,11 +25,12 @@ development run's, and it credits nothing.
 with ``--main``, whether that pin is on the verifier's first-parent line of main (a session pinned off it is refused).
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
-(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
-gives it, the auditor's ledger and pins log as the gate answers now and main's first-parent history (``--main``),
-checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
-H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
-is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`).
+(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session and its draw session as
+the gate's ``fetch`` gives them, the auditor's ledger and pins log as the gate answers now and main's first-parent history
+(``--main``), checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict
+is accept when H1's tables are tied to the window's Commit, its coins are the sessions the ledger opened and ended for it
+(the draw's withheld until the prover's draw root), and its record is one manifest under them; core's credit refuses the
+window and is shown beside it (`DEV_WHY`).
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -207,12 +208,14 @@ def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, st
 
 
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
-                     python: str) -> dict[str, Any]:
+                     draw: Path | None, python: str) -> dict[str, Any]:
     """`pouw_h1_gpu.py --check-challenger` (run by `python` in integrations/vllm, so ``tests`` is that package's) of the
-    window's record `calls` against its session's tree `tree`; its ``pouw_h1_challenger.json``."""
+    window's record `calls` against its session's tree `tree` and its draw session's `draw`; its
+    ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
-            "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out)]
+            "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []),
+            *(["--draw-dir", str(draw)] if draw else []), "--out", str(out)]
     p = subprocess.run(argv, cwd=ROOT / "integrations" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
@@ -222,7 +225,16 @@ def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Pa
                            f"{(p.stdout + p.stderr).strip()[-400:]}") from e
 
 
-Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path], Mapping[str, Any]]
+Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, "Path | None"], Mapping[str, Any]]
+
+
+def _fetched(gate: str, sid: str, tree: Path) -> Path:
+    """Session `sid`'s tree fetched from the gate into `tree` (its tarball beside it); the session's directory."""
+    tgz = tree.with_suffix(".tgz")
+    tgz.write_bytes(_gate_out(gate, "fetch", sid))
+    with tarfile.open(tgz) as t:
+        t.extractall(tree, filter="data")
+    return tree / sid
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
@@ -247,14 +259,12 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
         try:
             if not (gate and key):
                 raise ValueError("no gate or no key pin to check the window's session by (H1_GATE, H1_KEY_SHA512)")
-            sid = json.loads(calls.read_text())["commitment"]["session"]["session"]
-            tgz, tree = out / "session.tgz", out / "session"
-            tgz.write_bytes(_gate_out(gate, "fetch", sid))
-            with tarfile.open(tgz) as t:
-                t.extractall(tree, filter="data")
+            commitment = json.loads(calls.read_text())["commitment"]
+            sid, dsid = commitment["session"]["session"], (commitment.get("draw_session") or {}).get("session")
+            tree, draw = _fetched(gate, sid, out / "session"), dsid and _fetched(gate, dsid, out / "draw-session")
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
-            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check")
+            got = check(calls, tree, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check", draw or None)
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:

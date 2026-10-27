@@ -67,7 +67,7 @@ class Lane:
         leaf = self.leaves[-1] + 3 if self.leaves else 2
         if h1:
             ch = Wd.live_challenger(rng.randrange(4), 1, rng.randbytes)
-            s = rc.Session(rng, ch, [rng.randbytes(64)], salt=r, sid=sid, leaf=leaf, draw=lambda _: rng.randbytes(64))
+            s = rc.Session(rng, ch, [rng.randbytes(64)], salt=r, sid=sid, leaf=leaf)
         else:
             s = rc.Session(rng, Ch.LiveChallenger(Wd.LIVE_SCHEME, rng.randrange(4), Wd.SALT_FAMILIES, rng.randbytes), [],
                            salt=r, sid=sid, leaf=leaf)
@@ -165,7 +165,7 @@ def test_a_pass_whose_epoch_the_close_does_not_list_or_a_session_with_no_pass_re
     assert Cr.pearl_c_period_credit(*lane.args("p-a", [p0, p0b]))[1][0] == "missing"
     assert Cr.pearl_c_period_credit(*lane.args("p-a", [p1, p0, p0b]))[1][0] == "order"
     _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, b[0], p0b, p1]))
-    assert why[0] == "period" and "only the windows its close lists count" in why[1]
+    assert why[0] == "period" and "only the sessions its close lists count" in why[1]
     assert Cr.pearl_c_period_credit(*lane.args("p-c", a))[1][0] == "period"
 
 
@@ -187,7 +187,7 @@ def test_an_abandoned_complete_salt_only_session_refuses_its_period():
 
 
 def test_a_session_not_salt_only_refuses_the_period():
-    """Clause 2: an H1 window's session (salt, draw and rounds, every coin released, so the period's close is complete)
+    """Clause 2: an H1 window's session (salt and rounds, every coin released, so the period's close is complete)
     opened on an epoch's root is not a Pearl-C salt session, and H1's window check refuses a salt-only session."""
     lane = Lane("salt-only")
     base, w, n = _base(lane.rng)

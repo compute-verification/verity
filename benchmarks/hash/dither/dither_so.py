@@ -2312,7 +2312,9 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
                  "depth": D, "tail": rec["tail"], "final_index": i_f, "late_index": li}
     mroot = MF.manifest_root(W, rec["k"], rec["open_root"], s0, s1, list(pipe.roots[:i_f + 1]))
     salt_why = CO.Ch.live_reason(com, rec["salt_open"], CO.Wd.SALT, 0, rec["open_root"])
-    draw_why = CO.Ch.live_reason(com, rec["draw"], CO.Wd.DRAW, 0, mroot)
+    dcom = rec["coins"].draw_commitment
+    draw_why = ("the draw coin has no draw session's commitment" if dcom is None
+                else CO.Ch.live_reason(dcom, rec["draw"], CO.Wd.DRAW, 0, mroot))
     coins = {"source": rec["coins"].source, "salt_after_window_root": salt_why is None, "salt_reason": salt_why,
              "rounds_reason": CO.Wd.rounds_reason(com, pipe.roots, pipe.openings),
              "draw_after_manifest_root": draw_why is None and mroot == rec["mroot"], "draw_reason": draw_why,

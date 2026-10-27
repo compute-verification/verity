@@ -27,7 +27,7 @@ OPENS = {PH.SCHEME: "its window-open root (salt.window_open_root, over round 0's
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate``,
-    ``served``, ``graphs`` and ``period`` of `raw`, in that order; ValueError names the first bad one."""
+    ``served``, ``graphs``, ``period`` and ``draw_session`` of `raw`, in that order; ValueError names the first bad one."""
     rows, steps = raw.get("rows"), raw.get("steps")
     if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
         raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
@@ -65,7 +65,7 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
             and all(isinstance(z, int) and not isinstance(z, bool) and z > 0 for z in graphs)):
         raise ValueError("pouw setting 'graphs' is the engine's CUDA-graph capture sizes, positive integers (none when eager)")
     return (rows, steps, runner, rounds, challenger, session, admission, gate, served, tuple(graphs),
-            PHW.period_setting(raw.get("period")))
+            PHW.period_setting(raw.get("period")), PHW.reserved_of(raw.get("draw_session"), "draw_session"))
 
 
 def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
@@ -125,6 +125,11 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
         out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
     if scheme in CHALLENGED and settings.challenger is not None:
         out += PHW.refusals(scheme, settings, stage, opens=OPENS.get(scheme))
+    if settings.draw_session is not None and (scheme != PH.SCHEME or settings.challenger is None):
+        out.append(f"{scheme}: the pouw setting 'draw_session' is the draw session of H1's window ({PH.SCHEME}) on the "
+                   "challenger at 'challenger'")
+    elif scheme == PH.SCHEME and settings.challenger is not None and stage != "capture" and settings.draw_session is None:
+        out.append(f"{scheme}: {PHW.NO_DRAW_SESSION}")
     if scheme in PPD.SCHEMES and settings.challenger is not None and settings.session is not None:
         why = PHW.period_reason(settings.period, settings.session)
         out += [] if why is None else [f"{scheme}: {why}"]

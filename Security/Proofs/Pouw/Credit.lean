@@ -355,4 +355,62 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
 (`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
 theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
 
+/-! ## The draw coin's session is withheld (`DrawWithheld`) -/
+
+section Withheld
+
+open SampledProofs.Challenger (ChallengerKey trustedSessionOf withheldOn)
+
+theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
+    ∃ a, x = .ok a ∧ f a = .ok v := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+theorem drawSession_withheld {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (h : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
+  unfold PouwCheck.Credit.drawSession at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok h
+  by_cases hw : withheldOn ledger root = true
+  · exact hw
+  · simp [hw] at h
+    cases h
+
+theorem creditedDraw_withheld {ledger : Json} {k : ChallengerKey} {pins main draw : Json} {root : ByteArray}
+    (h : PouwCheck.Credit.Internal.creditedDraw ledger k pins main draw root = .ok ()) :
+    ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  unfold PouwCheck.Credit.Internal.creditedDraw at h
+  dsimp only at h
+  split at h
+  · next hr =>
+    obtain ⟨_, hx, -⟩ := bind_eq_ok h
+    refine ⟨Flock.hexOf root, ?_, drawSession_withheld hx⟩
+    revert hr; cases PouwCheck.get draw "root" <;> simp [PouwCheck.str?]
+  · cases h
+
+theorem drawWithheld : DrawWithheld := by
+  intro key ledger pins main salt calls served commit rounds draw got h
+  unfold PouwCheck.Credit.Internal.credited at h
+  obtain ⟨⟨k, out, root⟩, -, h⟩ := bind_eq_ok h
+  obtain ⟨u, hu, -⟩ := bind_eq_ok h
+  cases u
+  exact creditedDraw_withheld hu
+
+/-- `DrawWithheld`'s honest case: the draw session's step (`drawSession`) accepts every session the ledger opens withheld
+on the draw root and `trustedSessionOf` trusts, as a withheld deployment's is. -/
+theorem drawWithheld_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (ht : trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
+    (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
+  simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
+
+/-- `DrawWithheld`'s conclusion is false for a verifier that accepts everything: a ledger that opens no session (here
+the empty one) withholds no draw root. -/
+theorem drawWithheld_nontrivial :
+    ¬ ∀ ledger draw : Json, ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  intro h
+  obtain ⟨r, -, hw⟩ := h (.arr #[]) (Json.mkObj [("root", Json.str "")])
+  simp [withheldOn] at hw
+
+end Withheld
+
 end Properties.Pouw.Credit.SecurityProofs
