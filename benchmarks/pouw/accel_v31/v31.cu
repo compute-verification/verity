@@ -62,6 +62,19 @@ struct phc_prepared {   // no CUTLASS: Cut never finds a kernel
 #ifdef V31_WG
 #include "wg_proto.cuh"
 #endif
+// V31_SX (a ROLL of sha512x.cuh's compress: 0, 1 or 2; V31_SX_V its V) in place of sha::compress in hash_blocks: the same
+// function in another code size and pipe mix, for the GEMM's hash warps and the leaf phase
+#define V31_STR_(x) #x
+#define V31_STR(x) V31_STR_(x)
+#ifdef V31_SX
+#include "../../torch_gpu/sha512_rows/sha512x.cuh"
+#ifndef V31_SX_V
+#define V31_SX_V 0
+#endif
+#define SX_FORM V31_STR(V31_SX_V) "." V31_STR(V31_SX)
+#else
+#define SX_FORM ""
+#endif
 
 #define CL(x)                                                                                  \
   do {                                                                                         \
@@ -1494,7 +1507,11 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
       }
     }
     if (b == nblk - 1) W[15] = (u64)(128 + lb) * 8;
+#ifdef V31_SX
+    sx::compress<V31_SX_V, V31_SX>(x, W);
+#else
     sha::compress(x, W);
+#endif
   }
   return end;
 }
@@ -3501,7 +3518,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
            "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"r5src\": %d, \"r5nhw\": %d, \"wgw\": %d, "
-           "\"lminb\": %d, \"sahead\": %d, \"sha\": \"%d.%d.%d\", "
+           "\"lminb\": %d, \"sahead\": %d, \"sha\": \"%d.%d.%d\", \"sx\": \"%s\", "
            "\"fused_leaves\": %lld, "
            "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
@@ -3509,7 +3526,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
            f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.r5src, env_int("V31_R5NHW", 0), f.wgw ? 1 : 0,
-           f.kn.lminb, f.kn.sahead ? 1 : 0, SHA_ADD, SHA_ROT, SHA_ROLL, fused,
+           f.kn.lminb, f.kn.sahead ? 1 : 0, SHA_ADD, SHA_ROT, SHA_ROLL, SX_FORM, fused,
            f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);

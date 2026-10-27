@@ -49,8 +49,9 @@
 # gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), r5src (0), r5nhw (0), hall (0), hchunk (0), wgw (1),
 # lminb (5), sahead (0) (v31.cu's
 # Knobs), nreg (the GEMM's
-# register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's) and sha (ADD.ROT.ROLL:
-# sha512.cuh's SHA_ADD, SHA_ROT and SHA_ROLL, a build of its own; default SHA_FLAGS), default row=8192; REPS
+# register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), sha (ADD.ROT.ROLL:
+# sha512.cuh's SHA_ADD, SHA_ROT and SHA_ROLL, a build of its own; default SHA_FLAGS) and sx (V.ROLL: sha512x.cuh's compress
+# in hash_blocks, V31_SX_V and V31_SX, a build of its own; default sha::compress), default row=8192; REPS
 # (default 7); Q, the proof blocks a
 # verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -89,8 +90,12 @@ knob_env() {
     "V31_R5NHW=$(knob "$1" r5nhw 0)" \
     "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0)"
 }
-# vbin VARIANT: its binary's suffix after $W/v31 (nreg and sha each make a build of their own; empty: the default build)
-vbin() { local n s; n=$(knob "$1" nreg ""); s=$(knob "$1" sha ""); echo "${n:+-n$n}${s:+-s$s}"; }
+# vbin VARIANT: its binary's suffix after $W/v31 (nreg, sha and sx each make a build of their own; empty: the default build)
+vbin() {
+  local n s x
+  n=$(knob "$1" nreg ""); s=$(knob "$1" sha ""); x=$(knob "$1" sx "")
+  echo "${n:+-n$n}${s:+-s$s}${x:+-x$x}"
+}
 export -f knob knob_env vbin
 
 # CUTLASS's int8 GEMMs, the second baseline: the harness's cutlass_2x.cu at the harness's CUTLASS pin, cloned once into
@@ -131,8 +136,9 @@ echo "build rc $?" >> "$O/rc.txt"
 for v in $VARIANTS; do
   b=$(vbin "$v")
   { [ -z "$b" ] || [ -e "$W/v31$b" ]; } && continue
-  n=$(knob "$v" nreg "") s=$(knob "$v" sha "")
+  n=$(knob "$v" nreg "") s=$(knob "$v" sha "") x=$(knob "$v" sx "")
   nf=(); [ -n "$n" ] && nf=(-DV31_MAXNREG="$n" -DV31_WG_NREG="$n")
+  [ -n "$x" ] && IFS=. read -r xv xr <<< "$x" && nf+=(-DV31_SX="${xr:-2}" -DV31_SX_V="$xv")
   sf=; [ -n "$s" ] && IFS=. read -r sa sr sl <<< "$s" && sf="-DSHA_ADD=$sa -DSHA_ROT=$sr -DSHA_ROLL=${sl:-1}"
   BSHA=$sf build "$W/v31$b" "$O/build$b.log" "${nf[@]}"
   echo "build ${b#-} rc $?" >> "$O/rc.txt"
