@@ -1613,7 +1613,9 @@ def read_report(report: Path) -> dict | None:
     session finish.  None fails that suite alone (not `reported`); the invocation's other suites keep their verdicts."""
     try:
         rep = json.loads(report.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        if report.exists():
+            print(f"suites: {report}: no report ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return rep if isinstance(rep, dict) else None
 
