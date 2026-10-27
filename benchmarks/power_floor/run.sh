@@ -14,8 +14,10 @@
 # clocks, then a clock sweep (PF_CLOCKS, MHz); PF_PLAN=cap: the default clocks (nvidia-smi -rgc: the power cap holds the
 # board), then PF_CAP_CLOCKS (2430 2250 2100); PF_PLAN=gemm: the honest GEMMs alone at the default clocks, then locked
 # at PF_CLOCKS (none unless given); PF_PLAN=entropy: the tensor role, IDP.4A and the GEMMs over the operand modes 0-11
-# (PF_MODES, PF_DP4A_MODES, PF_GEMM_MODES) at the default clocks, then locked at PF_CLOCKS. Clocks change only where `sudo -n nvidia-smi` is allowed, and every exit
-# puts the GPU back: locked at PF_RELOCK_MHZ (2100 on the Nebius nodes, vm_setup.sh's vy-clocks), else nvidia-smi -rgc.
+# (PF_MODES, PF_DP4A_MODES, PF_GEMM_MODES) at the default clocks, then locked at PF_CLOCKS; a GEMM mode 12 first writes
+# real operands (real_operands.py: Llama-3.1-8B from the node's weight cache, its statistics in real_operands.json).
+# Clocks change only where `sudo -n nvidia-smi` is allowed, and every exit puts the GPU back: locked at PF_RELOCK_MHZ
+# (2100 on the Nebius nodes, vm_setup.sh's vy-clocks), else nvidia-smi -rgc.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -34,5 +36,13 @@ trap 'rm -rf "$WORK"' EXIT
 "$NVCC" -O3 -std=c++17 "${ARCH[@]}" -lineinfo -o "$WORK/energy" "$HERE/energy.cu" -lcublasLt -ldl -lpthread \
   >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
 cuobjdump -sass "$WORK/energy" >"$OUT/energy.sass" 2>&1
+case " ${PF_GEMM_MODES:-} ${PF_GEMM_LGC_MODES:-} " in
+  *" 12 "*)
+    py=(python3)
+    python3 -c "import numpy" 2>/dev/null || py=(uv run --no-project --with numpy python3)
+    "${py[@]}" "$HERE/real_operands.py" "$WORK/real" >"$OUT/real_operands.json" || exit 1
+    export PF_REAL_X=$WORK/real/x.s8 PF_REAL_W=$WORK/real/w.s8
+    ;;
+esac
 gpu-lease 1 --wait ${PF_LEASE_ON:+--on "$PF_LEASE_ON"} --max-min "${PF_LEASE_MIN:-30}" -- \
   bash "$HERE/run_lease.sh" "$WORK/energy" "$MMA"

@@ -16,6 +16,7 @@
 // (random in 1 byte of 8, else 0), 4 four-bit (uniform in [-8, 7]), 5 two-bit ([-2, 1]), 6 weight-like (the sum of four
 // random s8 over 4: about N(0, 37), absmax-quantized weights' shape), 7 the constant 1, 8 ternary ({-1, 0, 1}), and
 // signed data offset to non-negative (what a prover gets for a rank-1 correction): 9 [0, 3], 10 [0, 15], 11 [0, 127].
+// The GEMM's mode 12 is real operands: the files at $PF_REAL_X and $PF_REAL_W (real_operands.py), repeated.
 // SM_FRACTION < 1 launches that share of one block an SM (the rate at a partial load, for linearity).
 //
 // Prints one JSON line: the window's energy (NVML total-energy counter, mJ), its wall time, the operations each role
@@ -34,6 +35,7 @@
 #include <cstring>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 typedef unsigned long long u64;
@@ -594,12 +596,28 @@ struct Gemm {
     CK(cudaMalloc(&w, wsb));
     CK(cudaMalloc(&c, cs * 4));
     std::vector<int8_t> h(std::max(xs, wsb) + 3);
-    for (size_t i = 0; i < h.size(); i += 4) {
-      const uint32_t v = mode == 0 ? 0u : shape_s8(mix32((uint32_t)(i >> 2) * 0x9E3779B9u ^ (uint32_t)(i >> 34)), mode);
-      memcpy(&h[i], &v, std::min<size_t>(4, h.size() - i));
+    if (mode == 12) {  // real operands: the files real_operands.py writes, each repeated to fill its buffer
+      for (auto [env, dst, n] : {std::make_tuple("PF_REAL_X", x, xs), std::make_tuple("PF_REAL_W", w, wsb)}) {
+        const char* path = getenv(env);
+        FILE* f = path ? fopen(path, "rb") : nullptr;
+        if (!f) {
+          fprintf(stderr, "mode 12 reads $%s (real_operands.py's output)\n", env);
+          exit(2);
+        }
+        const size_t got = fread(h.data(), 1, n, f);
+        fclose(f);
+        if (got == 0) exit(2);
+        for (size_t i = got; i < n; i++) h[i] = h[i % got];
+        CK(cudaMemcpy(dst, h.data(), n, cudaMemcpyHostToDevice));
+      }
+    } else {
+      for (size_t i = 0; i < h.size(); i += 4) {
+        const uint32_t v = mode == 0 ? 0u : shape_s8(mix32((uint32_t)(i >> 2) * 0x9E3779B9u ^ (uint32_t)(i >> 34)), mode);
+        memcpy(&h[i], &v, std::min<size_t>(4, h.size() - i));
+      }
+      CK(cudaMemcpy(x, h.data(), xs, cudaMemcpyHostToDevice));
+      CK(cudaMemcpy(w, h.data(), wsb, cudaMemcpyHostToDevice));
     }
-    CK(cudaMemcpy(x, h.data(), xs, cudaMemcpyHostToDevice));
-    CK(cudaMemcpy(w, h.data(), wsb, cudaMemcpyHostToDevice));
     for (auto& s : shapes) {
       cublasLtMatmulDesc_t d;
       cublasLtMatmulDescCreate(&d, CUBLAS_COMPUTE_32I, CUDA_R_32I);
@@ -689,8 +707,8 @@ int main(int argc, char** argv) {
     warm = argc > 5 ? atof(argv[5]) : 5.0;
     frac = argc > 6 ? atof(argv[6]) : 1.0;
   }
-  if (mode < 0 || mode > 11) {
-    fprintf(stderr, "MODE is 0-11\n");
+  if (mode < 0 || mode > (gemm ? 12 : 11)) {
+    fprintf(stderr, "MODE is 0-11 (gemm: 0-12)\n");
     return 2;
   }
   CK(cudaSetDevice(0));

@@ -53,21 +53,19 @@ def wgmma_dead(run: Path) -> bool:
 
 def load(run: Path) -> list[dict]:
     """A run's rows, each with its `set`: `run` (the plan's own clocks), `cap` (PF_PLAN=cap's default clocks, the label's
-    `cap-` dropped) or `lgc` (a locked clock)."""
+    `cap-` dropped) or `lgc` (a locked clock). A run of the dead wgmma loop drops its wgmma rows and keeps the rest: a
+    quarter of their count isn't the full loop's (rerun clean, r20261027-045621-da10: 9.28e14 MAC/s against 8.19e14)."""
     rows = []
     dead = wgmma_dead(run)
     for line in (run / "out" / "energy.jsonl").read_text().splitlines():
         d = json.loads(line.replace(": inf", ": null"))
-        if d.get("failed") is not None:
+        if d.get("failed") is not None or (dead and "wgmma" in (d.get("role_a"), d.get("role_b"))):
             continue
         d["run"] = run.name
         d["label0"] = d["label"]
         d["set"] = "lgc" if d["label"].startswith("lgc") else "run"
         if d["label"].startswith("cap-"):
             d["set"], d["label"] = "cap", d["label"][4:]
-        if dead and d.get("role_a") == "wgmma":
-            d["rate_a"] /= 4
-            d["ops_a"] /= 4
         rows.append(d)
     return rows
 
@@ -147,7 +145,7 @@ def energies(rows: list[dict], every: list[dict] | None = None) -> dict:
 
 MODES = {0: "zeros", 1: "uniform", 2: "uniform, toggling", 3: "sparse 1/8", 4: "four-bit", 5: "two-bit",
          6: "weight-like N(0,37)", 7: "constant 1", 8: "ternary", 9: "unsigned [0,3]", 10: "unsigned [0,15]",
-         11: "unsigned [0,127]"}
+         11: "unsigned [0,127]", 12: "real (Llama-3.1-8B layer 0)"}
 ALL_MODES = tuple(MODES)
 HIDDEN_SCALES = (0.3, 0.45, 0.6, 0.8, 0.9, 1.0)
 
