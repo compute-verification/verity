@@ -115,7 +115,7 @@ def names_of(policy: dict, text: str) -> tuple[list[str], list[str]]:
 def used_program(pkg: Path, work: Path) -> str:
     """`Used.lean` compiled with ``pkg``'s toolchain into ``work`` (as `check.py`'s `facts_program` compiles `Facts.lean`)."""
     src = HERE / "Used.lean"
-    for argv in (["lake", "env", "lean", "-c", str(work / "Used.c"), str(src)],
+    for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(work / "Used.c"), str(src)],
                  ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(work / "Used.c"), "-o", str(work / "used")]):
         rc, text = C.run(argv, pkg, work / "compile.log")
         if rc:
