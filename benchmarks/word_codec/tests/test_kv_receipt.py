@@ -111,7 +111,7 @@ def test_sha_receipt_is_seed_first_in_one_block():
 
 def test_receipt_is_the_tags_construction():
     sk = np.arange(16, dtype=np.int64) - 8
-    from verity.core.protocols.bandwidth import tags
+    from benchmarks.bandwidth import tags
     want = tags.Blake3Tag(name=R.NAMES[2]).keyed(SEED)(5, sk.astype("<i4").tobytes())
     assert R.receipt(SEED, 2, 5, sk) == want
     assert R.key_words(SEED, 2).tobytes() == tags.Blake3Tag(name=R.NAMES[2]).key(SEED)

@@ -1,8 +1,14 @@
 # The bandwidth audit's GPU tagger
 
-The honest prover's step of the bandwidth audit v0 (`verity/core/protocols/bandwidth/PROTOCOL.md`) on an RTX PRO 6000:
+The honest prover's step of the bandwidth audit v0 (`archive/bandwidth-v0/PROTOCOL.md`) on an RTX PRO 6000:
 every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
 constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
+
+The audit's Python reference, which the tagger and the benchmarks that measure its tags are held to, is here too:
+`audit.py` (the window, the verifier, the prover's reference and `bound`) and `tags.py` (the three tags and their tree),
+imported as `benchmarks.bandwidth.audit` and `benchmarks.bandwidth.tags` with the repository on `sys.path`, with their
+tests and pinned vectors in `tests/` (`test_bandwidth.py`, `bandwidth_vectors.py`, `vectors.json`). They left core
+when the protocol was retired; the served bandwidth audit is `verity.core.protocols.remote_bandwidth`.
 
 - `tagger.cu` holds the kernels and builds two ways: `bwtag`, which checks the device's roots against the reference and
   then times, and `libbwtag.so`, a C ABI for a harness that holds `E` in its own device buffer. Its header comment
@@ -22,7 +28,7 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   `audit.Verifier(vk, params, secret, state, device=, commitment=, salt_source=)` takes, and `verifier.window()`
   takes no number. `gpu.py windows` runs every window through them: the timed windows, the skip controls, and one
   window per tag at a deadline no certificate allows, which checks the openings of a tag whose timed windows are late.
-- `reference.py` computes the expected roots with the core reference on CPU processes, and the store's PoUS leaves
+- `reference.py` computes the expected roots with the audit's reference on CPU processes, and the store's PoUS leaves
   under a salt (`store_leaves`), which `gpu.py windows` calls under the lease, once the GPU is known.
 - The harness runs the verifier and its state on the GPU's node too, to measure. In a deployment the verifier is the
   auditor's hardware, on a machine the prover doesn't control, and what runs on the GPU's node (`challenger_device`,
@@ -84,7 +90,7 @@ timed (the destination poisoned with 0xA5, sampled slots checked, and a control 
   was given.
 
 `tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
-of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
+of `tagger.cu`. It checks them against the audit's reference and checks that the bottom-up tree and its paths are RFC 6962's.
 `tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
 in the store's one challenger state under a nonce of its own. Run it with
 `uv run tools/verity/check/suites.py benchmarks/bandwidth`.

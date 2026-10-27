@@ -13,8 +13,8 @@ from fractions import Fraction
 
 import pytest
 
-import bandwidth_vectors as bv
-from verity.core.protocols.bandwidth import audit, tags
+import bandwidth_vectors as bv  # puts the repository on sys.path, for benchmarks.bandwidth
+from benchmarks.bandwidth import audit, tags
 from verity.core.protocols.pous import protocol, schemes
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS, P2Params
 from verity.core.protocols.pous.verifier import VerifierKey

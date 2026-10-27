@@ -141,7 +141,7 @@ def test_layout(bits):
 
 
 def test_tags_are_ro_blake3_over_the_encoded_words():
-    from verity.core.protocols.bandwidth import tags as T
+    from benchmarks.bandwidth import tags as T
     from verity.ml.crypto import blake3
 
     f = W.FIELDS[521]
@@ -158,7 +158,7 @@ def test_tags_are_ro_blake3_over_the_encoded_words():
 
 
 def test_batched_tags_cover_a_lane_of_adjacent_tasks():
-    from verity.core.protocols.bandwidth import tags as T
+    from benchmarks.bandwidth import tags as T
     from verity.ml.crypto import blake3
 
     f = W.FIELDS[521]

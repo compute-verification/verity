@@ -1,4 +1,5 @@
-"""The bandwidth audit's tags: `y_j = Tag(σ, j, E_j)` for every block `j` of the store, and the tree that commits them.
+"""The bandwidth audit v0's tags (`archive/bandwidth-v0/PROTOCOL.md`): `y_j = Tag(σ, j, E_j)` for every block `j` of
+the store, and the tree that commits them.
 
 ~~~text
 Z(x)           x zero-padded to whole 128-byte blocks (one SHA-512 block here, so a device starts from its midstate)

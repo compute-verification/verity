@@ -38,11 +38,17 @@ the verifier checks whole against `S` regenerated, with no tree and no sampling 
 from __future__ import annotations
 
 import hashlib
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 
-from verity.core.protocols.bandwidth import tags
-from verity.ml.crypto import blake3
-from verity.ml.randomness import Key, derive
+REPO = Path(__file__).resolve().parents[2]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+from benchmarks.bandwidth import tags  # noqa: E402
+from verity.ml.crypto import blake3  # noqa: E402
+from verity.ml.randomness import Key, derive  # noqa: E402
 
 STREAM_DOMAIN = "verity/bandwidth/stream/v1"
 ABSORB_DOMAIN = b"verity/bandwidth/stream/v1\0"

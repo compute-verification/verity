@@ -1,4 +1,4 @@
-"""The GPU tagger's arithmetic and message layouts, transcribed from `tagger.cu` into Python and held to the core reference.
+"""The GPU tagger's arithmetic and message layouts, transcribed from `tagger.cu` into Python and held to the reference.
 
 Each twin follows its kernel line by line (word order, byte swaps, padding words, the warp's lanes and shuffles), with the
 SHA-512 and BLAKE3 constants read out of `tagger.cu`.  The device itself is checked on the node (`run.sh`: `bwtag`'s gates, then
@@ -18,12 +18,13 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(HERE))
+sys.path[:0] = [str(HERE), str(HERE.parents[1])]
 
 import gpu  # noqa: E402
 import reference  # noqa: E402
 import summarize  # noqa: E402
-from verity.core.protocols.bandwidth import audit, tags  # noqa: E402
+
+from benchmarks.bandwidth import audit, tags  # noqa: E402
 from verity.core.protocols.pous.verifier import MerkleTree, node_hash  # noqa: E402
 from verity.ml.crypto import blake3  # noqa: E402
 

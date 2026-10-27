@@ -138,7 +138,7 @@ class V3(V1):
         from the same setup source, the GPU's 16-byte id bound in) in place of `protocol.draw_salt`'s, for a joint run
         (`--bandwidth-salt`): the bandwidth verifier then accepts `C` as this device's store, and P2's audit runs over the
         same `C`, its key prefix and leaves under that salt."""
-        from verity.core.protocols.bandwidth import audit
+        from benchmarks.bandwidth import audit
 
         self.salt = audit.draw_salt(SETUP_SOURCE, self.model, device)
         self.prefix = self.p2.expand_prefix(self.params, self.salt)
@@ -422,7 +422,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     if getattr(a, "bandwidth_salt", ""):
         if not isinstance(fr, V3):
             raise SystemExit(f"--bandwidth-salt sets up a registered P2 store (p2-v3-gpu, p2-v3-mc-gpu), not {fr.impl}'s")
-        from verity.core.protocols.bandwidth import audit as bandwidth
+        from benchmarks.bandwidth import audit as bandwidth
 
         fr.bind_device(bandwidth.read_device(a.bandwidth_salt))
     if isinstance(fr, MC):

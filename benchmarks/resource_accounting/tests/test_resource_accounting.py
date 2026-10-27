@@ -376,7 +376,7 @@ def test_q_cert_is_the_granted_rate_and_t_holds_the_rtt_at_p2_s_cap_under_the_fl
     """An accepted window at the red team's grant certifies PROTOCOL.md §6's 741,353,308 bytes of a 2^19-block store at
     the RTX PRO 6000's S_chip, error 2^-40.42; an uncertified tag has no Q_cert; a chain without windows certifies none;
     and the T a remote verifier would grant holds the RTT at P2's cap one ns under the rebuild floor."""
-    from verity.core.protocols.bandwidth import audit
+    from benchmarks.bandwidth import audit
     from verity.core.protocols.pous.schemes.p2 import RTT_ALLOWANCE_CAP_NS
     p = C.window_params("ro-blake3/v1")
     assert (p.samples, p.rtt_allowance_ns, p.limit_ns) == (audit.SAMPLES, RTT_ALLOWANCE_CAP_NS, audit.REGEN_FLOOR_NS - 1)
@@ -416,7 +416,7 @@ def small_store():
     `DEVICE`, its `vk`, and what the verifier checks the salt against."""
     from types import SimpleNamespace
 
-    from verity.core.protocols.bandwidth import audit
+    from benchmarks.bandwidth import audit
     from verity.core.protocols.pous import protocol, schemes
     from verity.core.protocols.pous.schemes.p2 import P2Params
     sch = schemes.P2(P2Params(128, 173, 8, 2))
@@ -468,7 +468,7 @@ class _Tagger:
 
     def tag_pass_prefix(self, tag: str, store: int, blocks: int, tagged: int, seed: bytes, workspace: int,
                         stream: int = 0) -> _Commitment:
-        from verity.core.protocols.bandwidth import audit
+        from benchmarks.bandwidth import audit
         if seed == J.THROWAWAY:
             self.calls.append(("warm", tag, workspace))
         else:
