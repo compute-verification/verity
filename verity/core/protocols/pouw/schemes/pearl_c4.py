@@ -405,13 +405,13 @@ def clean(fmt: Fmt, x: Sequence[int]) -> tuple[list[int], list[int], int]:
 # ---- the chain and the clean-up --------------------------------------------------------------------------------
 
 def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
-    """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (the
-    assessor's run of all 256 bytes, ``r20260930-093120-b2f2``); UE8M0 bytes as written.  Every replayed step reads
+    """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (on the card,
+    over all 256 bytes); UE8M0 bytes as written.  Every replayed step reads
     scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one.  It is the decode the Lean
     `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows.  Four of them are NaN
     accumulators whose scale bytes set bit 7: valid scales under this decode, which the pinned model
-    (`verity.ml.circuits.silicon.models._scale_dyadic`) now shares after GPU 4 replayed all 17 bit-7 vectors on the card
-    (r20260930-161935-83a8), and outside the model through the accumulator (the card writes 0x7FFFFFFF)."""
+    (`verity.ml.circuits.silicon.models._scale_dyadic`) shares, as all 17 bit-7 vectors replay on the card,
+    and outside the model through the accumulator (the card writes 0x7FFFFFFF)."""
     return [s & 0x7F for s in scales] if fmt is NVFP4 else list(scales)
 
 
@@ -1111,8 +1111,8 @@ class PearlC4:
             raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
         self.fmt, self.hashing = FORMATS[fmt], hashing
         self.commitment_hash = C.TREE_HASH[hashing]
-        #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending the
-        #: assessor's rating of its bounds)
+        #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending a
+        #: rating of its bounds)
         self.f1 = row_f1 if f1 is None else f1
         self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
