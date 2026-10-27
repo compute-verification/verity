@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "LmsEqual_v1{N=64}": {
+   "and": 511,
+   "type": "92d1389128dab6fe00cc6b0415cc5b33a75b31633c84ac5947822471ac6242abf6047946daf5040a7bca6d59b844e795a011e64a9a9d50a2a0ac7f96032f9849"
+  },
+  "LmsEqual_v1{N=8}": {
+   "and": 63,
+   "type": "76eca98b8c93f60717ddb23335653901bbc636a28e34383fc6846667f25294aa8944bd1a3541e443d8b9baabd816f80177ec423cd184ca47015d349cb9ddf6b0"
+  },
+  "LmsMessage_v1{N=8,W=1}": {
+   "and": 79165,
+   "type": "3bee26cc8812f45b2e9b7ba56556dd9686e9a8e09d927b3b5914838a79c0b66fda9e338a852831fdc470658eeea5a540e420ebb64236c29ff7d3f7a6b6af5d04"
+  }
+ }
+}
