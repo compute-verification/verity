@@ -13,10 +13,10 @@ attention isn't the class Program's one-row decode's, though at as few keys as o
 
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`). Every other unit holds its Definition's
 function of the window's values:
-- a slot's `ScanSlots_v1` every lane's row and head of the scan state row at its anchor (`io_shell.slots_reference`; its
-  lane's row is the slot's, `scan_slots`), a position's `TokenFeed_v1` its token and the slot it carries
-  (`io_shell.feed_reference`), the first position's `SlotRow_v1` the slot's row opened, each token select's `SlotMask_v1`
-  the token or `io_shell.EMPTY` and its `OutCollect_v1` that collected on from the lane's head
+- a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
+  (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
+  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `SlotMask_v1` the token or
+  `io_shell.EMPTY` and its `OutCollect_v1` that collected on from the lane's head
   (`io_shell.collect_reference`), and the last position's `SlotEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's chunks the first maximum above -inf of their logits and its index (`chunk_best`), and its ``x0``
   unit ``logits[0]``;
@@ -24,8 +24,7 @@ function of the window's values:
   core's ``one_stage.registered.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
-  range, and the earlier Calls' running state;
-- each `AllGather_v1` the concatenation of its parts, read through the circuit's wires once their writers hold them.
+  range, and the earlier Calls' running state.
 
 `Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
@@ -143,8 +142,8 @@ def _pinned(family: str) -> str | None:
 
 
 class Slot:
-    """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its lane's `SlotRow_v1`
-    row of the scan state row at its anchor (occupancy, prompt length, ids; `scan_slots`), ``weights`` the weights record's
+    """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its lane's row of the scan
+    state row at its anchor (occupancy, prompt length, ids; `scan_slots`), ``weights`` the weights record's
     fields and ``served`` its request's served values,
     None for an empty slot. Each node's value (its return fields) and source, each position's token and, below the class's
     prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
@@ -388,7 +387,7 @@ class Rows:
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
     registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
     `scan_state.SCAN_STATE`, with its rows: the network certifier's, a row a bucket of the window), of which an embedding
-    read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v1` reads the scan state's row at
+    read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v2` reads the scan state's row at
     its anchor. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
@@ -418,7 +417,6 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
-        self._gathers()
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
             raise ValueError(f"units with rows no node or Definition fills, by template: {bad}")
 
@@ -438,7 +436,7 @@ class Rows:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
-        for p, (j, (feed, row)) in enumerate(zip(emb, P.tokens)):
+        for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
             self._put(r.tid, r.unit, "o1", np.ones((1, 1), dtype=np.uint16), EVALUATED)
             if t < nodes[j].fn.bindings["V"]:
@@ -446,9 +444,6 @@ class Rows:
                 ins["row"][r.unit] = np.asarray(table.rows[t], dtype=np.uint16)
                 ins["salt"][r.unit] = _be_words(table.salts[t])
                 ins["path"][r.unit] = _be_words(table.path(t))
-            if row is not None:
-                self._put(*row, "o0", _i32(S.row[:1]), EVALUATED)
-                self._put(*row, "o1", _i32(S.row[1:]), EVALUATED)
             if feed is not None:
                 self._put(*feed, "o0", _i32([t]), EVALUATED)
                 self._put(*feed, "o1", _i32(S.carried[p]), EVALUATED)
@@ -474,15 +469,14 @@ class Rows:
             self._heads(nodes[j], plan, calls, S)
 
     def _scan(self, P: Any, S: Slot, masked: Sequence[int]) -> None:
-        """The slot's scan units: its `ScanSlots_v1` every lane's row and head of the scan state row at its anchor (its
-        lane's row the slot's, refused by name where it isn't), each position's `OutCollect_v1` its masked select collected
-        on from the lane's head, and its `SlotEntry_v1` its entry of the scan's Programs' row."""
-        lanes = _lanes(P, self.state)
+        """The slot's scan units: its `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan
+        state row at its anchor (its lane's row the slot's, refused by name where it isn't), each position's `OutCollect_v1`
+        its masked select collected on from the lane's head, and its `SlotEntry_v1` its entry of the scan's Programs' row."""
         tid, u = P.scan_unit
-        for k, (row, head) in enumerate(lanes):
-            self._put(tid, u, f"o{2 * k}", _i32(row), EVALUATED)
-            self._put(tid, u, f"o{2 * k + 1}", _i32(head), EVALUATED)
-        row, a = lanes[P.lane]
+        for k, lane in enumerate(_lanes(P, self.state, IO.scan_reference)):
+            for i, v in enumerate(lane):
+                self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
+        row, a = _lanes(P, self.state)[P.lane]
         if row != S.row:
             raise ValueError(f"{P.name}: its slot's row isn't lane {P.lane}'s of the scan state row at bucket {P.anchor}")
         KO = P.cls.outputs
@@ -516,37 +510,6 @@ class Rows:
                 self._put(tid, u, o, outs[o].view("<u2").reshape(NH, words), EVALUATED)
                 at += k
             got.append(outs)
-
-    def _gathers(self) -> None:
-        """Each `AllGather_v1` unit's output, its parts' rows in order, once every part's writer holds its row: the gathers
-        of gathers a pass later than the gathers they read."""
-        pending = {t for t, fn in self.fns.items() if fn.name == "AllGather"}
-        wires: dict[str, list[IF.Wire]] = {}
-        for w in self.circuit.wires:
-            if w.reader in pending:
-                wires.setdefault(w.reader, []).append(w)
-        while pending:
-            progress = False
-            for tid in sorted(pending):
-                W, N, n = self.fns[tid].bindings["WORLD"], self.fns[tid].bindings["N"], self.n[tid]
-                out, have = np.zeros((n, W * N), dtype=np.uint16), np.zeros((n, W), dtype=bool)
-                wired = np.zeros((n, W), dtype=bool)
-                for w in wires.get(tid, ()):
-                    i = np.arange(w.units, dtype=np.int64)
-                    u, r, s, o = w.at + i // w.cut[1], w.cut[0] + i % w.cut[1], w.source(i), int(w.out[1:])
-                    out[u[:, None], r[:, None] * N + np.arange(N)] = self.outs[w.writer][o][s]
-                    have[u, r], wired[u, r] = self.held[w.writer][s, o], True
-                if not wired.all():
-                    raise ValueError(f"{tid}: parts of {int((~wired).any(axis=1).sum())} units no wire reads")
-                new = have.all(axis=1) & ~self.held[tid][:, 0]
-                if new.any():
-                    self.outs[tid][0][new] = out[new]
-                    self.held[tid][new, 0] = True
-                    progress = True
-                if self.held[tid][:, 0].all():
-                    pending.discard(tid)
-            if pending and not progress:
-                raise ValueError(f"gathers {sorted(pending)}: parts whose writers no node or gather fills")
 
     def _span(self, tid: str, k: int) -> np.ndarray:
         out = np.full(self.n[tid], -1, dtype=np.int64)
@@ -583,11 +546,12 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def _lanes(P: Any, state: Sequence[Any]) -> list[tuple[list[int], list[int]]]:
-    """`io_shell.ScanSlots_v1` of ``state``'s row at class Program ``P``'s anchor: every lane's row and head."""
+def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference) -> list[Any]:
+    """Every lane of ``state``'s row at class Program ``P``'s anchor: its row and head (`io_shell.slots_reference`), or
+    ``of``'s (`io_shell.scan_reference`: `ScanSlots_v2`'s outputs)."""
     b = P.scan.bindings
     row = np.asarray(state[P.anchor], dtype=np.uint16).reshape(-1)
-    return IO.slots_reference(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
+    return of(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
 
 
 def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], list[int]]]:
