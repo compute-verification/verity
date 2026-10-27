@@ -9,19 +9,18 @@ package `certifier_program`, Lean core only) is the code the difftest runs, prov
 
 ## Zero knowledge: what ties the checks, and the named gap
 
-N2's count check and N3 read the same head leaf of N2's commitment. N3 holds the window's N frames to the head's root,
-and so to the head's Σ n_t, and N2 holds those counts to the occupancy profile. The two are tied only under three
-conditions, each of which holds:
+N2's count check reads the head leaf of N2's commitment and holds the head's counts to the occupancy profile. Another
+check that reads the same leaf is tied to N2's only under three conditions, each of which holds:
 1. The root is registered before either check's coins or draws (the firewall's registration, `LinkWindows.commit`).
 2. The leaf index, 2 + d, is fixed by the link-window's direction (`service.HEADS`), which is public structure, not
    something the prover chooses.
 3. SHA-512 is collision resistant, as hm96 rows in frame-v3-sha512 trees already assume.
 
-N2 compares no grid (NET-38), and the network claim is counts only until N3 is a proof-service unit on every window
-(ASK-70, counts-first). N2's verifier of record decides each link-window on a `--zk` proof of its registered unit and
-public inputs alone, and reads no head, salt or sibling ("Its verifier of record" below). What stays open is in the
-README: the certificates reach the verifier in the clear beside the proof service, a provisional exception to the four
-public kinds, and a run that proves nothing is decided in the clear.
+N2 compares no grid (NET-38), and the network claim is counts only (ASK-70, counts-first). N2's verifier of record
+decides each link-window on a `--zk` proof of its registered unit and public inputs alone, and reads no head, salt or
+sibling ("Its verifier of record" below). What stays open is in the README: the certificates reach the verifier in
+the clear beside the proof service, a provisional exception to the four public kinds, and a run that proves nothing is
+decided in the clear.
 
 A proof is held to the unit's circuits: each gate names its Definition's pinned circuit digest, so the unit's Program
 binds them, and the verifier refuses a proof of any other Program ("The check" below).
@@ -29,8 +28,8 @@ binds them, and the verifier refuses a proof of any other Program ("The check" b
 The certificate's signature no longer reads a hash of witness (NET-42). The certifier signs
 `D = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R)`, R the head's record digest:
 - `salt_c` is drawn by the certifier (`certificate.Issuer`'s `coins`), 64 bytes, fresh per record, and handed to the
-  prover with the head as witness only (`CertifiedRecord.salt`, in the record leaf after the head; the head leaf N3
-  reads is the head alone);
+  prover with the head as witness only (`CertifiedRecord.salt`, in the record leaf after the head; the head leaf is
+  the head alone);
 - each end's head check holds `R` to the digest of the head it opens and `D` to `R` under `salt_c` (part 4 below);
 - the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, window) and
   `D`, a hiding commitment to `R`. The in-the-clear check (`LinkWindows.clear`, a debug comparison) also checks `D`
@@ -180,9 +179,9 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   certificate), and their heads,
   leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
   `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the window. A proof that reads only a
-  head (N3's, which is designed to hold the window's frames to the head's root) opens its head leaf in two or three
-  SHA-512 compressions, where the record leaf would cost the certificate's 272 more. The firewall keeps the records and
-  salts (`Opening`). The challenger receives one salted root and never a certificate, a certifier's salt or a head.
+  head opens its head leaf in two or three SHA-512 compressions, where the record leaf would cost the certificate's 272
+  more. The firewall keeps the records and salts (`Opening`). The challenger receives one salted root and never a
+  certificate, a certifier's salt or a head.
 - **Selection:** `All`. A registration is one link-window, one proof block, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
@@ -215,10 +214,10 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   `LinkWindows.proof_unit`. The head check is a Boolean Definition,
   `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
   bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
-  root, the hiding read N3 makes of the same leaf (`NetworkHidingRead`), and accepts when the head's link, direction
-  and window are the link-window's, its status is complete, its T, r, B, τ_b and parameters digest are the end's
-  declared grid's (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the
-  window (`NetworkHeadCounts`; a window past the profile has no row and is a reject), and the head's record digest R
+  root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and window are the
+  link-window's, its status is complete, its T, r, B, τ_b and parameters digest are the end's declared grid's
+  (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the window
+  (`NetworkHeadCounts`; a window past the profile has no row and is a reject), and the head's record digest R
   (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the certificate
   signs the head the check opened. In the unit's Program each head check is one gate that names the Definition and
   its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment gadgets'
@@ -238,13 +237,9 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   sha512/row/v2 digest would share it and save about 1.2M ANDs a head at T = 600. The count check needs no frame's bytes, so it is the part of the egress grid check
   a proof can make without the content, and the only grid check on ingress. It runs on every link-window (RT-NET29
   item 3: a structural check runs in full).
-- **N3, the content check,** is a design and the simulator's behaviour, not part of this protocol: a prototype unit in
-  `benchmarks/network_sim` ("N3 in zero knowledge"), evaluated in the clear, in no proof-service Spec and not proved.
-  Its design runs it on every port-window that recorded frames, holding its N frames to the head's frames root, so to
-  Σ n_t, and to the committed layout's frames. A port-window the profile leaves empty passes from public occupancy,
-  with no N3 unit. That holds because the profile is fixed by the Program and the placement before the run and bound
-  by the spec's context: nothing declared at run time sets it, and a head with frames where the profile says 0 fails
-  N2's count check. An end without a profile has no such backing, since its occupancy is its record's own.
+- **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service
+  Spec, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which
+  `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
 - **Its verifier of record** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
   public inputs alone. It accepts when its own run of C-Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
   circuit file the auditor committed) accepts every session, the sessions prove the link's registered unit (every gate
@@ -261,9 +256,9 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   `service.OF_RECORD`), with the Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
   profile's (and the ingress head's, where that end declares one), which puts the link's timing at the profile. The
   egress grid is the head's counts filled with its frames in order, and the head's digest binds both, so the frames
-  are the rest of the grid, and nothing in this protocol holds them: until N3 is a proof-service unit with Selection
-  `All`, it doesn't say the egress grid is the Program's. A link whose egress end has neither an occupancy profile nor
-  a served profile has no verdict (`ValueError`, failing closed), since nothing would hold its egress timing.
+  are the rest of the grid, and nothing in this protocol holds them, so it doesn't say the egress grid is the Program's.
+  A link whose egress end has neither an occupancy profile nor a served profile has no verdict (`ValueError`, failing
+  closed), since nothing would hold its egress timing.
 - **The in-the-clear check** is `LinkWindows.clear`, over the opening: the opening reproduces the registered root,
   each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), and the audit accepts
   both records under the certifier's key in its session, comparing no grid (`check_link(grid=False)` on the status,
@@ -274,23 +269,22 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
   compared, and each head's counts the profile's (`LinkWindows.declares`). `clear` accepts every link-window it
   accepts, and differs only where the record's grid, at the profile's counts, isn't the Program's: in its frames, which
-  N2 doesn't hold (N3's design would reject them), or where the declared syncs move the Program's counts off the
-  profile, which N2 holds the counts to instead.
+  N2 doesn't hold, or where the declared syncs move the Program's counts off the profile, which N2 holds the counts to
+  instead.
 
 What this establishes: the outcome is accept exactly when the Lean verifier accepts a proof of the registered unit
 whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the sync is
-declared; the outcome record binds the root, the draw and the delivered sessions. The
-claim is counts only: on every link-window of a link whose egress end declares a profile, the egress head's counts are
-the profile's (and the ingress head's, where that end declares one), so the link's timing is at the profile. It stays
-counts only until N3 is a proof-service unit with Selection `All`. On a served link the egress head's counts are
-instead the ones its ingress head's counts derive under the window's declared sync ("A served link" below). An egress
-end with neither profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the head check
-leaves the head's deadline byte and frames root free. The unit reads the deadline for its public bit, and N3's design
-would read the frames root, so an accepted outcome says nothing of the frames. The proof opens the head leaves (2, 3)
+declared; the outcome record binds the root, the draw and the delivered sessions. The claim is counts only: on every
+link-window of a link whose egress end declares a profile, the egress head's counts are the profile's (and the ingress
+head's, where that end declares one), so the link's timing is at the profile. On a served link the egress head's counts
+are instead the ones its ingress head's counts derive under the window's declared sync ("A served link" below). An
+egress end with neither profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the head check
+leaves the head's deadline byte and frames root free. The unit reads the deadline for its public bit and nothing reads
+the frames root, so an accepted outcome says nothing of the frames. The proof opens the head leaves (2, 3)
 only: the record leaves (0, 1), each certified record whole, are committed but nothing in the verdict reads them, and
 the certificates' signatures are checked on the host from their public fields, not in the proof. One clock per
-spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
-with the served computation is left to N3.
+spatial unit across links is not checked (each registration is one link-window, alone), and nothing here checks the
+frames' consistency with the served computation.
 
 ## A warden link (`service.WardenProfile`)
 
@@ -371,16 +365,15 @@ What this establishes: on every accepted link-window of a served link, the egres
 ingress head's counts under the declared sync, whatever the frames hold. So the egress timing adds nothing to what
 the ingress counts and the charged advice carry, and under the premises it is the Program's. The ingress counts are
 the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
-(N3's; the salt frame's place among them is the salt audit's, which takes it only first in bucket 0, `check_salts`),
-and the premises, which nothing checks.
+(the salt frame's place among them is the salt audit's, which takes it only first in bucket 0, `check_salts`), and
+the premises, which nothing checks.
 
 ## The I/O tie (`io_tie`, a design)
 
-N2 holds a window's counts, and N3's design holds its frames to the head's frames root and a template, but neither says
-the frames carry the tokens the served computation produced: N3's open item is its outbox's agreement with the values.
-The I/O tie closes it on a served link's egress. It is one unit per egress link-window at selection `All`. It opens
-every cell of the window and holds each to the output the advice's map names there, and that output's id to the id
-the Commit sampled. It is a design with a prototype on the warden's own egress (`io_tie`, its cells cut by
+N2 holds a window's counts but says nothing of its frames, nor that they carry the tokens the served computation
+produced. The I/O tie closes that on a served link's egress. It is one unit per egress link-window at selection `All`.
+It opens every cell of the window and holds each to the output the advice's map names there, and that output's id to
+the id the Commit sampled. It is a design with a prototype on the warden's own egress (`io_tie`, its cells cut by
 `warden.Warden._egress`), in no Spec and unproved. The link-window's tie is T units, one a bucket row of the warden's
 registration (WARDEN's v2, a row a bucket), and each outputs 1 exactly when:
 1. every cell of its row is one of the warden's three: a `PAD` on a stream (no payload; a slot no connection holds is
@@ -428,8 +421,6 @@ decodes it with the public tokenizer.
 - **Ingress** carries ids too: a request is a canonical `/v1/completions` body whose prompt is token ids, each in an
   11-byte field (`[` or `,`, then `%10d`; 11 spaces past the prompt's length, which JSON reads as whitespace), placed so
   no field straddles a frame. The server adds nothing to a token-id prompt, so `c00.input/ids` is the request's ids.
-- **N3's template** trades the text field (88 base64 characters at byte 119) for the 10-character field, and its outbox
-  holds a u32 a frame instead of up to 64 bytes.
 - **The warden's cut** is fixed: a `DATA` cell carries exactly P = B − 9 of the server's bytes, and the rest go in the
   `END` (`warden.Warden._egress`). So the shim writes each event padded with spaces (JSON whitespace) ahead of its
   blank line to P bytes, and ends the response with `TRAILER` (`data: [DONE]` and its blank line, 14 bytes, shorter
@@ -804,8 +795,7 @@ extrapolated from there; nothing at these sizes is built.
   window. Hashing every byte once with SHA-512 is the floor of any tie that opens every cell under a SHA-512
   commitment. The port is 27% and 14%, and the tie's own checks are 2.6% and 3.5%.
 - **At B = 4,096** the window is 1.142 × 10^10 and 1.932 × 10^12, with 16 times the bytes to hash.
-- **A served link-day** (1,440 windows) is 2.043 × 10^14: against N2's 9.30 × 10^9 and N3's design at 4.9 to 9.2 ×
-  10^14.
+- **A served link-day** (1,440 windows) is 2.043 × 10^14: against N2's 9.30 × 10^9.
 - **Every part scales with the capacity** (N = T·R cells, S·P port entries), not with what is served: a served
   window's 35,386 tokens (REDTEAM's figure) fill 3.5% of N, and the pads are hashed, routed and matched as data cells
   are.
@@ -877,10 +867,10 @@ to the bound: a cell the tie never checks carries whatever the server wrote in i
 - **b.** It is log2|V| = 17.21 bits (V = 151,329) only when every other byte of every cell is fixed and the id is
   below V. On the current framing that needs every cell's form checked, which hashes every byte: the cells' rows and
   their parse, 1.214 × 10^11 a served window, 86% of the All tie, with an id < V compare that `IoTieCell` doesn't make
-  (it checks below 2^32). N3's design checks every frame's form too, at more than the All tie costs. Without that check,
-  an unchecked cell carries what the server wrote in it, up to B − 9 = 247 bytes at B = 256 (b = 1,976). With the
-  compact framing below, the warden's fixed cut leaves only the id's bytes to the server, so b = 32 with no check (24
-  with 3-byte ids). log2|V| then still needs id < V checked on every cell, and so every cell opened.
+  (it checks below 2^32). Without that check, an unchecked cell carries what the server wrote in it, up to B − 9 = 247
+  bytes at B = 256 (b = 1,976). With the compact framing below, the warden's fixed cut leaves only the id's bytes to
+  the server, so b = 32 with no check (24 with 3-byte ids). log2|V| then still needs id < V checked on every cell, and
+  so every cell opened.
 
   At δ = 2^−40 and n_w = 35,386 (REDTEAM's served average), restated at three values of K:
 
@@ -979,8 +969,6 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
   (`trusted-host`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
   proof. The head's counts and the cells come from one grid of the warden's: bucket t holds n_t data cells. The tie
   doesn't read the head; tying the cells' root into it (a record v3 field) is open.
-- **N3** (`All`, a design) holds every frame under the head's root to its template, which on a served link's egress
-  the tie's check of every cell covers.
 - **The map** is the advice's, charged as `A_c`. In v4 the verifier computes it from the opened advice v0, the named
   gap. At the target it is registered with the advice before the draw and read in the proof, and the compile unit
   holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root are
@@ -1227,7 +1215,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
 
 What this establishes: on every accepted link-window of an advised link, the egress head's counts are the advice's
 releases, and the advice's releases are eligible after the ingress head's releases under the declared sync. What it
-doesn't: the frames (N3's and IO-TIE's), that the advice is the computation's (the compiler's and PoUW's), the
+doesn't: the frames (IO-TIE's), that the advice is the computation's (the compiler's and PoUW's), the
 tie itself (IoTieRequest's, through the tie service; no IoTieRequest digest is pinned at the served size class, so
 there no advised link is accepted), the syncs the certifier ran (its report, which no head signs yet), and the
 premises.
@@ -2105,9 +2093,9 @@ them.
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
       configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
-      N3's templates, a design outside the protocol, don't model compact cells. The gate's rehearsal runs compact
-      framing on the auditor's host (`certifier-rehearse --traffic varied --compact B`), so with this coverage a
-      compact run there gives a verdict of record.
+      The gate's rehearsal runs compact framing on the auditor's host
+      (`certifier-rehearse --traffic varied --compact B`), so with this coverage a compact run there gives a verdict of
+      record.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -2143,10 +2131,10 @@ them.
   - **In the record: nothing of the salt.** The salt frame's bytes and its slot are fixed by the window and the traffic,
     so every record, before t_d and after, is a function of the traffic alone, and two salts at the same traffic give
     the same records. The record's formats are unchanged: the v1 digest and the v2 frame tree bind the salt frame like
-    any other frame, and N3 checks it against its public payload. Neither the Lean analysis nor the Lean ports change.
+    any other frame. Neither the Lean analysis nor the Lean ports change.
     A placeholder in the commitment's slot was the smaller of the two changes compute accounting offered (18 Oct): the
     other, the commitment in the record published at t_d, changes the record's format, its digest and certificate,
-    and N3's public input, and with the certifier trusted it binds nothing the reveal doesn't.
+    and with the certifier trusted it binds nothing the reveal doesn't.
   - **The sealed slots.** The certifier's record cells are its grids and two sealed slots per PoUW window:
     `_salts[p]`, which holds the salt and which only `reveal` opens, and `_weights[p]` (next item). So the record's
     open cells (`Accounting.Attribution.openCells`, the record minus those slots, ATTRIB-R4) are the grids, and what
@@ -2295,7 +2283,7 @@ sealed under an AEAD built from SHA-512 alone.
 - **Where it sits.** The sending certifier seals each egress slot after its egress certifier records it, and the
   receiving certifier opens each unit before its ingress certifier takes it. Every slot is sealed, padding too, so the
   link carries r units of B + 64 bytes a bucket whatever the occupancy. The records, the occupancy, the commitments and
-  the certificates are the unsealed run's, so N2, N3 and the timing bound read the same grids
+  the certificates are the unsealed run's, so N2 and the timing bound read the same grids
   (`test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unsealed_runs`).
 - **The construction** (`verity.ml.crypto.aead`, the standard library's SHA-512 with its whole output; no new hash).
   H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), and [x] is u16be len(x) ‖ x.
@@ -2435,7 +2423,7 @@ and seven lemmas, and three more proved lemmas:
   mismatch, another window or link, a certificate from another session, an unset deadline bit, a late proof, an opening of
   another root), each held to the stand-in; the unit's id and its gates by size class; N2 compares no grid, so a window
   whose frames differ from the Program's at the profile's counts (in content, or in order within a bucket) is accepted
-  where the stand-in rejects it, its frames being left to N3, and an egress head under another parameters digest is
+  where the stand-in rejects it, since N2 holds counts only, and an egress head under another parameters digest is
   rejected; a link whose egress end has neither an occupancy profile nor a served profile has no verdict; a head of
   another size class is a reject;
 - **`test_network_certifier_served.py`:** a served link: honest served traffic is accepted in every window; a window

@@ -355,13 +355,14 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
     Llama-3.2-1B's TP1 Commit r20261024-055630-5377, I2's four Programs equal the Build's `build_request_LP*` digests
     (`commit.json`'s and the audit summary's `i2`).
   - on a served window, the same over φ of the served engine as vllm's advice compiler (#3619) compiles under (`phi_of_serve`:
-    `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the server's default
-    seed, and each request's body as that compiler gives it (`serve_ingress`: the sampling fields its ingress record says it
-    brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named as `verity-vllm advice` registers it
-    (`served_identity`: `compile_steps` by module path, its digest over `source_identity.code_identity`, which covers
-    `integrations/vllm` and `verity`), so the audit runs on a tree whose two are the server's. `prove_path.py compiler
-    --serve-run DIR` prints the binding's compiler. I2's Programs are held to the ones vllm's advice compiler wrote into the
-    row dir (`manifest.json`, by I1 id).
+    `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the public default
+    seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
+    as vllm's advice compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
+    fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
+    as `verity-vllm advice` registers it (`served_identity`: `compile_steps` by module path, its digest over
+    `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree whose two are
+    the server's. `prove_path.py compiler --serve-run DIR` prints the binding's compiler. I2's Programs are held to the ones
+    vllm's advice compiler wrote into the row dir (`manifest.json`, by I1 id).
 - **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
   commits the window under the published binding. Before any commit and before the draw (folded into the source check a5
   gates the draw on), `serve_check` holds the published records to the verifier's own and refuses by name: another window

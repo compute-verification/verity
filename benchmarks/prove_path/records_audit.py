@@ -82,8 +82,8 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
 ``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session in the challenger
-party's own process (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
+takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
+party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
@@ -394,6 +394,15 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     return {str(v): dict(e) for v, e in values.items()}
 
 
+def pin_roots(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+    """The pins `interface.input_count` holds to a window's roots (`window_roots`), ``{param: root}``, of pinned entries
+    (`pinned`, `window_pins`'): each entry's root alone, its domain and shape staying with the entries that
+    `interface.registered_reads` opens against. Refused (ValueError) where a root isn't hex digits."""
+    pins = {v: e["root"] for v, e in entries.items()}
+    IF.held_params(pins, {})
+    return pins
+
+
 def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Callable[[str], Any] = IF.resolve) -> set[str]:
     """Those of ``values`` (registered parameters of the stated record ``circuit``) that are ties: every leaf an input
     port's registered read takes is a leaf some output port's read of the circuit writes, so the Lean verifier's opening
@@ -693,11 +702,11 @@ def audit(a: argparse.Namespace) -> int:
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
-    pin_roots = {v: e["root"] for v, e in pins.items()}
-    row["leak"] = (declared_count(doc, bits, resolve, pin_roots, roots, untied)
+    counted = pin_roots(pins)
+    row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
-        row["registered"] = {"pins": pin_roots, "roots": roots, "members": len(reads)}
+        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts

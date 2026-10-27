@@ -25,7 +25,9 @@ failure message carries its fix.
  - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
  counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
- through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name.
+ through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name. A hash's
+ domain-separation tag reads like one but names no record: a module-level constant named `*_TAG` or `*_DOMAIN` holds it as
+ a plain literal, which the rule skips.
 - **Recorded outcomes** (`test_silent_excepts.py`, allowlist `allowlists/silent_excepts.json`): in `verity_vllm/check/` and
  `verity_vllm/commit/`, a caught exception is raised or recorded (an `error` result, a reason, an `unreadable: …` entry in
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
@@ -81,7 +83,11 @@ a string or `False`, a name other than the caught exception's, an empty containe
 `tests/lint/allowlists/repo_silent_excepts.json`, built like the env-read list. The gate refuses a PR that adds one to a file it
 changes, naming each, with the fix: re-raise; or record the outcome in the area's typed record or log; or test for the
 expected case and let the rest raise (a narrower handler that still swallows still counts). A rename moves its entry
-(`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`).
+(`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`). A repository list (ruff's or a counted lint's) may
+raise a key, in any file, up to what its lint, as the PR's base has it, finds there in the base's tree: a list that records
+its base's findings adds none, so one left behind by PRs that were on `next` before its lint landed catches up, while growth
+past the base's findings is refused as before (27 Oct 06:20Z, CI-198). A lint that comes to count more lands in two steps,
+since its base's lint bounds the catch-up: first the gate's count, then the list.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more

@@ -1009,7 +1009,9 @@ def test_a_wired_registered_window_gives_the_leg_its_requests_outputs_and_free_i
     assert L.match_outputs([{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}], events, FRAMES, outputs,
                            STEPS)["equal"]
     # every activation is a tie and every weight registered: only the requests' step-0 up_proj inputs are free
-    pins, untied = RA.window_pins(json.loads((d / "registration.json").read_text())["window"], circuit)
+    w = json.loads((d / "registration.json").read_text())["window"]
+    pins, untied = RA.window_pins(w, circuit)
     pins |= RA.pinned(json.loads(weights["pin"].read_text()))
     assert not untied
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins=pins)["free"] == 2 * (1024 + 32)
+    count = IF.input_count(circuit, pins=RA.pin_roots(pins), roots=RA.window_roots(w))
+    assert L.free_inputs(circuit)["bits"] == count["free"] == 2 * (1024 + 32)
