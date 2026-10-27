@@ -11,8 +11,9 @@ identity_digest_sha512(tag, manifest) = tagged_sha512(tag, canonical_json_bytes(
 
 `tag` is UTF-8 and nonempty, and the lengths fit their fields; Python refuses anything else (`TypeError`, `OverflowError`),
 and so does `taggedState`. The manifest's canonical bytes are `Flock.canon`'s, which writes what `canonical_json_bytes`
-writes on every value both accept (`Flock.canon` refuses a non-integer number, as Python refuses a float). `taggedState` is
-the hash after the header, which a long payload of known length is streamed into.
+writes on every value both accept (`Flock.canon` refuses a non-integer number, as Python refuses a float, and a string or
+key outside ASCII without DEL, as Python's `jcs_domain_error` does). `taggedState` is the hash after the header, which a
+long payload of known length is streamed into.
 -/
 
 namespace Identity
