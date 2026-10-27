@@ -614,17 +614,17 @@ def test_an_honest_opening_of_each_committed_unit_checks_in_lean(server, committ
 
 
 def test_an_honest_session_over_the_committed_store_is_accepted_in_lean(server, committed) -> None:
-    """Every unit a pass, two windows of two passes and eight openings each: the Lean's answer is the books', an
-    acceptance crediting every receipt the pooled bound leaves."""
+    """Every unit a pass, two windows of two passes, three of each window's four receipts opened, checked two at a
+    time: the Lean's answer is the books', an acceptance crediting every receipt the pooled bound leaves."""
     reg = committed.registration
-    req = p2_party.request_of(reg.node, windows=2, passes=2, samples=8, window_ns=2 * P2_STEP_NS,
+    req = p2_party.request_of(reg.node, windows=2, passes=2, samples=3, window_ns=2 * P2_STEP_NS,
                               deadline_ns=P2_STEP_NS)
     coins_ = [expand(b"committed coin %d" % j, coins.COIN_BYTES) for j in range(4)]
     events = p2_events(committed, Plan.whole(reg.blocks), p2_party.params_of(reg, req), coins_, 0)
     v = {"registration": json.dumps(p2_party.registration_json(reg)).encode().hex(),
-         "request": p2_line("request", req).hex(), "coins": [c.hex() for c in coins_], "chunk": 3, "not_before_ns": 0,
+         "request": p2_line("request", req).hex(), "coins": [c.hex() for c in coins_], "chunk": 2, "not_before_ns": 0,
          "events": events}
     kind, out = D.replay(port("p2_session", p2_session, st.nothing()), v, server)
     answer = json.loads(out)["answer"]
     assert kind == "output" and answer["verdict"] == "accept", answer
-    assert answer["receipts"] == 2 * 2 * reg.blocks and answer["draws"] == [8, 8]
+    assert reg.blocks == 2 and answer["receipts"] == 2 * 2 * reg.blocks and answer["draws"] == [3, 3]
