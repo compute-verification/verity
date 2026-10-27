@@ -1,5 +1,5 @@
 """P2 v4 on the CPU, as `verity/core/protocols/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
-reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
+reference the harness's GPU kernels are gated against, and the one the wire frames (`wire.py`) and the vectors
 (`vectors.py`) are built on.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
@@ -32,9 +32,7 @@ VECTORS = HERE / "vectors.json"
 VECTORS_SHA512 = "959911fd371111fe20c4cee6fc532ff205bbf377962c73ac539a4d2de9b22121287e6e996d9ae4bfbef9f26fcd67ac78620873702c8b2899bc41a21bdd76e853"
 AUDIT_VECTORS = HERE / "audit-vectors.json"
 AUDIT_VECTORS_SHA512 = "5f8ed7f279ccd2f2d5bb60607fb5d7bec82bf982ac85da268f76cb8fbb16d36424e7b99eaa386508840aa2bd3c3b501512bde86b930871a769cd470a14ab176e"
-NEGATIVE_VECTORS = HERE / "audit-negative-vectors.json"
-NEGATIVE_VECTORS_SHA512 = "f57340a0965628051bd0c938c4c7e2db5a7133982ae1a523a1221a3fbb273bfbcb1ebc1d29680b61b47f86d45e7c98aa4a5ac6311545c19c78728d857596a687"
-"""The spec's §7 pins: `vectors.py` writes the three files and rewrites these."""
+"""The spec's §7 pins: `vectors.py` writes both files and rewrites these."""
 PROTOCOL = "p2/v4"
 SETUP_DOMAIN = "verity/pous/p2-setup/v4"
 AUDIT_ID_DOMAIN = "verity/pous/p2-audit-id/v4"

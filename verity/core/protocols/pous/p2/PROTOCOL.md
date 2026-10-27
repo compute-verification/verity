@@ -530,7 +530,7 @@ This harness makes the file/process boundary executable for the included toy Pyt
 ### Audit wire test vectors
 
 `benchmarks/pous/p2_v1/vectors.py` generates every vector file of this specification in one command,
-`cd benchmarks/pous && uv run python -m p2_v1.vectors`, and rewrites each pin in §7 that changed. `audit-vectors.json` holds a complete two-round w=64 setup/audit and one full-width 2,056-byte response. It includes W, setup sources, audit sources and counters, elapsed times and the intermediate values needed to recompute every field. Both small and full-width audit ids use the mode-0 `derive(source,"verity/pous/p2-audit-id/v4",{"counter":counter,"epoch":epoch_id}).stream("id",32)` map above. `audit-negative-vectors.json` holds 31 complete negative and boundary transcripts, each self-checked against the reference verifier `benchmarks/pous/p2_v1/wire.py` when generated and checked again by `benchmarks/pous/tests/test_pous_p2_wire.py`; it includes the setup source for each setup family. The wrong-domain case derives its challenge under v1's `verity/pous/audit-challenge/v2`. `expected_stop_round` is the failing round, k on success or on an extra post-k frame, and zero for a failure before round 0. The deployment value is k=105; k=2 exists only to keep the conformance vectors small. File and message hashes are listed in §7.
+`cd benchmarks/pous && uv run python -m p2_v1.vectors`, and rewrites each pin in §7 that changed. `audit-vectors.json` holds a complete two-round w=64 setup/audit and one full-width 2,056-byte response. It includes W, setup sources, audit sources and counters, elapsed times and the intermediate values needed to recompute every field. Both small and full-width audit ids use the mode-0 `derive(source,"verity/pous/p2-audit-id/v4",{"counter":counter,"epoch":epoch_id}).stream("id",32)` map above. The deployment value is k=105; k=2 exists only to keep the conformance vectors small. File and message hashes are listed in §7.
 
 ## 5. Audit
 
@@ -604,7 +604,6 @@ each point's p (BPSW plus 64 Miller–Rabin repetitions), which v4 does not chan
 Audit wire vectors:
 
 - `audit-vectors.json` SHA-512: `5f8ed7f279ccd2f2d5bb60607fb5d7bec82bf982ac85da268f76cb8fbb16d36424e7b99eaa386508840aa2bd3c3b501512bde86b930871a769cd470a14ab176e`
-- `audit-negative-vectors.json` SHA-512: `f57340a0965628051bd0c938c4c7e2db5a7133982ae1a523a1221a3fbb273bfbcb1ebc1d29680b61b47f86d45e7c98aa4a5ac6311545c19c78728d857596a687`
 - w=64 audit-open frame: `190450d36926cd0c6c66ec0161d9815cc3f1f3bd3d9c864cdfe87aa1ece95a06e8f63ce3261d258ff22425ef852e4434df50c141c265e79ca0493ac3f0c81887`
 - w=64 round-0 challenge: `227ee32fbec8715102a4e6585af430ab88a22bfca2ed65d8ef372c408439e4fdcf07a6747e22f6501f0e005eab499ad4b82c167fadbc1ddac8bd9827e8b271c7`
 - w=64 round-0 response: `36ac81b1ef2d7499e96563c4c53e7ac8b7b08c8d2c2907217d43196c12f82268851db7f5ce59bc73c56babb0ca20a38e071db002febf8b4fc84c7741471f073d`
@@ -614,8 +613,9 @@ Audit wire vectors:
 ## 8. Conformance of the repository
 
 `benchmarks/pous/p2_v1/reference.py` is this specification (§§3–4 and the derivations), `wire.py` is
-`p2-audit-wire/v4` and its reference verifier, and `memory_challenger.py` audits with v4's leaves and mode-0 derivation
-over the harness's own responder wire, not these frames. The registered scheme `p2-16448/v4`
+`p2-audit-wire/v4`'s frames (their builders), and the timed rounds' one verifier is the memory challenger's
+(`verity/core/protocols/pous/memory_challenger.py`), on the registered scheme and its own transport, not these frames.
+The registered scheme `p2-16448/v4`
 (`verity.core.protocols.pous.schemes.p2`) follows the maps, the values, the profile, the tweak rejection, k and
 the hash, and its keys are §4's streams, but it runs the generic protocol's setup, so four things differ:
 
@@ -645,8 +645,7 @@ Every item below is normative. A policy choice is not a substitute for the corre
 - [x] Specify and test state isolation: the normative subsection above maps the Lean state and boundaries to deployment, and `internal/efficient-crypto/p2-bounty-kit/isolation_harness.py` with `test_isolation_harness.py` passes its full-C, 18/19 raw-storage, over-cap, side-file, environment and network controls. Native-code/OS isolation, GPU/DMA and cache wiping, aggregate resource measurement, attestation and verifier evidence collection remain procedural deployment controls.
 - [x] Specify deadline clock boundaries, strict failure behavior, RTT allowance input and transcript evidence, including the frozen numerical Δ/RTT/hardware choice and SeqRoot evidence.
 - [x] Generate §7's vectors under `verity.ml.randomness` v2 (one command, §7).
-- [x] Obtain byte-for-byte interoperability results from two independent implementations of `p2-audit-wire/v4`: the reference verifier `benchmarks/pous/p2_v1/wire.py` and the Lean `pous_check` (`verity/core/protocols/pous/check`, `PousCheck.Wire` and `PousCheck.Audit.check`) agree byte for byte on every vector of §7, `uv run python verity/core/protocols/pous/check/interop.py --all`: 40 transcripts (the 31 of `audit-negative-vectors.json`, `audit-vectors.json`'s end-to-end audit and its full-width response under a public and a private setup, and `vectors.json`'s 4 vectors and 2 σ cases, the verifier holding its own root of the private setup), 0 mismatches in each setup's outputs (its failure code among them), `FINAL` frame, verdict, code, record count and transcript hash, or fault code and message. The Lean is a verifier only: the setup and response frames both read are the vectors', which Python's prover wrote. v1's results (`internal/efficient-crypto/p2-audit-wire-interop.md`) do not carry over.
-- [x] Add negative conformance cases for malformed encodings, setup failures, replayed challenges, wrong domains, failed authentication paths and late answers: 31 complete transcripts in `audit-negative-vectors.json`; its hash is listed in §7.
+- [ ] Interoperability results for `p2-audit-wire/v4` and its negative conformance cases (malformed encodings, setup failures, replayed challenges, wrong domains, failed authentication paths and late answers): the format has no verifier in this repository. The timed rounds' one verifier is the memory challenger's (`verity/core/protocols/pous/memory_challenger.py`), which reads none of these frames.
 - [ ] Migrate the MVP implementation and evidence path to every requirement in §8's table.
 
 ## 10. Decisions (frozen)
@@ -677,8 +676,8 @@ spec and in `ROOT_CALL_NS`, is the one that keeps 2× on the Zen 5 floor.
 
 **What changed.** F2's RTT allowance, from at most 1 ms to at most **354 µs (354,000 ns)**, so `Δ + RTT ≤ 854 µs`
 ("Sequential reveal and deadlines" and §§5, 6, 8 and 10). Nothing else changed: w, p, B, Q, k, the hardware class, the
-protocol version `p2/v1`, the byte formats and every vector. Every `AUDIT_OPEN` in `audit-vectors.json` and
-`audit-negative-vectors.json` carries `delta_ns = 500,000` and `rtt_allowance_ns = 0`, which is inside the cap, so the
+protocol version `p2/v1`, the byte formats and every vector. Every `AUDIT_OPEN` in `audit-vectors.json`
+carries `delta_ns = 500,000` and `rtt_allowance_ns = 0`, which is inside the cap, so the
 hashes in §7 still hold.
 
 **Why.** v1's "2× through about 1.9 ms" (§6) divided a one-core floor of about 13.2 ms by the measured 3.5×, then halved
@@ -786,7 +785,7 @@ doesn't control.
 
 ## 14. Errata
 
-These are four clarifications. They change no rule, value, vector or pin; the reference verifier already behaved this way. They hold for v1.1 and v4 alike. They came from the Lean port of the timed-audit check, which found the prose silent where the code had to choose.
+These are four clarifications. They change no rule, value, vector or pin. They hold for v1.1 and v4 alike.
 
 1. Δ and the RTT allowance in `AUDIT_OPEN` are the verifier's own, and no failure code covers them (§ Sequential reveal and deadlines).
 2. A setup transcript that ends early is transport code 6 unless a frame already read gave code 1 or 2 (§ Setup commitment, salt and verification root).
