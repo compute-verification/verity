@@ -300,7 +300,7 @@ theorem oodIntro_tr (cx : Ctx) (dim split : Nat) : Tr (SQ LP) (fun _ => SQ LP) (
   exact Tr.modify fun st h => ⟨hc_vx_left h.1, hc_vx_left h.2.1, h.2.2.1, h.2.2.2⟩
 
 theorem query_hc {cx : Ctx} {li foldLen : Nat} {e : KV} (h : query cx li foldLen = .ok e) : HC e.1 ∧ HC e.2 := by
-  unfold query at h
+  unfold VStar.Algebra.query at h
   split at h
   · rename_i lv _
     dsimp only at h
@@ -485,7 +485,6 @@ theorem pinv_step {r : Array Nat} (h : PInv r) (p : String × Nat) : PInv (pstep
   · have : k = r.size := by omega
     subst this
     rw [Array.getElem_push_eq]
-    exact Nat.le_refl _
 
 theorem pfx_gen : ∀ (l : List (String × Nat)) (init : Array Nat), PInv init →
     (l.foldl pstep init).size = init.size + l.length ∧
