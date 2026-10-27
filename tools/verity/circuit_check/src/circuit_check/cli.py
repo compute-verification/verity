@@ -2,13 +2,16 @@
 
     circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'     Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
-    circuit-check path/to/build_request_LP3_T2                      a served row's request Program
+    circuit-check path/to/build_request_LP3_T2                      a served workload's request Program
     circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
     circuit-check --batch                                           batch invariance of the v0 registration's templates
+
+A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
+``"mode": "by-calls"`` and names the target each callee relies on.
 
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
 on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
@@ -30,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ambient as AM
+from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
 from . import sidecars as SC
@@ -117,7 +121,9 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     """The targets' checks in target order (deterministic: a worker rebuilds the same list and runs entries by index).  Traced
     (`cache.tracing`), each check gets a memo of its own, so its result never rests on what an earlier target's check computed,
     and the pins it looks up are recorded (`cache.recorded_pins`); a suite Definition's ``as_call`` is resolved here (the catalog's
-    `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check."""
+    `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check.  A named by-calls
+    root brings the targets its callees rely on (`by_calls.relied_targets`), each checked beside it, so the report holds their
+    verdicts (`by_calls.joined`); ``--all``'s are its suite's."""
     from verity.ml.circuits.evaluation.reference import resolve
 
     TG.load_registries()
@@ -126,6 +132,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     memo = (lambda: {}) if fresh else (lambda: shared)
     pins = CC.recorded_pins(CK.load_pins()) if fresh else CK.load_pins()
     tasks: list[tuple] = []
+    named = 0
     if everything:
         found = TG.suite()
         calls = TG.call_families(found)
@@ -136,6 +143,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
         for label, sub, sts in TG.templates():
             tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
                           {"units": sorted(TG.BINDINGS.get(label, ()))}))
+        named = len(tasks)
     for s in specs:
         kind = TG.kind_of(s)
         if kind == "row":
@@ -161,6 +169,21 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
                 continue
             tasks.append(("definition", s, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
                           {"units": sorted(TG.BINDINGS.get(fn.id, ())), "roots": [fn]}))
+    labels = {t[1] for t in tasks}
+    for t in tasks[named:]:
+        if not any(TG.is_by_calls(fn) for fn in _info(t).get("roots", ())):
+            continue
+        try:
+            relied = BC.relied_targets(_info(t)["roots"][0])
+        except Exception as e:  # noqa: BLE001  (the root's own check fails by name on what raised here)
+            print(f"circuit-check: {t[1]}: the targets its callees rely on aren't added ({type(e).__name__}: {str(e)[:200]})",
+                  file=sys.stderr)
+            continue
+        for fn in relied:
+            if fn.id not in labels:
+                labels.add(fn.id)
+                tasks.append(("definition", fn.id, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
+                              {"units": sorted(TG.BINDINGS.get(fn.id, ())), "roots": [fn]}))
     return tasks
 
 
@@ -583,6 +606,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             qc = (r.get("partition") or {}).get("q_call") or {}
             call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
                     f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
+            if r.get("mode") == BC.CHECK:
+                call += f" by-calls: {len((r.get('by_calls') or {}).get('callees', []))} callees, not lowered whole"
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
                 f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
 
@@ -649,7 +674,7 @@ def update_pins(rep: dict) -> dict:
 
 
 #: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
-#: isolated `--all` run (`run`'s scheduling; it counts that task list, 26.7 GiB on 17 Oct).  The commit that writes a peak
+#: isolated `--all` run (`run`'s scheduling; it counts that task list).  The commit that writes a peak
 #: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here.
 #: Beside them, by binding name, how far the catalog bindings whose builds grow past `units.APART_GB` grew (`units.built_apart`)
 HEAVY = CC.HEAVY
@@ -662,8 +687,8 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 
 
 def slot_gb() -> int | None:
-    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (CIR-21: two runs in one
-    node's slots each budgeted the whole machine's MemAvailable and took it down)."""
+    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (else two runs in
+    one node's slots each budget the whole machine's MemAvailable and take it down)."""
     v = os.environ.get(SLOT_MEM_ENV, "")
     return int(v) if v.isdigit() else None
 
@@ -693,18 +718,16 @@ def heavy() -> dict[str, float]:
         return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
 
 
-#: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two
-#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct); a cold `--all` at 7 workers in
-#: vy-n2's 900 GiB session scope grew them to 107-155 GiB and was OOM-killed (r20261009-061009-1b4d, 9 Oct)
+#: the memory a worker counts on: a cold `--all` grows some workers to 40-155 GiB, and two `--all -j 0` runs, ~130 workers
+#: each, took 1.4 TB of a 1.6 TB user slice
 GB_PER_JOB = 160
 
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's session
     scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's inactive_file (its memory.stat) is in
-    its memory.current but the kernel reclaims it at the limit, so it counts as left: on vy-nebius-cpu-3 a user slice at 462 of
-    its 463 GiB, 278 GiB of it page cache, left a budget of ~0 and the targets ran one at a time, 0.06 a second
-    (r20261021-101535-85fb)."""
+    its memory.current but the kernel reclaims it at the limit, so it counts as left: otherwise a user slice that page
+    cache fills leaves a budget of ~0, and the targets run one at a time."""
     def read(p: Path) -> str:
         try:
             return p.read_text().strip()

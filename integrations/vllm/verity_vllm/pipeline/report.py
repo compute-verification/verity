@@ -7,8 +7,8 @@ used (census kernels, patterns, roots, instances per step) and what it cost.  `o
 field.  `summarize_md(card)` renders the fixed-width top section (CASE / provenance / counts / replay / HOLDOUTS /
 SUPPORT CLAIM / VERDICT) followed by a short markdown block.
 
-The five provenance rows come from `provenance.json`, written by the sealed verifier (`bench/verify_lane.sh`); without it
-the card is `unsealed: true` and those rows print `n/a`.
+The five provenance rows come from `provenance.json`, which no stage in this tree writes; without it the card is
+`unsealed: true` and those rows print `n/a`.
 """
 
 from __future__ import annotations
@@ -403,7 +403,7 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
         vu_txt = "not computed"
     return {
         "vu_coverage": vu_txt, "vu_zero_mass_specs": vp.get("zero_mass_specs"), "vu_partial_tiling_specs": vp.get("partial_tiling_specs"),
-        # G8 (window 2026-09-17): the VU-partition structural gate over query_use.json -- skipped / pass / fail + set count + max w_out
+        # G8: the VU-partition structural gate over query_use.json -- skipped / pass / fail + set count + max w_out
         "vu_partition": vu_partition_text(gates),
         "protected_files_modified": len(prov.get("protected_files_modified") or []) if prov else None,
         "existing_primitives_modified": len(prov.get("existing_primitives_modified") or []) if prov else None,

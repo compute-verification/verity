@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "EagerSoftmaxBackward_v1{N=6,D=64}": {
+   "and": 45401,
+   "type": "e3de696a5a697cbbc82f1f7a7749a73724b767bd6f5574ad48f20e3d743b0ab1a6c45851ec883f06894a7a645e9fd25d8c20d182b0b9f1df5a02e170e7f0d217"
+  },
+  "RepeatKvBackward_v1{NREP=3,N=4}": {
+   "and": 15632,
+   "type": "0c7097ec48646edbddab895c0093785e7306016bb373878673914b345f8e29448cfa20658d06098227afb917220d1336142df164017e447427b75d488de5f84a"
+  },
+  "RopeHfBackward_v1{D=8}": {
+   "and": 18352,
+   "type": "8a1ede218a91154dc3e184984701e733f4510e14dc34443bd0f07833ad5220c416c1f70af8403f180fafc97de198eb7bff6158ea0db4a98f5f23c3ed86c5a65d"
+  },
+  "RopeHf_v1{D=8}": {
+   "and": 18232,
+   "type": "118b0011682e8956abf113e7ff2de004b762ffb60f618e4a5e7e63c00d5ec9b468634b2e78b1730498914f2f7022a566491255749302ccefb9fa5b95d0250ec8"
+  },
+  "SoftmaxTorchBackward_v1{N=6}": {
+   "and": 49055,
+   "type": "68b1020219794451ff4832f0c6e324dddd8afd2baf76f7cc3484ef0fb3b81383eea305343469a0b9d9203570b7d4161e51b16178fb0568bd1e04e06a346d358d"
+  }
+ }
+}

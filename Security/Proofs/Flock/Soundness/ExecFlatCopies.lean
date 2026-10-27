@@ -1,13 +1,12 @@
 import Proofs.Flock.Soundness.ExecFlatClass
 import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Properties.Flock.Circuit.Keys
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)
 
 A flat statement's Δ (`HmRow.delta`, no typed template) is its slot constants' pairs, the rows' constant bits, then each
 unit copy's leaf bits, cut bits and wired bits (`delta_flat`). `HmRow.check` wires each of a unit's input ports exactly
-once (`CheckFacts.wired`, leaves by `leaves_in`), and #434's `Typed.flatNet` makes the unit's inputs its net's input port
+once (`CheckFacts.wired`, leaves by `leaves_in`), and `Typed.flatNet` makes the unit's inputs its net's input port
 bits in order, so the ports' bits are distinct columns. At each of a unit copy's input port bits, Δ then has one copy
 pair, over the net's self row there:
 - `Layout.delta_port`: the count of Δ's pairs at a port bit is its own and its source's (`flatSrc`);
@@ -245,6 +244,9 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
 
 /-! ## A net's input port bits -/
 
+/-- A net's input port bits, port by port: each port's columns. -/
+def portBits (gs : Array Group) : List ℕ := (portCols gs).toList.flatMap fun q => List.range' q.1 q.2
+
 /-- Distinct input port bits are distinct columns. -/
 theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' : ℕ} (hp : p < (portCols gs).size)
     (hp' : p' < (portCols gs).size) (ht : t < (portCols gs)[p]!.2) (ht' : t' < (portCols gs)[p']!.2)
@@ -267,6 +269,10 @@ theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' :
   · exact absurd he (key p p' hp hp' h t t' ht ht')
   · exact ⟨rfl, by omega⟩
   · exact absurd he.symm (key p' p hp' hp h t' t ht' ht)
+
+/-- The port a column of the input rows is a bit of: the first whose columns hold it. -/
+def portOf (pc : Array (ℕ × ℕ)) (off : ℕ) : ℕ :=
+  ((List.range pc.size).find? fun p => decide (pc[p]!.1 ≤ off ∧ off < pc[p]!.1 + pc[p]!.2)).getD 0
 
 theorem portOf_eq {gs : Array Group} (hnd : (portBits gs).Nodup) {p t : ℕ} (hp : p < (portCols gs).size)
     (ht : t < (portCols gs)[p]!.2) : portOf (portCols gs) ((portCols gs)[p]!.1 + t) = p := by
@@ -836,7 +842,7 @@ theorem setupH_flatFacts (ht : tags.typed = true)
       exact absurd hhn (by unfold HmRow.HM_NET; decide)
 
 /-- **A flat class's input copies, at each unit slot**: input `w`'s block rows read the column Δ copies into it
-(`flatSrcAt`). The unit's inputs are its net's input port bits in order (`Typed.flatNet`, #434). -/
+(`flatSrcAt`). The unit's inputs are its net's input port bits in order (`Typed.flatNet`). -/
 theorem setupH_flatInput (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net)) {s₀ w : ℕ}

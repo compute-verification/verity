@@ -30,10 +30,12 @@ before the draw (`a5_tp.sh` with `A5_WINDOWS=bundles`).
         [--other-advice-opening F --other-windows DIR] --windows DIR --coins verifier ...
 
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
-(`commit --serving-rows`, `serving_rows.readers`), serving's own commitment, made before any draw. A5 takes it only over a
+(`commit --serving-rows`, `serving_rows.readers`, which the deferred Commit runs at its C2 site before the bundle is sealed,
+`c2_replay.serving_rows`), serving's own commitment, made before any draw. A5 takes it only over a
 SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
-window is refused by name (`source`: `sha512`). The summary reports the form (`source`) and the commitment it names
-(`commitment`).
+window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
+against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_rows.weights_tree`). The summary reports the form
+(`source`) and the commitment it names (`commitment`).
 
 * **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
   what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
@@ -422,9 +424,9 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
     """The verifier's wiring check (§16.13, `wiring.check_drawn`) on altered wires, each with the units it alters drawn: the first
-    wire's writers rotated (each unit reading another unit's row), two wires of one output swapped (a split's partial read into
-    another combine slot), and a wired row's string flipped in its reader's public body (a partial that is not the one its
-    writer committed), its unit 0 drawn."""
+    wire's unit 0 reading another unit's row, neither its writer's nor its own, of its words where one is (``words``: same,
+    else other; rotating the writers is the honest wire at one unit a member or on a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
+    flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 drawn."""
     neg: dict[str, dict] = {}
     k = next((k for k, m in enumerate(members) if m.wired), None)
     if k is None:
@@ -437,8 +439,18 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     def units(j: int) -> range:
         return range(members[j].base, members[j].base + members[j].n)
 
-    neg["chunk-wired-to-another-unit (§16.13)"] = {
-        "refused": bool(WI.check_drawn(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics, units(k)))}
+    words, me = dict(members[k].rows)[p], members[k].base
+
+    def others(same: bool) -> Iterator[int]:
+        return (x.base + i for x in members if not same or dict(x.out_rows).get(o) == words for i in range(x.n)
+                if x.base + i not in (ws[0], me))
+
+    same = next(others(True), None)
+    other = same if same is not None else next(others(False), None)
+    if other is not None:
+        neg["chunk-wired-to-another-unit (§16.13)"] = {
+            "refused": bool(WI.check_drawn(rewired(k, ((p, o, (other, *ws[1:])), *rest)), publics, [me])),
+            "words": "same" if same is not None else "other"}
     swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
                  if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
     if swap is not None:
@@ -755,7 +767,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a)))
+                   served=sorted(served_units))
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -778,7 +790,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)))
+                   served=given["served"])
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -891,12 +903,11 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.W
 
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
-               session_roots: dict, served: list[int], v2: dict | str | None = None) -> None:
-    """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
-    `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio), in ``out/case.json``, and
-    today's Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
-    evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there
-    is none in ``out/case-v2-error.txt``."""
+               session_roots: dict, served: list[int]) -> None:
+    """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
+    (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
+    audit's as an exact ratio), in ``out/case.json``, and today's Python on it (`replay.python`) in
+    ``out/case-python.json``."""
     try:
         import replay as RP
 
@@ -908,49 +919,6 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
     except Exception as x:  # noqa: BLE001: the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
-        return
-    if v2 is None:
-        return
-    try:
-        if isinstance(v2, str):
-            raise ValueError(v2)
-        (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
-    except Exception as x:  # noqa: BLE001: as the v1 case's
-        (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
-
-
-def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
-            tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
-    the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
-    (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
-    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
-    import replay as RP
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-
-    pr, blobs = PF.evidence_v2(proof, sessions)
-    evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
-    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
-            "evidence": RP.DT.canonical(evidence).encode().hex(),
-            "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
-
-
-def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
-    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
-    one table's `--zk` sessions on its circuit and public file."""
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-
-    if not zk:
-        return "v2 verifies --zk sessions; this audit's are plain"
-    if len(done) != 1:
-        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
-    mm, sdir = done[0]["mm"], done[0]["sdir"]
-    st, n = mm["st"], mm["m"].n
-    tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
-    reads = st.get("registered_file")
-    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
-                              tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
-            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables}
 
 
 def streamed(a: argparse.Namespace) -> bool:
@@ -1007,8 +975,10 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     mine = DRW.window_of(r, a.partition)
     manifest = hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest()
 
+    weights_root = str((r.row["commit"].get("weight_registration") or {}).get("root") or "")
+
     def source(w: dict) -> dict:
-        src = DRW.source(w, mine.run, manifest, r.commitment)
+        src = DRW.source(w, mine.run, manifest, r.commitment, weights_root)
         return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
                 "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
 

@@ -30,7 +30,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.ml.circuits import Program, program_digest  # noqa: E402
-from verity.ml.circuits.evaluate import MissingValue, evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluation import MissingValue, evaluate_region  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
 
 from tests.program.test_derive_negative import IMPORTER_NAME, Outcome, _DERIVE, _input_gate_ranges, run_importer  # noqa: E402

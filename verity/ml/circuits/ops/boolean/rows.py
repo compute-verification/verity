@@ -1,5 +1,5 @@
-"""Row units on bits: the next version of each `ops.rows` word Definition, each one proof block a row that writes the whole
-row (the e2e demo's decoder, CMP-92).
+"""Row proof blocks on bits: the next version of each `ops.rows` word Definition, each one proof block a row that writes the whole
+row (the e2e demo's decoder).
 
     Bf16AddRow_v2{N}   (a, b: Array<N, bf16 bits>) -> Array<N, bf16 bits>          word view: Bf16AddRow_v1{N}
     Argmax_v2{V}       (logits: Array<V, bf16 bits>) -> Array<16, Value<1>>        word view: Argmax_v1{V}

@@ -310,7 +310,7 @@ __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
   st_be(out + 64 * i, o, 8);
 }
 
-// --- the per-GPU leaf forms (the hash lane's sharaw, note:hash/20261018T0650Z-draft-sharaw) ------------------------------------
+// --- the per-GPU leaf forms (sharaw) -------------------------------------------------------------------------------------------
 // rows_leaf_kernel inlines some 25 compression bodies and an unrolled mask, so its warps in different phases fetch different code:
 // on 4 KiB rows it reaches 69-91% of the raw compression rate where the row hash alone reaches 100%.  Two forms with less code a
 // kernel, the same bytes:

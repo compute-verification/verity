@@ -4,13 +4,13 @@ import Mathlib.Algebra.BigOperators.Fin
 /-!
 # The deployed bound receipt's sketch: a relay as a two-party protocol (trusted)
 
-The remote protocol's bound receipt (`ro-bound-sketch-blake3/v0`, lane ra-bound-receipt) hashes a sketch of the block's
-bytes against a multiplier matrix drawn from the matmul: for a tile of `r` vectors `e_i` of `m` bytes and a matrix `B`
-of `r` columns of `m` bytes, the sketch is `v_i[c] = Σ_q e_i[q]·B[c][q]` and the receipt `H(σ_p, j, v)`. The matrix is
-`B = R ⊕ M`: `M` the pass's fresh sign mask (one buffer for every tile of the pass, derived from the chained seed), `R`
-bytes of the matmul's own values (the bound tile's partial accumulators). A location makes the right receipt only
-knowing `v`, so a relay between the block side (the memory, holding the tile's bytes) and the tile side (holding `R`)
-ends with one of them knowing the sketch.
+The remote protocol's bound receipt (`ro-bound-sketch-blake3/v0`) hashes a sketch of the block's bytes against a
+multiplier matrix drawn from the matmul: for a tile of `r` vectors `e_i` of `m` bytes and a matrix `B` of `r` columns of
+`m` bytes, the sketch is `v_i[c] = Σ_q e_i[q]·B[c][q]` and the receipt `H(σ_p, j, v)`. The matrix is `B = R ⊕ M`: `M`
+the pass's fresh sign mask (one buffer for every tile of the pass, derived from the chained seed), `R` bytes of the
+matmul's own values (the bound tile's partial accumulators). A location makes the right receipt only knowing `v`, so a
+relay between the block side (the memory, holding the tile's bytes) and the tile side (holding `R`) ends with one of
+them knowing the sketch.
 
 This file states that relay in the communication model: a deterministic two-party protocol (`Protocol`) over the two
 inputs, each step one side sending one bit of its input and the bits before it, and at the end one side outputting a

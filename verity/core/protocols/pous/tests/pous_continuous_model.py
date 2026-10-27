@@ -14,9 +14,9 @@ Two restatements of one set of rules:
   1. Challenge `j` is sent no earlier than round `j − 1` closed (`contSend`).
   2. An answer's delay runs from the memory challenger's own send of its challenge (`contProg`).
   3. A round closes at its answer, or rejected once `late_limit` has passed with none; an answer past `late_limit` is
-     rejected too, its block never checked (`contVerdict`'s `.reject`).
-  4. Any other answer past `limit` is late, whatever its block; one within `limit` is a hit if it is the challenged
-     block and wrong otherwise.
+     rejected too, its label never checked (`contVerdict`'s `.reject`).
+  4. Any other answer past `limit` is late, whatever its label; one within `limit` is a hit if it is the challenged
+     label and wrong otherwise.
   5. With tolerance `f₀` the run accepts iff at most `f₀` rounds are not hits (`contAccepts`): those are the misses.
      The late count is the late and rejected rounds, every round whose answer was not in within `limit`.
 
@@ -289,7 +289,7 @@ class Record:
 
 class ClockOracle:
     """The memory challenger on its own clock (the module docstring, "On the memory challenger's clock"): `n`
-    challenges, the `j`th asking for block `index(j)` of `C`. `named` is a memory challenger whose answers name their
+    challenges, the `j`th asking for label `index(j)` of `C`. `named` is a memory challenger whose answers name their
     challenge (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge.
     Each action takes the clock reading `t` and returns what the memory challenger must do: the `(j, index)` it reveals,
     the `Record` it closes, or a `Refused`."""

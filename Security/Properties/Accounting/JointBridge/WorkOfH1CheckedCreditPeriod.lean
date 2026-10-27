@@ -23,7 +23,7 @@ salts, the period's live tiles, the play, its folded words and the right words i
 declared circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
 and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
 (`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
-The bridge adds two (RT4-LOGIC-6): each right word of a unit the device didn't outsource cost `m` multiply-adds of
+The bridge adds two: each right word of a unit the device didn't outsource cost `m` multiply-adds of
 priced work on it (`Accounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
 most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 -/

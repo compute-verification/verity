@@ -68,17 +68,19 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
     prefix = ProgramIndex(inst).prefix
     (p / "weights" / "extra").mkdir(parents=True)
     names, roots, extra = [], [], {}
+    geo, wk = bytes(range(32)), bytes(range(64))
     for i, (field, (flo, fhi)) in enumerate(woff.items()):
         raw = np.ascontiguousarray(w[flo:fhi]).view(np.uint8)
         name = field[len(prefix):]
         names.append([name, "bfloat16", [fhi - flo], int(raw.size)])
-        roots.append(CPU.tensor_root(raw, CHUNK))
+        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk) if com.rows else CPU.tensor_root(raw, CHUNK))
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw.tobytes())
         extra[name] = i
-    geo = bytes(range(32))
-    wroot = scheme.weights_root(geo, scheme.names_digest(names), roots).hex()
-    (p / "weights" / "tree.json").write_text(json.dumps({"names": names, "tensor_roots": [r.hex() for r in roots], "root": wroot,
-                                                         "chunk": CHUNK, "geo_digest": geo.hex(), "extra": extra}))
+    tree = (step_rows.weights_tree(geo, names, scheme.names_digest(names), roots, wk) if com.rows else
+            {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
+             "chunk": CHUNK, "geo_digest": geo.hex()})
+    wroot = tree["root"]
+    (p / "weights" / "tree.json").write_text(json.dumps(tree | {"extra": extra}))
     (out / "binding_map_p1.json").write_text(json.dumps(bmap))
     sr, lk = RB.deferred_records(RB.path(out, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr,
@@ -96,16 +98,23 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
 
 
 def hook(c: dict, out_dir: Path, run: str = "served-rope") -> Path:
-    """The in-Commit hook's window over the Commit's members (`serving_rows.readers`, its request as the row stage writes it) in
-    ``out_dir``: ``served``.  The hook reads the bundle's store opened against the record where a Commit's reads its committer."""
+    """The in-Commit hook's window over the Commit's members in ``out_dir``, as a deferred Commit's C2 site commits it
+    (`c2_replay.serving_rows`, its request as the row stage writes it): ``served``.  The site reads the bundle's store opened
+    against the record where a Commit's reads its committer, and the weights opened against the committed root where it reads
+    the engine's."""
+    from types import SimpleNamespace
+
+    from verity_vllm.pipeline import c2_replay as C2
     from verity_vllm.pipeline import deferred_rows as DRW
-    from verity_vllm.pipeline import serving_rows as SRW
 
     r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
-    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     req = out_dir.with_name(out_dir.name + ".request.json")
     req.write_text(json.dumps({"dir": str(out_dir), "partition": str(c["partition"]), "run": run, "committer": {"source": "served_rope"}}))
-    SRW.readers(str(req), r.store, r.run, DRW.opened_weights(r), r.programs, bmap, r.arrivals, r.loaded, r.manifest, "rope-d64-cpu", r.digests)
+    args = CPU.replay_args(SimpleNamespace(row_dir=str(c["row_dir"]), replay_workers=None), r.ctx)
+    args.serving_rows = str(req)
+    weights = DRW.opened_weights(r)
+    C2.serving_rows(SimpleNamespace(args=args, out=r.out, pair=r.pair, com=r.store, rc=r.run, reqs=r.ctx["requests"],
+                                    sampling=r.ctx["sampling"], row=r.row, manifest=r.manifest, weights_of=lambda _prefix: weights))
     if (out_dir / "error.txt").exists():
         raise RuntimeError(f"the in-Commit hook failed: {(out_dir / 'error.txt').read_text()[-2000:]}")
     return out_dir

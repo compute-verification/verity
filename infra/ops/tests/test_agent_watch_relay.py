@@ -270,6 +270,29 @@ def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_i
         "a lane's run names the handle; a coordinator's own is found by its route; a worker's rc 0 run (ab12) rings no one"
 
 
+def test_a_run_whose_sender_is_in_a_turn_is_posted_and_rings_no_one(relay):
+    """INF-277: the leads' survey (27 Oct 02:00Z) put run-end rings at most of their inboxes. A sender ACTIVE at its run's end
+    sees the end itself; one that then idles is resumed by the watch (`idle_after_run`), so nobody is rung."""
+    w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "run_ended", "agent": w, "name": "ZKS10", "run": "r20261027-020000-ab12", "handle": "proofs", "role": "worker",
+         "node": "vy-nebius-1", "what": "sweep-a", "rc": 1, "state": "failed", "after": "3 min", "sender_status": "ACTIVE"},
+        {"kind": "run_ended", "agent": co, "name": "verity: proofs", "run": "r20261027-020000-cd34", "handle": "proofs",
+         "role": "coordinator", "node": "vy-nebius-2", "what": "lean build", "rc": 1, "state": "failed", "after": "12 min",
+         "sender_status": "ACTIVE"},
+        {"kind": "run_ended", "agent": co, "name": "verity: proofs", "run": "r20261027-020000-ef56", "handle": "proofs",
+         "role": "coordinator", "node": "vy-nebius-2", "what": "lean build", "rc": 1, "state": "failed", "after": "12 min",
+         "sender_status": "IDLE"}]) + "\n"
+    relay.once()
+    link = f"<https://cursor.com/agents/{w}|{w}>"
+    assert relay.posts[:2] == [
+        f"*Agent watch:* run r20261027-020000-ab12 (sweep-a) of worker ZKS10 ({link}) ended rc=1 after 3 min on vy-nebius-1; its "
+        "sender is in a turn, so no one is rung.",
+        f"*Agent watch:* run r20261027-020000-cd34 (lean build) of verity: proofs (<https://cursor.com/agents/{co}|{co}>) ended "
+        "rc=1 after 12 min on vy-nebius-2; its sender is in a turn, so no one is rung."]
+    assert [a[a.index("--run") + 1] for a in relay.ring_runs] == ["r20261027-020000-ef56"], "an idle sender is still rung"
+
+
 def test_a_former_coordinators_run_refused_by_ring_run_is_rung_again_with_the_watchs_handle(relay):
     """ring-run finds a coordinator by its open route; one a handover replaced holds none, so it refuses without --to."""
     relay.refuse.append(True)
@@ -339,7 +362,7 @@ def test_doorbells_count_ring_runs_doorbell_for_ready_to_wake(relay, monkeypatch
 
 
 def test_a_failure_the_watch_acted_on_leads_with_its_owner_and_rings_that_inbox(relay):
-    """Daniel, 19 Oct: ring the owner at once. A coordinator's owner is top; a worker's, its launcher's handle."""
+    """Ring the owner at once. A coordinator's owner is top; a worker's, its launcher's handle."""
     top, proofs = (relay.slack.tag(relay.slack.entry(relay.REG, h)) for h in ("top", "proofs"))
     w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
     relay.log_text["text"] = "\n".join(json.dumps(r) for r in [

@@ -1,4 +1,4 @@
-"""`SnapshotStore` and the capture's `skipped` index entries (coverage lane cov-moe, 2026-09-17).
+"""`SnapshotStore` and the capture's `skipped` index entries.
 
 A tensor over the snapshot cap (D87 `--snapshot-max-bytes`, or the lower dispatcher-call cap `--snapshot-max-bytes-op`)
 is listed in `snapshots.json` with its view and a `skipped` reason and NO `file`.  The store must keep such entries out

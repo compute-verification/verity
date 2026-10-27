@@ -551,6 +551,19 @@ def test_size_counts_the_gates():
     assert AE.size("charge", N=2)["ands"] == ands(AE.charge_unit(2))
 
 
+@pytest.mark.parametrize("part, key", [(AE.ArithEncodeFinish, ()), (AE.ArithEncodeStep, (3, 1))])
+def test_a_parts_build_is_called_as_the_lowering_calls_it(part, key):
+    """C-Flock's lowering (`ir_lower._boolean_activation`) passes the statics to ``build`` only when the part has some, so a
+    part without any, ArithEncodeFinish_v1, takes the elements alone."""
+    from verity.ml.circuits.boolean.trace import trace
+
+    S = SimpleNamespace(**dict(zip(part.statics, key)))
+    build = (lambda C, *e: part.build(C, S, *e)) if part.statics else part.build
+    params, ret = part.signature(S)
+    got, want = trace(build, [t for _, t in params], ret), part.traced(*key)
+    assert (got.gates, got.outputs) == (want.gates, want.outputs)
+
+
 @pytest.mark.parametrize("traced", [False, True])
 def test_no_and_of_the_charge_reads_a_form_its_earlier_decisions_grew(traced):
     """The carried words are committed once a decision, as rows of a lowering and in the gate trace alike (where

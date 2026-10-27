@@ -3,7 +3,7 @@ import Definitions.Nci.Cover
 /-!
 # The cover theorem's fan-in/fan-out tightening: the vocabulary
 
-Daniel's covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
+The covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
 multiplications it completes. Fan-in and fan-out charge it for the values it reads: a block that reads a value of a
 token (an activation, a word) finishes
 only the products whose activations key back to that value, at most `aOut` of them, and to do more of a token's work
@@ -84,7 +84,7 @@ as its own tokens' (`c = 1`): a backward-only token has no valid lookup, and eve
 dk_nope into one value reaching 65536 products, more than `aOut`. Counting Dgrad raises `α₀` from 0.148 to 0.301
 (`kappa.py` at sequence 4096).
 
-Scope, the red team's conditions:
+Scope:
 
 * the LM head's forward products are not counted, since their activation reaches 163840 products, more than `aOut`;
 * layer 0's q_a and kv_a products, whose activation is keyed to an embedding gather (about 0.05%), are not counted

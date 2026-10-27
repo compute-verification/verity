@@ -5,8 +5,8 @@ plain GEMM baseline is gated at the exact shape and flag set it is timed at, the
 interleaved, and reported over the fastest plain GEMM of the arm's precision on the same card and shape.
 
 It is independent of the NCP stack: stdlib, numpy and ctypes (no torch), with a small native library for the device side.
-It takes #475's timing discipline (bursts over distinct operand sets past twice the L2, a read-only L2 flush, per-item
-sensors, versions, the consistency gate) and #449's primary-context ctypes pattern, so driver-API arms plug in.
+Its timing discipline: bursts over distinct operand sets past twice the L2, a read-only L2 flush, per-item sensors,
+versions, the consistency gate. It uses the CUDA primary context through ctypes, so driver-API arms plug in.
 
 | File | What |
 |---|---|
@@ -14,7 +14,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune (its fastest `--finalists` per family and each library's fastest go on to the timing, and at decode each gets a chain), a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report |
 | `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
-| `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, CUTLASS's sm_120 kernels, and the plain NVFP4 and FP8 GEMMs of `../nvfp4_sm120/nvf4_plain.cu` (#543, #570; source `verity`, `verity_nvf4_256x128*` and `verity_fp8_256x128*`: 256×128 tiles, one persistent CTA an SM, m a multiple of 256, n of 128, k of 128 or for FP8 64, one tile order, a workspace of their own for their tensor maps), and the bit-exact gate on ternary operands |
+| `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, CUTLASS's sm_120 kernels, and the plain NVFP4 and FP8 GEMMs of `../nvfp4_sm120/nvf4_plain.cu` (source `verity`, `verity_nvf4_256x128*` and `verity_fp8_256x128*`: 256×128 tiles, one persistent CTA an SM, m a multiple of 256, n of 128, k of 128 or for FP8 64, one tile order, a workspace of their own for their tensor maps), and the bit-exact gate on ternary operands |
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
 | `sass_gate.py` | the SASS gate, before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` (version, build, arguments, numeric run) builds them, and except an instruction a pinned toolkit's `exceptions` list (one of `EXCEPTABLE`, in its one form, naming the Definition that models it bit for bit and the numeric run that held the card to it: `MUFU.EX2` under 13.0.1-sm_90a, `MufuEx2Ftz`); nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`, `--pin`) |
 | `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
@@ -66,7 +66,7 @@ cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `a
 against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait --timed` and times on its first GPU
 (`--timed` pauses the fill queue: without it, fill jobs keep running beside the timed run). A timed run also passes
 `research run --no-sampler`, so `research`'s own telemetry sampler (`nvidia-smi` every 5 s) stays off the node while it
-times (17:27Z); the harness records clocks and the UUID itself:
+times; the harness records clocks and the UUID itself:
 
 ```bash
 R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
@@ -97,7 +97,7 @@ it; the shape's `warmup` says whether it got steady). Then every entry's timed i
 least `--item-ms` (40): calls for a baseline or an arm, replays for a chain (`sizing`). Every item samples NVML while the GPU
 runs it (`sensors.during`), and each panel row carries both sides' reps in the same run (`panel.reps`: per-call and item ms
 and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` and `sm_clock_base` for `panel.py`, and
-`clock_gap` (medians more than 0.5% apart; 08:50Z).
+`clock_gap` (medians more than 0.5% apart).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
 `--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6;
@@ -153,7 +153,7 @@ take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job
 every call a flag set's gate is about to check before the first of them, so their references compute side by side; the gate still compares against the
 inputs as the device holds them at the gate.
 
-**Poisoned transcripts and the no-write control** (panel rule, 11:50Z). An arm with `dump` (arm interface v0.5)
+**Poisoned transcripts and the no-write control** (a panel rule). An arm with `dump` (arm interface v0.5)
 lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,
 default `call.outputs`; never an operand, since poisoning one changes what the call computes, so an overlap is refused and the
 row gets no control) is filled with 0xA5, the weight side and the call run, and the arm's `dump` writes

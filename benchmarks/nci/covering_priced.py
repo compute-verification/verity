@@ -13,7 +13,7 @@ The forms, each a lower bound rho >= (chained charge per gate) * s / (charge one
   covers chained products of price sum at most ``k * (k/c_a) + k * p_max``, so the numerator is the price sum over the
   chained products: the product-weighted mean price replaces the cheapest class's ``c_w``.
 * ``priced additive``: the priced form with the weights' bits paid outside the token computations (the conditional
-  premise of ``Nci.Cover.Guarantees.CoveringBoundAdditive``, PR #3039), per block ``k^2/(4 c_a) + k p_max``.
+  premise of ``Nci.Cover.Guarantees.CoveringBoundAdditive``), per block ``k^2/(4 c_a) + k p_max``.
 
 Chaining (``chainedBlocksAt``) is decided per product stage of one token's forward pass from the count ``n`` of distinct
 updated weights upstream inside the token's computation (``depth.py`` of the realism note: routed experts and the router
@@ -77,7 +77,7 @@ CLASSES = {
 
 #: Pythia's per-tensor-type prices at 1,000 steps after theta, bits per weight: the lowest codec length over every
 #: codec (theta's forward codes, and theta's fp32 master and Adam moments), as `rweights/ckpt_deltas.py` measured them
-#: (art:044580cc14c18dcb55b1e69da10d0e0f3f6ef1321ed11375c50953a1af8dc7d2, `rweights/ckpt_160m_late.jsonl` and
+#: (their run's `rweights/ckpt_160m_late.jsonl` and
 #: `ckpt_410m.jsonl`). qkv: query_key_value; attn_out: dense; mlp_in: dense_h_to_4h; mlp_out: dense_4h_to_h; head:
 #: embed_out; embed: embed_in. The master and Adam codecs need the optimizer state registered; ``PYTHIA_FWD`` is theta's
 #: forward codes alone.
@@ -627,7 +627,7 @@ def sensitivity(pts: dict, cheapest: dict) -> dict:
 
 
 def check_daniel() -> dict:
-    """Daniel's marginal-dampener table (covering bound write-up): Kimi K2 at k = 2e7, w = 2.5, raw: the base tier
+    """The covering bound write-up's marginal-dampener table: Kimi K2 at k = 2e7, w = 2.5, raw: the base tier
     k^2/w + k gives 41, the additive charge 166, a-bit activations (a = 4) 660."""
     m = k2()
     gates = K.schedule(m)[1]

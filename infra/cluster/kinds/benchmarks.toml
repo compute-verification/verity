@@ -7,10 +7,3 @@ max_wall_min = 120
 question = "At this sweep point, do the spec's vLLM arms pass their token and arm gates, and what does each add over stock?"
 outputs = ["$RESEARCH_RUN_DIR/out/benchmark.json", "$RESEARCH_RUN_DIR/out/table.md", "$RESEARCH_RUN_DIR/out/resolved-spec.json"]
 restart = "requeue"
-
-[kinds.vllm-bench-8gpu]
-phase = "gpu8-timed"
-max_wall_min = 240
-question = "At this sweep point, do the spec's vLLM arms pass their token and arm gates on the whole node, and what does each add over stock?"
-outputs = ["$RESEARCH_RUN_DIR/out/benchmark.json", "$RESEARCH_RUN_DIR/out/table.md", "$RESEARCH_RUN_DIR/out/resolved-spec.json"]
-restart = "requeue"

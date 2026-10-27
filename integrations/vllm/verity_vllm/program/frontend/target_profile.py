@@ -78,7 +78,7 @@ class TargetProfile:
                            construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
-                           conformance on committed bytes; fused region == composed relations NOT established; Daniel's ruling).
+                           conformance on committed bytes; fused region == composed relations NOT established).
                            Omitted from `to_json()` when None: eager profiles serialise (and digest) exactly as before.
     fp8_block_gemm      -> env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
                            (`kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
@@ -147,7 +147,7 @@ class TargetProfile:
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
-    ir                  -> the IR the Program is written in (a Program static, declared-and-bound, never attested).  None = word
+    ir                  -> the circuit profile the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
                            each of the Boolean version of that Definition, on bits (`verity_vllm.program.frontend.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
@@ -206,7 +206,7 @@ class TargetProfile:
     fp8_scale_construction: str | None = None
     #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
-    #: the IR the Program is written in (None = word; see the doc); declared, never attested
+    #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
     #: the Program's values as registered inputs (None = constants; see the doc); declared, never attested
     registered_values: bool | None = None
@@ -416,9 +416,9 @@ class TargetProfile:
     @property
     def execution_label(self) -> str:
         """The row's `execution` label: `bi-eager` (batch-invariant eager, vLLM's own attention selection) with the suffix `-fa2`
-        when FA2 is FORCED on a capability whose selector would pick another version (Daniel: a separately labelled configuration,
+        when FA2 is FORCED on a capability whose selector would pick another version (a separately labelled configuration,
         never a substitute for the native row)."""
-        mode = "compiled" if self.compilation is not None else "eager"       # [R15 compiled] `bi-compiled`: the panel's compiled rows
+        mode = "compiled" if self.compilation is not None else "eager"       # `bi-compiled`: the panel's compiled rows
         base = f"bi-{mode}" if self.batch_invariant else mode
         if self.flash_attn_version is not None and self.flash_attn_version != self.with_overrides(flash_attn_version=None).effective_flash_attn_version():
             return f"{base}-fa{self.flash_attn_version}"
@@ -532,7 +532,7 @@ class TargetProfile:
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # noqa: PLC0415  (lazy: keeps this module light)
+        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
@@ -540,7 +540,7 @@ class TargetProfile:
         step, the correspondence evidence) — what Bet A pins, the eager resolver pins and the applicability manifest requires.  `arch_family`
         = the family the host actually reported (construction read-back / capture header), when known: it must be the record's.  Raises
         `gemm_targets.UnregisteredGemmTarget` (fail closed) for a target without a registered specialization."""
-        from verity_vllm.program.frontend.gemm_targets import gemm_target_for  # noqa: PLC0415
+        from verity_vllm.program.frontend.gemm_targets import gemm_target_for
         return gemm_target_for(self.compute_capability, arch_family)
 
     @classmethod
@@ -554,7 +554,7 @@ class TargetProfile:
         is `num_sms` (vLLM's `num_compute_units()`, the persistent-GEMM grid) and `(major, minor)` the compute capability.  The one
         source of the SM count for a construction on a GPU host: the builder applies it (shim), pins it (GEMM rule), and the artifact
         identity carries it (`ArtifactIdentity.target_profile.num_sms`).  Torch is imported lazily: this module stays torch-free."""
-        import torch  # noqa: PLC0415  (lazy: the module is torch-free on CPU hosts)
+        import torch  # lazy: the module is torch-free on CPU hosts
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
 

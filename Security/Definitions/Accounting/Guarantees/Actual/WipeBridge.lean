@@ -8,7 +8,7 @@ import Definitions.Accounting.Assumptions.WipeRead
 The lemma `Accounting.SecurityProofs.Actual.WipePool` bounds the un-held fractions a run tree of wipes labels
 (`Accounting.WipePlay`) on a tree meeting `WipePlay.UnheldFails`, which every tree meets once each un-held set is
 empty. These state the pool on the challenger's actual verdicts instead, per read, what an answered block costs the
-server's state at the read, and what the state can gain between reads. Restated by the MEM-55 and MEM-60 red teams, and
+server's state at the read, and what the state can gain between reads. They are
 proved in `Proofs/Accounting/Actual/WipeReadPool.lean`, `WipeBridge.lean` and `WipeLag.lean`.
 
 The setting is `Definitions.Accounting.Assumptions.WipeRead`'s: a strategy `S` on coins `r = (ω₀, c)`, `n` timed reads over
@@ -110,7 +110,7 @@ narrower than `m` bits at the arrival (`Actual.Run.mem`), is at most
 At the deployed wipe (`|B| = 40,625,000,000` labels of 512 bits, `n = 74,000`, `|T| ≤ 2^50`) the second term is under
 `2^-41` once `m ≤ 512 a − log₂ C(|B|, a) − 108`. With both terms under `2^-41`, a passing server held at least 90% of
 the store's bits at all but 286 of the reads and half of them at all but 57; `K = n`, with `a = |B| − 15,601,665`, says
-only that it held the store less 1.02 GB at one read (note:20261019T2210Z-report-timed-round-redteam-3). -/
+only that it held the store less 1.02 GB at one read. -/
 def WipeReadHeld : Prop :=
   ∀ {Ω₀ B L Z : Type*} [Fintype Ω₀] [Fintype B] [LinearOrder L] {n : ℕ}
     (S : Ω₀ × (Fin n → B) → Actual.Run L) (ℓ : L → L → ℕ) (X Y V : Finset L)

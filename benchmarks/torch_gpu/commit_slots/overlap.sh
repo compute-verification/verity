@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# overlap.py on one leased H200 (cwd = the source tree's root): the serve-time commit beside ALLP-H200's served step at the
-# frozen shape, alone, in today's loop, and overlapped at both priorities. Circuits' shared-row Layout JSON (CIR-113,
-# art:f6eb8ebd...) is sent; today's FAMILIES layout is e2e_h200's own.
+# overlap.py on one leased H200 (cwd = the source tree's root): the serve-time commit beside e2e_h200's served step at the
+# frozen shape, alone, in today's loop, and overlapped at both priorities. Circuits' shared-row Layout JSON, a fetched
+# fixture (fixtures/artifacts.json), is sent; today's families layout is e2e_h200's own.
 #
-#   research data fetch art:f6eb8ebda6ebef5a2cab7bfcfd37e8266660d8241e46a5037fe615a2040b695f --to DIR
+#   research data fetch-fixtures benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=LANE --send DIR/families-shared.layout.json -- bash benchmarks/torch_gpu/commit_slots/overlap.sh \
-#     [overlap.py's options]
+#     --env GPU_LEASE_WHO=LANE --send benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json \
+#     -- bash benchmarks/torch_gpu/commit_slots/overlap.sh [overlap.py's options]
 #
 # Before the lease: uv sync, attn_ref's cubin, the SHA-512 engine's build. Then one GPU lease of at most LEASE_MIN (30)
 # minutes for overlap.py, its JSON and summary into $OUT. Exit: overlap.py's (0 every run ran and every overlapped root is

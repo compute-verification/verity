@@ -1,6 +1,6 @@
-"""The opt-in serving rows (`ml.windows.rows`): M0's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
+"""The opt-in serving rows (`ml.windows.rows`): C-Flock's circuit prover's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
 reference on the batch and parallel paths for a two-member population, ChaCha20 salts, core's served-domain rule, the registration
-(core's v1 record, accepted by `registration.check` against the verifier's own copies) and M0's per-member file layout, every output
+(core's v1 record, accepted by `registration.check` against the verifier's own copies) and C-Flock's circuit prover's per-member file layout, every output
 a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
 flock-netlist/serving-row-leaf-vector.json, sha256 92aa7f77...)."""
 

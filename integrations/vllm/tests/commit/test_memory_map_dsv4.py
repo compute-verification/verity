@@ -1,4 +1,4 @@
-"""memory-map/v1 of DeepSeek-V4-Pro's attention caches, for a warm request's (MEM-48): its sliding window, compressor state and
+"""memory-map/v1 of DeepSeek-V4-Pro's attention caches, for a warm request's: its sliding window, compressor state and
 compressed (c4, c128) and indexer caches, which a prefix-cache hit reads from the request that computed them as the dense
 attention's K and V (`commit.memory_map`, `cached`).  Neither is on main: no DeepSeek-V4 Program takes a cached prefix (only the
 dense attention rule seeds one, `kv_prefix`), and the map lays out none of these caches, so the test is marked to fail until both

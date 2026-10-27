@@ -8,7 +8,7 @@ residual output (layer 0: the embedding), `w` = the checkpoint norm weight (fixt
 `fixtures/verity-ir/rmsnorm-fused-b0/smollm2_norm_weights.npz`, sha256-checked against the store's weights index).
 
 Two candidate trees, as vectorised numpy twins of the registered composites (`rmsnorm_fused`, checked against the
-gate-by-gate IR evaluation in `tests/program/test_rmsnorm_fused.py`):
+gate-by-gate circuit evaluation in `tests/program/test_rmsnorm_fused.py`):
 
 * `v1` — `RMSNormFusedCuda_v1`: `fused_add_rms_norm_kernel<bf16, 8>` (N/8 threads x one 8-vector, pairs summed
   sequentially); this kernel is guarded by `!batch_invariant_launch` in `csrc/layernorm_kernels.cu` and is not
@@ -22,9 +22,7 @@ Both share the epilogue `s = rsqrtf(var / N + eps)` (MUFU.RSQ), `out = bf16((z *
 
     PYTHONPATH=. verity-vllm rmsnorm-fused-sweep [--bundle PATH] [--out sweep.json]
 
-Result (2026-09-07, this machine): v1 exact on 2,327/2,340 rows (1,347,826/1,347,840 words); v2 exact on
-2,340/2,340 rows; the variance differs between the trees in 1,218 rows, `s` in 689, the bf16 output in 13 —
-every one of those 13 words is what production committed under v2.
+On the B0 store v2 is exact on every row and v1 misses 13 output words, each the word production committed under v2.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Compute accounting's credit rule for a served linear (Daniel, 19 Oct, after J11): a served call earns credit only if the y
+"""Compute accounting's credit rule for a served linear: a served call earns credit only if the y
 the linear hands back to vLLM is the credited kernel's own output, the same GEMM invocation that wrote the credited z, and
 no other GEMM ran for that linear.  Pearl-C's e2e gate holds served y to its own ``run.gemm``
 (`benchmarks/pouw/pearl_c_vllm/e2e.py`); this is the same rule for H1, read from the call's trace.  H1 adds the value
