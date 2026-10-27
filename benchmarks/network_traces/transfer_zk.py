@@ -52,6 +52,7 @@ import argparse
 import hashlib
 import json
 import os
+import socket
 import sys
 import time
 from collections.abc import Callable
@@ -520,6 +521,16 @@ def expected(name: str, res: dict) -> bool:
         and WHY[name] in why
 
 
+def session_port(base: int, j: int) -> int:
+    """Member ``j``'s session port: ``base + j``, else (``base`` 0) a port free now, so that two runs sharing a node never
+    cross one run's prover with another's verifier."""
+    if base:
+        return base + j
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -557,7 +568,7 @@ def prove(a) -> int:
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
     ok = True
     for j, (name, m) in enumerate(staged.items()):
-        res = audit_member(M, av, sg, m, out / name, a.port + j)
+        res = audit_member(M, av, sg, m, out / name, session_port(a.port, j))
         if "verdicts" in res and res["verdicts"]:
             blobs, held, public = LS.public_pieces(M.a8, *blobs_of(at, m), (m["dir"] / "circuit.txt").read_bytes())
             res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
@@ -587,7 +598,7 @@ def main(argv=None) -> int:
     p.add_argument("--units", type=int, default=8)
     p.add_argument("--shape", choices=sorted(BLOCKS), default=TINY.name,
                    help="tiny, or h200: interface 1's l0.wk at the frozen H200 shape, under its demo seed")
-    p.add_argument("--port", type=int, default=7791)
+    p.add_argument("--port", type=int, default=0, help="the members' first session port (default: a free port each)")
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the statements and the host's read of them: nothing proved")
     a = ap.parse_args(argv)
