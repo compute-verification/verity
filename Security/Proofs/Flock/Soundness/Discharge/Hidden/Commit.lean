@@ -387,7 +387,8 @@ theorem Committed.outRows (hty : tags.typed = false) (h : Committed tags cf tabl
   · obtain ⟨hp, hc⟩ := parse_untyped hty h
     exact out_rows_v1 hp hc hv1
   · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases h
-    exact out_rows_v1Pre hp (parse_factsPre_nets hp).1 hck hv1
+    have h := out_rows_v1Pre hp (parse_factsPre_nets hp).1 hck hv1
+    exact h
 
 /-- **A session's layout**, flat or templated (`hidden_layoutC`). -/
 theorem SpecC.layout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) : Layout st :=

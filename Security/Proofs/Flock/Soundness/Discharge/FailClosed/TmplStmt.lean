@@ -73,7 +73,7 @@ theorem portReadsB_unroll {t : Tmpl} {n : Net} (ho : t.ordered = true) (h : Tmpl
   have hg := TmplOrder.rows_good ho hr
   have hinc : n.inWords * WORD = t.inCols := by rw [hw0]; rfl
   have hw : 2 ^ n.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by decide) hlog
-  rw [hinc, hcp] at hle
+  rw [hinc] at hle
   unfold Layout.portReadsB
   simp only [List.all_eq_true, List.mem_range, List.mem_append, decide_eq_true_eq]
   intro i hi x hx hxn
@@ -139,8 +139,9 @@ theorem tmpl_facts {t : Tags} {cf : ByteArray} {tables : List (String × ByteArr
     have := tu.ok
     simp only [Tmpl.unrollOk, Bool.and_eq_true] at this
     exact this.1.1.1.1.1.2
-  refine ⟨hh, hi, hc, by rw [hu, hig], by rw [hu, hul], fun hlog => ?_, congrArg Circuit.outNet he,
-    congrArg Circuit.unitNet he, by rw [he]; rfl, by rw [he]; rfl⟩
+  refine ⟨hh, hi, hc, by rw [hu, hig], by rw [hu, hul], fun hlog => ?_,
+    by have e := congrArg Circuit.outNet he; exact e, by have e := congrArg Circuit.unitNet he; exact e,
+    by rw [he]; rfl, by rw [he]; rfl⟩
   rw [hu] at hlog ⊢
   exact portReadsB_unroll ho hun hlog
 
