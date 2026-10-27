@@ -1,4 +1,4 @@
-"""The registered weights under rows-sha512 (`NativeHostCommitter.register_weights`, `step_rows.tensor_root`): the committer's tree is
+"""The registered weights under rows-sha512 (`NativeHostCommitter.register_weights`, `weights_rows`): the committer's tree is
 the one the CPU replay opens against (`cpu_replay.open_weights`), with a 64-byte root the record names under its scheme, a
 re-registration reproduces it, and the device path's roots are the host path's byte for byte (CUDA only)."""
 from __future__ import annotations
@@ -9,6 +9,7 @@ torch = pytest.importorskip("torch")
 
 from tests.check.opened import committer  # noqa: E402
 from verity_vllm.commit import scheme, step_rows  # noqa: E402
+from verity_vllm.commit.committer import weights_rows as WR  # noqa: E402
 from verity_vllm.pipeline import cpu_replay as CPU  # noqa: E402
 
 
@@ -71,9 +72,10 @@ def test_a_vllm_v1_registration_stays_sha256_and_is_refused_under_a_sha512_root_
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for the device row hash")
 @pytest.mark.parametrize("nbytes", [1, 100, step_rows.ROW_BYTES, step_rows.ROW_BYTES + 1, 3 * step_rows.ROW_BYTES - 5, 5 * step_rows.ROW_BYTES])
 def test_the_device_rows_root_is_the_host_rows_root(nbytes, monkeypatch):
-    com = committer(commit_scheme=step_rows.NAME)
+    wr = WR.WeightsRows(committer(commit_scheme=step_rows.NAME)._geo_digest, bytes(range(64)))
     g = torch.Generator().manual_seed(nbytes)
     t = torch.randint(0, 256, (nbytes + 3,), dtype=torch.uint8, generator=g).cuda()
-    entry, wk = ["t", "uint8", [nbytes], nbytes], bytes(range(64))
+    entry = ["t", "uint8", [nbytes], nbytes]
     for flat in (t[:nbytes], t[3:]):                               # 16-byte aligned, and not
-        assert com._rows_tensor_root_device(flat, 2, entry, wk) == com._rows_tensor_root(flat, 2, entry, wk)
+        assert wr.device_root(2, entry, flat) == wr.host_root(2, entry, flat)
+        assert wr.root(2, entry, flat, "device-checked") == (wr.host_root(2, entry, flat), 1)

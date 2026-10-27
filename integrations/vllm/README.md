@@ -112,7 +112,7 @@ Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
 (`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), execution extent (`executed_prefix.py`: the rule and the not-executed classification; its link to the Match account is `check/executed_prefix.py`), `padding_steps.py`, `hidden_stream.py`, `step_rows.py` (the commitment scheme `rows-sha512`, the Commit's default), `scheme.py` (`vllm-v1`, by name: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the host committer every collector extends;
-`native_collect.py`, the collector of record (`native_collect_v2b`, the windowed worker), + `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `flush_points.py`, `hidden_gpu_src/`).  Never:
+`native_collect.py`, the collector of record (`native_collect_v2b`, the windowed worker), + `native_ext.py` (its JIT-built extension), `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `weights_rows.py` (the registered weights under `rows-sha512`), `flush_points.py`, `hidden_gpu_src/`).  Never:
 runtime metadata in the identity tuple.
 
 **`check/`** implements *checks -> verdicts*: `match/` (`global_match.py`, `global_match_fast.py`, `program_compare.py`,

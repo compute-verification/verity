@@ -48,8 +48,6 @@ Stress / negative-test knobs (never in headline runs; recorded when used):
 
 from __future__ import annotations
 
-import os
-import sys
 import threading
 import time
 from typing import Any
@@ -62,6 +60,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
                                                          _HostRanges, _HostWindows, outside, retain_exclude_families)
+from verity_vllm.commit.committer.native_ext import ext
 from verity_vllm.commit.committer.native_hidden import NativeHiddenM1Source, NativeHiddenM1SourceFA3
 from verity_vllm.commit.committer.native_host import (
     GPU_CHUNK_BYTES,
@@ -75,9 +74,6 @@ from verity_vllm.commit.committer.topp_splits import (SPLITS_IDENTITY, TOPP_SPLI
                                                       batch_top_p, install_split_kernel_proxies, split_count_of_launches, step_splits,
                                                       uninstall_split_kernel_proxies)
 from verity_vllm.commit.native_ranges import level_sizes
-
-_EXT = None
-HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
@@ -116,35 +112,6 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
         return int.from_bytes(h, "little") & 0x7FFF_FFFF_FFFF_FFFF, "geometry"
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return (int(ntok) << 16) | (int(nreq) & 0xFFFF), "counts"
-
-
-def build_source_digest() -> str:
-    """The source-set digest of THIS tree's collector (native_jit.source_set_digest with the toolchain versions) -- the key of its JIT dir."""
-    from verity_vllm.commit.committer import native_jit
-
-    return native_jit.source_set_digest(torch_version=str(torch.__version__), cuda_version=str(torch.version.cuda))
-
-
-def ext(build_dir: str | None = None, verbose: bool = False):
-    """JIT-build the C++ collector (pybind11 + cudart + .cu kernels) once per process.  `NATIVE_COLLECT_BUILD` (or `build_dir`) names the
-    PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- torch's
-    mtime test is never the arbiter of staleness (record_v5/ship.sh preserves source mtimes; a pod-wide dir warmed by another tree's build
-    was adopted by the r17-int-3 ship on cp-big).  Without a parent, torch's default cache dir is used, keyed the same way.  Concurrent jobs
-    on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
-    global _EXT
-    if _EXT is None:
-        from verity_vllm.commit.committer import native_jit
-
-        _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
-                                               parent=build_dir or settings.NATIVE_COLLECT_BUILD or None,
-                                               cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS, verbose=verbose)
-        missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, "native_collect.cpp"))
-        if missing:
-            _EXT = None
-            raise RuntimeError(f"native collector .so in {bd} does not expose {missing} bound by {HERE}/native_collect.cpp -- a stale build "
-                               f"(source digest {digest[:12]}); remove the directory and rebuild")
-        print(f"[jit] native collector source digest {digest[:12]} -> {bd}", file=sys.stderr, flush=True)
-    return _EXT
 
 
 # the first two zero-window overwriters and their flush leaves (GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES): `flush_points`
