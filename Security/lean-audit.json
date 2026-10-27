@@ -9469,61 +9469,264 @@
    "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
   "NetTiming.Witness.ConstantRate_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.ConstantRate_honest :",
+    "  Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxRate NetTiming.Witness.fxOp 1 1)",
+    "    NetTiming.Witness.fxHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "33134e5cad12f07d1dcb63004142c3fbe95abef56d5821824390a8d29e7d30c7"
   },
   "NetTiming.Witness.DecodableConstantRate_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.DecodableConstantRate_honest :",
+    "  And",
+    "    (NetTiming.AcceptedUpTo NetTiming.Witness.fxRate NetTiming.Witness.fxHonestI.op 1",
+    "      (NetTiming.Witness.fxHonestI.obsRun Unit.unit 1))",
+    "    (And (NetTiming.Regenerates NetTiming.Witness.fxHonestI.certifier fun x o => o)",
+    "      (NetTiming.JitterBounded NetTiming.Witness.fxHonestI.certifier 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "2cfee168ee6c8537443f582ace5d1698b8f13399825ef90460f612864164a12f"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul (Fintype.card Unit) (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "57c77ef65736c6a2966600028019e027ec68a84921df01d87e23911de4a4378c"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll (instHMul.hMul 1 1) 1).encard",
+    "      (instHMul.hMul (Fintype.card Unit)",
+    "          (instHPow.hPow (instHMul.hMul NetTiming.Witness.syncOne.size (instHPow.hPow 1 1)) 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "910e87783f67bba64cbeebaae7b695694d13260398bfbefda89f7b3977ba5cb6"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul (Fintype.card Unit) (instHPow.hPow NetTiming.Witness.syncOne.size (instMinNat.min 1 1)))",
+    "          (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "adbb360f7fa2fd4f36c6877d84cd17300b3cffdffacb0da8ba73149b4fa0048e"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul (instHMul.hMul (Fintype.card Unit) (instHPow.hPow NetTiming.Witness.syncOne.size 1))",
+    "          (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "2d50a5fc0260e8ef3eb30b78b958fdc5560e5eea9f5e6ebf6a05789bbe6f943e"
   },
   "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul (Fintype.card Unit) (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "57c77ef65736c6a2966600028019e027ec68a84921df01d87e23911de4a4378c"
   },
   "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul (instHMul.hMul (Fintype.card Unit) (instHPow.hPow (Fintype.card NetTiming.Witness.syncOne.Elem) 1))",
+    "          (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "4a9f947f3af366276d7b5cdd2edd8daf90c02f44932ece95f1efed5ef0e8c5ce"
   },
   "NetTiming.Witness.EncardAccSeqsSampledLe_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest :",
+    "  And (NetTiming.Witness.notLay.Fits NetTiming.Witness.notProg 1)",
+    "    (And",
+    "      (∀ (F : Finset Nat),",
+    "        SetLike.instMembership.mem (NetTiming.faultySets NetTiming.Witness.notStmt.design NetTiming.Witness.notPart 0)",
+    "            F →",
+    "          instLENat.le (NetTiming.faultyBits NetTiming.Witness.notProg NetTiming.Witness.notPart F) 0)",
+    "      (Set.instMembership.mem",
+    "        (NetTiming.AccSeqsSampled NetTiming.Witness.notProg NetTiming.Witness.notPart NetTiming.Witness.notStmt.design",
+    "          NetTiming.Witness.notLay 1 (Set.instSingletonSet.singleton fun x => Bool.false) 0",
+    "          (fun x x_1 => List.cons Bool.false List.nil) 1)",
+    "        (List.cons NetTiming.Witness.obs1 List.nil)))"
+   ],
+   "assumptions": [],
+   "type_hash": "33bc8db803f478832c619ff5913144d336fef208864744bef70ebe452fe43d94"
   },
   "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul",
+    "            (instHMul.hMul (instHPow.hPow 2 0)",
+    "              (NetTiming.faultySets NetTiming.Witness.notStmt.design NetTiming.Witness.notPart 0).card)",
+    "            (instHPow.hPow 2 0))",
+    "          (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "af9f3f0617e039a50b676587415c7e86c4b47602441e8e35bd5ad70e80f1bd44"
   },
   "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 1 1)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z (instHMul.hMul 1 1))) z)).encard",
+    "      (instHMul.hMul (Fintype.card Unit)",
+    "          (instHPow.hPow (instHMul.hMul NetTiming.Witness.syncOne.size (instHPow.hPow 1 1)) 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "7ba9f87a7f45487e77ce7326c2b581fd0698bd659fea28172eaf79420975bef3"
   },
   "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial": {
-   "owner": "@network-accounting"
-  },
-  "NetTiming.Witness.EncardIngressDecodableLe_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 1))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 1)) z)).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul (Fintype.card Unit) (instHPow.hPow NetTiming.Witness.syncOne.size (instMinNat.min 1 1)))",
+    "          (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "c7a3f8d5b8b7ac207b2108358a4d306af4b4f220884af1f2a3935af6bee48706"
   },
   "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 1))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 1)) z)).encard",
+    "      (instHMul.hMul (Set.instSingletonSet.singleton fun x => List.nil).encard",
+    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 1) (instHPow.hPow 1 1)).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "6bbac9a081b10631bf77bef489301e062ef09fe54c8eb2f32d7f2eb4405bedf1"
   },
-  "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial": {
-   "owner": "@network-accounting"
-  },
-  "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial": {
-   "owner": "@network-accounting"
+  "NetTiming.Witness.EncardIngressDecodableLe_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 1))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 1)) z)).encard",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 1) (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "8dfc74d2103c62a9b0d948577c22afef6dda3b04bc5fff02044d8ec3455bb105"
   },
   "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 1 1)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 1 1))) z)).encard",
+    "      (instHMul.hMul (Set.instSingletonSet.singleton fun x => List.nil).encard",
+    "        (instHPow.hPow",
+    "            (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 1) (instHPow.hPow 1 1))",
+    "            1).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "1e311727a86b2126587003050b556939f9babe88da82789b2fecaf9f7095b159"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 1))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 1)) z)).encard",
+    "      (instHMul.hMul (Set.instSingletonSet.singleton fun x => List.nil).encard",
+    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 1) (instHPow.hPow 1 1)).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "93256380934e450dbabfc5f8b4713274c371a09eacb7ee433f9e9bc0bc0734d2"
   },
   "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 1 1)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 1 1))) z)).encard",
+    "      (instHPow.hPow",
+    "          (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 1) (instHPow.hPow 1 1)) 1).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "6f148d11284b6ee019f9530f5945a2ea7985e78464118271951f732b314f4793"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 1))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 1)) z)).encard",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 1) (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "608d5fbc11724f201230ed40c0b006be5a05e2ebf38f9661194c251a3ecfe70c"
   },
   "NetTiming.Witness.FixedClock_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.FixedClock_honest :",
+    "  Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxFixed NetTiming.Witness.fxOp 1 1)",
+    "    NetTiming.Witness.fxHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "6aa1da3be93f40f10fee9f56921772977454f5c37c5b232d45e2b5fb8daa39d7"
   },
   "NetTiming.Witness.HorizonLeakAccepted_honest": {
    "owner": "@network-accounting",
@@ -9559,7 +9762,17 @@
    "type_hash": "d324f5679d0fffdaea5861b5cd8e3624ac125a8944aaa5560053a394aaad70f3"
   },
   "NetTiming.Witness.Ingress_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.Ingress_honest :",
+    "  And (NetTiming.StatusComplete 1 (NetTiming.Witness.fxHonestI.obsRun Unit.unit 1))",
+    "    (And (NetTiming.Packed NetTiming.Witness.fxHonestI.certifier)",
+    "      (And (NetTiming.Allocated NetTiming.Witness.fxHonestI.certifier fun x => 1)",
+    "        (And (NetTiming.JitterBounded NetTiming.Witness.fxHonestI.certifier 1)",
+    "          (NetTiming.Regenerates NetTiming.Witness.fxHonestI.certifier fun x o => o))))"
+   ],
+   "assumptions": [],
+   "type_hash": "71c19c9afcd04ab76a2bb402e28438f3bf9c6f9da6a809411fe01d06e285a84a"
   },
   "NetTiming.Witness.PeriodLeakAccepted_honest": {
    "owner": "@network-accounting",
@@ -18332,6 +18545,8 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
@@ -18933,6 +19148,8 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
@@ -24000,7 +24217,9 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.Ingress_honest"
    ]
   },
   "Definitions.NetworkCertifier.Assumptions.AdviceString": {
@@ -24076,8 +24295,28 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.ConstantRate_honest",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
+    "NetTiming.Witness.FixedClock_honest",
     "NetTiming.Witness.HorizonLeakAccepted_honest",
     "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
@@ -24269,7 +24508,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.Witness.Ingress_honest"
    ]
   },
   "Definitions.NetworkCertifier.Period": {
@@ -24354,8 +24594,28 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.ConstantRate_honest",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
+    "NetTiming.Witness.FixedClock_honest",
     "NetTiming.Witness.HorizonLeakAccepted_honest",
     "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
@@ -24395,6 +24655,8 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
@@ -24419,6 +24681,8 @@
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
@@ -24473,7 +24737,15 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
-    "NetTiming.SecurityProofs.ExpectedRowCausal"
+    "NetTiming.SecurityProofs.ExpectedRowCausal",
+    "NetTiming.Witness.ConstantRate_honest",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Tap": {
