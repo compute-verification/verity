@@ -854,64 +854,156 @@ def names (j : Json) (k : String) : Array Name :=
 end LeanAudit
 
 open LeanAudit in
-/-- The verifier's path: the constants its `entries` reach through definitions' values, `implemented_by` targets and
-`@[csimp]` replacements (the constant compiled code runs in place of one, by a theorem `@f = @g`), in every imported
-module, expanding nothing in `stop`. Reported: each reached `@[implemented_by]` and `@[extern]` constant, each reached
-`@[csimp]` rewrite with its replacement and theorem, and each constant of the `hash` namespace the walk enters from
-outside it, with the path from an entry. -/
-unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : Name) : Json := Id.run do
+/-- What a module's data holds about compiled code: its `implemented_by` targets, its `@[extern]` constants and its
+`@[csimp]` rewrites. -/
+unsafe def compiledIn (data : ModuleData) : Array (Name × Name) × Array Name × Array Compiler.CSimp.Entry :=
+  let csimp := match data.entries.find? (·.1 == Compiler.CSimp.ext.ext.name) with
+    | some (_, es) => es.map fun e => match (unsafeCast e : ScopedEnvExtension.Entry Compiler.CSimp.Entry) with
+      | .global c | .scoped _ c => c
+    | none => #[]
+  (entriesOf Name data Compiler.implementedByAttr.ext.name, (entriesOf Unit data externAttr.ext.name).map (·.1), csimp)
+
+/-- A breadth-first walk from `roots` along `next`, expanding nothing in `stop`: the constants reached, in the order
+reached, and the constant each one was first reached from. -/
+def walkFrom (roots : Array Name) (stop : NameSet) (next : Name → Array Name) :
+    Array Name × Std.HashMap Name Name := Id.run do
+  let mut seen : NameSet := {}
+  let mut order := #[]
+  let mut parent : Std.HashMap Name Name := {}
+  for r in roots do
+    if !seen.contains r then
+      seen := seen.insert r
+      order := order.push r
+  let mut i := 0
+  while i < order.size do
+    let n := order[i]!
+    i := i + 1
+    if stop.contains n then continue
+    for c in next n do
+      if !seen.contains c then
+        seen := seen.insert c
+        parent := parent.insert c n
+        order := order.push c
+  return (order, parent)
+
+/-- The root module of an executable, for the verifier's walk: none when the environment imports it (its `main` is the
+environment's), else the constants and compiled-code facts of its `.olean` files, read as data as `Replay.lean` reads
+a module. An error says why its `main` can't be walked: the module is not built, declares no `main`, or imports a module
+the environment does not hold, whose constants the walk would not find. -/
+unsafe def exeRoot (env : Environment) (m : Name) :
+    IO (Except String (Option (Array ConstantInfo × Array ModuleData))) := do
+  if let some i := env.getModuleIdx? m then
+    let own := (env.getModuleIdxFor? `main).map (·.toNat) == some i.toNat
+    return if own then .ok none else .error "declares no `main`"
+  let some olean ← (some <$> findOLean m) <|> pure none | return .error "is not built (no `.olean` on the search path)"
+  if !(← olean.pathExists) then return .error s!"is not built ({olean} is missing)"
+  let mut files := #[olean]
+  for level in [OLeanLevel.server, OLeanLevel.private] do
+    if ← (level.adjustFileName olean).pathExists then
+      files := files.push (level.adjustFileName olean)
+  let parts := (← readModuleDataParts files).map (·.1)
+  let some header := parts[0]? | return .error "has no module data"
+  if let some i := header.imports.find? fun i => (env.getModuleIdx? i.module).isNone then
+    return .error s!"imports {i.module}, which the audit's environment does not load; add it to `roots`"
+  let consts := parts.foldl (init := #[]) fun acc d => acc ++ d.constants
+  if !consts.any (·.name == `main) then return .error "declares no `main`"
+  return .ok (some (consts, parts))
+
+/-- One walk of the verifier's path: the executable's root module it starts from (none for the entries), the constants
+that module declares (looked up before the environment's), the compiled-code facts it walks with, the constants reached
+in order and each one's parent. -/
+structure VerifierWalk where
+  main : Option Name
+  own : Std.HashMap Name ConstantInfo
+  impl : Std.HashMap Name Name
+  ext : NameSet
+  csimp : Std.HashMap Name Compiler.CSimp.Entry
+  order : Array Name
+  parent : Std.HashMap Name Name
+
+open LeanAudit in
+/-- The verifier's path: the constants its `entries` reach, and those the `main` of each executable reaches (`mains`: each
+one's root module, with `exeRoot`'s reading of it), through definitions' values, `implemented_by` targets and `@[csimp]`
+replacements (the constant compiled code runs in place of one, by a theorem `@f = @g`), in every imported module. The
+entries' walk expands nothing in `stop`; a `main`'s expands everything, so it covers the code its binary runs, and looks a
+name up in its root module before the environment (two executables' roots both declare `main`). Reported: each reached
+`@[implemented_by]` and `@[extern]` constant and each reached `@[csimp]` rewrite (with its replacement and theorem), with
+the path from the first root that reaches it, the entries before the `main`s (`main`: the root module of the one it is
+from); each constant of the `hash` namespace the entries' walk enters from outside it, with its path; how many constants
+each walk reached; and each executable whose `main` could not be walked, with why. -/
+unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : Name)
+    (mains : Array (Name × Except String (Option (Array ConstantInfo × Array ModuleData)))) : Json := Id.run do
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let mut impl : Std.HashMap Name Name := {}
   let mut ext : NameSet := {}
   let mut csimp : Std.HashMap Name Compiler.CSimp.Entry := {}
   for data in env.header.moduleData do
-    for (n, t) in entriesOf Name data Compiler.implementedByAttr.ext.name do
-      impl := impl.insert n t
-    for (n, _) in entriesOf Unit data externAttr.ext.name do
-      ext := ext.insert n
-    if let some (_, es) := data.entries.find? (·.1 == Compiler.CSimp.ext.ext.name) then
-      for e in es do
-        match (unsafeCast e : ScopedEnvExtension.Entry Compiler.CSimp.Entry) with
-        | .global c | .scoped _ c => csimp := csimp.insert c.fromDeclName c
-  let stops := stop.foldl NameSet.insert {}
-  let mut seen : NameSet := {}
-  let mut parent : Std.HashMap Name Name := {}
-  let mut stack := #[]
-  for e in entries do
-    if env.contains e then
-      seen := seen.insert e
-      stack := stack.push e
-  while !stack.isEmpty do
-    let n := stack.back!
-    stack := stack.pop
-    if stops.contains n then continue
-    let next := (match env.find? n with
-      | some (.defnInfo d) => d.value.getUsedConstants
-      | some (.opaqueInfo d) => d.value.getUsedConstants
-      | _ => #[]) ++ (impl[n]?.toArray) ++ ((csimp[n]?.map (·.toDeclName)).toArray)
-    for c in next do
-      if !seen.contains c then
-        seen := seen.insert c
-        parent := parent.insert c n
-        stack := stack.push c
-  let pathTo (c : Name) : Array String := Id.run do
+    let (is, es, cs) := compiledIn data
+    impl := is.foldl (fun s (n, t) => s.insert n t) impl
+    ext := es.foldl NameSet.insert ext
+    csimp := cs.foldl (fun s c => s.insert c.fromDeclName c) csimp
+  let walk (main : Option Name) (own : Std.HashMap Name ConstantInfo) (impl : Std.HashMap Name Name) (ext : NameSet)
+      (csimp : Std.HashMap Name Compiler.CSimp.Entry) (roots : Array Name) (stop : NameSet) : VerifierWalk :=
+    let next (n : Name) : Array Name :=
+      (match own[n]? <|> env.find? n with
+        | some (.defnInfo d) => d.value.getUsedConstants
+        | some (.opaqueInfo d) => d.value.getUsedConstants
+        | _ => #[]) ++ (impl[n]?.toArray) ++ ((csimp[n]?.map (·.toDeclName)).toArray)
+    let (order, parent) := walkFrom roots stop next
+    { main, own, impl, ext, csimp, order, parent }
+  let first := walk none {} impl ext csimp (entries.filter env.contains) (stop.foldl NameSet.insert {})
+  let mut walks := #[first]
+  let mut unwalked : Array Json := #[]
+  for (m, read) in mains do
+    match read with
+    | .error why => unwalked := unwalked.push (Json.mkObj [("module", toJson m.toString), ("why", toJson why)])
+    | .ok got =>
+      let (consts, parts) := got.getD (#[], #[])
+      let mut impl' := impl
+      let mut ext' := ext
+      let mut csimp' := csimp
+      for data in parts do
+        let (is, es, cs) := compiledIn data
+        impl' := is.foldl (fun s (n, t) => s.insert n t) impl'
+        ext' := es.foldl NameSet.insert ext'
+        csimp' := cs.foldl (fun s c => s.insert c.fromDeclName c) csimp'
+      walks := walks.push (walk (some m) (consts.foldl (fun s c => s.insert c.name c) {}) impl' ext' csimp' #[`main] {})
+  let pathTo (parent : Std.HashMap Name Name) (c : Name) : Array String := Id.run do
     let mut p := #[c.toString]
     let mut x := c
-    for _ in [0:16] do
+    while true do
       match parent[x]? with
       | some y => p := p.push y.toString; x := y
       | none => break
     return p.reverse
-  let reached := seen.toArray.qsort Name.lt
+  -- a constant of an executable's root module is its own, apart from the environment's constant of the same name
+  let mut done : NameSet := {}
+  let mut found : Array (Name × String × Json) := #[]
+  for w in walks do
+    for c in w.order do
+      let mine := w.own.contains c
+      let key := if mine then (w.main.getD .anonymous).mkNum 0 ++ c else c
+      if done.contains key then continue
+      done := done.insert key
+      let loc := [("name", toJson c.toString), ("module", toJson ((if mine then w.main else moduleOf c).map toString)),
+        ("path", toJson (pathTo w.parent c))] ++ (w.main.map fun m => [("main", toJson m.toString)]).getD []
+      if let some t := w.impl[c]? then
+        found := found.push (key, "implemented_by", Json.mkObj (loc ++ [("by", toJson t.toString)]))
+      if w.ext.contains c then
+        found := found.push (key, "extern", Json.mkObj loc)
+      if let some e := w.csimp[c]? then
+        found := found.push (key, "csimp", Json.mkObj (loc ++ [("to", toJson e.toDeclName.toString),
+          ("by", toJson e.thmName.toString)]))
+  let sorted := found.qsort fun a b => Name.lt a.1 b.1
+  let ofKind (k : String) : Json := toJson (sorted.filterMap fun (_, k', j) => if k' == k then some j else none)
   let locOf (c : Name) : List (String × Json) := [("name", toJson c.toString), ("module", toJson ((moduleOf c).map toString))]
   return Json.mkObj [
-    ("missing", toJson ((entries.filter (!env.contains ·)).map toString)), ("reached", toJson reached.size),
-    ("implemented_by", toJson (reached.filterMap fun c => impl[c]?.map fun t => Json.mkObj (locOf c ++ [("by", toJson t.toString)]))),
-    ("extern", toJson (reached.filter ext.contains |>.map fun c => Json.mkObj (locOf c))),
-    ("csimp", toJson (reached.filterMap fun c => csimp[c]?.map fun e =>
-      Json.mkObj (locOf c ++ [("to", toJson e.toDeclName.toString), ("by", toJson e.thmName.toString)]))),
-    ("hash", toJson (reached.filter (fun c => hash.isPrefixOf c && !(parent[c]?.map hash.isPrefixOf).getD true)
-      |>.map fun c => Json.mkObj (locOf c ++ [("path", toJson (pathTo c))])))]
+    ("missing", toJson ((entries.filter (!env.contains ·)).map toString)), ("reached", toJson first.order.size),
+    ("mains", toJson ((walks.filterMap fun w => w.main.map fun m => Json.mkObj [("module", toJson m.toString),
+      ("reached", toJson w.order.size)]))), ("unwalked", toJson unwalked),
+    ("implemented_by", ofKind "implemented_by"), ("extern", ofKind "extern"), ("csimp", ofKind "csimp"),
+    ("hash", toJson ((first.order.qsort Name.lt).filter (fun c => hash.isPrefixOf c && !(first.parent[c]?.map hash.isPrefixOf).getD true)
+      |>.map fun c => Json.mkObj (locOf c ++ [("path", toJson (pathTo first.parent c))])))]
 
 open LeanAudit in
 unsafe def main (args : List String) : IO UInt32 := do
@@ -1110,9 +1202,10 @@ unsafe def main (args : List String) : IO UInt32 := do
       Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci))])))),
     ("moved_conflicts", toJson conflicts)]
   let vcfg := cfg.getObjValD "verifier"
-  let doc := if (names vcfg "entries").isEmpty then doc else
+  let mains ← (names vcfg "mains").mapM fun m => return (m, ← exeRoot env m)
+  let doc := if (names vcfg "entries").isEmpty && mains.isEmpty then doc else
     doc.setObjVal! "verifier" (verifierInfo env (names vcfg "entries") (names vcfg "stop")
-      (((vcfg.getObjValD "hash").getStr?.toOption.getD "").toName))
+      (((vcfg.getObjValD "hash").getStr?.toOption.getD "").toName) mains)
   lap "graph" oleans.size
   let text := doc.compress
   lap "render" text.length

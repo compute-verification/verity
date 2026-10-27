@@ -81,6 +81,9 @@ environment extension loaded, so none of the package's code runs), and replays t
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
+    verifier     (a policy with a `verifier` section) an `@[implemented_by]` or `@[extern]` constant that its `entries`
+                 or the `main` of any of the package's executables (`lean_exe`) reaches is outside `allow`, or the entries
+                 reach the `hash` namespace other than through `stop` (`verifier_failures`)
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
     runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run beside the replay by
@@ -531,6 +534,14 @@ def source_dirs(pkg: Path) -> list[Path]:
     top = (pkg / cfg.get("srcDir", ".")).resolve()
     dirs = {top, *((top / lib.get("srcDir", ".")).resolve() for lib in cfg.get("lean_lib", []))}
     return sorted(dirs, key=lambda d: len(d.parts), reverse=True)
+
+
+def executables(pkg: Path) -> dict[str, str]:
+    """{root module: name} for each `lean_exe` of the package's `lakefile.toml` (its `root`, Lake's default its name)."""
+    if not (pkg / "lakefile.toml").exists():
+        return {}
+    exes = tomllib.loads((pkg / "lakefile.toml").read_text()).get("lean_exe", [])
+    return {str(e.get("root", e["name"])): str(e["name"]) for e in exes if isinstance(e, dict) and "name" in e}
 
 
 def lean_modules(pkg: Path) -> dict[str, str]:
@@ -992,18 +1003,22 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     (`unfolded_sha256`, `Facts.lean`'s `liftOf`).  With ``moved`` ({old name: new name}), each guarantee and read definition
     also gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee with a
     `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`).  Each entry of `assumption_reads` (a
-    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`)."""
+    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`).  With a `verifier` section the walk
+    also starts from the `main` of each of the package's executables (`executables`), and its facts name them
+    (`executables`: {root module: name})."""
     out, canon = work / "facts.json", work / "canon.jsonl"
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
     premises = (policy.get("shape") or {}).get("premises")
+    exes = executables(pkg) if policy.get("verifier") else {}
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
-                                  "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
+                                  "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")}
+                                  | {"mains": sorted(exes)},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
@@ -1034,6 +1049,8 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     for es in facts.get("assumption_reads", {}).values():
         for r in es:
             r["sha256"] = hashes[f"read:{r['name']}"]
+    if isinstance(facts.get("verifier"), dict):
+        facts["verifier"]["executables"] = exes
     return facts
 
 
@@ -1394,13 +1411,29 @@ def verifier_allow(rule: dict, found: dict) -> list[str]:
     return modules + sorted({e["name"] for _, e in compiled(found) if not allowed_by(modules, e)})
 
 
+def reached_from(e: dict, found: dict, entries: str) -> str:
+    """Where the verifier's walk reached the constant ``e`` from (an entry, or an executable's `main`), with its path."""
+    path = e.get("path")
+    if not path:
+        return entries
+    if m := e.get("main"):
+        exe = (found.get("executables") or {}).get(m)
+        root = f"{m}'s main" + (f" (the {exe} executable)" if exe else "")
+    else:
+        root = path[0]
+    return f"{root}, by {' -> '.join(path)}" if len(path) > 1 else root
+
+
 def verifier_failures(rule: dict | None, found: dict | None, update: bool = False) -> list[str]:
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
-    `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
-    no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
-    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
-    record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
-    that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
+    `stop`, and the `hash` namespace), walked from the entries and from the `main` of each of the package's executables
+    (`executables`), whose walk expands everything, so it covers the code the binary runs. Every `@[implemented_by]` or
+    `@[extern]` constant either walk reaches is compiled code no proof sees, so one fails unless `allow` admits it
+    (`allowed_by`), naming the root and the path that reach it, and the entries reach the `hash` namespace only through
+    `stop`, so the verifier hashes through its parameter. An executable whose `main` the walk can't read (its root not
+    built, without a `main`, or importing a module the audit doesn't load) fails, update or not. `allow` is a record:
+    `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name that
+    admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
     constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
@@ -1409,8 +1442,13 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
                         "than the policy?")]
     allow = rule.get("allow", [])
     entries = ", ".join(rule.get("entries", []))
+    exes = found.get("executables") or {}
+    roots = ", ".join([*rule.get("entries", []), *(f"{m}'s main" for m in sorted(exes))])
     fails = [Failure("verifier.missing-entry", m, f"verifier: entry {m} is not a constant of the build; fix "
                      f"`verifier.entries`") for m in found.get("missing", [])]
+    fails += [Failure("verifier.main-unwalked", u["module"], f"verifier: {u['module']}, the root of the "
+                      f"{exes.get(u['module'], u['module'])} executable, {u['why']}, so the walk can't cover the code its "
+                      f"`main` runs") for u in found.get("unwalked", [])]
     if not update:
         used = set()
         for kind, e in compiled(found):
@@ -1418,11 +1456,11 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
                 used.add(a)
             else:
                 fails.append(Failure(f"verifier.{kind.replace('_', '-')}", e["name"], f"verifier: {e['name']} (@[{kind}], in "
-                                     f"{e.get('module')}) is on the path from {entries}: compiled code no proof sees; if it "
-                                     f"is a core primitive, run `check.py --update`, which lists it under `verifier.allow` "
-                                     f"(the landing DM shows it), else take it off the path"))
+                                     f"{e.get('module')}) is on the path from {reached_from(e, found, entries)}: compiled "
+                                     f"code no proof sees; if it belongs there, run `check.py --update`, which lists it "
+                                     f"under `verifier.allow` (the landing DM shows it), else take it off the path"))
         fails += [Failure("verifier.allow-unused", a, f"verifier: `verifier.allow` lists {a}, which admits nothing on the "
-                          f"path from {entries}; run `check.py --update`") for a in allow
+                          f"path from {roots}; run `check.py --update`") for a in allow
                   if not a.startswith("module:") and a not in used]
     for h in found.get("hash", []):
         fails.append(Failure("verifier.hash", h["name"], f"verifier: {entries} reach {h['name']} outside the hash parameter, "
@@ -2356,7 +2394,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
     records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
-    or dropped from `verifier.allow` gets a line."""
+    or dropped from `verifier.allow` gets a line, an added one with where the walk reached it from."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -2450,7 +2488,10 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
     out += assumption_changes(old, new)
     before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
-    where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
+    path = facts.get("verifier") or {}
+    entries = ", ".join((new.get("verifier") or {}).get("entries", []))
+    where = {e["name"]: f" (@[{kind}], in {e.get('module')}" + (f"; from {reached_from(e, path, entries)})" if e.get("path")
+                                                               else ")") for kind, e in compiled(path)}
     out += [f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the verifier's path"
             for a in after if a not in before]
     out += [f"verifier: no longer allowed {a}: off the verifier's path" for a in before if a not in after]
@@ -2896,7 +2937,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                            ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts]) if (ts := plugin_targets(pkg))
                                                       else [])),
                            ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
-                           ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                           ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in dict.fromkeys(
+                               [*policy["roots"], *(executables(pkg) if policy.get("verifier") else {})]))]))):
             if callable(argv) and not (argv := argv()):
                 continue
             with contextlib.nullcontext() if argv is None else writing(pkg, log):
