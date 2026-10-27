@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from collections import defaultdict
 from fractions import Fraction
@@ -45,6 +46,8 @@ from pathlib import Path
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import operands as OP
 from verity.core.protocols.pouw import window as Wd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from verity_all_protocols import settings
 
 LEAN_ENV = "VERITY_POUW_CHECK"

@@ -5,7 +5,8 @@ Read a setting as an attribute (``settings.CERTIFIER_HEIGHT``) or with `get`: th
 default when it is unset. An empty string is a value (``CERTIFIER_TAMPER=`` relays no tampered run, ``WARDEN_TAMPER=``
 runs none), except for an int, where it is the default. An undeclared name is an AttributeError, and a string that doesn't
 parse is a ValueError naming the variable. `put` writes a declared variable for the processes the run starts. The legs
-import it as ``verity_all_protocols.settings``, with ``benchmarks/all_protocols`` on their path as run.sh puts it.
+import it as ``verity_all_protocols.settings``, putting ``benchmarks/all_protocols`` on their path themselves, since other
+suites load them by file path (network_traces' ``chain_record`` loads ``legs/certifier.py``).
 """
 from __future__ import annotations
 

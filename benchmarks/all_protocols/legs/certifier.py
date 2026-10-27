@@ -117,6 +117,8 @@ import numpy as np
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.windows.rows import BC_BYTES, SALT_BYTES
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from verity_all_protocols import settings
 
 PROTOCOL = "verity/certifier/v0"
