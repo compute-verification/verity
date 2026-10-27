@@ -11,9 +11,6 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   partial by `TokenSelectChunk_v2` (`b1.TokenSelectChunk_v1` with its last lane's unread index increment gone), reduced with
   logits[0] by `TokenSelectCombine_v2` (`b1.TokenSelectCombine_v1` with each select's branches swapped, as the chunk step's
   are).  Flat, v1 and v3 lower to circuits quadratic in V; this one is linear.
-* `TokenSelectCombine_v3{V,C,N}`: `TokenSelectCombine_v2{V,C}`'s function with its partials reduced N at a time by
-  `TokenSelectReduce_v1{N,C}` (each run's partial of the N·C logits it covers, a chunk's partial at that width), then
-  `TokenSelectCombine_v2{V,N·C}` over logits[0] and those, so a reduce reads N partials and the combine ⌈n / N⌉ of n.
 * `TopPKeepWord_v2{V,S}`: `topp_words.TopPKeepWord_v1{V,S}`'s word gates that its keep bits depend on (`live_replay`).  The keep
   word's builder applies each operation to whole vectors of lanes, and some lanes of a vector are read by nothing after it.
 * `TopPMask_v4{V,S}` and `GumbelTopPTokenSelect_v3{V,S}`: `TopPMask_v2{V,S}` and `GumbelTopPTokenSelect_v2{V,S}` over
@@ -191,39 +188,6 @@ def TokenSelectCombineV2(B, S, x0, best, idx):
         if c < n - 1:
             run = B.call(P.SelectBf16, keep, run, best[c])
     return run_i
-
-
-@composite("TokenSelectReduce", 1, ["N", "C"],
-           lambda S: ((("best", Array(S.N, BF16)), ("idx", Array(S.N, I32))), Tuple(BF16, I32)), conformance="model-untested")
-def TokenSelectReduceV1(B, S, best, idx):
-    """N consecutive V-chunk partials of C logits each as the one partial of the N·C logits they cover: from (-inf, 0), partial
-    i's (best[i], iC + idx[i]) is taken iff ``Bf16GtStrict(best[i], best)``, so its first maximum above -inf, a NaN never taken
-    and (-inf, 0) when it has none, as `TokenSelectChunk_v2{N·C}` gives on those logits.  Its selects are
-    `TokenSelectCombine_v2`'s."""
-    run, run_i = B.call(const(16, NEG_INF_BF16)), B.call(const(32, 0))
-    for i in range(S.N):
-        keep = B.call(BitNot, B.call(P.Bf16GtStrict, best[i], run))
-        at = idx[i] if i == 0 else B.call(P.I32Add, idx[i], B.call(const(32, i * S.C)))
-        run_i = B.call(SelectI32, keep, run_i, at)
-        run = B.call(P.SelectBf16, keep, run, best[i])
-    return tuple_of(run, run_i)
-
-
-@composite("TokenSelectCombine", 3, ["V", "C", "N"], _combine_type, conformance="model-untested")
-def TokenSelectCombineV3(B, S, x0, best, idx):
-    """`TokenSelectCombine_v2{V,C}`'s function, its n partials N at a time: each run of N (the last one the rest) reduced by
-    `TokenSelectReduce_v1{N,C}`, then `TokenSelectCombine_v2{V,N·C}` (``C = V`` once N >= n) over x0 and the runs' partials,
-    run g's index read at gNC.  Taking a partial only when strictly above the running best keeps the first maximum, and
-    `Bf16GtStrict` orders the non-NaN words with +-0 equal and takes no NaN, so the first maximum among the runs' first maxima
-    is the row's and its index gNC + (i - gN)C + idx[i] is v2's, mod 2^32."""
-    n = len(chunks(S.V, S.C))
-    if S.N < 1:
-        raise ValueError(f"TokenSelectCombine_v3: N = {S.N} partials a run (N >= 1)")
-    runs = [(lo, min(lo + S.N, n)) for lo in range(0, n, S.N)]
-    parts = [B.call(bind(TokenSelectReduceV1, N=hi - lo, C=S.C), best[lo:hi], idx[lo:hi]) for lo, hi in runs]
-    run_best = _Coll(Array(len(parts), BF16), concat([p[0].refs for p in parts]))
-    run_idx = _Coll(Array(len(parts), I32), concat([p[1].refs for p in parts]))
-    return B.call(bind(TokenSelectCombineV2, V=S.V, C=min(S.N * S.C, S.V)), x0, run_best, run_idx)
 
 
 @composite("TokenSelect", 4, ["V"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested")
@@ -444,5 +408,5 @@ def AttentionV19(B, S, q, kc, vc):
 
 __all__ = ["AttentionHeadV18", "AttentionHeadV19", "AttentionV18", "AttentionV19", "AttnBlockFirstV1", "AttnHeadEndV1", "CHUNK",
            "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3", "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3",
-           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectCombineV3", "TokenSelectReduceV1",
-           "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2", "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]
+           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
+           "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]
