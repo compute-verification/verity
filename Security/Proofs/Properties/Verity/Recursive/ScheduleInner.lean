@@ -9,8 +9,8 @@ accept. Where the statement reads (`readX`), and so wherever it has a V* part (`
 * every inner and staging round the run reaches is answered by its coin's bytes (`RecDeploy.run_inner`), so the run
   reaches session 0's first round (`reach_sessions`);
 * every later round reads the run's own inner and staging rounds (`innerPairs_reach`), whose last message is the
-  staging message that `Stage.ofMsg` reads each part's public file and the inner session's record off, with the coin
-  server's transcript of the inner rounds before it (`stage_reads`).
+  staging message that `Stage.ofMsg` reads each part's public file, the inner session's record and V*'s shared rows
+  off, with the coin server's transcript of the inner rounds before it (`stage_reads`).
 
 The run lemmas under them hold for any verifier: a round before a run's last is answered by a message
 (`stepWith_mid`), a run whose round is answered by a message runs on or has used its rounds up (`stepWith_full`), and
@@ -225,14 +225,17 @@ theorem innerPairs_reach {xr : XR} (hx : readX x = some xr) {m : ℕ} (hk : IV.k
   simp [Option.some.inj ha]
 
 /-- **F1: the staging round as `Stage.ofMsg` reads it.** Where the statement has a V* part, the run's staging round
-(round `k_I`) is its message `a`, answered by its coin's bytes, and `Stage.ofMsg tr` reads each part's public file and
-the inner session's record off `a`, and the coin server's transcript `tr` of the inner rounds before it. -/
+(round `k_I`) is its message `a`, answered by its coin's bytes, and `Stage.ofMsg tr` reads each part's public file,
+the inner session's record and V*'s shared rows off `a`, and the coin server's transcript `tr` of the inner rounds
+before it. -/
 theorem stage_reads (tr : Msg → List (Msg × Out) → ByteArray) (hn : 0 < nS x) :
     ∃ a, (run H P (V IV st) x ω r).msgs[IV.k (xIOf x)]? = some (a, .msg (coinSeq r (IV.k (xIOf x))).bytes) ∧
       (∀ s, (Stage.ofMsg tr).pub x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s =
         ((decodeStage a).bind fun p => p.1[s]?).getD ByteArray.empty) ∧
       (Stage.ofMsg tr).record x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) =
-        ((decodeStage a).map Prod.snd).getD ByteArray.empty ∧
+        ((decodeStage a).map (·.2.1)).getD ByteArray.empty ∧
+      (Stage.ofMsg tr).rows x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) =
+        ((decodeStage a).map (·.2.2)).getD ByteArray.empty ∧
       (Stage.ofMsg tr).transcript x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) =
         tr x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x))) := by
   obtain ⟨xr, hx⟩ := readX_of_nS x hn
@@ -247,10 +250,12 @@ theorem stage_reads (tr : Msg → List (Msg × Out) → ByteArray) (hn : 0 < nS 
     unfold stageOf
     rw [htake, List.getLast?_concat]
     rfl
-  refine ⟨a, ha, fun s => ?_, ?_, ?_⟩
+  refine ⟨a, ha, fun s => ?_, ?_, ?_, ?_⟩
   · show ((stageOf _).bind fun p => p.1[s]?).getD ByteArray.empty = _
     rw [hst]
-  · show ((stageOf _).map Prod.snd).getD ByteArray.empty = _
+  · show ((stageOf _).map (·.2.1)).getD ByteArray.empty = _
+    rw [hst]
+  · show ((stageOf _).map (·.2.2)).getD ByteArray.empty = _
     rw [hst]
   · show tr x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)).dropLast = _
     rw [htake, List.dropLast_concat]
