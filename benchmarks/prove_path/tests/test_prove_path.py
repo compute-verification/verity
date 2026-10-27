@@ -1051,8 +1051,8 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
     ``weights-registration`` roots its weight parameters as the window circuit reads them: the s8 weights and their scales of
     q|k|v and gate|up fused as vLLM serves them, o and down, the norms, and the tied embedding at the embedding's and the LM
-    head's row widths, each the checkpoint's words; only the rotary table is unrooted. The verifier holds it to its own weights
-    record's shapes (`registration_pins`)."""
+    head's row widths and as the embedding's table (its own parameter, `window_builder.table_param`), each the checkpoint's
+    words; only the rotary table is unrooted. The verifier holds it to its own weights record's shapes (`registration_pins`)."""
     import functools
 
     from verity_vllm.pipeline import advice as ADV
@@ -1074,8 +1074,9 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
                     "--hf-config", str(hf), "--key", str(tmp_path / "private" / "weights.key"), "--out", str(out)]) == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     pins = ADV.registered_weights(reg, serve)
-    assert said["roots"] == len(pins) == 23 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
-    words = {p.removeprefix("weights/"): e["words"] * e["leaves"] for p, e in reg["values"].items()}
+    assert said["roots"] == len(pins) == 24 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
+    assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
+    words = {p.removeprefix("weights/"): e["words"] * e["leaves"] for p, e in reg["values"].items() if not p.endswith("/table")}
     H, I, QKV = TINY["hidden_size"], TINY["intermediate_size"], 8 * 16
     for i in range(TINY["num_hidden_layers"]):
         p = f"model.layers.{i}."

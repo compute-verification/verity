@@ -108,7 +108,7 @@ Two kinds of committed run:
 * **window-commit** (the prover, V3c): the served window committed as that Circuit's units (`window_commit_of_advice`):
   slot k is the advice's k-th request, its row (occupancy, prompt length, ids) its ingress prompt, its values its sealed
   record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, composed from the
-  checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints``) and opened against the committed weights
+  checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints`` where given) and opened against the committed weights
   root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
@@ -1329,15 +1329,12 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.check.replay.opening import CommittedStore
-    from verity_vllm.config import CHECKPOINTS
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity_vllm.records.weights_registration import WeightsRegistration
-
     from verity.core.protocols.sampled_proofs.one_stage import draw as DR
     from verity.core.protocols.sampled_proofs.one_stage import registered as CR
 
@@ -1365,8 +1362,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     k0 = next(iter(p.progs))
     tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
     model = registered.phi.model
-    ck = WR.CheckpointIndex(a.checkpoint_dir, checkpoints_manifest=str(a.checkpoints or CHECKPOINTS), model=model["repo"],
-                            revision=model["revision"])
+    ck = WR.CheckpointIndex(a.checkpoint_dir, checkpoints_manifest=a.checkpoints, model=model["repo"], revision=model["revision"])
     opened = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), ck)
     read = CPU.provider(opened, ProgramIndex(p.progs[k0], program_dir=p.dirs[k0]).prefix, set())
     sizes = {label: ty.leaves for label, ty in dict(low.fn.signature()[0])[WC.WEIGHTS].fields}
@@ -1393,7 +1389,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
         slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
         rows.append(row)
     lap("slots")
-    reg = WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
+    reg = WW.WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
     if (reg.repo, reg.revision) != (model["repo"], model["revision"]):
         raise ValueError(f"{a.registration} registers {reg.repo}@{reg.revision}'s weights, not the served "
                          f"{model['repo']}@{model['revision']}'s")
@@ -1566,7 +1562,8 @@ def main(argv: list[str] | None = None) -> int:
                    "(weights-registration), the verifier's pins (records_audit.py audit --registered)")
     p.add_argument("--checkpoint-dir", required=True, help="the served checkpoint, whose tensors the served weights are "
                    "opened from against the committed weights root")
-    p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
+    p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
+                   "held to its committed tensor root either way)")
     p.add_argument("--law", default="subset:1", help="the proof service's law of the window")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")

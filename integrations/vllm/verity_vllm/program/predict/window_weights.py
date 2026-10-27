@@ -249,5 +249,5 @@ def registration_pins(registration: Any, record: dict[str, Any]) -> dict[str, st
     return pins
 
 
-__all__ = ["WEIGHTS_CLASS", "WEIGHTS_NONCE", "Grain", "record_words", "registration_pins", "weight_nonces", "weight_value",
-           "weight_values", "weights_record", "weights_registration"]
+__all__ = ["WEIGHTS_CLASS", "WEIGHTS_NONCE", "Grain", "WeightsRegistration", "record_words", "registration_pins", "weight_nonces",
+           "weight_value", "weight_values", "weights_record", "weights_registration"]
