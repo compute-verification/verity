@@ -206,6 +206,12 @@
    "owner": "@memory-accounting",
    "digest": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
   },
+  "Properties.NetworkCertifier.HonestProfileReads": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.JsonStrBeq": {
+   "owner": "@network-accounting"
+  },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
    "digest": "f80df2c5f11cf37bad8e1410b455c5c011a86a3f6cf2d332c1a29daf9974be77"
@@ -429,9 +435,15 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "NetworkCheck.Period"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "Properties.Identity",
+    "NetworkCheck.Period",
+    "Lms.Sign"
+   ],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the period check's (NetworkCheck.Period), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the period check's (NetworkCheck.Period), never a proof; the period's honest instance signs with LMS's own key derivation and signer (Lms.Sign)"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -1592,6 +1604,12 @@
    "signature": ["Properties.NetworkCertifier.periodAcceptMeans : Properties.NetworkCertifier.PeriodAcceptMeans"],
    "assumptions": [],
    "type_hash": "a03ac9ceefb2566c1415183a6ffc0ad1af4e0b29b14d1582d485d9ca52daa2b3"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkCertifier.undecidedPending": {
    "owner": "@network-accounting",
@@ -3617,7 +3635,9 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
-   "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's."
+   "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
+   "Properties.NetworkCertifier.periodAcceptMeans_honest": "lemma: PeriodAcceptMeans' honest witness (LEAN-66): the check accepts an honest one-window clock-form period under the named assumptions JsonStrBeq and HonestProfileReads; the witnesses rule holds it to its form once it runs",
+   "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": "lemma: PeriodAcceptMeans' nontrivial witness (LEAN-66): a period check that accepts everything (acceptAllPeriod) fails PeriodAcceptMeansOf; the witnesses rule holds it to its form once it runs"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -17795,5 +17815,11 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "honest": ["Properties.NetworkCertifier.periodAcceptMeans_honest"],
+   "nontrivial": "Properties.NetworkCertifier.periodAcceptMeans_nontrivial"
+  }
  }
 }
