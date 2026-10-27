@@ -768,7 +768,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     gp, oracle = assemble([R0, RX_LATE], tmp_path, tgrouped=True)
     res = gm.check(gp, oracle, within_step="dag")
     assert res["verdict"] == "PASS", res["reasons"]
-    assert res["within_step_criterion"] == "dag" and "M-0177" in res["within_step_note"]
+    assert res["within_step_criterion"] == "dag" and "dag: criterion of record" in res["within_step_note"]
     r1 = next(e for e in res["requests"] if e["request_id"] == "r1")
     assert r1["executed_steps_equal"] and r1["criterion"].startswith("dag")
     assert r1["within_step"]["permuted_instances"] > 0 and r1["within_step"]["sequence_also_equal"] is False
