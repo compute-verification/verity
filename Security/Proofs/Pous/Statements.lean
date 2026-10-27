@@ -1,4 +1,7 @@
 import Definitions.Pous.Guarantees
+import Proofs.Pous.Defs.Model.BandGraph
+import Proofs.Pous.Defs.Model.Digest
+import Proofs.Pous.Defs.Model.HashChain
 
 /-!
 # PoUS's lemmas, stated
