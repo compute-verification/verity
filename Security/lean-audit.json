@@ -2101,6 +2101,30 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.Assumptions.Coverage": {
+   "owner": "@training",
+   "digest": "1e6f95d1a14c679962ca2491f34afe8efb0c2c22e1c2301aa8cc7729465d77f5"
+  },
+  "Accounting.Assumptions.IntegrityContains": {
+   "owner": "@training",
+   "digest": "1df4db03c30501febd18c60155c7307bd97bc43bc4cca2ae3ec661eabd7cb899"
+  },
+  "Accounting.Assumptions.WipeState": {
+   "owner": "@training",
+   "digest": "994ec5141785d9a3fa5652fc2c48c620d1e976a3e1001c2396f46b97ca25cda6"
+  },
+  "Accounting.CertifierLinks": {
+   "owner": "@training",
+   "digest": "41f4976fd7f85cb508322546684b7d7c9a9d041b9812bf9ecff95cd544358f74"
+  },
+  "Accounting.Onsite.Valid": {
+   "owner": "@training",
+   "digest": "c0cfd3665d2519e61fe1dc86877370c37cb48fdde18e38057ba64e7976b24157"
+  },
+  "Accounting.OnsiteClass": {
+   "owner": "@training",
+   "digest": "f9d70d66f16ce6d9e60509418f660cc59511c1a00d7483cd94369f017b6efef1"
   }
  },
  "meaning": [
@@ -2655,8 +2679,17 @@
     "Definitions.Hash",
     "Definitions.Accounting"
    ],
-   "except": ["Definitions.Accounting.Bandwidth.Game", "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted"],
+   "except": [
+    "Definitions.Accounting.Bandwidth.Game",
+    "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted",
+    "Definitions.Accounting.Onsite.Params"
+   ],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash)"
+  },
+  "Definitions.Accounting.Onsite.Params": {
+   "imports": ["Mathlib", "Definitions.Accounting", "Definitions.Nci"],
+   "except": [],
+   "why": "the onsite deployment's parameters bundle the actual circuit's hardware (Definitions.Accounting.Physical) with the reference circuit's threading and the dampener's Λ, NCI's definitions (Definitions.Nci.Threads, Definitions.Nci.Dampener); they import no assumption, guarantee or proof"
   },
   "Definitions.Accounting.Guarantees": {
    "imports": [
@@ -3788,67 +3821,162 @@
    "type_hash": "ce044d7f61c49917c656e0fef2aa65fc8cf9359727b975c2ee1adb3aec56f5e1"
   },
   "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass : Accounting.Guarantees.Onsite.AcceptedOnsiteClass"
+   ],
+   "assumptions": [],
+   "type_hash": "7cb05d4220a0d0b9717edce1f44895099e52f5e7df363c8e02c03035dc45dce0"
   },
   "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared : Accounting.Guarantees.Onsite.CertifierLinksDeclared"
+   ],
+   "assumptions": [],
+   "type_hash": "96150774b5a3d2051e0fe6eb0ec569d946f9d4ccaa37c641b1d4029c7c636def"
   },
   "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass : Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass"
+   ],
+   "assumptions": [],
+   "type_hash": "c7fadec1e39db71bf7f3f2e5d8edd8928f61d3be8605b213025b284d41279412"
   },
   "Accounting.SecurityProofs.OnsiteEndToEnd": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.OnsiteEndToEnd : Accounting.Guarantees.OnsiteEndToEnd"],
+   "assumptions": [],
+   "type_hash": "d2cbb9afb2e007d30f0c52f56454bb0828082c142b41c6f1a4324c4b6658976c"
   },
   "Accounting.SecurityProofs.OnsiteEndToEnd_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.OnsiteEndToEnd_honest : Accounting.Guarantees.OnsiteEndToEnd_honest"],
+   "assumptions": [],
+   "type_hash": "c33a64a1efd864de79172bf80ad45f167ea1d9bc1e696155e6f04c94adacdca9"
   },
   "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial : Accounting.Guarantees.OnsiteEndToEnd_nontrivial"],
+   "assumptions": [],
+   "type_hash": "76a589799a9d1ad012c615af2104eb1b3860ec317d1178b89956bff34870409b"
   },
   "Accounting.SecurityProofs.OnsiteTimeLowerBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.OnsiteTimeLowerBound : Accounting.Guarantees.OnsiteTimeLowerBound"],
+   "assumptions": [],
+   "type_hash": "80721b715310d440d400c6778f0fa43985cfeaed0af6db4bdc9fb9898d69589b"
   },
   "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest : Accounting.Guarantees.OnsiteTimeLowerBound_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "34d817ee46aa9f21e8a381feff61c615f41d98bce7324b2c9b2547143edbc389"
   },
   "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial : Accounting.Guarantees.OnsiteTimeLowerBound_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "c2049a104d6fc46bd623518d108ee81c62a472ee98e1926dbd96a8617b7dc5ed"
   },
   "Accounting.SecurityProofs.Overhead.EndToEnd": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.Overhead.EndToEnd : Accounting.Guarantees.Overhead.EndToEnd"],
+   "assumptions": [],
+   "type_hash": "e494f7e9fdee0d1f69db2ecd858524c9fd4d38a1db47613646a0c7b2dbb84a67"
   },
   "Accounting.SecurityProofs.Overhead.EndToEnd_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.Overhead.EndToEnd_honest : Accounting.Guarantees.Overhead.EndToEnd_honest"],
+   "assumptions": [],
+   "type_hash": "35798db56a1ae4e40444a65c0384c14163ef3bbff357cdba8e2d714bfea1a08c"
   },
   "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial : Accounting.Guarantees.Overhead.EndToEnd_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "15d0a69e3e89d58bf4c17b89413cb9903259810967eea2b7fab28b79321cdb83"
   },
   "Accounting.SecurityProofs.Overhead.OverheadOfReference": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference : Accounting.Guarantees.Overhead.OverheadOfReference"
+   ],
+   "assumptions": [],
+   "type_hash": "3301ea09066ec2ba00c276387f0af14789d91ea42ab58287344c8567987f426d"
   },
   "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest :",
+    "  Accounting.Guarantees.Overhead.OverheadOfReference_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "80b367a343f546d52e255d62b5619baba9c97979ff052393537fa880d12c22db"
   },
   "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial :",
+    "  Accounting.Guarantees.Overhead.OverheadOfReference_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "00521c36d8deccc1e03b279668fc2151ad3f11e57192f6e15ab59f5a4ebec77a"
   },
   "Accounting.SecurityProofs.Overhead.ReferenceBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.Overhead.ReferenceBound : Accounting.Guarantees.Overhead.ReferenceBound"],
+   "assumptions": [],
+   "type_hash": "6699f2ff43f3bfe299e3477bf5eb4fdbc73e492dee30becfdb99129d2eac4a98"
   },
   "Accounting.SecurityProofs.Overhead.ReferenceBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest : Accounting.Guarantees.Overhead.ReferenceBound_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "e4e69d2078606ba375d73e06585c47213a188a55910a66cdcf97c789fbcf2696"
   },
   "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial : Accounting.Guarantees.Overhead.ReferenceBound_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "f5fee46f6c6c68ac3f439479b2bac9cf7570076f034633eab36980c8b28d8870"
   },
   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise : Accounting.Guarantees.Overhead.ThresholdOfPointwise"
+   ],
+   "assumptions": [],
+   "type_hash": "9fc69eefc40894253aff3cf6b1a6823d1a664a0826c6ff6ea4d435c8e28dbcfd"
   },
   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest :",
+    "  Accounting.Guarantees.Overhead.ThresholdOfPointwise_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "2dd2bca82c4494127f0735d2cbe7b37fc348403b0dd8aa0d07af931353966922"
   },
   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial :",
+    "  Accounting.Guarantees.Overhead.ThresholdOfPointwise_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "c520fee443c14e03aac108231f673c2722fcf07997c7559c763556b7a49a4593"
   },
   "Accounting.SecurityProofs.PearlCEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -12630,6 +12758,15 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.RequirementCredits",
@@ -12709,6 +12846,17 @@
     "Accounting.SecurityProofs.JointHorizonBlocksDeployedA"
    ]
   },
+  "Definitions.Accounting.Assumptions.Coverage": {
+   "digest": "50fb666b0e6f733c30115c0a8b55fc9dd7c900ba17413a4f06132a36eab4e7a7",
+   "definitions": {
+    "Accounting.Assumptions.Coverage": "1e6f95d1a14c679962ca2491f34afe8efb0c2c22e1c2301aa8cc7729465d77f5"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial"
+   ]
+  },
   "Definitions.Accounting.Assumptions.CreditedWords": {
    "digest": "a25f4c1c49005044b2dd56f19dab51ba0e411b9c4f3620cd11b1807e52485ecb",
    "definitions": {
@@ -12726,6 +12874,20 @@
     "Accounting.Assumptions.EncodeChainHardness": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
    },
    "guarantees": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted"]
+  },
+  "Definitions.Accounting.Assumptions.Onsite": {
+   "digest": "bf2e0aaeb613c1c05dd3943ac171125283e2901ac191d88d7a2461684716dfaf",
+   "definitions": {
+    "Accounting.Assumptions.IntegrityContains": "1df4db03c30501febd18c60155c7307bd97bc43bc4cca2ae3ec661eabd7cb899",
+    "Accounting.Assumptions.WipeState": "994ec5141785d9a3fa5652fc2c48c620d1e976a3e1001c2396f46b97ca25cda6"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial"
+   ]
   },
   "Definitions.Accounting.Assumptions.PouwFloor": {
    "digest": "4f9b562c931e2da9c956607655fcd71f416e3789589c2c2a40b16527b84a2885",
@@ -13624,6 +13786,12 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.RequirementCredits",
@@ -13722,6 +13890,11 @@
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -14629,6 +14802,69 @@
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Accounting.SecurityProofs.Memory.Counting",
     "Accounting.SecurityProofs.Memory.CountingAdvice"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.Onsite": {
+   "digest": "dab58d73ab0f2a9a08ddcb39d74fd1d54ab9c0eec35f9125a112e86311dfb0f5",
+   "definitions": {
+    "Accounting.Guarantees.Onsite.AcceptedOnsiteClass": "f408b5cb4e8ea0fccfbc7fe41ef15d0217e33d50c9f6599c6dfa0168d314bbde",
+    "Accounting.Guarantees.Onsite.CertifierLinksDeclared": "747c607efd2740ef4cccbbd5369967bfe0af194b3efb932d24554ccf6b255d07",
+    "Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass": "f2a6c600f4ebbdb672149d2ef19f1258b6a026e9453e2d518106ad5f340299df"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.Onsite.EndToEnd": {
+   "digest": "cf63b3982b0d20d4d2bdd6e5e83656120ec57e1d70db3b723a5c1a830bc49cd6",
+   "definitions": {
+    "Accounting.Guarantees.OnsiteEndToEnd": "0a034437bf5c19d418cc73459e631779dd36df74d3ea05f5c227c1787ca7e858",
+    "Accounting.Guarantees.OnsiteEndToEnd_honest": "5abaea1c75a7a7943c88ec9cfb8785ca21cc0d69cfbac36d80310fe5d43716e6",
+    "Accounting.Guarantees.OnsiteEndToEnd_nontrivial": "d8068c12d4b95718e80f0b28faff5cd6ce9bd76aa10420847ac3e7b3ab09ebc9",
+    "Accounting.Guarantees.OnsiteTimeLowerBound": "4bb0773356219e8ce771970636b626fc5172ca59cfb93b16728154e3b9dc64a6",
+    "Accounting.Guarantees.OnsiteTimeLowerBound_honest": "e1f6dd1e348c84b4916edc6632df880f9d307144ff817918b3a2246311095b35",
+    "Accounting.Guarantees.OnsiteTimeLowerBound_nontrivial": "234b6b529658b583a7509d04c6e5b0ee42ebc8b5b08f6c793bda29d1a40c520e"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.Overhead": {
+   "digest": "d8d764de1e1314d59faf174b2c28ed4db92a9235c351c9dd827cdfeffaf75e03",
+   "definitions": {
+    "Accounting.Guarantees.Overhead.EndToEnd": "18d21ccdce1eae00c9755d9078bec3d0046583c362f0b6ed81f3417c9de3a94a",
+    "Accounting.Guarantees.Overhead.EndToEnd_honest": "7c6bc7e34519a870ff2afca44d9083ba2580125b3c6c2c99f44ff58700e30a45",
+    "Accounting.Guarantees.Overhead.EndToEnd_nontrivial": "8582514910a7cd070f95d7bc33c0c6c30692bc6ee37ea614a9a663e6683f33af",
+    "Accounting.Guarantees.Overhead.OverheadOfReference": "02337e1e0fcf019ba4d02638f2a93d410852e603f4fca59fb45458e9cad1f908",
+    "Accounting.Guarantees.Overhead.OverheadOfReference_honest": "0eb764b38b67c78c77007d0f5da85da3da9633e1203bce6ab843885f83d9e7ef",
+    "Accounting.Guarantees.Overhead.OverheadOfReference_nontrivial": "e8d84dd85a4612eff767582ea472a6482538a591273df6074bd9dc5a7b4c9afa",
+    "Accounting.Guarantees.Overhead.ReferenceBound": "ec10b767fa09dbeb0b4bc686d110e6001615aff0500f9a8ff5530dcf232c0d7c",
+    "Accounting.Guarantees.Overhead.ReferenceBound_honest": "121a225b90b8e52141365d24d88d56708d5f9391a838a562e0bb22b03b00e7b9",
+    "Accounting.Guarantees.Overhead.ReferenceBound_nontrivial": "59a4d97d4391d3be93f9b05d166645f57520893570f5aae201550eb598568809",
+    "Accounting.Guarantees.Overhead.ThresholdOfPointwise": "abce0adcf3ecdf852ee4b68f4908c3c5b803916ac9a91038122554be8c0e9b33",
+    "Accounting.Guarantees.Overhead.ThresholdOfPointwise_honest": "ba26961849e3aa4d1cdc5227a93aa839f4a49ac7068e50713115551a0fa4fca5",
+    "Accounting.Guarantees.Overhead.ThresholdOfPointwise_nontrivial": "2cd37d15fc96b6d29b31d8d631ff9af0f0e54f5669dbdfe337161e9067b1a385"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Overhead.EndToEnd",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_honest",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial"
    ]
   },
   "Definitions.Accounting.Guarantees.PerRun": {
@@ -15552,6 +15788,11 @@
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -15668,7 +15909,12 @@
    "guarantees": [
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
-    "Accounting.SecurityProofs.JointPeriodLive"
+    "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial"
    ]
   },
   "Definitions.Accounting.JointPeriod": {
@@ -15724,7 +15970,12 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriod",
-    "Accounting.SecurityProofs.JointPeriodLive"
+    "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial"
    ]
   },
   "Definitions.Accounting.Memory": {
@@ -15747,6 +15998,84 @@
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Accounting.SecurityProofs.Memory.Counting",
     "Accounting.SecurityProofs.Memory.CountingAdvice"
+   ]
+  },
+  "Definitions.Accounting.Onsite": {
+   "digest": "6216fe4050465098a01e4e9e769b9deffaa828aa28ababadc17e09e0a70ecb58",
+   "definitions": {
+    "Accounting.CertifierLinks": "41f4976fd7f85cb508322546684b7d7c9a9d041b9812bf9ecff95cd544358f74",
+    "Accounting.OnsiteClass": "f9d70d66f16ce6d9e60509418f660cc59511c1a00d7483cd94369f017b6efef1"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial"
+   ]
+  },
+  "Definitions.Accounting.Onsite.Params": {
+   "digest": "51f8de337a85aa5bfb85c396568fbffa30dd5545b9b6e26f356cdc4080547d40",
+   "definitions": {
+    "Accounting.Onsite": "c59c880ed5abf1c784cbaef97aa0bf3d648d2fcfd4e03e7afe48fd3ba0a93150",
+    "Accounting.Onsite.F": "01ca875c52d93556780aa04922ceaaa6a299a9b96e10054b4fb2f1a4c3e7468c",
+    "Accounting.Onsite.K": "7f5c59b066a86167529558d86ac6eafe2bf3dabfec5efb62cd201b5dfab34552",
+    "Accounting.Onsite.R": "5276fdcb15892be44b5e9d27682b0cac54bd9963f8ddbedf76858f42ccef9704",
+    "Accounting.Onsite.T": "dc634f0293b9131e7d4e0c84d4c2b07d9c6a81cba0cc4ee39c5c9a993852c31f",
+    "Accounting.Onsite.Valid": "c0cfd3665d2519e61fe1dc86877370c37cb48fdde18e38057ba64e7976b24157",
+    "Accounting.Onsite.X": "c1f73ad24e0b6577235cfe0eb3996267933f44e47f9ac53f08c147e168fdd66a",
+    "Accounting.Onsite.b_a": "8585b70e36419ef386b923733795bf1881f4276a1bbb671f1ee7d29ac552feb8",
+    "Accounting.Onsite.b_w": "c3aef84e12c1e9136b7dd88693a3257e8fe53fe0a17cdae91d8d1012f46e5c3c",
+    "Accounting.Onsite.c": "f2c8e54e9be3be514171d5ca5f019221e5f080e1e055e3b50b040c7955913751",
+    "Accounting.Onsite.computeTotal": "ba946c1bf069fdc8c85345d9b3e39096a7ec0b7bee101f823f11c0ad0226e308",
+    "Accounting.Onsite.d": "9183aa35781603f7a1ce56bbea286d17949c3a8361fd6c390532c0225a5e7b7b",
+    "Accounting.Onsite.e": "30a733418b78b5b8d8f5cc02accd58f27559447f5103df8cbcf64fbeaed99300",
+    "Accounting.Onsite.hw": "17b52c8ce02035ce2337783141f8ef1320624f409f18d0356b8ab6b6e074704c",
+    "Accounting.Onsite.n": "35917b0d5b328d5fb9c5930dc7a619f9b3f84d562123249b5c5f4f26568c68f8",
+    "Accounting.Onsite.tMin": "8bb27bd05e7cd2456406b0744fb5a8b3459f62f6a98919713abb67d620797220",
+    "Accounting.Onsite.Γ": "998e86f27095d7e924eb1c6d2cc7425f3f872923bbcd712ccf561c9a1609739d",
+    "Accounting.Onsite.Λ": "a3e10884c41aa0c41fcc24514c729d498e2f1a80a728476792e0872f8c3b80a4",
+    "Accounting.Onsite.α": "d97eb6415bf69980e5c6b92e0715cabc35a7d92bb464b20ecf28ea4834ea0c14",
+    "Accounting.Onsite.ω": "f674776223a7c77ee710cfc368560a0696f881a0d7be4380cdb59d50026f5b26"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial"
+   ]
+  },
+  "Definitions.Accounting.Overhead": {
+   "digest": "13dff5097945c1a0e6e8253c89a7bc4134e4ab706959874fcd4af78d46014ab2",
+   "definitions": {
+    "Accounting.Overhead.Class": "55484740e2806d10245d2cbbdf066510e069f8febf451048edc3988b9a0b8cd5",
+    "Accounting.Overhead.Task": "ae9c966618fffb1c475c1f09a123e80058ce48b6b45dc05223b20536d0e1a720",
+    "Accounting.Overhead.Task.draw": "f92e7f4077218998f94161f9bff0366d333c2fb8a8cceb5356b9b227faf4af7a",
+    "Accounting.Overhead.Task.fintype": "a65ccd39e0ba1e01cbf17c53166a12726e2e009b24de866123933c003335cb2a",
+    "Accounting.Overhead.Task.game": "a9e8db6f1bb249aac1cf833175b98ff0382b6cb5ad3ec1dcb01817f2732f8f7f",
+    "Accounting.Overhead.Task.play": "6c0b9a655e5342879cdff39e574ec4cfde831e33e71b61c92464c5c4424ad267",
+    "Accounting.Overhead.Task.prob": "82ebfe2f9de15aa49f6f8f26953381442205e22254c42bc7781d22923f59ccda",
+    "Accounting.Overhead.Task.Ω": "5d29d0793b3e25a64b500585f254375ba12971e4910a4832417e235079c8283a",
+    "Accounting.Overhead.overhead": "2a37acf2bc38be64c038c978524fb581e1bfb23a785cd62daf802eacf5e1a199",
+    "Accounting.Overhead.success": "6a6a8245a5ab05c0702dc6a8a04647f15c332779270788ce98bde6c107f13a7c",
+    "Accounting.Overhead.threshold": "40c98e1e90dc0482dae4c6e3fd92220bdec23b5a413fa1b263666b264ef65757"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial"
    ]
   },
   "Definitions.Accounting.PerRun": {
@@ -15784,12 +16113,17 @@
    ]
   },
   "Definitions.Accounting.Physical": {
-   "digest": "73dd130ac4c8d39fdaa54c6ae860941a1b15809c866c332556a7e3f495d502f3",
+   "digest": "fdc0fa5678989a198b2bd121516a808946e71b58029eff4073f7ea4e87ad284c",
    "definitions": {
     "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
     "Accounting.CausalStrategy": "c925dc397dff2c7afd95eeafa0c098ada1ed84ad87f7acaec4069157ab2d4083",
     "Accounting.Covered": "f96318a12fcb3f487d8805649ff57383d2000740fe3ee9bc6ab3a957bb5b9a5d",
     "Accounting.DeclaredLinks": "1d42c317ec6a1bf9a8840fe0946906a0218f8f32ec847718d03f1ee6f1af1a60",
+    "Accounting.Hardware": "35ae4e812ae96a19b4793d383370ca6edd8471256764a380c7379868bd6a9225",
+    "Accounting.Hardware.compute": "9968af9026f6f91422de8055500c69c78c9f5d69126f17b5bf7764b10d4bf49c",
+    "Accounting.Hardware.ends": "873ae2e88e3a5097842698972be5272ec07f86df1802a538eaac6b15f3f14d59",
+    "Accounting.Hardware.β": "c0eeb16e48d85558001d40a39812396b4753e1e55fba26c6c9b8e890b89ac29a",
+    "Accounting.Hardware.ℓ": "014ff81e8cdb96cd192423eefffec58bf7ecc9a39946af6ceb4aa816e4494c10",
     "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
     "Accounting.Placed.ComputeRate": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15",
     "Accounting.Placed.LatencyAtMost": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1",
@@ -15824,6 +16158,15 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial",
     "Nci.SecurityProofs.FitRate"
    ]
   },
@@ -19089,6 +19432,24 @@
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.RequirementCredits",
@@ -19201,6 +19562,14 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -19336,6 +19705,23 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.Overhead.EndToEnd",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_honest",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -19533,6 +19919,11 @@
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -22275,6 +22666,12 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -22588,6 +22985,11 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
@@ -22801,6 +23203,12 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial",
     "Nci.SecurityProofs.Dampener",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerRemotePeriodStated",
@@ -23414,6 +23822,12 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
+    "Accounting.SecurityProofs.OnsiteEndToEnd",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_honest",
+    "Accounting.SecurityProofs.OnsiteEndToEnd_nontrivial",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_honest",
+    "Accounting.SecurityProofs.OnsiteTimeLowerBound_nontrivial",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",

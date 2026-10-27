@@ -1,4 +1,4 @@
-import Definitions.Core.Game
+import Definitions.Accounting.Overhead
 
 /-!
 # Coverage: the task needs `N` counted multiplications (the task model)
