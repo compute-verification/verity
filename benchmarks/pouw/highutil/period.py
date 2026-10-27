@@ -377,18 +377,22 @@ def _path(levels, width: int, depth: int, pos: int) -> bytes:
 
 # --------------------------------------------------------------------------------------------------------- the drivers
 class GpuDriver:
-    """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, one a layer, each call's commit beside the next call's
-    compute) and plain cuBLASLt (torch._int_mm) on the same calls. Both operands of every block sit on the GPU; step g's
-    calls read block g mod NB. Each layer's calls run on a thread of its own (ctypes releases the GIL, so the four layers'
-    calls overlap on the device), and each call's tree levels are copied to host memory before the call two after it is
-    issued, for the openings after the block's check coin."""
+    """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, built from hu_lib.cu: one Prover a layer, every call on
+    the binding's shared streams in issue order, each commit beside the next call's compute) and plain cuBLASLt
+    (torch._int_mm) on the same calls. Both operands of every block sit on the GPU; step g's calls read block g mod NB
+    (hu_point_b, no copy). One thread drives every Prover, as the binding requires: a step's four calls are issued, then
+    the step before's roots and tree levels are read (each call's levels copied to host memory before its layer's call
+    two after it is issued), for the openings after the block's check coin."""
 
     def __init__(self, lib: str, cfg: Path, row: int, rmax: int) -> None:
+        import ctypes
+
         import torch
         import v31lib
-        from concurrent.futures import ThreadPoolExecutor
         self.torch, self.rmax = torch, rmax
         self.lib = v31lib.Lib(lib)
+        self.point_b = ctypes.CDLL(lib).hu_point_b
+        self.point_b.argtypes, self.point_b.restype = [ctypes.c_void_p, ctypes.c_void_p], ctypes.c_int
         self.params = Path(tempfile.mkdtemp(prefix="highutil-params-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
         self.ps, self.A, self.B, self.out, self.geom = [], [], [], [], []
         for name, n, k in LAYERS:
@@ -403,7 +407,6 @@ class GpuDriver:
             self.out.append(torch.empty((M, n), dtype=torch.int32, device="cuda"))
             assert f.S == p.info()["S"]
         torch.cuda.synchronize()
-        self.ex = [ThreadPoolExecutor(1) for _ in LAYERS]
         self.levels: list[np.ndarray] = [np.empty((0, 0), np.uint8)] * len(LAYERS)
         self.keys: dict[tuple[int, int], bytes] = {}
         self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {os.environ.get('V31_LTW', '0')}"]
@@ -436,29 +439,29 @@ class GpuDriver:
         self.levels = [np.empty((steps, g[2]), np.uint8) for g in self.geom]
         self.keys = {}
 
-        def run(li: int) -> None:
-            p, lv = self.ps[li], self.levels[li]
-            bad = kind if kind != "none" and at in (None, li) else "none"
+        bad = [kind if kind != "none" and at in (None, li) else "none" for li in range(NL)]
 
-            def collect(s: int, c: int) -> None:
-                got[s * NL + li] = p.root(c)
-                self.lib.check(self.lib.levels(p.h, c, lv[s].ctypes.data))
-                self.keys[(s, li)] = v31.call_key(p.ks, c)
-
-            prev = None
-            for s in range(steps):
-                t = (g0 + s) % NB
-                p.set_weights(self.B[li][t].data_ptr(), on_device=True)
-                c = p.prove(v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)]), self.A[li][t].data_ptr(), bad)
-                if prev is not None:
-                    collect(*prev)
-                prev = (s, c)
-            collect(*prev)
+        def collect(s: int, li: int, c: int) -> None:
+            p = self.ps[li]
+            got[s * NL + li] = p.root(c)
+            self.lib.check(self.lib.levels(p.h, c, self.levels[li][s].ctypes.data))
+            self.keys[(s, li)] = v31.call_key(p.ks, c)
 
         torch.cuda.synchronize()
         t0 = time.monotonic()
-        for fu in [self.ex[li].submit(run, li) for li in range(NL)]:
-            fu.result()
+        prev: list[tuple[int, int, int]] = []
+        for s in range(steps):
+            t = (g0 + s) % NB
+            cur = []
+            for li, p in enumerate(self.ps):
+                self.lib.check(self.point_b(p.h, self.B[li][t].data_ptr()))
+                sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
+                cur.append((s, li, p.prove(sd, self.A[li][t].data_ptr(), bad[li])))
+            for x in prev:
+                collect(*x)
+            prev = cur
+        for x in prev:
+            collect(*x)
         ms = 1e3 * (time.monotonic() - t0)
         roots.write_bytes(b"".join(got))
         return {"gpu_ms": ms, "host_ms": ms, "flags": 0, "sm_mhz": self._mhz()}
@@ -478,9 +481,8 @@ class GpuDriver:
         return self.ps[li].open(c, positions)
 
     def close(self) -> None:
-        for e in self.ex:
-            e.shutdown()
         for p in self.ps:
+            self.point_b(p.h, None)
             p.close()
         shutil.rmtree(self.params, ignore_errors=True)
 
@@ -859,6 +861,11 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> di
         "verdicts": [r["verdict"] for r in honest + neg],
         "negative_refused": [not r["accepted"] for r in neg],
     }
+    if out["sm_mhz_median"] and wall:
+        run = peak_macs(out["sm_mhz_median"])
+        out["peak_macs_s"]["run_clock"] = run
+        out["certified_share"]["run_clock"] = credited / (run * wall)
+        out["plain_share_of_peak"]["run_clock"] = med([r["macs"] / r["wall_s"] / run for r in plain])
     if out["proto_s_per_step"] and out["plain_s_per_step"]:
         out["gamma_wall"] = out["proto_s_per_step"] / out["plain_s_per_step"]
         plain_gpu = med([gpu_step(r) for r in plain])
