@@ -21,7 +21,8 @@ code and runs outside it.
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
                                                   Mathlib is a dependency, and main's cached build of PKG (below)
 python tools/verity/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
-python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
+python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first; without
+                                                  it, a build older than its sources is refused, naming the modules)
 python tools/verity/lean/check.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of
                                                   each record goes beside its reports, which a recorded run publishes;
                                                   refused in a tree `research run --on` shipped: use --cwd clone)

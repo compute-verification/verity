@@ -860,6 +860,27 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
     assert facts() == names and (pkg / A.POLICY).read_text() == record
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_audit_without_build_refuses_a_build_older_than_its_sources(tmp_path):
+    """Without `--build` the audit reads the `.olean` files a build left. A source edited since that build (by hand, or by a
+    merge into a warm tree) makes it refuse before it reads them, naming the module Lake would rebuild, so it never writes a
+    record of other sources; the package built again passes."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    assert unshaped(audit(update=True)) == [] and unshaped(audit()) == []
+    defs = pkg / "Control" / "Defs.lean"
+    defs.write_text(defs.read_text() + "-- edited after the build\n")
+    rep = audit()
+    assert rep["failure_codes"] == ["stale.build"] and "facts" not in rep["seconds"]
+    head = rep["failures"][0].split("\n")[0]
+    assert head.startswith(f"stale: {pkg}'s build is not up to date with its sources (") and "Control.Defs" in head
+    build()
+    assert unshaped(audit()) == []
+
+
 def test_all_neither_updates_records_nor_names_instances(capsys):
     for flag in ("--update", "--name-instances"):
         with pytest.raises(SystemExit):
@@ -2297,7 +2318,8 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
     monkeypatch.setattr(A, "sibling", lambda name: type("U", (), {"pinned": staticmethod(stub("pinned", ({"x": 1}, [])))}))
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
                         ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
-                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None),
+                        ("out_of_date", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
     assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
