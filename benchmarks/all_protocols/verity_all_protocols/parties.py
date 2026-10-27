@@ -190,8 +190,8 @@ class Machine:
         try:
             ans = load("sampled-proofs").leg(block, os.uname().nodename, out, challenger={
                 "mode": "loopback:" + challenger["address"], "main": str(main_history(self.state))})
-        except Exception as e:  # noqa: BLE001: a leg that can't decide is the block's error, never a verdict
-            ans = {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}
+        except (*FAILED, ValueError) as e:
+            raise SP.Unavailable(f"the records audit of block {i}: {type(e).__name__}: {e}") from e
         (out / "answer.json").write_text(json.dumps(ans, sort_keys=True))
         case = _json_if(out / "sampled-proofs.case.json")
         if case is not None:

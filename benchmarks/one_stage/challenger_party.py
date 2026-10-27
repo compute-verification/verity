@@ -35,7 +35,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import a5_coins as AC  # noqa: E402
+import a5_coins as AC
 
 #: the longest request line a client may send
 MAX_LINE = 1 << 16
