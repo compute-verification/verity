@@ -56,12 +56,6 @@ standing = "contested"
 beyond = "contested"
 credible_bits = { value = inf, unit = "bit", source = "contested at every k: an exact block codes an activation in 0.87-0.94 bits given theta (replay-consistent exact blocks on Qwen2.5-1.5B), below f = 4", status = "measured" }
 
-[premise.activation-reads]
-lean = "Nci.Cover.Assumptions.ActivationReads"
-standing = "contested"
-beyond = "refuted"
-credible_bits = { value = 4e9, unit = "bit", source = "a block holding Kimi K2's embedding and dense layer 0 updates computes their outputs from token ids (cheap inputs, measured); contested below at f = 4 (exact blocks on Qwen2.5-1.5B)", status = "derived" }
-
 [premise.activation-chained]
 lean = "Nci.Assumptions.ActivationChained"
 standing = "supported"
@@ -79,12 +73,6 @@ lean = "Nci.Cover.MulBlocks.Upstream"
 standing = "supported"
 beyond = "supported"
 credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.MulBlocks.Upstream docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
-
-[premise.cube-wide]
-lean = "Nci.Cover.Cube.Wide"
-standing = "supported"
-beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.Cube.Wide: the accumulation entries' width, a property of the recipe's shapes", status = "derived" }
 
 [premise.baseline-registered]
 lean = "Nci.Assumptions.BaselineRegistered"
