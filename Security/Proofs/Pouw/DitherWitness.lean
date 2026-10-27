@@ -12,8 +12,8 @@ every prover (`witness`). `witness_freed` is the headline's conclusion there, fr
 
 * The machine's premises: G1–G3 (`tw_G1`, `tw_G2`, `tw_G3`), and a program's cost at `μ` at least each resource's
   part (`cost_ge`).
-* The period: `μ` is its dual price (`twDual`), the cap `Q = 8` is its capacity of the hash units, which each call
-  uses (`twCap`), and the blocks' honest costs sum to `C = 14` (`twCost`).
+* The period: `μ` is its dual price (`twDual`), an oracle call uses a hash unit (`twCallUse`), so the cap on calls,
+  `callCap`, is the period's 8 hash units (`twCallCap`), and the blocks' honest costs sum to `C = 14` (`twCost`).
 * The verdict reads every block's answer within the period, so `AnswersFit` holds with every check coin selected
   (`twAnswersFit`), and the answers' calls are under the cap.
 
@@ -255,12 +255,25 @@ theorem twDual : twPd.DualOpt twμ 1 := by
   · show ∑ j : Fin 3, twμ j * (8 - twHon j) = ∑ r : Fin 3, twμ r * (1 * 8 - 1 * twHon r)
     simp
 
-theorem twCap : ∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r := by
-  refine ⟨1, ?_, ?_⟩
-  · show (0 : ℝ) < if (1 : Fin 3) = 1 then 1 else 0
+theorem twCallUse : ∃ r, 0 < tw.callUse r :=
+  ⟨1, show (0 : ℝ) < if (1 : Fin 3) = 1 then 1 else 0 by norm_num⟩
+
+/-- The witness period fits 8 oracle calls: its 8 hash units, the one resource a call uses, one unit a call. -/
+theorem twCallCap : twPd.callCap = 8 := by
+  have h1 : (0 : ℝ) < tw.callUse 1 := show (0 : ℝ) < if (1 : Fin 3) = 1 then 1 else 0 by norm_num
+  refine le_antisymm ((Pouw.SecurityProofs.Dither.callCap_le twPd h1).trans (le_of_eq ?_)) ?_
+  · show (1 : ℝ) * 8 / (if (1 : Fin 3) = 1 then 1 else 0) = 8
     norm_num
-  · show (1 : ℝ) * 8 ≤ twQ * if (1 : Fin 3) = 1 then 1 else 0
-    norm_num [twQ]
+  · haveI : Nonempty {r : Fin 3 // 0 < tw.callUse r} := ⟨⟨1, h1⟩⟩
+    unfold Period.callCap
+    refine le_ciInf fun ⟨r, hr⟩ => ?_
+    have hr1 : r = 1 := by
+      by_contra h
+      have h0 : tw.callUse r = 0 := if_neg h
+      linarith
+    subst hr1
+    show (8 : ℝ) ≤ 1 * 8 / (if (1 : Fin 3) = 1 then 1 else 0)
+    norm_num
 
 theorem twCost :
     ∑ w : Fin 2, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r := by
@@ -418,7 +431,7 @@ noncomputable def mhX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (Unit × (twA
     simpa using this
   work S hI h _ := (mh_shape S hI h).elim
 
-theorem twExtract : ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) := by
+theorem twExtract : ExtractAdv tw twRound 2 twReg twSel twPd.callCap twBadv twξ (fun _ => 0) := by
   intro _ _ _ _ _ A
   refine ⟨twAdv, past, mwX A, mhX A, adv_inj, fun o x x' w hx => ?_, fun o x w => rootOf_past A o x w,
     fun o x _ r => ?_, fun o x w => ?_, ?_⟩
@@ -472,12 +485,13 @@ theorem honest_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.timed
   unfold twHon
   split_ifs <;> norm_num
 
-theorem honest_calls (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.calls o x ≤ twQ := by
-  show ∑ _b : Fin 2, ((0 : ℝ) + 2) ≤ twQ
-  norm_num [twQ]
+theorem honest_calls (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.calls o x ≤ twPd.callCap := by
+  rw [twCallCap]
+  show ∑ _b : Fin 2, ((0 : ℝ) + 2) ≤ 8
+  norm_num
 
-theorem honest_withinCap (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.WithinCap twSel twQ o x :=
-  ⟨honest_calls o x, fun _ _ => show (0 : ℝ) ≤ twQ by norm_num [twQ]⟩
+theorem honest_withinCap (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.WithinCap twSel twPd.callCap o x :=
+  ⟨honest_calls o x, fun _ _ => show (0 : ℝ) ≤ twPd.callCap by rw [twCallCap]; norm_num⟩
 
 end Honest
 
@@ -496,7 +510,7 @@ theorem twκ_lt (A : Prover tw twRound 2) : twκ A < 1 := by
 /-- **The witness statement** (RT-LEAN L7, RT-LEAN-2 L38): every premise of `WorkSound`, in its order, at the witness
 machine `tw`, protocol `twRound` and period `twPd`, with `k = 2` sampling blocks, every instance registrable for each
 (`twReg`), `μ = (2, 1, 1)`, `H_mm = pub_mm = 4`, `H_sha = pub_sha = 2`, `H_o = 1` a block, `η = 1/7`, `δ = 1/2`,
-`β = K = κ_S = 0`, the cap `Q = 8`, every check coin selected (`twSel`), `κ_dmm = κ_dsha = 0`, and for every prover
+`β = K = κ_S = 0`, an oracle call using a hash unit (so `callCap = 8`), every check coin selected (`twSel`), `κ_dmm = κ_dsha = 0`, and for every prover
 `B_adv = |Adv|`, `ξ = 0`, `κ_x = 0` and `κ_sha = 0`; then the conclusion's bounds are nontrivial for every prover,
 `ε_A < 1` and `κ_A < 1`; and the honest prover passes on every oracle and coins, its sampling blocks' timed use is the
 period's whole honest use, and its run is within the cap, its answers' calls included. -/
@@ -505,7 +519,7 @@ def WitnessHolds : Prop :=
     (∀ w, 0 < twHmm w ∧ 0 < twHsha w ∧ 0 ≤ twHo w ∧ twHmm w ≤ twHmm w ∧ twHsha w ≤ twHsha w) ∧
     ∑ w, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r ∧
     0 < twη ∧ 0 < twδ ∧ twδ ≤ 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 0 ∧ (∀ A r, 0 ≤ twξ A r) ∧
-    (∀ _B : ℕ, (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 0) ∧ (∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r) ∧
+    (∀ _B : ℕ, (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 0) ∧ (∃ r, 0 < tw.callUse r) ∧
     tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
     (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
       (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
@@ -513,25 +527,26 @@ def WitnessHolds : Prop :=
       (fun _ => 0) (fun _ => 0) ∧
     OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
     ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
-    ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
+    ExtractAdv tw twRound 2 twReg twSel twPd.callCap twBadv twξ (fun _ => 0) ∧
     (∀ A, twε A < 1 ∧ twκ A < 1) ∧
-    ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧ honest.WithinCap twSel twQ o x
+    ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧
+      honest.WithinCap twSel twPd.callCap o x
 
 theorem witness : WitnessHolds :=
   ⟨twDual, fun _ => ⟨by norm_num [twHmm], by norm_num [twHsha], by norm_num [twHo], le_rfl, le_rfl⟩, twCost,
     by norm_num [twη], by norm_num [twδ], by norm_num [twδ], le_rfl, le_rfl, fun _ _ => le_rfl,
-    fun _ => ⟨le_rfl, le_rfl⟩, twCap, tw_G1, tw_G2, tw_G3, trivial, trivial, twSAK, twSAKSha, twOutsource,
+    fun _ => ⟨le_rfl, le_rfl⟩, twCallUse, tw_G1, tw_G2, tw_G3, trivial, trivial, twSAK, twSAKSha, twOutsource,
     twService, twImport, twAnswersFit, twExtract, fun A => ⟨twε_lt A, twκ_lt A⟩,
     fun o x => ⟨honest_passes o x, honest_timedUse o x, honest_withinCap o x⟩⟩
 
 /-- **The headline at the witness**: `WorkSound`'s conclusion from `witness`. -/
 theorem witness_freed :
     FreedSound tw twRound 2 twVerdict twDev twPd 1 twε (∑ r, twμ r * (1 * twPd.hon r)) twκ := by
-  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
+  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, hβ, hK, hξ, hdeg, hcall, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
     hsvc, himp, hans, hext, -, -⟩ := witness
   exact Pouw.SecurityProofs.Dither.WorkSound tw twRound 2 twReg Prop twVerdict twDev twPd twμ twHmm twHsha
-    twHo twHmm twHsha twη twδ 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
-    hinst hC hη hδ hδ1 hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
+    twHo twHmm twHsha twη twδ 0 0 0 (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
+    hinst hC hη hδ hδ1 hβ hK hξ hdeg hcall hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
 
 end Witness
 

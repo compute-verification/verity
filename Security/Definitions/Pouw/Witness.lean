@@ -21,8 +21,9 @@ import Definitions.Pouw.Dither
   oracle (`Orc = Unit`), so the commitment is perfectly binding.
 * The period (`twPd`): credited use `hon = (4, 4, 2)`, two honest sampling blocks whose commit phase commits the zero
   instance at no cost, whose work uses `(2, 2, 1)` and makes two oracle calls, and whose answer uses nothing (`honest`,
-  timed use `hon`), `T = 8`, and one other job per resource worth its use at `μ`. The cap on a run's calls is `Q = 8`,
-  the period's capacity of resource 1, which each call uses; the honest prover makes 4, and its answers none. Each
+  timed use `hon`), `T = 8`, and one other job per resource worth its use at `μ`. The cap on a run's calls is the
+  period's `callCap = 8`, its capacity of resource 1, the one resource each call uses; the honest prover makes 4, and
+  its answers none. Each
   sampling block's honest cost is `H = H_mm + H_sha + H_o = 4 + 2 + 1` and the public bests are the honest ones
   (`pub_mm = 4`, `pub_sha = 2`), so `C = 14`. Every instance is registrable for every block (`twReg`): the noise reads
   none.
@@ -217,9 +218,6 @@ noncomputable def twη : ℝ := 1 / 7
 
 /-- The confidence. -/
 noncomputable def twδ : ℝ := 1 / 2
-
-/-- The cap on a run's oracle calls: the period's hash units over a call's use of them. -/
-noncomputable def twQ : ℝ := 8
 
 /-- The registrable instances of each sampling block: every instance, since the witness's noise reads none. -/
 def twReg (_ : Fin 2) : Set twRound.Inst := Set.univ

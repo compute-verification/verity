@@ -78,19 +78,21 @@ other work `z` fits on the devices beside its sampling blocks' timed work with
 selected blocks' honest answers and operand roots at full weight, and `η_w` is the rate per priced cost,
 `η q/W_reg`. Every period the verdict accepts did its sampling blocks' commit phases and work within the period's
 capacity (`TimedWorkFits`) and ran its selected answers within the period (`AnswersFit`), which is what the deadlines
-buy.
+buy, and so made at most the period's `Period.callCap` oracle calls in them and in each selected answer
+(`AcceptedWithinCap`, by (G3)): every prover the verdict accepts is one the extraction is read at, inside the event's
+`Fits` at no other work, whatever its strategy (CMP-163).
 
 The other devices are resources of `G` at their rates in 𝓜 (RT-PROTO P9): the honest optimum and the capacity count
 them, and `SAKMatmul` and `SAKSha` hold at the dual price over them too. That they are all of the processors the
-cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the
-capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
-price. -/
+cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. Each public compression in
+`pb.sha` uses some card resource, so an oracle call does (`CallsAtPub`) and `Period.callCap` is the least, over the
+card resources a call uses, of the capacity over the call's use, whatever the price. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
   ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr → CallsAtPub G e pb →
   ∀ (nsb : ℕ) (Reg : Fin nsb → Set P.Inst) (Obs : Type) (verdict : Verdict P nsb Obs)
     (dev : Readings G P nsb Obs) (Pd : Period G) (μ : G.Res → ℝ) (Wmm Wsha Wans macs comps : Fin nsb → ℝ)
-    (ηw δ nmax Wmac Ein Eout κS Δ Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P nsb → ℕ)
+    (ηw δ nmax Wmac Ein Eout κS Δ : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P nsb → ℕ)
     (ξ : Prover G P nsb → G.Res → ℝ) (κx κsha : Prover G P nsb → ℝ) (cin cout : Obs → ℝ)
     (opArrive t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ),
     Pd.DualOpt μ 1 →
@@ -99,7 +101,7 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
     ∑ b, (Wmm b + Wsha b + Wans b) = ∑ r, μ r * Pd.hon r →
     0 < ηw → 0 < δ → δ ≤ 1 → 0 ≤ nmax → 0 ≤ Wmac → 0 ≤ Ein → 0 ≤ Eout → 0 ≤ Pd.T →
     (∀ A r, 0 ≤ ξ A r) → (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) →
-    (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
+    (∀ u ∈ pb.sha, ∃ r, 0 < u r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     (∀ b, SAKMatmul G P μ (Reg b) (fun _ => pubCost e μ pb.mm (macs b))
       (fun _ => ηw * (Wmm b + Wsha b + Wans b) / Wmm b) κdmm) →
@@ -108,7 +110,7 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
     OutsourceWithinEgress G μ (nmax * Wmac) → ProofSystemSound G P nsb Reg verdict dev κS →
     CertifierSeesImports G P nsb dev cin cout → CommitAfterWork G P nsb dev t opArrive →
     RootAfterCoin G P nsb dev t arrive → AnswerAfterWork G P nsb dev sel t ansAt →
-    ExtractAdv G P nsb Reg sel Q Badv ξ κx →
+    ExtractAdv G P nsb Reg sel Pd.callCap Badv ξ κx →
     FreedSound G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev Pd 1
       (fun A => epsWorkSound (fun b => Wmm b + Wsha b + Wans b)
           (fun b => pubCost e μ pb.mm (macs b)) (fun b => pubCost e μ pb.sha (comps b)) ηw δ
@@ -118,7 +120,9 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
       (fun A => δ + κS + κx A + κsha A + nsb * (κdmm (Badv A) + κdsha (Badv A))) ∧
     TimedWorkFits G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev
       Pd ∧
-    AnswersFit G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev sel Pd
+    AnswersFit G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev sel Pd ∧
+    AcceptedWithinCap G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev
+      sel Pd
 
 /-- **The headline on the card table `c` at θ**: `WorkSoundAtX` at every open parameter `x` meeting the table's floors
 (`c.floors`) with the product form (`AccelProductForm`). -/

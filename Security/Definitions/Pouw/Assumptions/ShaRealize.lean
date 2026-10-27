@@ -24,7 +24,8 @@ commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of it
     blocks' commit phases and work make at most `Q` oracle calls in all, and each selected block's answer at most `Q`.
     A run whose timed use fits the period's devices makes at most `cap_r / callUse_r` calls in its commit phases and
     work for each resource `r` a call uses (G3), and an answer that runs within the period as many
-    (`AnswersFit`), so `WorkSound` reads it at such a `Q`.
+    (`AnswersFit`), so `WorkSound` reads it at the least of them, `Period.callCap`: the model's bound, which every
+    run of the event meets, not a budget on the prover.
 * `Realization` and `ShaRealize`: the realization premise on the no-fold protocol, prover by prover. On every run within
   the cap, a prover's commitment-path hashing is its own calls and the verifier's evaluations, logged as `q A`
   black-box SHA-512 queries (the log). Its words program for a sampling block is the walk of the extractor over that
@@ -71,10 +72,11 @@ Open:
 * **The walk's oracle reach.** `Mw w` reads only the advice and the dither (RT-LEAN-2 L37, condition 1), and on every
   run within the cap it must be the walk over the prover's log, which reads the answers the prover got inside the
   round. A prover whose words or tree read such an answer has no `Mw w` at an advice size that doesn't hold those
-  answers for every dither, so `ShaRealize` at one `Badv` for every prover is false on a machine that has such a
-  prover. `WorkSound`, at each prover's own `Badv A` and `ξ A`, still holds for it, at whatever bound its own
-  `ExtractAdvAt` gives. Letting `Mw w` read the oracle through priced calls closes this, and changes what SAK(matmul)
-  and SHA-512's speed quantify over.
+  answers for every dither, so `ShaRealize` at one `Badv` for every prover would be false on a machine that has such
+  a prover. `WorkSoundNoFold` reads it at each prover's own `Badv A` (CMP-163), so such a prover is covered at the
+  advice size that holds them, and its bound pays for it in `κ_dmm(Badv A)` and `κ_dsha(Badv A)`, which no premise yet
+  gives a value. Letting `Mw w` read the oracle through priced calls would keep that advice small, and changes what
+  SAK(matmul) and SHA-512's speed quantify over.
 * **The padding's upkeep.** The cost clause charges `ξl` for each of the log's `q` positions, so at one schedule for
   every prover the dummy queries that pad its segments are charged too, and the log's term in `WorkSoundNoFold`'s `ε`
   is `k + 1` times the calls'. Charging only the logged calls and evaluations (a count of entries beside `q`), or

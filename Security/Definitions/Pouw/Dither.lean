@@ -27,7 +27,8 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
   readings (`Verdict`, `Readings`, `Prover.Passes`);
 * **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): R-ACCEL-1's definition, kept in
   this one place, and its probability form, the headline's conclusion, with the selected blocks' answers within the
-  period (`AnswersFit`);
+  period (`AnswersFit`), the oracle calls that fit the period's devices (`Period.callCap`: by (G3) at most that many,
+  so the cap is the model's, not a budget on the prover) and an accepted period within it (`AcceptedWithinCap`);
 * **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
   luck (`fleetLuck`; CMP-152);
 * the error (`epsWorkSound`, `ε_skip`).
@@ -393,14 +394,15 @@ noncomputable def timedUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Re
 
 /-- **The sampling blocks' oracle calls**: every block's `commit` and `work` at their inputs (RT-LEAN-2 L39, RT-POOL
 RP23), the calls on the state path that reaches the roots. On a run whose timed use fits the period's devices, (G3)
-caps them at a resource's capacity over a call's use of it. -/
+caps them at a resource's capacity over a call's use of it (`Period.callCap`). -/
 noncomputable def calls (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
   ∑ b, (G.calls (A.commit b) (A.commitIn o x b) + G.calls (A.work b) (A.workIn o x b))
 
 /-- **A run within the cap `Q`** (RT-LEAN-2 L39, RT-POOL RP20): the sampling blocks' commit phases and work make at
-most `Q` oracle calls in all (`calls`), and each selected block's answer (`sel` of its check coin) at most `Q`. Both
-follow from the machine model's rate on a run inside the period (G2, G3, `cap_r ≤ Q callUse_r`): the work's from its
-timed use fitting the devices, an answer's from its running within the period (`AnswersFit`). -/
+most `Q` oracle calls in all (`calls`), and each selected block's answer (`sel` of its check coin) at most `Q`. The
+guarantees read it at `Q = Period.callCap`, the calls that fit the period's devices, where both follow from the machine
+model's premises on a run inside the period (G2, G3): the work's from its timed use fitting the devices, an answer's
+from its running within the period (`AnswersFit`). So it bounds no prover the model doesn't. -/
 def WithinCap (sel : P.Chk → Prop) (Q : ℝ) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
   A.calls o x ≤ Q ∧ ∀ b, sel (x b).2 → G.calls (A.answer b) (A.answerIn o x b) ≤ Q
 
@@ -470,6 +472,13 @@ variable {G : Accel} (Pd : Period G)
 /-- What the devices can do in the period (G2): `ρ_r T` of resource `r`. -/
 def cap (r : G.Res) : ℝ := G.rate r * Pd.T
 
+/-- **The oracle calls that fit the period** (G3; RT-LEAN-2 L39, CMP-163): the least, over the resources an oracle call
+uses (`0 < callUse_r`), of the period's capacity over a call's use, `cap_r / callUse_r`. A call is a step that uses
+`callUse` of every resource (G3), so a run that uses at most the period's capacity makes at most this many calls,
+whatever the price and whoever runs it: the model's bound on every prover, not a cap on the adversary. It is `0` where
+no resource is used by a call, where (G3) bounds nothing; the guarantees read it only where some resource is. -/
+noncomputable def callCap : ℝ := ⨅ r : {r : G.Res // 0 < G.callUse r}, Pd.cap r / G.callUse r
+
 /-- A strategy fits the devices: its credited part (its sampling blocks' commit phases and work, `Prover.timedUse`)
 uses `X`, its other work `z j ≥ 0` of each job `j`, and the two together use no resource past its capacity. -/
 def Fits (X : G.Res → ℝ) (z : Pd.J → ℝ) : Prop := (∀ j, 0 ≤ z j) ∧ ∀ r, X r + ∑ j, z j * Pd.needs j r ≤ Pd.cap r
@@ -497,7 +506,7 @@ end Period
 
 /-- **An accepted period's selected answers run within it** (RT-POOL RP20): for every prover whose period the verdict
 accepts, each selected sampling block's answer (`sel` of its check coin) uses, resource by resource, at most the
-period's capacity `Period.cap`. With (G3) and `cap_r ≤ Q callUse_r` it puts the answer's oracle calls under the cap
+period's capacity `Period.cap`. With (G3) it puts the answer's oracle calls under the period's `Period.callCap`
 (`Prover.WithinCap`). It is what the deadlines buy on the card (`Definitions.Pouw.Guarantees.DitherInstance`: an
 answer reads its block's work, which reads coins issued inside the period, and arrives before its end), not a
 hypothesis on the prover's queries. -/
@@ -505,6 +514,16 @@ def AnswersFit (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Ve
     (dev : Readings G P k Obs) (sel : P.Chk → Prop) (Pd : Period G) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x →
     ∀ b, sel (x b).2 → ∀ r, G.use (A.answer b) (A.answerIn o x b) r ≤ Pd.cap r
+
+/-- **An accepted period is within the cap** (RT-LEAN-2 L39, CMP-163): for every prover whose period the verdict
+accepts, its sampling blocks' commit phases and work make at most the period's `Period.callCap` oracle calls in all,
+and each selected block's answer at most as many (`Prover.WithinCap`), whether or not other work fits beside it. On the
+card it follows from the deadlines and (G3) (`Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAtX`): no prover the
+verdict accepts makes more calls than the period's devices fit. -/
+def AcceptedWithinCap (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
+    (dev : Readings G P k Obs) (sel : P.Chk → Prop) (Pd : Period G) : Prop :=
+  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x →
+    A.WithinCap sel Pd.callCap o x
 
 /-- **Freed compute at most `ε C`, prover by prover** (R-ACCEL-1's probability form): for every prover, the
 probability over the oracle and the verifier's coins that the service accepts its period (`Prover.Passes`, on its

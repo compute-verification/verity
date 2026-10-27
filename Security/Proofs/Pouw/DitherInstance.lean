@@ -15,7 +15,10 @@ import Proofs.Pouw.Dither
   commit phase starts after block `b`'s work (`CommitAfterWork`), so the windows are disjoint inside `[0, T]`
   (`sum_windows_le_T`). A selected answer starts after its block's dither coins, inside the period, and arrives within
   `τ_ans` of its check coin, before the period's end (`AnswerAfterWork`, `Timed`), so it runs within the period
-  (`AnswersFit`). No count of sampling blocks or of selected ones is read.
+  (`AnswersFit`). No count of sampling blocks or of selected ones is read. An oracle call is a public compression
+  (`CallsAtPub`), which uses some card resource, so by (G3) every accepted period makes at most `Period.callCap` calls
+  in its timed work and each selected answer (`AcceptedWithinCap`, CMP-163): no accepted prover is outside the cap
+  `ExtractAdv` is read at.
 * `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting the floors, and at the `x`
   `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
   `Proofs.Pouw.Dither.WorkSound`.
@@ -26,6 +29,8 @@ import Proofs.Pouw.Dither
   match (`OnCard`), meets (G1), (G2) and (G3), and `CallsAtPub`, so the hypotheses on `G` are not empty either.
   `cardAccel` is a witness, not the canonical card accelerator RT-LEAN L31 asks for: its programs are any runs within
   the rates, so `SAKMatmul` is false at it.
+* `pubShaH200_pos`, `pubShaSm120_pos`: each card's public SHA-512 schedules use its ALU lanes, so `WorkSoundAtX`'s
+  hypothesis on `pb.sha` holds on both cards.
 -/
 
 namespace Pouw.SecurityProofs.DitherInstance
@@ -63,9 +68,14 @@ theorem sum_windows_le_T {n : ℕ} (s e : Fin n → ℝ) (T : ℝ) (hT : 0 ≤ T
 /-- `WorkSound` gives the headline on every card table at every open parameter. -/
 theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : WorkSoundAtX c pb hr x := by
-  intro D P L G e _ _ _ nsb Reg Obs verdict dev Pd μ Wmm Wsha Wans macs comps ηw δ nmax Wmac Ein Eout κS Δ Q
+  intro D P L G e _ _ hpub nsb Reg Obs verdict dev Pd μ Wmm Wsha Wans macs comps ηw δ nmax Wmac Ein Eout κS Δ
     κdmm κdsha Badv ξ κx κsha cin cout opArrive t arrive sel τans tc ansAt hdual hinst hH hη hδ hδ1 hn hWmac hEi hEo
-    hT0 hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc sees commit root ans ext
+    hT0 hξ hκd hpb g1 g2 g3 p1 p2 sak sha out svc sees commit root ans ext
+  -- An oracle call is a public compression, which uses some card resource.
+  have hcall : ∃ r, 0 < G.callUse r := by
+    obtain ⟨u, hu, hcu, -⟩ := hpub
+    obtain ⟨r, hr⟩ := hpb u hu
+    exact ⟨e.symm (.inl r), by rw [hcu r]; exact_mod_cast hr⟩
   have hinst' : ∀ b, 0 < Wmm b ∧ 0 < Wsha b ∧ 0 ≤ Wans b ∧ pubCost e μ pb.mm (macs b) ≤ Wmm b ∧
       pubCost e μ pb.sha (comps b) ≤ Wsha b := fun b =>
     ⟨(hinst b).1, (hinst b).2.1, (hinst b).2.2.1, (hinst b).2.2.2.1, (hinst b).2.2.2.2.1⟩
@@ -87,39 +97,41 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
       linarith [h4.2.1, h4.2.2]
     show G.use (A.answer b) (A.answerIn o x b) r ≤ G.rate r * Pd.T
     exact h1.2.trans (mul_le_mul_of_nonneg_left hwa (g2.1 r).le)
-  refine ⟨h G P nsb Reg Obs _ dev Pd μ Wmm Wsha Wans (fun b => pubCost e μ pb.mm (macs b))
-    (fun b => pubCost e μ pb.sha (comps b)) ηw δ (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha sel Badv ξ κx κsha
-    hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc'
-    imp hans ext, ?_, hans⟩
   -- The commit phases and work run one block at a time: block `b`'s from `t b − wall(commit b)` to
   -- `t b + wall(work b)`, inside `[0, T]`.
-  intro A o x hv r
-  have hrate : 0 ≤ G.rate r := (g2.1 r).le
-  have hw : ∀ b, G.use (A.commit b) (A.commitIn o x b) r + G.use (A.work b) (A.workIn o x b) r ≤
-      G.rate r * ((t (dev A o x) b + G.wall (A.work b) (A.workIn o x b)) -
-        (t (dev A o x) b - G.wall (A.commit b) (A.commitIn o x b))) := fun b => by
-    have h1 := ((g2.2 (A.commit b) (A.commitIn o x b)).2 r).2
-    have h2 := ((g2.2 (A.work b) (A.workIn o x b)).2 r).2
-    rw [show t (dev A o x) b + G.wall (A.work b) (A.workIn o x b) -
-        (t (dev A o x) b - G.wall (A.commit b) (A.commitIn o x b)) =
-        G.wall (A.commit b) (A.commitIn o x b) + G.wall (A.work b) (A.workIn o x b) by ring, mul_add]
-    exact add_le_add h1 h2
-  show ∑ b, (G.use (A.commit b) (A.commitIn o x b) r + G.use (A.work b) (A.workIn o x b) r) ≤ G.rate r * Pd.T
-  refine (Finset.sum_le_sum fun b _ => hw b).trans ?_
-  rw [← Finset.mul_sum]
-  refine mul_le_mul_of_nonneg_left (sum_windows_le_T
-    (fun b => t (dev A o x) b - G.wall (A.commit b) (A.commitIn o x b))
-    (fun b => t (dev A o x) b + G.wall (A.work b) (A.workIn o x b)) Pd.T hT0 (fun b hb => ?_) (fun b => ?_)
-    fun b b' hb => ?_) hrate
-  · have h1 := (commit A o x).1 b hb
-    have h2 := hv.2.2.1 b
-    linarith
-  · have h1 := root A o x b
-    have h2 := hv.2.1 b
-    linarith [h2.2.1, h2.2.2]
-  · have h1 := (commit A o x).2 b b' hb
-    have h2 := hv.2.2.1 b'
-    linarith
+  have hwork : TimedWorkFits G P nsb
+      (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev Pd := by
+    intro A o x hv r
+    have hrate : 0 ≤ G.rate r := (g2.1 r).le
+    have hw : ∀ b, G.use (A.commit b) (A.commitIn o x b) r + G.use (A.work b) (A.workIn o x b) r ≤
+        G.rate r * ((t (dev A o x) b + G.wall (A.work b) (A.workIn o x b)) -
+          (t (dev A o x) b - G.wall (A.commit b) (A.commitIn o x b))) := fun b => by
+      have h1 := ((g2.2 (A.commit b) (A.commitIn o x b)).2 r).2
+      have h2 := ((g2.2 (A.work b) (A.workIn o x b)).2 r).2
+      rw [show t (dev A o x) b + G.wall (A.work b) (A.workIn o x b) -
+          (t (dev A o x) b - G.wall (A.commit b) (A.commitIn o x b)) =
+          G.wall (A.commit b) (A.commitIn o x b) + G.wall (A.work b) (A.workIn o x b) by ring, mul_add]
+      exact add_le_add h1 h2
+    show ∑ b, (G.use (A.commit b) (A.commitIn o x b) r + G.use (A.work b) (A.workIn o x b) r) ≤ G.rate r * Pd.T
+    refine (Finset.sum_le_sum fun b _ => hw b).trans ?_
+    rw [← Finset.mul_sum]
+    refine mul_le_mul_of_nonneg_left (sum_windows_le_T
+      (fun b => t (dev A o x) b - G.wall (A.commit b) (A.commitIn o x b))
+      (fun b => t (dev A o x) b + G.wall (A.work b) (A.workIn o x b)) Pd.T hT0 (fun b hb => ?_) (fun b => ?_)
+      fun b b' hb => ?_) hrate
+    · have h1 := (commit A o x).1 b hb
+      have h2 := hv.2.2.1 b
+      linarith
+    · have h1 := root A o x b
+      have h2 := hv.2.1 b
+      linarith [h2.2.1, h2.2.2]
+    · have h1 := (commit A o x).2 b b' hb
+      have h2 := hv.2.2.1 b'
+      linarith
+  exact ⟨h G P nsb Reg Obs _ dev Pd μ Wmm Wsha Wans (fun b => pubCost e μ pb.mm (macs b))
+    (fun b => pubCost e μ pb.sha (comps b)) ηw δ (nmax * Wmac) (Ein + Eout) κS κdmm κdsha sel Badv ξ κx κsha
+    hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcall g1 g2 g3 p1 p2 sak sha out svc'
+    imp hans ext, hwork, hans, Pouw.SecurityProofs.Dither.acceptedWithinCap g3 hcall hwork hans⟩
 
 /-- `WorkSound` gives the headline on every card table at θ's floors. -/
 theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
@@ -336,6 +348,21 @@ by
   obtain ⟨h1, h2, h3, h4⟩ :=
     cardAccel_onCard _ _ D (shaUnits 3415 0 (3415 / 32)) P L sm120_rates_pos hf hoth hmem
   exact ⟨_, _, h1, h2, h3, h4, cardAccel_callsAtPub floorOpen D pubBestSm120 (List.Mem.head _)⟩
+
+/-- **Every public SHA-512 schedule on the H200 uses a card resource** (its ALU lanes), `WorkSoundAtX`'s hypothesis
+on `pb.sha`: so on the H200 an oracle call uses some resource and `Period.callCap` is the capacity's bound. -/
+theorem pubShaH200_pos : ∀ u ∈ pubBestH200.sha, ∃ r, 0 < u r := by
+  intro u hu
+  refine ⟨.alu, ?_⟩
+  simp only [pubBestH200, pubShaH200, List.mem_cons, List.not_mem_nil, or_false] at hu
+  rcases hu with rfl | rfl | rfl <;> norm_num [shaUnits]
+
+/-- **Every public SHA-512 schedule on the RTX PRO 6000 uses a card resource** (its ALU lanes), as on the H200. -/
+theorem pubShaSm120_pos : ∀ u ∈ pubBestSm120.sha, ∃ r, 0 < u r := by
+  intro u hu
+  refine ⟨.alu, ?_⟩
+  simp only [pubBestSm120, pubShaSm120, List.mem_cons, List.not_mem_nil, or_false] at hu
+  rcases hu with rfl | rfl | rfl <;> norm_num [shaUnits]
 
 /-- **The hosts are counted at devices whose other devices are the row's hosts** (rule I): with `h200_onCard` and
 `sm120_onCard` at such devices, `OnCard` and `HostsCounted` hold together. -/

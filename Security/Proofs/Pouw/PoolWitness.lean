@@ -111,11 +111,11 @@ end Probability
 /-- `WorkMoment`'s conclusion at the witness: the moment at `ε = 1/7`, `C = 14`, `η = 1/7` and `κ = 0`. -/
 theorem witness_moment :
     MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) := by
-  obtain ⟨hdual, hinst, hC, -, -, -, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
+  obtain ⟨hdual, hinst, hC, -, -, -, hβ, hK, hξ, hdeg, hcall, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
     hsvc, himp, hans, hext, -, -⟩ := witness
   have h := Pouw.SecurityProofs.Dither.WorkMoment tw twRound 2 twReg Prop twVerdict twDev twPd twμ twHmm
-    twHsha twHo twHmm twHsha twη 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
-    hinst hC hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
+    twHsha twHo twHmm twHsha twη 0 0 0 (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
+    hinst hC hβ hK hξ hdeg hcall hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
   convert h using 1
   · funext A
     norm_num [epsWorkSound, twHmm, twHsha, twHo, twξ, Fin.sum_univ_two]
@@ -131,12 +131,13 @@ namespace Pouw.SecurityProofs.Dither
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Witness Pouw.SecurityProofs.DitherWitness Finset
 
 /-- **`WorkMoment`'s honest witness** (LEAN-66): at `Definitions.Pouw.Witness`'s machine, protocol and period, every
-premise of `WorkMoment` that is no named assumption holds (the dual price, the cost split, the cap on calls, G1–G3, P1
-and P2), the named assumptions hold too, and the verdict accepts the honest prover on every oracle and coins. -/
+premise of `WorkMoment` that is no named assumption holds (the dual price, the cost split, an oracle call's use, G1–G3,
+P1 and P2), the named assumptions hold too, at the period's cap on calls (`callCap = 8`), and the verdict accepts the
+honest prover on every oracle and coins. -/
 theorem WorkMoment_honest :
     twPd.DualOpt twμ 1 ∧
       ∑ w, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r ∧
-      (∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r) ∧
+      (∃ r, 0 < tw.callUse r) ∧ twPd.callCap = 8 ∧
       tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
       (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
         (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
@@ -144,11 +145,11 @@ theorem WorkMoment_honest :
         (fun _ => 0) (fun _ => 0) ∧
       OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
       ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
-      ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
+      ExtractAdv tw twRound 2 twReg twSel twPd.callCap twBadv twξ (fun _ => 0) ∧
       ∀ o x, honest.Passes twVerdict twDev o x := by
-  obtain ⟨hdual, -, hC, -, -, -, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
+  obtain ⟨hdual, -, hC, -, -, -, -, -, -, -, hcall, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
     -, hhon⟩ := witness
-  exact ⟨hdual, hC, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
+  exact ⟨hdual, hC, hcall, twCallCap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
     fun o x => (hhon o x).1⟩
 
 /-- **`WorkMoment`'s nontrivial witness** (LEAN-66): its conclusion at the witness (`witness_moment`'s period and
@@ -167,15 +168,15 @@ theorem WorkMoment_nontrivial :
 
 /-- **`WorkSound`'s honest witness** (LEAN-66, CMP-154): at `Definitions.Pouw.Witness`'s machine, protocol and period,
 every premise of `WorkSound` that is no named assumption holds (the dual price, the costs and their split, the rate
-and confidence, the cap on calls, G1–G3, P1 and P2), the named assumptions hold too, `AnswersFit` among them, and the
-verdict accepts the honest prover on every oracle and coins, with its sampling blocks' timed use the period's honest
-use and its run, its answers' calls included, within the cap. -/
+and confidence, an oracle call's use, G1–G3, P1 and P2), the named assumptions hold too, `AnswersFit` among them, at
+the period's cap on calls (`callCap = 8`), and the verdict accepts the honest prover on every oracle and coins, with
+its sampling blocks' timed use the period's honest use and its run, its answers' calls included, within the cap. -/
 theorem WorkSound_honest :
     twPd.DualOpt twμ 1 ∧
       (∀ w, 0 < twHmm w ∧ 0 < twHsha w ∧ 0 ≤ twHo w) ∧
       ∑ w, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r ∧
       0 < twη ∧ 0 < twδ ∧ twδ ≤ 1 ∧
-      (∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r) ∧
+      (∃ r, 0 < tw.callUse r) ∧ twPd.callCap = 8 ∧
       tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
       (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
         (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
@@ -183,13 +184,13 @@ theorem WorkSound_honest :
         (fun _ => 0) (fun _ => 0) ∧
       OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
       ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
-      ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
+      ExtractAdv tw twRound 2 twReg twSel twPd.callCap twBadv twξ (fun _ => 0) ∧
       ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧
-        honest.WithinCap twSel twQ o x := by
-  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp,
+        honest.WithinCap twSel twPd.callCap o x := by
+  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, -, -, -, -, hcall, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp,
     hans, hext, -, hhon⟩ := witness
-  exact ⟨hdual, fun w => ⟨(hinst w).1, (hinst w).2.1, (hinst w).2.2.1⟩, hC, hη, hδ, hδ1, hcap, hG1, hG2, hG3, hP1,
-    hP2, hsak, hsha, hout, hsvc, himp, hans, hext, hhon⟩
+  exact ⟨hdual, fun w => ⟨(hinst w).1, (hinst w).2.1, (hinst w).2.2.1⟩, hC, hη, hδ, hδ1, hcall, twCallCap, hG1, hG2,
+    hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext, hhon⟩
 
 /-- **`WorkSound`'s nontrivial witness** (LEAN-66, CMP-154): its conclusion at the witness (`witness_freed`'s period
 and bounds, `ε_A = 1/7 + ln 2 / 2`, `C = 14`, `κ_A = 1/2`) is false at the verifier that accepts everything. The

@@ -18,16 +18,20 @@ import Proofs.Pouw.ShaRealize
     oracle and advice are bad for `SAKSha` (`roundF`), so the blocks' product is a supermartingale over the
     challenger's coins (`expect_prod_rounds`), of average at most 1: the moment.
   - Its bad event is the service's `κ_S` (which also covers an unregistrable instance), the extraction's `κ_x(A)`
-    on runs within the cap (a run whose sampling blocks' timed work fits, and whose selected answers run within the
-    period, is within it: `withinCap_of_fits`), the bad oracles' `κ_sha(A)` and the degenerate dithers'
+    on runs within the cap `Period.callCap` (a run whose sampling blocks' timed work fits, and whose selected answers
+    run within the period, is within it by (G3): `withinCap_of_fits`; the cap is attained, `exists_cap_eq_callCap`,
+    and at most any cap the capacity puts on the calls, `callCap_le_of_cap_le`, `extractAdv_anti`), the bad
+    oracles' `κ_sha(A)` and the degenerate dithers'
     `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off it the product is `e^{η D}` at the blocks' shortfall `D`, the blocks
     meet the work floor at `ε + D / C` (`floor_of_rounds`), and `FreedOfFloor` turns it into freed compute.
 * `freedSound_of_momentSound`: Markov on the moment at `δ_coin`, the luck `ln(1/δ_coin)/η` added to `ε C`.
 * `WorkSound`: the guarantee `Definitions.Pouw.Guarantees.Dither.WorkSound`, `WorkMoment` then
   `freedSound_of_momentSound`.
 * `WorkSoundNoFold`: `WorkSound` on the no-fold round with `ExtractAdv` from
-  `Proofs.Pouw.ShaRealize.ExtractOfRealize` at the budget `(k + 1)(⌈Q⌉ + V) + k ⌈Q⌉` and the schedule
-  `τ_w = (w + 1)(⌈Q⌉ + V)` (`sum_segments`).
+  `Proofs.Pouw.ShaRealize.ExtractOfRealize` at `Q = Period.callCap`, the budget `(k + 1)(⌈Q⌉ + V) + k ⌈Q⌉`, the
+  schedule `τ_w = (w + 1)(⌈Q⌉ + V)` (`sum_segments`) and each prover's own advice size.
+* `acceptedWithinCap`: a verdict under which every accepted period's timed work and selected answers fit the period
+  accepts only periods within the cap, the card's `AcceptedWithinCap`.
 * `FleetSound` is in `Proofs.Pouw.Pool`: the replicas' moments pooled by convexity.
 -/
 
@@ -361,17 +365,56 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
 
 /-! ## The cap on oracle calls -/
 
-/-- **A run whose timed use fits, and whose selected answers run within the period, is within the cap `Q`**
-(RT-LEAN-2 L39, CMP-154, RT-POOL RP20): by (G3) the calls in the sampling blocks' commit phases and work use at least
-`calls · callUse_r` of a resource `r` a call uses, which fits within its capacity `cap_r ≤ Q callUse_r`, and a
-selected answer's calls use at most its use, which is at most `cap_r`. -/
-theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) {Q : ℝ}
-    (sel : P.Chk → Prop) (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r)
-    (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) (o : P.Orc) (x : Fin k → P.Draw × P.Chk)
-    {z : Pd.J → ℝ} (hfit : Pd.Fits (A.timedUse o x) z)
-    (hans : ∀ b, sel (x b).2 → ∀ r, G.use (A.answer b) (A.answerIn o x b) r ≤ Pd.cap r) :
-    A.WithinCap sel Q o x := by
+/-- `Period.callCap` is at most the capacity over a call's use of each resource a call uses. -/
+theorem callCap_le {G : Accel} (Pd : Period G) {r : G.Res} (hr : 0 < G.callUse r) :
+    Pd.callCap ≤ Pd.cap r / G.callUse r :=
+  Finite.ciInf_le (fun r : {r : G.Res // 0 < G.callUse r} => Pd.cap r / G.callUse r) ⟨r, hr⟩
+
+/-- **`Period.callCap` is attained** where an oracle call uses some resource: at the resource `r` that binds,
+`cap_r = callCap · callUse_r`. -/
+theorem exists_cap_eq_callCap {G : Accel} (Pd : Period G) (h : ∃ r, 0 < G.callUse r) :
+    ∃ r, 0 < G.callUse r ∧ Pd.cap r = Pd.callCap * G.callUse r := by
+  obtain ⟨r, hr⟩ := h
+  haveI : Nonempty {r : G.Res // 0 < G.callUse r} := ⟨⟨r, hr⟩⟩
+  obtain ⟨⟨r', hr'⟩, he⟩ :=
+    exists_eq_ciInf_of_finite (f := fun r : {r : G.Res // 0 < G.callUse r} => Pd.cap r / G.callUse r)
+  have he' : Pd.cap r' / G.callUse r' = Pd.callCap := he
+  exact ⟨r', hr', by rw [← he', div_mul_cancel₀ _ hr'.ne']⟩
+
+/-- **Any cap the period's capacity puts on the calls is at least `Period.callCap`**: where `Q` calls use at least a
+resource's capacity (`cap_r ≤ Q callUse_r`, the form the guarantees took before CMP-163), `callCap ≤ Q`. -/
+theorem callCap_le_of_cap_le {G : Accel} (Pd : Period G) {Q : ℝ}
+    (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) : Pd.callCap ≤ Q := by
   obtain ⟨r, hr, hc⟩ := hcap
+  exact (callCap_le Pd hr).trans ((div_le_iff₀ hr).2 hc)
+
+/-- A run within a cap is within every larger cap. -/
+theorem withinCap_mono {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) {sel : P.Chk → Prop} {Q Q' : ℝ}
+    (hQ : Q ≤ Q') {o : P.Orc} {x : Fin k → P.Draw × P.Chk} (h : A.WithinCap sel Q o x) : A.WithinCap sel Q' o x :=
+  ⟨h.1.trans hQ, fun b hb => (h.2 b hb).trans hQ⟩
+
+/-- **The extraction premise is antitone in the cap**: `ExtractAdv` at a cap `Q` gives it at every smaller cap,
+whose runs are among `Q`'s. So `ExtractAdv` at `Period.callCap` is implied by `ExtractAdv` at any `Q` with
+`cap_r ≤ Q callUse_r` (`callCap_le_of_cap_le`): reading it at `callCap` asks no more of the prover. -/
+theorem extractAdv_anti {G : Accel} {P : RoundProto} {k : ℕ} {Reg : Fin k → Set P.Inst} {sel : P.Chk → Prop}
+    {Q Q' : ℝ} (hQ : Q' ≤ Q) {Badv : Prover G P k → ℕ} {ξ : Prover G P k → G.Res → ℝ} {κx : Prover G P k → ℝ}
+    (h : ExtractAdv G P k Reg sel Q Badv ξ κx) : ExtractAdv G P k Reg sel Q' Badv ξ κx := by
+  intro hG1 hG2 hG3 hP1 hP2 A
+  obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := h hG1 hG2 hG3 hP1 hP2 A
+  exact ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, fun o x hq => huse o x (withinCap_mono A hQ hq), hext,
+    le_trans (prob_mono fun _ ⟨ha, hq, hw⟩ => ⟨ha, withinCap_mono A hQ hq, hw⟩) hx⟩
+
+/-- **A run whose timed use and selected answers use at most the period's capacity is within `Period.callCap`**
+(RT-LEAN-2 L39, CMP-154, CMP-163, RT-POOL RP20): by (G3) the calls in the sampling blocks' commit phases and work use
+at least `calls · callUse_r` of the resource `r` that binds `callCap`, which is at most its capacity
+`cap_r = callCap · callUse_r`, and a selected answer's calls use at most its use, which is at most `cap_r`. Nothing
+about the prover is read but its run's use: every prover's run that fits is within the cap. -/
+theorem withinCap_of_le_cap {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G)
+    (sel : P.Chk → Prop) (hG3 : G.G3) (hcall : ∃ r, 0 < G.callUse r) (o : P.Orc) (x : Fin k → P.Draw × P.Chk)
+    (hwork : ∀ r, A.timedUse o x r ≤ Pd.cap r)
+    (hans : ∀ b, sel (x b).2 → ∀ r, G.use (A.answer b) (A.answerIn o x b) r ≤ Pd.cap r) :
+    A.WithinCap sel Pd.callCap o x := by
+  obtain ⟨r, hr, hc⟩ := exists_cap_eq_callCap Pd hcall
   refine ⟨?_, fun b hb => ?_⟩
   · have h1 : A.calls o x * G.callUse r ≤ A.timedUse o x r := by
       unfold Prover.calls Prover.timedUse
@@ -379,11 +422,27 @@ theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P
       exact Finset.sum_le_sum fun b _ => by
         rw [add_mul]
         exact add_le_add ((hG3 (A.commit b) (A.commitIn o x b)).2 r) ((hG3 (A.work b) (A.workIn o x b)).2 r)
-    have h2 : A.timedUse o x r ≤ Pd.cap r :=
-      le_trans (le_add_of_nonneg_right (Finset.sum_nonneg fun j _ => mul_nonneg (hfit.1 j) (hneeds j r)))
-        (hfit.2 r)
-    exact le_of_mul_le_mul_right ((h1.trans h2).trans hc) hr
-  · exact le_of_mul_le_mul_right ((((hG3 (A.answer b) (A.answerIn o x b)).2 r).trans (hans b hb r)).trans hc) hr
+    exact le_of_mul_le_mul_right ((h1.trans (hwork r)).trans hc.le) hr
+  · exact le_of_mul_le_mul_right ((((hG3 (A.answer b) (A.answerIn o x b)).2 r).trans (hans b hb r)).trans hc.le) hr
+
+/-- **A run whose timed use fits, and whose selected answers run within the period, is within `Period.callCap`**
+(`withinCap_of_le_cap`): the other work beside it uses a nonnegative amount of each resource, so the timed use alone
+is within the capacity. -/
+theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G)
+    (sel : P.Chk → Prop) (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r) (hcall : ∃ r, 0 < G.callUse r)
+    (o : P.Orc) (x : Fin k → P.Draw × P.Chk) {z : Pd.J → ℝ} (hfit : Pd.Fits (A.timedUse o x) z)
+    (hans : ∀ b, sel (x b).2 → ∀ r, G.use (A.answer b) (A.answerIn o x b) r ≤ Pd.cap r) :
+    A.WithinCap sel Pd.callCap o x :=
+  withinCap_of_le_cap A Pd sel hG3 hcall o x (fun r => le_trans (le_add_of_nonneg_right
+    (Finset.sum_nonneg fun j _ => mul_nonneg (hfit.1 j) (hneeds j r))) (hfit.2 r)) hans
+
+/-- **An accepted period is within the cap** where its timed work fits the period and its selected answers run within
+it (`TimedWorkFits`'s form, `AnswersFit`): every accepted prover, by (G3) (`withinCap_of_le_cap`). -/
+theorem acceptedWithinCap {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} {verdict : Verdict P k Obs}
+    {dev : Readings G P k Obs} {sel : P.Chk → Prop} {Pd : Period G} (hG3 : G.G3) (hcall : ∃ r, 0 < G.callUse r)
+    (hwork : ∀ (A : Prover G P k) o x, A.Passes verdict dev o x → ∀ r, A.timedUse o x r ≤ Pd.cap r)
+    (hans : AnswersFit G P k verdict dev sel Pd) : AcceptedWithinCap G P k verdict dev sel Pd :=
+  fun A o x hv => withinCap_of_le_cap A Pd sel hG3 hcall o x (hwork A o x hv) (hans A o x hv)
 
 /-! ## The headline -/
 
@@ -427,8 +486,8 @@ theorem freedSound_of_momentSound {G : Accel} {P : RoundProto} {k : ℕ} {Obs : 
 service's, the extraction's, the bad oracles' and the degenerate dithers' events it is `e^{η D}` at the rounds'
 combined shortfall `D`, where the floor holds at `ε + D / C`. -/
 theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
-  intro G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η β K κS Q κdmm κdsha sel Badv ξ κx κsha
-    hdual hpos hH hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr A
+  intro G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η β K κS κdmm κdsha sel Badv ξ κx κsha
+    hdual hpos hH hβ hK hξ hκd hcall hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr A
   beta_reduce
   classical
   obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := hextr hG1 hG2 hG3 hP1 hP2 A
@@ -629,7 +688,7 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
     linarith
   · rintro ⟨o, x⟩ z hv hbad hfit
     dsimp only at hv hbad hfit ⊢
-    have hq := withinCap_of_fits A Pd sel hG3 hneeds hcap o x hfit (hans A o x hv)
+    have hq := withinCap_of_fits A Pd sel hG3 hneeds hcall o x hfit (hans A o x hv)
     have hacc : A.Accepted Reg o x := by_contra fun h => hbad (Or.inl (Or.inl (Or.inl ⟨hv, h⟩)))
     have hok : ∀ w, okw o x w := fun w => by_contra fun h => hbad (Or.inl (Or.inl (Or.inr ⟨hacc, hq, w, h⟩)))
     have hg : ∀ w, Good o w (adv o x w, A.inst o x w) := fun w =>
@@ -645,8 +704,8 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
 /-- `Definitions.Pouw.Guarantees.Dither.WorkSound`: `WorkMoment`, then Markov on the moment at `δ`
 (`freedSound_of_momentSound`), whose luck `ln(1/δ)/η` is `epsWorkSound`'s. -/
 theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
-  intro G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha sel Badv ξ κx κsha
-    hdual hpos hH hη hδ _ hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr
+  intro G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS κdmm κdsha sel Badv ξ κx κsha
+    hdual hpos hH hη hδ _ hβ hK hξ hκd hcall hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr
   have hC : ∑ r, μ r * (1 * Pd.hon r) = ∑ w, (Hmm w + Hsha w + Ho w) := by
     rw [hH]
     simp only [one_mul]
@@ -654,8 +713,8 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
     rw [hC]
     exact Finset.sum_nonneg fun w _ => by linarith [hpos w]
   refine freedSound_of_momentSound hη hδ hC0
-    (WorkMoment G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η β K κS Q κdmm κdsha sel Badv ξ κx κsha
-      hdual hpos hH hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr)
+    (WorkMoment G P k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η β K κS κdmm κdsha sel Badv ξ κx κsha
+      hdual hpos hH hβ hK hξ hκd hcall hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hextr)
     (fun A => le_of_eq ?_) (fun A => le_of_eq (by ring))
   rw [hC]
   unfold epsWorkSound
@@ -673,26 +732,30 @@ theorem sum_segments (M n : ℕ) : ∑ i : Fin n, (2 * (((i : ℕ) + 1) * M) + 1
     ring
 
 /-- `Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`: `WorkSound` with `ExtractAdv` from `ExtractOfRealize` at
-the budget `q = (k + 1) M + k ⌈Q⌉`, `M = ⌈Q⌉ + V`, and the schedule `τ_w = (w + 1) M`, whose extraction term
-`q² + Σ_w q (2 τ_w + 1)` is `q² + k q ((k + 1) M + 1)` (`sum_segments`). -/
+the cap `Q = Period.callCap`, the budget `q = (k + 1) M + k ⌈Q⌉`, `M = ⌈Q⌉ + V`, the schedule `τ_w = (w + 1) M` and
+each prover's own advice size, whose extraction term `q² + Σ_w q (2 τ_w + 1)` is `q² + k q ((k + 1) M + 1)`
+(`sum_segments`). -/
 theorem WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold := by
-  intro G nf k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κsha κdmm κdsha sel Badv V X D
-    _ _ _ _ _ E eo rD pl dirs ξw ξl hdual hpos hH hη hδ hδ1 hβ hK hξw hξl hκd hcap hopens hG1 hG2 hG3 horc hP1 hP2
+  intro G nf k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS κsha κdmm κdsha sel Badv V X D
+    _ _ _ _ _ E eo rD pl dirs ξw ξl hdual hpos hH hη hδ hδ1 hβ hK hξw hξl hκd hcall hopens hG1 hG2 hG3 horc hP1 hP2
     hsak hsha hout hserv himp hans hR A
-  have hx := Pouw.SecurityProofs.ShaRealize.ExtractOfRealize G nf k Reg sel Q X D E eo rD pl dirs ξw ξl
-    (fun _ => (k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) hopens
-    horc hR
-  have hk : ∑ w : Fin k, ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * (2 * (((w : ℕ) + 1) * (⌈Q⌉₊ + V)) + 1) =
-      k * (((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * ((k + 1) * (⌈Q⌉₊ + V) + 1)) := by
+  have hx := Pouw.SecurityProofs.ShaRealize.ExtractOfRealize G nf k Reg sel Pd.callCap X D E eo rD pl dirs ξw ξl
+    (fun _ => (k + 1) * (⌈Pd.callCap⌉₊ + V) + k * ⌈Pd.callCap⌉₊) (fun _ w => ((w : ℕ) + 1) * (⌈Pd.callCap⌉₊ + V))
+    Badv hopens horc hR
+  have hk : ∑ w : Fin k, ((k + 1) * (⌈Pd.callCap⌉₊ + V) + k * ⌈Pd.callCap⌉₊) *
+        (2 * (((w : ℕ) + 1) * (⌈Pd.callCap⌉₊ + V)) + 1) =
+      k * (((k + 1) * (⌈Pd.callCap⌉₊ + V) + k * ⌈Pd.callCap⌉₊) * ((k + 1) * (⌈Pd.callCap⌉₊ + V) + 1)) := by
     rw [← Finset.mul_sum, sum_segments]
     ring
-  refine (WorkSound G (noFoldRound nf) k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha
-    sel (fun _ => Badv) (fun _ r => k * ξw r + ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊ : ℕ) * ξl r)
-    (fun _ => ((((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) +
-        ∑ w : Fin k, ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * (2 * (((w : ℕ) + 1) * (⌈Q⌉₊ + V)) + 1) : ℕ) : ℝ) /
+  refine (WorkSound G (noFoldRound nf) k Reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS κdmm κdsha
+    sel Badv (fun _ r => k * ξw r + ((k + 1) * (⌈Pd.callCap⌉₊ + V) + k * ⌈Pd.callCap⌉₊ : ℕ) * ξl r)
+    (fun _ => ((((k + 1) * (⌈Pd.callCap⌉₊ + V) + k * ⌈Pd.callCap⌉₊) *
+          ((k + 1) * (⌈Pd.callCap⌉₊ + V) + k * ⌈Pd.callCap⌉₊) +
+        ∑ w : Fin k, ((k + 1) * (⌈Pd.callCap⌉₊ + V) + k * ⌈Pd.callCap⌉₊) *
+          (2 * (((w : ℕ) + 1) * (⌈Pd.callCap⌉₊ + V)) + 1) : ℕ) : ℝ) /
       Fintype.card D) (fun _ => κsha) hdual hpos hH hη hδ hδ1 hβ hK
     (fun _ r => add_nonneg (mul_nonneg (Nat.cast_nonneg _) (hξw r)) (mul_nonneg (Nat.cast_nonneg _) (hξl r))) hκd
-    hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hx A).trans (le_of_eq ?_)
+    hcall hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hans hx A).trans (le_of_eq ?_)
   simp only [hk]
 
 end Pouw.SecurityProofs.Dither
