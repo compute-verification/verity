@@ -11,7 +11,9 @@ its entry moves with it and is refused naming the entry when it doesn't, a file 
 a member below the top), the environment-read check beside it (a new direct read refused by name with the settings-registry
 fix, one in a registry passing, a read moved within its file passing, a rename moving its entry, a registry mark counted from
 the change's base, the list's total held, a loosened lint failing, a base lint that doesn't load leaving the change unjudged),
-the source checks' findings kept beside the verdict, where ruff comes from (this
+the silent-except check beside that (a new swallowing handler, typed or broad, refused by name with the fix, one that
+re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
+counted lints counting one change), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""
@@ -812,7 +814,7 @@ def test_a_new_direct_environment_read_is_refused_naming_it_and_the_settings_reg
         "tools/a.py": A_READS + "B = os.environ['B']\n", "tools/c.py": "import os\nif 'C' in os.environ:\n    pass\n",
         "integrations/vllm/verity_vllm/c.py": "import os\nX = os.getenv('X')\n", "archive/x.py": "import os\nos.getenv('X')\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["touched"], c["env_read"]) == ("failed", [], ["tools/a.py", "tools/c.py"]), c["why"]
+    assert (c["verdict"], c["touched"], c["counted"].get("repo_env_reads")) == ("failed", [], ["tools/a.py", "tools/c.py"]), c["why"]
     assert c["why"].startswith(f"adds 2 direct environment read(s) to the Python it changes, as the base's {REPO_ENV_LINT} "
                                "counts them (tools/a.py 1 -> 2; tools/c.py 0 -> 1): Read the variable through your area's "
                                "settings registry, which declares each one once (the template: "
@@ -823,7 +825,7 @@ def test_a_new_direct_environment_read_is_refused_naming_it_and_the_settings_reg
         "tools/a.py": A_READS, "tools/c.py": "from tools import settings\nif settings.C:\n    pass\n",
         "tools/settings.py": "import os\nB = os.environ['B']\nC = 'C' in os.environ\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["env_read"], c["why"]) == ("passed", ["tools/c.py", "tools/settings.py"],
+    assert (c["verdict"], c["counted"].get("repo_env_reads"), c["why"]) == ("passed", ["tools/c.py", "tools/settings.py"],
                                                        "no direct environment read is new in the 2 Python file(s) it "
                                                        "changes"), c["why"]
     assert _env_lint(env_linted) is None
@@ -832,7 +834,7 @@ def test_a_new_direct_environment_read_is_refused_naming_it_and_the_settings_reg
 def test_a_read_moved_within_its_file_passes_the_gate_and_the_repository_lint(env_linted):
     env_linted.commit("A's read moves into a function", {"tools/a.py": "import os\n\n\ndef a():\n    return os.environ.get('A')\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["env_read"]) == ("passed", ["tools/a.py"]), c["why"]
+    assert (c["verdict"], c["counted"].get("repo_env_reads")) == ("passed", ["tools/a.py"]), c["why"]
     assert _env_lint(env_linted) is None
 
 
@@ -859,7 +861,7 @@ def test_a_registry_mark_counts_from_the_changes_base_so_it_lands_before_the_rea
     env_linted.commit("marks config.py a registry, and reads B there", {REPO_ENV_JSON: _allowlist(TOOLS_A, mark), **reads})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["touched"], c["fix"]) == ("failed", [REPO_ENV_JSON], ["tools/config.py:2 B (os.environ.get)"])
-    assert "(a mark counts from the change's base, so a new one lands before the reads it exempts)" in c["why"], c["why"]
+    assert "(a mark counts from the change's base, so a new one lands before what it exempts)" in c["why"], c["why"]
     assert _env_lint(env_linted) is None
     env_linted.git("checkout", "-q", "-b", "mark", "main")
     env_linted.commit("the mark alone", {REPO_ENV_JSON: _allowlist(TOOLS_A, mark)})
@@ -870,7 +872,7 @@ def test_a_registry_mark_counts_from_the_changes_base_so_it_lands_before_the_rea
     env_linted.git("checkout", "-q", "-b", "reads")
     env_linted.commit("reads B in the registry", reads)
     [c] = G.gate("main", "reads")["changes"]
-    assert (c["verdict"], c["env_read"]) == ("passed", ["tools/config.py"]), c["why"]
+    assert (c["verdict"], c["counted"].get("repo_env_reads")) == ("passed", ["tools/config.py"]), c["why"]
 
 
 def test_the_environment_read_list_may_not_grow(env_linted):
@@ -901,7 +903,7 @@ def test_the_source_checks_are_kept_beside_the_verdict_and_never_fail_a_member_b
     assert _verdicts(G.gate("main", "next")) == [("#1", "failed")]
     env_linted.queue(2, "two", two)
     doc = G.gate("main", "next")
-    assert [(c["name"], c["verdict"], c["env_read"]) for c in doc["changes"]] == [("#1", "untouched", None),
+    assert [(c["name"], c["verdict"], c["counted"].get("repo_env_reads")) for c in doc["changes"]] == [("#1", "untouched", None),
                                                                                   ("#2", "passed", ["tools/c.py"])]
     monkeypatch.setattr(G, "find", lambda c, base: pytest.fail("judged again"))
     assert _verdicts(G.gate("main", m1)) == [("#1", "failed")] and len(list(verdict_cache.glob("*.json"))) == 4
@@ -914,6 +916,111 @@ def test_a_base_whose_environment_read_lint_does_not_load_cannot_judge(env_linte
     env_linted.commit("a clean file", {"tools/c.py": "C = 1\n"})
     assert G.main(["main", "pr", "--json"]) == 2
     assert f"{REPO_ENV_LINT} at " in capsys.readouterr().err
+
+
+REPO_SILENT_LINT = "tests/lint/test_repo_silent_excepts.py"
+REPO_SILENT_JSON = "tests/lint/allowlists/repo_silent_excepts.json"
+TOOLS_S = {"file": "tools/s.py", "count": 1}
+S_SWALLOWS = "def s(p):\n    try:\n        return open(p).read()\n    except OSError:\n        return None\n"
+
+
+@pytest.fixture
+def silent_linted(repo) -> Repo:
+    """``repo`` with the repository's real silent-except lint: tools/s.py's ``except OSError: return None`` is its one, which
+    the list allows."""
+    repo.commit("silent excepts", {REPO_SILENT_LINT: (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text(),
+                                   REPO_SILENT_JSON: _allowlist(TOOLS_S), "tools/s.py": S_SWALLOWS})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def _silent_lint(repo: Repo) -> str | None:
+    """the repository's silent-except lint, as the root suite runs it after landing, on ``repo``'s checkout"""
+    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); "
+                        "import test_repo_silent_excepts as T; T.test_no_new_silent_excepts()"],
+                       cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def test_a_new_swallowing_handler_is_refused_naming_it_and_the_fix_and_one_that_records_its_outcome_passes(silent_linted):
+    """Typed handlers count like broad ones; handlers outside the lint's scope (the integration's, the archive's) are left to
+    others."""
+    silent_linted.commit("a second handler in s.py, a new file with one, and handlers the lint doesn't hold", {
+        "tools/s.py": S_SWALLOWS + "    except ValueError:\n        pass\n",
+        "tools/t.py": "def t(xs, out):\n    for x in xs:\n        try:\n            out[x] = int(x)\n"
+                      "        except ValueError:\n            continue\n",
+        "integrations/vllm/verity_vllm/c.py": "try:\n    X = 1\nexcept Exception:\n    pass\n",
+        "archive/x.py": "try:\n    X = 1\nexcept Exception:\n    pass\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["counted"].get("repo_silent_excepts")) == ("failed", [], ["tools/s.py", "tools/t.py"]), \
+        c["why"]
+    assert c["why"] == (f"adds 2 silent except handler(s) to the Python it changes, as the base's {REPO_SILENT_LINT} counts them "
+                        "(tools/s.py 1 -> 2; tools/t.py 0 -> 1): Re-raise; or record the outcome in your area's typed record or "
+                        "log, saying what was caught and what the code did instead; or narrow it away: test for the case you "
+                        "expect (`path.exists()`, `d.get(k)`) and let the rest raise, since a narrower handler that still "
+                        "swallows still counts (why: integrations/vllm/tests/lint/README.md (Recorded outcomes)). If the file "
+                        f"moved, move its entry in the same change: `python3 {REPO_SILENT_LINT} --move OLD NEW`."), c["why"]
+    assert c["fix"] == ["tools/s.py:6 except ValueError: pass", "tools/t.py:5 except ValueError: continue"]
+    assert "tools/t.py: 1 found, 0 allowed" in (_silent_lint(silent_linted) or "")
+    silent_linted.commit("re-raises in s.py, and records what t.py skips", {
+        "tools/s.py": S_SWALLOWS + "    except ValueError:\n        raise\n",
+        "tools/t.py": "def t(xs, out, skipped):\n    for x in xs:\n        try:\n            out[x] = int(x)\n"
+                      "        except ValueError as e:\n            skipped.append(f'{x}: {e}')\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_silent_excepts"), c["why"]) == (
+        "passed", ["tools/s.py", "tools/t.py"], "no silent except handler is new in the 2 Python file(s) it changes"), c["why"]
+    assert _silent_lint(silent_linted) is None
+
+
+def test_a_renamed_file_must_move_its_silent_except_entry_and_is_refused_naming_it_when_it_doesnt(silent_linted):
+    silent_linted.commit("moves s.py as it is", {"tools/s.py": None, "tools/sub/s.py": S_SWALLOWS})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"renames Python whose silent except handlers {REPO_SILENT_JSON} allows at the old path, and leaves 1 entry behind: "
+        f"{REPO_SILENT_LINT} counts a file's silent except handlers under its path, so it would fail after landing"), c["why"]
+    assert c["fix"] == [f'{REPO_SILENT_JSON}: move {{"file": "tools/s.py", "count": 1}} to "tools/sub/s.py", as the change '
+                        f"moves the file (`python3 {REPO_SILENT_LINT} --move tools/s.py tools/sub/s.py`)"]
+    assert "tools/sub/s.py: 1 found, 0 allowed" in (_silent_lint(silent_linted) or "")
+    subprocess.run([sys.executable, REPO_SILENT_LINT, "--move", "tools/s.py", "tools/sub/s.py"], cwd=silent_linted.root,
+                   check=True, capture_output=True)
+    silent_linted.commit("its entry", {REPO_SILENT_JSON: (silent_linted.root / REPO_SILENT_JSON).read_text()})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("passed", ["repo_silent_excepts"], []), c["why"]
+    assert _silent_lint(silent_linted) is None
+
+
+def test_the_silent_except_list_may_not_grow_and_loosening_its_lint_fails_naming_what_the_base_lint_finds(silent_linted):
+    b = {"file": "tools/b.py", "count": 1}
+    silent_linted.commit("a new handler, allowed", {"tools/b.py": "try:\n    B = 1\nexcept KeyError:\n    B = None\n",
+                                                    REPO_SILENT_JSON: _allowlist(TOOLS_S, b)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"]) == ("failed", [REPO_SILENT_JSON]), c["why"]
+    assert c["why"].startswith(f"grows {REPO_SILENT_JSON} 1 -> 2 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_SILENT_JSON}: {G.key(b)} 0 -> 1"]
+    silent_linted.git("checkout", "-q", "-B", "pr", "main")
+    lint = (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text().replace('"archive/")', '"archive/", "tools/")')
+    silent_linted.commit("leaves tools/ out and drops its entry", {REPO_SILENT_LINT: lint, REPO_SILENT_JSON: _allowlist()})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["repo_silent_excepts"], [
+        "repo_silent_excepts: tools/s.py: 1 found, 0 allowed",
+        "repo_silent_excepts: tools/s.py:4 except OSError: return None"]), c["why"]
+
+
+def test_both_counted_lints_count_the_top_change_each_naming_its_own_fix(env_linted):
+    env_linted.git("checkout", "-q", "main")
+    env_linted.commit("silent excepts", {REPO_SILENT_LINT: (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text(),
+                                         REPO_SILENT_JSON: _allowlist()})
+    env_linted.git("checkout", "-q", "-B", "pr")
+    env_linted.commit("reads B where it swallows a missing one", {
+        "tools/b.py": "import os\ntry:\n    B = int(os.environ['B'])\nexcept (KeyError, ValueError):\n    B = 0\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"]) == ("failed", {"repo_env_reads": ["tools/b.py"],
+                                                       "repo_silent_excepts": ["tools/b.py"]}), c["why"]
+    assert c["fix"] == ["tools/b.py:3 B (os.environ[...])", "tools/b.py:4 except (KeyError, ValueError): B = 0"]
+    first, second = c["why"].split("; and ")
+    assert first.startswith("adds 1 direct environment read(s)") and "settings registry" in first, c["why"]
+    assert second.startswith(f"adds 1 silent except handler(s) to the Python it changes, as the base's {REPO_SILENT_LINT} "
+                             "counts them (tools/b.py 0 -> 1): Re-raise;"), c["why"]
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"

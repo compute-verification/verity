@@ -11,11 +11,12 @@ ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` or ``tests/
 and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
 integration's ruff lint (and ``archive/``) to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
-``integrations/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``, and ``test_repo_env_reads.py``
-holds every tracked ``*.py`` file outside ``integrations/vllm/`` (which has its settings rule, P07) and ``archive/`` to
-``allowlists/repo_env_reads.json``, a count of direct environment reads per file, all one kind, beside the settings
-registries it marks (``{"file", "registry": true}``, a declaration rather than an exception, so a mark is never counted);
-its slugs stay apart from the integration's.  A change is judged when it touches a
+``integrations/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``, and its counted lints (``COUNTED``)
+hold every tracked ``*.py`` file outside ``integrations/vllm/`` (which has its own rules) and ``archive/`` to a count per
+file, all one kind: ``test_repo_env_reads.py`` its direct environment reads (``allowlists/repo_env_reads.json``, beside the
+settings registries it marks, ``{"file", "registry": true}``, a declaration rather than an exception, so a mark is never
+counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow what they catch
+(``allowlists/repo_silent_excepts.json``); its slugs stay apart from the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
 ``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
 when:
@@ -49,12 +50,13 @@ findings; but that lint reads no history, so a rename must move the file's entri
 (``test_repo_ruff.py --move OLD NEW``), and one that leaves them behind fails, naming each entry and the command.  A file
 the change doesn't touch is never linted.
 
-Its direct environment reads are counted the same way (the vLLM coordinator, 27 Oct 01:30Z: configuration in one place),
-when its base has the repository's environment-read lint, loaded from the base and counting as it counts: each ``*.py`` file
-the change adds or modifies outside that lint's ``LEFT_OUT`` and not a settings registry at the change's base (a
-``settings.py``, or a file the base's list marks, so a mark that comes with the reads it would exempt doesn't count) fails
-when its reads grow, naming the new ones and the fix: read it through the area's settings registry, or create one.  A rename
-must move the file's entry (``test_repo_env_reads.py --move OLD NEW``), as for ruff.
+Each counted lint's sites are counted the same way, when its base has the lint, loaded from the base and counting as it
+counts: each ``*.py`` file the change adds or modifies outside that lint's ``LEFT_OUT`` fails when its count grows, naming the
+new sites and the lint's fix.  Its direct environment reads (the vLLM coordinator, 27 Oct 01:30Z: configuration in one
+place), unless the file is a settings registry at the change's base (a ``settings.py``, or a file the base's list marks, so a
+mark that comes with the reads it would exempt doesn't count): the fix is the area's settings registry.  Its except handlers
+that swallow what they catch (02:05Z: recorded outcomes): the fix is to re-raise, record the outcome, or narrow the handler.
+A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
 Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
 were linted at their own merges.
@@ -119,11 +121,11 @@ REPO_RUFF_CONFIG = "ruff.toml"
 #: the repository's ruff lint's module, whose ``LEFT_OUT`` says which files the source lint leaves to others, and its list
 REPO_RUFF_MODULE = f"{REPO_LINT}/test_{REPO_RUFF_LINT}.py"
 REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
-#: the repository's environment-read lint (S1), whose count, registries and fix the source check reads from the base's copy
-REPO_ENV_LINT = "repo_env_reads"
-REPO_ENV_MODULE = f"{REPO_LINT}/test_{REPO_ENV_LINT}.py"
-REPO_ENV_LIST = f"{REPO_LINT}/allowlists/{REPO_ENV_LINT}.json"
-REPO_ENV_API = ("LEFT_OUT", "FIX", "reads", "parse", "is_registry")
+#: the repository's counted lints, each a module ``tests/lint/test_<slug>.py`` and a list ``tests/lint/allowlists/<slug>.json``
+#: of per-file counts, whose ``LEFT_OUT``, ``FIX``, ``parse`` and count the source check reads from the base's copy: (slug, the
+#: module's function that lists a source's sites, what it counts).  One with ``is_registry`` exempts the files it marks.
+COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
+           ("repo_silent_excepts", "handlers", "silent except handler"))    # S4: recorded outcomes
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
 FILE_MODES = {"100644", "100755"}
 #: the lint directories, each run as its base has it
@@ -279,14 +281,13 @@ class Change:
     pooled: list[str] = field(default_factory=list)
     #: the files the source lint read (None: it didn't run, below the top or with no repository ruff lint at the base)
     linted: list[str] | None = None
-    #: the files the environment-read count read (None: it didn't run, below the top or with no such lint at the base)
-    env_read: list[str] | None = None
     ruff_new: list[str] = field(default_factory=list)
     ruff_grown: list[str] = field(default_factory=list)
     ruff_unmoved: list[str] = field(default_factory=list)
-    env_new: list[str] = field(default_factory=list)
-    env_grown: list[str] = field(default_factory=list)
-    env_unmoved: list[str] = field(default_factory=list)
+    #: each counted lint's count of the change, by slug (none: it didn't run, below the top or with no such lint at the
+    #: base): the files it ``read``, the sites it finds ``new``, each file that ``grew`` and each entry a rename leaves behind
+    #: (``unmoved``)
+    counted: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -296,7 +297,7 @@ class Change:
         return {"name": self.name, "commit": self.hi, "base": self.lo, "pr": self.pr, "verdict": self.verdict, "why": self.why,
                 "before": self.before, "after": self.after, "touched": self.touched, "lints": self.lints, "fix": self.fix,
                 "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed, "pooled": self.pooled, "linted": self.linted,
-                "env_read": self.env_read}
+                "counted": {s: v["read"] for s, v in self.counted.items()}}
 
 
 def merge_base(base: str, top: str) -> str:
@@ -354,7 +355,7 @@ def is_pure_move(c: Change, base: str) -> bool:
 
 
 def kind(entry: object) -> object:
-    """An entry's kind: its ``kind``, or the repository ruff list's ``rule`` (none: the environment-read list's counts)."""
+    """An entry's kind: its ``kind``, or the repository ruff list's ``rule`` (none: a counted lint's per-file counts)."""
     return entry.get("kind", entry.get("rule")) if isinstance(entry, dict) else None
 
 
@@ -627,82 +628,93 @@ def source_lint(c: Change, base: str) -> tuple[list[str], list[str], list[str]]:
             unmoved)
 
 
+def counted_paths(slug: str) -> tuple[str, str]:
+    """A counted lint's module and list."""
+    return f"{REPO_LINT}/test_{slug}.py", f"{REPO_LINT}/allowlists/{slug}.json"
+
+
 @functools.lru_cache(maxsize=None)
-def env_lint_at(rev: str) -> types.ModuleType | None:
-    """The repository's environment-read lint as ``rev`` has it, loaded (it imports only the standard library) without
+def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleType | None:
+    """The repository's counted lint ``slug`` as ``rev`` has it, loaded (it imports only the standard library) without
     running a test, or None when ``rev`` has none."""
+    module, _ = counted_paths(slug)
     try:
-        source = git("show", f"{rev}:{REPO_ENV_MODULE}")
+        source = git("show", f"{rev}:{module}")
     except GitError:
         return None
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
-        path = Path(d) / REPO_ENV_MODULE
+        path = Path(d) / module
         path.parent.mkdir(parents=True)
         path.write_text(source)
-        spec = importlib.util.spec_from_file_location(f"ratchet_gate_{REPO_ENV_LINT}", path)
+        spec = importlib.util.spec_from_file_location(f"ratchet_gate_{slug}", path)
         lint = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(lint)
         except Exception as e:
-            raise GitError(f"{REPO_ENV_MODULE} at {rev[:12]} doesn't load ({type(e).__name__}: {e}), so the gate can't count "
-                           f"the change's environment reads") from e
-    if missing := [n for n in REPO_ENV_API if not hasattr(lint, n)]:
-        raise GitError(f"{REPO_ENV_MODULE} at {rev[:12]} has no {', '.join(missing)}, so the gate can't count the change's "
-                       f"environment reads")
+            raise GitError(f"{module} at {rev[:12]} doesn't load ({type(e).__name__}: {e}), so the gate can't count the "
+                           f"change's {noun}s") from e
+    if missing := [n for n in ("LEFT_OUT", "FIX", "parse", sites) if not hasattr(lint, n)]:
+        raise GitError(f"{module} at {rev[:12]} has no {', '.join(missing)}, so the gate can't count the change's {noun}s")
     return lint
 
 
-def env_list(lint: types.ModuleType, rev: str) -> tuple[Counter, frozenset[str]]:
-    """(each file's allowed reads, the files marked settings registries) in the environment-read list at ``rev`` (none when
-    it has no readable list: the ratchet judges that)."""
+def counted_list(lint: types.ModuleType, slug: str, rev: str) -> tuple[Counter, frozenset[str]]:
+    """(each file's allowed count, the files it marks exempt) in counted lint ``slug``'s list at ``rev`` (none when it has no
+    readable list: the ratchet judges that)."""
     try:
-        return lint.parse(json.loads(git("show", f"{rev}:{REPO_ENV_LIST}")))
+        got = lint.parse(json.loads(git("show", f"{rev}:{counted_paths(slug)[1]}")))
     except (GitError, ValueError, AssertionError):
         return Counter(), frozenset()
+    return got if isinstance(got, tuple) else (got, frozenset())
 
 
-def env_lint(c: Change, base: str) -> tuple[list[str], list[str], list[str]]:
-    """(each direct environment read the change adds, ``file:line what``; each file whose reads grew, with its counts; each
-    entry of the repository's environment-read list a rename leaves behind): the base's environment-read lint's count of each
-    ``*.py`` file the change adds or modifies that the lint holds, before and after, per file as that lint counts.  A settings
-    registry is exempt: a ``settings.py``, or a file the change's base marks, so a mark that comes with the reads it would
-    exempt doesn't.  Of a grown file's reads, those on lines the change adds are named first.  A file that didn't grow fails
-    when the change's list leaves more of its reads uncovered than its base's list did (at a renamed file's old path, where
-    the base's registry or a path the lint left out covers them all).  Sets ``c.env_read``."""
-    lint = env_lint_at(base)
+def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict[str, list[str]] | None:
+    """The base's counted lint ``slug``'s count of each ``*.py`` file the change adds or modifies that the lint holds, before
+    and after, per file as that lint counts (None when the base has no such lint): the files it ``read``; each site the change
+    adds, ``file:line what`` (``new``); each file whose count ``grown``, with its counts; and each list entry a rename leaves
+    behind (``unmoved``).  A file the lint exempts (``is_registry``: the environment-read lint's settings registries) is
+    exempt as the change's base marks it, so a mark that comes with the sites it would exempt doesn't.  Of a grown file's
+    sites, those on lines the change adds are named first.  A file that didn't grow fails when the change's list leaves more
+    of its sites uncovered than its base's list did (at a renamed file's old path, where an exemption or a path the lint left
+    out covers them all)."""
+    lint = counted_lint_at(base, slug, sites, noun)
     if lint is None:
-        return [], [], []
+        return None
+    module, listed_at = counted_paths(slug)
+    count = getattr(lint, sites)
+    exempt = getattr(lint, "is_registry", lambda path, marks: False)
     sources = [s for s in changed_sources(c.lo, c.hi, tuple(lint.LEFT_OUT)) if s[0].endswith(".py")]
-    c.env_read = [path for path, *_ in sources]
+    out: dict[str, list[str]] = {"read": [path for path, *_ in sources], "new": [], "grown": [], "unmoved": []}
     if not sources:
-        return [], [], []
+        return out
     data = blobs({b for *_, lo, hi in sources for b in (lo, hi) if b})
-    (listed_before, marked_before), (listed, marked) = env_list(lint, c.lo), env_list(lint, c.hi)
-    new, grown, unmoved = [], [], []
+    (listed_before, marked_before), (listed, marked) = counted_list(lint, slug, c.lo), counted_list(lint, slug, c.hi)
+    new = []
     for f, o, lo, hi in sources:
-        if lint.is_registry(f, marked_before):
+        if exempt(f, marked_before):
             continue
-        was = lint.reads(data[lo].decode("utf-8", errors="replace")) if lo else []
-        now = lint.reads(data[hi].decode("utf-8", errors="replace"))
+        was = count(data[lo].decode("utf-8", errors="replace")) if lo else []
+        now = count(data[hi].decode("utf-8", errors="replace"))
         if len(now) > len(was):
             fresh = added_rows(c.lo, c.hi, f)
-            sites = sorted((line not in fresh, line, what) for line, what in now)
-            new += [(f, line, f"{f}:{line} {what}") for _, line, what in sites[:len(now) - len(was)]]
-            grown.append(f"{f} {len(was)} -> {len(now)}")
+            found = sorted((line not in fresh, line, what) for line, what in now)
+            new += [(f, line, f"{f}:{line} {what}") for _, line, what in found[:len(now) - len(was)]]
+            out["grown"].append(f"{f} {len(was)} -> {len(now)}")
             continue
-        allows = math.inf if lint.is_registry(f, marked) else listed[f]
-        allowed = (math.inf if o is None or o.startswith(tuple(lint.LEFT_OUT)) or lint.is_registry(o, marked_before)
+        allows = math.inf if exempt(f, marked) else listed[f]
+        allowed = (math.inf if o is None or o.startswith(tuple(lint.LEFT_OUT)) or exempt(o, marked_before)
                    else listed_before[o])
         if max(0, len(now) - allows) <= max(0, len(was) - allowed):
             continue
         if o != f and (listed[o] or o in marked):
             entries = [{"file": o, "count": listed[o]}] * bool(listed[o]) + [{"file": o, "registry": True}] * (o in marked)
-            unmoved += [f"{REPO_ENV_LIST}: move {json.dumps(e)} to {json.dumps(f)}, as the change moves the file "
-                        f"(`python3 {REPO_ENV_MODULE} --move {o} {f}`)" for e in entries]
+            out["unmoved"] += [f"{listed_at}: move {json.dumps(e)} to {json.dumps(f)}, as the change moves the file "
+                               f"(`python3 {module} --move {o} {f}`)" for e in entries]
         else:
-            unmoved.append(f"{REPO_ENV_LIST} allows {listed[f]} of {f}'s {len(now)} direct environment read(s), and allowed "
-                           f"{'all' if allowed == math.inf else allowed} of {o}'s before the change: keep its entry")
-    return [n for *_, n in sorted(new)], grown, unmoved
+            out["unmoved"].append(f"{listed_at} allows {listed[f]} of {f}'s {len(now)} {noun}(s), and allowed "
+                                  f"{'all' if allowed == math.inf else allowed} of {o}'s before the change: keep its entry")
+    out["new"] = [n for *_, n in sorted(new)]
+    return out
 
 
 def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
@@ -830,14 +842,14 @@ def judge(c: Change, base: str) -> None:
 
 
 def find(c: Change, base: str) -> None:
-    """The source checks on ``c``: ruff's findings, and its direct environment reads."""
+    """The source checks on ``c``: ruff's findings, and each counted lint's count."""
     c.ruff_new, c.ruff_grown, c.ruff_unmoved = source_lint(c, base)
-    c.env_new, c.env_grown, c.env_unmoved = env_lint(c, base)
+    c.counted = {slug: got for slug, sites, noun in COUNTED if (got := counted_lint(c, base, slug, sites, noun)) is not None}
 
 
 def lint_top(c: Change, base: str) -> None:
-    """The source checks on the top change ``c``, after ``judge``: a ruff finding or a direct environment read it adds, or a
-    list entry a rename leaves behind, fails a change that passed or touched nothing else, unless it is exempt (a revert; a
+    """The source checks on the top change ``c``, after ``judge``: a ruff finding or a counted lint's site it adds, or a list
+    entry a rename leaves behind, fails a change that passed or touched nothing else, unless it is exempt (a revert; a
     pure move, from what it adds but not from the entries it leaves behind, which would fail the repository's lints as
     surely); a change already failed or exempt keeps its verdict.  What the checks find is kept beside the verdict, in an entry
     of its own, so a change below the top never fails by it."""
@@ -847,9 +859,11 @@ def lint_top(c: Change, base: str) -> None:
     if not recall(c, p, FOUND):
         find(c, base)
         keep(c, p, FOUND)
-    if not (c.linted or c.env_read):
+    counted = [(slug, sites, noun, c.counted[slug]) for slug, sites, noun in COUNTED if slug in c.counted]
+    if not (c.linted or any(v["read"] for *_, v in counted)):
         return
-    new, unmoved = c.ruff_new + c.env_new, c.ruff_unmoved + c.env_unmoved
+    new = c.ruff_new + [n for *_, v in counted for n in v["new"]]
+    unmoved = c.ruff_unmoved + [u for *_, v in counted for u in v["unmoved"]]
     if (new or unmoved) and is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
         return
@@ -857,10 +871,12 @@ def lint_top(c: Change, base: str) -> None:
         if not unmoved:
             c.verdict, c.why = "exempt", f"a pure move ({MOVE_CHECK} certifies it)"
             return
-        c.ruff_new, c.env_new, new = [], [], []
+        c.ruff_new, new = [], []
+        for *_, v in counted:
+            v["new"] = []
     if not (new or unmoved):
-        notes = ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []) + (
-            [f"no direct environment read is new in the {len(c.env_read)} Python file(s) it changes"] if c.env_read else [])
+        notes = ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []) + [
+            f"no {noun} is new in the {len(v['read'])} Python file(s) it changes" for _, _, noun, v in counted if v["read"]]
         c.why = "; ".join(notes if c.verdict == "untouched" else [c.why, *notes])
         c.verdict = "passed"
         return
@@ -869,12 +885,16 @@ def lint_top(c: Change, base: str) -> None:
         why.append(f"adds {len(c.ruff_new)} ruff finding(s) to the Python it changes, under the base's root "
                    f"{REPO_RUFF_CONFIG} ({'; '.join(c.ruff_grown)}): fix the code (`ruff check --fix PATH` fixes some, F401 "
                    f"and F541 among them), or, where a rule is wrong for that line, say why in a `# noqa: CODE` on it")
-    if c.env_new:
-        why.append(f"adds {len(c.env_new)} direct environment read(s) to the Python it changes, as the base's "
-                   f"{REPO_ENV_MODULE} counts them ({'; '.join(c.env_grown)}): {env_lint_at(base).FIX} (a mark counts from "
-                   f"the change's base, so a new one lands before the reads it exempts)")
+    for slug, sites, noun, v in counted:
+        if v["new"]:
+            lint = counted_lint_at(base, slug, sites, noun)
+            why.append(f"adds {len(v['new'])} {noun}(s) to the Python it changes, as the base's {counted_paths(slug)[0]} "
+                       f"counts them ({'; '.join(v['grown'])}): {lint.FIX}"
+                       + (" (a mark counts from the change's base, so a new one lands before what it exempts)"
+                          if hasattr(lint, "is_registry") else ""))
     for moved, names, listed, module in ((c.ruff_unmoved, "findings", REPO_RUFF_LIST, REPO_RUFF_MODULE),
-                                         (c.env_unmoved, "direct environment reads", REPO_ENV_LIST, REPO_ENV_MODULE)):
+                                         *((v["unmoved"], f"{noun}s", counted_paths(slug)[1], counted_paths(slug)[0])
+                                           for slug, _, noun, v in counted)):
         if moved:
             why.append(f"renames Python whose {names} {listed} allows at the old path, and leaves {len(moved)} "
                        f"entr{'y' if len(moved) == 1 else 'ies'} behind: {module} counts a file's {names} under its path, "
@@ -887,7 +907,7 @@ def lint_top(c: Change, base: str) -> None:
 #: what `judge` decides, the fields a cached verdict restores
 JUDGED = ("verdict", "why", "before", "after", "touched", "lints", "fix", "noqa_added", "noqa_removed", "pooled")
 #: what `find` finds, kept in an entry of its own, which only the top change reads
-FOUND = ("linted", "env_read", "ruff_new", "ruff_grown", "ruff_unmoved", "env_new", "env_grown", "env_unmoved")
+FOUND = ("linted", "ruff_new", "ruff_grown", "ruff_unmoved", "counted")
 VERDICTS = ("untouched", "passed", "exempt", "failed")
 
 
