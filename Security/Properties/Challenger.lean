@@ -5,13 +5,12 @@ import SampledProofs.OneStage
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
 
-The one-theorem plan's ONE-4 (`note:proofs/20261026T0332Z-report-onethm`). A component whose draw reads live coins
-(`Core.Live`) decides at the coins it reads from the challenger's signed record in its evidence. These properties say
+A component whose draw reads live coins (`Core.Live`) decides at the coins it reads from the challenger's signed record in its evidence. These properties say
 what that record shows, for every input: the coins the challenger device drew, or a break the run carries.
 
 * `LiveAnswer`: what `Protocol.answer` accepts, `Protocol.answerAt` accepts at the coins its evidence's record shows.
   It follows from `Live.factors` and reads no device.
-* `CoinsFromLog`, ONE-4's target: what a component that reads its coins through that reader (`ReadsChallenger`)
+* `CoinsFromLog`, the target: what a component that reads its coins through that reader (`ReadsChallenger`)
   accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a session of the device released after `after`, a session the device's
@@ -25,10 +24,9 @@ released after it), and signs its record before any coin opens and its close ove
 session its ledger opens withheld (`OpensOn`, `remote.open_session(..., withhold=True)`) releases, while it runs, each
 coin's raw bytes and nothing else, and its commitment, salts and paths only once its close is signed, after the prover's
 commitments are in: nothing the prover sees before a coin depends on a coin not yet released, so no hiding premise on
-the root enters soundness (Daniel, 26 Oct). It
-also signs the auditor's ledger, line by line. `Signed` is all it signs under a key. One role per key: a key also used
-for another role is outside the model, and a `forgery` witness is then an EUF-CMA break only under that one-role
-reading.
+the root enters soundness. It also signs the auditor's ledger, line by line. `Signed` is all it signs under a key.
+One role per key: a key also used for another role is outside the model, and a `forgery` witness is then an EUF-CMA
+break only under that one-role reading.
 
 **The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a draw reads the concatenation
 of the coins it was released (`take`, in `SampledProofs.Draw.drawUnits`), with no hash between: no SHA-512-expanded
@@ -36,7 +34,7 @@ stream is read as uniform. In the causal game each coin is one release of `8 * C
 bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
 session's releases are those bits alone.
 
-**The break** (`Break`) is one adversary form's (Daniel, 26 Oct): it is no event of the run but what one fixed finder
+**The break** (`Break`) is one adversary form's: it is no event of the run but what one fixed finder
 outputs. `findBreak` is a computable function of the run (the record the evidence carries and the device's log), the
 same for every prover; its SHA-512 calls are one per string in `readHashed` and `deviceHashed` and an LMS verification
 per signature `drawCoins` checks, so at most a constant times the reader's and the device's own. It outputs a `Witness`,
@@ -379,7 +377,7 @@ after `after`, then `ξ` is the coins of `label` that a session of the device un
 session the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
 def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
 
-/-! ## ONE-4's target: a component's coins, from the device's log -/
+/-! ## The target: a component's coins, from the device's log -/
 
 /-- What a draw's coins are read under, all of it the verifier's: the challenger's key, the window (its open root,
 lowercase hex), the family, and what the coins were released after. -/
@@ -399,7 +397,7 @@ structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
   reads : ∀ p c d, source p c = some d → ∀ e ξ, L.coins p c e = .ok ξ →
     ∃ raw, drawCoins d.key d.window d.label d.after (record e) = .ok raw ∧ decode raw = ξ
 
-/-- **ONE-4: what a component accepts, it accepts at the coins its challenger device drew, or the run carries a
+/-- **What a component accepts, it accepts at the coins its challenger device drew, or the run carries a
 break.** For every protocol whose check reads its coins through the challenger's reader (`ReadsChallenger`) and every
 challenger device: if `answer` accepts `a`, `b`, `e`, they decode to `p`, `c`, `ev`, and `answerAt` accepts them at
 the coins `ξ` the evidence's record shows; and where `p` and `c` name a challenger (`source`), `ξ` is the decoding of
