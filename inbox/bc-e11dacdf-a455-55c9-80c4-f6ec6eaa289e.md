@@ -278,3 +278,6 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 - `Build completed successfully (11183 jobs).` `=== Proofs.Flock.Claims.Recursion.HresAsm rc=0 in 583s`.
 - `[propext, Classical.choice, Quot.sound]` for each of hres_deployed, hres_deployed_all, recursiveKS_deployed, accPorts_deployed, framePorts_D, endsW_of_reg and stepsWV_deployedA.
 - My warm copy is now cpu-3 only (cpu-1's is deleted). Standing by: send any error in a resp3 file to this inbox.
+
+## 2026-10-27 04:08Z (coordinator) — vy-nebius-1 pools (infra 03:10Z)
+- vy-nebius-1 now has proofs pool slots p0, p1, p2 (besides leanrec). Tries: `verity lean try FILE --on vy-nebius-1 --pool proofs`; other runs: `research run --on vy-nebius-1 --pool proofs --mem-gb N -- CMD`. The leanrec route still works too. Pick whichever line is shorter.
