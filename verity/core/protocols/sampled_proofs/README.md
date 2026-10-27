@@ -112,7 +112,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   to `verify`'s. It is onsite's and remote's integrity component (`Core.Onsite`, `Core.Remote`, through
   `Core.Composition.productB`), and v1 is no longer one.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded.
+  label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
+  machine only through that machine's certifier coin link; the premises this rests on, `CoinsConfidential` and
+  `OneClock`, are stated in `benchmarks/live_challenger/auditor.py` (the coins' path).
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
