@@ -30,10 +30,10 @@ The subprotocols run composed, as one protocol with one verdict
 every component accepts its own case, and the commitment binds all of theirs.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, the remote bandwidth audit, the wipe and the network certifier.
+  PoUS, the remote bandwidth audit and the network certifier.
 - **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs and PoUW.
 
-NCI is not a component of either: onsite checks the registration with it before composing.
+The wipe and NCI are not components of either yet.
 
 ## The vLLM integration
 
