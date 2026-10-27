@@ -175,8 +175,8 @@ theorem networkComponentBound_honest {ι : Type} {d : Accounting.Device ι} {α 
 
 /-- **The network certifier's error where its finder meets its collision premise**: its published `δ` at the
 strategy's SHA-512 calls plus its loss at the probability that the finder outputs a collision. -/
-theorem error_of_finderCR {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (a : Audit)
-    (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hcr : V.FinderCR a θ F c σ) :
+theorem error_of_finderCR {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+    (a : Accounting.Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hcr : V.FinderCR a θ F c σ) :
     V.error a θ F c σ = V.delta θ a (V.cost θ F c σ) + V.loss a θ ((V.live θ F c).collides sha512Msg a σ) := by
   simp [Vocab.error, Accounting.condError, hcr, Accounting.PeriodLive.error]
 
