@@ -57,3 +57,16 @@ and no proof needs a new argument. Its builds are da6d (~02:00Z) and records 68d
 - ONE9P / ONE9-C / ONE9-D2 / ONE9-E: merge RECDEC's branch when it builds, and read bindings per part.
 - VREFUSE (proofs) is auditing that each part's partition/program is pinned to V*'s statement of its index (report ~01:45Z).
   If it finds a gap, the fix is a compiled refusal, which ONE9-A stages.
+
+## 02:10Z from soundness: onsite keeps v2 until recursion's bridge is proved
+
+ONE9 put the recursive component (`VStar.Recursive.Sampled`, which dispatches to one-stage v2 or recursive) into ONE3B's
+single onsite **in place of** v2 (`cursor/soundness-one9-onsite1-5e2a` c55c887ef3). Ruling: **keep that swap on ONE9's branch;
+onsite composes v2 (ONE3B's #4772) until recursion's bridge (PRF-202) is proved.** That's Daniel's approved fallback
+(12:38 PM PDT), with go/no-go Wed 06:00Z, and v2 is what ONE3P's property and ONE8's leg are proved against. If the bridge
+lands by go/no-go, the swap lands with it, plus one lemma: `Sampled`'s one-stage branch accept ⇒ v2 accept, so ONE3P's and
+ONE8's results carry over. ONE9P states that lemma in G.
+- ONE9: rebase #4822 onto ONE3B's onsite as-is (v2), and keep the swap as a separate commit or PR stacked on it, marked only
+  after PRF-202's bridge passes. The registration-sending gap in `compose.py` is ONE3B's.
+- ONE9-A: `--stratified` is `some n`, with n the inner statement's population (`85-rec-reprice.sh:892`). Your `innerOk` refusal
+  computes n from the params' partition and program, never reads it from a param.
