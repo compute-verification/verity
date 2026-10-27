@@ -339,7 +339,7 @@ def _counter(label: bytes, n: int) -> bytes:
 
 
 def test_sketch_sha512_is_ra_codec_tensors_reference() -> None:
-    """Byte for byte with the numpy reference the GPU reader is held to: the signs, σ_j at the int8 extremes, of the
+    """Byte for byte with the numpy reference the pins were taken from: the signs, σ_j at the int8 extremes, of the
     block alone and under a one-byte, a repeated and a folded z, and y up to the last u64 index."""
     seeds = [hashlib.sha512(SKETCH_PINS + bytes([k])).digest() for k in range(2)]
     assert [hashlib.sha512(b"".join(receipts.sign_bits(s))).hexdigest() for s in seeds] == SKETCH_SIGN_BITS_SHA512
