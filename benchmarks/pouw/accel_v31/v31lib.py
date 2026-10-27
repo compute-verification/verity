@@ -15,7 +15,9 @@ Calls run in issue order on the device, each commit beside the next call's compu
 done, and a call's values can be opened until the call two after it is issued (`prove` waits for that call's commit
 first). Several Provers share a process (a domain slot each, up to 8; one ROW, one device). W' is formed again only when
 the weight-side seeds (dB, U, P) or the weights change, so v3.2's period coins form it once a period. Leaf p of call c is
-salted prf_salt(call_key(Ks, c), p), Ks the Prover's own.
+salted prf_salt(call_key(Ks, c), p), Ks the Prover's own. v31.cu's knobs come from the environment when a Prover is made:
+V31_LTW=1 has a call at S = 1 (L >= K) take cuBLASLt's int32 X W'^T in place of the protocol GEMM, its leaves the same
+bytes (the low halves); V31_PF, V31_CCTA, V31_SCHED and V31_CPRIO tune the commit beside the next call's compute.
 
     python3 v31lib.py gate --lib LIB [--q 64]   the GPU's words, pad and every tree level against the reference and the
                                                 verifier's verdicts on the GPU's own openings, honest and cheating calls
@@ -220,6 +222,9 @@ f-row8k 128 256 8192 256 8192 8192 pad none
 f-big 512 1024 8192 256 4096 1024 llm none
 c-skip 256 256 4096 256 1024 1024 pad skip:5
 c-forge 256 256 4096 256 1024 1024 llm forge:2:0.25
+f-k2048 256 384 2048 256 2048 2048 llm none
+c-skip-s1 256 256 2048 256 2048 1024 pad skip:3
+c-forge-s1 256 256 2048 256 2048 1024 llm forge:1:0.25
 """
 
 
