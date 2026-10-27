@@ -12,8 +12,8 @@ import Proofs.Pous.Accounting.Numbers
 One forward-only adversary against the two-layer chain on `Fin 8` (`wc = 64`, `m = 512`, `s = 1`, `D = 3`,
 `Q = 4`, `k = 2`, `W = 0`) answers two challenges with probability at least `2^-448` (`pr_attack`), while every
 statement below bounds it by `8·56⁴·2^-512 ≈ 2^-485.8` (`bound_lt`). Refuted: the pinned
-`Pous.Guarantees.InvExPostFactoTwoLayer`, the `q_inv = 0` case of `pebbling/InvertibleExPostFactoDraft.lean`'s
-`inv_ex_post_facto_bounded_inv` (`ForwardOnlyBound`), and that file's placeholder `ForwardBound`.
+`Pous.Guarantees.InvExPostFactoTwoLayer`, the `q_inv = 0` case of the N10 draft's
+`inv_ex_post_facto_bounded_inv` (`ForwardOnlyBound`), and the draft's placeholder `ForwardBound`.
 -/
 
 namespace PousP3Forward
@@ -139,7 +139,7 @@ namespace PousP3Forward
 open Pous Pous.Invertible Pous.Labelling
 open scoped ENNReal
 
-/-! ### Inverse-query counting (verbatim from `pebbling/InvertibleExPostFactoDraft.lean`) -/
+/-! ### Inverse-query counting (verbatim from the N10 draft) -/
 
 /-- Whether a P3 query is an inverse (`P⁻¹`) query. -/
 def isInv {n wc : ℕ} (q : (p3Model n wc).Qry) : Bool :=
@@ -483,7 +483,7 @@ theorem not_invExPostFactoTwoLayer : ¬ Pous.Guarantees.InvExPostFactoTwoLayer :
   exact absurd (pr_attack.trans hb) (not_le.2 bound_lt)
 
 set_option linter.unusedVariables false in
-/-- The `q_inv = 0` specialization of `pebbling/InvertibleExPostFactoDraft.lean`'s `inv_ex_post_facto_bounded_inv`,
+/-- The `q_inv = 0` specialization of the N10 draft's `inv_ex_post_facto_bounded_inv`,
 verbatim with `q_inv := 0`. -/
 def ForwardOnlyBound : Prop :=
   ∀ (n wc m s D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc)
@@ -506,7 +506,7 @@ theorem not_forwardOnlyBound : ¬ ForwardOnlyBound := by
 /-! ### The sibling's placeholder `ForwardBound` -/
 
 set_option linter.unusedVariables false in
-/-- `ForwardBound`, verbatim from `pebbling/InvertibleExPostFactoDraft.lean` (namespace `PousInvBoundedInv`). -/
+/-- `ForwardBound`, verbatim from the N10 draft (namespace `PousInvBoundedInv`). -/
 def ForwardBound (n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) : Prop :=
   ∀ (s' : ℕ) (A₁ : (p3Model n wc).Ω → Bits m) (A₂ : Bits m → Fin n → Prog (p3Model n wc) (Lab n wc)),
     (∀ σ c, (A₂ σ c).Bounded D Q) → (∀ σ c, InvBounded 0 (A₂ σ c)) → WhiteGreenHard G s' D k →
