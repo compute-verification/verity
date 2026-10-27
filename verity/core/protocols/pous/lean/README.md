@@ -3,7 +3,7 @@
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
 outside help (a deployment accounts for help: `../PROTOCOL.md`, "The problem"), are part of the security analysis,
-`Security/` (Daniel's Lean layout ruling, 5 Oct), listed below by their paths there. Declarations kept their names
+`Security/`, listed below by their paths there. Declarations kept their names
 (`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
 check file.
@@ -133,7 +133,7 @@ certificate, and the dense scheme at the 64 KB point, with the implementation's 
 the raw-storage refutations the `m1p` guarantees cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the
 non-vacuity theorems `complete`, `tight` and `tight_p16448`, and the refutation `not_meetsOn_b19_k88`), and the
 continuous audit's counting step (`PousContinuous.pr_misses_le`, `pr_misses_gt_le`). When a changed record lands on
-`main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
+`main`, a DM shows it (Verity's `AGENTS.md`).
 
 **Submissions** are one file that imports only the trusted layers (`Definitions.Pous`, `Definitions.Pous.Assumptions`,
 `Definitions.Pous.Guarantees`, `Proofs.Pous.Statements`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the

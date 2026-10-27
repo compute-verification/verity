@@ -18,12 +18,12 @@ one, with its seed and prefix-cache mode. If a request's output ids moved with t
 
 `WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
 server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
-(`drive_warden`) speaking cells through the warden's shim. The warden, the client and the server each run on cores of
-their own (`cpu_plan`), the warden under `warden_probe.py` (its every tick, publish and collection) and the host's load
+(`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
+their own (`cpu_plan`), the relay under `warden_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
-holds what the warden published (its deployment, certified records and connection log), the probes' records and the
-shim's record of every connection; `summarize` runs `warden_serve.py check` on it first. Which warden served (main's
-egress from the release a, or #3553's from the admission s) is the trace's meta.json `warden.egress_base`
+holds what the relay published (its deployment, certified records and connection log), the probes' records and the
+shim's record of every connection; `summarize` runs `warden_serve.py check` on it first. Which relay served (its
+egress from the release a, or from the admission s) is the trace's meta.json `warden.egress_base`
 (`egress_base`). Every trace's server also loads `vllm_accept_stamp`, which records each request's
 TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
 the wire.
@@ -36,7 +36,7 @@ request by `request_seed` from its id, which is the same in every trace, as `eng
 ``add_request``. Model Runner V2 draws a sampled token's Gumbel noise from Philox keyed by that seed and the token's
 position. `MODELS`:
 
-* ``llama32_1b``, G-A's model: unsloth/Llama-3.2-1B in bf16, vLLM's own attention.
+* ``llama32_1b``: unsloth/Llama-3.2-1B in bf16, vLLM's own attention.
 * ``llama31_8b_int8``: the int8_exact linears (``--quantization verity_int8``) with vLLM's own attention. The int8 attention
   (``attention_backend CUSTOM``) refuses a request whose query rows are neither its whole window nor one row
   (`verity_vllm.engine.int8_ops._requests`), which is every prefix-cache hit and every later prefill chunk.
@@ -155,13 +155,12 @@ class Model:
 
 MODELS = {
     # a decode step takes about 20 ms from 10 to 180 rows and whole prefills run at about 105k tokens/s; 8192 KV tokens
-    # serve about 7 requests/s (the 200-request smoke, r20261024-052926-14e8)
+    # serve about 7 requests/s
     "llama32_1b": Model("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "llama-3.2-1b",
                         "Llama-3.2-1B (G-A's LLAMA32_1B), bf16, the bi-eager engine, vLLM's own attention",
                         ("--dtype", "bfloat16"), {},
                         {"light": 4.0, "medium": 20.0, "heavy": 300.0, "chunked": 40.0, "smallkv": 10.0}),
-    # a decode step takes about 32 ms from 5 to 50 rows and whole prefills run at about 37k tokens/s (the 60-request smoke,
-    # r20261024-045656-4c66)
+    # a decode step takes about 32 ms from 5 to 50 rows and whole prefills run at about 37k tokens/s
     "llama31_8b_int8": Model("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "llama-3.1-8b-int8",
                              "Llama-3.1-8B INT8 (int8_exact linears, `--quantization verity_int8`), the bi-eager engine, "
                              "vLLM's own attention", ("--quantization", "verity_int8"), {"VERITY_INT8_PARTS": "linears"},
@@ -407,8 +406,8 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
     every thread of the process with it (numpy's among them), with the garbage collector off and every object made
-    before the drive frozen out of its reach (in art:d5380875's heavy trace, stalls every connection shared put 6,820 cell
-    reads 135-255 ms late), and the descriptor table grown to hold every connection before the first is opened
+    before the drive frozen out of its reach (stalls every connection shares put cell reads late), and the descriptor
+    table grown to hold every connection before the first is opened
     (`reserve_fds`). warden/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
     after the origin, ms]), every collection that still ran, and the table's size."""
     from warden_probe import Collections
@@ -502,7 +501,7 @@ def reserve_fds(n: int) -> int:
     """Grow the process's descriptor table to hold `n` descriptors (at most RLIMIT_NOFILE's soft limit) now; returns its
     size. The kernel grows it as descriptors pass 64, 128, 256 …, and in a process of more than one thread each growth
     waits for an RCU grace period (`expand_fdtable`), the growing thread asleep in D: on a loaded node, every connection's
-    cell read a bucket late (`warden_serve.reserve_fds`, #3919). The table never shrinks."""
+    cell read a bucket late (`warden_serve.reserve_fds`). The table never shrinks."""
     n = min(n, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
     fd = os.open(os.devnull, os.O_RDONLY)
     try:
@@ -537,8 +536,8 @@ def taskset(cpus: list[int] | None) -> list[str]:
 
 
 def egress_base(warden) -> str:
-    """Which point the warden's D counts from, read from its module's docstring: #3540's (main's) egress cell i is at
-    a + D + i/r from the release a (the ingress end), #3553's at s + D + i/r from the admission s."""
+    """Which point the relay's D counts from, read from its module's docstring: egress cell i at
+    a + D + i/r from the release a (the ingress end), or at s + D + i/r from the admission s."""
     doc = warden.__doc__ or ""
     if "before a + D" in doc:
         return "release a (the ingress end): egress cell i at a + D + i/r"
