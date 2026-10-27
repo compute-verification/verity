@@ -35,15 +35,15 @@ check" marks a rule no code enforces yet.
 
 ## Before you start: what's been tried
 
-For your line, version and mechanism, read the approaches (`campaigns/pouw/APPROACHES.md`), the technique catalog
-(`kb/sm120/tried-techniques.md`), then the attempts since: the harness's records (`research data select --kind
-kernel-attempt/v1`, or `ledger.py rows --refresh`), the panel (`kb/sm120/panel.md`) and the owning lane's checkpoints
-(`campaigns/pouw/rtx-pro/workers/*.md`). If it was tried and dropped, your hypothesis says what's different, or you pick
-something else. Claim a new approach family (a schedule, forming or mainloop, not a knob in your own kernel) with
-`research notes claim pouw/<slug> --lane <you> --hypothesis "..."`, which refuses one live under another lane or killed
-unless you pass `--reopen WHY`. Read your toolchain's and the node's sections of `kb/sm120/gotchas.md` before your first
-build. Every kernel directory, shared module and tool has one owner lane (`campaigns/pouw/rtx-pro/brief.md`): change
-theirs by a PR against their branch or a message, never an edit in their tree.
+For your line, version and mechanism, read `campaigns/pouw/APPROACHES.md`, the technique catalog
+(`kb/sm120/tried-techniques.md`), then the attempts since: `research data select --kind kernel-attempt/v1` (or
+`ledger.py rows --refresh`), `kb/sm120/panel.md` and the owning lane's checkpoints (`campaigns/pouw/rtx-pro/workers/*.md`).
+An idea tried and dropped comes back only with a hypothesis saying what's different. Claim a new approach family (a
+schedule, forming or mainloop, not a knob in your own kernel) with `research notes claim pouw/<slug> --lane <you>
+--hypothesis "..."`, which refuses one live under another lane or killed unless you pass `--reopen WHY`. Read your
+toolchain's and the node's sections of `kb/sm120/gotchas.md` before your first build. Each kernel directory, shared
+module and tool has one owner lane (`campaigns/pouw/rtx-pro/brief.md`): change theirs by a PR against their branch or a
+message, never an edit in their tree.
 
 ## Where the code goes
 
