@@ -17,7 +17,8 @@ the ones `LiveAt.CR` names (`TableCRZAt`, `LinkCRZCAt`), and no others:
   picks one of the `k = card (Ix τ)` uniformly with its own coins and runs it. Each, `extra` included (`extra_le`),
   succeeds at most `k` times as often as `B^τ` (`le_mix`), and `B^τ` costs what they do (`crFinder_cost_le`). `extra`
   is the vocabulary's replay finder in a deployment, so that one finder bounds both the play's collision event and
-  C-Flock's premises; `Claims.Finder.null` where nothing else is needed.
+  C-Flock's premises; `Claims.Finder.null` where nothing else is needed. `card_Ix_le` bounds `k` by the draws, the
+  tables, their levels and the committed positions, with no strategy in the bound.
 
 `LiveAt.CR_of_crFinder`: where `B^τ` succeeds with probability at most `β`, and `k β` is at most each kind's bound
 (`qF τ²/2^513`, `qS τ²/2^513`, and `t' τ / 2^256` for the link finders), `LiveAt.CR τ` holds. A link finder plays `τ`
@@ -160,6 +161,32 @@ noncomputable def crFam (τ : Strategy A.G) (extra : Claims.Finder) : A.Ix τ �
 run on its own coins. -/
 noncomputable def crFinder (τ : Strategy A.G) (extra : Claims.Finder) : Claims.Finder :=
   Claims.Finder.mix (A.crFam τ extra)
+
+/-- **The number of finders at `τ`, at no strategy**: where every table's schedule, at every draw, has at most `lv`
+levels, `k = card (Ix τ)` is at most `2 lv + 6` per table per draw, one per committed position, and one for `extra`. -/
+theorem card_Ix_le (τ : Strategy A.G) {lv : ℕ}
+    (hlv : ∀ (S : Finset (Fin n)) (j : Fin (nTab A.I)), (tableZHJ A.dj A.y₀ S j).sch.levels.length ≤ lv) :
+    Fintype.card (A.Ix τ) ≤ Fintype.card A.Ω * (nTab A.I * (2 * lv + 6)) + Fintype.card A.vb.Pos + 1 := by
+  classical
+  have e : Fintype.card (A.Ix τ) = Fintype.card (Option ((Σ ω : A.L.Ω, Σ j : Fin (A.tsAt τ ω).length,
+      TabIx ((A.tsAt τ ω).get j).sch.levels.length) ⊕ A.LinkPos)) := Fintype.card_congr (Equiv.refl _)
+  rw [e, Fintype.card_option, Fintype.card_sum, Fintype.card_sigma]
+  refine Nat.add_le_add_right (Nat.add_le_add ?_ ?_) 1
+  · refine (Finset.sum_le_sum (g := fun _ => nTab A.I * (2 * lv + 6)) fun ω _ => ?_).trans (le_of_eq ?_)
+    · have hl : (A.tsAt τ ω).length = nTab A.I := planZHJ_length _ _ _ _
+      rw [Fintype.card_sigma]
+      refine (Finset.sum_le_sum (g := fun _ => 2 * lv + 6) fun j _ => ?_).trans (le_of_eq ?_)
+      · have hle : ((A.tsAt τ ω).get j).sch.levels.length ≤ lv := by
+          have hg : (A.tsAt τ ω).get j = tableZHJ A.dj A.y₀ (A.L.draw ω) (Fin.cast hl j) := List.get_ofFn _ _
+          rw [hg]
+          exact hlv _ _
+        generalize ((A.tsAt τ ω).get j).sch.levels.length = l at hle ⊢
+        simp only [TabIx, Fintype.card_sum, Fintype.card_prod, Fintype.card_fin, Fintype.card_unit]
+        omega
+      · rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul, hl]
+    · rw [Finset.sum_const, Finset.card_univ, smul_eq_mul]
+      all_goals rfl
+  · convert Fintype.card_subtype_le _
 
 /-- **`extra` succeeds at most `k` times as often as `B^τ`.** -/
 theorem extra_le (τ : Strategy A.G) (extra : Claims.Finder) :
