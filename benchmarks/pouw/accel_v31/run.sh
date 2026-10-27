@@ -15,7 +15,7 @@
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
-# cprio (lo), carve (100), dyn (1), wrap (2), wcw (256), ccta (1) (v31.cu's Knobs) and nreg (the GEMM's register cap, a
+# cprio (lo), carve (100), dyn (1), wrap (2), wcw (256), ccta (1), pf (0) (v31.cu's Knobs) and nreg (the GEMM's register cap, a
 # build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict opens (default
 # 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -136,8 +136,9 @@ if [ "$MODE" = bench ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
       n=$(knob "$v" nreg "")
       mkdir -p "$W/bench/$tag"
       V31_CPRIO=$(knob "$v" cprio lo) V31_CARVE=$(knob "$v" carve 100) V31_DYN=$(knob "$v" dyn 1) V31_WRAP=$(knob "$v" wrap 2) \
-        V31_WCW=$(knob "$v" wcw 256) V31_CCTA=$(knob "$v" ccta 1) "$W/v31${n:+-n$n}" bench "$REPS" "$W/bench/$tag" "$W/params" \
-        "$LP" "$T" "$(knob "$v" row 8192)" $SHAPES > "$O/bench-$tag.jsonl" 2> "$O/bench-$tag.err"
+        V31_WCW=$(knob "$v" wcw 256) V31_CCTA=$(knob "$v" ccta 1) V31_PF=$(knob "$v" pf 0) \
+        "$W/v31${n:+-n$n}" bench "$REPS" "$W/bench/$tag" "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" $SHAPES \
+        > "$O/bench-$tag.jsonl" 2> "$O/bench-$tag.err"
       echo "bench $tag rc $?" >> "$O/rc.txt"
     done
     kill $smi'

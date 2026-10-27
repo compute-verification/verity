@@ -732,32 +732,54 @@ __global__ void forge_kernel(uint16_t* words, int* O, int S, int s0, int stride,
 }
 
 // ---------------------------------------------------------------- the committed rows
+// pf (hash_after_block's prefetch of the next 128-byte block, V31_PF): 1 into L1, 2 into L2
+DEV void pf_to(const uint8_t* p, u32 pf) {
+  if (pf == 2) asm volatile("prefetch.global.L2 [%0];" ::"l"(p));
+  else pf_l1(p);
+}
+struct CRow {
+  const uint8_t* p;
+  u32 pfm;
+  DEV uint4 ld16(u32 off) const { return ldg16(p + off); }
+  DEV void pf(u32 off) const { pf_to(p + off, pfm); }
+};
 // O's row h of a tile: cells [h ROW / 4, (h + 1) ROW / 4) in the tile's row-major order, read from the m x N output
 struct ORow {
   const uint8_t* base;   // the tile's first cell
   u64 stride;            // N 4
-  u32 c0;
-  DEV uint4 ld16(u32 off) const {
+  u32 c0, pfm;
+  DEV const uint8_t* at(u32 off) const {
     const u32 c = c0 + off / 4;
-    return ldg16(base + (c >> 7) * stride + (c & 127) * 4);
+    return base + (c >> 7) * stride + (c & 127) * 4;
   }
-  DEV void pf(u32) const {}
+  DEV uint4 ld16(u32 off) const { return ldg16(at(off)); }
+  DEV void pf(u32 off) const { pf_to(at(off), pfm); }
 };
 // leaf pos: tile pos / LPT; j = pos % LPT < S ROW_W a words row (segment j / ROW_W), else O's row j - S ROW_W
 struct V31Row {
   const uint8_t* words;
   const uint8_t* O;
   u64 lpt, srw, N, tiles_n;
-  u32 row, S;
+  u32 row, S, pf;
   DEV void digest(u64 pos, u64* x) const {
     const u64 t = pos / lpt, j = pos % lpt;
     if (j < srw) {
-      hash_after_block(C.mid_P, Contig{words + t * S * 32768ull + j * row}, row, x);
+      hash_after_block(C.mid_P, CRow{words + t * S * 32768ull + j * row, pf}, row, x, pf != 0);
     } else {
       const u64 tm = t / tiles_n, tn = t % tiles_n;
-      hash_after_block(C.mid_P, ORow{O + (tm * TILE * N + tn * TILE) * 4, N * 4, (u32)((j - srw) * row / 4)}, row, x);
+      hash_after_block(C.mid_P, ORow{O + (tm * TILE * N + tn * TILE) * 4, N * 4, (u32)((j - srw) * row / 4), pf}, row, x, pf != 0);
     }
   }
+};
+// timing only (the bench's leaf_nomem arm): a row's bytes made in registers, V31Row's compressions without its loads
+struct NoMemSrc {
+  u32 seed;
+  DEV uint4 ld16(u32 off) const { return make_uint4(seed ^ off, seed + off, seed * 3u ^ off, off); }
+  DEV void pf(u32) const {}
+};
+struct NoMemRow {
+  u32 row;
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, NoMemSrc{(u32)pos}, row, x); }
 };
 
 // ---------------------------------------------------------------- the commit in at most cap CTAs an SM
@@ -1020,10 +1042,11 @@ static std::string env_str(const char* name, const char* dflt) {
 // driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
 // its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
 // the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel), V31_WCW its columns a CTA (256 where N allows, or 128);
-// V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small).
+// V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
+// V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
-      ccta = env_int("V31_CCTA", 1);
+      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1033,7 +1056,7 @@ static void set_carveout(int pct) {
                       (const void*)form_b_kernel,      (const void*)bits_kernel,         (const void*)noise_kernel,
                       (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
                       (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
-                      (const void*)leaf_persist<V31Row>};
+                      (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
 }
 
@@ -1146,7 +1169,7 @@ struct Ctx {
   }
   V31Row rowsrc(int b) const {
     return V31Row{reinterpret_cast<const uint8_t*>(words[b]), reinterpret_cast<const uint8_t*>(O[b]), (u64)lpt,
-                  (u64)S * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)S};
+                  (u64)S * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)S, (u32)kn.pf};
   }
   void coins(cudaStream_t st) {
     const u64 ba = (u64)m * (kb64 / 64), bb = (u64)n * (kb64 / 64);
@@ -1195,16 +1218,18 @@ struct Ctx {
     const u64 nvb = (cm.width + SMALL_THREADS - 1) / SMALL_THREADS;
     salt_persist<<<persist_grid(nvb), SMALL_THREADS, 0, st>>>(persist(nvb), cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels);
   }
-  void leaves_nodes(cudaStream_t st, int b) {
+  template <class Row>
+  void leaves_nodes_of(cudaStream_t st, const Row& rows) {
     if (!kn.ccta) {
-      cm.leaves(rowsrc(b), st);
+      cm.leaves(rows, st);
     } else {
       const u64 nvb = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
-      leaf_persist<V31Row><<<persist_grid(nvb), SMALL_THREADS, 0, st>>>(persist(nvb), cm.dom, rowsrc(b), cm.S, cm.F, cm.n,
-                                                                        cm.width, cm.levels);
+      leaf_persist<Row><<<persist_grid(nvb), SMALL_THREADS, 0, st>>>(persist(nvb), cm.dom, rows, cm.S, cm.F, cm.n, cm.width,
+                                                                     cm.levels);
     }
     cm.nodes(st);
   }
+  void leaves_nodes(cudaStream_t st, int b) { leaves_nodes_of(st, rowsrc(b)); }
   void commit(cudaStream_t st, int b) {
     salts(st);
     leaves_nodes(st, b);
@@ -1250,7 +1275,8 @@ static void kernel_attrs(FILE* f) {
                       {"wrap", (const void*)wrap_kernel}, {"wrap2_128", (const void*)wrap2_kernel<128>},
                       {"wrap2_256", (const void*)wrap2_kernel<256>}, {"bits", (const void*)bits_kernel},
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
-                      {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist}};
+                      {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist},
+                      {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>}};
   fprintf(f, "{");
   for (size_t i = 0; i < sizeof ks / sizeof ks[0]; i++) {
     cudaFuncAttributes a;
@@ -1408,6 +1434,10 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
         {"commit", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.commit(s, 0); }},
         {"call", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) { c.compute(s, 0); c.commit(s, 0); } }},
         {"ovl", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.call_ovl(s); c.ovl_drain(s); }},
+        // the commit's parts: the salt phase, the leaves and nodes, and the leaves' compressions without their rows' loads
+        {"salt", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.salts(s); }},
+        {"leaf", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.leaves_nodes(s, 0); }},
+        {"leaf_nomem", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.leaves_nodes_of(s, NoMemRow{(u32)c.row}); }},
     };
     const gk::Timing tm = gk::timed_items(arms, reps, c.s0, nv);
     CK(cudaGetLastError());
@@ -1435,10 +1465,10 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     printf("{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"lp\": %d, \"t\": %d, \"row\": %d, \"S\": %d, \"dz\": %d, \"dy\": %d, "
            "\"leaves\": %llu, \"gpu\": \"%s\", \"sms\": %d, \"grid\": %d, \"copies\": %d, \"wrap_rate_A\": %.6f, \"wrap_rate_B\": %.6f, "
            "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, \"steady\": %s, "
-           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"maxnreg\": %d, \"arms\": {",
+           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"arms\": {",
            name, m, n, k, lp, t, row, c.S, c.dz, c.dy, (unsigned long long)c.leaves, prop.name, c.nsm, c.grid, c.nb,
            (double)wa / ((double)m * k), (double)wbn / ((double)n * k), lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand,
-           tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str(), c.kn.wrap, c.wcw, c.kn.ccta, V31_MAXNREG);
+           tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str(), c.kn.wrap, c.wcw, c.kn.ccta, c.kn.pf, V31_MAXNREG);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     printf("}, \"gamma_call\": %.4f, \"gamma_ovl\": %.4f, \"gamma_gemm\": %.4f, \"plain_over_lt\": %.4f, \"kernels\": ", med[7] / med[0],
