@@ -17,16 +17,11 @@ their reads to these declarations.
 """
 from __future__ import annotations
 
-from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, not_zero, one, present, words
+from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, ints, not_zero, one, present, words
 
 #: the files that run outside the tree, relative to this one
 STANDALONE = ("pearl_c_sm120/run.py", "pearl_c_sm90/run.py", "pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
               "harness/sass_gate.py", "harness/ieee_pin.py")
-
-
-def ints(raw: str) -> tuple[int, ...]:
-    """Comma-separated integers (``1,8,32,128``)."""
-    return tuple(int(x) for x in raw.split(","))
 
 
 def places(raw: str) -> frozenset[str]:

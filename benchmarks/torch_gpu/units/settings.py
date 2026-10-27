@@ -8,13 +8,7 @@ session.sh's own variables (CUDA, CUBIN_ONLY, REPLAY, ROWS, VERITY_BENCH_VENV, L
 """
 from __future__ import annotations
 
-from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, not_zero, one, present
-
-
-def ints(raw: str) -> tuple[int, ...]:
-    """Comma-separated integers, in order (``1,7,128``)."""
-    return tuple(int(x) for x in raw.split(","))
-
+from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, ints, not_zero, one, present
 
 REGISTRY = Registry(
     __file__, ("UNITS_",),

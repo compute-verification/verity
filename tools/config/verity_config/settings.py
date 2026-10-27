@@ -103,6 +103,11 @@ def csv(raw: str) -> tuple[str, ...]:
     return tuple(x for x in raw.split(",") if x)
 
 
+def ints(raw: str) -> tuple[int, ...]:
+    """Comma-separated integers, in order (``1,7,128``)."""
+    return tuple(int(x) for x in raw.split(","))
+
+
 def paths(raw: str) -> tuple[str, ...]:
     """A list of paths separated by ``os.pathsep``, as ``PATH`` is, in order; empty items are dropped."""
     return tuple(x for x in raw.split(os.pathsep) if x)
