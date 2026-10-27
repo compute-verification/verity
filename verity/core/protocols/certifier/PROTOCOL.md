@@ -8,7 +8,12 @@ every frame are fixed by the declared Program.
 
 - **Trust.** The certifier is auditor-trusted: it runs on a host the prover doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
-  named assumption `trusted-host`.
+  named assumption `trusted-host`. The challenger's live coins reach it on two more premises, stated with the coins'
+  path in `benchmarks/live_challenger/auditor.py` and `verity/core/protocols/sampled_proofs/README.md`:
+  `CoinsConfidential` (the challenger's coins reach the certifier only inside auditor-trusted hosts, `trusted-host`, and
+  no prover-controlled host reads a coin before the certifier admits it) and `OneClock` (the challenger's release times
+  and the certifier's ingress ticks are read on one clock; on two devices, within 1.03 s of each other). No Lean
+  statement reads either yet.
 - **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the sampling block and
   the record's digest hidden under a salt the certifier draws ("Network certificates").
 - **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The certifier (`grid`)"), the set of clock-sync
