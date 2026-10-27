@@ -129,7 +129,7 @@ certified, the I/O, the audit and the salt accept.
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
-        [--out-shape SHAPE.json]
+        [--out-shape SHAPE.json] [--attest [--period M]]
 
 - `keys` makes an LMS key (`seed`, 0600, `public`, its tree, and its leaf state `state.json`), or loads one, and writes
   `public.json`, the public key a deployment record carries. The certifier's key and the challenger's are each one.
@@ -208,6 +208,9 @@ period's. The client keeps each liveness record that verifies under the device's
 `liveness.jsonl`. `check` reads every record, clock and out value as a record of its period in a live block
 (`attested_check`, `period_root.refusal`), and the client's liveness records as the run's, but gives no N2 verdict
 and asks no salt (N2 reads certificates; `NO_N2_ATTEST`), so a device-attest run is refused until N2's period form.
+`rehearse --attest` makes the device in its scratch directory at `--height`, draws the deployment's hash, and runs
+every strategy on it; it exits 0 when every run is refused, every one's records are read in their periods
+(``attest`` accepts) and the audit accepts honest, token and byte (`as_expected`).
 """
 
 from __future__ import annotations
@@ -1789,11 +1792,22 @@ def table(result: dict) -> str:
 
 # The rehearsal.
 
+def as_expected(strategy: str, result: dict) -> bool:
+    """Whether a rehearsed run's `check` came out as its strategy expects: accepted for the strategies of `ACCEPTED`,
+    refused for the rest; on device-attest (``attest``) refused for every one (`NO_N2_ATTEST`), with every record read
+    in its period and, for the strategies of `ACCEPTED`, the audit accepting."""
+    if "attest" not in result:
+        return result["verdict"] == ("accepted" if strategy in ACCEPTED else "refused")
+    return result["verdict"] == "refused" and result["attest"]["accepted"] and \
+        (strategy not in ACCEPTED or result["audit_accepted"])
+
+
 def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, challenger_dir: Path,
-                 api_key_env: str | None, start_in: float, out_shape: dict | None = None) -> dict:
-    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest, and `--out-shape`, the
-    run's ``out-shape.json``, when given), then `client` (into the run's `client/`), then `check` while `serve` serves
-    reveals."""
+                 api_key_env: str | None, start_in: float, out_shape: dict | None = None,
+                 attest: Sequence[str] = ()) -> dict:
+    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest, `--out-shape`, the
+    run's ``out-shape.json``, when given, and `attest`, its device-attest flags), then `client` (into the run's
+    `client/`), then `check` while `serve` serves reveals."""
     run = out / strategy
     run.mkdir(parents=True, exist_ok=True)
     if out_shape is not None:
@@ -1805,7 +1819,7 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
                    "--session", secrets.token_hex(32), "--start-in", str(start_in)]
     served += (["--tamper", strategy] if strategy != "honest" else []) + \
         (["--api-key-env", api_key_env] if api_key_env else []) + \
-        (["--out-shape", str(run / "out-shape.json")] if out_shape is not None else [])
+        (["--out-shape", str(run / "out-shape.json")] if out_shape is not None else []) + list(attest)
     with open(run / "serve.log", "w") as log:
         proc = subprocess.Popen(served, stdout=subprocess.PIPE, stderr=log, text=True)
         try:
@@ -1893,6 +1907,12 @@ def rehearse(args) -> int:
     certifier_dir, challenger_dir = scratch / "certifier", scratch / "challenger"
     for d in (certifier_dir, challenger_dir):
         load_key(d, args.height)
+    attest: list[str] = []
+    if args.attest:
+        deployment = secrets.token_bytes(lms.DEPLOYMENT_BYTES)
+        issue_party_key(scratch / "device", deployment, args.height)
+        attest = ["--attest", deployment.hex(), "--device", str(scratch / "device"), "--height", str(args.height),
+                  *(["--period", str(args.period)] if args.period else [])]
     started: list = []
     try:
         url = args.upstream
@@ -1905,7 +1925,8 @@ def rehearse(args) -> int:
         (out / "plan.json").write_text(json.dumps(plan))
         (out / "calibration.json").write_text(json.dumps(report))
         results = {s: rehearse_one(out, s, url=url, certifier_dir=certifier_dir, challenger_dir=challenger_dir,
-                                   api_key_env=args.api_key_env, start_in=args.start_in, out_shape=args.out_shape)
+                                   api_key_env=args.api_key_env, start_in=args.start_in, out_shape=args.out_shape,
+                                   attest=attest)
                    for s in args.strategies.split(",")}
     finally:
         shutil.rmtree(scratch)
@@ -1917,14 +1938,16 @@ def rehearse(args) -> int:
                "served": plan.get("served"), "varied": plan.get("varied"), "windows": plan["windows"],
                "profile": plan["occupancy"]["kind"],
                "compact": plan.get("compact"),
+               "attest": bool(attest),
                "runs": {s: {k: r.get(k) for k in ("verdict", "network_verdict", "audit_accepted", "salt_accepted",
-                                                  "salt_again", "certified_accepted", "io", "exit", "egress_bytes")}
+                                                  "salt_again", "certified_accepted", "io", "exit", "egress_bytes",
+                                                  "attest")}
                         | {"windows": [{k: row.get(k) for k in ("window", "n2", "served_counts", "certified", "salt",
                                                                  "audit")}
                                        for row in r["rows"]]}
                         for s, r in results.items()}}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
-    ok = all(r["verdict"] == ("accepted" if s in ACCEPTED else "refused") for s, r in results.items())
+    ok = all(as_expected(s, r) for s, r in results.items())
     print(f"rehearsal {'as expected' if ok else 'NOT as expected'}: "
           f"{ {s: r['verdict'] for s, r in results.items()} }", flush=True)
     return 0 if ok else 1
@@ -2025,8 +2048,13 @@ def parser() -> argparse.ArgumentParser:
     x.add_argument("--expect", choices=("accepted", "refused"))
     r.add_argument("--vllm", metavar="MODEL", help="start vLLM for MODEL on this host's GPU instead of --upstream")
     r.add_argument("--vllm-cpus", help="with --vllm: its CPUs (taskset -c)")
-    r.add_argument("--height", type=int, default=HEIGHT, help="the LMS keys' tree height")
+    r.add_argument("--height", type=int, default=HEIGHT, help="the LMS keys' tree height (and the device's, --attest)")
     r.add_argument("--strategies", default=",".join(STRATEGIES))
+    r.add_argument("--attest", action="store_true",
+                   help="device-attest: a device made in the scratch directory, a drawn deployment hash, and every "
+                        "strategy's serve --attest on it")
+    r.add_argument("--period", type=int, help="with --attest: link-windows a certification period (default: the "
+                                              "plan's)")
     return ap
 
 

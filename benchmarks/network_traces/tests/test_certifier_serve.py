@@ -645,6 +645,53 @@ def test_the_out_shape_reaches_each_rehearsed_serve_and_is_an_out_shape(tmp_path
     assert cs.parser().parse_args(seen[0][2:]).out_shape == shape
 
 
+def test_rehearse_attest_makes_one_device_and_each_strategys_serve_certifies_on_it(tmp_path, monkeypatch):
+    """`rehearse --attest` makes a device in its scratch directory, draws the deployment's hash, and hands every
+    strategy's `serve` the same `--attest`, `--device`, `--height` and `--period`, under which the device holds the
+    network certifier's lower key; the device is gone once the rehearsal ends."""
+    from verity.core.protocols.sampled_proofs.one_stage import verifier
+
+    monkeypatch.setenv("VERITY_NETWORK_RECORDS_EXE", "unused")
+    monkeypatch.setattr(verifier, "executable", lambda: None)
+    plan = {"live_model": "m", "windows": 2, "occupancy": {"kind": "planned"}}
+    monkeypatch.setattr(cs, "plan_of", lambda args, url: ({}, {}, plan))
+    serve = ["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o", "--link", "h:1",
+             "--reveal", "h:2", "--key", "k", "--challenger-key", "c", "--session", "00"]
+    seen, devices = {}, set()
+
+    def one(out, strategy, *, attest, **_):
+        args = cs.parser().parse_args([*serve, *attest])
+        devices.add(args.device)
+        party = cs.party_key(args.device, bytes.fromhex(args.attest), args.height)
+        seen[strategy] = (args.attest, args.height, args.period, party.identity, party.party)
+        return {"verdict": "refused", "attest": {"accepted": True}, "audit_accepted": True, "rows": []}
+
+    monkeypatch.setattr(cs, "rehearse_one", one)
+    assert cs.main(["rehearse", "--upstream", "http://127.0.0.1:1", "--out", str(tmp_path / "o"), "--attest",
+                    "--height", "4", "--period", "1", "--strategies", "honest,late"]) == 0
+    assert seen.keys() == {"honest", "late"} and len(set(seen.values())) == 1 and len(devices) == 1
+    deployment, height, period, _, party = seen["honest"]
+    assert (len(bytes.fromhex(deployment)), height, period, party) == (cs.lms.DEPLOYMENT_BYTES, 4, 1, cs.PR.PARTY)
+    assert not devices.pop().exists()
+    assert json.loads((tmp_path / "o" / "summary.json").read_text())["attest"] is True
+
+
+def test_a_rehearsal_on_device_attest_expects_every_run_refused_and_read_in_its_periods():
+    """`as_expected`: without ``attest`` honest is accepted and late refused; on device-attest every run is refused
+    (N2 gives no verdict), each one's records read in their periods, and honest's audit accepting."""
+    def result(verdict, attest=None, audit=True):
+        return {"verdict": verdict, "audit_accepted": audit} | \
+            ({} if attest is None else {"attest": {"accepted": attest}})
+
+    expect = cs.as_expected
+    assert expect("honest", result("accepted")) and expect("late", result("refused"))
+    assert not expect("honest", result("refused")) and not expect("late", result("accepted"))
+    assert expect("honest", result("refused", True)) and expect("late", result("refused", True, False))
+    assert not expect("honest", result("accepted", True))
+    assert not expect("honest", result("refused", False)) and not expect("late", result("refused", False))
+    assert not expect("honest", result("refused", True, False))
+
+
 DEPLOYMENT = hashlib.sha512(b"a certifier-serve deployment").digest()
 PERIOD = 1
 
