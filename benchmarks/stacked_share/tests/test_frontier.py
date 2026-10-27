@@ -1,5 +1,5 @@
 """`frontier.py` without the registry: the composition of Llama-3.1-8B held to the int8 census's measured units (its callees'
-units an instance as the census's Program has them, art:dc25549e), each model's layer kinds and weights against its published
+units an instance as the census's Program has them), each model's layer kinds and weights against its published
 size, and the table, its serving arithmetic and its markdown on synthetic atoms for every model."""
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ S, P = SPEC["workload"]["context"], SPEC["workload"]["prompt"]
 
 
 def census_atoms() -> dict:
-    """The 8B Program's callees' units an instance (units-8b.json of art:dc25549e: each callee's units over its instances), and
+    """The 8B Program's callees' units an instance (units-8b.json: each callee's units over its instances), and
     the attention's fitted forms the census's coefficients give (r0 = H const, b_q = H slope of the row; w0 = G const,
     b_kv = G slope of the window)."""
     eps = 1e-05
@@ -175,7 +175,7 @@ def test_the_table_on_synthetic_atoms():
 
 
 def test_data_products():
-    """#4622's nonlinear units: a product of two run values is a unit. The attention row's QKᵀ and PV, 2 D a head-key, are
+    """Nonlinear units: a product of two run values is a unit. The attention row's QKᵀ and PV, 2 D a head-key, are
     products_pass.py's measured 16,384 for Int8LutAttentionRow{D=128,S=64}; DSA's indexer dots and linear attention's chunked
     prefill products are charged too; SwiGLU's, MoE's combine and the gates are already fp roundings, not charged twice."""
     assert F.E_WORD == {"conjectured": 1_145_562, "best found": 50_674_272}

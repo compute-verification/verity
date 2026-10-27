@@ -1,7 +1,7 @@
 import Mathlib
 import Proofs.Accounting.Bandwidth.Ticked
 import Proofs.Accounting.Actual.Transducer
-import Definitions.Accounting.Actual.Source
+import Proofs.Accounting.Defs.Actual.Source
 import Definitions.Accounting.Guarantees.Bandwidth.Causal
 
 /-!

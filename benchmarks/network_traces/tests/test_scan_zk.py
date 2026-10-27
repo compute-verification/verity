@@ -49,8 +49,8 @@ import warden_serve as WS
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
     h = sz.host(tmp_path)
     at, T, A = h.at, sz.PARAMS.window, sz.W63.A
-    assert at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 22}
-    assert [s.q for s in at.chain.scan[23].slots] == [5, 2, 3, 4]
+    assert at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
+    assert [s.q for s in at.chain.scan[29].slots] == [5, 2, 3, 4]
     honest, chain, tampered = ({m.name: m for m in h.rounds[k]} for k in ("honest", "chain", "tampered"))
     first, ing, eg = (honest[k] for k in ("first", "ingress-0", "egress-0"))
     assert [(m.base, m.n) for m in (first, ing, eg)] == [(0, 1), (1, T - 1), (T, T)]
@@ -156,7 +156,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
     assert set(h.rounds) == {"honest", "chain", "tampered"} and h.at.run_id == "00" * 32
-    assert "warden run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 22}
+    assert "warden run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.at.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.at.tampered.key_of == "the driver's own"
     syn = sz.host(tmp_path / "syn")
@@ -386,7 +386,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
-        "forged": ("reject", "window 0: certificates"), "tampered": ("reject", "window 0: registration"),
+        "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
+                   "connection)"), "tampered": ("reject", "window 0: registration"),
         "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):

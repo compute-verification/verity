@@ -1,4 +1,4 @@
-"""IR-registered primitives over the tensor-core semantics: the BF16 k16 and E4M3 k32 accumulator steps and the
+"""Registered primitives over the tensor-core semantics: the BF16 k16 and E4M3 k32 accumulator steps and the
 BF16/E4M3/FP32 casts.
 
 Encodings: bf16 = `Value<16>`, e4m3 = `Value<8>`, f32 = `Value<32>`.  Every evaluator is total on encodings.  The

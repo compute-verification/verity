@@ -53,6 +53,9 @@ OUT_BITS = 16
 #: what `horizon_leak`'s K rests on until its two per-window inputs are discharged
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
+#: K's jitter term, the periods' own at their jitter bound (1, so 0 bits): J (`NetTiming.JitterBounded`) assumes it,
+#: and the certifier doesn't meet J at that bound: an offset the prover chooses within a bucket reaches the client
+JITTER = "assumed (J)"
 
 
 def onsite_components(source: str | None = None) -> list[str]:
@@ -247,7 +250,7 @@ def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: i
     number yet (``e_for_eps_2delta`` is the per-window error at which that sum stays within 2δ). The schedule, cell,
     free-input and jitter terms are the periods' own, scaled to ``count``. ``share`` is K over the period's registered
     output bits, 16 a unit. #4367 is conditional on its two per-window inputs (`HORIZON_CONDITION`), so this K is cited
-    as conditional."""
+    as conditional, and its jitter term as `JITTER` (``jitter_term``)."""
     count = len(periods) if count is None else count
     audits = [a for p in periods for a in p["audits"]]
     q = min(Fraction(a["drawn"], a["units"]) for a in audits)
@@ -263,7 +266,7 @@ def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: i
     windows = math.ceil(scale * len(audits))
     return {"periods": count, "windows": windows, "units": N, "q": str(q), "Fmax": fmax, "K": K, "terms": terms,
             "share": K / (OUT_BITS * N), "eps": f"{delta} + Σ_i (e_i + e'_i) over {windows} windows",
-            "e_for_eps_2delta": str(delta / windows), "conditional": HORIZON_CONDITION}
+            "e_for_eps_2delta": str(delta / windows), "conditional": HORIZON_CONDITION, "jitter_term": JITTER}
 
 
 def fleet(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: int, machines: int) -> dict[str, Any]:
@@ -300,7 +303,7 @@ def communication(reports: Sequence[Mapping[str, Any]], period_s: float, spans: 
     return out
 
 
-__all__ = ["CERTIFIER", "COMMITTER", "HORIZON_CONDITION", "NCI", "NCI_EVIDENCE", "NCI_PARAMS", "NO_CASE", "OUT_BITS",
-           "PORTS", "PROTOCOL", "STUB_CASE", "bind", "communication", "component_of", "composed", "fleet",
+__all__ = ["CERTIFIER", "COMMITTER", "HORIZON_CONDITION", "JITTER", "NCI", "NCI_EVIDENCE", "NCI_PARAMS", "NO_CASE",
+           "OUT_BITS", "PORTS", "PROTOCOL", "STUB_CASE", "bind", "communication", "component_of", "composed", "fleet",
            "horizon_leak", "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs", "registration_case",
            "registration_digest", "stub_component"]

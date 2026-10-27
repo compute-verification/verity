@@ -20,7 +20,11 @@ gets the ingress payloads as bytes (co-located tonight; deployed, its own shim s
 it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
 taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
-until its last bucket. Nothing admitted is dropped or reordered.
+until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
+can hold (`every`: a timestep of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
+`ingress_scan.Class`), so the warden certifies no record of a window in which it refused a connection: `withhold`
+gets that window's three records in place of `publish`, and the period check refuses a link-window missing any
+record's certificate.
 
 **The schedule.** Connection q, admitted at bucket s on the warden's own schedule, carries r = `slots` cells a bucket
 each way from s on:
@@ -50,6 +54,17 @@ only at an egress slot, so the server, which controls whether and where a connec
 (cells + 1) outcomes; the client's two fail at once, and are the client's own doing. A tick that runs more than
 `slack` past its boundary faults every grid's window (`monitor-unavailable`), as the active certifier's do.
 
+**The pacer** (`Warden(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
+loop reads every server, so when a server writes within a bucket, which the prover chooses, moves when the bucket
+reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live connection's cells as a
+part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it at `origin` + t·τ +
+`paced` on the host's monotonic clock, a time fixed before the bucket is made; each connection's socket reaches the
+pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached the pacer after its
+time, or whose release started more than `slack` after it, faults every grid's window `monitor-unavailable`, as a late
+tick does. A window's three records are published once every bucket of it that was handed is released, or by the
+next window's first tick, faulted `monitor-unavailable` if one isn't by then. A client that reads slowly holds only its
+own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
+
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the warden sent that way: every connection's r cells of the bucket, in ordinal order, padding included. So the
 records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The third,
@@ -67,19 +82,20 @@ import hashlib
 import math
 import secrets
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from functools import cached_property
 from typing import Any
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
                                                    precise_sleep)
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, row_count
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
+from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.release import with_release
 
-PARAMETERS_TAG = "verity-network-warden/parameters/v2"
+PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 #: the warden's cell kinds, beside `active`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
@@ -105,6 +121,7 @@ class WardenParams:
     ingress_cells: int = 64
     ingress_buckets: int = 50
     egress_cells: int = 4096
+    every: int = 1  # a timestep's buckets: the Programs' boundaries are every `every` buckets of a window
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
@@ -112,6 +129,18 @@ class WardenParams:
                 raise ValueError(f"{name} is a positive integer, not {value!r}")
         if self.cell_bytes <= HEADER.size + 1:
             raise ValueError(f"a cell holds its {HEADER.size}-byte header and a byte")
+        if self.window % self.every:
+            raise ValueError(f"every ({self.every}) divides the window ({self.window}): a window is whole timesteps")
+
+    @property
+    def program_slots(self) -> int:
+        """A timestep's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the warden)."""
+        return self.lanes
+
+    @property
+    def window_programs(self) -> int:
+        """A window's Program slots: `window / every` timesteps of `program_slots`."""
+        return self.window // self.every * self.program_slots
 
     @property
     def payload(self) -> int:
@@ -255,22 +284,37 @@ class Warden:
     served or queued. `connect()` opens a server connection, a (reader, writer) pair.
 
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
-      default they are kept in `records`); `log` has one entry a connection once it ends, `refused` the ordinal-less
-      refusals' count, `lateness` each tick's in seconds;
+      default they are kept in `records`), and `withhold(record, params)` in its place those of a window in which a
+      connection was refused (`refused_windows`; by default kept in `withheld`): nothing of that window is to be
+      certified; `log` has one entry a connection once it ends, `refused` the ordinal-less refusals' count,
+      `lateness` each tick's in seconds;
     - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
     - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
       `run_id`, `RUN_ID_BYTES` drawn from `run_nonce` at construction, names the run on the server's side;
+    - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
+      the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
+      `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
+      bucket's `pacer.Report` once its writes end;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
+                 withhold: Callable[[Record, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
-                 run_nonce: Callable[[int], bytes] = secrets.token_bytes) -> None:
+                 run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None) -> None:
+        if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
+            raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
+                             f"time hands it before its time, not {paced!r} s after its boundary")
+        self.paced = paced
+        self.releases: list[Report] = []
+        self._pacer: Pacer | None = None
+        self._unreleased: Counter[int] = Counter()
+        self._held: dict[int, tuple[Callable[[Record, GridParams], None], list[tuple[Record, GridParams]]]] = {}
         self.run_id = run_nonce(RUN_ID_BYTES)
         if not (isinstance(self.run_id, bytes) and len(self.run_id) == RUN_ID_BYTES):
             raise ValueError(f"a run id is {RUN_ID_BYTES} bytes")
@@ -282,11 +326,14 @@ class Warden:
         self.fails = Certifier(fails_link, params.fails_grid)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, grid: self.records.append(record))
+        self.withheld: list[Record] = []
+        self.withhold = withhold or (lambda record, grid: self.withheld.append(record))
         self.release = release
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
         self.refused = 0
+        self.refused_windows: set[int] = set()
         self.log: list[dict] = []
         self.lateness: list[float] = []
         self.ticks = 0
@@ -303,6 +350,7 @@ class Warden:
     async def handle(self, reader: asyncio.StreamReader, writer: Any) -> None:
         if len(self.queue) >= self.params.queue:
             self.refused += 1
+            self.refused_windows.add(self.ticks // self.params.window)
             writer.write(cell(REFUSED, 0, b"", self.params.cell_bytes))
             writer.close()
             self._changed.set()
@@ -319,6 +367,10 @@ class Warden:
 
     async def run(self) -> None:
         tau = self.params.bucket_ms / 1000
+        reports = None
+        if self.paced is not None:
+            self._pacer = await Pacer.start(backlog=WRITE_BACKLOG)
+            reports = asyncio.create_task(self._reports(self._pacer))
         try:
             for t in range(self.windows * self.params.window):
                 deadline = self.origin + t * tau
@@ -331,15 +383,27 @@ class Warden:
                 self._tick(t)
                 self.ticks += 1
                 self._changed.set()
+            if self._pacer is not None:
+                await self._pacer.close()
+                await reports
         finally:
             for connection in [*self.active, *self.queue]:
                 self._end(connection, cut=True)
             self.active, self.queue = [], deque()
+            if self._pacer is not None:
+                reports.cancel()
+                await self._pacer.kill()
+                for w in sorted(self._held):
+                    self._emit(w, Reason.MONITOR_UNAVAILABLE)
             self._changed.set()
 
     def _tick(self, t: int) -> None:
+        T = self.params.window
+        if t % T == 0 and t // T - 1 in self._held:
+            self._emit(t // T - 1, Reason.MONITOR_UNAVAILABLE)
         while self.queue and len(self.active) < self.params.lanes:
             self._admit(self.queue.popleft(), t)
+        parts = []
         for c in self.active:
             if c.ingress_end is None and c.failed is None:
                 for frame in self._ingress(c, t):
@@ -347,7 +411,13 @@ class Warden:
             out = self._egress(c, t)
             for frame in out:
                 self.egress.enqueue(frame)
-            self._write(c, b"".join(out))
+            if self._pacer is None:
+                self._write(c, b"".join(out))
+            else:
+                parts.append((c.ordinal, b"".join(out), c.ended is not None))
+        if parts:
+            self._pacer.hand(t, self.origin + t * self.params.bucket_ms / 1000 + self.paced, parts)
+            self._unreleased[t // T] += 1
         for c in self.active:
             if c.ended is not None:
                 self._end(c)
@@ -356,15 +426,55 @@ class Warden:
             row = grid.tick()
             if self.release is not None:
                 self.release(grid.link, row)
-        if (t + 1) % self.params.window == 0:
-            self.publish(self.ingress.close_window(), self.params.grid)
-            self.publish(self.egress.close_window(), self.params.grid)
-            self.publish(self.fails.close_window(), self.params.fails_grid)
+        if (t + 1) % T == 0:
+            w = t // T
+            out = self.withhold if w in self.refused_windows else self.publish
+            records = [(self.ingress.close_window(), self.params.grid), (self.egress.close_window(), self.params.grid),
+                       (self.fails.close_window(), self.params.fails_grid)]
+            self._held[w] = (out, records)
+            if not self._unreleased[w]:
+                self._emit(w)
+
+    def _emit(self, w: int, reason: Reason | None = None) -> None:
+        """Window w's held records, each with `reason` as its status unless it has one: a window records its first
+        fault."""
+        out, records = self._held.pop(w)
+        for record, grid in records:
+            out(record if reason is None or not record.status.complete else replace(record, status=Status(reason)),
+                grid)
+
+    async def _reports(self, pacer: Pacer) -> None:
+        async for report in pacer.reports():
+            self._report(report)
+
+    def _report(self, report: Report) -> None:
+        """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
+        or whose release started more than `slack` after it, faults every grid's window `monitor-unavailable`: the open
+        window's certifiers, or the records held for a closed one, published once every bucket of it that was handed is
+        released. A connection's writes fault nothing, as on the loop: a client that doesn't read holds its own."""
+        if report.end is not None:
+            self.releases.append(report)
+            return
+        w = report.t // self.params.window
+        if report.arrived > 0 or report.start > self.slack:
+            if w in self._held:
+                out, records = self._held[w]
+                self._held[w] = (out, [(r if not r.status.complete else
+                                        replace(r, status=Status(Reason.MONITOR_UNAVAILABLE)), g) for r, g in records])
+            elif w == self.ingress.window:
+                for grid in (self.ingress, self.egress, self.fails):
+                    grid.fault(Reason.MONITOR_UNAVAILABLE)
+        self._unreleased[w] -= 1
+        if not self._unreleased[w] and w in self._held:
+            self._emit(w)
+        self._changed.set()
 
     def _admit(self, c: _Connection, t: int) -> None:
         c.admitted = t
         _pad(c, self.params.cell_bytes)
         self.active.append(c)
+        if self._pacer is not None:
+            self._pacer.add(c.ordinal, c.writer.get_extra_info("socket").fileno())
         c.tasks = [asyncio.create_task(self._client(c)), asyncio.create_task(self._server(c))]
 
     async def _client(self, c: _Connection) -> None:

@@ -35,7 +35,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "integrations/vllm/verity_vllm/program/mla_capture.py",
           "integrations/vllm/verity_vllm/program/moe_difftest.py",
           "integrations/vllm/verity_vllm/program/layer_norm_difftest.py",
-          "integrations/vllm/verity_vllm/program/relations.py",
           "integrations/vllm/verity_vllm/program/sampling_rng.py",
           "integrations/vllm/verity_vllm/program/libdevice_sampling.py",
           "integrations/vllm/verity_vllm/program/rmsnorm_fused_sweep.py",

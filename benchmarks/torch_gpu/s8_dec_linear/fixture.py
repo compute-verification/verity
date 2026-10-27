@@ -16,8 +16,7 @@ from pathlib import Path
 
 from verity.core.protocols.pous.schemes import p2 as S
 
-ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pous"))
 from p2_v1 import reference as R
 
 PARAMS = S.P2Params(*S.POINT)
