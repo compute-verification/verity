@@ -6,6 +6,8 @@
 * the attention at key blocks of 4 over 6 positions is the hand count, and in 2-key groups (`L3a`) too;
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
   and the plan from ``L1 + L2`` on leaves no pad pass at any traffic;
+* serving's stream commit is its stream's 4 KiB rows under both schedules, its FA3 interiors the hand count of each launch,
+  and ``F`` leaves out exactly those;
 * the H200's AND tables are `BS.compile`'s counts.
 """
 from __future__ import annotations
@@ -32,6 +34,8 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
 GRAIN = Grain(gemm_words=512, rows=9, select=64)
 LLAMA_1B = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+#: Llama-3.2-1B's arena sizing record (`step_bound_bytes`'s widths)
+SIZING = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/pipeline/fixtures/admission/b16.json"
 
 
 def _census(cls: WindowClass, probe: int | None = None) -> dict:
@@ -107,7 +111,9 @@ def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leave
               target={"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"})
     probe = CR.census(class_circuit(Registered.of(phi, default_seed=7), WindowClass(1, 2, 2), 1), IF)
     probe["class"] = {"slots": 1, "prompt": 2, "outputs": 2, "positions": 3}
-    doc = W.price(probe, "h200", to=(8, 1024, 64))
+    doc = W.price(probe, "h200", to=(8, 1024, 64), sizing=json.loads(SIZING.read_text())["sizing"])
+    assert all(0 < r["F"]["ands"] < r["all"]["ands"] for r in doc["stream"].values())
+    assert "the plan + F" in W.report(doc)
     by = {r["levers"]: r for r in doc["rows"]}
     base = by["baseline (engine)"]["commit_compressions"]
     assert all(r["commit_compressions"] <= base for r in doc["rows"] if r["costs"] == "engine")
@@ -116,6 +122,27 @@ def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leave
     assert all(b["commit_compressions"] < a["commit_compressions"] for a, b in zip(plan, plan[1:]))
     assert all(p["steps"] == 0 for r in plan for p in r["pad_pass"].values())
     assert by["baseline (engine)"]["pad_pass"][W.TRAFFIC[0].name]["steps"] == 1087 - W.EXACT_KEYS
+
+
+def test_serving_streams_commit_is_its_4_kib_rows_and_F_leaves_out_its_fa3_interiors():
+    from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, mat_total_words
+
+    sizing = json.loads(SIZING.read_text())["sizing"]
+    one, anchors = W.stream(sizing, {"slots": 4, "prompt": 40, "outputs": 3}, "h200", 1e12, 1.0, lanes=2, every=2).values()
+
+    def fa3(seqs: int, rows: int, BN: int) -> int:
+        """one launch's FA3 M1 bytes over the layers: a slab a (sequence, KV head) of rows · 4 query heads, one key block"""
+        words = mat_total_words(8 * seqs, 4 * rows, 1, BN, 64)
+        return sizing["model"]["layers"] * 4 * -(-words // CHUNK_WORDS) * CHUNK_WORDS
+
+    # 40 ids · 4 heads a KV head > 64 rows: blocks of 128; a decode launch's 4 rows: blocks of 192
+    assert one["hidden_bytes"] == fa3(4, 40, 128) + 2 * fa3(4, 1, 192)
+    # 2 prompts at step 0 and 2 at step 2, whose launch pads the 2 decoding slabs to the 40-id prompts
+    assert anchors["hidden_bytes"] == fa3(2, 40, 128) + fa3(2, 1, 192) + fa3(4, 40, 128) + 2 * fa3(2, 1, 192)
+    for r in (one, anchors):
+        assert r["all"]["compressions"] == -(-r["bytes"] // W.STREAM_ROW_BYTES) * W.STREAM_ROW
+        assert r["F"]["compressions"] == -(-(r["bytes"] - r["hidden_bytes"]) // W.STREAM_ROW_BYTES) * W.STREAM_ROW
+        assert r["all"]["seal_s"] - r["F"]["seal_s"] == pytest.approx(r["hidden_bytes"] / W.SEAL_BYTES_S)
 
 
 def _ands(t) -> int:

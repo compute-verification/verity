@@ -35,8 +35,14 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
   b || c, 128 bytes) SHA-512'd on the CPU for `rows.leaf_layer` and written out, and every port root a JSON entry; under one
   Merkle root over members, each member's leaf over its port roots, it is a root, and an audit opens K members in O(K log M).
 
+Serving commits its own stream as well, while it serves and before the window's commit (`stream`, rows-sha512), and seals
+it. ``F`` leaves out of it the attention interiors (the FA2 and FA3 M1 taps, `fa2.m1/` and `fa3.m1/`: each query row's
+scores and probabilities at every key and each key block's running state), which nothing reads after the seal: the window
+circuit's units read wired, registered (weights) and ingress rows only, its key blocks' running states are its own units'
+outputs (`window_rows` evaluates them), and a served window draws no openings.
+
     python window_cost.py CENSUS.json [--target h200|sm120] [--served-s 1.7] [--step-ms 23] [--project S,PROMPT,OUTPUTS]
-        [--measure-cpu SCRATCH | --cpu-rates FILE] [--out FILE]
+        [--measure-cpu SCRATCH | --cpu-rates FILE] [--stream SIZING] [--out FILE]
 """
 from __future__ import annotations
 
@@ -486,6 +492,44 @@ def pad_pass(heads: Heads, traffic: Traffic, levers: frozenset[str], base_ands: 
     return {"positions": sum(b - a for a, b in spans), "steps": steps, "seconds": steps * step_s, "ands": ands}
 
 
+#: serving's commit of its own stream (rows-sha512, `step_rows`): a 4 KiB row's digest, its salt derived from the step's key
+#: (three compressions) and the engine's fresh row
+STREAM_ROW_BYTES = 4096
+STREAM_ROW = CR.blocks(128 + STREAM_ROW_BYTES) + 3 + ENGINE.fresh
+#: the seal's store, bytes a second: VLLM-102's before arm (r20261027-054922-0f54) stored 29,327,490,072 committed bytes in
+#: 90.581 s
+SEAL_BYTES_S = 29_327_490_072 / 90.581
+STREAM_LEVER = "F: the attention interiors (fa*.m1) not committed"
+
+
+def stream(sizing: dict, cls: dict, target: str, served_ands: float, served_s: float, lanes: int = 4,
+           every: int = 16) -> dict:
+    """Serving's own commit of the class's full window, made while it serves, before the window's and beside it
+    (`step_rows`: every 4 KiB of a step's stream a hiding row, `STREAM_ROW` compressions), and the seal's store of it
+    (`SEAL_BYTES_S`), whole and under ``F``. The stream is `native_host.schedule_stream_bound`'s, serving's stream of record
+    under a declared schedule (every request to the class's outputs, a mixed step's FA3 launch padded to its longest query),
+    at ``sizing``'s widths (an arena sizing record), under two schedules: every prompt in one prefill step, and the class's
+    anchors (``lanes`` requests every ``every`` steps, `window_circuit.CLASS_OF_RECORD`'s, a bucket a step)."""
+    from verity_vllm.commit.committer.native_host import schedule_stream_bound
+
+    asz = dict(sizing, model=dict(sizing["model"], attn_backend="fa3" if target == "h200" else "fa2"))
+    S, prompt, outputs = cls["slots"], cls["prompt"], cls["outputs"]
+    schedules = {"one prefill step": [0] * S,
+                 f"the class's anchors ({lanes} every {every} steps)": [s // lanes * every for s in range(S)]}
+    out = {}
+    for name, arrive in schedules.items():
+        r = schedule_stream_bound(asz, [{"prompt_len": prompt, "max_tokens": outputs, "arrive_step": a} for a in arrive])
+        row = {"bytes": r["run_bytes"], "hidden_bytes": r["hidden_bytes"], "steps": r["steps"]}
+        for key, b in (("all", r["run_bytes"]), ("F", r["run_bytes"] - r["hidden_bytes"])):
+            c = -(-b // STREAM_ROW_BYTES) * STREAM_ROW
+            s = {k: c / v for k, v in RATES.items()}
+            row[key] = {"compressions": c, "ands": c * SHA512_ANDS, "ratio_ands": c * SHA512_ANDS / served_ands, "s": s,
+                        "ratio_s": {k: v / served_s for k, v in s.items()}, "seal_s": b / SEAL_BYTES_S,
+                        "seal_ratio": b / SEAL_BYTES_S / served_s}
+        out[name] = row
+    return out
+
+
 def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "h200") -> tuple[list[Unit], Heads, dict]:
     """A census of one Program at a probe class within one key block (`class_rows.py --probe`), projected to ``slots``
     Programs of ``prompt`` ids and ``outputs`` outputs as `class_size.project` projects one: outside attention a fixed count
@@ -578,11 +622,12 @@ PLAN = ("L1", "L2", "L4", "W", "R", "L3a", "L3b", "P")
 
 
 def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: float = 0.023,
-          to: tuple[int, int, int] | None = None, cpu: dict | None = None) -> dict:
+          to: tuple[int, int, int] | None = None, cpu: dict | None = None, sizing: dict | None = None) -> dict:
     """Every figure the report prints, as data, for ``census`` or its projection ``to`` a class (slots, prompt, outputs): each
     lever alone and the `PLAN` stacked. Every compression counts in ANDs wherever it runs. In seconds, the window's rows (and
     under ``L4`` the member tree) run on the GPU at `RATES`; the registration without ``L4`` runs on the committer's CPU, at
-    ``cpu``'s measured rates (`measure_cpu`), else at the GPU's (``registration_cpu`` None: a lower bound)."""
+    ``cpu``'s measured rates (`measure_cpu`), else at the GPU's (``registration_cpu`` None: a lower bound). With an arena
+    ``sizing`` record, serving's own stream commit too (`stream`)."""
     if to is None:
         cls = census["class"]
         rest, heads = split(units_of(census), cls, target)
@@ -618,6 +663,7 @@ def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: flo
                      "full_ratio_ands": (commit_c * SHA512_ANDS + full["ands"]) / served,
                      "full_ratio_s": (commit_s["3.1 G/s"] + full["seconds"]) / served_s})
     out["rows"] = rows
+    out["stream"] = None if sizing is None else stream(sizing, cls, target, served0, served_s)
     windows = {p: GPUS * s / served_s for p, s in PERIODS.items()}
     out["periods"] = {p: {"windows": w, "served_ands": w * served0,
                           "commit_ands": {r["levers"]: w * r["commit_ands"] for r in rows}} for p, w in windows.items()}
@@ -661,17 +707,37 @@ def report(doc: dict) -> str:
         lines.append(f"| {r['levers']} | {g['members']:,} | {g['roots']:,} | {_e(g['public_bytes'])} | {_e(g['private_bytes'])} | "
                      f"{_e(g['compressions'])} | {_e(g['json_bytes'])} | {g['files']:,} | "
                      f"{'-' if on is None else f'{on['total']:.3g}'} |")
+    st = doc.get("stream")
+    if st:
+        lines += ["", f"serving's own stream commit, made while it serves, before the window's commit and beside it (rows-sha512: "
+                  f"{STREAM_ROW} compressions a 4 KiB row; the seal's store at {SEAL_BYTES_S / 1e9:.3f} GB/s, VLLM-102's "
+                  f"r20261027-054922-0f54), the full window; {STREAM_LEVER}:", "",
+                  "| schedule | stream bytes | fa*.m1 bytes (share) | commit ANDs (ratio) | commit s at 3.1 (4.79) G/s (ratio) | "
+                  "seal s (ratio) | under F: commit ANDs (ratio) | commit s (ratio) | seal s (ratio) |",
+                  "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+        for name, r in st.items():
+            cells = [f"{_e(r[k]['ands'])} ({r[k]['ratio_ands']:.4f}×) | {r[k]['s']['3.1 G/s']:.3g} s "
+                     f"({r[k]['s']['4.79 G/s']:.3g} s) ({r[k]['ratio_s']['3.1 G/s']:.3f}×) | {r[k]['seal_s']:.3g} s "
+                     f"({r[k]['seal_ratio']:.3g}×)" for k in ("all", "F")]
+            lines.append(f"| {name} | {_e(r['bytes'])} | {_e(r['hidden_bytes'])} ({r['hidden_bytes'] / r['bytes']:.2f}) | "
+                         f"{cells[0]} | {cells[1]} |")
     base, plan = "baseline (engine)", "plan: " + " + ".join(PLAN)
     by = {r["levers"]: r for r in doc["rows"]}
     pad = {k: by[k]["pad_pass"][TRAFFIC[0].name]["ands"] for k in (base, plan)}
+    worst = max(st.values(), key=lambda r: r["bytes"]) if st else None
+    head = ("| period | windows | served ANDs | commit ANDs, baseline (engine) | share | commit ANDs, the plan | share |"
+            + (" with serving's stream: baseline | share | the plan + F | share |" if worst else ""))
     lines += ["", f"over the reference datacenter ({GPUS:,} GPUs) serving full class-of-record windows back to back (commit "
-              "with its pad pass; share: of the served ANDs):", "",
-              "| period | windows | served ANDs | commit ANDs, baseline (engine) | share | commit ANDs, the plan | share |",
-              "| --- | --- | --- | --- | --- | --- | --- |"]
+              "with its pad pass; share: of the served ANDs" + ("; serving's stream at its larger schedule" if worst else "")
+              + "):", "", head, "|" + " --- |" * (head.count("|") - 1)]
     for p, v in doc["periods"].items():
         w, sv = v["windows"], v["served_ands"]
         b, a = v["commit_ands"][base] + w * pad[base], v["commit_ands"][plan] + w * pad[plan]
-        lines.append(f"| {p} | {_e(w)} | {_e(sv)} | {_e(b)} | {b / sv:.3f} | {_e(a)} | {a / sv:.3f} |")
+        line = f"| {p} | {_e(w)} | {_e(sv)} | {_e(b)} | {b / sv:.3f} | {_e(a)} | {a / sv:.3f} |"
+        if worst:
+            b2, a2 = b + w * worst["all"]["ands"], a + w * worst["F"]["ands"]
+            line += f" {_e(b2)} | {b2 / sv:.3f} | {_e(a2)} | {a2 / sv:.3f} |"
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -692,6 +758,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout", nargs=2, default=None, metavar=("T,T,...", "DIR"), help="write one slot's output rows at "
                     "each position T as a commit_slots layout, DIR/pos<T>.json (`position_layout`), for step.py time")
     ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
+    ap.add_argument("--stream", default=None, metavar="SIZING", help="price serving's own stream commit (`stream`) at this arena "
+                    "sizing record's widths, or a fixture's under \"sizing\" (Llama-3.2-1B's: "
+                    "integrations/vllm/tests/pipeline/fixtures/admission/b16.json)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None
@@ -706,7 +775,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     rates = (measure_cpu(Path(a.measure_cpu), a.measure_mib) if a.measure_cpu else
              json.loads(Path(a.cpu_rates).read_text())["cpu"] if a.cpu_rates else None)
-    doc = price(json.loads(Path(a.census).read_text()), a.target, a.served_s, a.step_ms / 1e3, to, rates)
+    sizing = json.loads(Path(a.stream).read_text()) if a.stream else None
+    sizing = sizing.get("sizing", sizing) if sizing else None
+    doc = price(json.loads(Path(a.census).read_text()), a.target, a.served_s, a.step_ms / 1e3, to, rates, sizing)
     if a.out:
         Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(report(doc))
