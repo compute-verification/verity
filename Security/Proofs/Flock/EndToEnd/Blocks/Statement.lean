@@ -25,7 +25,8 @@ for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/
 
 A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
-statements say nothing of whether the value a session reads there is the one the block before committed.
+statements say nothing of whether the value a session reads there is the one the block before committed;
+`IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) does.
 -/
 
 namespace Flock.Guarantees

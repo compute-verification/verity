@@ -139,7 +139,7 @@ theorem expect_trial {t : ℕ} (τ : Strategy (W t).game) (h : x.Read t) (F : Tr
           (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw)
         (trialStratZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
           (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw) := by
-  haveI := h
+  have := h
   exact (expect_optG_pos F _ _ _ _ h _).trans (expect_map _ _ _ _)
 
 theorem expect_trial_neg {t : ℕ} (τ : Strategy (W t).game) (h : ¬ x.Read t) (F : TrialAt W → ℝ) :
@@ -152,8 +152,8 @@ theorem errZC_le_trial {t : ℕ} (ht : t ∈ x.sessions) (τ : Strategy (W t).ga
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw (pull (x.e t) w) ≤
       errAt (x.trial t τ) (x.trialS t τ) x.rd w := by
   by_cases hne : x.Read t
-  · haveI := hne
-    rw [errZC_of]
+  · unfold errZC
+    rw [dite_eq_left_of_eq_true (eq_true hne)]
     refine (errAt_pull_le _ _ _ (x.e_inj ht) w).trans (le_of_eq ?_)
     rw [errAt_eq_expect, errAt_eq_expect, x.expect_trial τ hne]
     refine congrArg (fun f => expect f _ _) (funext fun o => ?_)
@@ -173,7 +173,7 @@ theorem costMix_nonneg (y : Σ _ : x.Ses, TrialAt W) : 0 ≤ x.costMix y :=
 theorem expect_cost_le (t : ℕ) (τ : Strategy (W t).game) :
     expect trialCost (x.trial t τ) (x.trialS t τ) ≤ (W t).t' * (1 + (W t).k) := by
   by_cases hne : x.Read t
-  · haveI := hne
+  · have := hne
     rw [x.expect_trial τ hne]
     exact expect_cT_leZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
       (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw (W t).ht'
@@ -510,8 +510,7 @@ theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
         by_cases hd : ∃ r ∈ l, r.drawnWrong
         · obtain ⟨r, hr, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
-        · push_neg at hd
-          exact Or.inr ⟨hd, Nat.ceil_le.2 hl.2⟩
+        · exact Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, Nat.ceil_le.2 hl.2⟩
     _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.drawnWrong) (S.run s) +
           value (fun l => (∀ r ∈ l, ¬ r.drawnWrong) ∧ M ≤ (l.map WindowRec.wrong).sum) (S.run s) :=
         value_or_le _ _ _
