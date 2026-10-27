@@ -4,7 +4,7 @@ import Mathlib.Data.Fintype.Sum
 import Proofs.Pouw.Defs.Fp8Atom.H1TVectors
 
 /-!
-# H-1T's pinned statements (trusted)
+# H-1T's pinned statements
 
 M2 of `internal/pouw-fp8/lean-atom-m2-plan.md`: the map `DistinctLiveH1T` is about (`Pouw.Fp8Atom.H1T`), the facts
 about it that do not need the Target A proof, and the FP32 lemmas that proof uses.

@@ -4,7 +4,7 @@ import Proofs.Pouw.Defs.Fp8Atom.Vectors.Ada
 import Proofs.Pouw.Defs.Fp8Atom.Vectors.Add
 
 /-!
-# `Pouw.Fp8Atom`'s pinned statements (trusted)
+# `Pouw.Fp8Atom`'s pinned statements
 
 M1 of `internal/pouw-fp8/lean-atom-plan.md`: the bit-exact `HOPPER_E4M3_K32` step and its basic facts.
 
