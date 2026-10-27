@@ -2,7 +2,7 @@ import Proofs.Flock.Bridge.ScopeGate
 import Proofs.Flock.Bridge.RefusedWitnesses
 
 /-!
-# `SampledKSLiveV4`'s nontrivial lemma (LEAN-66)
+# `SampledKSLiveV4`'s nontrivial lemma
 
 It reads `SampledKSLivePub`'s failing instance (`Bridge.toy_exceeds`, `Guarantees.sampledKSLivePub_nontrivial`) through
 `SampledKSLiveV3`'s (`sampledKSLiveV3_nontrivial`), with no instance of its own.
@@ -96,7 +96,7 @@ theorem sampledKSLiveV3All_of_v4All (h : SampledKSLiveV4All) : SampledKSLiveV3Al
   · exact absurd hs ‹_›
 
 open Classical in
-/-- **`SampledKSLiveV4`'s nontrivial lemma** (LEAN-66): `SampledKSLiveV4` at the verifiers that accept everything is
+/-- **`SampledKSLiveV4`'s nontrivial lemma**: `SampledKSLiveV4` at the verifiers that accept everything is
 false at `SampledKSLivePub`'s failing instance, since it implies `SampledKSLiveV3All` (`sampledKSLiveV3All_of_v4All`),
 which is false there (`sampledKSLiveV3_nontrivial`). -/
 theorem sampledKSLiveV4_nontrivial :
