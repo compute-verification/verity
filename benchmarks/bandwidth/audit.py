@@ -1,6 +1,6 @@
 """The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time: the reference the GPU tagger and the
-benchmarks that measure its tags are held to.  Its protocol, retired from core, is `archive/bandwidth-v0/PROTOCOL.md`
-(`PROTOCOL.md` below).  Each device's store is set up under a salt with its identity bound in (`draw_salt`, its GPU's
+benchmarks that measure its tags are held to.  Its protocol, deleted from the tree, is
+`git show b19372fa9e:verity/core/protocols/bandwidth/PROTOCOL.md` (`PROTOCOL.md` below).  Each device's store is set up under a salt with its identity bound in (`draw_salt`, its GPU's
 16-byte UUID, `device_id`, which the on-node challenger reads from the driver, `read_device`), so devices holding one
 `W` hold different stores, and the verifier refuses a store whose salt is not its device's (`Verifier`).
 

@@ -1,7 +1,7 @@
 # The bandwidth audit's GPU tagger
 
-The honest prover's step of the bandwidth audit v0 (`archive/bandwidth-v0/PROTOCOL.md`) on an RTX PRO 6000:
-every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
+The honest prover's step of the bandwidth audit v0 (its protocol, deleted from the tree, is
+`git show b19372fa9e:verity/core/protocols/bandwidth/PROTOCOL.md`, `PROTOCOL.md` below) on an RTX PRO 6000: every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
 constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
 
 The audit's Python reference, which the tagger and the benchmarks that measure its tags are held to, is here too:
