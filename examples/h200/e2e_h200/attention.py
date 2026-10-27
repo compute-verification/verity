@@ -1,5 +1,5 @@
-"""MQA attention at one position, on the CPU through the Definitions' own numpy kernels: the stand-in for kernels' KP2-ATTN
-until it is handed over (a BF16 tensor-core product computed by torch is another function).
+"""MQA attention at one position, on the CPU through the Definitions' own numpy kernels: the stand-in for kernels' attention
+kernel until it is handed over (a BF16 tensor-core product computed by torch is another function).
 
     scores   GemmCoordinate_v2{K=d, GEMM_HOPPER} (`HopperBF16WgmmaDot16`'s 16-wide steps in ascending k from +0, then
              `F2fpBf16`): query head h of slot b against the KV head's key at each position s <= t
