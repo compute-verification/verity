@@ -39,7 +39,7 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the warden's
 release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
-``serve.json``'s ``step_rows``).
+``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the bench row declares (`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -106,7 +106,7 @@ from typing import Any
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_remote as SR
+from verity_vllm.pipeline import serve_remote as SR, serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
@@ -658,9 +658,9 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
                          f"ninja is) on PATH{', or pass --no-gpu-tree' if opts.scheme == SS.V1 else ''}")
 
 
-def build(opts: Options, session: SR.ServeSession | None = None) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`) and, with the Commit on, its committer, sized from the engine's envelope, with a
-    `served_record.SamplerInputsSource` attached; with a remote ``session``, the engine built under it."""
+def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
+    """The engine (`verity_vllm.LLM`), scheduling as the bench ``row`` declares, and with the Commit on, its committer, sized
+    from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``."""
     from verity_vllm.engine import env as engine_env
 
     engine_env.apply_engine(opts.hf_home)
@@ -669,8 +669,8 @@ def build(opts: Options, session: SR.ServeSession | None = None) -> tuple[Any, A
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
-    kw = engine_options(opts)
-    llm = LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw))
+    kw = engine_options(opts) | RW.engine_args(row)
+    llm = RW.checked(row, LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw)))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
@@ -687,7 +687,7 @@ def main(opts: Options) -> int:
     out = Path(opts.out)
     out.mkdir(parents=True, exist_ok=True)
     session = SR.session_of(opts, out)
-    llm, com = build(opts, session)
+    llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
     reference = getattr(proto, "base", proto)
@@ -756,7 +756,7 @@ def main(opts: Options) -> int:
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
-              "remote_session": session.describe() if session is not None else None,
+              "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None),
