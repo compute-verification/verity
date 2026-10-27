@@ -1,7 +1,7 @@
 import Definitions.Pouw.Barrier.Defs
 
 /-!
-# The degenerate-input barrier: pinned statements
+# The degenerate-input barrier: pinned statements (trusted)
 
 Plain-language map: `internal/pouw/new-crypto/barrier.md` in the project store.
 -/

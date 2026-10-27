@@ -39,12 +39,10 @@ import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutChainOnly
 import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutFp4
 import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutFp4ChainOnly
 import Proofs.Pouw.Defs.Assumptions.PearlC.TTOutTileUOnly
-import Proofs.Pouw.Defs.Barrier.Pinned
 import Proofs.Pouw.Defs.Dimension.Causal
 import Proofs.Pouw.Defs.FpG1.Gemm
 import Proofs.Pouw.Defs.H1Zy.Stream
 import Proofs.Pouw.Defs.NCP.ExtraIdentity
-import Proofs.Pouw.Defs.NCP.Pinned
 import Proofs.Pouw.Defs.PearlC.Completeness
 import Proofs.Pouw.Defs.PearlC.DeviceFp4Hot
 import Proofs.Pouw.Defs.PearlC.NoiseSha512

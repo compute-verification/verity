@@ -1,5 +1,6 @@
 import Definitions.Pouw.FpG1
 import Proofs.Pouw.Exact
+import Proofs.Pouw.Defs.FpG1.Gemm
 
 /-!
 # FP8-g1 and W4A8-g1: ranges, the coin's rank-one terms and the epilogue's exactness

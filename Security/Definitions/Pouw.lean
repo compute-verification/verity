@@ -1,4 +1,5 @@
 import Definitions.Pouw.Barrier.Defs
+import Definitions.Pouw.Barrier.Pinned
 import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
@@ -20,6 +21,7 @@ import Definitions.Pouw.H1Zy
 import Definitions.Pouw.M1
 import Definitions.Pouw.MerkleExtract
 import Definitions.Pouw.NCP.Defs
+import Definitions.Pouw.NCP.Pinned
 import Definitions.Pouw.NCP.Protocol
 import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
