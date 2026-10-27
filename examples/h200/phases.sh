@@ -79,7 +79,7 @@ benchmarks/e2e_h200/m3coin.py --registration "$RESEARCH_RUN_DIR/inputs/step-regi
   withheld)
     need REG; named "$REG" step-registration.json
     CMD=("${RR[@]}" --on "$CPU" --cwd source --mem-gb 4 --send "$REG" --send "$(main_txt)" --env PIN="$(git rev-parse origin/main)" "$@" \
-         -- bash -c 'uv sync -q && uv run --no-sync python benchmarks/e2e_h200/m3withheld.py --registration \
+         -- bash -c 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python benchmarks/e2e_h200/m3withheld.py --registration \
 "$RESEARCH_RUN_DIR/inputs/step-registration.json" --main "$RESEARCH_RUN_DIR/inputs/main.txt" --pin "$PIN" \
 --utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --peer '"$CPU"' --out "$OUT/withheld"') ;;
   open)
