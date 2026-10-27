@@ -56547,9 +56547,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.Defs": {
-   "digest": "60b41f2b7ff3319033bbff52e39009a698ca00f82a47e4485ed54fc05bb2405e",
+   "digest": "c1082c6d0e9165ddc72fcc043fe5de1066742b17b8db51eeeff8ae5a4928c095",
    "definitions": {
-    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "413a2f07f95f33951926c91ea36ad6ad97ceb71ee0dae2f4663088c5d458dea5",
+    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "1c7ad6da1648d7210bc55256b2481da1c280773af2bc9763d3a259c51b666db0",
     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
    },
    "guarantees": [

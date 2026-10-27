@@ -560,11 +560,28 @@ def standin(n: int, ks: Sequence[int] = (128, 256), seed: int = 20261024) -> lis
     return out
 
 
+def out_words(fn, *args: np.ndarray) -> np.ndarray:
+    """Each instance's output row ``o0`` (``(n, words)`` u16): ``fn``'s return leaves on ``args`` (each parameter's leaves
+    per instance, `evaluation.evaluate_batch`), concatenated little-endian and zero-padded to whole u16 words, as
+    `class_statement.unit_lowering`'s output port holds them."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    ret = fn.signature()[1]
+    leaves = np.asarray(evaluate_batch(fn, *args), dtype=np.uint64).reshape(len(args[0]), ret.leaves)
+    bits = np.concatenate([(leaves[:, [i]] >> np.arange(w, dtype=np.uint64)) & np.uint64(1)
+                           for i, w in enumerate(ret.leaf_widths())], axis=1).astype(np.uint8)
+    bits = np.pad(bits, ((0, 0), (0, -bits.shape[1] % 16)))
+    return np.packbits(bits, axis=1, bitorder="little").view("<u2").astype(np.uint16)
+
+
 def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int = 20261024):
     """The stand-in with registered weights: a Program whose ``weights`` parameter (``table_rows`` bf16 rows of K, a
     registered value committed once, `registered.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
-    ``x`` the unit's own and held by the verifier. Returns ``(member, program, query, registered file)``: the verifier's
-    own ``--registered`` file (`registered.reads_file`, at the value's root) written under ``out``."""
+    and whose ``x`` (unit i's row i, the input the verifier holds) and output rows ``o0`` (unit i's row i) are registered
+    values too, so every port of the statement is a port of the verifier's registered reads, which the Lean verifier opens
+    (`Flock.Registered.checkComplete`). Returns ``(member, program, query, registered file)``: the verifier's own
+    ``--registered`` file (`registered.reads_file` at the values' roots, and the output rows' port) written under
+    ``out``."""
     from circuit_check import targets as TG
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -588,16 +605,25 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     program = Program(bind(CompositeDefinition("ProveLegRegisteredDot", 0, (), sig, body, register=False)))
     query = P.template_instance_query(fn)
     x, weights = bf16(rng.normal(0, 1, (n, K))), bf16(rng.normal(0, 0.02, (table_rows, K)))
-    reg = G.Registered.commit(P.program_digest(program), "weights", weights.tolist(), None, G.WORD_BITS, V2)
-    own = G.reads_file(program, query, {"weights": K}, {"weights": reg.root.hex()}, schemas={"weights": V2})
+    prog = P.program_digest(program)
+    reg = G.Registered.commit(prog, "weights", weights.tolist(), None, G.WORD_BITS, V2)
+    reg_x = G.Registered.commit(prog, xn, x.tolist(), None, G.WORD_BITS, V2)
+    reg_o = G.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, G.WORD_BITS, V2)
+    own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
+                       schemas={xn: V2, "weights": V2})
+    own["ports"]["o0"] = {**reg_o.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)
     rows, salts, entry = reg.statement(table)
+    _, x_salts, x_entry = reg_x.statement(range(n))
+    _, o_salts, o_entry = reg_o.statement(range(n))
     member = Member(f"dot{K}-registered", fn, [(xn, V2, 16 * K, [xn]), (wn, V2, 16 * K, [wn])], [(V2, (0,))],
-                    {xn: x, wn: weights[positions]}, held={xn: x},
+                    {xn: x, wn: weights[positions]},
                     stage_kw={"tables": {xn: x, wn: np.asarray(rows, dtype=np.uint16)},
-                              "refs": {xn: list(range(n)), wn: refs}, "registered": {wn: entry}, "salts": {wn: salts}})
+                              "refs": {xn: list(range(n)), wn: refs},
+                              "registered": {xn: x_entry, wn: entry, "o0": o_entry},
+                              "salts": {xn: x_salts, wn: salts, "o0": o_salts}})
     return member, program, query, out / "registered.json"
 
 

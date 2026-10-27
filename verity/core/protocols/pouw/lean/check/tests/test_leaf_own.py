@@ -80,7 +80,7 @@ def _file(rng: random.Random, reg: dict, prod: dict, place: dict, ln: int | None
     kind = LL.COMBINE if ln is None else LL.LANE
     ent, roots = LL.verifier_entries(reg, prod, LL.lanes(R, C), 2 * LL.words(K))
     known = {nm: _known(rng, nm) for nm in ((LL.PUB, LL.ADMIT, LL.OK) if ln is not None else (LL.OK,))}
-    return LL.registered_file(LL.reads(R, C, kind, ln), ent, roots, {v: G.SCHEMA_V2 for v in ent}, known, True, place)
+    return LL.registered_file(LL.reads(R, C, kind, ln), ent, roots, {v: G.SCHEMA_V2 for v in ent}, known, place)
 
 
 def _own(tmp: Path, reg: dict, prod: dict, file: dict, u: int, ln: int | None, steps: int = STEPS) -> tuple[int, dict]:
