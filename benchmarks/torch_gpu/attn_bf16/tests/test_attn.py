@@ -29,6 +29,7 @@ def _listing(arch: str = "sm_90a", skip: str = "") -> tuple[str, str]:
                      "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\n"
                      "ptxas info    : Used 40 registers\n")
         sass.append(f"        Function : {name}\n        /*0090*/                   HFMA2.MMA R4, -RZ, RZ, 0, 0 ;\n"
+                    "        /*00a0*/                   FSEL R5, R5, RZ, !P0 ;            /* 0x000000ff05057208 */\n"
                     + "        /*0100*/                   HMMA.16816.F32.BF16 R4, R8, R12, R4 ;\n" * (want or 1)
                     + "        /*0200*/                   F2FP.BF16.F32.PACK_AB R3, R5, R4 ;\n")
     return "".join(ptxas), "".join(sass)
@@ -52,7 +53,8 @@ REF_PV = "        Function : attn_pv_d64_ref\n"
 
 @pytest.mark.parametrize("ptxas, sass, why", [
     (PTXAS, SASS.replace(REF_PV, REF_PV + "        /*0300*/  FFMA R3, R4, R5, R6 ;\n"), "floating-point instructions other than"),
-    (PTXAS, SASS.replace(REF_PV, REF_PV + "        /*0300*/  FSEL R3, R4, R5, P0 ;\n"), "floating-point instructions other than"),
+    (PTXAS, SASS.replace(REF_PV, REF_PV + "        /*0300*/  FSEL R3, -R4, R5, P0 ;\n"), "floating-point instructions other than"),
+    (PTXAS, SASS.replace(REF_PV, REF_PV + "        /*0300*/  FSEL R3, |R4|, RZ, P0 ;\n"), "floating-point instructions other than"),
     (PTXAS, SASS + "        /*0300*/  FADD R1, R2, R3 ;\n", "floating-point instructions other than"),
     (PTXAS.replace("0 bytes spill stores", "8 bytes spill stores", 1), SASS, "local memory"),
     (PTXAS, SASS.replace("HMMA.16816.F32.BF16", "HMMA.1688.F32.TF32", 1), "MMA forms other than"),
