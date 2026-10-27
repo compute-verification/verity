@@ -1,5 +1,6 @@
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Proofs.Pouw.Period.Honest
+import Proofs.Pouw.Prob
 
 /-!
 # `WorkOfH1CheckedCreditPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
