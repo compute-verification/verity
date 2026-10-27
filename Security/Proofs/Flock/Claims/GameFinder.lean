@@ -51,7 +51,6 @@ theorem Pr_and_prod {α β : Type} [Fintype α] [Fintype β] (p : α → Prop) (
 theorem Pr_fin_lt {m N : ℕ} (hm : m ≤ N + 1) : Pr (fun u : Fin (N + 1) => u.val < m) = m / (N + 1) := by
   rw [Pr_eq_sum, Finset.sum_boole, Fin.card_filter_val_lt, min_eq_right hm, Fintype.card_fin]
   push_cast
-  rfl
 
 /-- **`F` diluted to `m` in `N + 1`**: `F` beside a uniform `u : Fin (N + 1)`, with `F`'s output and cost where
 `u < m`, and no output and no cost elsewhere. -/
@@ -70,7 +69,8 @@ theorem Finder.dilute_Pr (H : Msg → Msg) (F : Finder) {m N : ℕ} (hm : m ≤ 
         (x.1.val < m ∧ ∃ u v, F.out x.2 = some (u, v) ∧ Collision H u v) := by
     intro x
     by_cases h : x.1.val < m <;> simp [h]
-  rw [Pr_congr e, Pr_and_prod (fun u : Fin (N + 1) => u.val < m), Pr_fin_lt hm]
+  rw [Pr_congr e, Pr_and_prod (fun u : Fin (N + 1) => u.val < m)
+    (fun s : F.S => ∃ u v, F.out s = some (u, v) ∧ Collision H u v), Pr_fin_lt hm]
 
 theorem Finder.dilute_cost_le (F : Finder) (m N b : ℕ) (h : ∀ x, F.cost x ≤ b) (x : (F.dilute m N).S) :
     (F.dilute m N).cost x ≤ b := by
@@ -100,7 +100,7 @@ def Finder.null : Finder where
 
 theorem Finder.null_Pr (H : Msg → Msg) : Finder.null.Pr H = 0 := by
   unfold Finder.Pr
-  exact (Pr_congr fun _ => by simp [Finder.null]).trans Pr_false
+  exact (Pr_congr (q := fun _ => False) fun _ => by simp [Finder.null]).trans Pr_false
 
 end Claims
 

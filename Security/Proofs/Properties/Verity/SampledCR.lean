@@ -59,8 +59,8 @@ theorem weighted_le {m N : ℕ} (hm : 0 < m) {p β b : ℝ} (hB : (m : ℝ) / (N
     (hb : ((N : ℝ) + 1) * β ≤ m * b) : p ≤ b := by
   have hN : (0 : ℝ) < N + 1 := by positivity
   have h1 : (m : ℝ) * p ≤ (N + 1) * β := by
-    rw [div_mul_eq_mul_div, div_le_iff₀ hN] at hB
-    linarith
+    rw [div_mul_eq_mul_div, div_le_iff₀ hN, mul_comm β] at hB
+    exact hB
   exact le_of_mul_le_mul_left (h1.trans hb) (by exact_mod_cast hm)
 
 /-- **A diluted strict-time finder's premise from the threshold**: where it succeeds with probability at most `β` and
