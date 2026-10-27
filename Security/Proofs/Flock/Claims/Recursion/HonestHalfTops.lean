@@ -30,8 +30,8 @@ the reference prover `refP`'s run is accepted and satisfies V\*, no recorded cal
 fit V\*'s levels and the reps' tops differ (`TopsAt`), `PartAccepts` holds at every part `s < nS x`.
 
 The premises are about Lean's `refP`; the run witnessing them (`HonestFixture`) used Python's builder and C-Flock's CPU
-prover. `HonestFixture`'s docstring says which difftest ties the two: `test_vstar_trace_difftest` (r20261026-232210-2d0b
-passed; `vstar-trace --sat` r20261027-014612-19c5). -/
+prover. `HonestFixture`'s docstring says which difftest ties the two: `test_vstar_trace_difftest`, with
+`vstar-trace --sat`. -/
 theorem honest_half_tops (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)
