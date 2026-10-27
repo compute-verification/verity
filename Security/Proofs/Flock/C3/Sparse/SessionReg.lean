@@ -222,7 +222,8 @@ theorem stmt0_of_setup {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU :
     exact ⟨by simp, (Except.ok.inj h1).symm⟩
   · have h0 : 0 < sts.size := by omega
     obtain ⟨d, hd⟩ := hall 0 h0
-    have h1 := (FlockSoundness.Discharge.Hidden.setupHidden_spec' hd).parseF (HmOut.parse_isTmpl zo.hcH)
+    have h1 := (FlockSoundness.Discharge.Hidden.setupHidden_spec' hd).parseF
+      (HmOut.parse_isTmpl ((ZkHidden.parseH_identity ((zkTags_typed zo.I).trans zo.ht) _ _ _).trans zo.hcH))
     rw [ZkHidden.parseH_identity ((zkTags_typed zo.I).trans zo.ht)] at h1
     have h2 : HmOut.parse (zkTags zo.I) zo.I.circuitFile zo.I.tables = .ok sts[0].c := h1
     rw [zo.hcH] at h2
