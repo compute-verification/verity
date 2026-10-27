@@ -129,11 +129,12 @@ quantizer (2 proof blocks of codes and one of the scale), down and residual.
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `step.py`: one step at a layout file (`slots._layout_json`'s form) timed by phase against the engine's peak,
-  with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference, and `export --shared`,
-  circuits' shared-row layout (`--row-bytes B` cuts its shared rows to B bytes), `count`, a layout's compressions a row-slot on the
-  host twin, and `time --graphs 0 1`, steps eager and on graphs with the host's enqueue time; `launches.py`: an nsys
-  report's enqueue calls a step (how long each held the thread, and from which call they block); `gpu.sh`: these, with
-  the tests, under one GPU lease (its header has the `research run` line; `STEP_WRAP` runs `step.py` under a profiler).
+  with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference; `count`, a layout's
+  compressions a row-slot on the host twin; and `time --graphs 0 1`, steps eager and on graphs with the host's enqueue
+  time. A file of FAMILIES' shared-row layout at B-byte rows is `e2e_h200.window.shared_layout(FROZEN, B)` written by
+  `S._layout_json`. `launches.py`: an nsys report's enqueue calls a step (how long each held the thread, and from which
+  call they block); `gpu.sh`: these, with the tests, under one GPU lease (its header has the `research run` line;
+  `STEP_WRAP` runs `step.py` under a profiler).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the edge layout and FAMILIES' 1 KiB layout written and loaded back to the same layout, digests and roots,
   the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
