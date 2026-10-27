@@ -24,10 +24,10 @@ theorem OnsiteServingEndToEnd : Verity.OnsiteServingEndToEnd := by
       by_contra hall
       push_neg at hall
       exact hn ⟨hA, hR, hall⟩⟩) _ _).trans (hV s)
-  refine (Game.prob_mono (fun o ⟨hA, hR, hs, hw⟩ => ⟨⟨hA, hR⟩, hs, hw⟩) _ _).trans ?_
-  exact Accounting.SecurityProofs.ServingRoute.ServingEndToEnd (V.game θ F c) P play
-    (fun _ o => Accepts o.sent ∧ V.Registered o.params o.file)
-    (fun s o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c s a o) success N
-    (fun s => ∑ a, V.error a θ F c s) δb η hcS hqS hL2 hbr hcov s
+  exact (Game.prob_mono (fun o ⟨hA, hR, hs, hw⟩ => ⟨⟨hA, hR⟩, hs, hw⟩) _ _).trans
+    (Accounting.SecurityProofs.ServingRoute.ServingEndToEnd (V.game θ F c) P play
+      (fun _ o => Accepts o.sent ∧ V.Registered o.params o.file)
+      (fun s o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c s a o) success N
+      (fun s => ∑ a, V.error a θ F c s) δb η hcS hqS hL2 hbr hcov s)
 
 end Verity.SecurityProofs
