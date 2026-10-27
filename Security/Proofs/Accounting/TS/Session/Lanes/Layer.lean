@@ -32,14 +32,14 @@ This file states, on words, what the 33 statements check and what one unit's ser
   circuits' premise reads (`Accounting.Assumptions.TS.LeafChecks`);
 * `UnitServed`: the leaf's served checks, `Accounting.Served`'s `ProductOf` and `DequantOf` at every cell (`CellOk`,
   with `dq` the Program's dequant on its words, `PouwZyDequant_v2` today) and its receipt the XOR of its lanes' honest
-  partials (#3095's order, the tile unit's receipt as `lane_partials` splits it);
+  partials (the tile unit's receipt as `lane_partials` splits it);
 * `SameTree`, `RowsAgree`, `LeafColl`: the 33 sessions' registrants' rows (`RowsSession.rdU`, each the commit-time
   opening its session registers) are one row's bytes wherever two of them read one registered tree (root, leaf count,
   domain and schema, under any port name) at one position; or two of the
   registrants' records clash (`ReadsX.Clash`: their openings, or hm96's leaves over their rows, are two different
   SHA-512 inputs with one digest, both in hand). Each opening opens its root there (`ReadsX.committed`), so one of the
   two holds (`Accounting.TS.Lanes.rowsAgree_or_leafColl`);
-* `KnownHeld`, `LeafKnownColl`: the known-content tie (#3142's, at every port the verifier registers at known content:
+* `KnownHeld`, `LeafKnownColl`: the known-content tie (at every port the verifier registers at known content:
   each lane's `admit` and `pub`, every statement's `o0`). Where flock-verify's known-content check
   (`Registered.checkKnownAll`) accepts a session's `own` at its known content, the registrant's row at every read of
   such a port is the bytes of the known row at its position (`KnownHeld`), or the registrant's openings exhibit a
@@ -196,7 +196,7 @@ def KnownHeld (s : RowsSession) (known : Known) : Prop :=
 
 /-- **A leaf's known-content tie collides**: at one of its 33 sessions `k`, at a port `nm` its known content names with
 rows `ks`, the known-content extractor outputs two different SHA-512 inputs with one digest
-(`Accounting.TS.Held.OkColl` at `nm`, #3142's `ok` tie at any known port). -/
+(`Accounting.TS.Held.OkColl` at `nm`, the `ok` tie at any known port). -/
 def LeafKnownColl (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 32) → Known) : Prop :=
   ∃ k nm ks, (nm, ks) ∈ known k ∧ Accounting.TS.Held.OkColl (sess k) nm ks
 
