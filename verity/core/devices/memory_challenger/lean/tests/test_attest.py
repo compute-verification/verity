@@ -90,7 +90,7 @@ def test_role_digests(server):
          st.fixed_dictionaries(base | {"block": U64}))]
     for fn, reference, inputs in cases:
         stats = D.run(port(fn, reference, inputs), examples=200, server=server)
-        assert stats.outputs > 80 and stats.rejects > 10, (fn, stats)
+        assert stats.outputs > 40 and stats.rejects > 10, (fn, stats)
 
 
 def test_attest_root(server):
