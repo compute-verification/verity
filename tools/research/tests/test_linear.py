@@ -6,7 +6,7 @@ import re
 import stat
 import urllib.error
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -546,7 +546,7 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
 
 
 def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, lin, monkeypatch):
-    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 27, 7, 10, tzinfo=timezone.utc))
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 27, 7, 10, tzinfo=UTC))
     rc, out, _ = run(capsys, "linear", "place", "TOP-1", "E2E", "toy", "--milestone", "M3")
     assert rc == 0 and out.strip() == "TOP-1 placed in E2E toy deployment on one H200 / M3 · composed"
     assert lin.updated == [("I1", {"projectId": "PJ1", "projectMilestoneId": "MS3"})]
