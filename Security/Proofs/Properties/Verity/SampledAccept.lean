@@ -100,16 +100,16 @@ theorem acceptsZK_of_transcript {p : Params} {c : OneStage.Commitment} {e : Evid
   obtain ⟨tr, tp⟩ := t
   obtain ⟨tags1, c1, p1, rd1, b1, ht1, hc1, hp1, hrd1, hb1, hu1, hf1⟩ := ht
   obtain ⟨tags2, c2, p2, ht2, hc2, hp2, rfl⟩ := hI
-  obtain rfl : tags1 = tags0 := Option.some.inj (ht1.symm.trans ht0)
-  obtain rfl : tags2 = tags1 := Option.some.inj (ht2.symm.trans ht0)
-  obtain rfl : c1 = circuitB := Except.ok.inj (hc1.symm.trans hcB)
-  obtain rfl : c2 = c1 := Except.ok.inj (hc2.symm.trans hcB)
-  obtain rfl : p1 = pubB := Except.ok.inj (hp1.symm.trans hpB)
-  obtain rfl : p2 = p1 := Except.ok.inj (hp2.symm.trans hpB)
-  obtain rfl : rd1 = rd := Except.ok.inj (hrd1.symm.trans hrd)
-  obtain rfl : b1 = b := Except.ok.inj (hb1.symm.trans hb)
-  obtain rfl : tr = record := Option.some.inj (hu1.symm.trans hu)
-  obtain rfl : tp = proofs := Except.ok.inj (hf1.symm.trans hf)
+  obtain rfl := Option.some.inj (ht1.symm.trans ht0)
+  obtain rfl := Option.some.inj (ht2.symm.trans ht0)
+  obtain rfl := Except.ok.inj (hc1.symm.trans hcB)
+  obtain rfl := Except.ok.inj (hc2.symm.trans hcB)
+  obtain rfl := Except.ok.inj (hp1.symm.trans hpB)
+  obtain rfl := Except.ok.inj (hp2.symm.trans hpB)
+  obtain rfl := Except.ok.inj (hrd1.symm.trans hrd)
+  obtain rfl := Except.ok.inj (hb1.symm.trans hb)
+  obtain rfl := Option.some.inj (hu1.symm.trans hu)
+  obtain rfl := Except.ok.inj (hf1.symm.trans hf)
   exact hA
 
 /-- A blob found among the one blob `F` is `F`. -/
@@ -158,7 +158,7 @@ theorem componentAccepts_sampled {s : Sent} (h : ComponentAccepts .sampled s) :
     ∃ p c e pub prof, SampledCase s p c e ∧
       _root_.SampledProofs.OneStageZk.checkBlobs p c e (Core.Blobs.ofArray s.blobs) = .accept pub prof := by
   obtain ⟨n, ps, b, dg, k, ev, hD, ⟨P, nm, cs⟩, hx, hx1, p, c, e, hp, hc, he, pub, prof, hacc⟩ := h
-  dsimp only at hx1
+  try dsimp only at hx1
   subst hx1
   exact ⟨p, c, e, pub, prof, ⟨n, ps, b, dg, k, ev, hD, nm, cs, hx, hp, hc, he⟩, hacc⟩
 
