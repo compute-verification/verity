@@ -4,8 +4,9 @@
 // (sx::compress<0, 1> on a chained block, as the co-issue probe's hash CTAs do), until the consumers are done.
 //
 // A configuration (CFGS) sets:
-//   NWG    the CTA's warpgroups (gemm_r5: 4), NM of them consumers; the register file is 512 registers for each thread
-//          of one warpgroup, so NM Y + (NWG - NM) HR is at most 512
+//   NWG    the CTA's warpgroups (gemm_r5: 4), NM of them consumers; setmaxnreg only moves registers within the launch's,
+//          65,536 over the CTA's threads rounded down to 8 a thread (128 at 4 warpgroups, 96 at 5), so NM Y + (NWG - NM)
+//          HR is at most NWG times that (512, 480); past it the consumers' setmaxnreg waits for ever
 //   NM     consumer warpgroups: 1 (a 64 x BN tile) or 2 (128 x BN, gemm_r5's)
 //   FORM   n128: one m64n128k32 a k32 atom (BN 128); alt: gemm_r5's 128 x 256 tile, two m64n128k32 an atom into
 //          accumulators 0..63 and 64..127 in turn (imma_atom<256, true>); chain: the same eight MMAs a k-tile, the four
@@ -22,11 +23,14 @@
 // HREPS compressions).
 //
 // Per launch, from each CTA's consumer warp 0 (clock64 and %globaltimer at its first and last MMA) and its hash warps'
-// compression counts: theta, the INT8 MACs a SM-clock over 4096; the hash's compressions a SM-clock over the bar (sx's
-// 4.355 G/s at 1830 MHz over 132 SMs, 0.018029); the SM clock. Each line of output is JSON; the arms are medians of REPS
-// launches.
+// compression counts: the SM clock (clock64 over %globaltimer); theta, the INT8 MACs a second over 989.4 T (4,096 a
+// SM-clock at 1,830 MHz on 132 SMs), and theta_clk, a SM-clock over 4,096 (so theta_clk / theta is the clock's share of
+// the loss); the hash's compressions a second over the bar (sx's 4.355 G/s), and hash_bar_clk, a SM-clock over 0.018029.
+// The arms are medians of REPS launches. Then an energy item: the arm's launches back to back for ITEM_MS or longer, the
+// board's energy over it (NVML's counter): mean watts, pJ a MAC and nJ a compression, and the most of its power sampled
+// every 20 ms. The operands are random bytes. Each line of output is JSON.
 //
-//   coresident [REPS] [KTILES] [HREPS]   (KTILES: a resident configuration's k-tiles a CTA)
+//   coresident [REPS] [KTILES] [HREPS] [ITEM_MS]   (KTILES: a resident configuration's k-tiles a CTA; ITEM_MS 2000)
 //
 // Build (sm_90a): nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -o coresident coresident.cu -lcuda
 #include <cuda.h>
@@ -40,6 +44,7 @@
 #include <vector>
 
 #include "../../torch_gpu/sha512_rows/sha512x.cuh"
+#include "../gpu_kit/bench.cuh"
 #include "wg_proto.cuh"
 
 #define CK(x)                                                                                    \
@@ -59,6 +64,14 @@ enum Form { N128 = 0, ALT = 1, CHAIN = 2 };
 enum Flag { BAR = 1, LOAD = 2, EPI = 4 };
 constexpr int STAGES = 4;
 constexpr double BAR_RATE = 0.018029;   // compressions a SM-clock: 4.355e9 / (132 x 1830e6)
+constexpr double PEAK_MHZ = 1830;       // the clock of int8 wgmma's peak, 989.4 T MACs a second
+
+__host__ __device__ inline u32 mix32(u64 i) {   // splitmix64's finalizer: random bytes
+  u64 z = (i + 1) * 0x9e3779b97f4a7c15ull;
+  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+  z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+  return (u32)((z ^ (z >> 31)) >> 32);
+}
 
 struct Stamp {
   u64 t0, t1, c0, c1;   // the consumers' first and last MMA (or the hash's window, with no consumers)
@@ -93,7 +106,7 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   using S = Shape<NM, FORM>;
   constexpr int NT = NWG * 128, BASE = 65536 / NT / 8 * 8;   // the launch's registers a thread, as setmaxnreg counts them
-  static_assert(NM * Y + (NWG - NM) * HR <= 512, "the warpgroups' registers exceed the register file");
+  static_assert(NM * Y + (NWG - NM) * HR <= NWG * BASE, "the warpgroups' registers exceed the launch's");
   static_assert(HR <= BASE && Y >= BASE, "the consumers take registers, the rest give them");
   static_assert(FORM != N128 || Y >= 96, "n128's 64 accumulators");
   constexpr bool bar = FL & (BAR | LOAD);
@@ -113,8 +126,8 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     *done = 0;
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
-  if (!(FL & LOAD))   // resident operands: any bytes do
-    for (int i = tid; i < S::STAGE / 4; i += NT) reinterpret_cast<u32*>(smem + (base - wgp::smem_at(smem)))[i] = i * 2654435761u;
+  if (!(FL & LOAD))   // resident operands
+    for (int i = tid; i < S::STAGE / 4; i += NT) reinterpret_cast<u32*>(smem + (base - wgp::smem_at(smem)))[i] = mix32(i);
   __syncthreads();
   asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
   __syncthreads();
@@ -246,14 +259,14 @@ struct Cfg {
 // The consumers' register budget Y and, for each, the tiles and CTA sizes it fits, the hash warps at the registers left:
 // res, the operands resident (the ceiling), and le, TMA loads and the epilogue (the served call's parts). gemm_r5 is
 // y160_m2_alt_w4 (HR 96, 7 hash warps beside the producer). At most 5 warpgroups: ptxas sizes each MMA by the launch's
-// registers a thread, and a m64n128k32 takes 90, which 6 warpgroups' 85 doesn't hold.
+// registers a thread, and a m64n128k32 takes 90, which 6 warpgroups' 85 doesn't hold. Left out, under SHA-512's 48
+// registers of state: Y 232 at 5 warpgroups (HR 56) and two consumers at Y 160 at 5 (HR 48).
 #define BOTH(NAME, NM, FORM, Y, HR, NWG) CFG(NAME "_res", NM, FORM, 0, Y, HR, NWG), CFG(NAME "_le", NM, FORM, LOAD | EPI, Y, HR, NWG)
 static const Cfg CFGS[] = {
-    BOTH("y232_m1_alt_w4", 1, ALT, 232, 88, 4),  BOTH("y232_m1_alt_w5", 1, ALT, 232, 64, 5),
-    BOTH("y200_m1_alt_w5", 1, ALT, 200, 72, 5),  BOTH("y176_m2_alt_w4", 2, ALT, 176, 80, 4),
-    BOTH("y176_m1_alt_w5", 1, ALT, 176, 80, 5),  BOTH("y160_m2_alt_w4", 2, ALT, 160, 96, 4),
-    BOTH("y160_m2_alt_w5", 2, ALT, 160, 64, 5),  BOTH("y128_m2_n128_w4", 2, N128, 128, 128, 4),
-    BOTH("y128_m2_n128_w5", 2, N128, 128, 80, 5),
+    BOTH("y232_m1_alt_w4", 1, ALT, 232, 88, 4),   BOTH("y200_m1_alt_w4", 1, ALT, 200, 104, 4),
+    BOTH("y200_m1_alt_w5", 1, ALT, 200, 64, 5),   BOTH("y176_m2_alt_w4", 2, ALT, 176, 80, 4),
+    BOTH("y176_m1_alt_w5", 1, ALT, 176, 72, 5),   BOTH("y160_m2_alt_w4", 2, ALT, 160, 96, 4),
+    BOTH("y128_m2_n128_w4", 2, N128, 128, 128, 4), BOTH("y128_m2_n128_w5", 2, N128, 128, 72, 5),
 };
 
 static CUtensorMap tmap(const void* ptr, int depth, int rows, int box_rows) {
@@ -268,11 +281,8 @@ static CUtensorMap tmap(const void* ptr, int depth, int rows, int box_rows) {
 }
 
 __global__ void fill_k(uint8_t* p, size_t n, u64 seed) {
-  for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) {
-    u64 z = seed + (i + 1) * 0x9e3779b97f4a7c15ull;
-    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
-    p[i] = (uint8_t)(z >> 56);
-  }
+  for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x)
+    p[i] = (uint8_t)mix32(seed * 0x100000000ull + i);
 }
 
 static double median(std::vector<double> v) {
@@ -280,14 +290,25 @@ static double median(std::vector<double> v) {
   return v.empty() ? 0 : v.size() % 2 ? v[v.size() / 2] : 0.5 * (v[v.size() / 2 - 1] + v[v.size() / 2]);
 }
 
+static std::string jnum(double x, int digits) {   // a JSON number, or null
+  char b[48];
+  if (!std::isfinite(x)) return "null";
+  snprintf(b, sizeof b, "%.*f", digits, x);
+  return b;
+}
+
 int main(int argc, char** argv) {
   const int reps = argc > 1 ? atoi(argv[1]) : 5, groups = argc > 2 ? atoi(argv[2]) : 4096, hreps = argc > 3 ? atoi(argv[3]) : 2048;
+  const double item_ms = argc > 4 ? atof(argv[4]) : 2000;
   const int M = 16384, N = 28672, K = 4096;   // Llama 3 8B's gate-up at M 16,384
   cudaDeviceProp dp;
   CK(cudaGetDeviceProperties(&dp, 0));
   const int nsm = dp.multiProcessorCount;
-  printf("{\"device\": \"%s\", \"sms\": %d, \"M\": %d, \"N\": %d, \"K\": %d, \"groups\": %d, \"hreps\": %d}\n", dp.name, nsm, M, N, K,
-         groups, hreps);
+  const double peak = nsm * 4096.0 * PEAK_MHZ * 1e6;
+  gk::Nvml nv(0);
+  printf("{\"device\": \"%s\", \"sms\": %d, \"M\": %d, \"N\": %d, \"K\": %d, \"groups\": %d, \"hreps\": %d, \"item_ms\": %.0f, "
+         "\"nvml\": %s, \"energy\": %s}\n",
+         dp.name, nsm, M, N, K, groups, hreps, item_ms, nv.ok() ? "true" : "false", nv.energy_mj() ? "true" : "false");
   uint8_t *A, *B;
   int* O;
   Stamp* st;
@@ -305,7 +326,7 @@ int main(int argc, char** argv) {
     printf("{\"cfg\": \"%s\", \"nm\": %d, \"bn\": %d, \"y\": %d, \"hr\": %d, \"threads\": %d, \"regs\": %d, \"local\": %zu, \"smem\": %d}\n",
            c.name, c.nm, c.form == N128 ? 128 : 256, c.y, c.hr, 128 * c.nwg, fa.numRegs, fa.localSizeBytes, c.smem);
   }
-  auto launch = [&](const Cfg& c, int g, int nhw) {
+  auto prm = [&](const Cfg& c, int g, int nhw) {
     Prm p{};
     const int bn = c.form == N128 ? 128 : 256;
     p.a = tmap(A, K, M, 64 * c.nm);
@@ -313,6 +334,10 @@ int main(int argc, char** argv) {
     p.O = O;
     p.st = st;
     p.M = M; p.N = N; p.K = K; p.groups = g; p.nhw = nhw; p.hreps = hreps;
+    return p;
+  };
+  auto launch = [&](const Cfg& c, int g, int nhw) {
+    const Prm p = prm(c, g, nhw);
     CK(cudaMemset(st, 0, nsm * sizeof(Stamp)));
     c.k<<<nsm, 128 * c.nwg, c.smem>>>(p);
     CK(cudaGetLastError());
@@ -321,11 +346,15 @@ int main(int argc, char** argv) {
     CK(cudaMemcpy(s.data(), st, nsm * sizeof(Stamp), cudaMemcpyDeviceToHost));
     return s;
   };
-  // one arm: theta and the hash's share of the bar a SM-clock, each over the CTAs' own windows; the SM clock; the wall
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  // one arm: first the energy item (so the stamped launches after it run at the board's steady power), then REPS
+  // launches: theta and the hash's rate, over the CTAs' own windows, a second and a SM-clock; the SM clock; the wall
   auto arm = [&](const Cfg& c, int g, int nhw, const char* what) {
-    std::vector<double> th, hb, mhz, ms;
+    std::vector<double> th, thc, hb, hbc, mhz, ms, mc, cm;
     launch(c, g, nhw);
-    for (int r = 0; r < reps; r++) {
+    auto stamped = [&] {
       auto s = launch(c, g, nhw);
       const int bn = c.form == N128 ? 128 : 256, tiles = (M / (64 * c.nm)) * (N / bn), TK = K / BK;
       double cyc = 0, ns = 0, macs = 0, comps = 0;
@@ -339,21 +368,51 @@ int main(int argc, char** argv) {
         const int myt = i < tiles ? (tiles - 1 - i) / nsm + 1 : 0;
         macs += g == 0 ? 0 : c.macs * ((c.fl & LOAD) ? (double)myt * TK : (double)g);
       }
-      th.push_back(macs / cyc / 4096);
-      hb.push_back(comps / cyc / BAR_RATE);
-      mhz.push_back(cyc / ns * 1e3);
+      const double f = cyc / ns * 1e3;
+      thc.push_back(macs / cyc / 4096);
+      th.push_back(macs / cyc / 4096 * f / PEAK_MHZ);
+      hbc.push_back(comps / cyc / BAR_RATE);
+      hb.push_back(comps / cyc / BAR_RATE * f / PEAK_MHZ);
+      mhz.push_back(f);
       ms.push_back((double)(b - a) * 1e-6);
-    }
-    printf("{\"cfg\": \"%s\", \"arm\": \"%s\", \"nhw\": %d, \"theta\": %.4f, \"hash_bar\": %.4f, \"mhz\": %.0f, \"ms\": %.4f}\n", c.name,
-           what, nhw, median(th), median(hb), median(mhz), median(ms));
+      mc.push_back(macs);
+      cm.push_back(comps);
+    };
+    stamped();
+    const int n = std::max(1, (int)std::ceil(item_ms / std::max(ms[0], 1e-3)));
+    const Prm p = prm(c, g, nhw);
+    gk::PowerTrace pt(nv, 20);
+    const unsigned long long j0 = nv.energy_mj();
+    CK(cudaEventRecord(e0));
+    for (int i = 0; i < n; i++) c.k<<<nsm, 128 * c.nwg, c.smem>>>(p);
+    CK(cudaEventRecord(e1));
+    CK(cudaEventSynchronize(e1));
+    const unsigned long long j1 = nv.energy_mj();
+    pt.stop();
+    CK(cudaGetLastError());
+    float ims = 0;
+    CK(cudaEventElapsedTime(&ims, e0, e1));
+    th.clear(); thc.clear(); hb.clear(); hbc.clear(); mhz.clear(); ms.clear(); mc.clear(); cm.clear();
+    for (int r = 0; r < reps; r++) stamped();
+    const double mj = j0 && j1 >= j0 ? (double)(j1 - j0) : NAN, macs = median(mc), comps = median(cm);
+    printf("{\"cfg\": \"%s\", \"arm\": \"%s\", \"nhw\": %d, \"theta\": %.4f, \"theta_clk\": %.4f, \"hash_bar\": %.4f, "
+           "\"hash_bar_clk\": %.4f, \"mhz\": %.0f, \"ms\": %.4f, \"item_ms\": %.1f, \"launches\": %d, \"theta_item\": %s, "
+           "\"w\": %s, \"wmax\": %.1f, \"wsampled\": %.1f, \"pj_mac\": %s, \"nj_comp\": %s}\n",
+           c.name, what, nhw, median(th), median(thc), median(hb), median(hbc), median(mhz), median(ms), ims, n,
+           jnum(macs > 0 ? n * macs / (ims * 1e-3) / peak : NAN, 4).c_str(), jnum(mj / ims, 1).c_str(), pt.max_mw / 1e3,
+           pt.mean_mw() / 1e3, jnum(macs > 0 ? mj * 1e9 / (n * macs) : NAN, 3).c_str(),
+           jnum(comps > 0 ? mj * 1e6 / (n * comps) : NAN, 3).c_str());
     fflush(stdout);
   };
   for (const Cfg& c : CFGS) {
     const int maxhw = (c.nwg - c.nm) * 4 - 1;
     arm(c, groups, 0, "gemm");
-    if (maxhw > 7) arm(c, groups, 7, "gemm+hash");
-    arm(c, groups, maxhw, "gemm+hash");
-    if (!(c.fl & LOAD)) arm(c, 0, maxhw, "hash");
+    std::vector<int> hws = {maxhw};
+    if (maxhw > 7) hws.insert(hws.begin(), 7);
+    for (int nhw : hws) {
+      arm(c, groups, nhw, "gemm+hash");
+      if (!(c.fl & LOAD)) arm(c, 0, nhw, "hash");
+    }
   }
   return 0;
 }

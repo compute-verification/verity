@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # coresident.cu on one leased H200, cwd = the source tree's root under `research run --cwd source`: the build outside the
 # lease (ptxas's registers and spills to build.log), then under it the GPU's clock and power sampled beside
-# `coresident REPS KTILES HREPS` (coresident.jsonl; defaults 5 4096 2048), and the table (table.md).
+# `coresident REPS KTILES HREPS ITEM_MS` (coresident.jsonl; defaults 5 4096 2048 2000), and the tables (table.md).
 #   research run --on vy-dc-h200-3 --project verity --campaign C --source . --cwd source --env GPU_LEASE_WHO=LANE -- \
 #     bash benchmarks/pouw/accel_v31/coresident.sh
 # PROBE (a directory, optional): another probe's sources, built (nvcc -O3 PROBE/PROBE_MAIN) and run first under the same
-# lease, its output to probe.jsonl. LEASE (default gpu-lease 1 --wait --max-min 15 --).
+# lease, its output to probe.jsonl. LEASE (default gpu-lease 1 --wait --max-min 15 --). ITEM_MS: each arm's energy item
+# (default 2000).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -22,13 +23,13 @@ if [ -n "${PROBE:-}" ]; then
   (cd "$PROBE" && nvcc $G -o "$O/probe" "${PROBE_MAIN:-coissue.cu}") > "$O/build-probe.log" 2>&1
   echo "build probe rc $?" >> "$O/rc.txt"
 fi
-export REPS=${REPS:-5} KTILES=${KTILES:-4096} HREPS=${HREPS:-2048}
+export REPS=${REPS:-5} KTILES=${KTILES:-4096} HREPS=${HREPS:-2048} ITEM_MS=${ITEM_MS:-2000}
 ${LEASE-gpu-lease 1 --wait --max-min 15 --} bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit --format=csv > "$O/gpu.txt" 2>&1
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu,utilization.gpu --format=csv -lms 200 > "$O/smi.csv" 2>&1 &
   smi=$!
   if [ -x "$O/probe" ]; then "$O/probe" ${PROBE_ARGS:-1 2048} > "$O/probe.jsonl" 2> "$O/probe.err"; echo "probe rc $?" >> "$O/rc.txt"; fi
-  "$O/coresident" "$REPS" "$KTILES" "$HREPS" > "$O/coresident.jsonl" 2> "$O/coresident.err"
+  "$O/coresident" "$REPS" "$KTILES" "$HREPS" "$ITEM_MS" > "$O/coresident.jsonl" 2> "$O/coresident.err"
   echo "coresident rc $?" >> "$O/rc.txt"
   kill $smi
 '
@@ -37,20 +38,36 @@ python3 - "$O/coresident.jsonl" > "$O/table.md" <<'EOF'
 import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1]) if l.startswith("{")]
 cfg = {r["cfg"]: r for r in rows if "regs" in r}
-alone = {r["cfg"]: r for r in rows if r.get("arm") == "gemm"}
-solo = {(r["cfg"].rsplit("_", 1)[0], r["nhw"]): r for r in rows if r.get("arm") == "hash"}
-print("| configuration | Y | tile | threads | HR | regs | spill B | hash warps | theta alone | theta | theta / alone | hash / bar "
-      "| hash alone / bar | SM MHz | ms |")
-print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
-for r in rows:
-    if r.get("arm") != "gemm+hash":
-        continue
-    c, a = cfg.get(r["cfg"], {}), alone.get(r["cfg"])
-    h = solo.get((r["cfg"].rsplit("_", 1)[0], r["nhw"]))
-    rel = f'{r["theta"] / a["theta"]:.3f}' if a and a["theta"] else ""
+arms = [r for r in rows if "arm" in r]
+alone = {r["cfg"]: r for r in arms if r["arm"] == "gemm"}
+solo = {(r["cfg"].rsplit("_", 1)[0], r["nhw"]): r for r in arms if r["arm"] == "hash"}
+f = lambda x, d=3: "-" if x is None else f"{x:.{d}f}"
+print("theta: of 989.4 T MACs a second; a clock: of 4,096 MACs a SM-clock (clock64). hash / bar: of 4.355 G compressions a "
+      "second; a clock: of 0.018029 a SM-clock. Watts: the board's energy over the item (mean) and the most of its power "
+      "sampled every 20 ms (max). Random operands.\n")
+print("| configuration | Y | tile | threads | HR | spill B | arm | hash warps | theta | theta a clock | clock64 MHz | hash / bar "
+      "| hash / bar a clock | W mean | W max | pJ / MAC | nJ / compression | item s |")
+print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+for r in arms:
+    c = cfg.get(r["cfg"], {})
     print(f'| {r["cfg"]} | {c.get("y", "")} | {64 * c.get("nm", 0)} x {c.get("bn", "")} | {c.get("threads", "")} | '
-          f'{c.get("hr", "")} | {c.get("regs", "")} | {c.get("local", "")} | {r["nhw"]} | {a["theta"] if a else 0:.4f} | '
-          f'{r["theta"]:.4f} | {rel} | {r["hash_bar"]:.4f} | {h["hash_bar"] if h else float("nan"):.4f} | {r["mhz"]:.0f} | '
-          f'{r["ms"]:.3f} |')
+          f'{c.get("hr", "")} | {c.get("local", "")} | {r["arm"]} | {r["nhw"]} | {f(r["theta"])} | {f(r["theta_clk"])} | '
+          f'{r["mhz"]:.0f} | {f(r["hash_bar"])} | {f(r["hash_bar_clk"])} | {f(r.get("w"), 0)} | {f(r.get("wmax"), 0)} | '
+          f'{f(r.get("pj_mac"))} | {f(r.get("nj_comp"), 2)} | {r["item_ms"] / 1e3:.1f} |')
+print("\nEach GEMM with the hash against the GEMM alone and the hash alone (the same configuration and hash warps). The "
+      "hash's rate over its rate alone is its clock's ratio times its rate a clock's ratio (co-issue).\n")
+print("| configuration | hash warps | theta alone | theta | theta / alone | a clock / alone | hash alone / bar | hash / bar "
+      "| clock / alone (hash) | a clock / alone (hash) | pJ / MAC alone | pJ / MAC | W alone | W |")
+print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+for r in arms:
+    if r["arm"] != "gemm+hash":
+        continue
+    a, h = alone.get(r["cfg"]), solo.get((r["cfg"].rsplit("_", 1)[0], r["nhw"]))
+    q = lambda x, y: f"{x / y:.3f}" if x is not None and y else "-"
+    print(f'| {r["cfg"]} | {r["nhw"]} | {f(a and a["theta"])} | {f(r["theta"])} | {q(r["theta"], a and a["theta"])} | '
+          f'{q(r["theta_clk"], a and a["theta_clk"])} | {f(h and h["hash_bar"])} | {f(r["hash_bar"])} | '
+          f'{q(r["mhz"], h and h["mhz"])} | {q(r["hash_bar_clk"], h and h["hash_bar_clk"])} | '
+          f'{f(a and a.get("pj_mac"))} | {f(r.get("pj_mac"))} | {f(a and a.get("w"), 0)} | {f(r.get("w"), 0)} |')
 EOF
 cat "$O/table.md"
+! grep -qv ' rc 0$' "$O/rc.txt"
