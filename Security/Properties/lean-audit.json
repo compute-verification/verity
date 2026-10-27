@@ -7344,6 +7344,7 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -8653,14 +8654,17 @@
    ]
   },
   "MemoryChallenger.Protocol": {
-   "digest": "038dd1a36c1c54edd3c42b163360563d654f514480145d4d25faaf7dbe7f6406",
+   "digest": "b3d0705caa5902a8c8cac1e9a9e44795a25dd09db92f033d664fec0508db2816",
    "definitions": {
     "MemoryChallenger.Digests": "9f5fa02321f5051365a0261249653d12cff78b4aa12fb0b50604175a58399f88",
-    "MemoryChallenger.Digests.find": "214e718e77fb761e5bb139201e52328f23a349b37ecb89cb9f47a1e06a88e7f3"
+    "MemoryChallenger.Digests.find": "214e718e77fb761e5bb139201e52328f23a349b37ecb89cb9f47a1e06a88e7f3",
+    "MemoryChallenger.exactly": "adaee847e1fa4e160a956f3d4d5835651a87a8867fe8647f2c666da554b48a12",
+    "MemoryChallenger.hexField": "7a200b743ced0f99b1ae9cc3e36a5f77a9b6a3a53ea2d96e04b4aebd6a83d591"
    },
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
-    "MemoryChallenger.Properties.SecurityProofs.judgeSigned"
+    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound"
    ]
   },
   "MemoryChallenger.Records": {
@@ -8785,7 +8789,7 @@
    ]
   },
   "MemoryChallenger.StreamedWipe": {
-   "digest": "23df94a1bc248d175c61f0e7c9cb4642e5c60b50f2e5a15a4004f623f989c588",
+   "digest": "a6b70363b9b0865608d6d709fc4e2a57128c883bc06a37c86f13c02ca006a431",
    "definitions": {
     "MemoryChallenger.StreamedWipe.Batch": "c41fb834ea7b752afa45114c300050fe7328c6ed51abb498123e584d9ffdf6af",
     "MemoryChallenger.StreamedWipe.Batch.b": "721183a276bad453e26b8c0e2453c4b40f5eaf062b9f6113542e38dbc6762b07",
@@ -8813,6 +8817,7 @@
     "MemoryChallenger.StreamedWipe.Params.batch": "9df978bb0957d7ec33abc28fa1a954d4407075754a1394c2775a9300f899eb0c",
     "MemoryChallenger.StreamedWipe.Params.batches": "05d1a6b2b644b4252266f9b242fc38a0d8a4be4b7fe247cefab1a7cdfcdca31c",
     "MemoryChallenger.StreamedWipe.Params.casesOn": "f16593a74c5a65666418fce29c2ac4d770363f85e1a57e6aa0d6afb51c006fa1",
+    "MemoryChallenger.StreamedWipe.Params.check": "02ab2104a738a4cd91d1f2db487de2cfde257c4913a7a980d002fb7fc0241c22",
     "MemoryChallenger.StreamedWipe.Params.covered": "bcfdeedc15c138a0d1f1c83a9c68fbe59f2915ee446525bf0fe5a49378958124",
     "MemoryChallenger.StreamedWipe.Params.k": "6cc29c61114cf70871490e57aae494570c77c86c3e6916aa4480f1e92fd1b75a",
     "MemoryChallenger.StreamedWipe.Params.labels": "99ab2c2146a0174c76d08dc9b7374b37f762ee0330ea4e1652d12956b0163530",
@@ -8899,27 +8904,43 @@
     "Pous.Period.SecurityProofs.periodHeldNontrivial"
    ]
   },
+  "MemoryChallenger.WipeJudge": {
+   "digest": "3066aa83320c9831c856cb4c8c60c711364d436a6df629edc2eac656a82c8677",
+   "definitions": {
+    "MemoryChallenger.StreamedWipe.Commitment.ofJson": "dede4791ba7c433bd40af746fb48f499f331f01cca23ce064779dfe5a611b164",
+    "MemoryChallenger.StreamedWipe.Commitment.toJson": "e376bb4eeca970ce1f20193d115a40d5c14d955fad89240dbaf4196d1ea28d68",
+    "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.hexJ": "d762bfacb778ace058f6c070c88fab74270d40ef5af392759046c7831cc08c31",
+    "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.natJ": "aae9e67ce6fad22524532dee9f859a6fb9b2f4935cf892a569e7769c81bbf1d6"
+   },
+   "guarantees": ["MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound"]
+  },
   "MemoryChallenger.WipeProtocol": {
-   "digest": "446b05dc0a3c346dfb5d7264f2f52f6564abbcf24185aeb8a014230cb4f645ab",
+   "digest": "1706594984d57712fb6dac8c3fb449b510a8cca927a100ca8567c5cb737ecc5a",
    "definitions": {
     "MemoryChallenger.WipeProtocol.EPS": "3531a8db9b9865dca0216151f8cd12d96646f4f742bffc1f22bcf747a9ab0383",
     "MemoryChallenger.WipeProtocol.Evidence": "5ddd3ec888e055bcdc0385948ada000a27b53b67cfe10812e5f128d2374d62b1",
     "MemoryChallenger.WipeProtocol.Evidence.signed": "36a3eb1978c22d1cae8c104ca1b10392f19eb059a350d5d12a47bbcb457bd884",
-    "MemoryChallenger.WipeProtocol.F": "0186d44c8b7d503a79e3b2de3f262da5545eabe5f06b9fc48c66960e29adfdb0",
-    "MemoryChallenger.WipeProtocol.LEAST_FILL_BYTES": "534a2092fe897e8865554d2835ae16d97bd739722fc25af5b9d70c5236fb5759",
+    "MemoryChallenger.WipeProtocol.MAX_READS": "8af5a750e886c09459339aedd2975d185c38bc245b03ce658f42fbac3abc521c",
     "MemoryChallenger.WipeProtocol.Params": "685abdfda10157070d82a5c2c36fc420263a31f8ad2dc82815352b741c9c849b",
     "MemoryChallenger.WipeProtocol.Params.server": "f20f46eab435381a5096411c609da400ed8c471a0bff60ab23775463933ab581",
     "MemoryChallenger.WipeProtocol.Params.session": "0c7b260b0f7b5c301cac716efdbac6c7758b151b00443717a318b62920e8f598",
     "MemoryChallenger.WipeProtocol.Params.trusted": "b0eaa4bafb6cb723f6209d32f75d818328eb535497e901089d0bddb5d0cb3233",
-    "MemoryChallenger.WipeProtocol.Public": "5441c319bcf61927f87eba7d566f51649a2f6634d9b2ee410b3130524f161118",
+    "MemoryChallenger.WipeProtocol.Public": "52443519c55d37287d451360b5107c8115217129bc4199490014090192d96adb",
     "MemoryChallenger.WipeProtocol.Public.eps": "fe7105ef6c49c8c807500c9037884af132e22d6bc5d4640050a52ee2f6915e08",
     "MemoryChallenger.WipeProtocol.Public.foreignBits": "571a2986c0fb070551d9593b8792a2b167d62b24b4220e722aadeda7fb931617",
-    "MemoryChallenger.WipeProtocol.READS": "5b06ce3b929e5ff397cfc6a2dec53960386d0045371f1b9db783a5cf8d13aaa3",
     "MemoryChallenger.WipeProtocol.UNIT_BITS": "c4b7d4e610401af58c38eda64d2115b264377f918ad6ecfaa4372534dcda1ba8",
-    "MemoryChallenger.WipeProtocol.certify": "74fc9a307fcacd46c27ac946dc34a503b1b521ee17a2ef2c08336e57b1f50408",
+    "MemoryChallenger.WipeProtocol.certify": "072ab9c2de8386c35209c9cde07faef7acffe6fe24cf7b643ba447c1edfe6c8a",
     "MemoryChallenger.WipeProtocol.check": "4412a8341059ff7bf37a9ec4383b9ff241046fb40d2e743def0edc0726bba545",
-    "MemoryChallenger.WipeProtocol.gaps": "f33de20f543dbc600e789735bf46dfb66f76fa039a2486654bcbb8fee2104324",
-    "MemoryChallenger.WipeProtocol.memoryBits": "f0dc139ac938d311717e1705d6dacdb85324f924c5b068027daf553df2646e05"
+    "MemoryChallenger.WipeProtocol.decodeCommitment": "70a5253e2776f0a06ea1a8fe30555ae0f605646a6a1cf1bbacbf9d218b0d278f",
+    "MemoryChallenger.WipeProtocol.fillBits": "2e0c25f793835b270b0a7b5cf2ac43531072cd93754991996be96b14a9cfa45a",
+    "MemoryChallenger.WipeProtocol.foreignBits": "8ddc228413957f7732e20f7b4c1eba7efc73fc6f5559af4896e54edca10b8ab4",
+    "MemoryChallenger.WipeProtocol.gaps": "cb6573f90cca7340b2c64ffeaca1e97b0195a60f34915df3d27f0d812a3327bc",
+    "MemoryChallenger.WipeProtocol.memoryBits": "e3db7869d85dbda0befcefa074fb025c0ad1904bffb010fa10348a96b74260c7",
+    "MemoryChallenger.WipeProtocol.outsideBits": "ff895eefb5cb61ce41e8ea0e9ecba4149e6cc022c53cbbfbe419fa2fc8b504df",
+    "MemoryChallenger.WipeProtocol.ratio": "c777dbab595c379dcb0f151dfc26f99db623ed03640bfffac3e44ef11a319248",
+    "MemoryChallenger.WipeProtocol.ratioOf": "ead0d9b00b59e4cbd2917faf07df7214127f4fd9d9db0f0d0aa7246f28db7f44",
+    "MemoryChallenger.WipeProtocol.ratioSearch": "594894da11c038ce3658eee5177321e1baf6dacf9cada0502ea06d3bf0033417",
+    "MemoryChallenger.WipeProtocol.samples": "7a145ac3840232f5e62e20ad5f71db9989984c8bc67b8f5d18d1db9c447713e0"
    },
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
@@ -12140,17 +12161,17 @@
    ]
   },
   "Properties.Pous.Wipe": {
-   "digest": "a5faea31d0077064495e6c1f8741fb8edb60826cc657bc70cea68e598875e31d",
+   "digest": "99860529101aba5409c9bdb5a1a8133c3769f1d3c5c3a075fa05541e04f85a88",
    "definitions": {
-    "MemoryChallenger.Properties.WipeSurvivorBound": "771bff1f380ced03ed5a73ae0837897a9dd9f5d8c16171652b017ebd7c301dfc",
-    "MemoryChallenger.Properties.WipeSurvivorBoundHonest": "4f65ee223574b968efd4a644e73efd182261ebbace13f6aef9f939d8f78dc4b5",
-    "MemoryChallenger.Properties.WipeSurvivorBoundNontrivial": "80e525d4d030d794ff563b1a932e8f79994df1a0d306c79998610c88a53729aa",
+    "MemoryChallenger.Properties.WipeSurvivorBound": "023c3f96c30e8f5bc7a8f43219b03a87f08c74cec8839a2cfcda88e451d320be",
+    "MemoryChallenger.Properties.WipeSurvivorBoundHonest": "b4ee7d08abfe1c1ae23740573ac5fd95988a24c5556f28a35b0821b8dfa7bbb6",
+    "MemoryChallenger.Properties.WipeSurvivorBoundNontrivial": "e9a539290c7c26f336dd7ee8a806fdb1b6907ce0778143d542a3c5fe3e67369a",
     "MemoryChallenger.Properties.cheat": "77cd207d90f2c3d500f09453fd9d826e7f93ad5350447327f1fa9e9d1be1c569",
     "MemoryChallenger.Properties.honest": "f1a0aa2ef440014fa97d0ce75b546bc090bd811a57e65d9030b4d94006b497b4",
     "MemoryChallenger.Properties.honestFill": "2ab1010cc6cba22ceb9f4ac15cd6b4db5eeaed27fd6c4666b07cd9bc7cf805ab",
     "MemoryChallenger.Properties.honestRead": "a080cc7bcd8e3fec1a194c4cfdad7a1969e09065ab3784c252d2ee865fdca1c1",
     "MemoryChallenger.Properties.segmentDevice": "458f7f321269403473d693b03c2cf80e9f2bf82ff856470689d1c2be8c1e67ad",
-    "MemoryChallenger.Properties.segmentParams": "b9b72100b5e4432f24f0c565565d9a1f2b4bbde81de1053778ff6c3d5fe2bc55"
+    "MemoryChallenger.Properties.segmentParams": "076d7292bf2140a9d7f55ad495342af07974a29a49713b8096f8ecf9b11464cb"
    },
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
