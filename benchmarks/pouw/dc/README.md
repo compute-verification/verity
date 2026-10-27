@@ -116,8 +116,8 @@ point's best configuration; committed words = slots / lm), clock64 a CTA on 148 
   issuing for every tile serializes the commits (at most 0.36 at L = 32), so a tile needs its own issuer. Four tiles of
   128 columns take as long a round trip as two of 256.
 - **ε_tensor at L = 32**, honest's TMEM stage at 0.489 of ρ_T5: T1 gives 51.1%. TENSOR's two-stage LP (mma.sync fills
-  the shared pipe's slack) gives 47.7% against an adversary at the probes' bandwidth balance (0.914) and 29.0% against one
-  held to the same round trip (0.585). The 2.3% above assumed load bandwidth alone.
+  the shared pipe's idle cycles) gives 47.7% against an adversary at the probes' bandwidth balance (0.914) and 29.0%
+  against one held to the same round trip (0.585). The 2.3% above assumed load bandwidth alone.
 - **The commit spacing need not be 64.** At L = 64 the TMEM stage commits 109.2 words/SM/clk, 0.426 of ρ_T5, so T1 gives
   57.4% against 51.1% at L = 32 (even a TMEM stage at ρ_T5 would give 50% at L = 64), and the fold-bound honest kernel
   is no faster (29.1 against 29.6 words/SM/clk). L = 32 stays sm_100's spacing.
@@ -144,7 +144,7 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   and its issue price, and no other row.
 - **A uniform instruction costs 0.92 (B200) and 0.98 (H200) of an issue slot**, its least slowdown beside an
   issue-saturated stream, less 2%. The streams beside the honest step and the `ub_` stream leave 6–28% of issue idle,
-  and their slack absorbs the chains (0.10 to 1.08 a uniform instruction). The `sat` streams don't: on the B200 `uv_`,
+  and idle slots absorb the chains (0.10 to 1.08 a uniform instruction). The `sat` streams don't: on the B200 `uv_`,
   `uw_` and `ux_` issue 0.958, 0.976 and 0.981 of their slots without chains, and each uniform instruction added slows
   them 0.94 to 1.03 SMSP-cycles (least 0.943, `uv_64x`). On the H200 only `ux_` (FADD by an immediate: one register
   read) reaches 0.974; FFMA streams stop at 0.92–0.93, where the chains slow them by −0.13 to 0.85. Beside `ux_` each

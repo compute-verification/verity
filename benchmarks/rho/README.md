@@ -7,15 +7,15 @@ it is the **time to the target** that size implies, at least the overhead times 
 wall-clock). Every number it reads is a parameter with a public source and a status, so a bound is always at some choice
 of every parameter, and the package shows how the bound moves with each one.
 
-A scenario is one choice from every part: a fleet (its location and dark compute's share), a regime (the protocols that
-run, each with its admissible set), the NCI registration policy, a monitoring period (the horizon), a run (the target
-and its model), the algorithm families the adversary may use, and the bounds and attacks applied. For each one the
-package reports:
+A scenario is one choice from every part: a fleet (its location and unregistered hardware's share), a regime (the
+protocols that run, each with its admissible set), the NCI registration policy, a monitoring period (the horizon), a run
+(the target and its model), the algorithm families the adversary may use, and the bounds and attacks applied. For each
+one the package reports:
 
 - **the overhead lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. It comes
   with its status, where its named premises stand, the δ at which the admissible sets fail (`δ_coin + δ_crypto`, plus a
-  named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored compute), and the
-  time it implies;
+  named `Pr[Break]`), the registered share (`Overhead.monitored`, the part of the adversary's counted weight on
+  registered hardware), and the time it implies;
 - **the comparator** `μ / MFU` (`Result.unmonitored`): an adversary that no protocol encumbers trains at its MFU on a
   circuit padded to capacity, so a lower bound below the comparator is **vacuous**, and is marked so;
 - **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a server block's layout,
@@ -56,12 +56,12 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 A bound is argued in three parts, as the Notation states it, and each module's docstring says what it implements.
 
 - **The feasible set** `𝓕` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its capacity
-  `Φ_X` in gates per second and its servers' memory `M_s`, dark compute's share `ε_dark`, and the monitoring period
-  (`Horizon`). `Units` is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its
+  `Φ_X` in gates per second and its servers' memory `M_s`, unregistered hardware's share `ε_unreg`, and the monitoring
+  period (`Horizon`). `Units` is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its
   `units.basis`).
 - **Protocol soundness**, the admissible sets (`envelopes.py`, `data/envelopes.toml`): each protocol (PoUW, detection
-  and sampled proofs, the wipe, the certifier) is one admissible set `𝒜_a` with its parameters, the unaccounted gates it
-  leaves (by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_a`, split into `δ_coin` and
+  and sampled proofs, the wipe, the certifier) is one admissible set `𝒜_p` with its parameters, the free gates it
+  leaves (by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_p`, split into `δ_coin` and
   `δ_crypto`. The NCI check is the registration (`Policy`). A regime is the protocols that run, and builds the
   server blocks with their cuts.
 - **The overhead lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as per-block limits
@@ -72,20 +72,20 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | Notation | here |
 |---|---|
 | `\|A[X,J]\| ≤ Φ_X \|J\|`, `M_s` | `Location.phi`, `Location.server_memory` |
-| `ε_dark`, `L_dark` | `fleet.<name>.eps_dark`, `Partition.eps_dark` |
+| `ε_unreg`, `L_unreg` | `fleet.<name>.eps_dark`, `Partition.eps_dark` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
 | server block `S`, `(c_S, k_S)`, `n_S` | `ServingBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
 | the per-block limit `q_T(c, k)` | `Cap`, from a pricing argument's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.faulty` (`Cut.uncertified`) |
-| `𝒜_a`, `δ_a`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
+| `𝒜_p`, `δ_p`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
 | the overhead, the time to the target | `Overhead.rho`, `Scenario.seconds` |
 
-**What an unaccounted gate holds.** A bound counts a slack or dark gate at `ω_max / s_×`, `s_×` the fewest gates in any
-counted operation's subcircuit. `structure.reference` takes `s_×` at the reference training algorithm's gates per
-counted product, which is valid only under the named assumption `draft:no-straddle` (no counted operation straddles
-accounted and unaccounted gates), so every bound counting such gates cites it. A structure states its `basis`, and
+**What a free gate holds.** A bound counts a free gate at `ω_max / s_×`, `s_×` the fewest gates in any counted
+operation's subcircuit. `structure.reference` takes `s_×` at the reference training algorithm's gates per counted
+product, which is valid only under the named assumption `draft:no-straddle` (no counted operation straddles verified
+and free gates), so every bound counting such gates cites it. A structure states its `basis`, and
 `Structure.check` refuses one whose `s_×` and `units.gates_per_flop` come from different sources. `structure.elementary`
 (one counted operation a gate, at most) needs no such premise; it is the `*-elementary` scenarios, and what
 `analysis.upto` falls back to for a status stronger than `draft`. A scenario that names no structure takes
@@ -122,7 +122,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,
 `conditional` (proved under named assumptions), `draft` (a statement not yet in Lean, a `draft:` id) or `absent`. Its
 citations are its argument's and those of the cuts that bound it, and `draft:no-straddle` wherever a bound holds
-slack or dark gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
+free gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
 
 ## Names
 

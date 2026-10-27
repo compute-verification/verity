@@ -53,7 +53,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 - **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
   proof block in Dither's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
-  is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_acc.
+  is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's verified compute V.
 - **W_reg**: a replica's budget for a monitoring period, registered before its first coin.
 - **W_F, W_cap and W_S**: a fleet's registered total, or its registered cap, and the total of its accepted replicas'
   W_reg (see "The fleet").

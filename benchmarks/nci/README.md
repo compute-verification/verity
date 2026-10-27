@@ -197,7 +197,7 @@ one is a research target.
 | Rung | Claim | Status |
 | --- | --- | --- |
 | 1 | inference complies as declared | established |
-| 2 | within the monitored circuit, contained dense pretraining runs at about 1e-7 to 3e-7 efficiency | conditional |
+| 2 | within the circuit on registered hardware, contained dense pretraining runs at about 1e-7 to 3e-7 efficiency | conditional |
 | 3 | the policy throttles pretraining however long the run | conditional |
 | 4 | every known method is throttled or weak | open |
 | 5 | translated into capability and time | contested |
@@ -210,7 +210,7 @@ Each claim lists:
 - **what attacks it:** the red teams' findings, by severity, each with its repair;
 - **what comes next.**
 
-The monitored computation is one circuit, built by appending as it streams, over one registration up front. The
+What registered hardware computes is one circuit, built by appending as it streams, over one registration up front. The
 red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
