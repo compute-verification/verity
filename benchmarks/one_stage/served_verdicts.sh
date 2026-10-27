@@ -4,14 +4,19 @@
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
 #     the H200 int8 row's manifest (ROW/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO). Each closed window is sealed as a
-#     rows-sha512 row dir, and SERVED-SEAL opens each one's replay bundle (`deferred_rows.of_record`).
+#     rows-sha512 row dir, and SERVED-SEAL opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
+#     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
+#     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, committed under salts drawn from the committer's key
+#     $D/private/weights.key, 0600, which no record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
+#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
-#     closed window's advice under PROVE-PATH's registered compiler, then this window's request Programs
-#     (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES (`prove_path.py window-circuit --pin PIN`,
-#     default `weights`; #4317 with #4757; `record` is the class of record); then the window audited from its records alone
+#     closed window's advice under PROVE-PATH's registered compiler and the weights registration (`--weights-of-record`),
+#     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES
+#     (`prove_path.py window-circuit --pins` the registration, and PIN's NAME=ROOT if set; #4317 with #4757; `record` is the
+#     class of record), its registered and free input bits at those pins; then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's: proving the window circuit's own units is V3c (VLLM-103),
@@ -64,6 +69,27 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
+CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
+NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
+weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
+  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$CKPT" \
+    --key "$D/private/weights.key" --out "$WREG") > "$OUT/weights_registration.txt" 2>&1
+  local rc=$? log=$OUT/weights_registration.txt
+  if [ "$rc" != 0 ] || [ ! -f "$WREG" ]; then
+    say "$NO_WEIGHTS (weights-registration exit $rc: $({ grep -m1 'prove_path.py weights-registration:' "$log" || tail -1 "$log"; } | cut -c1-400))"
+    return
+  fi
+  cp "$WREG" "$OUT/"
+  say "WEIGHTS $("$PY" - "$WREG" <<'EOF'
+import json, sys
+r = json.load(open(sys.argv[1]))
+v, u = r["values"], r["unrooted"]
+print(f"registered before the first request: {len(v)} weight parameters rooted ({sum(e['words'] * e['leaves'] for e in v.values()) * 16} "
+      f"bits) of {r['model']['repo']}@{r['model']['revision'][:10]} under the committer's key (kept off every record); "
+      f"{len(u)} unrooted" + "".join(f"; {p}: {why}" for p, why in sorted(u.items())))
+EOF
+)"
+}
 
 serve() {  # under the lease: the endpoint, the requests, every closed window sealed, the endpoint stopped
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
@@ -93,6 +119,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     kill -TERM "$srv" 2>/dev/null; wait "$srv"; return 10
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
+  weights
   release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
   "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" --prompt-range "$PROMPTS" \
     --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
@@ -203,9 +230,11 @@ CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-ru
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
 [ -n "$CA" ] || stop compiler 13
 echo "registered compiler: $CA" > "$OUT/compiler.txt"
+WA=() PINS=() WP="$NO_WEIGHTS"
+[ -f "$WREG" ] && WA=(--weights-of-record "$WREG") PINS=(--pins "$WREG") WP="at the weights registration's pins"
 for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
   # shellcheck disable=SC2086
-  vv advice "$D" --window "$k" --cap "$CAP" $CA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1
+  vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1
   [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
   [ "$k" = "$K" ] && break
 done
@@ -214,7 +243,8 @@ cp "$D/advice/w$K/registration.json" "$OUT/registration-w$K.json"
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$OUT/compile_w$K.log" 2>&1
 rc=$?
 say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits", w["bits"])' \
-  "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); compile (advice_compile.py) exit $rc: $(tail -1 "$OUT/compile_w$K.log" | cut -c1-300)"
+  "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
+  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc: $(tail -1 "$OUT/compile_w$K.log" | cut -c1-300)"
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0
@@ -225,12 +255,13 @@ for c in $CLASSES; do
   cls=(); tag=record; [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
   f=$D/window-circuit-w$K-$tag.json
   timeout "${WC_TIMEOUT:-30m}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
-    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" --pin "${PIN:-weights}" "${cls[@]}" \
-    > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
+    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${PINS[@]}" ${PIN:+--pin "$PIN"} \
+    "${cls[@]}" > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
   rc=$?
   if [ "$rc" = 0 ]; then
     wc_ok=1
-    say "WINDOW-CIRCUIT class $c: $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
+    say "WINDOW-CIRCUIT class $c: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
+      "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $WP; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
   else
     say "WINDOW-CIRCUIT class $c refused (exit $rc): $(grep -m1 'window-circuit' "$OUT/window-circuit-$tag.err" | cut -c1-600)"
   fi

@@ -58,9 +58,11 @@ negatives.
 - `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
   (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
-  few greedy requests from the certifier's traffic generator, and seals each window. On the window holding the most requests,
-  none carried, it runs sampled proofs: the window's advice and request Programs, V3b's window circuit at each class of
-  `CLASSES`, then the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
+  few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
+  registers its weights under its own key (`prove_path.py weights-registration`). Without a registration, `NO WEIGHTS
+  REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
+  sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
+  circuit at each class of `CLASSES`, with its weight reads counted registered at the registration's pins, then the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
   and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and CMP-153's block record. Each step's verdict line is in
