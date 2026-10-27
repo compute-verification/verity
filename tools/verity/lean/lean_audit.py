@@ -534,7 +534,7 @@ def prune(pkg: Path) -> int:
 #: than the ~30 packages, every check evicted some and rebuilt them cold (r20261026-040757-de32: Flock's build alone 1,094 s)
 BUILDS_KEPT = 48
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
-#: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra)
+#: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra, LEAN-29)
 DEPS_KEPT = 8
 #: the replay cache's entries a node keeps, last used first (a replay touches each entry it reuses): one per module and key,
 #: about 3k a version of the tree plus some 8k of Mathlib's and ArkLib's that every replay reuses, each a few hundred bytes;

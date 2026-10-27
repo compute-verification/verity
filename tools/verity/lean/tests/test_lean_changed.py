@@ -1,4 +1,4 @@
-"""`lean_changed.py --records --update`: the regenerated record survives where the run keeps it, and a node
+"""`lean_changed.py --records --update`: the regenerated record survives where the run keeps it (LEAN-10), and a node
 whose Lean slots grant no `build` slot takes the `--dev-cache` path.
 
 In a recorded run the fast path never writes ROOT (the commit's shared source tree), and the slot tree's copy of the
@@ -184,7 +184,7 @@ def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_pa
 
 def torn(lib: Path, name: str) -> Path:
     """A module whose `.olean` was written after its `.hash`, the trace and the `.hash` still agreeing: what a build killed
-    after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash`."""
+    after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash` (TOP-90 row 54)."""
     t = module(lib, name)
     h = lib / f"{name}.olean.hash"
     os.utime(h, ns=(10**18, 10**18))

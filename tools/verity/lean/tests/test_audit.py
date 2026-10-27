@@ -358,7 +358,7 @@ def test_a_module_s_tree_is_its_longest_prefix_s_and_reaches_the_packages_requir
 
 
 def test_a_statement_reads_nothing_of_the_proofs_tree_and_the_trusted_trees_import_none_of_it():
-    """The three trees: a guarantee's or property's statement reads only the definitions tree and the code, and
+    """Daniel's three trees (24 Oct): a guarantee's or property's statement reads only the definitions tree and the code, and
     no module of the definitions or properties tree imports the proofs tree; each refusal says what to move where."""
     assert A.tree_failures({}, spec_facts(), TREES) == []
     read = A.tree_failures({}, spec_facts(reads=fact()["reads"] + AUX), TREES)
@@ -968,8 +968,8 @@ def test_the_dependencies_plugins_are_named_once_each():
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it_no_more(tmp_path):
-    """Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
-    `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race.
+    """INF-62: Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
+    `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race (three proofs builds failed so on 18 Oct).
     Whether a plain build schedules the second link depends on Lake's scheduling, so the test checks only the fix: linked
     alone first (`plugin_targets`), the build finds it up to date and links nothing."""
     dep, root = tmp_path / "dep", tmp_path / "root"
@@ -1131,7 +1131,7 @@ def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
 
 def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_out():
     """A record whose declarations are unchanged but whose generated constants are grouped differently (`group_keys`) is
-    counted on one line that `statement_changes` leaves out, so the landing DM lists only real changes; a changed declaration
+    counted on one line that `statement_changes` leaves out, so Daniel's DM lists only real changes; a changed declaration
     among them is still listed."""
     enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
     mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
@@ -1337,7 +1337,8 @@ def test_a_premise_the_lock_does_not_list_fails():
 
 
 def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
-    """A premise is listed wherever it is defined, not only in an assumptions module. A head in any module whose `.olean` a package of the repository builds
+    """LEAN-37 (RT2-LOGIC-2): `ProofLayer.SoundAt`, a premise defined in `Definitions/Accounting/TS`, passed unlisted, since
+    only a head in an assumptions module counted. A head in any module whose `.olean` a package of the repository builds
     is listed now, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
     toolchain or a fetched dependency (`Nat.le`, Mathlib's) is not."""
     pin = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
@@ -1374,8 +1375,9 @@ def aliased(unfolds: dict, closed: bool = False) -> dict:
 
 
 def test_an_alias_of_listed_assumptions_is_no_new_named_assumption():
-    """A premise that only packs listed assumptions (`def Both n := Hyp ∧ Hyp2 n`, or through another such definition)
-    is no new named assumption: the check holds its parts to the lock in its place (so a listed part reached only through it is read), an
+    """TOP-90 row 17 (#4440, #4358): a premise that only packs listed assumptions (`def Both n := Hyp ∧ Hyp2 n`, or through
+    another such definition) failed as a new named assumption, and listing or renaming it took another records run. It is
+    not one: the check holds its parts to the lock in its place (so a listed part reached only through it is read), an
     update doesn't add it, and taken closed, its parts are the guarantee's named assumptions."""
     listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Hyp2": {"owner": "@lean"}}}
     for unfolds in ({"P.Both": [asserted("P.Hyp"), asserted("P.Hyp2")]},
@@ -1483,7 +1485,8 @@ def test_aliases_of_listed_assumptions_pass_and_aliases_hiding_others_fail_on_a_
 
 
 def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
-    """A premise whose module is outside `meaning` (a Proofs module) has no `reads` record, so its digest is its walk's
+    """LEAN-60: a premise whose module is outside `meaning` (a Proofs module) has no `reads` record, and its entry was an
+    owner alone, so #4641's strengthened `RecDeploy.PlainLeavesAdmitted` changed no record. Its digest is now its walk's
     (`Facts.lean`'s `assumption_reads`: it and what it reads): a change to either fails under its name, and an update
     writes it, which the review prints."""
     pin = fact(signature="P.t (n : Nat) (h : P.Leaves n) : P.f n = n", hyps=[])
@@ -1513,7 +1516,7 @@ LEAVES = "import Control.LeafBound\nnamespace Control\ndef Leaves (n : Nat) : Pr
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_changes(tmp_path):
-    """On a real build: a premise defined outside `meaning` (`Control.Leaves`, as `RecDeploy.PlainLeavesAdmitted`
+    """LEAN-60 on a real build: a premise defined outside `meaning` (`Control.Leaves`, as `RecDeploy.PlainLeavesAdmitted`
     is in a Proofs module), reading a definition of another such module (`leafBound`), gets a digest; a rebuild that
     changes neither keeps the lock byte for byte, and a change to the definition it reads, or to its own statement, changes
     its record and nothing else, which the audit refuses until `--update` records it."""
@@ -1570,7 +1573,7 @@ def test_a_statement_whose_premises_could_not_be_read_fails():
 
 
 def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
-    """The checks on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
+    """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
     constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
     entry into the `hash` namespace that bypasses `stop`, naming its path; a missing entry is named; no rule, no checks."""
     path = {"missing": ["P.gone"], "reached": 40,
@@ -1593,7 +1596,7 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
 
 
 def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
-    """`verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
+    """LEAN-33: `verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
     `--update` writes it, so the landing DM shows one added: an Init extern the list doesn't name fails (no `module:Init`
     admitting all of Init), a name that admits nothing on the path fails, and a `module:` entry still admits its modules."""
     path = {"missing": [], "reached": 40, "hash": [], "csimp": [],
@@ -1621,7 +1624,7 @@ def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
 
 
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
-    """Each predicate the spec declares under `claims.modules` names a `fails` theorem stating `¬ C …` with that
+    """LEAN-26: each predicate the spec declares under `claims.modules` names a `fails` theorem stating `¬ C …` with that
     claim at the head, and `meets` theorems that are not `C` itself, each a guarantee; one without witnesses fails unless
     `claims.not` gives the reason, and a named assumption is no claim."""
     def spec(name, predicate=True):
@@ -1684,7 +1687,7 @@ def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
 
 
 def test_a_meets_witness_says_something_about_the_deployment():
-    """A `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
+    """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
     hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
     conjunct applies a definition of the spec (`∃ s w, InScope deploy s ∧ RelS s w`, `deploy.zk = true`) passes."""
     def k(head, defs=("P.deploy",), refl=False, assumed=False):
@@ -1761,7 +1764,7 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
 
 
 def test_each_heartbeat_override_is_listed_with_its_value_reason_and_module_build_time_and_none_is_refused(tmp_path):
-    """`heartbeats` (listed, never banned): an override with its reason ending its line, one with the
+    """`heartbeats` (Daniel, 2026-10-09: not banned, listed): an override with its reason ending its line, one with the
     comments just above as its reason, one with none, `synthInstance`'s, and one in a comment, which is not an override;
     each with its module's time from the audit's build log (`build_seconds`, which skips a non-module like `:c.o`), or
     None for a module the build didn't build."""
@@ -2636,8 +2639,8 @@ def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_w
 
 
 def test_a_statement_in_another_order_or_with_a_shared_field_fits_as_its_restatement_would():
-    """A statement whose binders come in another order, or that shares a field (`c.root = c'.root`), fits as its
-    restatement would. Binders reorder with the acceptances, the premises and what they mention first, so a
+    """LEAN-47: `OnePair` bound `w k` before its two acceptances and `LiveCoinBinding` took `c.root = c'.root`, each
+    equivalent to a form that fits. Binders reorder with the acceptances, the premises and what they mention first, so a
     hypothesis on a binder the acceptance doesn't read is the conclusion's, when the conclusion reads that binder too; an
     equation of one field of two inputs the acceptance reads is the field bound once. Nothing else moves: a hypothesis on
     what the acceptance reads, one whose proof a kept binder mentions, a structure's fields, a probability statement's
