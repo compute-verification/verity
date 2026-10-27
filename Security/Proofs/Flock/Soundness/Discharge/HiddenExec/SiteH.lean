@@ -14,7 +14,7 @@ set_option Elab.async false
 
 * `siteAddrH a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site_ofH`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
-  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnS`);
+  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnS_unpin`);
   `BcSiteH` bundles what it reads;
 * `copy_siteH`: a stacked unit input whose Δ key is message bit `bit` of byte `byte` of row `q` holds the witness's bit
   at that message column (`copyPos_blockH`, `Aliased.copyPos_key` at the flat twin);
@@ -133,7 +133,7 @@ def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) :
     HmOut.loadPublic a.tags a.st.c a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnS`), at a `BcSiteH`, for every row
+/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnS_unpin`), at a `BcSiteH`, for every row
 `p`. -/
 theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteH a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
@@ -145,7 +145,7 @@ theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u 
   dsimp only at hd hregs hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact Hidden.bc_drawnS h.self hpop hD hlt L regs hregs hz o hg hg2 hp hr
+  exact Hidden.bc_drawnS_unpin h.self hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
 /-! ## Copies at a site -/
 
@@ -167,7 +167,7 @@ theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o :
     rw [← L.unitRows_nIn]; exact hx
   rcases Aliased.copyPos_key Lf regs F hg hx' (by simp [hk]) (fun k off => by simp [hk]) with he | ⟨hn, -⟩
   · simp only [AcceptedH.col, siteAddrH, Fin.cast_eq_self]
-    rw [hb]
+    refine hb.trans ?_
     show z _ = z _
     congr 2
     apply Fin.ext
@@ -241,8 +241,7 @@ theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.
   subst hT
   dsimp only at hg x hu0 hj0 ho0 hrf0 hjo0 hk0 hw0 hcol hty hls hcr h16 hlo hget hin hs L0 F0 ⊢
   have C := check_facts hty hls
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [hs.da, Hidden.hidden_delta']
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hrows := hrf0.1
   have hupv : 0 < st.c.upv := Hm.upv_pos C ho0
   have hpv := perVu_unit C L.unit_mem L.unit_kind L.unit_count (by omega)
@@ -280,11 +279,9 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
   dsimp only at hupv hrf hg hp ⊢
-  have s := h.self
   have L0 := h.flatLayout ht
   have F0 := h.unitFacts ht
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta']
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
   exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv (hz0.ex _) o hg hp (hrf.kind hp)
 
