@@ -37,8 +37,8 @@ that law over the registered population (Lean's `flock-verify draw --registratio
 (two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
-window itself, which `benchmarks/one_stage/prove_bundle.py` proves the bundle against, is the fetched fixture
-`benchmarks/one_stage/tests/fixtures/bundle-window`.
+window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is in the evidence store
+(its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v1`)
 

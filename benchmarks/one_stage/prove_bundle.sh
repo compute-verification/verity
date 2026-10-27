@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The drawn-unit replay bundle proved (prove_bundle.py; PRF-171's M1): the bundle PB_BUNDLE (its .bin beside it) of the
-# window PB_WINDOW, without PB_WINDOW the fetched fixture tests/fixtures/bundle-window (a W8A8 MLP's window, its tampered twin and
-# the bundle of four drawn units under the window's registered subset:4, a fixture's draw).
+# window PB_WINDOW; without PB_WINDOW, the store's art:1cd702b1 (BUNDLE_WINDOW: a W8A8 MLP's window under a test key, its
+# tampered twin and e2e_demo's bundle of four drawn units under the window's registered subset:4, a fixture's draw).
 # Each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
 # member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the firewall and refused by
@@ -26,7 +26,8 @@ PY=$REPO/.venv/bin/python
 
 STAMP=$(git rev-parse HEAD:verity/ml/flock HEAD:verity/core/service/flock 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
-FX=$REPO/benchmarks/one_stage/tests/fixtures/bundle-window
+BUNDLE_WINDOW=art:1cd702b13ac6c9d885670a4939beadaa34c297e16d318291732b059b7c46427f
+FX=$W/bundle-window
 if [ -n "${PB_WINDOW:-}" ]; then
   BUNDLE=${PB_BUNDLE:?PB_WINDOW needs its PB_BUNDLE} WINDOW=$PB_WINDOW TAMPERED=${PB_TAMPERED:-}
 else
@@ -61,7 +62,7 @@ export RAYON_NUM_THREADS=$(nproc)
 export RUST_MIN_STACK=$((64 << 20))
 
 if [ -z "${PB_WINDOW:-}" ]; then
-  "$REPO/.venv/bin/research" data fetch-fixtures benchmarks/one_stage/tests/fixtures/bundle-window > "$O/fetch.log" 2>&1 \
+  "$REPO/.venv/bin/research" data fetch $BUNDLE_WINDOW --to "$FX" > "$O/fetch.log" 2>&1 \
     || { tail -20 "$O/fetch.log"; exit 8; }
 fi
 

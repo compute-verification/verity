@@ -16,7 +16,7 @@ SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json
 #: the bundle of units 5, 200, 300 and 511 (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1) of a W8A8 MLP's
 #: window (two requests, one step, width 128: 512 units in members of 8) on the RTX PRO 6000's dot, under the window's
 #: registered subset:4, and that registration; `prove_bundle.py make` wrote them at bc24cf2713 from the retired torch loop,
-#: and the window itself is the fetched fixture benchmarks/one_stage/tests/fixtures/bundle-window
+#: and the window itself is in the evidence store (benchmarks/one_stage/prove_bundle.sh's BUNDLE_WINDOW)
 FIXTURES = Path(__file__).parent / "fixtures"
 DRAW = (5, 200, 300, 511)
 PATHS = "its paths do not reach its unit, slot and step roots"

@@ -6,8 +6,8 @@ tampered window's member, whose proof must not be accepted.
     python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
         --firewall flock-firewall --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
 
-* **The bundle** is what `replay_bundle.build` wrote of the window's drawn units. `prove_bundle.sh` proves
-  `tests/fixtures/bundle-window` (a W8A8 MLP's window, its tampered twin and the bundle of four drawn units under its
+* **The bundle** is what `replay_bundle.build` wrote of the window's drawn units. `prove_bundle.sh` proves the
+  store's `BUNDLE_WINDOW` (a W8A8 MLP's window, its tampered twin and e2e_demo's bundle of four drawn units under its
   registered `subset:4`, a fixture's draw) unless it's given others.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since C-Flock's statement is a whole member. Checks: the bundle's own check
