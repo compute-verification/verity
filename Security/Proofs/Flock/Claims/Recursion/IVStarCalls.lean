@@ -560,7 +560,7 @@ theorem nextR_calls_le (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg
   | rej => simp [FlockDeploy.nextR, ha, Claims.OC.eval]
   | coin c => simp [FlockDeploy.nextR, ha, Claims.OC.eval]
   | decide s spec sts link c₁ mids f =>
-    obtain ⟨v, -, -, -, -, -, -, hset, -, -, -, -, -, hd⟩ := FlockDeploy.decR_some (FlockDeploy.actR_decide ha)
+    obtain ⟨v, _, _, _, _, _, _, hset, -, -, -, -, -, hd⟩ := FlockDeploy.decR_some (FlockDeploy.actR_decide ha)
     have hs : s = v.1 := congrArg FlockDeploy.DecR.s hd
     have h1 := hB v hset
     rw [← hs] at h1

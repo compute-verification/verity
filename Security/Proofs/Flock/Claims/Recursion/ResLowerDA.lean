@@ -159,7 +159,7 @@ theorem decAt_of (S : Claims.JsonSpec FlockComplete.printJ _root_.Flock.canon) {
   | decide s spec sts link c₁ mids f =>
     have hd := FlockDeploy.actR_decide h
     have hs := setupWith_sha512_of (actR_decide_setup h).1
-    obtain ⟨sess, hsess⟩ := DecodeAt.decode_at S rd (fun _ _ _ => True) (xIOf xo) ms cs
+    obtain ⟨sess, hsess⟩ := DecodeAt.decode_at rd (fun _ _ _ => True) (xIOf xo) ms cs
       ⟨⟨xo, sto, hst, hf, rfl⟩, hr, fun b hb => hBs xo sto hst b hb ms cs hlen, trivial⟩ _ hd spec sts hs
     exact ⟨⟨_, hd, spec, sts, hs, sess, hsess⟩⟩
 
