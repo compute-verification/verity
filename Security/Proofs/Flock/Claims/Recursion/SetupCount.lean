@@ -1729,11 +1729,15 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
       countC.P (HmOut.checkPublicWith (Hashes.counted h) c pub) (NP * perRow K) :=
     fun c pub hc hp => countC.mono (checkPublic_cost h c pub K hp.1 hp.2) (Nat.mul_le_mul_right _ (hPC c hc))
   unfold Stmt.setupHiddenWith
+  -- `if let some d := draw` binds its own `d`; only once that match reduces is the law's `Except.map` at the theorem's
+  -- `d`, where `generalize` finds it. A `split` the walk leaves unreduced shares one bound between its arms.
+  try simp -zeta only
   generalize Except.map (fun x => x.law) (Draw.UnitDraw.ofJson d) = s
   cases hb : tags.bindings <;> cases partition <;> cases program <;>
     rcases s with e | (k | ⟨num, den⟩ | ⟨k, strata⟩ | ⟨k, strata⟩)
   all_goals
-    (try simp -zeta only)
+    (try simp -zeta only [eq_self, Bool.false_eq_true, Bool.true_eq_false, Option.isSome_none, Option.isSome_some,
+      ↓reduceIte])
     apply countC.mono
     · repeat (first
         | extract_lets
