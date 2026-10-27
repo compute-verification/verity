@@ -30,9 +30,11 @@ structure Disks where
   bytes : ℕ
   labels : ℕ
 
-/-- PROVISIONAL, replaced by the run's measured values: vy-dc-h200-2's disks. -/
+/-- vy-dc-h200-2's disks as a whole-node session filled them: its two virtual disks whole (`vda` 274,877,906,944 B
+and `vdc` 499,289,948,160 B), and the labels of the fill written on them, each filesystem's free space less 10 GiB
+(325,243,109,376 B). -/
 def h200Disks : Disks where
-  bytes := 1920383410176
-  labels := 28000000000
+  bytes := 774167855104
+  labels := 5081923584
 
 end Pous.StreamedWipe

@@ -57,7 +57,7 @@ f17be8cbc547930461d46c4f41040ea165bfff15169972934aade312603dc129  ../../../../..
 54f82aac68b27f47b2383f486ef7dbfae2dfc14fc02de7e12458a97b7bfd6463  ../../../../../Security/Definitions/Pous/Model/SecureErasure.lean
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 f5671be4b98bfe70d0cafff562ed2c79f5ac500482a652ac3c6d669e0fc836c1  ../../../../../Security/Definitions/Pous/Model/StreamedWipe.lean
-2640100dab0952ddd8f3fbd23a731ad1c49a424b65e5a911ef2dc08e3e294b27  ../../../../../Security/Definitions/Pous/Model/StreamedWipeDisk.lean
+f308c1597624e04be337abe95c510881afc2cc6449761bb578f7cbceabd930c2  ../../../../../Security/Definitions/Pous/Model/StreamedWipeDisk.lean
 a312bea2de0d6adef69a6d228883618b4de893658306c0aae970ee761f9b6b70  ../../../../../Security/Definitions/Pous/Model/StreamedWipeServer.lean
 58c66950dee05bce6131152a168b1910b8059fd8d7967bc78259331ff96a15a5  ../../../../../Security/Definitions/Pous/P2/Cost.lean
 820e3315c31eafa922a98a3e9ce18dd085f66a9a2948d8f35b08f8f3e2576c79  ../../../../../Security/Definitions/Pous/P2/Mutable.lean
