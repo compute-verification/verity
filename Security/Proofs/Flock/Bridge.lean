@@ -11,6 +11,7 @@ import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.KSLive
 import Proofs.Flock.Bridge.Public
+import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.PublicWitnesses
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
@@ -22,8 +23,10 @@ verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lo
 (`Flock.Bridge.lowers`).
 `FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). `Public`:
 `Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
-`Flock.Bridge.deltaPub`, a function of the public parameters. `PublicWitnesses`: its honest lemma (the parameter
-hypotheses hold as deployed) and its nontrivial lemma (false at the verifier that accepts everything). -/
+`Flock.Bridge.deltaPub`, a function of the public parameters. `PublicDeployed`:
+`Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
+parameters. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and its nontrivial lemma
+(false at the verifier that accepts everything). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
