@@ -82,7 +82,8 @@ roots and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the
 two rows' registrations, under the deployment's key and its one schedule; the scan's Program its descriptor
 (`scan_zk`'s ``joint/program.json``, the generator form's), off which the period check reads the scan's terms (it
 refuses a checker form, whose egress rows are inputs, by name); and beside the loop's audits the scan's block round's
-(`block_audit`), whose o1 is the scan's `prog`, as the rows form's `progTied` asks. A period with a link-window the
+(`block_audit`), whose o1 is the scan's `prog` and whose ``scan/state`` is the scan's, as the rows form's `progTied`
+and `idsTied` ask. A period with a link-window the
 scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved yet, and a ``late`` run's is refused before
 the scan registers it).
 

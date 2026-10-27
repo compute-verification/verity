@@ -4,7 +4,9 @@ and each round's host read (`scan_zk.member`, as Lean's registered reads make it
 round's: honest accepted with every output 1, its state and view chains wires through the registered roots
 (`scan_zk.wired`); chain's ingress member refused at unit A's o1 and tampered's egress member at the re-signed row
 ("does not open"); unread's one ingress unit, at a request's anchor with its Programs' entry unread, every read held and
-its output 0, its state and view the honest ones. A group of link-windows (IO-TIE's) is one registration, a member a
+its output 0, its state and view the honest ones; the block's ``ids`` the state's leaf b − 1, and prompt's and
+sampling's block, whose unit at a request's anchor reads a prompt id or a sampling field the warden didn't certify,
+refused at that read. A group of link-windows (IO-TIE's) is one registration, a member a
 template and link-window, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
 registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
@@ -56,14 +58,28 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert [(m.base, m.n) for m in (first, ing, eg)] == [(0, 1), (1, T - 1), (T, T)]
     assert all(m.refused is None and m.outputs == [1] * m.n for m in honest.values())
     assert sz.wired(honest.values()) == []
-    # the block: one unit a bucket, its o1 the prog tree's leaf b, the tree under its o1 frame binding
+    # the block: one unit a bucket, its o1 the prog tree's leaf b, the tree under its o1 frame binding, and its ids the
+    # state tree's leaf b - 1 (unit 0 leaf 0): the S_(b-1) ingress unit b reads
     (blk,) = h.rounds["block"]
-    tr = at.trees["prog"]
+    tr, st = at.trees["prog"], at.trees["state"]
     assert (blk.name, blk.base, blk.n, blk.refused, blk.outputs, blk.warden) == ("block", 0, T, None, [1] * T, {})
     assert blk.ports["o1"]["root"] == tr.root.hex() == ing.ports["prog"]["root"] and blk.ports["o1"]["reads"] == list(
-        range(T)) and list(blk.ports) == ["o1"]
+        range(T)) and list(blk.ports) == ["ids", "o1"]
+    assert blk.ports["ids"]["root"] == st.root.hex() == ing.ports["sin"]["root"] and blk.ports["ids"]["reads"] == [
+        0, *range(T - 1)]
     assert blk.made["o1"] == [sz._bits(tr, b) for b in range(T)] == [u[0] for u in blk.units]
+    assert [u[1] for u in blk.units] == [sz._bits(st, max(b - 1, 0)) for b in range(T)]
+    assert blk.bcs["ids"] == first.bcs["o1"] * 2 + ing.bcs["o1"][:-1]
     assert blk.set_name == at.block_set and tr.binding == sz.block_binding(at.block_set, T)
+    # prompt and sampling: request 1 is anchored at 16 in slot 0, and the block's unit 16 reads S_15 with its first
+    # prompt id, or its temperature (0.7 in six decimals), one more: refused at that read
+    for k, field, was in (("prompt", "ids", sz.W63.prompts[0][0]), ("sampling", "temperature", 700_000)):
+        (m,) = h.rounds[k]
+        c = at.changed[k]
+        assert (c.bucket, c.slot, c.q, c.field, c.was) == (16, 0, 1, field, was) and sz.targets(at, k) == ["block"]
+        assert m.refused == "registered reads: table row 16 does not open the registered root at position 15"
+        assert m.units[16][1] == c.row != blk.units[16][1] and m.changed == 16 and m.ports == blk.ports
+        assert [u for i, u in enumerate(m.units) if i != 16] == [u for i, u in enumerate(blk.units) if i != 16]
     assert first.bcs["o1"] + ing.bcs["o1"][:-1] == ing.bcs["sin"] and first.bcs["o2"] + ing.bcs["o2"] == eg.bcs["state"]
     assert ing.ports["o1"]["root"] == ing.ports["sin"]["root"] and ing.ports["o2"]["root"] == eg.ports["state"]["root"]
     assert first.ports["row"]["reads"] == [0] and sz.REG.READS_FROM not in first.ports["row"]
@@ -115,6 +131,28 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
     assert [(m.name, m.buckets, m.outputs) for m in h.rounds["unread"]] == [("ingress-0", [4], [0])]
     with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
+
+
+def test_a_block_that_computed_on_another_prompt_id_or_sampling_field_is_refused_at_its_ids_read(tmp_path):
+    """The block's ``ids`` row at a request's anchor A is S_(A-1), whose slot holds the prompt ids and sampling fields
+    the scan read off the warden's ingress cells: at the test class request 1's (its first prompt id, max_tokens 5,
+    seed 0, temperature 0.7 and top_p 0.95, each in its six decimals), anchored at 4 in slot 0. With any of them one
+    more (`changed_ids`), the block's unit 4 reads a row that opens no state leaf, and the host's read refuses it there,
+    as Lean's registered reads do; every other unit's read is the honest block's."""
+    h = sz.host(tmp_path, setup=sz.TEST)
+    at, s = h.at, sz.TEST
+    want = {"ids": s.prompts[0][0], "max_tokens": s.max_tokens, "seed": 0, "temperature": 700_000, "top_p": 950_000}
+    (blk,) = h.rounds["block"]
+    assert blk.refused is None
+    for field in ("ids", *sz.SAMPLING_FIELDS):
+        c = sz.changed_ids(s.cls, at.chain, field)
+        assert (c.bucket, c.slot, c.q, c.was) == (4, 0, 1, want[field]), field
+        got = sz.IS.decode(s.cls, c.row).slots[0]
+        assert (got.ids[sz.IS.position(s.cls, 0)] if field == "ids" else getattr(got, field)) == c.was + 1, field
+        at.changed["sampling"] = c
+        (m,) = (sz.member(at, "sampling", mb) for mb in sz.members_of(sz.BLOCK, 1, at.T))
+        assert m.refused == "registered reads: table row 4 does not open the registered root at position 3", field
+        assert [i for i, (x, y) in enumerate(zip(m.bcs["ids"], blk.bcs["ids"])) if x != y] == [4], field
 
 
 XOR8 = PrimitiveDefinition("ScanZkTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
@@ -181,7 +219,8 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 
 def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
-    assert set(h.rounds) == {"block", "honest", "chain", "tampered", "unread"} and h.at.run_id == "00" * 32
+    assert set(h.rounds) == {"block", "honest", "chain", "tampered", "unread", "prompt", "sampling"} and \
+        h.at.run_id == "00" * 32
     assert "warden run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.at.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.at.tampered.key_of == "the driver's own"
@@ -356,12 +395,14 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
     case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
     descriptor (``joint/program.json``) as the scan, the block's audit (its descriptor, free inputs and no steps; its
-    registration, whose ``block/o1`` is the scan's ``scan/prog`` root and domain, and its answer), the registration,
+    registration, whose ``block/o1`` is the scan's ``scan/prog`` root and domain and whose ``scan/state`` is the scan's,
+    and its answer), the registration,
     and its answer, three records' certificates (requests, responses, fails: its own) and two row registrations, each
     named by the registration's roots. The period's mirror accepts the honest case, its scan's terms read off the test
     class's own templates with no free inputs, and refuses the forged case (a certificate's signature changed) at the
     certificates, the tampered case (another Program's registration) at the registration, the chain case (the round's
-    registration of the Program) at its refusal and a block whose o1 is at another root by name; a group of two
+    registration of the Program) at its refusal, and a block whose o1, or whose state, is at another root by name; a
+    group of two
     link-windows is refused by name. Slow (the test class's Program, about 15 s): the period check reads the scan's
     templates' signatures, which no stand-in can stand for."""
     import scan_period as SP
@@ -376,9 +417,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     (scan / "joint").mkdir(parents=True)
     (scan / "joint" / "program.json").write_bytes(canonical_json(encode_program(program)))
-    tr = h.at.trees["prog"]
+    tr, sr = h.at.trees["prog"], h.at.trees["state"]
     prog = {"root": tr.root.hex(), "leaves": T, "domain": sz.ADV.domain(tr.binding, T).domain_id.hex()}
-    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [{"port": "scan/prog", **prog}]
+    state = {"root": sr.root.hex(), "leaves": T, "domain": sz.ADV.domain(sr.binding, T).domain_id.hex()}
+    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
+        {"port": "scan/prog", **prog}, {"port": "scan/state", **state}]
     law = sz.DR.parse_law(f"stratified:{2 * T}")
     reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
                   for x in ("ee", "ff"))
@@ -392,9 +435,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     block = sz.PA.mixed_population_program([(defs["block"], T)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_law(f"stratified:{T}")
 
-    def block_audit(o1: dict) -> dict:
-        breg = R.record(block, bquery, blaw, sz.S.SCHEME, [{"port": "block/o1", **o1}], {"kind": "stand-in"},
-                        leaf_layer="cc" * 64)
+    def block_audit(o1: dict, ids: dict = state) -> dict:
+        breg = R.record(block, bquery, blaw, sz.S.SCHEME, [{"port": "block/o1", **o1}, {"port": "scan/state", **ids}],
+                        {"kind": "stand-in"}, leaf_layer="cc" * 64)
         bdraw = {**sz.DR.derive(block, bquery, blaw), "population": T, "units": list(range(T))}
         brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": list(range(T))}
         return {"answer": sz.window_answer(breg, brec, sz.Fraction(1, 100), "unused"), "free": T * sz.IS.prog_bits(
@@ -439,6 +482,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(untied)]}))
     got = PC.reference(SP.rows_case(run, scan))
     assert (got["verdict"], got["reason"]) == ("reject", "window 0: the scan's prog is no compute audit's output")
+    (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(prog, {**state, "root": "ee" * 64})]}))
+    got = PC.reference(SP.rows_case(run, scan))
+    assert (got["verdict"], got["reason"]) == ("reject", "window 0: a tied audit's ids aren't the scan's")
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
         SP.rows_case(run, scan)

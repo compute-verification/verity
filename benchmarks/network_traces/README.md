@@ -270,7 +270,10 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   Tied (NET-92: `NetworkCheck.Period`'s `progTied`, scan_zk's block round), these rows are a compute audit's outputs
   and the scan's own free term is 0: the bits are that audit's free inputs (the toy block's `x`), which the rows form's
   K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
-  tied audit's inputs; K is unchanged in what it bounds, 143,872 bits a link-window at w63.
+  tied audit's inputs; K is unchanged in what it bounds, 143,872 bits a link-window at w63. The ingress tie (`idsTied`)
+  adds no term: the block's `ids`, the prompt ids and sampling fields it computes on, is a registered read of the scan's
+  `state` (unit b reads S_{b−1}), so a block that computed on another prompt id or sampling field is refused at that
+  read (scan_zk's `prompt` and `sampling` rounds), and an audit whose `scan/state` isn't the scan's is refused by name.
 - No faulty term with every unit drawn, and D_j = 1.
 
 The two forms:
