@@ -4343,7 +4343,7 @@
     "Properties.SampledProofs.bernoulliBounds"
    ]
   },
-  "Definitions.Accounting.Actual.WipeDraw": {
+  "Definitions.Accounting.Actual.Sampler": {
    "digest": "e93a07d613ef24d8ce4fed26d4b9caf7e4c26bc0726e85305ada1a4f371bc77a",
    "definitions": {
     "Accounting.Actual.wordIndex": "d33dadd3418335eec0660359ccf6e2bc823b564c2bb7bd6cd5318f174a710aa5"
