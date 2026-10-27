@@ -109,6 +109,31 @@ def test_hardware_lines_are_dense_fp32_accumulate_peaks_with_their_datasheet() -
         census.line("NVIDIA A100 SXM4 80GB", "e4m3")
 
 
+#: a census dtype's format in a card file's tensor weights: the census's e2m1 is block-scaled NVFP4 (datatypes.json)
+CARD_FORMAT = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvf4"}
+
+
+def test_the_lines_of_a_device_with_a_card_file_agree_with_it() -> None:
+    """Where a line's device slug is a card file's SKU (``verity/hardware/cards``), the facts both state agree: its memory
+    is the card's DRAM, its bandwidth the data sheet's rounding of the card's ceiling (at most it, within 0.1%), and its
+    dtypes' peaks stand as the card's tensor weights do. The peak itself is the data sheet's, at a boost clock the card's
+    firmware ceiling doesn't reach (the RTX PRO 6000's 1 PFLOPS FP8 is 2,597 MHz at the card's rate, against 2,430), so
+    only its ratios are the card's."""
+    from verity.hardware import load, skus
+
+    carded = {h.id.split("/")[0] for h in census.HARDWARE.values()} & set(skus())
+    assert carded
+    for sku in sorted(carded):
+        card = load(sku)
+        lines = [h for h in census.HARDWARE.values() if h.id.startswith(sku + "/")]
+        bandwidth = card["memory"]["bandwidth"]["value"]
+        for h in lines:
+            assert h.memory_bytes == card["store"]["dram"]["value"], h.id
+            assert 0.999 * bandwidth <= h.memory_bytes_per_second <= bandwidth, h.id
+        per_unit = {h.flop_per_second * card["weight"][CARD_FORMAT[h.dtype]]["value"] for h in lines}
+        assert len(per_unit) == 1, (sku, per_unit)
+
+
 def test_the_reference_network_is_the_same_datacenter_and_the_sensitivity_profiles_vary_one_axis() -> None:
     ref = census.REFERENCE_NETWORK
     assert ref.id == "dc-1ms-100gbps" and (ref.rtt_s, ref.bandwidth_bps) == (0.001, 100e9)

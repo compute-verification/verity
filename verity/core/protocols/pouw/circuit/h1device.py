@@ -18,13 +18,17 @@ record's s8 binding and refuses a contraction outside the record's domain.
   sm_120's record states no domain: its windows keep the Definitions' own refusals, as before records existed.
 * **The sheet.** Each record holds the device's data-sheet facts with their sources: SMs, the clock its tensor peaks are
   quoted at, f_max, the dense s8 MACs an SM clock, and the data sheet's dense INT8 figure (None where no data sheet states
-  one). sm_90's are the machine model's DS-90 sheet (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose
-  Lean is `Security/Definitions/Accounting/Sheets/H200.lean`), sm_120's its DS-120 (`Accounting.TS.Headline.Sm120.ds120`).
+  one). SMs, f_max and the s8 MACs are the card file's (`verity.hardware`, ``sm.count``, ``clock.sm`` and
+  ``rate.tensor``, which counts s8 MACs). sm_90's tensor clock and INT8 figure are the machine model's DS-90 sheet
+  (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose Lean is
+  `Security/Definitions/Accounting/Sheets/H200.lean`); sm_120's DS-120 (`Accounting.TS.Headline.Sm120.ds120`) quotes every
+  peak at f_max.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from verity.hardware import load
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma
 
@@ -72,27 +76,31 @@ class Device:
         return None
 
 
+def _card(sku: str) -> dict:
+    """SMs, f_max and the dense s8 MACs an SM clock from ``sku``'s card file."""
+    c = load(sku)
+    return {"sms": c["sm"]["count"]["value"], "fmax_mhz": c["clock"]["sm"]["value"],
+            "s8_macs": c["rate"]["tensor"]["value"]}
+
+
+_RTX, _H200 = _card("rtx-pro-6000-server"), _card("h200-sxm-141gb")
+
 SM120 = Device(
     arch="sm_120", gpu="RTX PRO 6000 Blackwell Server Edition", step=BLACKWELL_SM120_S8_M16N8K32,
-    instruction="sm120.mma.m16n8k32.s8", domain=None,
-    sms=188, tensor_mhz=2430, fmax_mhz=2430, s8_macs=1024, sheet_s8_tops=None,
-    source="DS-120 (Accounting.TS.Headline.Sm120.ds120): f_max 2430 MHz, the driver's reported maximum (SPEC's P1: no data "
-           "sheet states it), at which DS-120 quotes every peak; IMMA16832 at 1024 dense MACs an SM clock (census "
-           "r20261015-062626-f65b: 1,023.6 measured); 188 SMs, as the device reports (machine model table.toml); no RTX PRO "
-           "6000 data sheet figure for INT8 is on file",
+    instruction="sm120.mma.m16n8k32.s8", domain=None, tensor_mhz=_RTX["fmax_mhz"], sheet_s8_tops=None, **_RTX,
+    source="verity/hardware/cards/rtx-pro-6000-server.toml (sm.count, clock.sm, rate.tensor); DS-120 "
+           "(Accounting.TS.Headline.Sm120.ds120) quotes every peak at f_max; IMMA16832 measured at 1,023.6 dense MACs an SM "
+           "clock (census r20261015-062626-f65b); no RTX PRO 6000 data sheet figure for INT8 is on file",
 )
 
 SM90 = Device(
     arch="sm_90", gpu="H200 SXM (sm_90a)", step=HOPPER_SM90_S8_K32,
-    instruction="sm90.mma.m16n8k32.s8", domain=(Z.LEAST_K, 512),
-    sms=132, tensor_mhz=1830, fmax_mhz=1980, s8_macs=4096, sheet_s8_tops=1979,
-    source="DS-90 (benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml): H200 data sheet "
-           "(nvidia.com/en-us/data-center/h200, Technical Specifications, H200 SXM): 'INT8 Tensor Core 3,958' TOPS, footnote "
-           "2 'With sparsity', so 1,979 dense; H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5 (the H200 "
-           "data sheet states no clock or SM count, its peaks equal H100 SXM5's): 'Peak INT8 Tensor TOPS 1978.9/3957.8', "
-           "'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz', 'GPU Boost Clock for FP64 Tensor Core Ops, "
-           "FP32 and FP64 non Tensor Core Ops: 1980 MHz', 'SMs 132'; so 4096 dense s8 MACs an SM clock "
-           "(2 x 4096 x 132 x 1830 MHz = 1,979 TOPS); the device reports 132 SMs and a 1980 MHz maximum (vy-dc-h200)",
+    instruction="sm90.mma.m16n8k32.s8", domain=(Z.LEAST_K, 512), tensor_mhz=1830, sheet_s8_tops=1979, **_H200,
+    source="verity/hardware/cards/h200-sxm-141gb.toml (sm.count, clock.sm, rate.tensor); DS-90 "
+           "(benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml): H200 data sheet (nvidia.com/en-us/data-center/h200, "
+           "Technical Specifications, H200 SXM): 'INT8 Tensor Core 3,958' TOPS, footnote 2 'With sparsity', so 1,979 dense; "
+           "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 "
+           "Tensor Core Ops: 1830 MHz' (2 x 4096 x 132 x 1830 MHz = 1,979 TOPS)",
 )
 
 DEVICES = {d.arch: d for d in (SM120, SM90)}

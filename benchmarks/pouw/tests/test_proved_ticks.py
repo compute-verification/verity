@@ -55,9 +55,10 @@ def test_work_outside_the_designs_products_is_refused(census):
         P.units(census, S)
 
 
-def test_a_family_without_a_sheet_clock_is_refused():
-    with pytest.raises(ValueError, match="FMAX_MHZ"):
-        P.sheet("sm_90")
+def test_the_sheets_sms_and_f_max_are_the_cards_and_a_family_without_one_is_refused():
+    assert (P.sheet("sm_90").sms, P.sheet("sm_90").fmax_mhz) == (132, 1980)     # h200-sxm-141gb.toml
+    with pytest.raises(ValueError, match="sm_100 has no card file"):
+        P.sheet("sm_100")
 
 
 def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_other_work_is_refused():

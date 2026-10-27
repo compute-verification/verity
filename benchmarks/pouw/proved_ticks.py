@@ -19,7 +19,8 @@ reads W off a block where the datacenter places a Program `SCHEME` or its one st
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
 - 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`Accounting.TS.Model.credit`), and a GPU's
-  4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the sheet's (`FMAX_MHZ`).
+  4 · SMs SMSPs share the window's units. SMs and f_max, the highest SM clock, are the device's card file's (188 and
+  2,430 MHz on sm_120, `verity/hardware/cards/rtx-pro-6000-server.toml`).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
   is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (#2924's A5b on #2791, not on
@@ -62,14 +63,11 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent))     # appended: network accounting's tests import this module by path
 import eps_budget as EB
-from verity_machine_model import headline
-from verity_machine_model.eps import PRODUCTS, design, honest, table
+from verity_machine_model import card, headline
+from verity_machine_model.eps import PRODUCTS, design, honest
 from verity_machine_model.model import device
 
 SMSPS = 4                          # SMSPs an SM
-#: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
-#: `Accounting.TS.Headline.Sm120.ds120.fmax`, #2482)
-FMAX_MHZ = {"sm_120": 2430}
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
@@ -81,8 +79,8 @@ SCHEME_V3 = "eps1-sm120-h1fx1-os"
 
 @dataclass(frozen=True)
 class Sheet:
-    """A family's data-sheet reading: its headline design (data/headline.toml), the DS vector it prices it on, its SMs
-    and f_max."""
+    """A family's data-sheet reading: its headline design (data/headline.toml), the DS vector it prices it on, and its
+    card's SMs and f_max (A1: its highest SM clock)."""
     family: str
     vector: str
     design: str
@@ -91,10 +89,13 @@ class Sheet:
 
 
 def sheet(family: str = "sm_120") -> Sheet:
-    if family not in FMAX_MHZ:
-        raise ValueError(f"no data-sheet f_max for {family}: add the sheet's highest SM clock to FMAX_MHZ")
+    data = device(family)
+    c = card.of(data)
+    if c is None:
+        raise ValueError(f"{family} has no card file, which its SMs and f_max are read from: name its SKU in "
+                         f"{data / 'model.toml'} (card = \"SKU\")")
     f = headline.spec()["family"][family]
-    return Sheet(family, f["sheet"]["vector"], f["design"], table(device(family)).sms, FMAX_MHZ[family])
+    return Sheet(family, f["sheet"]["vector"], f["design"], card.number(c, "sm.count"), card.number(c, "clock.sm"))
 
 
 def unit_cycles(s: Sheet) -> float:

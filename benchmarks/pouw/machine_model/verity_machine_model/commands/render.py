@@ -131,10 +131,10 @@ def _forms(data: Path) -> str | None:
 def _route(data: Path) -> str | None:
     if not (data / "table.toml").is_file():
         return None
-    t = tomllib.loads((data / "table.toml").read_text())
-    l2 = f"{t['l2']:.4g}" if "l2" in t else "unmeasured"
+    t, status = E.table(data), tomllib.loads((data / "table.toml").read_text()).get("status")
+    l2 = f"{t.l2:.4g}" if t.l2 is not None else "unmeasured"
     return _table(["q (lane instructions a word)", "L2 bytes a word", "L2 bytes a second", "SMs", "MHz", "status",
-                   "source"], [[t["q"], t["bytes"], l2, t["sms"], t["mhz"], t.get("status"), t["source"]]])
+                   "source"], [[t.q, t.bytes, l2, t.sms, t.mhz, status, t.source]])
 
 
 def _headline(data: Path) -> str | None:

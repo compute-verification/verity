@@ -58,6 +58,8 @@ import argparse
 import json
 import math
 
+from verity.hardware import load as load_card
+
 YEAR = 3.156e7
 GB = 8e9
 #: Lemma M's audit window: the most a helper can add to a store under audit is the side channel over it
@@ -69,11 +71,12 @@ BLOCK_NAME_BITS = 25
 #: products; the default d is 1 until Layered's lookups may read weight columns (a trained embedding)
 REFERENCE_THREADED = (10.0, 37248.0)
 
-#: the ACCEL model's card table, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its
-#: firmware's maximum (``Verity.Accel.Sm120.card``, 188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit,
-#: the clock's ceiling 2430 MHz), pinned from Security/Definitions/Core/Accel/Sm120.lean at ba71196752 (#4920) until it
-#: lands; tests/test_tiers.py holds the pin to the file
-CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
+#: the card file, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its firmware's maximum
+#: (verity/hardware/cards/rtx-pro-6000-server.toml, which ``Verity.Accel.Sm120.card`` is held to: 188 SMs, 1024 tensor
+#: units an SM clock, a FP8 E4M3 MAC one unit, the clock's ceiling 2430 MHz)
+_RTX = load_card("rtx-pro-6000-server")
+CARD = {"sms": _RTX["sm"]["count"]["value"], "tensor": _RTX["rate"]["tensor"]["value"] / _RTX["weight"]["e4m3"]["value"],
+        "clock_hz": _RTX["clock"]["sm"]["value"] * 1e6}
 #: the clock PoUW credits on sm_120 (H1's SM120 record, verity/core/protocols/pouw/circuit/h1device.py: 2430 MHz)
 CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
