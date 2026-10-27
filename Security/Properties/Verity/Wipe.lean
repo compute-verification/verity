@@ -17,13 +17,13 @@ compiled component is `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`
   `M_s = 512 · n + R` over every tier (`capacity`), and at the wipe tick that opens the period a server whose tiers hold
   at most M_s keeps at most `B(n, r, k, R)` bits of prior content (`keepBound`, `StreamedWipe.serverBound`) plus its
   egress (`WipeVocab.Holds`);
-* its target (`WipeVocab.WipeSound`, MEM-93) is that claim's bound per server, at every parameters, commitment and
+* its target (`WipeVocab.WipeSound`) is that claim's bound per server, at every parameters, commitment and
   strategy, with error `StreamedWipeMeetsServer`'s bound at the wipe model's prover built from the strategy (`2^-128`
   plus the PRF's advantage against the distinguisher built from it) plus the collision finder's loss plus the
   probability that the wipe's LMS forger succeeds in the play (`WipeVocab.error`), the two break terms of
-  `Vocab.error`. It follows from `Pous.Guarantees.StreamedWipeMeetsServer` (memory-accounting, MEM-95) and the coupling
+  `Vocab.error`. It follows from `Pous.Guarantees.StreamedWipeMeetsServer` (memory-accounting's) and the coupling
   of the wipe model's game into this one (`WipeVocab.Couples`): `Verity.WipeVocab.wipeSound_of_streamed`.
-  The 5 GB form (Daniel, 26 Oct 12:16 PM PDT: "We only wipe all but 5 GB of the assumed memory capacity of the server")
+  The 5 GB form (the wipe leaves at most 5 GB of the server's assumed memory capacity unwiped)
   is a corollary where the registered wipe is at that point (`AtOperatingPoint`, `Holds5GB`,
   `wipeSound5GB_of_wipeSound`), never a premise of the theorem: today's fill leaves `R` above it.
 
@@ -31,7 +31,7 @@ compiled component is `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`
 over the servers, in the bound. Onsite composes the wipe (`verity/wipe/v0`), so what onsite accepts, the wipe's case
 accepts (`WipeAccepts`).
 
-The names the wipe defines are `WipeVocab`'s fields: `coinsRead` (ONE-4), what each server holds, keeps and sends in
+The names the wipe defines are `WipeVocab`'s fields: `coinsRead`, what each server holds, keeps and sends in
 each play (the memory challenger's world), each server's published wipe and egress bound, the PRF, the wipe model's
 prover built from the strategy, the collision finder and its loss, and the LMS forger on the play's outcome.
 -/
@@ -52,7 +52,7 @@ structure ServerWipe where
   egress : ℕ
 
 /-- **The names the wipe defines**, over the servers `Srv` and the rounds of the subprotocols' names `V`: the releases the
-wipe's check read, decoded from the device's signed log entries in what the prover sent (ONE-4); what each server holds,
+wipe's check read, decoded from the device's signed log entries in what the prover sent; what each server holds,
 keeps and sends in each play; each server's wipe as published (the fill's `n` labels, the ratio `r`, the read count
 `k`, the bits `R` outside the fill, so its assumed capacity is `M_s = 512 · n + R`) and the egress bound `E` its network
 certifier enforces, with the side conditions `StreamedWipeMeetsServer` reads of the published `n`, `r` and `k`
@@ -131,7 +131,7 @@ noncomputable def error (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)
         (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.Accepts (W.prover θ F c σ s)) +
     W.loss θ s (ENNReal.ofReal ((W.finder θ F c σ s).Pr sha512Msg)) + W.forges θ F c σ s
 
-/-- **The wipe's target (MEM-93)**: at all parameters and commitments, for every strategy and every server, the
+/-- **The wipe's target**: at all parameters and commitments, for every strategy and every server, the
 probability that the wipe accepts while that server's claim fails is at most its error at that strategy. -/
 def WipeSound : Prop :=
   ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (s : Srv),
@@ -141,8 +141,8 @@ def WipeSound : Prop :=
 while server `s` keeps more than its keep bound plus its egress is at most the probability that the wipe model accepts
 the prover built from the strategy while it keeps its `B(n, r, k, R) + E` bits (`StreamedWipe.winRealBy` at `Accepts`),
 plus the collision finder's loss, plus the probability that the forger succeeds. It is the coupling the memory
-challenger's piece proves (MEM-93), by construction of `prover` from the strategy, as `NetworkCouples` is the
-certifier's, on memory-accounting's `MemoryChallenger.Properties.WipeSigned` (#4985): an accepted wipe is the
+challenger's piece proves, by construction of `prover` from the strategy, as `NetworkCouples` is the
+certifier's, on memory-accounting's `MemoryChallenger.Properties.WipeSigned`: an accepted wipe is the
 challenger's own run and the streamed wipe's accepted session, or carries a `WipeBreak`, an event of the collision
 finder `wipeFinder` (charged at `finder`'s loss) or of the forger `wipeForger` (`forger`, charged at `forges`). -/
 def Couples : Prop :=
