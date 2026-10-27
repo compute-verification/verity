@@ -434,7 +434,7 @@ def _accepted(law: dict, delta: float = 0.5) -> dict:
 
 
 def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_bounds():
-    """An accepted audit's charge terms (README, "What an accepted plain audit means"): λ_δ is `consumers.location_bits` of the
+    """An accepted audit's charge terms (README, "What an accepted audit means"): λ_δ is `consumers.location_bits` of the
     audit's profile, β_δ its `harm_bound` with each template's units weighing their committed bits (one weight, the most, where
     the law's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
     stratified = {"law": "stratified", "k": 4, "strata": [{"template": "T", "units": [[0, 8]], "k": 4}]}
@@ -894,21 +894,72 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     assert PP.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
 
 
-def test_a_served_windows_compiler_is_the_servers_whatever_phi_it_compiles_under(monkeypatch):
-    """The registration names the server's compiler (`verity-vllm advice`'s, over its tree's code identity), so the verifier's I2
-    carries that name and digest, and φ (the target, the seed) moves what I2 compiles, not the name it is registered under."""
+def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
+    """The served I2 is named as the server names its compiler, and its digest is a single-GPU window's I2's (one
+    `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ, the default seed, ℓ and the served
+    model name move it as they move a single-GPU one's."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
-    monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
-    one = PP.Capped(PP.I2Compiler(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), {}, "", name=SERVER[0], registered_digest=SERVER[1]))
-    assert (one.inner.name, one.inner.digest) == SERVER
-    assert one.digest == PP.Capped(SimpleNamespace(name=SERVER[0], digest=SERVER[1])).digest
-    plain = PP.I2Compiler(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), {}, "")
-    assert plain.name == PP.I2 and plain.digest != SERVER[1]
+    reg = PP.registered_of_serve(serve, None, None, PP.CAP_BITS)
+    one = PP.I2Compiler(reg, {}, "", name=SERVER[0], code=SERVER[1])
+    assert one.name == SERVER[0] and one.digest != SERVER[1] and len(one.digest) == 128
+    monkeypatch.setattr(PP, "code_identity", lambda: SERVER[1])
+    assert PP.I2Compiler(reg, {}, "", name=SERVER[0]).digest == one.digest
+    assert PP.I2Compiler(reg, {}, "", name=SERVER[0], code="c0" * 64).digest != one.digest
+    others = [PP.registered_of_serve(other, None, None, cap) for other, cap in (
+        ({**serve, "model": "m/y"}, PP.CAP_BITS), ({**serve, "revision": "s"}, PP.CAP_BITS),
+        ({**serve, "execution": "eager"}, PP.CAP_BITS), ({**serve, "target": {**TARGET, "device_name": "other"}}, PP.CAP_BITS),
+        (serve, 2 * PP.CAP_BITS))] + [replace(reg, default_seed=DEFAULT_SEED + 1), replace(reg, served_model="llama")]
+    digests = {PP.I2Compiler(r, {}, "", name=SERVER[0], code=SERVER[1]).digest for r in others}
+    assert len(digests) == len(others) and one.digest not in digests
+
+
+#: a served run's ``serve.json`` edited after its advice was registered, in each field the compile reads of it (`phi_of_serve`,
+#: `registered_of_serve`, `served_gates`), and the verifier's own ``--hf-config`` other than the pin's config of record
+SERVE_EDITS = {"model": {"model": "verity-int8/Llama-3.2-1B-INT8"}, "revision": {"revision": "0" * 40},
+               "default_seed": {"default_seed": DEFAULT_SEED + 1}, "execution": {"execution": "eager"},
+               "engine-execution": {"engine": {"execution": "eager", "pin": {"world": 1}}},
+               "target": {"target": {**TARGET, "device_name": "other-gpu"}}, "hf_config": None}
+
+
+@pytest.mark.parametrize("field", list(SERVE_EDITS))
+def test_a_served_window_under_another_serve_json_than_its_advice_was_registered_under_is_refused(tmp_path, monkeypatch, field):
+    """The served compiler's digest covers every field the compile reads of ``serve.json`` (`I2Compiler.digest`), so a window
+    whose ``serve.json`` says another model, revision, execution or target than the one `verity-vllm advice` registered its
+    advice under (or whose verifier compiles under another config) is refused by name before any commit (`serve_check`'s
+    ``compiler``, and ``advice``: its advice tree's domain is the registered compiler), and the records audit's compiler
+    table (`compiler_doc`, ``prove_path.py compiler``) holds another digest; one recording another default seed is refused
+    outright (`registered_seed`); the honest one passes."""
+    from verity_vllm.program.predict import steps as ST
+
+    s = _served(tmp_path, monkeypatch)
+    monkeypatch.setitem(PP.GATES_OF_RECORD, SERVE_EDITS["model"]["model"], PP.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    units = [ST.RequestUnit(0, "d0" * 64, 5, 2, {}, None, 0, "r0"), ST.RequestUnit(1, "d1" * 64, 3, 1, {}, None, 2, "r1")]
+    monkeypatch.setattr(ST, "compile_steps", lambda registered, data, ingress: SimpleNamespace(requests=units))
+    _q, held, _o = PP.served_advice(s.a)
+    assert held == s.bound and PP.serve_check_of(s.a, held)["ok"]
+    assert PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)["digest"] == s.bound["compiler"]["digest"]
+    serve = json.loads((s.run / "serve.json").read_text())
+    if SERVE_EDITS[field] is None:
+        config = tmp_path / "config.json"
+        config.write_text(json.dumps({**json.loads(PP.LLAMA32_1B_CONFIG.read_text()), "rms_norm_eps": 1e-6}))
+        s.a.hf_config = str(config)
+    else:
+        (s.run / "serve.json").write_text(json.dumps({**serve, **SERVE_EDITS[field]}))
+    if field == "default_seed":
+        for refused in (lambda: PP.served_advice(s.a), lambda: PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)):
+            with pytest.raises(ValueError, match=f"filled in default seed {DEFAULT_SEED + 1}"):
+                refused()
+        return
+    _c, _r, bound, _o = PP.compiled(s.a)
+    assert bound["compiler"] != s.bound["compiler"] and PP.serve_check_of(s.a, bound)["codes"] == ["compiler", "advice"]
+    with pytest.raises(ValueError, match=r"published records are refused \(compiler, advice\)"):
+        PP.served_advice(s.a)
+    assert PP.compiler_doc(str(s.run), s.a.hf_config, None, PP.CAP_BITS)["digest"] != s.bound["compiler"]["digest"]
 
 
 def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
                                                                                                          capsys):
-    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does (#5063): a run
+    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
@@ -1041,7 +1092,8 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
     file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
-    advice --weights-of-record` records and ``window-circuit --pins`` takes, and what the verifier holds to its own weights
+    advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
+    rows), and what the verifier holds to its own weights
     record's shapes (`registration_pins`) without computing a root. Another key gives other roots for every weight; a key
     file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
     one the manifest pins, is refused by name, nothing registered."""
@@ -1055,7 +1107,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
-    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": 7,
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
              "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
@@ -1072,7 +1124,8 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert len(key.read_bytes()) == 32 and key.stat().st_mode & 0o777 == 0o600
     assert key.read_bytes().hex() not in out.read_text()
     pins = ADV.registered_weights(reg, serve)
-    assert said["roots"] == len(pins) == 15 and PP.pins_of((), [str(out)]) == pins
+    assert said["roots"] == len(pins) == 16 and PP.pins_of((), [str(out)]) == pins
+    assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
     assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
@@ -1104,8 +1157,8 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
     ``weights-registration`` roots its weight parameters as the window circuit reads them: the s8 weights and their scales of
     q|k|v and gate|up fused as vLLM serves them, o and down, the norms, and the tied embedding at the embedding's and the LM
-    head's row widths, each the checkpoint's words; only the rotary table is unrooted. The verifier holds it to its own weights
-    record's shapes (`registration_pins`)."""
+    head's row widths and as the embedding's table (its own parameter, `window_builder.table_param`), each the checkpoint's
+    words; only the rotary table is unrooted. The verifier holds it to its own weights record's shapes (`registration_pins`)."""
     import functools
 
     from verity_vllm.pipeline import advice as ADV
@@ -1116,7 +1169,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny-int8.json", tmp_path / "ck" / "snap"
     run.mkdir()
-    serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800", "default_seed": 7,
+    serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800", "default_seed": DEFAULT_SEED,
              "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188, "int8_exact": "linears"}}
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps({**TINY, "quantization_config": INT8_V1}))
@@ -1127,8 +1180,9 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
                     "--hf-config", str(hf), "--key", str(tmp_path / "private" / "weights.key"), "--out", str(out)]) == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     pins = ADV.registered_weights(reg, serve)
-    assert said["roots"] == len(pins) == 23 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
-    words = {p.removeprefix("weights/"): e["words"] * e["leaves"] for p, e in reg["values"].items()}
+    assert said["roots"] == len(pins) == 24 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
+    assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
+    words = {p.removeprefix("weights/"): e["words"] * e["leaves"] for p, e in reg["values"].items() if not p.endswith("/table")}
     H, I, QKV = TINY["hidden_size"], TINY["intermediate_size"], 8 * 16
     for i in range(TINY["num_hidden_layers"]):
         p = f"model.layers.{i}."
@@ -1317,3 +1371,14 @@ def test_the_verifiers_traces_run_with_its_interpreter_from_integrations_vllm_an
     assert (Path(got["cwd"]), got["path"][:2]) == (VLLM.resolve(), [str(VLLM.resolve()), str(VLLM.resolve().parents[1])])
     with pytest.raises(RuntimeError, match=rf"^the verifier's trace of {re.escape(str(tmp_path / 'b2'))} failed \(rc 3\)"):
         PP.trace_builds(cmds, str(py))
+
+
+def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
+    """`committer_key`: 32 bytes made mode 0600 where the file doesn't exist, the same bytes read back every window after;
+    a file of another size is refused."""
+    p = tmp_path / "private" / "committer.key"
+    k = PP.committer_key(p)
+    assert len(k) == 32 and (p.stat().st_mode & 0o777) == 0o600 and PP.committer_key(p) == k
+    p.write_bytes(bytes(31))
+    with pytest.raises(ValueError, match="32 bytes, not 31"):
+        PP.committer_key(p)

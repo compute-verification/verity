@@ -1425,6 +1425,25 @@ def test_review_lists_the_members_lacking_a_land_verdict_and_records_one_refusin
     assert (lab.value, lab.by, lab.ref) == ("land", "lane-9", "note:ci/x")
 
 
+def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_short_sha(world, monkeypatch):
+    world.with_store_remote()
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.d.review = False
+    h.q.sync()
+    old = world.gh.prs[1].head
+    world.gh.put(1, new := world.change({"a.txt": "2\n"}))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    with pytest.raises(QueueError, match=f"GitHub has its head at {new[:12]}.*pass --sha"):
+        Q.review(h.q, world.store, labels, 1, "land", None, "lane-9")
+    assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new[:10]) == 0
+    assert Q.review(h.q, world.store, labels, 1, "hold", "old", "lane-9", sha=old[:10]) == 0
+    assert [lab.value for lab in world.store.labels(label_target(1, new), key=vocab.REVIEWED)] == ["land"]
+    assert [lab.value for lab in world.store.labels(label_target(1, old), key=vocab.REVIEWED)] == ["hold"]
+    with pytest.raises(QueueError, match="full 40-character SHA"):
+        Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha="0badc0de")
+
+
 def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
     """TOP-90: #4412, marked, waited on #4382's unmarked commits (CI-178) and nobody told #4382's owner.  Its owner hears once per
     (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""

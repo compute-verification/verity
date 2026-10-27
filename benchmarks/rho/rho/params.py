@@ -2,7 +2,7 @@
 
 The registry is the TOML files under `data/`, one per layer. A leaf is either a bare value (a choice, such as a kind or a
 name) or a parameter: an inline table with `value` and optionally `unit`, `low` and `high` (the plausible range that
-sweeps and tornados span), `source` (a datasheet, an `art:` or `note:` id, a Lean name, a ruling) and `status`
+sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a ruling) and `status`
 (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`)::
 
     [location.h200-hgx]

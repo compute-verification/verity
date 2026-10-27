@@ -54,6 +54,7 @@ from __future__ import annotations
 import bisect
 import hashlib
 import re
+from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .codec import canonical_json, descriptor_id, program_digest
@@ -380,20 +381,22 @@ def order_violation(program: Any) -> dict | None:
     name any of its nodes), over every body the root reaches, root first and callees in node order, each Definition once; None when the
     program is topological.  A program with such a reference is no computation (a gate would read itself or a later gate): every query
     is inapplicable to it."""
-    seen: set[int] = set()
-    todo = [program.root]
+    # each Definition queued once, at its first reference: a body's nodes call few Definitions many times
+    queued = {id(program.root)}
+    todo = deque([program.root])
     while todo:
-        fn = todo.pop(0)
-        if id(fn) in seen or not hasattr(fn, "body"):
+        fn = todo.popleft()
+        if not hasattr(fn, "body"):
             continue
-        seen.add(id(fn))
         body = fn.body
         for k, node in enumerate(body.nodes):
             for i, a in enumerate(node.args):
                 bad = _out_of_order(a.refs, len(body.params), k)
                 if bad is not None:
                     return {"definition": fn.id, "node": k, "arg": i, "reference": bad, "why": "not topological"}
-            todo.append(node.fn)
+            if id(node.fn) not in queued:
+                queued.add(id(node.fn))
+                todo.append(node.fn)
         bad = _out_of_order(body.ret, len(body.params), len(body.nodes))
         if bad is not None:
             return {"definition": fn.id, "node": "ret", "reference": bad, "why": "not topological"}
@@ -404,9 +407,9 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     """The first (space, index) of `refs` outside the body's parameters `0..params-1` and nodes `0..nodes-1`, or None."""
     parts = [refs]
     while parts:
-        r = parts.pop(0)
+        r = parts.pop()
         if isinstance(r, Concat):
-            parts[:0] = r.parts
+            parts.extend(reversed(r.parts))
             continue
         names = [(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else ([(r.space, r.idx)] if r.count else [])
         for space, idx in names:
