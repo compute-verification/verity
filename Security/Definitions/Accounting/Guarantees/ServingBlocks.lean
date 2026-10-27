@@ -23,9 +23,9 @@ Two terms differ from the note's statement:
 * The bound takes no alignment: `q_U(S)` caps whatever the inference blocks counted for `S` leave, wherever they lie.
   Alignment is what lets `q_U(S)` be the uncertified count, `ω_max |S \ W| + split(S)` (`UncertifiedElementary`).
 
-Each guarantee has an honest and a nontrivial lemma beside its proof
-(`Security/Proofs/Accounting/ServingBlocks/Witnesses.lean`): its premises hold at a small instance of a serving-block
-layout, and its conclusion fails at an explicit circuit once one named premise is dropped. The boundary term is needed:
+Each guarantee has an honest and a nontrivial lemma
+(`Security/Definitions/Accounting/Guarantees/ServingBlocks/Witnesses.lean`): its premises hold at a small instance of a
+serving-block layout, and its conclusion fails at an explicit circuit once one named premise is dropped. The boundary term is needed:
 without it the bound fails at a circuit where every premise holds (`ServingBlockBound_nontrivial_overlap`).
 
 `ServingBlockBoundRemote` is the remote case: no wipe or certifier, so `k_S` is unbounded and only the inference cap

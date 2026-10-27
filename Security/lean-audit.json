@@ -4149,6 +4149,24 @@
    "assumptions": [],
    "type_hash": "7b60f71dc0966c273ada4bf69ae68fc28dc0a748f7fdef2e8f4c439de57fe45b"
   },
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap": {
+   "owner": "@training"
+  },
   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
    "owner": "@training",
    "signature": [
@@ -4157,6 +4175,12 @@
    ],
    "assumptions": [],
    "type_hash": "db71cc8b3f4c79c53c151b088daad6bb2bb6f050a9539f7503cfb3c7cfe660e7"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": {
+   "owner": "@training"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -11500,6 +11524,14 @@
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary actual circuit (Accounting.Placed) with a training class's counted operations, its serving blocks and the inference blocks counted for each, and takes the per-block caps, the serving and inference blocks' bounds, the operations' bodies and their overlap, and the uncertified caps as named premises about it (Security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary actual circuit and its counted operations under named premises about it, not a function's acceptance; it keeps only the inference cap, the remote case.",
    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "frozen (no-function): It is a counting fact about an arbitrary circuit's counted operations and a family of blocks under the named Alignment (Security/Definitions/Accounting/ServingBlocks.lean), not about a function's acceptance.",
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": "completeness: ServingBlockBound's honest lemma (#4825): at Honest (Accounting.ServingBlocks.Honest, Security/Definitions/Accounting/ServingBlocks/Instances.lean), a small actual circuit on one server wiped once with one dark leaf, its premises hold together at (c_S, k_S) = (c, k) = (1, 1) and omega_max = mu = 1. It states facts of an instance of the actual-circuit model, not a property of a Lean function; it rests on no run and no art:, and it is not the deployed partition at the onsite reference numbers.",
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": "lemma: ServingBlockBound's nontrivial lemma (#4825): at Counter, one constant gate, every premise but the per-block cap at the serving blocks' size (1, 0) holds, that cap fails, and the counted weight 1 is above the bound's right-hand side 0. A counterexample at an instance of the actual-circuit model, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies": "lemma: ServingBlockBound's nontrivial lemma for OperationBodies: at Detached, whose one operation takes in a gate none of it reads, every premise but OperationBodies holds and the counted weight 1 is above the bound's right-hand side 0. A counterexample at an instance of the actual-circuit model, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap": "lemma: ServingBlockBound's nontrivial lemma for Overlap, and so for its boundary term omega_max mu k_S: at Straddle, whose one operation is split across the wipe, every premise holds at mu = 1, Overlap fails at mu = 0, and there the counted weight 1 is above the bound's right-hand side 0, so the bound without its boundary term is false. A counterexample at an instance of the actual-circuit model, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": "completeness: ServingBlockBoundRemote's honest lemma (#4825): at Honest (as ServingBlockBound_honest's) its premises hold together at (c, k) = (1, 1). It states facts of an instance of the actual-circuit model, not a property of a Lean function, and rests on no run and no art:.",
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": "lemma: ServingBlockBoundRemote's nontrivial lemma (#4825): at Counter every premise but the per-block cap at the inference size (1, 0) holds, that cap fails, and the counted weight 1 is above the bound's right-hand side 0. A counterexample at an instance of the actual-circuit model, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": "completeness: UncertifiedElementary's honest lemma (#4825): at Honest each serving block, with itself as its inference block and every gate certified, and the dark leaves, with no blocks and none certified, are aligned, at omega_max = 1. It states facts of an instance of the actual-circuit model, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": "lemma: UncertifiedElementary's nontrivial lemma (#4825): at Counter's gate with no blocks and the gate certified, Alignment fails and the operation's weight 1 is above the cap omega_max |R \\ W| + split(R) = 0. A counterexample at an instance of the actual-circuit model, not a property of a Lean function.",
    "Accounting.SecurityProofs.SketchBinds": "frozen (premise): It is a property of Accounting.RateSketch.sketch under the hypothesis SectorsBind σ on the window's signs, which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketch prices the hypothesis as Pr_σ[¬ SectorsBind σ].",
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
    "Bandwidth.SecurityProofs.AuditInteractive": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the oracle and what was sent (Security/Definitions/Accounting/Bandwidth/Interactive.lean), with the device's bounds (S_chip, the side bits read, T / R_regen, queries) as a field of the InteractiveDevice it ranges over, not the bandwidth audit's code; sends are unbounded and free, and relayed tags count against the side budget as in AuditRelay.",
