@@ -1,5 +1,5 @@
 """G4 (`per_request._compare_component`): the global Program's address map declares each request's component by its root nodes
-(`n_instances`), and the component the Match loads has `Prog._bind_splits` remove a single-request Program's splits constants (one
+(`n_instances`), and the component the Match loads has `RootView._bind_splits` remove a single-request Program's splits constants (one
 `Const32[S]` per top-p select) from its compared sequence.  So G4 compares the address map with the compared sequence plus those bound
 constants (`addressed_instances`).  Workload 101's fifth Match failed G4 by exactly its 32 selects: 46,686 declared, 46,654
 compared."""
