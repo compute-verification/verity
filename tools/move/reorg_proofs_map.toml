@@ -5,19 +5,19 @@
 #
 # - `benchmarks/one_stage/`, the one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end, becomes
 #   `examples/one_stage/`, whole. Its scripts import each other from their own directory (`sys.path` and `import a0`), and
-#   its cost jobs read the drivers (`zk_cost.py` imports `a0` and `a6`), so the cost jobs come along rather than being cut
-#   off: `zk_cost.py`, `zk_cost.sh`, `zk_cost_cpu.sh`, `a8_cost.py` and `a8_gpu.sh` go back to `benchmarks/` in phase 2,
-#   with code. It is not a package, and its suite is named by its path.
+#   its cost jobs need the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gpu.sh` runs `a8.py`), so the cost jobs come
+#   along rather than being cut off. `zk_cost.py`, `zk_cost.sh`, `zk_cost_cpu.sh`, `a8_cost.py` and `a8_gpu.sh` go back to
+#   `benchmarks/` in phase 2, once they no longer need the drivers. It is not a package, and its suite is named by its path.
 # - `benchmarks/private_circuit/`, protocol 2 (the private circuit through the universal unit) end to end, becomes
 #   `examples/private_circuit/`.
 # The directories keep their names, with `_`: `verity example NAME` reads a `-` in NAME as `_`, and an example's name is
 # `[a-z0-9_]+` (the ladder, `tools/verity/cli/verity_cli/examples.py`). Neither is pinned by `deploy.toml` or run by a gate
-# script. Nothing is split, edited or deleted, and no file is added. The
-# format is `layout_map.toml`'s.
+# script. Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
 #
-# It runs on a tree whose joins off these directories are root-anchored (#4910): `layout.py` doesn't rewrite a single
-# segment off an alias, `HERE.parent / "network_traces"`. The move is 95222028e3 (#4916); carry an open branch across it
-# with `tools/move/restack.py BRANCH --move-commit 95222028e3 --script-arg=--no-lock --script-arg=--map
+# It runs on a tree where every path to or from these directories is in a form `layout.py` rewrites (#4910). `layout.py`
+# rewrites neither a single segment off an alias (`HERE.parent / "network_traces"`) nor a path after a `-` (a shell
+# default, `${X:-benchmarks/…}`). The move is ef9be866a5 (#4916). Carry an open branch across it with
+# `tools/move/restack.py BRANCH --move-commit ef9be866a5 --script-arg=--no-lock --script-arg=--map
 # --script-arg="$PWD/tools/move/reorg_proofs_map.toml"`.
 
 [roots]
