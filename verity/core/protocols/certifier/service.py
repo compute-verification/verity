@@ -203,8 +203,8 @@ Lean takes as an input rather than checks:
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
-ingress tie's verifier, is not ported and stays Python. Every recorded proving run of N2 replays through both to the
-verdict it recorded (`benchmarks/network_traces/n2_lean_replay.py`), and the properties of the Lean's verdict are
+ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
+through both to the verdict it recorded (the runs the README cites), and the properties of the Lean's verdict are
 `Security/Properties/NetworkCertifier/LinkWindow.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the

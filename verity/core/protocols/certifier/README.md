@@ -344,9 +344,9 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   plain unit's public row with both ends' grids at the warden's parameters digest, which both take as an input (the
   warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest isn't 64
   bytes, whose ends have a profile, or whose two grids differ.
-- every recorded proving run of N2 replays through both to the verdict it recorded, negative controls included
-  (`benchmarks/network_traces/n2_lean_replay.py`): 193 link-windows of seven runs, plain and served, 180 accepted and 13
-  refused, each with nine injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
+- every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
+  controls included: 193 link-windows of seven runs, plain and served, 180 accepted and 13 refused, each with nine
+  injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
   warden runs give 30 link-windows from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a draw of 8 on the
   H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
   r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and
