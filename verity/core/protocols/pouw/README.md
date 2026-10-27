@@ -13,7 +13,7 @@ are their references, held to them by the difftests.
 
 - `PROTOCOL.md`: the spec while it is experimental: the interface, the lifecycle, epoch coins, registered weights, the
   proof's identifier, the served audit window, each scheme's section, and the compile pass.
-- `accel/PROTOCOL.md`: Dither, PoUW's no-fold protocol under the ACCEL model.
+- Dither, PoUW's no-fold protocol under the ACCEL model, has its own `PROTOCOL.md` in its directory beside this one.
 - `schemes/`: the named schemes (`ncp-v1`, `pearl-fp8-v4`, the Pearl-C family, `pearl-c-nvfp4-v0`).
 - `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served
   Program (`compile`), and the draw plan (`plan`). Each Definition has its `circuit-check` sidecar.
