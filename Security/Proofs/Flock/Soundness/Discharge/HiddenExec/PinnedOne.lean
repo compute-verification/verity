@@ -109,7 +109,7 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
       refine ⟨(Hidden.matA_unpin hda r.val j.val).trans ?_, (Hidden.matB_unpin hdb r.val j.val).trans ?_⟩ <;>
         simp [Hidden.pinCnt, hnp] <;> rfl
     exact (Pinned.sat_unpin hPR hz (fun _ _ h => absurd h zero_ne_one) (fun _ _ h => absurd h zero_ne_one)).1
-  have huse := (built_spec L.unit_built).2.1
+  have huse := (built_spec (L.built_flat P.tmpl)).2.1
   have hZ : Hm.zeroCol st.c < 2 ^ st.c.kLog := L.unit_slot_lt hs₀ C.unit_zero
   have hA0 : ∀ j, (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).A₀ ⟨Hm.zeroCol st.c, hZ⟩ j = 0 := by
     intro j
