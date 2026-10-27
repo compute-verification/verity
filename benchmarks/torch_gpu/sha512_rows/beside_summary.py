@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -104,6 +105,15 @@ NCU_COLS = (("tensor", ("sm__pipe_tensor_op_gmma_cycles_active", "sm__pipe_tenso
             ("shared", ("sm__pipe_shared_cycles_active",)), ("issue", ("smsp__issue_active",)))
 
 
+NUMBER = re.compile(r"-?\d+(\.\d+)?([eE][-+]?\d+)?")
+
+
+def ncu_value(cell: str) -> float | None:
+    """A raw-page cell as a number ("1,234.5"), or None for what ncu prints when it has none ("", "n/a")."""
+    s = cell.replace(",", "").strip()
+    return float(s) if NUMBER.fullmatch(s) else None
+
+
 def ncu_row(path: Path) -> dict[str, float]:
     """The last launch's pct_of_peak_sustained_elapsed for NCU_COLS' metrics, from ncu's raw page (header, units, rows)."""
     rows = list(csv.reader(path.open()))
@@ -114,11 +124,9 @@ def ncu_row(path: Path) -> dict[str, float]:
     for label, names in NCU_COLS:
         for n in names:
             col = f"{n}.avg.pct_of_peak_sustained_elapsed"
-            if col in head and last[head.index(col)].strip():
-                try:
-                    out[label] = float(last[head.index(col)].replace(",", ""))
-                except ValueError:
-                    continue
+            v = ncu_value(last[head.index(col)]) if col in head else None
+            if v is not None:
+                out[label] = v
                 break
     return out
 
@@ -136,12 +144,9 @@ def ncu_stalls(path: Path) -> dict[str, float]:
     out = {}
     for i, col in enumerate(head):
         name = col[len(STALL):] if col.startswith(STALL) else "active" if col.startswith("smsp__warps_active.") else None
-        if name is None or not col.endswith(".avg.per_cycle_active") or not last[i].strip():
-            continue
-        try:
-            out[name.split(".")[0]] = float(last[i].replace(",", ""))
-        except ValueError:
-            continue
+        v = ncu_value(last[i]) if name is not None and col.endswith(".avg.per_cycle_active") else None
+        if v is not None:
+            out[name.split(".")[0]] = v
     return out
 
 
