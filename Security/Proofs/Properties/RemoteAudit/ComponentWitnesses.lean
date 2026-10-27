@@ -106,7 +106,7 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
   unfold SketchBoundAt Trace.Holds
   refine le_of_eq (Pouw.pr_eq_zero fun ω hω => hω.2 fun p hp j _ => ?_)
   obtain ⟨t, h1, h2, h3⟩ := h ω p hp
-  exact ⟨t, h1, h2, mem_union_left _ (h3 ▸ mem_univ j)⟩
+  exact ⟨t, h1, h2, mem_union_left _ (by rw [h3]; exact mem_univ j)⟩
 
 theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
     (T : Trace (Coins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
@@ -203,18 +203,20 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
   · intro ω hv
     obtain ⟨hsz, hpass, hmono, hfp, hrun⟩ := hgs ω hv _ rfl
     refine ⟨monotone_nat_of_le_succ fun p => (htick ω p).le, by simp [recordPace, firstPass], ?_,
-      fun g hg => ?_, fun g h hgh => ?_, fun g hg => ?_, fun g hg p h1 h2 => hrun g (by omega) p h1 h2⟩
+      fun g hg => ?_, fun g h hgh => ?_, fun g hg => ?_, fun g hg p h1 h2 => ?_⟩
     · show firstPass _ (node.windows - 1 + 1) ≤ passes
       rw [Nat.sub_add_cancel hW]
       exact hfp
-    · show firstPass _ g < firstPass _ (g + 1)
+    · change g ≤ node.windows - 1 at hg
+      show firstPass _ g < firstPass _ (g + 1)
       rw [firstPass_succ]
       have := (hpass g (by omega)).1
       omega
     · show released _ node.windows g ≤ released _ node.windows h
       unfold released
       exact hmono _ _ (min_le_min_right _ hgh) (by omega)
-    · show released _ node.windows (g + 1) ≤ ended _ g
+    · change g ≤ node.windows - 1 at hg
+      show released _ node.windows (g + 1) ≤ ended _ g
       unfold released ended
       rw [hsz]
       by_cases h1 : g + 1 < node.windows
@@ -222,12 +224,14 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
         exact le_max_right _ _
       · rw [if_neg h1, min_eq_right (by omega : node.windows - 1 ≤ g + 1), (by omega : node.windows - 1 = g)]
         exact (hpass g (by omega)).2
+    · change g ≤ node.windows - 1 at hg
+      exact hrun g (by omega) p h1 h2
   · have e : (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com =
         (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play (Committed.junk com t) := by
       unfold Committed.play
-      congr 1
-      funext t' ω
-      exact Fin.ext (congrArg (min · receiptMax) (hsize _ _ ω ω t'))
+      congr 1 <;> funext t' ω <;> first
+        | exact Fin.ext (congrArg (min · receiptMax) (hsize _ _ ω ω t'))
+        | rfl
     unfold Committed.hide
     rw [← e, tsub_self, tsub_self, add_zero]
 
@@ -542,8 +546,7 @@ theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
     (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _) rfl
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
-  · simp [binding_empty, toy_delta]
-    norm_num
+  · norm_num [binding_empty, toy_delta]
   · exact fun ω => ⟨trivial, toy_not_held _ rfl (fun _ t ht => if_neg (by omega)) ω⟩
 
 /-- **The line credits only what the trace held**: on one node, record and summary, every link-charged stretch
