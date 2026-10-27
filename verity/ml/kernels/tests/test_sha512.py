@@ -98,7 +98,7 @@ def _digest(lib: ctypes.CDLL, form: int, m: bytes) -> bytes:
 
 
 def test_the_package_names_the_header_the_forms_include() -> None:
-    assert SHA512 == SOURCE.parents[1] / "sha512.cuh"
+    assert SHA512.resolve() == SOURCE.parents[1] / "sha512.cuh"
     assert '#include "../sha512.cuh"' in SOURCE.read_text()
 
 
