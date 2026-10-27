@@ -261,7 +261,7 @@ def main(args: Options) -> int:
                 "root_combination": f"tp_run_root = {'SHA-512' if rows else 'SHA-256'}(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": root_tag.decode(), "commit_scheme": args.commit_scheme,
                 "layout_version_per_rank": f"chunk-leaf-v1 step streams under {args.commit_scheme}", "required_classes": list(required_classes),
-                "required_classes_source": "cli" if args.required_classes is not None else "default (REL-02) + tp_rank_partials (TP-03), checked per rank",
+                "required_classes_source": "cli" if args.required_classes is not None else "default (REL-02) + tp_rank_partials (R14 TP-03), checked per rank",
                 "negatives": {"omit_rank": args.omit_rank, "no_tp_partials": bool(args.no_tp_partials), "relabel_rank": args.relabel_rank, "swap_requests": args.swap_requests,
                               "wrong_root_rank": args.wrong_root_rank, "omit_rank_partials": args.omit_rank_partials, "omit_partial_site": args.omit_partial_site,
                               "flip_partial": args.flip_partial},
@@ -391,7 +391,7 @@ def main(args: Options) -> int:
     if moe_ranks and args.required_classes is None and "moe_block_stream" not in required_classes:
         required_classes = required_classes + ("moe_block_stream",)
         versions["required_classes"] = list(required_classes)
-        versions["required_classes_source"] += " + moe_block_stream (MoE-runner modules on every rank)"
+        versions["required_classes_source"] += " + moe_block_stream (R15 TP-MOE-SRC: MoE-runner modules on every rank)"
         versions["moe_source"] = {int(m["rank"]): m.get("moe_source") for m in made}
         (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
         print(f"[tp2commit] MoE block source attached on every rank ({versions['moe_source'][0]}); required classes {list(required_classes)}", flush=True)
