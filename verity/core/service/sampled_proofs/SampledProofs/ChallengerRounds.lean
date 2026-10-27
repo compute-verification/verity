@@ -5,7 +5,7 @@ of record).
 
 A use is one read of a family's coins: its label, what they were released after, and how many coins. v2 reads the
 window's draw (after the registration's digest), and each session's link points and rounds (after root_B's digest
-and each round's stream's chain over `Round.sha`), as uses of the one withheld session the auditor's ledger opens on the window.
+and each round's request at its stream's chain over `Round.sha`), as uses of the one withheld session the auditor's ledger opens on the window.
 `roundCoins key window uses order groups coins` reads each use's coins with `drawCoins` on its own segment, and refuses unless the
 session's signed release log shows every family of its layout released after exactly the uses' roots, coin for coin,
 in order (`exactlyReason`, `Use.roots`). So the log holds one release a use: a second release for one round (a
