@@ -20,7 +20,8 @@ A single-GPU row's Build of record needs no trace at all (`write_row`, `predict 
 Program with the names its trace gives it (`naming.write_build`, `build_request_<shape>/`), GP-01's workload over them
 (`build_workload/workload_program.json`: its digest, and the `lag` and `applicability.engine.async_scheduling` the declared target
 resolves), the row's required-value manifest over them (`manifest.json`, the row's own query and policies, `row_build`) and
-`predicted.json`, what predicted it and the manifest's sha256. That is the Build the served Commit binds (`serve_seal.row_refusal`). `compare --predicted DIR` holds it to
+`predicted.json` (`records.predicted_row`), what predicted it and the manifest's sha256. That is the row's Build of record, the
+ahead-of-time compiler's, which a traced Build only cross-checks. `compare --predicted DIR` holds it to
 a traced Build of the same row: every Program digest, and the manifest's digest, Program digest and identities.
 
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR (--wrapper step --M N --pos0 N |
@@ -46,15 +47,13 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import WORKLOADS, RowEngine, UsageError, option, row_file, workload_file
+from verity_vllm.records.predicted_row import FILE, PredictedRow
 
 from . import score as S
 from .build import build_program
 from .phi import Phi
 
 SCHEMA = "verity-vllm/aot-comparison/v1"
-ROW_SCHEMA = "verity-vllm/predicted-row/v1"
-#: the predicted row's record of what predicted it, beside its Build dirs (`write_row`)
-PREDICTED = "predicted.json"
 #: what a predicted row's `build_workload/workload_program.json` names as its maker
 ROW_BUILT_BY = "verity_vllm.program.predict.aot"
 #: the traced derive dir's files a switched row's carries as written; `instances.json.gz` is the predicted Program's own
@@ -198,9 +197,9 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0, predicted: st
 
 
 def _manifest_facts(path: Path) -> dict[str, Any]:
-    m = json.loads(path.read_text())
-    return {"manifest_digest": m.get("manifest_digest"), "program_digest": m.get("program_digest"),
-            "identities": (m.get("populations") or {}).get("identities"), "complete": m.get("complete")}
+    from verity_vllm.records.required_manifest import RequiredManifest
+    m = RequiredManifest.load(path)
+    return {"manifest_digest": m.manifest_digest, "program_digest": m.program_digest, "identities": len(m.identities)}
 
 
 def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dict[str, Any]:
@@ -211,19 +210,19 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
     traced = traced if traced is not None else epoch.build_programs(Path(row_dir))
     if list(traced) != ["0"]:
         raise UsageError(f"{row_dir}: a predicted row is one rank's, and the traced Build has ranks {sorted(traced)}")
-    p, rec = traced["0"], json.loads(Path(predicted, PREDICTED).read_text())
+    p, rec = traced["0"], PredictedRow.of(json.loads((path := Path(predicted, FILE)).read_text()), str(path))
     by_shape = {s: p["requests"][n] for n, s in _traced_shapes(row_dir, "0", p).items()}
-    parts = {"workload": (p["workload"], rec["workload_digest"]),
-             **{n: (by_shape.get(tuple(int(x) for x in REQUEST.fullmatch(n).groups())), d) for n, d in rec["requests"].items()}}
+    parts = {"workload": (p["workload"], rec.workload_digest),
+             **{n: (by_shape.get(tuple(int(x) for x in REQUEST.fullmatch(n).groups())), d) for n, d in rec.requests.items()}}
     out: dict[str, Any] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
     t, q = _manifest_facts(Path(row_dir, "manifest.json")), _manifest_facts(Path(predicted, "manifest.json"))
     out["manifest"] = {"traced": t, "predicted": q, "equal": bool(t["manifest_digest"]) and t == q}
     return {"dir": str(Path(predicted).resolve()), "parts": out, "equal": all(v["equal"] for v in out.values())}
 
 
-def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, log=None) -> dict[str, Any]:
+def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, log=None) -> PredictedRow:
     """A single-GPU row's Build of record at `out` from its declared inputs alone (module docstring): no trace, no vLLM.  The
-    checkpoint's `config.json` is `config`, else the pin's (`pinned_hf_config`).  Returns `predicted.json`'s record."""
+    checkpoint's `config.json` is `config`, else the pin's (`pinned_hf_config`).  Returns the record it writes beside them."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.pipeline import manifest as MN
     from verity_vllm.program import prefix_plan as PP
@@ -259,15 +258,15 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
         man = MN.build_global(w, out, workload_digest=wp["digest"], **policy)
     else:
         man = MN.build(os.path.join(out, next(iter(requests))), workload=w, **policy)
-    if MN.incomplete_rc(man):
-        raise UsageError(f"{row}: the predicted Build's manifest is incomplete (unmodelled {sorted(man.get('unmodelled') or {})[:3]})")
     raw = json.dumps(man, separators=(",", ":")).encode()
     Path(out, "manifest.json").write_bytes(raw)
-    rec = {"schema": ROW_SCHEMA, "row": row, "config": str(config), "code_version": S.code_version(), "requests": requests,
-           "workload_digest": wp["digest"], "lag": wp["lag"], "manifest_digest": man["manifest_digest"],
-           "manifest_sha256": hashlib.sha256(raw).hexdigest(), "program_digest": man["program_digest"],
-           "identities": man["populations"]["identities"], "secs": round(time.time() - t0, 1)}
-    Path(out, PREDICTED).write_text(json.dumps(rec, indent=1) + "\n")
+    if MN.incomplete_rc(man):
+        raise UsageError(f"{row}: the predicted Build's manifest is incomplete (named above), so it has no {FILE}")
+    rec = PredictedRow(row=row, config=str(config), code_version=S.code_version(), requests=requests, workload_digest=wp["digest"],
+                       lag=wp["lag"], manifest_digest=man["manifest_digest"], manifest_sha256=hashlib.sha256(raw).hexdigest(),
+                       program_digest=man["program_digest"], identities=man["populations"]["identities"],
+                       secs=round(time.time() - t0, 1))
+    Path(out, FILE).write_text(json.dumps(rec.dump(), indent=1) + "\n")
     return rec
 
 
@@ -319,7 +318,7 @@ def main(a: EmitOptions | CompareOptions | RowOptions) -> int:
         return 0
     if a.cmd == "row":
         rec = write_row(a.row, a.out, config=a.config, jobs=a.jobs, log=lambda s: print(s, file=sys.stderr, flush=True))
-        print(json.dumps({k: rec[k] for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities", "secs")}))
+        print(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities", "secs")}))
         return 0
     doc = compare(a.row_dir, a.row, a.config, a.workers, a.predicted)
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
