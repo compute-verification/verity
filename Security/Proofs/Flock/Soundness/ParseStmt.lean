@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplUnitAt
 
 /-!
-# A hidden-output file's statement circuit (PRF-133, ASK-112 option A)
+# A hidden-output file's statement circuit
 
 A templated file's statement circuit is the flat circuit its template unrolls to (`HmOut.unrolled`): the circuit
 `HmOut.parseTmpl` commits, its unit net `Tmpl.unroll`'s, carrying no template. `HmOut.parseStmt` reads it, and any

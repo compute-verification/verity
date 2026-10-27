@@ -4,10 +4,14 @@ with its issue and given no verdict; and sampled proofs' accepted answer compose
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
 composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
 and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
-CLASSES, and the class of record's count after them gates nothing."""
+CLASSES, and the class of record's count after them gates nothing. Its load, `serve_load.py --varied`, writes each
+request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import io
+import itertools
 import json
 import os
 import subprocess
@@ -25,6 +29,9 @@ import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
+SL = importlib.util.module_from_spec(_SL)
+_SL.loader.exec_module(SL)
 
 
 def _write(d: Path, name: str, rows: list[dict]) -> None:
@@ -320,3 +327,87 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")
+
+
+class _Response:
+    """`urlopen`'s response, read whole or line by line; reading line i sets ``now[0]`` to ``times[i]``, and reading past the
+    last line to ``end``."""
+
+    def __init__(self, lines: list[bytes], now: list[float] | None = None, times: list[float] = (), end: float = 0.0) -> None:
+        self.lines, self.now, self.times, self.end = lines, now, list(times), end
+
+    def __enter__(self) -> _Response:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return b"".join(self.lines)
+
+    def __iter__(self):
+        for i, line in enumerate(self.lines):
+            if self.now is not None:
+                self.now[0] = self.times[i]
+            yield line
+        if self.now is not None:
+            self.now[0] = self.end
+
+
+def _sse(*events: dict | bytes) -> list[bytes]:
+    """serve-openai's stream of ``events``, as `urlopen`'s response yields it: each event's data line, then its blank line."""
+    return [x for e in events for x in (b"data: " + (e if isinstance(e, bytes) else json.dumps(e).encode()) + b"\n", b"\n")]
+
+
+def test_serve_load_times_a_request_at_its_send_its_first_output_id_and_its_end(monkeypatch):
+    """A streamed request's first token is the first event carrying output ids, not the stream's opening event, and its end
+    comes once the stream is read past [DONE]; its ids and finish are what they were. An unstreamed one has no first token."""
+    now = [1.0]
+    lines = _sse({"choices": [{"text": "", "token_ids": None}]}, {"choices": [{"token_ids": [7]}]},
+                 {"choices": [{"token_ids": [8], "finish_reason": "length"}]}, b"[DONE]")
+    stream = _Response(lines, now, times=[2, 2, 3, 3, 4, 4, 5, 5], end=6.0)
+    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: stream)
+    times: dict = {}
+    assert SL.post(0, {"stream": True}, times=times, clock=lambda: now[0]) == {"token_ids": [7, 8], "finish_reason": "length"}
+    assert times == {"send": 1.0, "first_token": 3.0, "done": 6.0}
+    whole = _Response([json.dumps({"choices": [{"token_ids": [7]}]}).encode()])
+    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: whole)
+    times = {}
+    assert SL.post(0, {}, times=times, clock=lambda: now[0]) == {"choices": [{"token_ids": [7]}]} and set(times) == {"send", "done"}
+
+
+def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_path, monkeypatch):
+    """A varied run's timings file beside its record: its release run and wall-clock start, and one entry a request in
+    release order, its times on the injected clock from the run's start (send, then first token, then done) and its
+    streamed ids counted; the record's lines are what they were."""
+    ticks = itertools.count()
+
+    def clock() -> float:
+        return float(next(ticks))
+
+    def urlopen(req, timeout=None):
+        b = json.loads(req.data)
+        if req.full_url.endswith("/tokenize"):
+            return _Response([json.dumps({"tokens": [128000] + [1000 + ord(c) for c in b["prompt"]]}).encode()])
+        ids = list(range(500, 500 + b["max_tokens"]))
+        return _Response(_sse({"choices": [{"text": "", "token_ids": None}]},
+                              *({"choices": [{"token_ids": [t], "finish_reason": "length" if t == ids[-1] else None}]} for t in ids),
+                              b"[DONE]"))
+
+    monkeypatch.setattr(SL.urllib.request, "urlopen", urlopen)
+    out = tmp_path / "load.jsonl"
+    a = argparse.Namespace(port=0, model="m", varied=3, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1, release="run",
+                           jitter_ms=0.0, out=str(out))
+    assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
+    rows = [json.loads(line) for line in out.read_text().splitlines()]
+    assert SL.timings_path(out) == tmp_path / "load.timings.json"
+    doc = json.loads(SL.timings_path(out).read_text())
+    assert set(doc) == {"clock", "release_run", "start_unix", "requests"} and (doc["release_run"], doc["start_unix"]) == ("run", 1.7e9)
+    assert [set(r) for r in rows] == [{"user", "release", "at_s", "delay_s", "prompt", "max_tokens", "response"}] * 3
+    assert [(t["user"], t["release"], t["at_s"]) for t in doc["requests"]] == [(r["user"], r["release"], r["at_s"]) for r in rows]
+    assert [r["release"] for r in rows] == [0, 1, 2]
+    for t, r in zip(doc["requests"], rows):
+        assert set(t) == {"user", "release", "at_s", "send_s", "first_token_s", "done_s", "tokens", "ok"} and t["ok"]
+        assert 0 < t["send_s"] < t["first_token_s"] < t["done_s"]
+        assert r["response"] == {"token_ids": list(range(500, 500 + r["max_tokens"])), "finish_reason": "length"}
+        assert t["tokens"] == r["max_tokens"]

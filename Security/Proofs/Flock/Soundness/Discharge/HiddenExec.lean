@@ -61,7 +61,8 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
 * `TablesP`, `SitesP`: the one-table plan at the verifier's public inputs `own` (`tableAtHP`, `planAtHP`, `tablesAtHP`)
   and its sites (`sitesAtHP`, `ppHP`, `hConstHP`, `hZeroHP`) for `Placed.keyProgP`.
 * `RowsAtHP`: `lay` and `rs` there (`layAtHP`, `rsAtHP`, `rsAtHP_computes`), `BcSiteHP` at every satisfiable site.
-* `LiveOnP`: R11 for one-table sessions at `own` (`AcceptsP`, `DecodesOnP`, `Prog.flock_headline_live_onXP`).
+* `LiveOnP`: the execution refinement for one-table sessions at `own` (`AcceptsP`, `DecodesOnP`,
+  `Prog.flock_headline_live_onXP`).
 * `HeadlineExecP`: `flock_headline_exec_hiddenP`, `flock_headline_exec_hidden` at `own` and `Placed.keyProgP`.
 * `SetupP`: what a setup at `own` establishes (its tags, leaf scheme, well-formedness and drawn public file, the
   session's rounds and link points), and `drawSetupHP_of_setupHiddenI`.

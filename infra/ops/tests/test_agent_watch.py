@@ -1588,7 +1588,7 @@ def silent(tmp_path):
 
 
 def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_until_it_shows_activity(tmp_path):
-    """Daniel, 19 Oct: agents go quiet and nobody notices (proofs' 20 workers, 18 Oct). A worker ACTIVE 90 min with no note of
+    """Agents go quiet and nobody notices. A worker ACTIVE 90 min with no note of
     its and no push to its branch rings its coordinator's handle; a second silent window rings again; then nothing until a
     note or a push."""
     notes = tmp_path / "notes"
@@ -1970,7 +1970,7 @@ def test_the_deployed_nodes_file_names_the_nebius_nodes_and_an_ssh_argv():
 
 
 def test_a_running_run_that_streams_nothing_for_30_min_is_stalled_cancelled_and_continued(tmp_path):
-    """Daniel, 19 Oct (proofs sat 7 h): a run that reads RUNNING and streams nothing, while its agent's updatedAt stands still,
+    """A run that reads RUNNING and streams nothing, while its agent's updatedAt stands still,
     is a hung call or a suspended VM, which the API doesn't show. Its owner (top, for a coordinator) is rung with the record."""
     api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r",
                                              "updatedAt": W.iso(T0)}], {"run-r": {"status": "RUNNING"}}, timers=None)
@@ -2029,7 +2029,7 @@ def run_end_for(tmp_path, roots, clock, w, agent, rid="r20261018-200100-0002"):
 
 
 def test_a_coordinator_idle_after_its_run_ended_is_resumed_with_the_result_10_min_on(tmp_path):
-    """Rule (b), Daniel 19 Oct: a coordinator that ended its turn to wait on a run, and wasn't woken when it ended."""
+    """Rule (b): a coordinator that ended its turn to wait on a run, and wasn't woken when it ended."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     ended = run_end_for(tmp_path, roots, clock, w, CO)
     while clock.t < ended + W.RESUME_S - 60:

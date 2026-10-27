@@ -3,12 +3,11 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # Per-stage coins with sampled proofs (trusted)
 
-STEER-PROOF's route A over PoUW's rounds (`Pouw.RelativeSecurity.RoundGame`,
-`Paths`, `prob`): a round runs its stages in order, and stage `c`'s coin is released after stage `c`'s operands are
-committed (decision 36's order, with whole dot products for units), so what the cheater does at a stage is a function
-of the coins of that stage and the earlier ones, never a later one. After the round's last stage, `s` independent
-draws each name a unit (a whole dot product) by a uniform ticket, so any draw law with rational weights, and the round
-passes when every drawn unit's proof passes.
+STEER-PROOF's route A over PoUW's rounds (`Pouw.RelativeSecurity.RoundGame`, `Paths`, `prob`): a round runs its stages
+in order, and stage `c`'s coin is released after stage `c`'s operands are committed (with whole dot products for units),
+so what the cheater does at a stage is a function of the coins of that stage and the earlier ones, never a later one.
+After the round's last stage, `s` independent draws each name a unit (a whole dot product) by a uniform ticket, so any
+draw law with rational weights, and the round passes when every drawn unit's proof passes.
 
 * `CoinStages`: a round's stages: per stage, the units the cheater skips (does not pay for) and the units whose proof
   passes, as functions of the stage's coin, then the rest of the round, which may depend on it. A unit belongs to one

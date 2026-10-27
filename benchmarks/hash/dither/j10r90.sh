@@ -25,7 +25,7 @@
 #     --env GPU_LEASE_WHO=WHO --send BUILD_RUN/out/lib/sm_90a/h1u_kr.so --send .../h1u_kraqwxsc.so \
 #     [--send .../h1u_kra.so ...] --send .../BUILD.txt -- bash benchmarks/hash/dither/j10r90.sh check
 # then on a CPU node with check's out/j10r90-check.json and .npz sent: j10r90.py verify and j10r_units.py anchor.
-# Env: NVCC (default CUDA 13.0's), LEASE (default "--max-min 20"), HB_WHO (default $GPU_LEASE_WHO), BENCH_ARGS.
+# Env: NVCC (default CUDA 13.0's), LEASE (default "--max-min 20"), HB_WHO (default $GPU_LEASE_WHO, else dither/ and the run's id), BENCH_ARGS.
 set -uo pipefail
 WHAT=${1:?usage: j10r90.sh build|check|time}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -80,7 +80,7 @@ EOF
       mkdir -p "$OUT/s8_linear" && tar -C "$OUT/s8_linear" -xf "$s8" || exit 2
       export BENCH_ARGS="--wgmma $OUT/s8_linear ${BENCH_ARGS:-}"
     fi
-    HB_WHO=${HB_WHO:-${GPU_LEASE_WHO:-kernels-kcommitfb}} LEASE=${LEASE:---max-min 20} \
+    HB_WHO=${HB_WHO:-${GPU_LEASE_WHO:-dither/${RESEARCH_RUN_ID:-local}}} LEASE=${LEASE:---max-min 20} \
       exec bash "$HERE/job.sh" sm_90a "$([ "$WHAT" = check ] && echo j10r90 || echo j10r90t)" ;;
   *) echo "j10r90.sh: no $WHAT (build, check or time)" >&2; exit 2 ;;
 esac

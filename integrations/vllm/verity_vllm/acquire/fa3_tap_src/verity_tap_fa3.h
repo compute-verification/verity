@@ -1,7 +1,7 @@
 /******************************************************************************
- * Verity R13 lane hopper: M1 hidden-value tap for the FlashAttention-3 forward (hopper/, vllm-flash-attn 506341a1).
+ * Verity: M1 hidden-value tap for the FlashAttention-3 forward (hopper/, vllm-flash-attn 506341a1).
  *
- * The R9 CMT-2 "export-and-commit" tap (csrc/flash_attn/src/verity_tap.h, VERITY_TAP=3) ported to the sm90 warp-specialised
+ * The FA2 "export-and-commit" tap (csrc/flash_attn/src/verity_tap.h, VERITY_TAP=3) ported to the sm90 warp-specialised
  * kernel `flash::FlashAttnFwdSm90`: the hidden classes selected by VERITY_MAT_SRC are written, in canonical positions, to a
  * preallocated flat f32/u32 buffer (params.vt.diag_ptr) whose layout is `Verity_mat_layout(HB, M, NB, BN, D)` -- the SAME
  * word layout as the FA2 tap (v8), so the host mirror (`hidden_source.mat_total_words` / `hidden_stream.StreamLayout`) is reused

@@ -8,7 +8,7 @@ import Flock.TmplOrder
 import Flock.ProvedScope
 
 /-!
-# A templated statement the check passes (PRF-133, ASK-112 option A)
+# A templated statement the check passes
 
 `ProvedScope.check` passes a templated circuit (`Circuit.tmpl`) on its description (`ProvedScope.scopeOkT`), never on the
 rows it unrolls to. Its statement circuit, the flat circuit its template unrolls to (`HmOut.unrolled`), is then one the

@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
 set_option Elab.async false
 
 /-!
-# The custody forms at the session's statement circuit (PRF-133 G-B)
+# The custody forms at the session's statement circuit
 
 `zk_session_soundH_custody`, `zk_session_soundHJ_custody` and `zk_session_soundHJ_custody_json` at `HmOut.parseStmt`
 (`hcS`, a templated file's committed circuit unrolled), with the rows' fit `hv1` given: `zk_session_soundHSt` and

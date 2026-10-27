@@ -70,7 +70,7 @@ theorem simZJA_accepts (I : Inputs) (hdec : DecodesOnZKJ A Hs planZ I wr opn dec
       simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ :=
   rfl
 
-/-- **R11 at `--zk` for sessions of `J` tables, at `acc`** (`execRefinesZK_tables`). -/
+/-- **The execution refinement at `--zk` for sessions of `J` tables, at `acc`** (`execRefinesZK_tables`). -/
 theorem execRefinesZK_tablesA (hdec : DecodesOnZKJA A Hs planZ acc wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) :
     ExecRefines (auditLive L Reg (liveOfZJ dg planZ N wr)) τ (fun o => acc o.2.2) (fun _ => False)

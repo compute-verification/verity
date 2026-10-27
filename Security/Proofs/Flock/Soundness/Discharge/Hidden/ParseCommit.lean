@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.ParseStmt
 
 /-!
-# The committed circuit and the statement circuit (PRF-133, ASK-112 option A)
+# The committed circuit and the statement circuit
 
 An untyped hidden-output session commits the circuit `HmOut.parseCommit` reads (a templated file's carries its
 template), and its statement circuit (`HmOut.parseStmt`) is that circuit unrolled (`HmOut.unrolled`), which is the

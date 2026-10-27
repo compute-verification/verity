@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.TmplUnitAt
 import Proofs.Flock.Soundness.TmplNetOK
 
 /-!
-# A templated statement has the layout the placement reads (PRF-133)
+# A templated statement has the layout the placement reads
 
 `layout_of`'s templated form: a statement whose circuit `HmOut.parseTmpl` accepted has `Layout`, its unit the read
 templated unit's logical net placed at `posMap` (`UnitAt.tmpl`). Every other fact is the flat file's, on the circuit
