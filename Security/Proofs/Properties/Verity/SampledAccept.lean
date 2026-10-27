@@ -23,7 +23,7 @@ probability that flock-verify `--zk` accepts the live audit's transcript at the 
   in the break.
 
 `accept_le_of_coupling` is `accept_le` in the field's shape from a `PlayCoupling` at the session's setting `A`
-(`I = A.I`, `G = A.G`); `accept_le_of_couplings` takes the coupling's break to be the collision `SampledDeploy.col`
+(`I = A.I`, `G = A.GH`, the hash-first audit); `accept_le_of_couplings` takes the coupling's break to be the collision `SampledDeploy.col`
 reads off the outcome or sampled proofs' forger's success (`Vocab.Forges`), as `SampledDeploy.accept_le` states it. In
 a play the blobs are the committed file and the blobs sent last (`Outcome.sent`), each fetched by its SHA-512 digest,
 so the circuit and public files a session reads are the registered ones off a collision (`get_single` where the
@@ -256,16 +256,16 @@ theorem accept_le_of_couplings {V : Vocab d α} (kd : ByteArray → ℕ) (desc :
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
     (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
-      (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
+      (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).GH)
     (col : ByteArray → ByteArray → ByteArray → Outcome → Option (Claims.Msg × Claims.Msg))
     (Cp : ∀ θ F c σ r (hr : V.parsed F = some r), V.Registered θ F →
       PlayCoupling V θ F c σ (fun o => ColEvent (col θ F c) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr).I
-        (A θ F c σ r hr).G (τOf θ F c σ r hr)) :
+        (A θ F c σ r hr).GH (τOf θ F c σ r hr)) :
     ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
       (hr : V.parsed F = some r), V.Registered θ F →
       Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (col θ F c) o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
         FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
-          (A θ F c σ r hr).G (τOf θ F c σ r hr) :=
+          (A θ F c σ r hr).GH (τOf θ F c σ r hr) :=
   fun θ F c σ r hr hreg =>
     (Game.prob_mono (fun o ho => ⟨ho.1, fun h => h.elim ho.2.1 ho.2.2⟩) _ σ).trans
       (accept_le_of_coupling (Cp θ F c σ r hr hreg))

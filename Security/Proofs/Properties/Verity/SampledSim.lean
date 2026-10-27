@@ -6,14 +6,15 @@ import Proofs.Properties.Verity.AcceptRounds
 /-!
 # `PlayCoupling.prob_le` by driving the play through the live audit (`SampledDeploy.accept_le`'s reduction)
 
-The reduction runs a strategy of the play against the live audit (`Exec.auditLive` over `Composed.liveOfZJ`), one
+The reduction runs a strategy of the play against the hash-first live audit (`Exec.auditLive` over
+`LiveHash.liveOfZJH`: the roots' hash first, the roots with the proof files last), one
 release of the challenger device at a time (`Game.dom_reach`). It reads each release's bytes, with the requests before
 it (`LiveDrive.annot`, `LiveDrive.histPlan`: whether the device serves a request depends on them), for what the release
 is to the live audit (`LiveDrive.Tag`): a chunk of the window's draw, of session 0's link points, or of one of its
 rounds.
 
 * The draw's chunks give the live draw through A3 (`dom_coin_right_map` at `uniform_of_A3`), the points' chunks the link
-  points, after the roots the release answers (`rootOf`), and a round's chunks its coins, after the round the release
+  points, after the roots' hash the release answers (`rootOf`), and a round's chunks its coins, after the round the release
   answers (`bytesOf`). The device answers on the bytes' SHA-512 digest, so the reduction forwards the bytes it holds,
   and a record whose bytes differ under the same digest is a collision. A coin longer than a release is drawn chunk by
   chunk (`Game.Split`), each chunk the release's bits through a map keeping the uniform law and reading back to the
@@ -23,7 +24,7 @@ rounds.
 Each chunk reads back from its release's bits, so the live state the reduction reaches is a function of the play's
 releases (`LiveDrive.reached`). `LiveDrive.dom_live` is the reduction, generic in the live session's rounds
 (`LiveDrive.rounds`), `LiveDrive.dom_liveH` the same on the requests annotated with those before each, and
-`toVerity_auditLive` is the live audit in that form. `dominated_of_drive` is the domination
+`toVerity_auditLiveH` is the hash-first live audit in that form. `dominated_of_drive` is the domination
 `PlayCoupling.ofDominated` takes, under one hypothesis on the play's outcome: where it is accepted off the break, its
 releases bring the reduction into the session's rounds, and the live audit's transcript at the proof files is
 accepted.
@@ -32,14 +33,15 @@ accepted.
 `coinsMismatch`: each round's coins the device's release after its digest, one release per (session, round), in the
 live order). An untagged release never moves the reduction (`reached_filter`); where the tagged releases are the draw's
 block, the link points', then one block per round, each one release per chunk, the reduction is in the rounds at what
-they read back to (`reached_canon`); and where the coupling's transcript of the record is accepted, so is the live
-audit's there (its writer `wr` at what the releases read back to).
+they read back to (`reached_canon`); and where the coupling's transcript of the record is accepted, and the record's
+roots hash to what the points' request carries, so is the live audit's there (its writer `wrH` at what the releases
+read back to).
 
 `Drive` bundles the reduction at one live session of `SampledDeploy.A` (the coupling's `proj` and `covers`, how it
 reads the releases, and those refusals), and gives the strategy `Drive.τ` and the coupling `Drive.coupling`.
 `accept_le_of_drives` is `SampledDeploy.accept_le` at `τOf := (Dr …).τ`.
 
-What the reduction reads off a release is its request's (`tagOfRequest`, `rootOfRequest`, `bytesOfRequest`, over
+What the reduction reads off a release is its request's (`tagOfRequest`, `bytesOfRequest`, over
 `PlayDevice.requestParts`; a round's coin count its message's squeeze header, `coinCountOf`, so `tagOfPlay`), where the
 play's device serves it after the requests before it (`tagOfServed`), and a
 release's 512 bits read as the record reads its coin's bytes (`splitDraw`, `splitPoints`, `splitRounds`: bytes LSB
@@ -52,6 +54,8 @@ valid witness off the records the uses name (`Vocab.breakAt`, `Vocab.recsOf`), s
 namespace Verity.Game.LiveDrive
 
 open Verity.Game
+
+universe u
 
 /-- What a release of the play is, to the reduction: a chunk of the draw, of session 0's link points, or of one of its
 rounds (table, rep, coin count). -/
@@ -74,25 +78,32 @@ def annot {M : Type} : List (ℕ × M) → List (Σ m : ℕ, M × (Fin m → Boo
   | _, [] => []
   | h, ⟨m, b, x⟩ :: hs => ⟨m, (h, b), x⟩ :: annot (h ++ [(m, b)]) hs
 
-/-- A plan that reads each request with the requests before it, its state carrying them. -/
-def histPlan {M β St : Type} {q : β → Prop} {G : St → Game β} (plan : (st : St) → (m : ℕ) → Req M → Move q G st m) :
-    (st : St × List (ℕ × M)) → (m : ℕ) → M → Move q (fun s => G s.1) st m
-  | (st, h), m, b =>
-    match plan st m (h, b) with
-    | .skip st' hG => .skip (st', h ++ [(m, b)]) hG
-    | .step S => .step
-      { C := S.C, R := S.R, f := S.f, hf := S.hf, dec := S.dec, dec_f := S.dec_f,
-        next := fun c => (S.next c, h ++ [(m, b)]), reach := fun _ _ _ hd => S.reach _ _ _ hd }
+/-- A move, its state carrying the requests `h` before it and then its request `b`. -/
+def histMove {M β : Type} {St : Type u} {q : β → Prop} {G : St → Game β} {st : St} {m : ℕ} (h : List (ℕ × M))
+    (b : M) : Move q G st m → Move q (fun s : St × List (ℕ × M) => G s.1) (st, h) m
+  | .skip st' hG => .skip (st', h ++ [(m, b)]) hG
+  | .step S => .step
+    { C := S.C, R := S.R, f := S.f, hf := S.hf, dec := S.dec, dec_f := S.dec_f,
+      next := fun c => (S.next c, h ++ [(m, b)]), reach := fun _ _ _ hd => S.reach _ _ _ hd }
 
-theorem histPlan_next {M β St : Type} {q : β → Prop} {G : St → Game β}
-    (plan : (st : St) → (m : ℕ) → Req M → Move q G st m) (st : St) (h : List (ℕ × M)) (m : ℕ) (b : M)
-    (x : Fin m → Bool) : (histPlan plan (st, h) m b).next x = ((plan st m (h, b)).next x, h ++ [(m, b)]) := by
-  unfold histPlan
-  generalize plan st m (h, b) = mv
+theorem histMove_next {M β : Type} {St : Type u} {q : β → Prop} {G : St → Game β} {st : St} {m : ℕ}
+    (h : List (ℕ × M)) (b : M) (mv : Move q G st m) (x : Fin m → Bool) :
+    (histMove h b mv).next x = (mv.next x, h ++ [(m, b)]) := by
   cases mv <;> rfl
 
+/-- A plan that reads each request with the requests before it, its state carrying them. -/
+def histPlan {M β : Type} {St : Type u} {q : β → Prop} {G : St → Game β}
+    (plan : (st : St) → (m : ℕ) → Req M → Move q G st m) :
+    (st : St × List (ℕ × M)) → (m : ℕ) → M → Move q (fun s => G s.1) st m :=
+  fun st m b => histMove st.2 b (plan st.1 m (st.2, b))
+
+theorem histPlan_next {M β : Type} {St : Type u} {q : β → Prop} {G : St → Game β}
+    (plan : (st : St) → (m : ℕ) → Req M → Move q G st m) (st : St) (h : List (ℕ × M)) (m : ℕ) (b : M)
+    (x : Fin m → Bool) : (histPlan plan (st, h) m b).next x = ((plan st m (h, b)).next x, h ++ [(m, b)]) :=
+  histMove_next h b (plan st m (h, b)) x
+
 /-- **The history-reading plan reaches what the plan does on the annotated requests.** -/
-theorem runPlan_hist {M β St : Type} {q : β → Prop} {G : St → Game β}
+theorem runPlan_hist {M β : Type} {St : Type u} {q : β → Prop} {G : St → Game β}
     (plan : (st : St) → (m : ℕ) → Req M → Move q G st m) :
     ∀ (st : St) (h : List (ℕ × M)) (hs : List (Σ m : ℕ, M × (Fin m → Bool))),
       (runPlan (histPlan plan) (st, h) hs).1 = runPlan plan st (annot h hs)
@@ -117,28 +128,28 @@ def rounds (J : ℕ) : ℕ → (Fin J → Fin 2 → List Rd) → Game (Fin J →
     | none => .ret rs
     | some s => .coin (Fin (nOf s) → F) fun c => rounds J N (app s c rs)
 
-variable {Xd : Type} [Fintype Xd] [Nonempty Xd] (J : Xd → ℕ) (mPts N : ℕ)
-  (out : (x : Xd) → Array ByteArray → (Fin 2 → Fin mPts → F) → (Fin (J x) → Fin 2 → List Rd) → Array ByteArray → β)
+variable {Xd : Type} [Fintype Xd] [Nonempty Xd] {RB PF : Type} [Inhabited RB] [Inhabited PF] (J : Xd → ℕ) (mPts N : ℕ)
+  (out : (x : Xd) → RB → (Fin 2 → Fin mPts → F) → (Fin (J x) → Fin 2 → List Rd) → PF → β)
 
 /-- The live session's rounds and proof files, at the draw `x`, the roots and the points. -/
-def tail (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F) (N' : ℕ) (rs : Fin (J x) → Fin 2 → List Rd) :
+def tail (x : Xd) (rB : RB) (pts : Fin 2 → Fin mPts → F) (N' : ℕ) (rs : Fin (J x) → Fin 2 → List Rd) :
     Game β :=
-  (rounds nOf app (J x) N' rs).bind fun rs' => .send (Array ByteArray) fun pf => .ret (out x rB pts rs' pf)
+  (rounds nOf app (J x) N' rs).bind fun rs' => .send PF fun pf => .ret (out x rB pts rs' pf)
 
 /-- The live session at the draw `x`: the roots, the link points, the rounds and the proof files. -/
 def session (x : Xd) : Game β :=
-  .send (Array ByteArray) fun rB => .coin (Fin 2 → Fin mPts → F) fun pts =>
+  .send RB fun rB => .coin (Fin 2 → Fin mPts → F) fun pts =>
     tail nOf app J mPts out x rB pts N fun _ _ => []
 
 /-- Where the live audit is, between the play's releases. -/
 inductive Phase
   | pre
   | sess (x : Xd)
-  | rnds (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F) (N' : ℕ) (rs : Fin (J x) → Fin 2 → List Rd)
+  | rnds (x : Xd) (rB : RB) (pts : Fin 2 → Fin mPts → F) (N' : ℕ) (rs : Fin (J x) → Fin 2 → List Rd)
 
 variable {Ω : Type} [Fintype Ω] [Nonempty Ω] (t : Ω → Xd)
 
-def phaseG : Phase J mPts (F := F) (Rd := Rd) → Game β
+def phaseG : Phase J mPts (F := F) (Rd := Rd) (RB := RB) → Game β
   | .pre => .coin Ω fun ω => session nOf app J mPts N out (t ω)
   | .sess x => session nOf app J mPts N out x
   | .rnds x rB pts N' rs => tail nOf app J mPts out x rB pts N' rs
@@ -148,20 +159,20 @@ variable (m : ℕ)
 /-- The reduction's state: at a phase, or inside a coin drawn chunk by chunk (its tag, the chunks still to draw, and
 the phase their values lead to). -/
 inductive St
-  | at (ph : Phase J mPts (F := F) (Rd := Rd))
-  | mid (tg : Tag) (c : Chunk m) (cs : List (Chunk m)) (k : Chunks (c :: cs) → Phase J mPts (F := F) (Rd := Rd))
+  | at (ph : Phase J mPts (F := F) (Rd := Rd) (RB := RB))
+  | mid (tg : Tag) (c : Chunk m) (cs : List (Chunk m)) (k : Chunks (c :: cs) → Phase J mPts (F := F) (Rd := Rd) (RB := RB))
 
-def G : St J mPts (F := F) (Rd := Rd) m → Game β
+def G : St J mPts (F := F) (Rd := Rd) (RB := RB) m → Game β
   | .at ph => phaseG nOf app J mPts N out t ph
   | .mid _ c cs k => nested (c :: cs) fun y => phaseG nOf app J mPts N out t (k y)
 
 /-- The state once the chunks `cs` are left to draw toward `k`. -/
-def St.after (tg : Tag) : (cs : List (Chunk m)) → (Chunks cs → Phase J mPts (F := F) (Rd := Rd)) →
-    St J mPts (F := F) (Rd := Rd) m
+def St.after (tg : Tag) : (cs : List (Chunk m)) → (Chunks cs → Phase J mPts (F := F) (Rd := Rd) (RB := RB)) →
+    St J mPts (F := F) (Rd := Rd) (RB := RB) m
   | [], k => .at (k ())
   | c :: cs, k => .mid tg c cs k
 
-theorem G_after (tg : Tag) : ∀ (cs : List (Chunk m)) (k : Chunks cs → Phase J mPts (F := F) (Rd := Rd)),
+theorem G_after (tg : Tag) : ∀ (cs : List (Chunk m)) (k : Chunks cs → Phase J mPts (F := F) (Rd := Rd) (RB := RB)),
     G nOf app J mPts N out t m (St.after J mPts m tg cs k) = nested cs fun y => phaseG nOf app J mPts N out t (k y)
   | [], _ => rfl
   | _ :: _, _ => rfl
@@ -170,7 +181,7 @@ theorem G_after (tg : Tag) : ∀ (cs : List (Chunk m)) (k : Chunks cs → Phase 
 
 variable {α : Type} {p : α → Prop} {q : β → Prop} (ht : Uniform t) {Msg : Type} (tagOf : Msg → Option Tag)
   (spΩ : Split Xd m) (spP : Split (Fin 2 → Fin mPts → F) m) (spR : (n : ℕ) → Split (Fin n → F) m)
-  (rootOf : Msg → Array ByteArray) (bytesOf : Msg → ByteArray)
+  (rootOf : Msg → RB) (bytesOf : Msg → ByteArray)
 
 /-- The draw's first chunk: the live draw through A3 (`t`), drawn chunk by chunk. -/
 def stepDraw : Step q (G nOf app J mPts N out t m) (.at .pre) m where
@@ -186,7 +197,7 @@ def stepDraw : Step q (G nOf app J mPts N out t m) (.at .pre) m where
     exact dom_coin_right_map (K := fun x => session nOf app J mPts N out x) t ht (dom_split spΩ h)
 
 /-- The link points' first chunk, after the roots the reduction sends. -/
-def stepPts (x : Xd) (rB : Array ByteArray) : Step q (G nOf app J mPts N out t m) (.at (.sess x)) m where
+def stepPts (x : Xd) (rB : RB) : Step q (G nOf app J mPts N out t m) (.at (.sess x)) m where
   C := spP.first.P
   R := spP.first.R
   f := spP.first.f
@@ -199,7 +210,7 @@ def stepPts (x : Xd) (rB : Array ByteArray) : Step q (G nOf app J mPts N out t m
     exact dom_send_right rB (dom_split spP h)
 
 /-- A round's first chunk, after the round the reduction submits. -/
-def stepRound (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F) (N' : ℕ)
+def stepRound (x : Xd) (rB : RB) (pts : Fin 2 → Fin mPts → F) (N' : ℕ)
     (rs : Fin (J x) → Fin 2 → List Rd) (tab : Fin (J x)) (rep : Fin 2) (n : ℕ) (bytes : ByteArray) :
     Step q (G nOf app J mPts N out t m) (.at (.rnds x rB pts (N' + 1) rs)) m where
   C := (spR (nOf (mkS tab rep bytes n))).first.P
@@ -215,7 +226,7 @@ def stepRound (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F) (
     exact dom_send_right (some (mkS tab rep bytes n)) (dom_split (spR _) h)
 
 /-- A later chunk of the coin being drawn. -/
-def stepMid (tg : Tag) (c : Chunk m) (cs : List (Chunk m)) (k : Chunks (c :: cs) → Phase J mPts (F := F) (Rd := Rd)) :
+def stepMid (tg : Tag) (c : Chunk m) (cs : List (Chunk m)) (k : Chunks (c :: cs) → Phase J mPts (F := F) (Rd := Rd) (RB := RB)) :
     Step q (G nOf app J mPts N out t m) (.mid tg c cs k) m where
   C := c.P
   R := c.R
@@ -231,7 +242,7 @@ def stepMid (tg : Tag) (c : Chunk m) (cs : List (Chunk m)) (k : Chunks (c :: cs)
 /-- **The reduction's plan at a release of `m` bits** tagged `tagOf b`: the draw's chunks before the session, session
 0's points' chunks after the draw, a round's chunks while rounds remain, and each coin's later chunks while it is being
 drawn; every other release is left to the play, its bits at their best value. -/
-def move (st : St J mPts (F := F) (Rd := Rd) m) (b : Msg) :
+def move (st : St J mPts (F := F) (Rd := Rd) (RB := RB) m) (b : Msg) :
     Move q (G nOf app J mPts N out t m) st m :=
   match st with
   | .at .pre => if tagOf b = some .draw then .step (stepDraw nOf app J mPts N out t m ht spΩ) else .skip _ rfl
@@ -245,7 +256,7 @@ def move (st : St J mPts (F := F) (Rd := Rd) m) (b : Msg) :
     | _, _ => .skip _ rfl
   | .mid tg c cs k => if tagOf b = some tg then .step (stepMid nOf app J mPts N out t m tg c cs k) else .skip _ rfl
 
-def plan (st : St J mPts (F := F) (Rd := Rd) m) (m' : ℕ) (b : Msg) :
+def plan (st : St J mPts (F := F) (Rd := Rd) (RB := RB) m) (m' : ℕ) (b : Msg) :
     Move q (G nOf app J mPts N out t m) st m' :=
   if hm : m' = m then by subst hm; exact move nOf mkS app J mPts N out t m' ht tagOf spΩ spP spR rootOf bytesOf st b
   else .skip _ rfl
@@ -253,14 +264,14 @@ def plan (st : St J mPts (F := F) (Rd := Rd) m) (m' : ℕ) (b : Msg) :
 /-! ### The end of the play -/
 
 /-- The prover stops: no more rounds, no proof files. -/
-def stratTail (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F) :
+def stratTail (x : Xd) (rB : RB) (pts : Fin 2 → Fin mPts → F) :
     (N' : ℕ) → (rs : Fin (J x) → Fin 2 → List Rd) → Strategy (tail nOf app J mPts out x rB pts N' rs)
-  | 0, _ => ⟨#[], PUnit.unit⟩
-  | _ + 1, _ => ⟨none, ⟨#[], PUnit.unit⟩⟩
+  | 0, _ => ⟨default, PUnit.unit⟩
+  | _ + 1, _ => ⟨none, ⟨default, PUnit.unit⟩⟩
 
-def stratPhase : (ph : Phase J mPts (F := F) (Rd := Rd)) → Strategy (phaseG nOf app J mPts N out t ph)
-  | .pre => fun _ => ⟨#[], fun _ => stratTail nOf app J mPts out _ _ _ N _⟩
-  | .sess _ => ⟨#[], fun _ => stratTail nOf app J mPts out _ _ _ N _⟩
+def stratPhase : (ph : Phase J mPts (F := F) (Rd := Rd) (RB := RB)) → Strategy (phaseG nOf app J mPts N out t ph)
+  | .pre => fun _ => ⟨default, fun _ => stratTail nOf app J mPts out _ _ _ N _⟩
+  | .sess _ => ⟨default, fun _ => stratTail nOf app J mPts out _ _ _ N _⟩
   | .rnds _ _ _ N' rs => stratTail nOf app J mPts out _ _ _ N' rs
 
 def stratNested {γ : Type} : (cs : List (Chunk m)) → (K : Chunks cs → Game γ) → (∀ y, Strategy (K y)) →
@@ -268,13 +279,13 @@ def stratNested {γ : Type} : (cs : List (Chunk m)) → (K : Chunks cs → Game 
   | [], _, hK => hK ()
   | _ :: cs, _, hK => fun a => stratNested cs _ fun r => hK (a, r)
 
-def stratG : (st : St J mPts (F := F) (Rd := Rd) m) → Strategy (G nOf app J mPts N out t m st)
+def stratG : (st : St J mPts (F := F) (Rd := Rd) (RB := RB) m) → Strategy (G nOf app J mPts N out t m st)
   | .at ph => stratPhase nOf app J mPts N out t ph
   | .mid _ c cs k => stratNested m (c :: cs) _ fun y => stratPhase nOf app J mPts N out t (k y)
 
 /-- The session's tail ends at the proof files the reduction sends. -/
-theorem dom_tail {a : α} {s : Strategy (Game.ret a)} (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F)
-    (pf : Array ByteArray) :
+theorem dom_tail {a : α} {s : Strategy (Game.ret a)} (x : Xd) (rB : RB) (pts : Fin 2 → Fin mPts → F)
+    (pf : PF) :
     ∀ (N' : ℕ) (rs : Fin (J x) → Fin 2 → List Rd), (p a → q (out x rB pts rs pf)) →
       Dominated p (.ret a) s q (tail nOf app J mPts out x rB pts N' rs)
   | 0, _, h => dom_send_right pf (dom_ret h s)
@@ -282,14 +293,14 @@ theorem dom_tail {a : α} {s : Strategy (Game.ret a)} (x : Xd) (rB : Array ByteA
 
 /-- **The live state the reduction reaches** after the play's releases `hs` (each its bit count, the bytes it answers
 and its bits): the plan run over them from before the draw. -/
-def reached (hs : List (Σ m' : ℕ, Msg × (Fin m' → Bool))) : St J mPts (F := F) (Rd := Rd) m :=
+def reached (hs : List (Σ m' : ℕ, Msg × (Fin m' → Bool))) : St J mPts (F := F) (Rd := Rd) (RB := RB) m :=
   runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at .pre) hs
 
 /-- **The play's rounds driven through the live audit**: a strategy of the play (its rounds `ns` of released bits,
 then a message `e` and its outcome `outc log e`) is dominated by the live audit after the draw, wherever every outcome
 in `p` has its releases bring the reduction into the session's rounds (`reached`), with an outcome in `q` at the proof
 files `pfOf e`. -/
-theorem dom_live {ρ E : Type} (mk : Msg → List Bool → ρ) (outc : List ρ → E → α) (pfOf : E → Array ByteArray)
+theorem dom_live {ρ E : Type} (mk : Msg → List Bool → ρ) (outc : List ρ → E → α) (pfOf : E → PF)
     (hok : ∀ hs e, p (outc (hs.map (recOf mk)) e) → ∃ x rB pts N' rs,
       reached (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf hs = .at (.rnds x rB pts N' rs) ∧
         q (out x rB pts rs (pfOf e)))
@@ -321,13 +332,13 @@ def decChunks : (cs : List (Chunk m)) → List (Fin m → Bool) → Chunks cs
   | c :: cs, [] => (c.dec fun _ => false, decChunks cs [])
   | c :: cs, x :: xs => (c.dec x, decChunks cs xs)
 
-theorem plan_self (st : St J mPts (F := F) (Rd := Rd) m) (b : Msg) :
+theorem plan_self (st : St J mPts (F := F) (Rd := Rd) (RB := RB) m) (b : Msg) :
     plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf st m b = move nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf st b := by
   simp only [plan, dite_true]
 
 /-- **An untagged release never moves the reduction**: the live state the play's releases reach is the one their
 tagged releases reach. -/
-theorem run_filter : ∀ (st : St J mPts (F := F) (Rd := Rd) m) (hs : List (Σ m' : ℕ, Msg × (Fin m' → Bool))),
+theorem run_filter : ∀ (st : St J mPts (F := F) (Rd := Rd) (RB := RB) m) (hs : List (Σ m' : ℕ, Msg × (Fin m' → Bool))),
     runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st hs = runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st (hs.filter (Tagged m tagOf))
   | _, [] => rfl
   | st, ⟨m', b, x⟩ :: hs => by
@@ -352,14 +363,14 @@ theorem reached_filter (hs : List (Σ m' : ℕ, Msg × (Fin m' → Bool))) :
       reached (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (hs.filter (Tagged m tagOf)) :=
   run_filter nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf _ hs
 
-theorem run_append' (st : St J mPts (F := F) (Rd := Rd) m) :
+theorem run_append' (st : St J mPts (F := F) (Rd := Rd) (RB := RB) m) :
     ∀ hs hs' : List (Σ m' : ℕ, Msg × (Fin m' → Bool)), runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st (hs ++ hs') = runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st hs) hs'
   | [], _ => rfl
   | ⟨_, _, _⟩ :: hs, hs' => run_append' _ hs hs'
 
 /-- A coin's later chunks: releases tagged `tg`, one per chunk, bring the reduction to the phase at the chunks they read
 back to. -/
-theorem run_mid (tg : Tag) : ∀ (cs : List (Chunk m)) (k : Chunks cs → Phase J mPts (F := F) (Rd := Rd))
+theorem run_mid (tg : Tag) : ∀ (cs : List (Chunk m)) (k : Chunks cs → Phase J mPts (F := F) (Rd := Rd) (RB := RB))
     (rels : List (Msg × (Fin m → Bool))), rels.length = cs.length → (∀ z ∈ rels, tagOf z.1 = some tg) →
     runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (St.after J mPts m tg cs k) (rels.map (rel m)) = .at (k (decChunks m cs (rels.map Prod.snd)))
   | [], _, [], _, _ => rfl
@@ -429,7 +440,7 @@ def roundsOf (x : Xd) : List (RoundBlock Msg m) → (Fin (J x) → Fin 2 → Lis
     else rs)
 
 /-- The rounds' blocks, in the rounds: the reduction submits each round and appends it at the coin it reads back to. -/
-theorem run_rounds (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F) :
+theorem run_rounds (x : Xd) (rB : RB) (pts : Fin 2 → Fin mPts → F) :
     ∀ (rds : List (RoundBlock Msg m)) (N' : ℕ) (rs : Fin (J x) → Fin 2 → List Rd), rds.length ≤ N' →
       (∀ r ∈ rds, r.Fits nOf mkS J m tagOf spR bytesOf x) →
       runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at (.rnds x rB pts N' rs)) ((rds.flatMap fun r => r.k.rels).map (rel m)) =
@@ -474,16 +485,16 @@ section Hist
 variable {F Rd β : Type} [Fintype F] [Nonempty F] {Sub : ℕ → Type} (nOf : {J : ℕ} → Sub J → ℕ)
   (mkS : {J : ℕ} → Fin J → Fin 2 → ByteArray → ℕ → Sub J)
   (app : {J : ℕ} → (s : Sub J) → (Fin (nOf s) → F) → (Fin J → Fin 2 → List Rd) → Fin J → Fin 2 → List Rd)
-  {Xd : Type} [Fintype Xd] [Nonempty Xd] (J : Xd → ℕ) (mPts N : ℕ)
-  (out : (x : Xd) → Array ByteArray → (Fin 2 → Fin mPts → F) → (Fin (J x) → Fin 2 → List Rd) → Array ByteArray → β)
+  {Xd : Type} [Fintype Xd] [Nonempty Xd] {RB PF : Type} [Inhabited RB] [Inhabited PF] (J : Xd → ℕ) (mPts N : ℕ)
+  (out : (x : Xd) → RB → (Fin 2 → Fin mPts → F) → (Fin (J x) → Fin 2 → List Rd) → PF → β)
   {Ω : Type} [Fintype Ω] [Nonempty Ω] (t : Ω → Xd) (m : ℕ) {M₀ α : Type} {p : α → Prop} {q : β → Prop}
   (ht : Uniform t) (tagOf : Req M₀ → Option Tag) (spΩ : Split Xd m) (spP : Split (Fin 2 → Fin mPts → F) m)
-  (spR : (n : ℕ) → Split (Fin n → F) m) (rootOf : Req M₀ → Array ByteArray) (bytesOf : Req M₀ → ByteArray)
+  (spR : (n : ℕ) → Split (Fin n → F) m) (rootOf : Req M₀ → RB) (bytesOf : Req M₀ → ByteArray)
 
 /-- **`dom_live`, each request read with the requests before it**: the plan runs on the play's requests annotated with
 those before each (`annot`, `histPlan`), so wherever every outcome in `p` has its annotated releases bring the reduction
 into the session's rounds, with an outcome in `q` at the proof files, the live audit dominates the play. -/
-theorem dom_liveH {ρ E : Type} (mk : M₀ → List Bool → ρ) (outc : List ρ → E → α) (pfOf : E → Array ByteArray)
+theorem dom_liveH {ρ E : Type} (mk : M₀ → List Bool → ρ) (outc : List ρ → E → α) (pfOf : E → PF)
     (hok : ∀ hs e, p (outc (hs.map (recOf mk)) e) → ∃ x rB pts N' rs,
       reached (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (annot [] hs) =
           .at (.rnds x rB pts N' rs) ∧
@@ -491,7 +502,7 @@ theorem dom_liveH {ρ E : Type} (mk : M₀ → List Bool → ρ) (outc : List ρ
     (ns : List ℕ) (s : Strategy (roundsThen mk (fun log => .send E fun e => .ret (outc log e)) ns)) :
     Dominated p (roundsThen mk (fun log => .send E fun e => .ret (outc log e)) ns) s q
       (.coin Ω fun ω => session nOf app J mPts N out (t ω)) := by
-  refine dom_reach mk (fun s : St J mPts (F := F) (Rd := Rd) m × List (ℕ × M₀) => G nOf app J mPts N out t m s.1)
+  refine dom_reach mk (fun s : St J mPts (F := F) (Rd := Rd) (RB := RB) m × List (ℕ × M₀) => G nOf app J mPts N out t m s.1)
     (histPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf)) (.at .pre, []) _
     (fun hs K s' hK => ?_) ns s
   show Dominated p (K []) s' q (G nOf app J mPts N out t m (runPlan (histPlan
@@ -506,7 +517,7 @@ theorem dom_liveH {ρ E : Type} (mk : M₀ → List Bool → ρ) (outc : List ρ
     exact dom_tail nOf app J mPts out x rB pts (pfOf s'.1) N' rs fun _ => hq
   · exact dom_ret_not hp _ (stratG nOf app J mPts N out t m _)
 
-end
+end Hist
 
 end Verity.Game.LiveDrive
 
@@ -543,24 +554,27 @@ noncomputable def drawOS {n mL : ℕ} {Lb : Fin mL → ℕ} (law : Flock.Draw.La
     (x : (i : Fin mL) → Fin (Lb i) → Fin 256) : Finset (Fin n) :=
   (FlockSoundness.Audit.Law.execOS (n := n) (fun _ : Unit => x) law pop).draw ()
 
-/-- **The live audit, in the driver's form**: the registration, the draw's bytes, then the session at the draw. -/
-theorem toVerity_auditLive {n mL mPts : ℕ} {Lb : Fin mL → ℕ} {Reg Ω : Type} [Fintype Ω] [Nonempty Ω]
+/-- **The hash-first live audit, in the driver's form**: the registration, the draw's bytes, then the session at the
+draw, its first message the roots' hash and its last the roots and the proof files. -/
+theorem toVerity_auditLiveH {n mL mPts : ℕ} {Lb : Fin mL → ℕ} {Reg Ω : Type} [Fintype Ω] [Nonempty Ω]
     (src : Ω → (i : Fin mL) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) (dg : ByteArray → ByteArray)
     (planZ : Finset (Fin n) → Reg → List (FlockSoundness.Discharge.ZkSession.TabZK 𝔽 mPts)) (N : ℕ)
-    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts →
+    (wrH : (S : Finset (Fin n)) → (R : Reg) → Flock.Guarantees.LiveHash.OutH (planZ S R).length mPts →
       FlockSoundness.Discharge.Exec.Transcript) :
     toVerity (FlockSoundness.Discharge.Exec.auditLive (FlockSoundness.Audit.Law.execOS (n := n) src law pop) Reg
-      (FlockSoundness.Discharge.Composed.liveOfZJ dg planZ N wr)) =
+      (Flock.Guarantees.LiveHash.liveOfZJH dg planZ N wrH)) =
       .send Reg fun R => .coin Ω fun ω =>
         session nOfJ (appJ dg) (fun x => (planZ (drawOS law pop x) R).length) mPts N
-          (fun x rB pts rs pf => (R, drawOS law pop x, wr (drawOS law pop x) R ⟨rB, pts, rs, pf⟩)) (src ω) := by
+          (fun x (h : ByteArray) pts rs (lst : Flock.Guarantees.LiveHash.Last) =>
+            (R, drawOS law pop x, wrH (drawOS law pop x) R (h, pts, rs, lst))) (src ω) := by
   refine congrArg (Verity.Game.send Reg) (funext fun R => ?_)
   show Verity.Game.coin Ω (fun ω : Ω => toVerity
-    ((FlockSoundness.Discharge.Composed.liveOfZJ dg planZ N wr (drawOS law pop (src ω)) R).map
+    ((Flock.Guarantees.LiveHash.liveOfZJH dg planZ N wrH (drawOS law pop (src ω)) R).map
       fun t' => (R, drawOS law pop (src ω), t'))) = _
   refine congrArg (Verity.Game.coin Ω) (funext fun ω => ?_)
-  simp only [FlockSoundness.Discharge.Composed.liveOfZJ, toVerity_map, liveSession, toVerity, toVerity_bind,
-    toVerity_liveRoundsJ, KLJ, session, tail, Verity.Game.map, Verity.Game.bind, Verity.Game.bind_assoc]
+  simp only [Flock.Guarantees.LiveHash.liveOfZJH, toVerity_map, Flock.Guarantees.LiveHash.liveSessionH,
+    Flock.Guarantees.LiveHash.contH, Flock.Guarantees.LiveHash.KH, toVerity, toVerity_bind, toVerity_liveRoundsJ,
+    session, tail, Verity.Game.map, Verity.Game.bind, Verity.Game.bind_assoc]
 
 end Verity.Game.LiveDrive
 
@@ -598,51 +612,56 @@ theorem releases_bind {β : Type} :
     simp only [Game.bind_ret]
     exact releases_bind ns _
 
-/-- **The play dominated by the live audit**: the play at `σ`, in the event `P`, is dominated by the live audit, its
-draw from the operating system's bytes `src` (A3), wherever every outcome in `P` has its releases bring the reduction
-into the session's rounds, at a live transcript flock-verify `--zk` accepts (`hok`). -/
+/-- **The play dominated by the hash-first live audit**: the play at `σ`, in the event `P`, is dominated by the live
+audit, its draw from the operating system's bytes `src` (A3), wherever every outcome in `P` has its releases bring the
+reduction into the session's rounds, at a live transcript flock-verify `--zk` accepts (`hok`). -/
 theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Strategy (V.game θ F c))
     (P : Outcome → Prop) {n mL mPts : ℕ} {Lb : Fin mL → ℕ} {Reg Ω : Type} [Fintype Ω] [Nonempty Ω] {I : Exec.Inputs}
     (src : Ω → (i : Fin mL) → Fin (Lb i) → Fin 256)
     (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) (law : Flock.Draw.Law) (pop : ℕ)
     (dg : ByteArray → ByteArray) (planZ : Finset (Fin n) → Reg → List (ZkSession.TabZK 𝔽 mPts)) (N : ℕ)
-    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript) (R₀ : Reg) (m : ℕ)
+    (wrH : (S : Finset (Fin n)) → (R : Reg) → Flock.Guarantees.LiveHash.OutH (planZ S R).length mPts → Exec.Transcript)
+    (R₀ : Reg) (m : ℕ)
     (tagOf : Game.LiveDrive.Req ByteArray → Option Game.LiveDrive.Tag) (spΩ : Game.Split ((i : Fin mL) → Fin (Lb i) → Fin 256) m)
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
-    (rootOf : Game.LiveDrive.Req ByteArray → Array ByteArray) (bytesOf : Game.LiveDrive.Req ByteArray → ByteArray) (pfOf : ByteArray × Array ByteArray → Array ByteArray)
+    (hOf : Game.LiveDrive.Req ByteArray → ByteArray) (bytesOf : Game.LiveDrive.Req ByteArray → ByteArray)
+    (pfOf : ByteArray × Array ByteArray → Flock.Guarantees.LiveHash.Last)
     (hok : ∀ hs e, P ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
-      ∃ x rB pts N' rs, Game.LiveDrive.reached
+      ∃ x (h : ByteArray) pts N' rs, Game.LiveDrive.reached
           (q := fun o : Reg × Finset (Fin n) × Exec.Transcript => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
           Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length)
-          mPts N (fun x rB pts rs pf => (R₀, Game.LiveDrive.drawOS (n := n) law pop x,
-            wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pf⟩)) src m (uniform_of_A3 hA3) tagOf spΩ spP spR
-          rootOf bytesOf (Game.LiveDrive.annot [] hs) = .at (.rnds x rB pts N' rs) ∧
-        ZkExec.AcceptsZK I (wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pfOf e⟩)) :
+          mPts N (fun x (h : ByteArray) pts rs (lst : Flock.Guarantees.LiveHash.Last) =>
+            (R₀, Game.LiveDrive.drawOS (n := n) law pop x, wrH (Game.LiveDrive.drawOS law pop x) R₀ (h, pts, rs, lst)))
+          src m (uniform_of_A3 hA3) tagOf spΩ spP spR
+          hOf bytesOf (Game.LiveDrive.annot [] hs) = .at (.rnds x h pts N' rs) ∧
+        ZkExec.AcceptsZK I (wrH (Game.LiveDrive.drawOS law pop x) R₀ (h, pts, rs, pfOf e))) :
     Game.Dominated P (V.game θ F c) σ (fun o => ZkExec.LiveAcceptsZK I o)
       (toVerity (Exec.auditLive (FlockSoundness.Audit.Law.execOS (n := n) src law pop) Reg
-        (Composed.liveOfZJ dg planZ N wr))) := by
-  rw [Game.LiveDrive.toVerity_auditLive]
+        (Flock.Guarantees.LiveHash.liveOfZJH dg planZ N wrH))) := by
+  rw [Game.LiveDrive.toVerity_auditLiveH]
   refine Game.dom_send_right R₀ (Game.Dominated.of_eq
     (releases_bind (V.rounds θ) fun log => Game.send (ByteArray × Array ByteArray) fun eb =>
       Game.ret (⟨θ, F, c, log, eb.1, eb.2⟩ : Outcome)) ?_)
   exact Game.LiveDrive.dom_liveH Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m
-    (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf _ _ pfOf hok (V.rounds θ) _
+    (uniform_of_A3 hA3) tagOf spΩ spP spR hOf bytesOf _ _ pfOf hok (V.rounds θ) _
 
 /-- **`prob_le`'s domination from the device's refusals, read in the play**: where sampled proofs' verdict accepts the
 play's outcome off the break, its tagged releases (each read with the requests before it, `LiveDrive.annot`) are the
 draw's block, then the link points', then one block per round, each one release per
 chunk of its coin (one release per (session, round), in the live order: `hcanon`'s first five conjuncts), and the
-transcript `proj` reads is the live audit's at the draw, roots, points and rounds those releases read back to, and the
-proof files (the record's coins the device's releases: its last). -/
+transcript `proj` reads is the hash-first live audit's at the draw, roots' hash, points and rounds those releases read
+back to, and the roots and proof files (the record's coins the device's releases: its last). -/
 theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Strategy (V.game θ F c))
     {Brk : Outcome → Prop} {n mL mPts : ℕ} {Lb : Fin mL → ℕ} {Reg Ω : Type} [Fintype Ω] [Nonempty Ω] {I : Exec.Inputs}
     (proj : Outcome → Exec.Transcript) (src : Ω → (i : Fin mL) → Fin (Lb i) → Fin 256)
     (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) (law : Flock.Draw.Law) (pop : ℕ)
     (dg : ByteArray → ByteArray) (planZ : Finset (Fin n) → Reg → List (ZkSession.TabZK 𝔽 mPts)) (N : ℕ)
-    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript) (R₀ : Reg) (m : ℕ)
+    (wrH : (S : Finset (Fin n)) → (R : Reg) → Flock.Guarantees.LiveHash.OutH (planZ S R).length mPts → Exec.Transcript)
+    (R₀ : Reg) (m : ℕ)
     (tagOf : Game.LiveDrive.Req ByteArray → Option Game.LiveDrive.Tag) (spΩ : Game.Split ((i : Fin mL) → Fin (Lb i) → Fin 256) m)
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
-    (rootOf : Game.LiveDrive.Req ByteArray → Array ByteArray) (bytesOf : Game.LiveDrive.Req ByteArray → ByteArray) (pfOf : ByteArray × Array ByteArray → Array ByteArray)
+    (hOf : Game.LiveDrive.Req ByteArray → ByteArray) (bytesOf : Game.LiveDrive.Req ByteArray → ByteArray)
+    (pfOf : ByteArray × Array ByteArray → Flock.Guarantees.LiveHash.Last)
     (hcanon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
       ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
       ∃ (kd kp : Game.LiveDrive.Block (Game.LiveDrive.Req ByteArray) m) (rds : List (Game.LiveDrive.RoundBlock (Game.LiveDrive.Req ByteArray) m)),
@@ -653,30 +672,32 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
             (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length) m tagOf spR bytesOf
             (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) ∧
           (ZkExec.AcceptsZK I (proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩) →
-            ZkExec.AcceptsZK I (wr (Game.LiveDrive.drawOS law pop (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) R₀
-              ⟨rootOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
+            ZkExec.AcceptsZK I (wrH (Game.LiveDrive.drawOS law pop (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) R₀
+              (hOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
                 Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg)
                   (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length) m spR bytesOf
-                  (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits)) rds fun _ _ => [], pfOf e⟩))) :
+                  (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits)) rds fun _ _ => [], pfOf e)))) :
     Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
       (fun o => ZkExec.LiveAcceptsZK I o)
       (toVerity (Exec.auditLive (FlockSoundness.Audit.Law.execOS (n := n) src law pop) Reg
-        (Composed.liveOfZJ dg planZ N wr))) := by
-  refine dominated_of_drive σ _ src hA3 law pop dg planZ N wr R₀ m tagOf spΩ spP spR rootOf bytesOf pfOf
+        (Flock.Guarantees.LiveHash.liveOfZJH dg planZ N wrH))) := by
+  refine dominated_of_drive σ _ src hA3 law pop dg planZ N wrH R₀ m tagOf spΩ spP spR hOf bytesOf pfOf
     fun hs e ⟨hv, hacc, hb⟩ => ?_
   obtain ⟨kd, kp, rds, hc, hd, hp, hN, hr, hpr⟩ := hcanon hs e hv hb
   refine ⟨_, _, _, _, _, Game.LiveDrive.reached_canon (q := fun o => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
-    Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf
+    Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m (uniform_of_A3 hA3) tagOf spΩ spP spR hOf bytesOf
     (Game.LiveDrive.annot [] hs) kd kp rds hc hd hp hN hr, ?_⟩
   exact hpr hacc
 
-/-- **The reduction at a live session `A`**: the coupling's transcript of the play (`proj`: off the break, where
-sampled proofs' verdict accepts, a session's transcript of v2's evidence at `A`'s inputs, `covers`), the registration
-it sends the live audit (`R₀`), and how it reads the device's releases: their bits (`m`), their tags, the chunks of the
-draw, the link points and the rounds, the roots and the rounds' bytes the releases answer, and the proof files the
-evidence holds. `canon` is the device's refusals and v2's coins, read in the play, and the coupling's transcript a
-record of the live outcome the releases read back to (`Flock.Guarantees.RecordOfZKJ`), so that where it is accepted, so
-is the live audit's (`Flock.Guarantees.accepts_canonWr`, `dominated_of_canon`). -/
+/-- **The reduction at a live session `A`**, against its hash-first audit (`LiveAt.GH`): the coupling's transcript of
+the play (`proj`: off the break, where sampled proofs' verdict accepts, a session's transcript of v2's evidence at
+`A`'s inputs, `covers`), the registration it sends the live audit (`R₀`), and how it reads the device's releases: their
+bits (`m`), their tags, the chunks of the draw, the link points and the rounds, the hash the link points' request
+carries (`hOf`), the rounds' bytes the releases answer, and the roots and proof files the evidence holds (`pfOf`).
+`canon` is the device's refusals and v2's coins, read in the play: the coupling's transcript a record of the live
+outcome the releases read back to at the evidence's roots (`Flock.Guarantees.RecordOfZKJ`), and those roots' hash the
+one the points' request carries (`LiveHash.pointsHash`), so that where it is accepted, so is the hash-first audit's
+(`LiveHash.accepts_canonWrH`, `dominated_of_canon`). -/
 structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (Brk : Outcome → Prop)
     {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {kd K₀ : ℕ} {desc : Claims.Msg}
     (A : Flock.Guarantees.LiveAt n D hU kd K₀ desc) where
@@ -690,9 +711,9 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
   spΩ : Game.Split ((i : Fin 1) → Fin (A.Lb i) → Fin 256) m
   spP : Game.Split (Fin 2 → Fin (Exec.mPtsOf D.unroll.g (kd / Composed.nTab A.I)) → 𝔽) m
   spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m
-  rootOf : Game.LiveDrive.Req ByteArray → Array ByteArray
+  hOf : Game.LiveDrive.Req ByteArray → ByteArray
   bytesOf : Game.LiveDrive.Req ByteArray → ByteArray
-  pfOf : ByteArray × Array ByteArray → Array ByteArray
+  pfOf : ByteArray × Array ByteArray → Flock.Guarantees.LiveHash.Last
   canon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
     ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
     ∃ (kd' kp : Game.LiveDrive.Block (Game.LiveDrive.Req ByteArray) m) (rds : List (Game.LiveDrive.RoundBlock (Game.LiveDrive.Req ByteArray) m)),
@@ -706,11 +727,12 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
           (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀
             (Game.LiveDrive.drawOS (.subset kd) n (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) R₀).length
           (Game.LiveDrive.drawOS (.subset kd) n (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits)))
-          ⟨rootOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
+          ⟨(pfOf e).1, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
             Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ A.dg)
               (fun x => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ (Game.LiveDrive.drawOS (.subset kd) n x) R₀).length)
-              m spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits)) rds fun _ _ => [], pfOf e⟩
-          (proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩)
+              m spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits)) rds fun _ _ => [], (pfOf e).2⟩
+          (proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩) ∧
+        Flock.Guarantees.LiveHash.pointsHash (pfOf e).1 = hOf kp.b
 
 namespace Drive
 
@@ -718,21 +740,21 @@ variable {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F 
   {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {kd K₀ : ℕ} {desc : Claims.Msg} {A : Flock.Guarantees.LiveAt n D hU kd K₀ desc}
   (Dr : Drive V θ F c σ Brk A)
 
-/-- The play at `σ` is dominated by `A`'s live audit (`dominated_of_canon`). -/
+/-- The play at `σ` is dominated by `A`'s hash-first live audit (`dominated_of_canon`). -/
 theorem dominated : Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK A.I (Dr.proj o) ∧ ¬ Brk o)
-    (V.game θ F c) σ (fun o => ZkExec.LiveAcceptsZK A.I o) (toVerity A.G) :=
-  dominated_of_canon σ Dr.proj A.src A.hA3 (.subset kd) n A.dg (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀) A.N A.wr
-    Dr.R₀ Dr.m Dr.tagOf Dr.spΩ Dr.spP Dr.spR Dr.rootOf Dr.bytesOf Dr.pfOf fun hs e hv hb => by
-      obtain ⟨kd', kp, rds, hc, hd, hp, hN, hr, hrec⟩ := Dr.canon hs e hv hb
-      exact ⟨kd', kp, rds, hc, hd, hp, hN, hr, fun hacc => Flock.Guarantees.accepts_canonWr
-        (Jf := fun S R => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length) hrec hacc⟩
+    (V.game θ F c) σ (fun o => ZkExec.LiveAcceptsZK A.I o) (toVerity A.GH) :=
+  dominated_of_canon σ Dr.proj A.src A.hA3 (.subset kd) n A.dg (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀) A.N A.wrH
+    Dr.R₀ Dr.m Dr.tagOf Dr.spΩ Dr.spP Dr.spR Dr.hOf Dr.bytesOf Dr.pfOf fun hs e hv hb => by
+      obtain ⟨kd', kp, rds, hc, hd, hp, hN, hr, hrec, hh⟩ := Dr.canon hs e hv hb
+      exact ⟨kd', kp, rds, hc, hd, hp, hN, hr, fun hacc => Flock.Guarantees.LiveHash.accepts_canonWrH
+        (Jf := fun S R => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length) hrec hh hacc⟩
 
-/-- **The live audit's strategy the reduction builds.** -/
-noncomputable def τ : FlockSoundness.Game.Strategy A.G :=
-  Pouw.PearlC.FlockTile.stratOfVerity A.G (Classical.choose Dr.dominated)
+/-- **The hash-first live audit's strategy the reduction builds.** -/
+noncomputable def τ : FlockSoundness.Game.Strategy A.GH :=
+  Pouw.PearlC.FlockTile.stratOfVerity A.GH (Classical.choose Dr.dominated)
 
-/-- **The play coupled to `A`'s live audit** at the reduction's strategy. -/
-noncomputable def coupling : PlayCoupling V θ F c σ Brk A.I A.G Dr.τ :=
+/-- **The play coupled to `A`'s hash-first live audit** at the reduction's strategy. -/
+noncomputable def coupling : PlayCoupling V θ F c σ Brk A.I A.GH Dr.τ :=
   PlayCoupling.ofDominated Dr.proj Dr.covers Dr.dominated
 
 end Drive
@@ -752,7 +774,7 @@ theorem accept_le_of_drives {V : Vocab d α} (kd : ByteArray → ℕ) (desc : By
       (hr : V.parsed F = some r), V.Registered θ F →
       Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (col θ F c) o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
         FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
-          (A θ F c σ r hr).G (Dr θ F c σ r hr).τ :=
+          (A θ F c σ r hr).GH (Dr θ F c σ r hr).τ :=
   accept_le_of_couplings kd desc A (fun θ F c σ r hr => (Dr θ F c σ r hr).τ) col
     fun θ F c σ r hr _ => (Dr θ F c σ r hr).coupling
 
@@ -760,12 +782,8 @@ theorem accept_le_of_drives {V : Vocab d α} (kd : ByteArray → ℕ) (desc : By
 
 A release answers a request (`PlayDevice.requestParts`): a family's label, then the bytes the coin is released after.
 v2's families are the draw's (the registration's challenger label), session `i`'s link points
-(`slot/i/session`, after its `root_B` digests in turn) and its streams' rounds (`slot/i/<stream>`, after the round's
+(`slot/i/session`, after the SHA-512 of its `root_B` digests, `OneStageZk.pointsAfter`) and its streams' rounds (`slot/i/<stream>`, after the round's
 message). Only session 0's are tagged. -/
-
-/-- The 64-byte digests a request's bytes hold in turn. -/
-def digestsOf (x : ByteArray) : Array ByteArray :=
-  ((List.range (x.size / 64)).map fun i => x.extract (64 * i) (64 * i + 64)).toArray
 
 /-- **What a release is to the reduction, from its request**: the draw's family `draw`, session 0's link points, or a
 round of one of session 0's streams, as `round` reads the round's label and bytes (its table, rep and coin count);
@@ -779,11 +797,8 @@ def tagOfRequest (draw : String) (round : String → ByteArray → Option (ℕ �
     else if l = _root_.SampledProofs.Hello.slotStream 0 _root_.SampledProofs.OneStageZk.POINTS then some .points
     else (round l x).map fun (t, r, n) => Game.LiveDrive.Tag.round t r n
 
-/-- The roots a release's request holds: the `root_B` digests the link points are released after. -/
-def rootOfRequest (b : ByteArray) : Array ByteArray :=
-  ((PlayDevice.requestParts b).map fun p => digestsOf p.2).getD #[]
-
-/-- The bytes a release's request holds: the round's message a round's coins are released after. -/
+/-- The bytes a release's request holds: the round's message a round's coins are released after, or the hash of the
+`root_B` digests the link points are released after. -/
 def bytesOfRequest (b : ByteArray) : ByteArray :=
   ((PlayDevice.requestParts b).map (·.2)).getD .empty
 

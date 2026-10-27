@@ -46,6 +46,47 @@ commitment opening every gate that isn't a constant to them; the parse's constan
 (`parsedConsts_isInput`) and their openings hold (`bits_of_consts`), and no draw enters.
 -/
 
+namespace Flock.Bridge
+
+/-- **`deltaPub` at the deployment's parameters, plus a term of at most `2^-200`, is the draw's miss plus at most
+`2^-100`** (`deltaPub_le_deployed` with the slack its proof leaves). -/
+theorem deltaPub_add_le_deployed (n kd K₀ W : ℕ) (hW : W ≤ 2 ^ 40) {qF qS t' x : ℝ} (hF0 : 0 ≤ qF)
+    (hF : qF ≤ 2 ^ 82) (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 80)
+    (hx : x ≤ 1 / 2 ^ (200 : ℕ)) :
+    deltaPub n kd K₀ kDep qF qS t' (2 ^ 192) (2 ^ 192) W (1 / 2) + x ≤
+      ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + 2 ^ (-(100 : ℝ)) := by
+  unfold deltaPub
+  have hks := ksClosedM1_le kDep_le hF0 hF hS0 hS
+  have hl := link_le kDep_le ht
+  have hW' : (W : ℝ) ≤ 2 ^ 40 := by exact_mod_cast hW
+  set B := 2 * (t' * (1 + (kDep : ℝ))) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) +
+      (kDep : ℝ) / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) with hB
+  have hl0 : 0 ≤ B := by rw [hB]; positivity
+  have hWl := mul_le_mul hW' hl hl0 (by positivity)
+  have e : ∀ r : ℝ, (2 : ℝ) ^ (-r) = 1 / (2 : ℝ) ^ r := fun r => by rw [Real.rpow_neg (by norm_num)]; ring
+  have e155 : (2 : ℝ) ^ (155 : ℝ) = 2 ^ (155 : ℕ) := by norm_num
+  have e150 : (2 : ℝ) ^ (150 : ℝ) = 2 ^ (150 : ℕ) := by norm_num
+  have e100 : (2 : ℝ) ^ (100 : ℝ) = 2 ^ (100 : ℕ) := by norm_num
+  rw [e, e155] at hks
+  rw [e, e150] at hWl
+  rw [e, e100]
+  have hρ : (1 : ℝ) - 1 / 2 = 1 / 2 := by norm_num
+  rw [hρ, div_div_eq_mul_div, div_div_eq_mul_div]
+  have h1 : ksClosedM1 kDep qF qS * 2 / 1 ≤ 1 / 2 ^ 155 * 2 := by linarith
+  have h2 : (W : ℝ) * B * 2 / 1 ≤ 2 ^ 40 * (1 / 2 ^ 150) * 2 := by linarith
+  have h3 : (1 : ℝ) / 2 ^ 155 * 2 + 2 ^ 40 * (1 / 2 ^ 150) * 2 + 1 / 2 ^ 200 ≤ 1 / 2 ^ 100 := by norm_num
+  linarith
+
+/-- **The root finder's term at a budget up to `2^82`** is at most `2^-200`. -/
+theorem rootTerm_le {qS : ℝ} (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) : qS ^ 2 / 2 ^ (513 : ℝ) ≤ 1 / 2 ^ (200 : ℕ) := by
+  have h513 : (2 : ℝ) ^ (513 : ℝ) = 2 ^ (513 : ℕ) := by norm_num
+  rw [h513]
+  have hq2 : qS ^ 2 ≤ 2 ^ 164 := by nlinarith [mul_le_mul hS hS hS0 (by norm_num : (0 : ℝ) ≤ 2 ^ 82)]
+  calc qS ^ 2 / 2 ^ (513 : ℕ) ≤ 2 ^ 164 / 2 ^ (513 : ℕ) := by gcongr
+    _ ≤ 1 / 2 ^ (200 : ℕ) := by norm_num
+
+end Flock.Bridge
+
 namespace Verity
 
 open Accounting Core
@@ -72,6 +113,55 @@ theorem deltaPub_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.u
   exact Flock.Bridge.deltaPub_le_deployed n kd K₀ _ hW
     (show 0 ≤ 2 * (A.t' τ + A.v) by linarith) (show 2 * (A.t' τ + A.v) ≤ 2 ^ 82 by linarith)
     (show 0 ≤ A.t' τ + A.v by linarith) (show A.t' τ + A.v ≤ 2 ^ 82 by linarith) h0 ht
+
+/-- **`deltaPub` and the root finder's term at the deployment's constants** are the draw's miss plus at most
+`2^-100`, at a strategy whose cost `t'` is at most `2^80`. -/
+theorem deltaPub_root_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {kd K₀ : ℕ}
+    {desc : Claims.Msg} (A : Flock.Guarantees.LiveAt n D hU kd K₀ desc) (τ : FlockSoundness.Game.Strategy A.G)
+    (hk : A.k = Flock.Bridge.kDep) (hM : A.M = 2 ^ 192) (hRw : A.Rw = 2 ^ 192) (hρ : A.ρ = 1 / 2)
+    (hv : A.v ≤ 2 ^ 80) (hW : Flock.Bridge.ioSum A.P ≤ 2 ^ 40) (ht : A.t' τ ≤ 2 ^ 80) :
+    Flock.Bridge.deltaPub n kd K₀ A.k (A.qF τ) (A.qS τ) (A.t' τ) A.M A.Rw (Flock.Bridge.ioSum A.P) A.ρ +
+        A.qS τ ^ 2 / 2 ^ (513 : ℝ) ≤
+      ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + 2 ^ (-(100 : ℝ)) := by
+  rw [hk, hM, hRw, hρ]
+  have h0 := A.ht' τ
+  have hv0 := A.hv
+  have hS0 : 0 ≤ A.qS τ := by unfold Flock.Guarantees.LiveAt.qS; linarith
+  have hS : A.qS τ ≤ 2 ^ 82 := by unfold Flock.Guarantees.LiveAt.qS; linarith
+  exact Flock.Bridge.deltaPub_add_le_deployed n kd K₀ _ hW
+    (show 0 ≤ 2 * (A.t' τ + A.v) by linarith) (show 2 * (A.t' τ + A.v) ≤ 2 ^ 82 by linarith)
+    (show 0 ≤ A.t' τ + A.v by linarith) (show A.t' τ + A.v ≤ 2 ^ 82 by linarith) h0 ht
+    (Flock.Bridge.rootTerm_le hS0 hS)
+
+theorem ofReal_add_le_of {a b c : ℝ} (hb : 0 ≤ b) (h : a + b ≤ c) (hbc : b ≤ c) :
+    ENNReal.ofReal a + ENNReal.ofReal b ≤ ENNReal.ofReal c := by
+  rcases le_or_lt 0 a with ha | ha
+  · rw [← ENNReal.ofReal_add ha hb]
+    exact ENNReal.ofReal_le_ofReal h
+  · rw [ENNReal.ofReal_of_nonpos ha.le, zero_add]
+    exact ENNReal.ofReal_le_ofReal hbc
+
+/-- `deltaPub_root_le_of` as the sum of the two errors in `ℝ≥0∞`. -/
+theorem deltaPub_root_ofReal_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit}
+    {kd K₀ : ℕ} {desc : Claims.Msg} (A : Flock.Guarantees.LiveAt n D hU kd K₀ desc)
+    (τ : FlockSoundness.Game.Strategy A.G)
+    (hk : A.k = Flock.Bridge.kDep) (hM : A.M = 2 ^ 192) (hRw : A.Rw = 2 ^ 192) (hρ : A.ρ = 1 / 2)
+    (hv : A.v ≤ 2 ^ 80) (hW : Flock.Bridge.ioSum A.P ≤ 2 ^ 40) (ht : A.t' τ ≤ 2 ^ 80) :
+    ENNReal.ofReal
+        (Flock.Bridge.deltaPub n kd K₀ A.k (A.qF τ) (A.qS τ) (A.t' τ) A.M A.Rw (Flock.Bridge.ioSum A.P) A.ρ) +
+        ENNReal.ofReal (A.qS τ ^ 2 / 2 ^ (513 : ℝ)) ≤
+      ENNReal.ofReal (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + 2 ^ (-(100 : ℝ))) := by
+  have h := deltaPub_root_le_of A τ hk hM hRw hρ hv hW ht
+  have h0 := A.ht' τ
+  have hv0 := A.hv
+  have hS0 : 0 ≤ A.qS τ := by unfold Flock.Guarantees.LiveAt.qS; linarith
+  have hS : A.qS τ ≤ 2 ^ 82 := by unfold Flock.Guarantees.LiveAt.qS; linarith
+  have hc0 : (0 : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by positivity
+  have e100 : (2 : ℝ) ^ (100 : ℝ) = 2 ^ (100 : ℕ) := by norm_num
+  refine ofReal_add_le_of (by positivity) h ?_
+  calc A.qS τ ^ 2 / 2 ^ (513 : ℝ) ≤ 1 / 2 ^ (200 : ℕ) := Flock.Bridge.rootTerm_le hS0 hS
+    _ ≤ 2 ^ (-(100 : ℝ)) := by rw [Real.rpow_neg (by norm_num), e100]; norm_num
+    _ ≤ _ := le_add_of_nonneg_left hc0
 
 /-- Equal circuits, unit counts, partitions, openings and transcripts have as many unbound units. -/
 theorem card_unbound_congr {C C' : Verity.Circuit} (hC : C = C') {n n' : ℕ} (hn : n = n')
@@ -468,13 +558,13 @@ structure SampledDeploy (V : Vocab d α) where
   A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
     Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ)
   τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
-    (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G
+    (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).GH
   col : ByteArray → ByteArray → ByteArray → Outcome → Option (Claims.Msg × Claims.Msg)
   accept_le : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
     Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (col θ F c) o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
       FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
-        (A θ F c σ r hr).G (τOf θ F c σ r hr)
+        (A θ F c σ r hr).GH (τOf θ F c σ r hr)
   kMax : ByteArray → ℕ
   finder_ge : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed),
     V.parsed F = some r → V.Registered θ F →
@@ -484,10 +574,10 @@ structure SampledDeploy (V : Vocab d α) where
   unbound_le : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
     (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤
-      ((A θ F c σ r hr).faultyE (q θ) (τOf θ F c σ r hr)).card
+      ((A θ F c σ r hr).faultyE (q θ) ((A θ F c σ r hr).adapt (τOf θ F c σ r hr))).card
   cr : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
-    V.FinderCR .sampled θ F c σ → (A θ F c σ r hr).CR (τOf θ F c σ r hr)
+    V.FinderCR .sampled θ F c σ → (A θ F c σ r hr).CRH (τOf θ F c σ r hr)
   k_eq : ∀ θ F c σ r hr, (A θ F c σ r hr).k = Flock.Bridge.kDep
   M_eq : ∀ θ F c σ r hr, (A θ F c σ r hr).M = 2 ^ 192
   Rw_eq : ∀ θ F c σ r hr, (A θ F c σ r hr).Rw = 2 ^ 192
@@ -530,11 +620,11 @@ noncomputable def sampledIn (Dp : SampledDeploy V) (θ F c : ByteArray) (σ : Ga
   cr := Dp.cr θ F c σ r hr hreg
   delta_le := by
     by_cases hc : V.cost θ F c σ ≤ 2 ^ 80
-    · have ht : (Dp.A θ F c σ r hr).t' (Dp.τOf θ F c σ r hr) ≤ 2 ^ 80 := by
+    · have ht : (Dp.A θ F c σ r hr).t' ((Dp.A θ F c σ r hr).adapt (Dp.τOf θ F c σ r hr)) ≤ 2 ^ 80 := by
         rw [Dp.t'_eq]
         exact_mod_cast hc
-      exact (ENNReal.ofReal_le_ofReal (deltaPub_le_of _ _ (Dp.k_eq θ F c σ r hr) (Dp.M_eq θ F c σ r hr)
-        (Dp.Rw_eq θ F c σ r hr) (Dp.ρ_eq θ F c σ r hr) (Dp.v_le θ F c σ r hr) (Dp.ioSum_le θ F c σ r hr) ht)).trans
+      exact (deltaPub_root_ofReal_le_of _ _ (Dp.k_eq θ F c σ r hr) (Dp.M_eq θ F c σ r hr)
+        (Dp.Rw_eq θ F c σ r hr) (Dp.ρ_eq θ F c σ r hr) (Dp.v_le θ F c σ r hr) (Dp.ioSum_le θ F c σ r hr) ht).trans
         (Dp.delta_ge θ F r hr hreg _ hc)
     · rw [Dp.delta_top θ _ (not_le.1 hc)]
       exact le_top
