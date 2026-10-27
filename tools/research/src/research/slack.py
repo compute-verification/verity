@@ -93,7 +93,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -103,12 +103,12 @@ try:
     from .timefmt import both, slack_dates
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     def both(t: Any) -> str:
-        return f"{datetime.fromtimestamp(float(t), timezone.utc):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
+        return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
 
     def slack_dates(text: str, now: Any = None) -> str:
         return text
 
-    class waitcap:  # noqa: N801  research/waitcap.py's cap, which a single file carries itself
+    class waitcap:  # research/waitcap.py's cap, which a single file carries itself
         WAIT_CAP_S, STILL_GOING = 1200, 79
 
         @staticmethod
@@ -880,7 +880,7 @@ def stamp_time(text: str, now: datetime) -> str:
     if not m or any(w.strip("*_,()").lower() in DEADLINE_WORDS for w in m[1].split()):
         return text                                              # no header time, or a deadline (`... by 20:00Z:`)
     typed = int(m[2]) * 60 + int(m[3])
-    real = now.astimezone(timezone.utc)
+    real = now.astimezone(UTC)
     off = abs(typed - (real.hour * 60 + real.minute)) % (24 * 60)
     if min(off, 24 * 60 - off) * 60 <= STAMP_SLACK_S:
         return text
@@ -1342,7 +1342,7 @@ class Routes:
         if len(names) == 1:
             one(names[0])
         elif names:
-            from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+            from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=min(16, len(names))) as pool:
                 list(pool.map(one, names))
 
@@ -1772,7 +1772,7 @@ def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> s
     or Linear fails, so the ask still goes out on Slack in full."""
     if not ASKS_ON_LINEAR or ns.dry_run or not owner.get("linear"):
         return body
-    from . import linear  # noqa: PLC0415
+    from . import linear
 
     parent = getattr(ns, "parent", None)
     issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None))
@@ -1788,7 +1788,7 @@ def linear_close(text: str, state_type: str) -> None:
     """Move the Linear issue an ask's root links (`linear_ask`) to its team's `state_type` state (`Linear.move`)."""
     if not (m := LINEAR_LINK_RE.search(text or "")):
         return
-    from . import linear  # noqa: PLC0415
+    from . import linear
 
     try:
         print(f"linear: {m[1]} {linear.Linear().move(m[1], state_type)}")
@@ -1802,7 +1802,7 @@ LINEAR_STATES = ("Backlog = filed, Todo = accepted, In Progress = someone is on 
 
 def render_audit(found: list[dict], counts: dict[str, dict[str, int]]) -> str:
     """The audit's findings by lane, one line each (`ISSUE kind: fix`), then their counts by lane and kind."""
-    from .linear import AUDIT_KINDS  # noqa: PLC0415
+    from .linear import AUDIT_KINDS
 
     lines, kinds = [], [k for k in AUDIT_KINDS if any(k in c for c in counts.values())]
     for lane in counts:
@@ -1826,7 +1826,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]` and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
-    from . import linear  # noqa: PLC0415
+    from . import linear
 
     def need(value: str | None, what: str) -> str:
         if not value:
@@ -1838,8 +1838,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit"):
-        raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, which has one")
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+        raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
+                         "`place` or `comment`, which have one")
     try:
         brief = Path(ns.file).read_text() if ns.file else None
     except OSError as e:
@@ -1896,9 +1897,14 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             print(f"{issue} unrelated: removed " + "; ".join(lin.unrelate(issue, need(value, "the OTHER issue"))))
             return 0
         if ns.verb == "state":
-            print(f"{issue} {lin.move(issue, need(value, 'the STATE by name (e.g. In Progress)'))}")
+            state = need(value, 'the STATE by name (e.g. In Progress)')
+            print(f"dry-run: would move {issue} to {state}" if ns.dry_run else f"{issue} {lin.move(issue, state)}")
             return 0
         if ns.verb == "place":
+            if ns.dry_run:
+                print(f"dry-run: would place {issue} in {need(value, 'the PROJECT (a prefix of its name)')}"
+                      + (f" / {ns.milestone}" if ns.milestone else ""))
+                return 0
             p = lin.place(issue, need(value, "the PROJECT (a prefix of its name)"), ns.milestone)
             print(f"{issue} placed in {p['project']}" + (f" / {p['milestone']}" if p["milestone"] else ""))
             return 0
@@ -1917,6 +1923,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
                                  "no lane to comment as")
             author = f"{lane}/{ns.worker}"
+        if ns.dry_run:
+            print(f"dry-run: would comment on {issue} as {author}: {text}")
+            return 0
         lin.comment(info["id"], author, text)
         if ns.worker:
             print(f"{issue} commented as {author}")
@@ -2249,7 +2258,7 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         thread = f" in {m['thread_ts']}" if m.get("thread_ts") and m.get("thread_ts") != m.get("ts") and not ns.thread else ""
         who = "@" + m["username"] if m.get("username") else poster(m, reg) or m.get("user") or m.get("bot_id") or "?"
         tags = [t for t in tags_of(m.get("text") or "") if t != "ask"]
-        at = datetime.fromtimestamp(float(m["ts"]), timezone.utc).strftime("%H:%M:%SZ") if m.get("ts") else "?"
+        at = datetime.fromtimestamp(float(m["ts"]), UTC).strftime("%H:%M:%SZ") if m.get("ts") else "?"
         print(f"{m.get('ts')} {at}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''))}")
     return 0
 
@@ -2490,7 +2499,7 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
     someone other than `asker` commented on it; and the state that says so.  Not taken when Linear can't say, so a doubtful
     ask still shows."""
     if ident not in cache:
-        from . import linear  # noqa: PLC0415
+        from . import linear
         q = "query($id: String!) { issue(id: $id) { state { type } comments { nodes { botActor { userDisplayName } user { name } body } } } }"
         try:
             i = linear.Linear().gql(q, {"id": ident})["issue"]
@@ -2673,7 +2682,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
         asker, record, ref, found = poster(root, reg), "slack", None, None
         if link := LINEAR_LINK_RE.search(root.get("text") or ""):
             if (link[1], asker) not in issues:
-                from . import linear  # noqa: PLC0415
+                from . import linear
                 try:
                     lin = lin or (linear_client or linear.Linear)()
                     issues[(link[1], asker)] = {"answer": issue_answer(lin, link[1], asker)}
@@ -3357,7 +3366,7 @@ def cmd_slack_app(ns: argparse.Namespace, reg: dict) -> int:
 # --- #ask-daniel ------------------------------------------------------------------------------------------------------------
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _sleep(seconds: float) -> None:
@@ -3374,7 +3383,7 @@ def pacific(t: datetime) -> str:
 
 
 def _iso(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def since_ts(raw: str) -> str:
@@ -3400,14 +3409,14 @@ def parse_deadline(raw: str, now: datetime) -> datetime:
         if not (1 <= hour <= 12 and minute < 60):
             raise SlackError(f"--deadline {raw!r}: not a clock time")
         hour = hour % 12 + (12 if m[3].lower() == "pm" else 0)
-        return now.astimezone(PACIFIC).replace(hour=hour, minute=minute, second=0, microsecond=0).astimezone(timezone.utc)
+        return now.astimezone(PACIFIC).replace(hour=hour, minute=minute, second=0, microsecond=0).astimezone(UTC)
     try:
         t = datetime.fromisoformat(raw)
     except ValueError:
         raise SlackError(f"--deadline {raw!r}: give `3:00 PM` (today, Pacific) or an ISO time such as 2026-09-30T23:00:00Z") from None
     if t.tzinfo is None:
         raise SlackError(f"--deadline {raw!r}: an ISO time needs its zone (Z, or an offset such as -07:00)")
-    return t.astimezone(timezone.utc)
+    return t.astimezone(UTC)
 
 
 def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:

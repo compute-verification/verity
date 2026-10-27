@@ -152,7 +152,7 @@ def test_proofs_require_the_security_package():
 
 def test_code_never_requires_the_security_analysis():
     """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
-    `Security/`: the analysis reads the code, never the reverse (Daniel's layout ruling of Oct 5)."""
+    `Security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside Security"
     bad = [f"{pkg.relative_to(ROOT)} requires {(pkg / r['path']).resolve().relative_to(ROOT)}"
@@ -172,7 +172,7 @@ def test_every_upstream_watch_is_scanned():
 
 def test_every_open_conjecture_names_a_test_that_exists():
     """An open entry of a lock's `shape.conjectures` names its falsification test as a pytest node id, `PATH::NAME` from
-    the repository's root, and that file defines the test (Daniel, 8 Oct: each conjecture's test runs)."""
+    the repository's root, and that file defines the test, so each conjecture's test runs."""
     bad = []
     for p in sorted(ROOT.rglob("lean-audit.json")):
         if ".lake" in p.parts:

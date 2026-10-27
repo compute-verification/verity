@@ -1,4 +1,4 @@
-"""The first campaign subcircuit, frozen: exactly which function the proof backends are asked to prove.  A :class:`Target` is
+"""The first campaign subcircuit, frozen: exactly which function the proof systems are asked to prove.  A :class:`Target` is
 the code's name for a subcircuit (``gemm_coordinate(K, semantics)`` with every parameter bound; README Glossary).
 
 Every proof-system experiment in the campaign proves *this* relation until the target is deliberately re-versioned.
@@ -34,7 +34,7 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
   unbound family (below).
 * **Saturation is inside the relation (log entry D8).** A finite input whose grouped sum leaves the FP32 range
   yields ``+-inf`` at once, sticky through the remaining group -- the hardware's word on every measured case.  That
-  word is a valid output of a transition and, through the epilogue, of the VU; it is not a finite accumulator, so a
+  word is a valid output of a transition and, through the epilogue, of the proof block; it is not a finite accumulator, so a
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
 * **Statement and binding.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``) whose
@@ -42,28 +42,28 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
   Merkle roots (``verity_sp1.proofs.packed``, ``verity.ml.commitments.leaves``).  The guest's public values are
   ``h_O || h_L || verdict`` and are accepted only under the approved verifying key (``verity_sp1.host.APPROVED``).
 
-Transition unit versus verification unit
-========================================
+Transition unit versus proof block
+==================================
 
-Two objects, deliberately distinct (closed 2026-09-21):
+Two objects, deliberately distinct:
 
-* The **backend transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
+* The **proof system's transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
   ``tc_dot16(c, x[16s:16s+16], W[16s:16s+16])`` -- two grouped sums, ``c`` joining the first.  A numerical proof
-  backend may take, expose and check these transitions and their intermediate accumulators internally in any
+  system may take, expose and check these transitions and their intermediate accumulators internally in any
   layout it likes; those states are proof-internal auxiliary witness, never new runtime boundaries.
-* The **Verity verification unit** (what the outer sampler selects and what a proof must establish in full) is
+* The **proof block** (what the outer sampler selects and what a proof must establish in full) is
   ``GemmCoordinate<K>``: the chain of ``K/16`` transitions from ``c_0 = +0`` followed by the epilogue cast.
 
-Backends must agree on the profile, the input/output bitstrings, the supported domain, the exact
-function and the VU endpoints; they need not agree on auxiliary witness layouts.
+Proof systems must agree on the profile, the input/output bitstrings, the supported domain, the exact
+function and the proof block's endpoints; they need not agree on auxiliary witness layouts.
 
 References and the log of disagreements
 =======================================
 
 * :data:`HAWKEYE_PIN` pins the source-close reference (Hawkeye's simulator, commit ``30703fcb``); the
   parameters above are the ones it recovers on the A100, re-measured bit-exactly on both the RTX 4090 (sm_89) and
-  the A100 (sm_80) over 25,698,304 finite elements each (12,065,535 with a nonzero accumulator; runs
-  ``r20260921-231618-ea24`` and ``r20260921-232750-56c5``, log entries D2 and D9) and on the 7,713 all-finite
+  the A100 (sm_80) over 25,698,304 finite elements each (12,065,535 with a nonzero accumulator; log entries
+  D2 and D9) and on the 7,713 all-finite
   structured A100 cases.
 * :data:`DISCREPANCY_LOG` records every place where the paper, the simulator, Verity's reference and the hardware
   disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
@@ -88,7 +88,7 @@ Explicitly unresolved (not part of the target)
   encoding -- NaN, infinities, saturation -- as measured on A100/RTX 4090; no registered gate family binds them
   (no name is reserved: the ``veritor.*`` prefix is frozen, so the total relation takes a fresh id when it is
   declared).  Declaring the total relation is a
-  protocol decision, not a backend optimisation.
+  protocol decision, not a proof-system optimisation.
 * **Hopper.** ``wgmma`` on the H100 is one group of sixteen, a 26-bit adder, floor ``-133``
   (:data:`verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
@@ -97,10 +97,10 @@ Explicitly unresolved (not part of the target)
 * **Other dtypes.** FP8 (E4M3) pipelines exist in ``silicon`` and now have *draft* targets below
   (:data:`FP8_HOPPER_WGMMA`, :data:`FP8_ADA_MMA`); nothing about them is frozen.
 
-Draft targets (silicon Phase 0, 2026-09-22)
-===========================================
+Draft targets
+=============
 
-A :class:`Target` carries a ``status``: ``"frozen"`` (:data:`FIRST`: every backend proves it, it changes only by
+A :class:`Target` carries a ``status``: ``"frozen"`` (:data:`FIRST`: every proof system proves it, it changes only by
 re-versioning) or ``"draft"`` (a relation stated precisely enough to generate vectors against, owned by the silicon
 campaign, not yet bound to a guest or a registered family digest).  Each target names its ``instruction`` in
 :data:`verity.ml.circuits.silicon.instructions.INSTRUCTIONS`; the instruction's status (pinned / hypothesis / unprobed) says how
@@ -117,23 +117,24 @@ much hardware stands behind the model the target computes with.
 * :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: veritor RTX 4090, 24,898,304 elements), model
   :data:`verity.ml.circuits.silicon.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same program,
   same domain, same absent epilogue; a different grouping and so a different function.
-* :data:`FP8_SM120_MMA` (lane vllm-sm120-tc-gemm, 2026-09-30) -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its
+* :data:`FP8_SM120_MMA` -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its
   conformance device, 25,041,024 elements / 0 mismatches; one QMMA.16832 per tile), model
   :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_E4M3_M16N8K32`: one group of 32 in
   the 26-bit adder of the sm_120 BF16 pipeline, so the accumulator is not truncated.  Same program, domain and absent
   epilogue as the other two; the registry's ``sm120.mma.m16n8k32.e4m3`` is this pipeline, and trust anchors it here.
 * The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity_sp1.proofs.families.make_tensor_core_gate_set`
   (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
-  bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
-  replays (``verity/ml/circuits/silicon/captures/vectors/``, schema ``verity/tc-reference-vector/v0``), not authenticated obligations.
-* :data:`BF16_HOPPER` (lane b-hopper, 2026-09-22) -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
+  bound to them** and no ``typed-obligation/v0`` lowering has been produced -- :data:`FP8_HOPPER_WGMMA`'s reference
+  vectors are model replays (``verity/ml/circuits/silicon/captures/vectors/``, schema ``verity/tc-reference-vector/v0``),
+  not authenticated obligations.
+* :data:`BF16_HOPPER` -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
   25.7M elements / 0 mismatches; the ``wgmma`` BF16 path runs the same pipeline), model
   :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16` (one group of 16, the 26-bit adder, floor -133; exact BF16
   products).  FIRST's program and epilogue -- ``GemmCoordinate<K>`` with ``f32_to_bf16`` -- so the Hopper row of the
   table is the same function as the Ampere row up to the step; the family is
   ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (:func:`verity_sp1.proofs.families.make_tc_bf16_gate_set`), FIRST's
   vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5 dense BF16 rate (989.4 TFLOPS).
-* :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090, lanes fp4-re / fp4-proof), model
+* :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090), model
   :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots over four
   groups of 16, one UE4M3 scale byte per 16-element block on A and on B, the five-way align-add anchored on the leading
   participating group's scale exponent (27 fraction bits), the accumulator's 36-bit window, truncation toward zero,
@@ -144,7 +145,7 @@ much hardware stands behind the model the target computes with.
   binary32 are outside; an NVFP4 chain from ``c_0 = 0`` cannot leave binary32).  Consumer die: the evidence is
   ``mma.sync kind::mxf4nvf4`` on the RTX 5090; B200 ``tcgen05.mma`` cannot be assumed.
 * Not covered by any draft: ``sm90.mma.m16n8k32.e4m3`` (the Hopper legacy path -- unprobed; whether it is Hopper's
-  one group of 32 or Ada's two of 16 is the probe lane's first question), E5M2 (hypotheses only), and the MXFP4
+  one group of 32 or Ada's two of 16 is the first thing a probe must settle), E5M2 (hypotheses only), and the MXFP4
   instruction ``sm120.mma.m16n8k64.e2m1.mxf4`` (pinned; the same adder with UE8M0 scales over blocks of 32, no target).
 
 Native peak: what a target's overhead is measured against
@@ -155,8 +156,8 @@ on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for ``sm90.wgmma.m64n8k32.e4m3``, 
 -- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  The number a
 benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry (``benchmarks/census/hardware.json``, data read
 by the benchmarks) of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the
-relation's FP32 accumulate width.  One VU of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
-VU at a peak is ``2K / flop_per_second``.
+relation's FP32 accumulate width.  One proof block of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
+proof block at a peak is ``2K / flop_per_second``.
 """
 
 from __future__ import annotations
@@ -192,8 +193,8 @@ __all__ = [
     "Target",
 ]
 
-#: The tensor-core gate families' names and versions (the frozen SP1 backend's ``verity_sp1.proofs.families`` builds them).
-#: The ``veritor.*`` ids below are grandfathered and the prefix is FROZEN (CIR-12, circuits, 14 Oct 2026): each spelling is
+#: The tensor-core gate families' names and versions (the archived D-SP1's ``verity_sp1.proofs.families`` builds them).
+#: The ``veritor.*`` ids below are grandfathered and the prefix is FROZEN: each spelling is
 #: baked into a ``*_FAMILY_DIGEST`` pin, fixtures and recorded runs, so it stays; no new family is created under
 #: ``veritor.*`` — a new family takes a fresh id, and ``tests/test_targets_frozen_families.py`` fails on any other.
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
@@ -239,8 +240,8 @@ Status = Literal["frozen", "draft"]
 @dataclass(frozen=True, slots=True)
 class Target:
     """One target (a subcircuit): the gate family, the pipeline the steps are computed on, the program, the reference sizes, the
-    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
-    and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
+    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every proof system proves it; ``draft``: stated,
+    bound to nothing yet) with the id of the instruction class it is a relation over
     (``verity.ml.circuits.silicon.instructions.INSTRUCTIONS``)."""
 
     name: str
@@ -346,7 +347,7 @@ FP8_ADA_MMA = Target(
     statement_format=2,
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
-    reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
+    reference_vectors=(),
     anchor_device="NVIDIA GeForce RTX 4090",
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
@@ -380,7 +381,7 @@ NVFP4_SM120 = Target(
     statement_format=2,
     domain=_NVFP4_DOMAIN,
     epilogue=_NVFP4_EPILOGUE,
-    reference_vectors=("nvfp4-sm120-mma-k64", "nvfp4-sm120-mma-k1536"),
+    reference_vectors=(),
     anchor_device="NVIDIA GeForce RTX 5090",
     status="draft",
     instruction="sm120.mma.m16n8k64.e2m1.nvf4",
@@ -401,7 +402,7 @@ FP8_SM120_MMA = Target(
     statement_format=2,
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
-    reference_vectors=("fp8-sm120-mma-k32", "fp8-sm120-mma-k1536"),
+    reference_vectors=(),
     anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
     status="draft",
     instruction="sm120.mma.m16n8k32.e4m3",

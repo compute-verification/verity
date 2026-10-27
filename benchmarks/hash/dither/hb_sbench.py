@@ -21,7 +21,7 @@
     dither-1s-hbk  dither-1s-hbp on the unit's K split (an h1u.cu build with H1U_KSPLIT, from the .so HB_H1U_KSPLIT names):
                    h1k for the calls a warp-a-unit form underfills, h1u for the rest; gated as dither-1s-hbp is.
 
-sbench's dither-a arms (ASK-71's option A, `dither_a`) and their statement-order arms (`dither_so`, -so<D>) run here as
+sbench's dither-a arms (option A, `dither_a`) and their statement-order arms (`dither_so`, -so<D>) run here as
 they are, their side unit kh_unit_ws from HB_H1U (hbk's and hbr's from HB_H1U_KSPLIT and HB_H1U_KRONLY), and their
 tokens must equal exact's at every decode rep too.
 
@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.environ["HB_DITHER_DIR"])
-import sbench  # noqa: E402
+import sbench
 
 _build = sbench.build
 

@@ -222,7 +222,7 @@ def _relative_spec(source: str | Path, root: Path) -> str:
         raise ValueError("a recorded benchmark spec must be inside the source tree") from None
 
 
-QUEUE_KINDS = {1: "vllm-bench-1gpu", 8: "vllm-bench-8gpu"}
+QUEUE_KINDS = {1: "vllm-bench-1gpu"}
 # A point writes its records, out/ and what its setup builds (a few MB; the venv and model cache are shared). The
 # queue's default 20 GB request would hold every point once the node's disk nears research disk-hold's 80%.
 POINT_DISK_GB = 5
@@ -257,8 +257,9 @@ def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> N
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
-#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU (g0-g7) in GPU_SLOTS
-DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3")
+#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU in GPU_SLOTS (the nebius nodes g0-g7, the
+#: single-GPU DC VMs g0)
+DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-b200")
 GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 
 

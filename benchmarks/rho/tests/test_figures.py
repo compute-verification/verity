@@ -16,7 +16,7 @@ NAMES = ["onsite-h200-kimi", "remote-h200-kimi"]
 @pytest.mark.parametrize("name", list(figures.FIGURES))
 def test_each_figure_writes_a_png_and_the_standard_json_it_plots(tmp_path, name):
     written = figures.render(REG, tmp_path, NAMES, grid=4, only=[name])[name]
-    if name in ("class-vs-k", "brackets", "dark"):
+    if name in ("class-vs-k", "overheads", "dark"):
         assert written, f"{name} needs only a scenario, and drew nothing"
     assert [p.name for p in written] == ([f"{name}.png", f"{name}.json"] if written else [])
     if written:
@@ -31,7 +31,7 @@ def test_class_vs_k_marks_where_each_class_turns_vacuous(tmp_path):
     data = json.loads((tmp_path / "class-vs-k.json").read_text())
     for panel in data["panels"]:
         for name, c in panel["classes"].items():
-            ys = [float(y) for y in c["slowdown"]]
+            ys = [float(y) for y in c["overhead"]]
             if c["vacuous_from_k"] is None:
                 assert min(ys) > 1, name
             else:
