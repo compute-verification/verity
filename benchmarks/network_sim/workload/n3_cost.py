@@ -10,7 +10,7 @@ compressions a frame and 2 a node of its depth-D tree (`nodes`), and the XOR as 
 `checked` requires `composed` to equal `size`, which traces both, at every N of a ladder. `composed_v4` and
 `n3_v4.size` are the same for v4.
 
-`composed_v5` is `n3_v5`'s N3Window_v5, and `levers` prices NET-52's levers on the busy link-windows from it.
+`composed_v5` is `n3_v5`'s N3Window_v5, and `levers` prices v5's cost levers on the busy link-windows from it.
 
     python -m workload.n3_cost --out FILE [--lab RUN_DIR] [--sim] [--check N ...] [--check-v4 N ...]
         [--runs EGRESS INGRESS] [--served N ...] [--levers [--check-v5 N ...]]
@@ -319,7 +319,7 @@ prompt's bytes packed whole, and keep rows of B."""
 
 def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] = (1, 2),
            egress_rows: tuple[int, ...] = EGRESS_ROWS) -> dict:
-    """NET-52's levers on served rows' busy link-windows, at one busy window's depths and a day's (`served`'s formats):
+    """v5's cost levers on served rows' busy link-windows, at one busy window's depths and a day's (`served`'s formats):
     v4; lever 1, v5's rows of B bytes; lever 2, the frames' placement a template's (`SERVED_TEMPLATES`, the descriptor
     then only r and the segments, P = Q = 1), on v4 and on v5; lever 4 on both, egress rows of `egress_rows[0]` bytes
     under frames of B (the rest of `egress_rows` beside it); and lever 3's estimate on v5 with lever 2, and with 2
@@ -476,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="v4's runs a port-window, egress and ingress")
     ap.add_argument("--served", type=int, nargs="*", default=[2, 16, 256, 4096, 16384],
                     help="the N of the served ladder, beside the busy windows' own")
-    ap.add_argument("--levers", action="store_true", help="NET-52's levers on the busy link-windows instead of `served`")
+    ap.add_argument("--levers", action="store_true", help="v5's cost levers on the busy link-windows instead of `served`")
     ap.add_argument("--check-v5", type=int, nargs="*", default=[2, 3, 64],
                     help="with --levers, the N at which `composed_v5` must equal `n3_v5.size`, at one busy window's depths")
     args = ap.parse_args(argv)

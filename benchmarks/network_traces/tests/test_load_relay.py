@@ -1,6 +1,6 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
-are CMP-95 interface 1's (its fixture's TINY manifest, tensor digests and entries, and at H200 its stream's length, head
-and every tensor's first and last rows); the relayed roots are interface 1's fixture roots under its salts, for its
+are the seeded weights' (`verity_torch_loop.weights`, interface 1: its fixture's TINY manifest, tensor digests and
+entries, and at H200 its stream's length, head and every tensor's first and last rows); the relayed roots are interface 1's fixture roots under its salts, for its
 reader named by digest, whose domains are the verifier's (``tok`` (H, V) in row/v2, every tensor 16-bit leaves, an f32
 scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow`` part), over one process and several, whatever
 the reads' sizes, and `Registered.commit`'s under the certifier's own salts (the witness it writes) and the verifier's

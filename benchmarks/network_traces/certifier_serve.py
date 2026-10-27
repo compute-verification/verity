@@ -1675,7 +1675,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--delta-buckets", type=int,
                        help="the latency budget D (default: 4 × the slowest + 0.5 s, or the most that fits down to 2 ×)")
         q.add_argument("--profile", choices=PROFILES, default=PROFILES[0],
-                       help="N2's profile: the planned egress occupancy, or the served profile (NET-54), whose egress "
+                       help="N2's profile: the planned egress occupancy, or the served profile, whose egress "
                             "counts derive from the ingress head's")
         q.add_argument("--traffic", choices=TRAFFIC, default=TRAFFIC[0],
                        help="fixed: one body every session (--tokens, --prompt-tokens, --in-flight, --profile); varied: "

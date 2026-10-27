@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NET-68's scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
+# The step-indexed scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
 # job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the
 # sampled-proofs verifier built in the tree. From a clone, in a slot of network-accounting's pool:
 #   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env SC_MEM_GB=128 -- \

@@ -22,8 +22,8 @@
   certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
-  the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` (#4326) summed by
-  `periodLeak_le_sum` (#4324). ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
+  the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
+  `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
   summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
   All: every link-window's one unit proved) or, once it lands, N2-ZK's sampled draw's, read by the same fields. Scan's

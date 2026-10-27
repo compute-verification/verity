@@ -866,7 +866,7 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
 
 
 def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():
-    """On the warden's bucket rows (#3698): connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
+    """On the warden's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)

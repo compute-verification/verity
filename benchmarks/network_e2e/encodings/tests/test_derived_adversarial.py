@@ -1,4 +1,4 @@
-"""Red-team cases against ENC-DERIVED's canonical rules (#3543): the zero-bit source and hit derivation, and the key it
+"""Adversarial cases against the derived encoding's canonical rules: the zero-bit source and hit derivation, and the key it
 looks token prefixes up by.
 
 The companion `test_derived.py` already pins the canonical rules the lead named -- the no-eviction bound (a hit shorter

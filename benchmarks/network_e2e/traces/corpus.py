@@ -407,8 +407,8 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
     every thread of the process with it (numpy's among them), with the garbage collector off and every object made
-    before the drive frozen out of its reach (in art:d5380875's heavy trace, stalls every connection shared put 6,820 cell
-    reads 135-255 ms late), and the descriptor table grown to hold every connection before the first is opened
+    before the drive frozen out of its reach (stalls every connection shares put cell reads late), and the descriptor
+    table grown to hold every connection before the first is opened
     (`reserve_fds`). warden/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
     after the origin, ms]), every collection that still ran, and the table's size."""
     from warden_probe import Collections

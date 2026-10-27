@@ -23,7 +23,7 @@ and are halved past 2^16, so the model is public. `Encoder` and `Decoder` take t
 codes with contexts of its own (ENC-REPLAY's egress contexts). `encode` and `decode` drive them over `Window`s, where a
 window's `arrived` bits take as context the run of decisions since the last arrival.
 
-**Prefix-free, canonical, self-delimiting.** LEAK-LEAN's `BitsCount` (#3533) holds when the charge is at least the length
+**Prefix-free, canonical, self-delimiting.** Lean's `BitsCount` holds when the charge is at least the length
 of a prefix-free encoding.
 - A segment's symbols are fixed by its counts, so the decoder knows where the segment's message ends. The coder's
   termination (`code.ArithEncoder.finish`: the pending bits and two more) names a dyadic interval inside the message's
