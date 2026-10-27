@@ -22,8 +22,9 @@ def test_eps_skip_at_delta_one_percent():
 
 
 def test_picks_are_the_coin_s_and_weigh_each_mac_equally():
-    P.configure({"layers": [["qkv", 6144, 4096], ["o", 4096, 4096], ["up", 28672, 4096], ["down", 4096, 14336]], "m": 16384,
-                 "nb": 32})
+    wl = {"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 16384}
+    P.configure(wl)
+    P.configure({**wl, "layers": [[c, n, k] for c, n, k, _, _ in P.calls(P.LINEARS)]})
     coin, receipt = b"\x01" * 64, b"\x02" * 64
     a = P.picks(coin, "p", 3, receipt, 300, 400, 32768)
     assert a == P.picks(coin, "p", 3, receipt, 300, 400, 32768)
@@ -162,23 +163,29 @@ def test_down_runs_as_k_slices_whose_segments_are_at_most_t_max_noise_periods():
     try:
         P.configure({"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 16384})
         assert P.calls(P.LINEARS) == [("qkv", 6144, 4096, "qkv", 0), ("o", 4096, 4096, "o", 0), ("up", 28672, 4096, "up", 0)] + \
-            [(f"down.{s}", 4096, 3584, "down", 3584 * s) for s in range(4)]
+            [(f"down.{s}", 4096, 7168, "down", 7168 * s) for s in range(2)]
+        assert [P.lp_of(k) for k in (4096, 7168)] == [512, 1024]
+        P.configure({"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 16384, "lp_max": 512})
+        assert P.calls(P.LINEARS)[3:] == [(f"down.{s}", 4096, 3584, "down", 3584 * s) for s in range(4)]
         P.configure({"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 4096})
-        assert P.calls(P.LINEARS)[3] == ("down", 4096, 14336, "down", 0)
+        assert P.calls(P.LINEARS)[3] == ("down", 4096, 14336, "down", 0) and P.lp_of(14336) == 512
     finally:
         P.configure({"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 16384})
 
 
-def test_one_segment_a_call_when_L_exceeds_K(small, tmp_path):
-    """The run's setting, L past every layer's K (S = 1, the output's low 16 bits the only words), with layer b (K = 2 x 8 L')
-    as two K-slices: an honest period is accepted and a skipping prover refused, as at S > 1."""
+@pytest.mark.parametrize("lp_max,layers,lps", [(128, ["a", "b.0", "b.1"], [128, 128, 128]), (1024, ["a", "b"], [128, 256])])
+def test_one_segment_a_call_when_L_exceeds_K(small, tmp_path, lp_max, layers, lps):
+    """The run's setting, L past every layer's K (S = 1, the output's low 16 bits the only words), with layer b (K = 16 L')
+    as two K-slices when L' stops at 128, else whole at L' = 256: an honest period is accepted and a skipping prover
+    refused, as at S > 1."""
     cfg = tmp_path / "cfg"
-    assert P.main(["prep", str(cfg), "--small", "--L", "2048"]) == 0
+    assert P.main(["prep", str(cfg), "--small", "--L", "2048", "--lp-max", str(lp_max)]) == 0
     prep = json.loads((cfg / "prep.json").read_text())
     try:
         P.configure(prep)
-        assert [x[0] for x in P.LAYERS] == ["a", "b.0", "b.1"]
-        assert [P.shape(n, k, prep["row"]).S for _, n, k in P.LAYERS] == [1, 1, 1]
+        assert [x[0] for x in P.LAYERS] == layers
+        assert [P.shape(n, k, prep["row"]).lp for _, n, k in P.LAYERS] == lps
+        assert [P.shape(n, k, prep["row"]).S for _, n, k in P.LAYERS] == [1] * len(layers)
         secret = b"\x07" * 64
         per = P.Period(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
                        prep["row"], prep["source"], secret, tmp_path, _Serial())

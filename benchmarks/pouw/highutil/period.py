@@ -3,8 +3,8 @@
 prover, with live coins, and the certified share of the GPU's tensor peak that the periods establish.
 
 **The workload.** Llama-3.1-8B's linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
-14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back, down as four K-slices (`calls`: Dither's
-argument covers a segment of at most T_MAX L'). A step is one transformer block's calls,
+14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back, down as two K-slices at L' = 1,024 (`calls`,
+`lp_of`: Dither's argument covers a segment of at most T_MAX L', and v31 takes L' <= 1,024). A step is one transformer block's calls,
 and step g runs block g mod NB, so NB = 32 consecutive steps are the prefill's every linear. B is the published
 checkpoint's weights (verity-int8/Llama-3.1-8B-INT8 at its pinned revision, q k v and gate up fused as served; `prep
 --checkpoint`, the shards' SHA-256 in the registration). A is the s8 input each linear gets in a W8A8 forward of that
@@ -35,7 +35,7 @@ the coins are 64-byte session coins expanded here, not the challenger's streamed
 (the challenger's release log records what each coin opened after); and the checks run in the clear, the stand-in for
 the Definition and C-Flock --zk.
 
-    period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--L 16384] [--nb 32]   the weights and shapes
+    period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--lp-max 1024] [--L 16384] [--nb 32]   the weights and shapes
     capture.py CFG --checkpoint DIR                                           the activations (on the GPU)
     period.py diag CFG LIB OUT                                                one step's GPU openings against the answers'
     period.py run CFG LIB|ref OUT [--coins local|gate:USER@HOST ...] [--blocks --steps --q --periods --negative]
@@ -80,10 +80,12 @@ LINEARS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down",
 LAYERS = LINEARS
 M = 16384
 NB = 32       # transformer blocks: step g runs block g mod NB
-LP, L = 512, 16384   # the noise period L' and the word interval L: S = ceil(K / L) = 1 at every call's K
+LP, L = 512, 16384   # the noise period L' (a call's least; `lp_of`) and the word interval L: S = ceil(K / L) = 1 at every call's K
 #: Dither's argument covers segments of at most T_MAX L' inner indices (a proof block's cost goes as c_t / t; v3.2 proves it
-#: for t <= 8), and v31's Fill takes L' <= 1024, so a linear whose segment would be longer runs as K-slices (`calls`)
+#: for t <= 8), and v31's Fill takes L' <= LP_MAX, so a call takes a longer L' (`lp_of`), and a linear no L' covers runs as
+#: K-slices (`calls`)
 T_MAX = 8
+LP_MAX = 1024
 TILE = v31.TILE
 SCHEME = "verity/highutil/period/v1"
 OPERANDS_TAG = "verity/highutil/operands/v1"
@@ -127,18 +129,28 @@ def u64(x: int) -> bytes:
 
 
 def shape(n: int, k: int, row: int, m: int | None = None) -> v31.Fill:
-    return v31.Fill(M if m is None else m, n, k, LP, L, row)
+    lp = lp_of(k)
+    if lp is None:
+        raise SystemExit(f"K {k}: no L' from {LP} to {LP_MAX} divides it and L {L} with its segment at most {T_MAX} L' "
+                         "(split it: `calls`)")
+    return v31.Fill(M if m is None else m, n, k, lp, L, row)
+
+
+def lp_of(k: int) -> int | None:
+    """A call's L' at its K: the least multiple of 128 from LP to LP_MAX that divides K and L with the segment min(L, K) at
+    most T_MAX L' (None: none does)."""
+    return next((lp for lp in range(LP, LP_MAX + 1, TILE) if k % lp == 0 and L % lp == 0 and min(L, k) <= T_MAX * lp), None)
 
 
 def calls(linears) -> list[tuple[str, int, int, str, int]]:
-    """Each linear's calls (name, n, k, linear, k0): the linear whole, or its fewest equal K-slices, each a multiple of L',
-    whose segment min(L, k) is at most T_MAX L'. A slice's X W'^T is the linear's over columns k0..k0 + k, and the
-    linear's output is its slices' sum."""
+    """Each linear's calls (name, n, k, linear, k0): the linear whole, or its fewest equal K-slices, each with an L'
+    (`lp_of`). A slice's X W'^T is the linear's over columns k0..k0 + k, and the linear's output is its slices' sum."""
     out = []
     for name, n, k in linears:
-        d = next((d for d in range(1, k // LP + 1) if k % d == 0 and (k // d) % LP == 0 and min(L, k // d) <= T_MAX * LP), None)
+        d = next((d for d in range(1, k // TILE + 1) if k % d == 0 and lp_of(k // d)), None)
         if d is None:
-            raise SystemExit(f"{name}: no K-slice of {k} is a multiple of L' {LP} with its segment at most {T_MAX} L'")
+            raise SystemExit(f"{name}: no K-slice of {k} has an L' from {LP} to {LP_MAX} dividing it and L {L} with its "
+                             f"segment at most {T_MAX} L'")
         out += [(name, n, k, name, 0)] if d == 1 else [(f"{name}.{s}", n, k // d, name, s * (k // d)) for s in range(d)]
     return out
 
@@ -237,9 +249,9 @@ def operand_trees(cfg: Path, secret: bytes, pool) -> dict[tuple[str, int, int], 
 
 def configure(prep: dict) -> None:
     """The workload a config was prepared for (its layers, M, NB, L' and L; the 8B shapes unless a test made it smaller)."""
-    global LAYERS, M, NB, LP, L
+    global LAYERS, M, NB, LP, L, LP_MAX
     LAYERS, M, NB = tuple(tuple(x) for x in prep["layers"]), prep["m"], prep["nb"]
-    LP, L = prep.get("lp", LP), prep.get("L", L)
+    LP, L, LP_MAX = prep.get("lp", LP), prep.get("L", L), prep.get("lp_max", 1024)
 
 
 def checkpoint_weights(d: Path, name: str, modules: tuple[str, ...], t: int) -> np.ndarray:
@@ -260,12 +272,13 @@ def cmd_prep(a: argparse.Namespace) -> int:
     d = Path(a.cfg)
     d.mkdir(parents=True, exist_ok=True)
     if a.small:
-        configure({"layers": [["a", 256, 1024], ["b", 128, 2048]], "m": 256, "nb": 2, "lp": 128, "L": a.L or 512})
+        configure({"layers": [["a", 256, 1024], ["b", 128, 2048]], "m": 256, "nb": 2, "lp": 128, "L": a.L or 512,
+                   "lp_max": a.lp_max})
     else:
-        configure({"layers": [list(x) for x in LINEARS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L or L})
+        configure({"layers": [list(x) for x in LINEARS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L or L, "lp_max": a.lp_max})
     linears = [x[0] for x in LAYERS]
     parts = calls(LAYERS)
-    configure({"layers": [[c, n, k] for c, n, k, _, _ in parts], "m": M, "nb": NB, "lp": LP, "L": L})
+    configure({"layers": [[c, n, k] for c, n, k, _, _ in parts], "m": M, "nb": NB, "lp": LP, "L": L, "lp_max": LP_MAX})
     if a.checkpoint:
         ck = Path(a.checkpoint)
         if ck.name != CHECKPOINT["revision"]:
@@ -299,8 +312,9 @@ def cmd_prep(a: argparse.Namespace) -> int:
                     seeded_activations(M, k, (a.seed * 16 + li) * 64 + 32 + t).tofile(f)
         lines.append(f"{name} {M} {n} {k} {NB} {linear} {k0}")
     (d / "shapes.txt").write_text("\n".join(lines) + "\n")
-    source["calls"] = {"t_max": T_MAX, "slices": [[c, linear, k0] for c, _, _, linear, k0 in parts]}
-    (d / "prep.json").write_text(json.dumps({"row": a.row, "layers": LAYERS, "m": M, "nb": NB, "lp": LP, "L": L, "source": source}))
+    source["calls"] = {"t_max": T_MAX, "slices": [[c, linear, k0, lp_of(k)] for c, _, k, linear, k0 in parts]}
+    (d / "prep.json").write_text(json.dumps({"row": a.row, "layers": LAYERS, "m": M, "nb": NB, "lp": LP, "lp_max": LP_MAX, "L": L,
+                                                    "source": source}))
     return 0
 
 
@@ -442,7 +456,7 @@ class GpuDriver:
         self.ps, self.A, self.B, self.out, self.geom = [], [], [], [], []
         for name, n, k in LAYERS:
             f = shape(n, k, row)
-            p = v31lib.Prover(M, n, k, LP, L, row, lib=self.lib, params_dir=str(self.params))
+            p = v31lib.Prover(M, n, k, f.lp, L, row, lib=self.lib, params_dir=str(self.params))
             self.ps.append(p)
             depth = p.info()["depth"]
             self.geom.append((1 << depth, depth, (2 * (1 << depth) - 1) * 64))
@@ -680,7 +694,7 @@ class Period:
 
     def registration(self, pid: str, plan: Plan) -> tuple[bytes, dict]:
         reg = {"period": pid, "receipt": "dither no-fold (v31.py Fill)", "m": M, "nb": NB, "layers": [list(x) for x in LAYERS],
-               "lp": LP, "L": L, "row": self.row,
+               "lp": {name: lp_of(k) for name, _, k in LAYERS}, "L": L, "row": self.row,
                "blocks": plan.blocks, "steps_per_block": plan.steps, "q": plan.q, "first_step": self.g,
                "W_reg": plan.blocks * plan.steps * step_macs(), "source": self.source,
                "operand_roots": {kind: [[self.trees[(kind, li, t)].root.hex() for t in range(NB)] for li in range(len(LAYERS))]
@@ -923,7 +937,8 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
     wall = sum(r["wall_s"] for r in honest)
     mhz = [b["sm_mhz"] for r in results for b in r["blocks"] if b["sm_mhz"]]
     out = {
-        "workload": {"m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(), "lp": LP, "L": L,
+        "workload": {"m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(),
+                     "lp": {name: lp_of(k) for name, _, k in LAYERS}, "L": L,
                      "source": source},
         "plan": plan.__dict__, "periods": len(honest),
         "accepted": sum(r["accepted"] for r in honest),
@@ -963,7 +978,8 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("prep")
     p.add_argument("cfg")
     p.add_argument("--row", type=int, default=8192, help="leaf row bytes")
-    p.add_argument("--lp", type=int, default=LP, help="the noise period L'")
+    p.add_argument("--lp", type=int, default=LP, help="the least noise period L'")
+    p.add_argument("--lp-max", type=int, default=LP_MAX, help="the longest L' (v31's Fill takes up to 1024)")
     p.add_argument("--L", type=int, help=f"the word interval L (default {L}; --small's 512)")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--checkpoint", help=f"{CHECKPOINT['repo']}'s snapshot directory at {CHECKPOINT['revision'][:10]} (B; "
