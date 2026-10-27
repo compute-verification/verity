@@ -873,13 +873,22 @@
    "type_hash": "2cfa1eed4accb530e3f5570ec5d41e4f81c6a09f60324b20fc5d5da711a012e2"
   },
   "Pous.Period.SecurityProofs.pooledShort_log": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log : Pous.Period.PooledShortLog"],
+   "assumptions": [],
+   "type_hash": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b"
   },
   "Pous.Period.SecurityProofs.pooledShort_log_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_honest : Pous.Period.PooledShortLog_honest"],
+   "assumptions": [],
+   "type_hash": "a166ec85423658dbf9ab96dee3c20618193b6c8e4315ea1abae1955f572dec6b"
   },
   "Pous.Period.SecurityProofs.pooledShort_log_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_nontrivial : Pous.Period.PooledShortLog_nontrivial"],
+   "assumptions": [],
+   "type_hash": "918e7292201b0d4ec19a1ad0f4586c158a191610851dd27f0b67962dda2bbd0f"
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
    "owner": "@memory-accounting",
@@ -4283,6 +4292,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -4728,6 +4738,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.Requirement.held",
     "Properties.Requirement.read",
     "Properties.Requirement.stepRegion"
@@ -4982,7 +4995,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Definitions.Accounting.JointBridge.CreditedWords": {
@@ -6292,7 +6308,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.Assumptions.P2": {
@@ -6314,7 +6332,8 @@
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldAt",
     "Pous.Period.SecurityProofs.periodHeldDemo",
-    "Pous.Period.SecurityProofs.periodHeldDeployed"
+    "Pous.Period.SecurityProofs.periodHeldDeployed",
+    "Pous.Period.SecurityProofs.pooledShort_log"
    ]
   },
   "Definitions.Pous.Game.Oracle": {
@@ -6353,7 +6372,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Definitions.Pous.Game.Prob": {
@@ -6382,6 +6404,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -6418,7 +6443,8 @@
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldAt",
     "Pous.Period.SecurityProofs.periodHeldDemo",
-    "Pous.Period.SecurityProofs.periodHeldDeployed"
+    "Pous.Period.SecurityProofs.periodHeldDeployed",
+    "Pous.Period.SecurityProofs.pooledShort_log"
    ]
   },
   "Definitions.Pous.Model.M1": {
@@ -6443,7 +6469,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.Model.M1p": {
@@ -6471,6 +6499,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
@@ -6506,7 +6537,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.Model.StreamedWipe": {
@@ -6531,7 +6564,9 @@
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
-    "Pous.Period.SecurityProofs.periodHeldHonest"
+    "Pous.Period.SecurityProofs.periodHeldHonest",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.P2.Cost": {
@@ -6598,7 +6633,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Definitions.Pous.P2.Mutable": {
@@ -6645,6 +6683,8 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
@@ -7129,6 +7169,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -7268,6 +7310,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -7474,6 +7518,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -7615,6 +7661,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -7708,6 +7756,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -8037,6 +8087,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8289,6 +8341,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -8338,6 +8392,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -8446,6 +8502,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
@@ -8523,7 +8580,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "MemoryChallenger.Judge": {
@@ -8556,7 +8615,7 @@
    ]
   },
   "MemoryChallenger.Records": {
-   "digest": "8dd851e22ad536c9f5ae02c29116b0844bddb6a56004d05056f9fb18fd467986",
+   "digest": "b0de27e95cf5082851d50a9369102a10e4ef64c0368e9a4b1ddace18a71d1f55",
    "definitions": {
     "MemoryChallenger.CLOCK": "c62d8ef353db15b9b0e1cb6626ff8f2a40800017bbb67c1c07366903bf25aac3",
     "MemoryChallenger.COIN_BINDING": "48cf245cc1cbab220a213486e0fb74d209689db0adae15e9e56f6743018ec505",
@@ -8617,6 +8676,8 @@
     "MemoryChallenger.header": "ba8ba493a6e94b378f7d5986e48ccac0461e2ae75b030f4defdb1227c8ba007d",
     "MemoryChallenger.instBEqSessionCommitment": "4b71f394bba101b8137e4b85a4480ae521fdf8901a68c3c1a6e6e7efba43b454",
     "MemoryChallenger.instBEqSessionCommitment.beq": "fc559134d62c8328730d4711c4732821d8255538575ae507ddf54f792ff45c86",
+    "MemoryChallenger.instInhabitedSessionCommitment": "f562164380665d3682bfa7502107482e6698b0824b2bfa631bc341d7e83de2ac",
+    "MemoryChallenger.instInhabitedSessionCommitment.default": "5ee7da6c329148556696c8ac54a53eb5ed7fbf615635f1413f923ce840797f1a",
     "MemoryChallenger.message": "c7f4d39c27b0c2b6d78b2e86ccd054863dff64347b17493c7816933ef495434b",
     "MemoryChallenger.pyJsonStr": "4b73401b7a9b129fc9ebbea967e554592113d2094c19b2745d3f71528320dbbd",
     "MemoryChallenger.recordsRoot": "353ee7187b7be14be7af950c97c84e69644730673bceab8a16a323e8a037bbec",
@@ -8647,7 +8708,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "MemoryChallenger.SignedMessage": {
@@ -8671,11 +8735,12 @@
     "Pous.Period.SecurityProofs.periodHeldAt",
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log"
    ]
   },
   "MemoryChallenger.Verdict": {
-   "digest": "31e763500bf324942f8d5579e4ba37a5aa2b1b703a0c2a229c0deb82428ce411",
+   "digest": "e00861e499354f37068407371abc101821130e4eb685fdf731eeb0029aaecb56",
    "definitions": {
     "MemoryChallenger.KNOWN_SCHEMES": "a9e423b941289e505c96985a3b431ba9ba0a7ba7ceb2c317450bd028b9fa0ab3",
     "MemoryChallenger.LMS": "adec2334cb4a7eb8ed19042a9400f4316cbfed9dd7c5589ebefdf78412f9d64a",
@@ -8693,6 +8758,8 @@
     "MemoryChallenger.Verdict": "9fdf3285abed057627ac0fa87f4122e84418b7073b3ea11fa99ce34054ee24ef",
     "MemoryChallenger.Verdict.accepted": "784f0ec84e7d2acbcc246cda142ba9efb1f614dc9e210bb869ccd8074169aab0",
     "MemoryChallenger.Verdict.reasons": "966c235026fe75780915223787dd5424778757d55801953d89f10006060bb5cc",
+    "MemoryChallenger.instInhabitedSignedSession": "78321aec9e577e16f501cba5fb1a9f5694864a99e935b0049aa26523519b7f30",
+    "MemoryChallenger.instInhabitedSignedSession.default": "5bd4af79877fd1c89356f1d05bd47da345822ae864bbd46c0a0d73775edb26d5",
     "MemoryChallenger.lmsVerify": "c0ebdb51213699179ff3229ef1192e756fcb4b72eca4d01e3c21e6bf3c2b1b48",
     "MemoryChallenger.pyRepr": "910b941de99f0673933b0e96b05ebe93ce61a92fa9ff3dbca15032aba45d7602",
     "MemoryChallenger.testScheme": "5ccf1c73c6c0c982ae0e66ad9a0c407f0cd9e994b099ef86a44b054235a4e4cb",
@@ -8713,7 +8780,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "NciCheck.Baseline": {
@@ -9626,6 +9695,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -9661,6 +9732,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -9689,6 +9762,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
@@ -9739,6 +9814,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.deployed",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
@@ -9763,6 +9840,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "PousCheck.Properties.SecurityProofs.deployed"
    ]
   },
@@ -9784,6 +9864,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -9844,7 +9926,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "PousCheck.Setup": {
@@ -9877,6 +9961,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -9916,6 +10001,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -11645,6 +11732,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.deployed",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
@@ -11709,7 +11798,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Properties.Pous.EndToEndAt": {
@@ -11796,7 +11888,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Properties.Pous.Obligation": {
@@ -11841,7 +11935,9 @@
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Properties.Pous.PeriodAt": {
@@ -11888,7 +11984,26 @@
    "guarantees": [
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
+   ]
+  },
+  "Properties.Pous.Pooled": {
+   "digest": "59878ee12ca2af574c1b93e9de879b7822a2e062bc4a272a401384bfc29ee4c7",
+   "definitions": {
+    "Pous.Period.FixedBefore": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c",
+    "Pous.Period.PooledShortLog": "f418a975384990bab09688029b56c681ff8b6894351f77c21eceeb5740261fb7",
+    "Pous.Period.PooledShortLog_honest": "9c9d262884d77dd347daf6ca15d853626586338627b17bd7fa8cfcca322b20f3",
+    "Pous.Period.PooledShortLog_nontrivial": "0381700be935c15956a9c8563d69ed9db7657fd4a1735e40b3770b13aab084f1",
+    "Pous.Period.ShortAccepted": "5f0c88920b892dd88e2a6b63b450bfb909c3a159e75657f068fdec14ac69b506",
+    "Pous.Period.acceptAll": "b5ad9aea4487fe1a74c195a20dda866bf3d84b8f972cbee2f55e0b88e8642d0d",
+    "Pous.Period.sidAudit": "8bbbf89f01c989f569a704473176c42b1fdea9eab4f7c199aa85595a60700ede"
+   },
+   "guarantees": [
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Properties.Pous.TimedAudit": {
@@ -11916,6 +12031,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
    ]
   },
