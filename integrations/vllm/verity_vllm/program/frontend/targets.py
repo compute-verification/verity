@@ -623,7 +623,7 @@ def softcapped(spec, cap: float):
     """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
     for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
     chain has a registered softcapped form (UnregisteredTarget)."""
-    from verity.ml.definitions.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
+    from verity.ml.definitions.registry import dense as DN, fa2_softcap as F2S
     body = {"Attention_v3": DN.AttentionSoftcap, "Attention_v5": F2S.AttentionSoftcapV2}.get(spec.base_id)
     if body is None:
         raise UnregisteredTarget(f"{spec.base_id} has no registered softcapped chain: a softcapped row is registered on the accepted target "
