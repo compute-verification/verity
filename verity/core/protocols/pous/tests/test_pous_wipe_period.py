@@ -393,6 +393,9 @@ def test_the_config_and_the_device_fit() -> None:
     assert W.segments_of(c | {"segments": 9}, Free(0)) == 9 and W.segments_of(W.CONFIG, WS.HostMemory()) == W.SEGMENTS
     with pytest.raises(RuntimeError, match="less than one segment"):
         W.segments_of(c, Free(W.SEGMENT_BYTES))
+    h200_after_context = Free(149_557_477_376)
+    assert W.segments_of(W.config({"wipe": {"store": "cuda"}}), h200_after_context) * W.SEGMENT_BYTES == 148_478_361_600
+    assert W.segments_of(W.config({"wipe": {"store": "cuda", "reserve_bytes": 64 << 20}}), h200_after_context) == 4455
 
 
 @pytest.mark.parametrize("k", [W.READS, 5231])

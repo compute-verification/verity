@@ -11,8 +11,9 @@
 #   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
 #                        run but the size and the placement (trusted-nebius-host unmet)
 #   --segments N         the fill in 32 MiB segments (default: the device's free memory less --reserve-gib; 64 dry)
-#   --reserve-gib G      device memory left out of the fill (default 1); the whole device is declared, so what the fill
-#                        doesn't reach counts in full in the published foreign_bits (R)
+#   --reserve-gib G      device memory left out of the fill (default 1; a fraction too: 0.0625 is MEM-95's 64 MiB,
+#                        r20261027-090125-7d5e); the whole device is declared, so what the fill doesn't reach counts in
+#                        full in the published foreign_bits (R)
 #   --reads K            the timed spot reads, which the certificate is computed at (default 2152; 5231 is the H200's
 #                        StreamedWipeMeets141GB5, r = 59): a challenger here is started with it; one on its own host
 #                        chooses its own (its --challenger-command's wipe_party --reads K), and the leg refuses a
@@ -193,7 +194,7 @@ for spec in filter(None, specs.splitlines()):
         sys.exit(f"demo.sh: --link is NAME=TO@VIA, not {spec!r}")
     links.append({"name": name, "to": to, "via": via})
 doc = {"tools": json.loads(tools),
-       "wipe": {"store": store, "segments": json.loads(segments), "reserve_bytes": int(reserve) << 30,
+       "wipe": {"store": store, "segments": json.loads(segments), "reserve_bytes": int(Fraction(reserve) * 2 ** 30),
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
                 "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
