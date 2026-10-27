@@ -129,7 +129,7 @@ class Producer:
         return art
 
     def live(self, run: str, summary: dict, stop: dict, *, rc=0) -> str:
-        """A kernels run: its run record holds sbench's summary and stop records under out/."""
+        """A live PoUW run: its run record holds sbench's summary and stop records under out/."""
 
         record = self._tree(run, {"out/summary.json": json.dumps(summary), "out/stop.json": json.dumps(stop)})
         self._attempt(run, "bash", {}, {"result": None, "run_record": record}, validation=None, rc=rc,
@@ -265,7 +265,7 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
 
 
 def _live_summary(steps, controls, *, live=True, tokens_equal=True):
-    """sbench's summary.json and stop.json for one PoUW arm beside its control, as kernels' runs write them."""
+    """sbench's summary.json and stop.json for one PoUW arm beside its control, as the live runs write them."""
 
     summary = {
         "arms": ["exact", LIVE_CONTROL, LIVE_ARM], "b": 32, "gate_failed": [], "ref_of": {LIVE_ARM: "exact"},

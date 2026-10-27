@@ -430,7 +430,7 @@ class TP2CaptureWorkerExtension:
                 return y
             return w
 
-        # [R15 moe TP-MOE-AR] the fused-MoE block's FINAL all-reduce (RowParallel-style reduction of the expert partials, one per MoE
+        # [R15 moe TP-MOE-AR] the fused-MoE layer's FINAL all-reduce (RowParallel-style reduction of the expert partials, one per MoE
         # layer per step) is issued from vLLM's fused_moe runner module through ITS OWN module-level import of
         # `tensor_model_parallel_all_reduce`, not from linear/vocab_parallel_embedding/logits_processor -- patching only those three left
         # every MoE all-reduce unrecorded (Qwen3-30B-A3B TP2 on 2x L40S: 50 recorded collectives per rank per step vs the rank Build's
@@ -452,7 +452,7 @@ class TP2CaptureWorkerExtension:
             if hasattr(mod, attr) and (mod.__name__, attr) not in wrapped:
                 wrapped.add((mod.__name__, attr))
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
-        for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
+        for mod, attr in FN.targets(model):      # DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
         # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`): each
         # Marlin MoE align call's schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl`
@@ -461,7 +461,7 @@ class TP2CaptureWorkerExtension:
 
         # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
-        # block's all-reduce is recorded at the outermost MoE module = the Program's module path (the same site the committer binds and
+        # layer's all-reduce is recorded at the outermost MoE module = the Program's module path (the same site the committer binds and
         # the site tp_links names) -- the site-identity criterion compares record.module to that path per k.
         st["cur_stack"] = []
 
@@ -555,11 +555,11 @@ class TP2CaptureWorkerExtension:
             com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
                                                  fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
             res["hidden_source"] = hidden_so
-        # [R15 moe TP-MOE-SRC] the fused-MoE block source (R13 MOE-03: router_w/ids, up, act, down, sum per MoE layer per step, class
+        # [R15 moe TP-MOE-SRC] the fused-MoE layer source (R13 MOE-03: router_w/ids, up, act, down, sum per MoE layer per step, class
         # moe_block_stream), attached exactly as commit_delta's `--moe-source auto` does: when the rank's model has MoE-runner modules.
         # Without it a TP MoE row's Commit binds no `moe/L<n>` plane (Qwen3-30B-A3B TP2 B2: 37 440 of 132 708 required identities per
         # rank unbound, coverage FAIL) -- the manifest requires the six planes per rank at shard widths, and this rank's kernel sees them.
-        # A manifest that names no plane is bound at the block's Calls (`moe_source`: `at_calls`).
+        # A manifest that names no plane is bound at the layer's Calls (`moe_source`: `at_calls`).
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 

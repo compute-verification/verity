@@ -7,18 +7,18 @@ encodings, carried as unsigned ints like the FP32 words of the other models; ope
 complement for s8).
 
 What the model rests on (``pinned`` in ``instructions``): one device, an RTX PRO 6000; no other sm_120 part has been
-probed.  Run r20261015-084000-06d8 (compute-accounting's IMMA probe) ran one ``mma.sync`` per tile in eight forms: s8/u8 x
+probed.  An IMMA probe ran one ``mma.sync`` per tile in eight forms: s8/u8 x
 s8/u8, with and without ``.satfinite``, each lowered to one ``IMMA.16832.<A>.<B>[.SAT]``.  Every form reproduces
 ``IntegerMma`` at its operand formats bit for bit on 10,243,968 words, with code -128, random and +-2^31-edge incoming
 accumulators, and 0.29M-1.1M words per form whose exact sum leaves s32.  ``.satfinite`` clamps once, at D: tiles whose products run past the range
 and come back within the instruction exclude a clamp after every product or every 2, 4, 8 or 16 products, in either k
 order (in each form with a signed operand; u8 x u8 sums only grow, so there every clamp point gives the same word).
-Without it, D wraps modulo 2^32.  An earlier library-kernel probe (run r20261015-071801-6d3c, CUTLASS ``i16832gemm_s8``
+Without it, D wraps modulo 2^32.  An earlier library-kernel probe (CUTLASS ``i16832gemm_s8``
 through ``torch._int_mm``) agrees: random int8 products exact to k = 133,120, and the s32 edge saturating.
 
 The datacenter cards compute the same function (`benchmarks/pouw/dc/s8_mma.py`, the same families at each instruction's tile).
-An H200 (sm_90a, run r20261019-043020-f267) ran ``wgmma.mma_async`` m64n8k32 (SASS ``IGMMA.64x8x32.<A>.<B>[.SAT]``) and
-``mma.sync`` m16n8k32; a B200 (sm_100a, run r20261019-042817-8fd3) ran ``tcgen05.mma.cta_group::1.kind::i8`` M128 N32 K32
+An H200 (sm_90a) ran ``wgmma.mma_async`` m64n8k32 (SASS ``IGMMA.64x8x32.<A>.<B>[.SAT]``) and
+``mma.sync`` m16n8k32; a B200 (sm_100a) ran ``tcgen05.mma.cta_group::1.kind::i8`` M128 N32 K32
 (SASS ``UTCIMMA``, the formats and the saturation in the instruction descriptor, its bit 3 ``.satfinite``) and ``mma.sync``
 m16n8k32.  Each of the eight forms of each instruction reproduces this module's step at its formats on every word, with the
 clamp at D.  `HOPPER_SM90_S8_K32` and `BLACKWELL_SM100_S8_K32` are that step under each architecture's name.

@@ -1,5 +1,5 @@
 """The suite's report: with ``CIRCUIT_CHECK_REPORT=path`` set, every target the suite checked is written there as one
-`verity-circuit-check/v1` report when the session ends (CI uploads it).  In an xdist worker, the circuit-checks the tests start
+`verity-circuit-check/v1` report when the session ends.  In an xdist worker, the circuit-checks the tests start
 keep to that worker's share of the suite's memory (`worker_slot_gb`).
 
 circuit-check's catalog (`Catalog`: `targets.suite()` and what its roots reach) is built once per session, and only for a test
@@ -100,7 +100,7 @@ def _from_records(cache: Path) -> Catalog | None:
     """The catalog from the bindings' records (`units.plan`), each suite target made along the path its record lists; None when
     no record counts or one is stale.  A target is taken as its record describes it, as `cli._planned` takes a target whose
     result it reuses: holding each one to its descriptor (`cache.descriptor`, as `cli._planned` does for one it checks) walks
-    all it reaches, which over the suite took longer than making it (past 15 minutes, against 426 s, r20261022-005352-48a5)."""
+    all it reaches, which over the suite takes longer than making it."""
     with pytest.MonkeyPatch.context() as mp:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
         mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}

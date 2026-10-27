@@ -601,7 +601,7 @@ def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
 
 @pytest.mark.parametrize("resident_failure", [None, "candidate"])
 def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedule_keeps_them(resident_failure):
-    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms (18 Oct, r20261018-215203-b81a):
+    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms:
     the count is a spec knob in the identity, each engine runs all of them before it times anything, and each warm-up's
     own summary stays in the schedule."""
 
@@ -762,7 +762,7 @@ def test_a_failed_token_gate_records_the_first_divergent_token():
 
 
 def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
-    """MEM-15: at b128-p8192 the audit arm's engine got a smaller KV pool than its plain twin's (its encoded store and
+    """At b128-p8192 the audit arm's engine got a smaller KV pool than its plain twin's (its encoded store and
     scratch shrink what vLLM's profiling leaves), vLLM scheduled the two arms differently once the point overran the
     pool, and the greedy tokens diverged. Equal pools are a precondition of the token gate, so unequal pools must fail
     loudly on their own, before any timing."""
@@ -956,7 +956,7 @@ def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_
 
 
 def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
-    """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
+    """`pouw:pearl-c-sm120-v1-h3` was refused before any engine started: the harness
     gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
@@ -1607,29 +1607,52 @@ def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_
     assert "2.000× (n=1)" in render(bench(reps=1))
 
 
+COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
+
+
+def _repo(tmp_path):
+    """A workspace checkout whose one commit, made at COMMITTED, is the commit the lookup reads its tree from."""
+
+    (repo := tmp_path / "repo").mkdir()
+    (repo / "uv.lock").write_text("lock\n")
+    (repo / "pyproject.toml").write_text("")
+    env = {**os.environ, "GIT_AUTHOR_DATE": f"@{COMMITTED} +0000", "GIT_COMMITTER_DATE": f"@{COMMITTED} +0000"}
+    subprocess.run("git init -q && git add . && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false "
+                   "commit -qm points", shell=True, cwd=repo, env=env, check=True)
+    return repo, subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+
+
+def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tree=None, tool="vllm_bench_point"):
+    """An attempt as `research run` records it from `repo` (from another commit's `tree`, or another `tool`)."""
+
+    from research import env
+    from research.store import derivation
+
+    source = {**env.source_identity(env.source_conditions(repo)), **({"tree": tree} if tree else {}), "dirty": dirty}
+    drv = derivation.derivation_id({"name": tool, "version": "0"}, {}, {"identity": identity}, {}, ["hw.gpu.family"])
+    return {"schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": "0"}, "derivation": drv,
+            "reuse_key": derivation.reuse_key(drv, source), "argv": [], "params": {"identity": identity}, "inputs": {},
+            "key_params": ["identity"], "conditions": {}, "key_conditions": [], "source": source, "closure": None,
+            "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"},
+            "cost": None, "status": {"state": "done", "rc": rc, "validation": validation}, "outputs": {}, "telemetry": None}
+
+
 def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_commit(tmp_path):
     """Red team, attacks 6 and 7: validation comes from result.json alone, so a run killed after writing it (rc 143,
     preempted) read as passed, and so did a run from a dirty tree, whose code its commit doesn't name."""
 
-    import sqlite3
+    from research.store.local import LocalStore
 
-    from research.store.index import SCHEMA
-
-    db = sqlite3.connect(tmp_path / "index.sqlite")
-    db.executescript(SCHEMA)
-    ident, commit = "f" * 64, "a" * 40
-    rows = [("passed-clean", "vllm_bench_point", "passed", 0, commit, 0, ident, "2026-10-18T01"),
-            ("preempted", "vllm_bench_point", "passed", 143, commit, 0, ident, "2026-10-18T02"),
-            ("dirty", "vllm_bench_point", "passed", 0, commit, 1, ident, "2026-10-18T03"),
-            ("failed", "vllm_bench_point", "failed", 3, commit, 0, ident, "2026-10-18T04"),
-            ("other-commit", "vllm_bench_point", "passed", 0, "b" * 40, 0, ident, "2026-10-18T05"),
-            ("other-point", "vllm_bench_point", "passed", 0, commit, 0, "e" * 64, "2026-10-18T06"),
-            ("other-tool", "something_else", "passed", 0, commit, 0, ident, "2026-10-18T07")]
-    for rid, tool, validation, rc, src, dirty, key, start in rows:
-        db.execute("INSERT INTO attempts (id, tool, validation, rc, source_commit, source_dirty, start_utc) "
-                   "VALUES (?,?,?,?,?,?,?)", (rid, tool, validation, rc, src, dirty, start))
-        db.execute("INSERT INTO attempt_params VALUES (?, 'identity', ?)", (rid, key))
-    assert db.execute(jobs.PASS_QUERY.format(identity=ident, commit=commit)).fetchall() == [("passed-clean",)]
+    (repo, commit), ident = _repo(tmp_path), "f" * 64
+    store, config = _stores(tmp_path, [_attempt("r20261021-130000-0001", ident, repo),
+                                       _attempt("r20261021-140000-0002", ident, repo),
+                                       _attempt("r20261021-150000-0003", ident, repo, rc=143),
+                                       _attempt("r20261021-160000-0004", ident, repo, dirty=True),
+                                       _attempt("r20261021-170000-0005", ident, repo, validation="failed", rc=3),
+                                       _attempt("r20261021-180000-0006", ident, repo, tree="b" * 40),
+                                       _attempt("r20261021-190000-0007", "e" * 64, repo),
+                                       _attempt("r20261021-200000-0008", ident, repo, tool="something_else")])
+    assert jobs.StoreCompletion(LocalStore(store, config_path=config), root=repo)(ident, commit) == "r20261021-140000-0002"
 
     root = Path(__file__).resolve().parents[3]
     spec = resolve_spec("llama31-8b-fp8-1gpu")
@@ -1638,15 +1661,6 @@ def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_
     identity = jobs.point_identity(spec.config_sha256, pins, point)
     assert identity != jobs.point_identity(spec.config_sha256, replace(pins, vllm_pin="0" * 40), point)
     assert identity != jobs.point_identity("0" * 64, pins, point)
-
-
-def _attempt(run, identity, commit, *, validation="passed", rc=0, dirty=False):
-    return {"schema": "research/attempt/v0.1", "id": run, "tool": {"name": "vllm_bench_point", "version": "0"},
-            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {"identity": identity},
-            "key_params": ["identity"], "inputs": {}, "conditions": {}, "key_conditions": [],
-            "source": {"commit": commit, "dirty": dirty}, "closure": None,
-            "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"},
-            "cost": None, "status": {"state": "done", "rc": rc, "validation": validation}, "outputs": {}, "telemetry": None}
 
 
 def _stores(tmp_path, remote_attempts):
@@ -1663,38 +1677,35 @@ def _stores(tmp_path, remote_attempts):
     return tmp_path / "local", config
 
 
-COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
-
-
 def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tmp_path):
     """BENCH-10: the lookup read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
     have launched them again). It pulls the remote's attempts since the commit, once, and nothing older."""
 
     from research.store.local import LocalStore
 
-    commit, found, absent, failed = "a" * 40, "1" * 64, "2" * 64, "3" * 64
+    (repo, commit), found, absent, failed = _repo(tmp_path), "1" * 64, "2" * 64, "3" * 64
     remote_attempts = [
-        _attempt("r20261021-130000-0001", found, commit),
-        _attempt("r20261021-140000-0002", failed, commit, validation="failed", rc=3),
-        _attempt("r20261018-120000-0003", absent, commit),  # before the commit's margin: never fetched
-        _attempt("r20261021-150000-0004", absent, "b" * 40),
+        _attempt("r20261021-130000-0001", found, repo),
+        _attempt("r20261021-140000-0002", failed, repo, validation="failed", rc=3),
+        _attempt("r20261018-120000-0003", absent, repo),  # before the commit's margin: never fetched
+        _attempt("r20261021-150000-0004", absent, repo, tree="b" * 40),
     ]
     root, config = _stores(tmp_path, remote_attempts)
     store = LocalStore(root, config_path=config)
     logged = []
-    lookup = jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED, log=logged.append)
+    lookup = jobs.StoreCompletion(store, root=repo, log=logged.append)
 
-    assert jobs.StoreCompletion(LocalStore(root, config_path=config), local_only=True)(found, commit) is None
+    assert jobs.StoreCompletion(LocalStore(root, config_path=config), root=repo, local_only=True)(found, commit) is None
     assert lookup(found, commit) == "r20261021-130000-0001"
     assert lookup(absent, commit) is None
     assert lookup(failed, commit) is None
     assert sorted(store.attempt_ids()) == ["r20261021-130000-0001", "r20261021-140000-0002", "r20261021-150000-0004"]
     assert logged == [f"pulled 3 attempts started since r20261020 from {store.remote.describe()} (0 of 3 were here)"]
 
-    later = _attempt("r20261021-160000-0005", absent, commit)
+    later = _attempt("r20261021-160000-0005", absent, repo)
     (tmp_path / "remote" / "attempts" / f"{later['id']}.json").write_bytes(json.dumps(later).encode())
     assert lookup(absent, commit) is None, "one pull per commit"
-    again = jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED, log=logged.append)
+    again = jobs.StoreCompletion(store, root=repo, log=logged.append)
     assert again(found, commit) == "r20261021-130000-0001" and len(logged) == 1, "a local hit reads no remote"
     assert again(absent, commit) == "r20261021-160000-0005"
     assert logged[-1].startswith("pulled 1 attempts") and logged[-1].endswith("(3 of 4 were here)")
@@ -1703,22 +1714,21 @@ def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tm
 def test_without_a_remote_the_lookup_refuses_unless_told_to_read_the_catalog_alone(tmp_path):
     from research.store.local import LocalStore
 
+    repo, commit = _repo(tmp_path)
     config = tmp_path / "store.toml"
     config.write_text("")
     store = LocalStore(tmp_path / "local", config_path=config)
     with pytest.raises(RuntimeError, match="--local-only"):
-        jobs.StoreCompletion(store, commit_time=lambda c: COMMITTED)("1" * 64, "a" * 40)
-    assert jobs.StoreCompletion(store, local_only=True)("1" * 64, "a" * 40) is None
+        jobs.StoreCompletion(store, root=repo)("1" * 64, commit)
+    assert jobs.StoreCompletion(store, root=repo, local_only=True)("1" * 64, commit) is None
 
 
 def test_check_on_a_fresh_store_counts_the_points_the_remote_holds(tmp_path, monkeypatch, capsys):
-    root = Path(__file__).resolve().parents[3]
-    commit = "a" * 40
+    repo, commit = _repo(tmp_path)
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", commit)
-    monkeypatch.chdir(root)
-    monkeypatch.setattr(jobs, "commit_time", lambda _root, _commit: COMMITTED)
-    points = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, lookup=lambda identity, commit: None).points
-    ran = [_attempt(f"r20261021-13000{i}-000{i}", item.identity, commit) for i, item in enumerate(points[1:])]
+    monkeypatch.chdir(repo)
+    points = jobs.make_plan("llama31-8b-fp8-1gpu", root=repo, lookup=lambda identity, commit: None).points
+    ran = [_attempt(f"r20261021-13000{i}-000{i}", item.identity, repo) for i, item in enumerate(points[1:])]
     store, config = _stores(tmp_path, ran)
     monkeypatch.setenv("RESEARCH_STORE", str(store))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(config))
@@ -1756,7 +1766,7 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
 
 
 def test_the_readme_states_the_contract_the_code_keeps():
-    """The README is the harness's contract (BENCH-3): every metric, gate kind, mode, schema and kind it names is the
+    """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
     code's, and the code has none it doesn't name."""
 
     from verity_bench.vllm import result as result_format
@@ -1781,7 +1791,7 @@ def test_the_readme_states_the_contract_the_code_keeps():
 
 def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):
     """The setup's TERM trap runs under `set -e`: a `kill` of an nvcc that already exited returns nonzero, and without a
-    guard the trap stopped there, exiting 1 and leaving its partial build in the shared cache (memory accounting, 19 Oct)."""
+    guard the trap stopped there, exiting 1 and leaving its partial build in the shared cache."""
 
     root = Path(__file__).resolve().parents[3]
     script = (root / "benchmarks/harness/setup/vllm_encoded.sh").read_text()
