@@ -1,6 +1,7 @@
 """The window circuit's units as `window_circuit` lowers a class Program into them: each template's units, allocated a slot
 at a time with each allocation's slots side by side (`_Builder.unit`), the rows each unit's ports read (`_Feed`), the
-gathers that make several writers' rows one (`AllGather_v1`, made once a run of rows), the weight reads, and `settle`:
+gathers that make several writers' rows one (`AllGather_v1`, made once a run of rows), the registered reads (the weights'
+and the scan state's), and `settle`:
 each port's cut within its unit's rows and every feed wired as `interface.Wire` patterns, one a run of rows from one
 writer's output at a constant unit step. A unit holds at most ``Grain.rows`` rows in and out, a gather's parts and its
 output among them.
@@ -205,13 +206,16 @@ class _Builder:
         self.params[name] = n
         return name, off
 
-    def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int]) -> None:
+    def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int],
+             param: str | None = None) -> None:
         """Units ``[at, at + Π radix)`` of ``tid`` read ``port`` from word ``base`` of the weights record on (``step`` words a
-        digit), as rows of their weight's registered parameter at the port's width (`weight`)."""
-        lay = IF.layout(self.fns[tid])
-        words = dict(lay.rows + lay.outs)[port]
-        param, lo = self.weight(base, base + words + sum((r - 1) * s for r, s in zip(radix, step)), words)
-        self.reads.append(IF.Read(tid, port, param, at=at, radix=tuple(radix), base=lo, step=tuple(step)))
+        digit), as rows of their weight's registered parameter at the port's width (`weight`); from word ``base`` of
+        registered parameter ``param`` when given."""
+        if param is None:
+            lay = IF.layout(self.fns[tid])
+            words = dict(lay.rows + lay.outs)[port]
+            param, base = self.weight(base, base + words + sum((r - 1) * s for r, s in zip(radix, step)), words)
+        self.reads.append(IF.Read(tid, port, param, at=at, radix=tuple(radix), base=base, step=tuple(step)))
 
     def value(self, tid: str, port: str, at: int, param: str, row: int, rows: int) -> None:
         """Unit ``at`` of ``tid`` reads ``port`` as row ``row`` of the registered parameter ``param``, ``rows`` rows of the

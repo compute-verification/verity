@@ -16,8 +16,8 @@ namespace Accounting.Assumptions.TS
 
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Held Accounting.TS.Tile Flock.SoundAtBridge
 
-/-- `accounting-ts-tile-checks` (a fact of `PouwH1TileZy_v1`'s circuit, to be computed by a check; owner
-@compute-accounting). **A tile session's circuit computes its Definition at its decoded ports**: at the session `s`,
+/-- `accounting-ts-tile-checks` (a fact of `PouwH1TileZy_v1`'s circuit, to be computed by a check).
+**A tile session's circuit computes its Definition at its decoded ports**: at the session `s`,
 at a `K` the tile binds at (`32 ∣ K` and `K < 2^17`, `GemmAccumulatorS8`'s bind, which refuses any other; from `2^17`
 a step of its s8 accumulator can clamp, so `z` need not be the exact dot), for every wire assignment `vals` that the
 key program's evaluation (`Circuit.eval`) agrees with on every wire of unit

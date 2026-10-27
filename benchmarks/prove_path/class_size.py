@@ -6,8 +6,10 @@ Llama-3.2-1B is 46,028,317 units, and the class's 8 take a pod some 22 minutes a
 projection (`project`) from an exact lowering of one Program of the same registration at a small probe class within one
 key block, which the tests hold to the exact lowering past one block and two, and at the class of record itself:
 
-* every template but the heads and their key gathers is a fixed number of units a position (`TokenFeed_v1` a prompt
-  position, `SlotRow_v1` one a Program), read off the probe, which is refused unless each divides evenly;
+* every template but the heads and their key gathers is a fixed number of units a position (`projected`), a slot's where
+  it places them (`placed`: `TokenFeed_v1` a prompt position; `ScanSlots_v1`, at the class's scan state row, `SlotRow_v1`
+  and `SlotEntry_v1` one a Program; `OutCollect_v1` one a position, its first the first's), read off the probe, which is
+  refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
   ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). Its
@@ -29,7 +31,10 @@ import json
 import math
 from collections import Counter
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
+
+from verity_vllm.program.predict import scan_state as SS
 
 from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
 
@@ -38,6 +43,9 @@ END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
 ROW = "SlotRow_v1"
+SCAN = "ScanSlots_v1"
+COLLECT = "OutCollect_v1"
+ENTRY = "SlotEntry_v1"
 GATHER = "AllGather_v1"
 
 
@@ -49,6 +57,12 @@ def label(fn: Any) -> str:
 def statics(lab: str) -> tuple[str, dict[str, Any]]:
     fam, _, body = lab.partition("{")
     return fam, {k: json.loads(v) for k, v in (kv.split("=") for kv in body.rstrip("}").split(",") if kv)}
+
+
+def _relabel(lab: str, **at: Any) -> str:
+    """``lab`` with the statics ``at`` names set to theirs, where it has them."""
+    fam, s = statics(lab)
+    return fam + "{" + ",".join(f"{k}={json.dumps(at.get(k, v))}" for k, v in s.items()) + "}"
 
 
 def census(circuit: Any) -> dict[str, int]:
@@ -63,6 +77,37 @@ def _one(xs: list[Any], what: str) -> Any:
     if len(set(xs)) != 1:
         raise ValueError(f"the probe's heads differ in {what}: {sorted(set(xs))}")
     return xs[0]
+
+
+def placed(lab: str, T: int, P: int) -> int | None:
+    """A Program's units of template ``lab`` at position T of its P, for a slot's template: `TokenFeed_v1` at each of its NP
+    prompt positions (its first the first's), `ScanSlots_v1` and `SlotRow_v1` at the first, `SlotEntry_v1` at the last and
+    `OutCollect_v1` at each (its first the first's); None for any other, a fixed count at every position."""
+    fam, s = statics(lab)
+    if fam == FEED:
+        return int(T == 1) if s["FIRST"] else int(1 < T <= s["NP"])
+    if fam in (SCAN, ROW):
+        return int(T == 1)
+    if fam == ENTRY:
+        return int(T == P)
+    if fam == COLLECT:
+        return int(T == 1) if s["FIRST"] else int(T > 1)
+    return None
+
+
+def projected(lab: str, n: int, at: Any, cls: Any) -> tuple[str, int]:
+    """A template outside the heads, ``n`` units of one Program at the probe's class ``at``, as one Program at class ``cls``
+    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v1` at its scan state row) and
+    `placed`'s units there, any other the probe's fixed count a position at each of the class's, refused unless ``n`` is
+    the probe's by that rule."""
+    if placed(lab, 1, at.positions) is None:
+        if n % at.positions:
+            raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {at.positions} positions")
+        return lab, n // at.positions * cls.positions
+    if n != (want := sum(placed(lab, T, at.positions) or 0 for T in range(1, at.positions + 1))):
+        raise ValueError(f"the probe has {n} {lab} units, not the {want} its slot places")
+    to = label(SS.bridge(cls.scan, cls.prompt)) if lab.startswith(SCAN + "{") else _relabel(lab, NP=cls.prompt, KO=cls.outputs)
+    return to, sum(placed(to, T, cls.positions) or 0 for T in range(1, cls.positions + 1))
 
 
 def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
@@ -91,19 +136,8 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
         rest[key] -= G
     out: Counter[str] = Counter()
     for lab, n in rest.items():
-        fam, s = statics(lab)
-        if fam == FEED:
-            out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1 if s["FIRST"] else cls.prompt - 1
-            if n != (1 if s["FIRST"] else NP0 - 1):
-                raise ValueError(f"the probe has {n} {lab} units, not one a prompt position")
-        elif fam == ROW:
-            out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1
-            if n != 1:
-                raise ValueError(f"the probe has {n} {lab} units, not one a Program")
-        elif n % P0:
-            raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {P0} positions")
-        elif n:
-            out[lab] += n // P0 * P
+        to, k = projected(lab, n, at, cls)
+        out[to] += k
     for T in range(1, P + 1):
         nb, mf = -(-T // BN), fa2_masked_from(T, 1, 0, BN, False)
         nvis = T - (nb - 1) * BN
@@ -116,38 +150,45 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
+#: the sources that cite a run, an artifact or a change, kept as data (``sources.json``): ``composed`` and ``rows_3``, a
+#: unit's by its label (``measured``) and a family's that `measured` prices past `MEASURED` (``families``)
+SOURCES: dict[str, Any] = json.loads(Path(__file__).resolve().with_name("sources.json").read_text())
 #: the compositions of the blocks this estimate scaled or interpolated, each staged by C-Flock's `UnitStager` at V3b's
 #: cuts
-COMPOSED = ("circuits' compositions r20261025-183214-951f, r20261025-183237-6217 and r20261025-183911-2915 "
-            "(art:65bc8cddf39ec0076f17c19b4e13a74ad26554736b531b43fe6063f778cdcaf3)")
-#: ANDs and k_log a unit at Llama-3.2-1B, each with its source: k_log is CIR-95's table at its cut reads
-#: (note:circuits/20261024T0443Z-report-windows-advice-windows, r20261025-093758-baf3) unless said otherwise
-MEASURED: dict[str, tuple[int, int, str]] = {
-    "EmbeddingRead_v1{V=128256,H=2048}": (5_392_976, 25, "#4227's table (ANDs and block)"),
-    "RMSNormTriton_v5{N=2048}": (9_416_444, 25, "r20261025-072237-b8e3"),
-    "RMSNormFusedCuda_v2{N=2048}": (10_474_114, 27, "r20261025-072834-bd85; k_log the post-attention norm's (x cut 128), the "
-                                    "input and final norms' (x cut 4) 25"),
-    "Gemm_v2{K=2048,N=16}": (16 * 1_053_595, 27, "scaled: 16 × Gemm_v2{K=2048,N=1}'s, r20261025-072834-bd85"),
-    "Gemm_v2{K=8192,N=4}": (4 * 4_215_067, 27, "scaled: 4 × Gemm_v2{K=8192,N=1}'s, r20261025-072834-bd85"),
-    "Gemm_v2{K=2048,N=1}": (1_053_595, 24, "r20261025-072834-bd85"),
+COMPOSED: str = SOURCES["composed"]
+#: the source of a scan slot unit circuit-check lowered whole, of 3 rows in and out
+ROWS_3: str = SOURCES["rows_3"]
+#: ANDs and k_log a unit at Llama-3.2-1B, each with its source (None: its label's in `SOURCES`): k_log is the cut reads'
+#: table unless said otherwise
+MEASURED: dict[str, tuple[int, int, str]] = {lab: (ands, k, SOURCES["measured"][lab] if src is None else src)
+                                             for lab, (ands, k, src) in {
+    "EmbeddingRead_v1{V=128256,H=2048}": (5_392_976, 25, None),
+    "RMSNormTriton_v5{N=2048}": (9_416_444, 25, None),
+    "RMSNormFusedCuda_v2{N=2048}": (10_474_114, 27, None),
+    "Gemm_v2{K=2048,N=16}": (16 * 1_053_595, 27, None),
+    "Gemm_v2{K=8192,N=4}": (4 * 4_215_067, 27, None),
+    "Gemm_v2{K=2048,N=1}": (1_053_595, 24, None),
     "RoPEHead_v1{D=64}": (191_872, 22, COMPOSED + ", x cut 4"),
-    "SiluMul_v2{I=8192}": (8192 * 1380, 26, "8,192 × SiluMulBf16_v4's 1,380 (circuits-bool-silu)"),
+    "SiluMul_v2{I=8192}": (8192 * 1380, 26, None),
     "TokenSelectChunk_v2{C=768}": (91_823, 22, COMPOSED),
     "TokenSelectCombine_v2{V=128256,C=768}": (27_355, 27, COMPOSED + ", idx cut 167"),
-    "AttnHeadEnd_v1{D=64}": (169_842, 22, "#4263, r20261025-123346-091b"),
-    "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, "#4263, r20261025-123346-091b"),
-    "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, "CHECK=false's (#4263, r20261025-123346-091b), "
-                                                                   "which circuits found it equal to"),
-}
+    "AttnHeadEnd_v1{D=64}": (169_842, 22, None),
+    "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, None),
+    "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, None),
+    "ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (0, 23, None),
+    "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
+    "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
+    "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, None),
+}.items()}
 #: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where the heads' run (NVIS 1, 17, 128) and the compositions (`COMPOSED`)
 #: composed it, linear between
 FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 571_031, 12: 843_099, 14: 979_101, 15: 1_047_070,
                 16: 1_115_295, 17: 1_231_456, 24: 1_708_199, 32: 2_252_527, 33: 2_368_688, 34: 2_436_657, 36: 2_573_043,
                 40: 2_845_431, 48: 3_389_759, 64: 4_526_991, 80: 5_664_223, 88: 6_257_127, 90: 6_393_065, 92: 6_529_131,
                 96: 6_801_455, 112: 7_938_687, 128: 9_075_919}
-#: its k_log: (the last NVIS at it, k_log), the steps circuits bisected to adjacent NVIS
+#: its k_log: (the last NVIS at it, k_log), its steps bisected to adjacent NVIS
 FIRST_K = ((4, 22), (15, 23), (33, 24), (90, 25), (128, 26))
-#: `TokenFeed_v1{NP}`'s k_log as circuits composed it: (the most NP, k_log), an upper bound below a composed NP
+#: `TokenFeed_v1{NP}`'s k_log as composed: (the most NP, k_log), an upper bound below a composed NP
 FEED_K = ((1024, 23), (2048, 24))
 #: C-Flock's largest block, 2^27 bits (`verity_flock.circuit.K_MAX`)
 K_MAX = 27
@@ -155,7 +196,7 @@ K_MAX = 27
 
 def rows_k(rows: int) -> int:
     """The least k_log of a unit of ``rows`` rows in and out: C-Flock's composer gives each an hm96 slot, the slots rounded up
-    to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every `AllGather_v1{W, 64}` circuits composed
+    to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every `AllGather_v1{W, 64}` composed
     (W 2 to 128) and `{64, 16}` take exactly this at their W + 1 rows (`COMPOSED`), so a gather of 256 parts takes 2^28."""
     return max(22, 19 + (rows - 1).bit_length())
 
@@ -165,21 +206,22 @@ def measured(lab: str) -> tuple[int, int, str]:
     if lab in MEASURED:
         return MEASURED[lab]
     fam, s = statics(lab)
+    by = SOURCES["families"]
     if fam == GATHER and s["WORLD"] >= 2:
         return 0, rows_k(s["WORLD"] + 1), f"a copy (b1_tp2); k_log its {s['WORLD'] + 1} rows' (rows_k)"
     if fam == "AttnBlockFirst_v1" and (s["D"], s["BN"]) == (64, 128) and 1 <= s["NVIS"] <= 128:
         v, (lo, hi) = s["NVIS"], next((a, b) for a, b in zip(FIRST_BLOCKS, list(FIRST_BLOCKS)[1:]) if s["NVIS"] <= b)
         ands = round(FIRST_BLOCKS[lo] + (FIRST_BLOCKS[hi] - FIRST_BLOCKS[lo]) * max(v - lo, 0) / (hi - lo))
         k = next(k for last, k in FIRST_K if v <= last)
-        return ands, k, "#4263 (r20261025-123346-091b) and " + COMPOSED + ("" if v in FIRST_BLOCKS else ": ANDs interpolated")
+        return ands, k, by[fam] + " and " + COMPOSED + ("" if v in FIRST_BLOCKS else ": ANDs interpolated")
     if fam == FEED and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
-        return 30 if s["FIRST"] else 62, k, "circuit-check r20261025-174007-faec; k_log " + COMPOSED + (
+        return 30 if s["FIRST"] else 62, k, by[fam] + "; k_log " + COMPOSED + (
             "" if s["NP"] in dict(FEED_K) else ", an upper bound")
     if fam == ROW and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
-        return 0, k, ("a copy (circuit-check r20261026-172423-b1a4); k_log an estimate, not composed: TokenFeed_v1{NP, "
+        return 0, k, ("a copy (" + by[fam] + "); k_log an estimate, not composed: TokenFeed_v1{NP, "
                       "FIRST=true}'s, whose rows it holds but for one i32 more")
     if lab == "SlotMask_v1{}":
-        return 32, 22, "circuit-check r20261026-172423-b1a4; k_log the least block, its 3 rows of one i32 each"
+        return 32, 22, by[fam] + "; k_log the least block, its 3 rows of one i32 each"
     raise ValueError(f"no measured ANDs or k_log for {lab} at Llama-3.2-1B: add its measurement to MEASURED")
 
 

@@ -35,8 +35,8 @@ bits of run input (the word itself, sent after the draw).
 
 **The floor.** It is claimed at `ε ≥ 2^−64` (`εden ≤ 2^64 · εnum`), `k ≥ 1`, `p ≥ 2^66` and `p ≡ 3 mod 4`, and says
 nothing outside them; every reader carries them. Below each, a circuit with no budgeted gate computes a word, so the
-bound fails at every `E ≥ 1` (the red team's counterexamples; the examples
-after `EncodeCost` in `Proofs/Accounting/Gates.lean` put them outside the floor):
+bound fails at every `E ≥ 1` (known counterexamples; the examples after `EncodeCost` in `Proofs/Accounting/Gates.lean`
+put them outside the floor):
 
 * at `ε = 0`, the constant bytes of one draw's target are right on that draw;
 * at `k = 0` the encoding is the payload word itself, registered before the draw;
@@ -67,9 +67,9 @@ exponentiation (as Sloth's sequentiality) and no amortization across words. At `
 
 **The restriction is `B`.** It is false without one: a budgeted gate that reads a word's bits computes a byte of its
 root, so a word costs about `k·n/32 + n/8` gates (224 at p1024, `k = 3`). property/v1's listed primitives read at most
-96 operand bits; the falsification test's constructions (ripple carries, the red team's IMMA plus `I32Div`/`I32Rem`,
-and look-ahead carries) are within `B = 128`, and spend at least `L − d(0)` units a squaring. Which `B` is safe is
-open: a test at toy `n` with `B/n` fixed would settle the trend.
+96 operand bits; the falsification test's constructions (ripple carries, IMMA plus `I32Div`/`I32Rem`, and look-ahead
+carries) are within `B = 128`, and spend at least `L − d(0)` units a squaring. Which `B` is safe is open: a test at toy
+`n` with `B/n` fixed would settle the trend.
 
 **Units, and why a gather over run-time values pays one.** A gate that reads only registered values and constants is
 free (it computes one value on every draw), and a gather pays its fresh index bits, `⌈log₂ (V + 1)⌉` for a column

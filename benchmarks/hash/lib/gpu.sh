@@ -3,7 +3,7 @@
 # every node shows all three build), and the workspace's Python. Under one lease: the conformance (conformance.py) on this GPU,
 # then (BENCH=1) the performance gate (bench/bench.sh, its own lease).
 #
-#   research run --on vy-dc-h200 --project verity --campaign hash-loop --source . --cwd source --env GPU_LEASE_WHO=kernels-lib \
+#   research run --on vy-dc-h200 --project verity --campaign hash-loop --source . --cwd source --env GPU_LEASE_WHO=WHO \
 #     -- bash benchmarks/hash/lib/gpu.sh
 # LEASE_ARGS (--preemptible on vy-nebius-2), QUICK=1 (conformance --quick), BENCH=1
 set -uo pipefail
