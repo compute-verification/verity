@@ -269,8 +269,9 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
     `want` the record's F128 hex its coins' bytes must begin with: its link points, of family `slot/<slot>/session`
     after the SHA-512 of its tables' `link.root_b_sha512` digests in key order, then each stream's rounds in the
     record's order, of family `slot/<slot>/<stream>` after the round's ``msg_sha512``; ceil(n/4) coins of 64 bytes for
-    n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Raises
-    ValueError with Lean's reason."""
+    n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Lean
+    reads them (`usesOf`) only once the record's streams and rounds are what `_rounds_ok` asks. Raises ValueError with
+    Lean's reason."""
     j = json.loads(record)
     link = j.get("link") if isinstance(j, dict) else None
     pts_j = link.get("points") if isinstance(link, dict) else None
@@ -307,7 +308,47 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
                 raise ValueError(f"record: a round of {name}'s msg_sha512 is not 64 bytes of hex")
             cs = _hexes(r.get("coins"), f"the coins of a round of {name}")
             out.append((f"slot/{slot}/{name}", _unhex(sha), (len(cs) + 3) // 4, cs))
+    _rounds_ok(streams)
     return out
+
+
+#: Lean `OneStageZk.STREAMS`: the statement's one table's two rep streams, the only streams a record may hold.
+STREAMS = ("circuit/rep0", "circuit/rep1")
+
+
+def squeeze_count(x: bytes) -> int | None:
+    """Lean `OneStageZk.squeezeCount`: the coin count of the squeeze header a round message ends in (op 4, the coin's
+    kind, six zero bytes, the count as eight bytes little-endian); None when it ends in none."""
+    if len(x) < 16 or x[-16] != 4:
+        return None
+    return int.from_bytes(x[-8:], "little")
+
+
+def _rounds_ok(streams: list) -> None:
+    """Lean `OneStageZk.roundsOk`, on a record `session_uses` has read: each stream one of `STREAMS`, none named twice,
+    each round's retained ``msg`` its ``msg_sha512``'s and ending in the squeeze header of its coins."""
+    seen: set[str] = set()
+    for s in streams:
+        name = s["stream"]
+        if name not in STREAMS:
+            raise ValueError(f"record: a stream is named {name}, not a rep stream of the statement's table")
+        if name in seen:
+            raise ValueError(f"record: two streams are named {name}")
+        seen.add(name)
+        for r in s["rounds"]:
+            cs = r["coins"]
+            m = r.get("msg")
+            if type(m) is not str:
+                raise ValueError(f"record: a round of {name} retains no msg")
+            try:
+                msg = _unhex(m)
+            except ValueError:
+                raise ValueError(f"record: a round of {name}'s msg is not hex") from None
+            if hashlib.sha512(msg).digest() != _unhex(r["msg_sha512"]):
+                raise ValueError(f"record: a round of {name}'s msg is not its msg_sha512's")
+            if squeeze_count(msg) != len(cs):
+                raise ValueError(
+                    f"record: a round of {name}'s msg does not end in the squeeze header of its {len(cs)} coins")
 
 
 def uses_v2(slot: int, record: Path) -> dict:
@@ -341,6 +382,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2",
-           "executable", "file_sha512", "proved_units", "reads_registered", "session_uses", "uses_v2", "v2_executable",
-           "verdicts_v2", "verify"]
+__all__ = ["EXE", "PACKAGE", "STATEMENT", "STREAMS", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2",
+           "evidence_v2", "executable", "file_sha512", "proved_units", "reads_registered", "session_uses",
+           "squeeze_count", "uses_v2", "v2_executable", "verdicts_v2", "verify"]

@@ -403,11 +403,24 @@ def pointsAfter (link : Json) : V ByteArray := do
     | _ => throw s!"record: link.root_b_sha512.{t} is not 64 bytes of hex"
   return Flock.Sha512.hash (ds.foldl (· ++ ·) .empty)
 
-/-- Session `slot`'s uses of the challenger's coins, each with the coins (as the record's F128 hex) its bytes must
-begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`, then each stream's rounds in the
-record's order, of family `slot/<slot>/<stream>` after the round's `msg_sha512` (`Round.sha`); `⌈n/4⌉` coins of 64
-bytes for `n` F128s. -/
-def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
+/-- The streams a session's record may hold: its statement's one table's two reps (`Flock.Tags.tableNames` at the one
+table `inputsOf` sets up), the rep streams `Flock.Record.decode` requires. -/
+def STREAMS : Array String :=
+  match Flock.Tags.find? STATEMENT with
+  | some t => (t.tableNames 1).flatMap fun n => #[n ++ "/rep0", n ++ "/rep1"]
+  | none => #[]
+
+/-- A round message's coin count: the count its squeeze header frames last (`Flock.Transcript.framed`: op `4`, the
+coin's kind, six zero bytes, then the count in eight bytes little-endian); none when it ends in no such header. -/
+def squeezeCount (x : ByteArray) : Option Nat :=
+  if x.size < 16 ∨ x.get! (x.size - 16) ≠ 4 then none
+  else some ((List.range 8).foldl (fun acc i => acc + (x.get! (x.size - 8 + i)).toNat * 256 ^ i) 0)
+
+/-- Session `slot`'s uses of the challenger's coins as its record lists them, each with the coins (as the record's
+F128 hex) its bytes must begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`, then each
+stream's rounds in the record's order, of family `slot/<slot>/<stream>` after the round's `msg_sha512` (`Round.sha`);
+`⌈n/4⌉` coins of 64 bytes for `n` F128s. -/
+def usesOf (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
   let j ← (Flock.JsonParse.parse record).mapError (s!"record: not JSON: {·}")
   let link := getD j "link"
   let .arr ps := getD link "points" | throw "record: link.points is not a list"
@@ -425,6 +438,36 @@ def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Arra
       let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
       out := out ++ [({ label := Hello.slotStream slot name, after := ← Flock.unhex sha, coins := (cs.size + 3) / 4 }, cs)]
   return out
+
+/-- Why the record's streams and rounds are not what the coins' families and counts are read from; none when they are:
+each stream one of `STREAMS`, none named twice, and each round's retained message (`msg`) its `msg_sha512`'s, ending
+in the squeeze header of its coins (`squeezeCount`). `Flock.Record.decode` and the replay require as much of a record
+`--zk` accepts. -/
+def roundsOk (record : String) : V Unit := do
+  let j ← (Flock.JsonParse.parse record).mapError (s!"record: not JSON: {·}")
+  let .arr ss := getD j "streams" | throw "record: streams is not a list"
+  let mut seen : Array String := #[]
+  for s in ss do
+    let .str name := getD s "stream" | throw "record: a stream's name is not a string"
+    unless STREAMS.contains name do throw s!"record: a stream is named {name}, not a rep stream of the statement's table"
+    if seen.contains name then throw s!"record: two streams are named {name}"
+    seen := seen.push name
+    let .arr rs := getD s "rounds" | throw s!"record: {name}'s rounds are not a list"
+    for r in rs do
+      let .str sha := getD r "msg_sha512" | throw s!"record: a round of {name} has no msg_sha512"
+      let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
+      let .str m := getD r "msg" | throw s!"record: a round of {name} retains no msg"
+      let msg ← (Flock.unhex m).mapError fun _ => s!"record: a round of {name}'s msg is not hex"
+      if Flock.Sha512.hash msg != (← Flock.unhex sha) then throw s!"record: a round of {name}'s msg is not its msg_sha512's"
+      if squeezeCount msg != some cs.size then
+        throw s!"record: a round of {name}'s msg does not end in the squeeze header of its {cs.size} coins"
+
+/-- Session `slot`'s uses of the challenger's coins (`usesOf`), once its record's streams and rounds are what they are
+read from (`roundsOk`). -/
+def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
+  let us ← usesOf slot record
+  roundsOk record
+  return us
 
 /-- Why the coins `ξ` don't begin with the F128s `want` (record hex, `{hi:016x}{lo:016x}`, 16 bytes each); none when
 they do. -/
@@ -558,10 +601,26 @@ def main (args : List String) : IO UInt32 := do
 #guard (provedUnits "{\"units\":{\"indices\":[7,3,9]}}\nrest".toUTF8 "{\"unit_draw\":{\"units\":[2,0]}}").toOption
   == some #[7, 9]
 #guard (provedUnits "{\"units\":{\"indices\":[7]}}".toUTF8 "{\"unit_draw\":{\"units\":[1]}}").toOption.isNone
-#guard ((sessionUses 1 ("{\"link\":{\"points\":[[\"" ++ "aa".pushn 'a' 30 ++ "\"]],\"root_b_sha512\":{\"t\":\"" ++
+#guard ((usesOf 1 ("{\"link\":{\"points\":[[\"" ++ "aa".pushn 'a' 30 ++ "\"]],\"root_b_sha512\":{\"t\":\"" ++
     "".pushn '0' 128 ++ "\"}},\"streams\":[{\"stream\":\"t/rep0\",\"rounds\":[{\"msg_sha512\":\"" ++ "".pushn '1' 128 ++
     "\",\"coins\":[\"a\",\"b\",\"c\",\"d\",\"e\"]}]}]}")).toOption.map
     (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/1/session", 1, 1), ("slot/1/t/rep0", 2, 5)]
+#guard STREAMS == #["circuit/rep0", "circuit/rep1"]
+#guard squeezeCount (Flock.Transcript.header 4 1 300) == some 300
+#guard squeezeCount (ByteArray.mk #[0] ++ Flock.Transcript.header 4 1 7) == some 7
+#guard squeezeCount (Flock.Transcript.header 3 1 7) == none
+#guard squeezeCount (ByteArray.mk (Array.replicate 15 4)) == none
+
+/-- A record with no link points and one round on `stream`, its retained message `msg` and `n` coins. -/
+private def recordOf (stream : String) (msg : ByteArray) (n : Nat) : String :=
+  "{\"link\":{\"points\":[],\"root_b_sha512\":{}},\"streams\":[{\"stream\":\"" ++ stream ++
+    "\",\"rounds\":[{\"msg_sha512\":\"" ++ Flock.hexOf (Flock.Sha512.hash msg) ++ "\",\"msg\":\"" ++ Flock.hexOf msg ++
+    "\",\"coins\":[" ++ ",".intercalate (List.replicate n "\"00\"") ++ "]}]}]}"
+
+#guard ((sessionUses 0 (recordOf "circuit/rep1" (Flock.Transcript.header 4 1 5) 5)).toOption.map
+  (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/0/session", 0, 0), ("slot/0/circuit/rep1", 2, 5)]
+#guard (sessionUses 0 (recordOf "circuit/rep1" (Flock.Transcript.header 4 1 4) 5)).toOption.isNone
+#guard (sessionUses 0 (recordOf "t/rep0" (Flock.Transcript.header 4 1 5) 5)).toOption.isNone
 #guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
 #guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 

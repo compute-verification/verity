@@ -791,10 +791,9 @@ def bytesOfRequest (b : ByteArray) : ByteArray :=
 coin's kind, six zero bytes, then the count in eight bytes little-endian). The verifier asks a round for exactly that
 many coins after exactly those bytes (`Flock.Transcript.squeeze`), and the device serves one coin a request with no
 count of its own (`PlayDevice.served`), so the count is the message's: a record round whose message has the request's
-digest carries it, or the two messages are a collision. -/
-def coinCountOf (x : ByteArray) : Option ℕ :=
-  if x.size < 16 ∨ x.get! (x.size - 16) ≠ 4 then none
-  else some ((List.range 8).foldl (fun acc i => acc + (x.get! (x.size - 8 + i)).toNat * 256 ^ i) 0)
+digest carries it, or the two messages are a collision. It is the count v2 refuses a record round without
+(`OneStageZk.squeezeCount`, `OneStageZk.roundsOk`). -/
+def coinCountOf (x : ByteArray) : Option ℕ := SampledProofs.OneStageZk.squeezeCount x
 
 /-- A round request's table, rep and coin count: its stream's (`streamOf`, from the label `slot/0/<stream>`) and its
 message's (`coinCountOf`). -/

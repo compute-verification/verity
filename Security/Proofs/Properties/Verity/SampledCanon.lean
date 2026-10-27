@@ -306,6 +306,22 @@ theorem loop_mono {α σ ε : Type} (R : σ → σ → Prop) (hrefl : ∀ s, R s
     | done b => cases hn; exact h1
     | yield b => exact htrans _ _ _ h1 (loop_mono R hrefl htrans f hf l b s' hn)
 
+/-- A session's uses are its record's (`usesOf`), and its record's streams and rounds are what they are read from
+(`roundsOk`). -/
+theorem usesOf_of_sessionUses {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : sessionUses slot record = .ok us) : usesOf slot record = .ok us ∧ roundsOk record = .ok () := by
+  unfold sessionUses at h
+  cases hu : usesOf slot record with
+  | error e => simp [hu, bind, Except.bind] at h
+  | ok us' =>
+    cases hr : roundsOk record with
+    | error e => simp [hu, hr, bind, Except.bind] at h
+    | ok u =>
+      simp only [hu, hr, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      cases u
+      exact ⟨rfl, rfl⟩
+
 /-- Every use session `slot` makes of the challenger's coins is of one of its own families, `slot/<slot>/…`. -/
 theorem sessionUses_label {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
     (h : sessionUses slot record = .ok us) : ∀ x ∈ us, ∃ n, x.1.label = Hello.slotStream slot n := by
@@ -317,7 +333,8 @@ theorem sessionUses_label {slot : Nat} {record : String} {us : List (Challenger.
     rcases List.mem_append.1 hx with hx | hx
     · exact ha x hx
     · rw [List.mem_singleton.1 hx]; exact ⟨n, hy⟩
-  unfold sessionUses at h
+  replace h := (usesOf_of_sessionUses h).1
+  unfold usesOf at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | skip
@@ -666,7 +683,8 @@ theorem sessionUses_points {slot : Nat} {record : String} {us : List (Challenger
     (h : sessionUses slot record = .ok us) :
     ∃ j a pts, Flock.JsonParse.parse record = .ok j ∧ pointsAfter (getD j "link") = .ok a ∧
       us.head? = some (⟨Hello.slotStream slot POINTS, a, (pts.size + 3) / 4⟩, pts) := by
-  unfold sessionUses at h
+  replace h := (usesOf_of_sessionUses h).1
+  unfold usesOf at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | skip
