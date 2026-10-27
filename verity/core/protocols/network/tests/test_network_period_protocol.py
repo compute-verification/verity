@@ -39,7 +39,7 @@ SEEN: Counter = Counter()
 
 
 #: The changes drawn more often than the rest: the clock form's honest period, now the only accepted one, and its
-#: undecided answers, now the only undecided ones (the rows form refuses both, `PC.UNWIRED`).
+#: undecided answers, now the only undecided ones (the rows form refuses both, `PC.UNTIED`).
 WEIGHTS = {"honest": 4, "rows-honest": 2, "answer-undecided": 2, "audit-undecided": 2}
 
 
@@ -94,12 +94,12 @@ def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypat
 
 def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
     """A mirror that doesn't read the row registrations passes a rows-form period whose rows a key other than the
-    deployment key signed to the last refusal, the wiring's (`PC.UNWIRED`), and Lean refuses it at the rows. The rows
+    deployment key signed to the last refusal, the state tie's (`PC.UNTIED`), and Lean refuses it at the rows. The rows
     form refuses every period, so a skipped check shows in the reason, which the difftest's key leaves out."""
     monkeypatch.setattr(PC, "_rows_check", lambda p, w, d, doc: None)
     for n in range(2):
         case = build("rows-reg-key", n, small=True)
-        assert reference(case)["reason"] == PC.UNWIRED, (n, reference(case))
+        assert reference(case)["reason"] == PC.UNTIED, (n, reference(case))
         verdict, out = D.replay(PORT, case, server)
         assert verdict == REJECT and "not under the deployment key" in json.loads(out)["reason"], (n, out)
 
@@ -114,6 +114,7 @@ ROWS_REFUSALS = {
     "rows-delta": ("is not the period's", "is not the period's"),
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
     "rows-prog-untied": ("is no compute audit's output",) * 2,
+    "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
     "rows-tied-undrawn": ("units drawn: K charges a tied audit no faulty term",) * 2,
 }
 
@@ -122,8 +123,9 @@ def test_the_rows_form_refuses_what_it_must(server):
     """A link-window missing one of its records' certificates, one the warden left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
-    other than its 2T units, a scan whose `prog` is no compute audit's output, and an audit a scan's `prog` is tied to
-    with a unit undrawn: Lean and the mirror each refuse every one at that check."""
+    other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
+    no `SlotEntry_v1` template's entries, and an audit a scan's `prog` is tied to with a unit undrawn: Lean and the
+    mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -132,21 +134,23 @@ def test_the_rows_form_refuses_what_it_must(server):
             assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
 
 
-def test_the_rows_form_refuses_every_period_until_its_prog_is_wired(server, monkeypatch):
-    """Until each due, occupied slot's `prog` entry is a wire from a `SlotEntry_v1` unit, its read bit is the prover's
-    word, and which slots are due and occupied is private, so the rows form refuses every period of a link-window
-    (`unwired`), last, with the fix: an honest period and one with an undecided scan or audit answer are each refused,
+def test_the_rows_form_refuses_every_period_until_its_audits_state_is_tied(server, monkeypatch):
+    """With the scan's `prog` wired to a `SlotEntry_v1` template's entries, each slot's entry is the one its Program
+    computed, but until a tied audit's `SCAN_STATE` is tied to the scan's state its Program could compute on a state the
+    prover chose, and which slots are due and occupied is private, so the rows form refuses every period of a
+    link-window (`untied`), last, with the fix: an honest period and one with an undecided scan or audit answer are each
+    refused,
     Lean's reason the mirror's word for word, and the mirror without the refusal accepts the honest one and leaves the
     others undecided, so each passed every check before it."""
     for m, without in (("rows-honest", ACCEPT), ("rows-answer-undecided", UNDECIDED),
                        ("rows-audit-undecided", UNDECIDED)):
         for n in range(3):
             case = build(m, n, small=n % 2 == 0)
-            assert (reference(case)["verdict"], reference(case)["reason"]) == (REJECT, PC.UNWIRED), (m, n)
+            assert (reference(case)["verdict"], reference(case)["reason"]) == (REJECT, PC.UNTIED), (m, n)
             verdict, out = D.replay(PORT, case, server)
-            assert verdict == REJECT and json.loads(out)["reason"] == PC.UNWIRED, (m, n, out)
+            assert verdict == REJECT and json.loads(out)["reason"] == PC.UNTIED, (m, n, out)
             with monkeypatch.context() as mp:
-                mp.setattr(PC, "_unwired", lambda p: None)
+                mp.setattr(PC, "_untied", lambda p: None)
                 assert reference(case)["verdict"] == without, (m, n, reference(case))
 
 
@@ -169,15 +173,39 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
     monkeypatch.setattr(PC, "_prog_tied", lambda audits, reg: True)
     for n in range(2):
         case = build("rows-prog-untied", n, small=True)
-        assert reference(case)["reason"] == PC.UNWIRED, (n, reference(case))
+        assert PC.UNWIRED in reference(case)["reason"], (n, reference(case))
         verdict, out = D.replay(PORT, case, server)
         assert verdict == REJECT and "is no compute audit's output" in json.loads(out)["reason"], (n, out)
 
 
+def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
+    """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, so the
+    rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's wiring can fail
+    (`PC.UNWIRES`): the audit's entry at an output port (another unit's `o<j>`, or the slot entries' chunk's `o1`), at
+    the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, or that template one member off a
+    slot each; and a mirror that skips the wiring refuses only at the state tie (`PC.UNTIED`) what Lean refuses at the
+    wiring."""
+    unwire = PC.UNWIRES
+    for u in unwire:
+        monkeypatch.setattr(PC, "UNWIRES", (u,))
+        for n in range(3):
+            case = build("rows-prog-unwired", n, small=n % 2 == 0)
+            assert PC.UNWIRED in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNWIRED in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNWIRES", unwire)
+    monkeypatch.setattr(PC, "_wired", lambda p, audits, reg: True)
+    for n in range(2):
+        case = build("rows-prog-unwired", n, small=True)
+        assert reference(case)["reason"] == PC.UNTIED, (n, reference(case))
+        verdict, out = D.replay(PORT, case, server)
+        assert verdict == REJECT and PC.UNWIRED in json.loads(out)["reason"], (n, out)
+
+
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server, monkeypatch):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
-    audit's inputs are the link-window's: over honest rows periods, which Lean and the mirror refuse at the wiring
-    alone (`PC.UNWIRED`), the mirror without that refusal accepts with each scan's `free` the parameters' `free` of the
+    audit's inputs are the link-window's: over honest rows periods, which Lean and the mirror refuse at the state tie
+    alone (`PC.UNTIED`), the mirror without that refusal accepts with each scan's `free` the parameters' `free` of the
     audits whose registration holds its `prog`'s root (the scan's own is 0), some of them nonzero. Lean publishes no
     rows-form K while it refuses every period; its `rowsTerms` `#guard`s and the hand-worked bound below hold K to the
     terms."""
@@ -186,9 +214,9 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server, monkeypa
         case = build("rows-honest", n, small=n % 2 == 0)
         c = json.loads(bytes.fromhex(case["commitment"]))
         verdict, got = D.replay(PORT, case, server)
-        assert verdict == REJECT and json.loads(got)["reason"] == PC.UNWIRED, (n, got)
+        assert verdict == REJECT and json.loads(got)["reason"] == PC.UNTIED, (n, got)
         with monkeypatch.context() as mp:
-            mp.setattr(PC, "_unwired", lambda p: None)
+            mp.setattr(PC, "_untied", lambda p: None)
             out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)
         for reg, t in zip(c["windows"], out["public"]["scans"]):
@@ -204,15 +232,16 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server, monkeypa
 def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
     """K charges an audit a scan's `prog` is tied to its free inputs and no faulty term, so the rows form refuses one
     with a unit undrawn (`rows-tied-undrawn` above), and only such an audit: over honest rows periods, which the mirror
-    without the wiring's refusal (`PC.UNWIRED`) accepts, every tied audit draws all its units and some untied audit
-    fewer, and Lean refuses each such period at the wiring alone, after the draw's refusal let its untied audits
-    through; and a mirror that skips the draw's refusal refuses only at the wiring what Lean refuses at the draw."""
+    without the state tie's refusal (`PC.UNTIED`) accepts, every tied audit draws all its units and some untied audit
+    fewer, and Lean refuses each such period at the state tie alone, after the draw's refusal let its untied audits
+    through; and a mirror that skips the draw's refusal refuses only at the state tie what Lean refuses at the
+    draw."""
     partial = []
     for n in range(24):
         case = build("rows-honest", n)
         c = json.loads(bytes.fromhex(case["commitment"]))
         with monkeypatch.context() as mp:
-            mp.setattr(PC, "_unwired", lambda p: None)
+            mp.setattr(PC, "_untied", lambda p: None)
             out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)
         audits, windows = ([PC.Registration(x, b"") for x in c[k]] for k in ("audits", "windows"))
@@ -223,11 +252,11 @@ def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
     assert partial
     for case in partial[:3]:
         verdict, got = D.replay(PORT, case, server)
-        assert verdict == REJECT and json.loads(got)["reason"] == PC.UNWIRED, got
+        assert verdict == REJECT and json.loads(got)["reason"] == PC.UNTIED, got
     monkeypatch.setattr(PC, "_tied_in", lambda audits, windows, i: False)
     for n in range(2):
         case = build("rows-tied-undrawn", n, small=True)
-        assert reference(case)["reason"] == PC.UNWIRED, (n, reference(case))
+        assert reference(case)["reason"] == PC.UNTIED, (n, reference(case))
         verdict, out = D.replay(PORT, case, server)
         assert verdict == REJECT and "units drawn: K charges a tied audit no faulty term" in json.loads(out)["reason"]
 
@@ -238,6 +267,15 @@ def test_an_output_port_is_a_units_past_o0():
     assert all(map(PC.output_port, ["block-3/o1", "a/b/o10", "/o2"]))
     assert not any(map(PC.output_port, ["o1", "u/o0", "u/o01", "u/o", "u/O1", "u/o1x", "u/o\u0663", "u/o\u00b9",
                                         "u/prog", "", 1, None]))
+
+
+def test_an_entries_port_is_a_slot_entry_templates_first_chunks_o0():
+    """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: a `SlotEntry_v1` template's `<id>/c0/o0`."""
+    assert PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") == "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
+    assert all(map(PC.entries_port_name, [PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}"),
+                                          "SlotEntry_v1{}/c0/o0"]))
+    assert not any(map(PC.entries_port_name, ["SlotEntry_v2{KO=2}/c0/o0", "SlotEntry_v1{KO=2}/c1/o0",
+                                              "SlotEntry_v1{KO=2}/c0/o1", "SlotEntry_v1/c0/o0", "", 1, None]))
 
 
 def test_the_scan_is_read_off_its_program(server):
@@ -366,7 +404,7 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     each clock certificate alone, and in the rows form each link-window's three records' certificates and two row
     registrations, with one scan a link-window, all at one δ, and a schedules term equal to the cells';
     `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's answer. The rows
-    form reaches no acceptance and no undecided answer (`PC.UNWIRED`), so its kinds are the rest."""
+    form reaches no acceptance and no undecided answer (`PC.UNTIED`), so its kinds are the rest."""
     kinds = PC.kinds(form)
     assert kinds == (KINDS if form == "clock" else tuple(k for k in KINDS if k not in (ACCEPT, UNDECIDED))), kinds
     drawn = {(k, s): PC.case(k, s, form) for k in kinds for s in range(6)}

@@ -208,10 +208,11 @@ A spec-level reference for network accounting's timing channel:
   ids appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
-  occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Until each
-  due, occupied slot's entry is a wire from its Program's `SlotEntry_v1` unit, the read bit is the prover's word (an
-  entry of read 1 and no outputs passes), so the period check refuses every rows-form period of a link-window
-  (`NetworkCheck.Period`'s `unwired`);
+  occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
+  Programs' row is a compute audit's `SlotEntry_v1` template's entries, the read bit is the prover's word (an entry of
+  read 1 and no outputs passes), so the period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and
+  until a slot's Program's `SCAN_STATE` is tied to the scan's state it refuses every rows-form period of a link-window
+  (`untied`);
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a

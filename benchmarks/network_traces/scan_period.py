@@ -20,9 +20,9 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
-  answer accepts, at the wiring alone (the mirror's ``UNWIRED``, Lean's reason too). The rows form refuses every
-  period of a link-window, last, until a check reads that each due, occupied slot's `prog` entry is a wire from a
-  `SlotEntry_v1` unit, so the honest case passes every other check and is refused there. ``DIR`` gets each case's
+  answer accepts, at the wiring alone (the mirror's ``UNWIRED`` in its reason and in Lean's). The rows form refuses a
+  link-window whose scan's `prog` is no compute audit's `SlotEntry_v1` template's entries, and the block round's is
+  the toy block's `o1`, so the honest case passes every other check and is refused there. ``DIR`` gets each case's
   files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
@@ -134,7 +134,7 @@ def main(argv=None) -> int:
         why = m.UNWIRED if not round_ and scan_said == {"accept"} else None
         want = "reject" + (" at the wiring" if why else "")
         good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                and (why is None or py.get("reason") == lean.get("reason") == why))
+                and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
         got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}

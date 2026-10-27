@@ -21,8 +21,9 @@ the salt in no case), and answered by one-stage with its one unit proved. In the
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
 none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of an output port's
-entry in an audit's registration (`_prog_tied`), answered by one-stage with a stratified or subset draw at the
+registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port
+of that link-window's slot entries' template (`SLOT_UNIT`, a stand-in `SlotEntry_v1` with one member a slot) in an
+audit's registration and Program (`_prog_tied`, `_wired`), answered by one-stage with a stratified or subset draw at the
 period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths in the Boolean
 profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in the checker form is a bad
 scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks (`scan_negatives`). Beside them,
@@ -30,11 +31,11 @@ the compute audits (in the rows form at least one, whose registrations' `roots` 
 registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
 (`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units, every
 unit drawn for an audit a scan's `prog` is tied to (`tied-undrawn`: one such audit drawn `subset:k`, k < N). The rows
-form refuses every period of a link-window, its honest one included, after every other check (`UNWIRED`: no check yet
-reads that each due, occupied slot's `prog` entry is a wire from a `SlotEntry_v1` unit), so its changes all aim at a
-rejection. `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure
-(`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a composition's
-difftest takes a real component's cases.
+form refuses every period of a link-window, its honest one included, after every other check (`UNTIED`: no check yet
+reads that a tied audit's `SCAN_STATE` is the scan's state), so its changes all aim at a rejection.
+`case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`, those the
+form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a composition's difftest takes a real
+component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -100,6 +101,8 @@ EGRESS_PARAMS = ("state",)
 BOOL_BYTE, BOOL_U16 = ["Array", 8, ["Value", 1]], ["Array", OUT_BITS, ["Value", 1]]
 #: the checker form's, which took the rows its units compared as inputs
 CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
+#: `slotEntryId`: the slot entry's Definition, whose committed `o0` is the entry the scan reads at a slot
+SLOT_ENTRY = "SlotEntry_v1"
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
@@ -107,12 +110,14 @@ CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 @dataclasses.dataclass(frozen=True)
 class Audit:
     """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
-    SHA-512, its units (its root's template instances) and the most bits one of them commits."""
+    SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
+    templates (`entries`: each root template node calling `SlotEntry_v1`, by descriptor id and members)."""
     free: int
     steps: int
     program: str
     units: int
     bits: int
+    entries: tuple[tuple[str, int], ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -135,8 +140,8 @@ class Params:
 
 @dataclasses.dataclass(frozen=True)
 class Scan:
-    """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's output,
-    `_prog_tied`, whose free inputs a link-window's term counts, `_tied_audits`), and the bits one ingress and one
+    """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's slot
+    entries, `_wired`, whose free inputs a link-window's term counts, `_tied_audits`), and the bits one ingress and one
     egress instance commit."""
     steps: int
     free: int
@@ -368,11 +373,14 @@ def _audit(a, ctx: str) -> Audit:
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
-    units = [(_members(x), bits_of(d["body"]["ret_type"])) for x in defs[j["root"]]["body"]["nodes"]
+    nodes = defs[j["root"]]["body"]["nodes"]
+    units = [(_members(x), bits_of(d["body"]["ret_type"])) for x in nodes
              if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
     if not units:
         raise D.Reject(f"{ctx}: program: no template")
-    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units))
+    entries = tuple((callees[x["fn"]], _members(x)) for x in nodes
+                    if (d := defs[callees[x["fn"]]])["form"] != "primitive" and d.get("id") == SLOT_ENTRY)
+    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries)
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
@@ -653,20 +661,47 @@ def output_port(port) -> bool:
     return parts[-1][:1] == "o" and j != "" and all("0" <= c <= "9" for c in j) and j[0] != "0"
 
 
-def _tied_audits(audits: list[Registration], reg: Registration) -> list[int]:
-    """`tiedAudits`: the audits, by index, whose registration's `roots` has an output port's entry (`output_port`) at
-    the root and domain of the scan's registration's `scan/prog` entry (`PROG`)."""
-    def entries(j: dict, k: str) -> list[dict]:
-        v = j.get(k)
-        return [e for e in v if isinstance(e, dict)] if isinstance(v, list) else []
+def entries_port(key: str) -> str:
+    """`entriesPort`: a `SlotEntry_v1` template's entry rows, its first chunk's public word,
+    ``<descriptor id>/c0/o0``."""
+    return f"{key}/c0/o0"
 
-    prog = [e for e in entries(reg.record, "roots") if e.get("port") == PROG] + \
-        [e for e in entries(reg.record, "registered") if e.get("value") == PROG]
+
+def entries_port_name(port) -> bool:
+    """`entriesPortName`: some `SlotEntry_v1` template's entries port (`entries_port`)."""
+    return isinstance(port, str) and port.startswith(SLOT_ENTRY + "{") and port.endswith("}/c0/o0")
+
+
+def _entries(j: dict, k: str) -> list[dict]:
+    v = j.get(k)
+    return [e for e in v if isinstance(e, dict)] if isinstance(v, list) else []
+
+
+def _prog(reg: Registration) -> list[dict]:
+    """The scan's registration's `scan/prog` entries (`PROG`) whose root and domain are strings."""
+    return [e for e in [*(e for e in _entries(reg.record, "roots") if e.get("port") == PROG),
+                        *(e for e in _entries(reg.record, "registered") if e.get("value") == PROG)]
+            if isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)]
+
+
+def _tied_audits(audits: list[Registration], reg: Registration) -> list[int]:
+    """`tiedAudits`: the audits, by index, whose registration's `roots` has an output port's or an entries port's entry
+    (`output_port`, `entries_port_name`) at the root and domain of the scan's registration's `scan/prog` entry
+    (`PROG`)."""
     return [i for i, a in enumerate(audits)
-            if any(isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)
-                   and any(output_port(o.get("port")) and o.get("root") == e["root"] and o.get("domain") == e["domain"]
-                           for o in entries(a.record, "roots"))
-                   for e in prog)]
+            if any(any((output_port(q := o.get("port")) or entries_port_name(q)) and o.get("root") == e["root"]
+                       and o.get("domain") == e["domain"] for o in _entries(a.record, "roots"))
+                   for e in _prog(reg))]
+
+
+def _wired(p: Params, audits: list[Registration], reg: Registration) -> bool:
+    """`wired`: the scan's `scan/prog` entry is at the root and domain of an audit's entries port (`entries_port`) of
+    a `SlotEntry_v1` template of that audit's own Program (`Audit.entries`) with one member a slot of the window."""
+    s = p.schedule
+    return any(n == s.window // s.every * s.lanes
+               and any(o.get("port") == entries_port(k) and o.get("root") == e["root"]
+                       and o.get("domain") == e["domain"] for e in _prog(reg) for o in _entries(r.record, "roots"))
+               for a, r in zip(p.audits, audits) for k, n in a.entries)
 
 
 def _prog_tied(audits: list[Registration], reg: Registration) -> bool:
@@ -747,16 +782,18 @@ def _audit_check(i: int, audit: Audit, reg: Registration, a: dict, tied: bool = 
     return f
 
 
-#: `unwired`'s refusal, Lean's word for word.
-UNWIRED = ("the rows form: the scan's prog entries aren't wired from SlotEntry_v1 units, so a due, occupied slot's read "
-           "bit is the prover's word (an entry with read 1 and no outputs passes for a request no Program reads): wire "
-           "each slot's prog entry from its Program's SlotEntry_v1 unit, and check that wiring here")
+#: `wiredCheck`'s refusal, after its window's number.
+UNWIRED = "the scan's prog is no compute audit's slot entries"
+#: `untied`'s refusal, Lean's word for word.
+UNTIED = ("the rows form: no check reads that each tied audit's SCAN_STATE is the scan's state (its root and domain), "
+          "so a slot's Program can compute its entry on a state the prover chose: tie each tied audit's SCAN_STATE to "
+          "the scan's state by root and domain, and check that tie here")
 
 
-def _unwired(p: Params) -> str | None:
-    """`unwired`: the rows form refuses a period of any link-window, as no check reads how the scan's `prog` entries
-    are wired from `SlotEntry_v1` units."""
-    return UNWIRED if p.schedule is not None and p.windows else None
+def _untied(p: Params) -> str | None:
+    """`untied`: the rows form refuses a period of any link-window, as no check reads that a tied audit's Programs
+    compute on the scan's state."""
+    return UNTIED if p.schedule is not None and p.windows else None
 
 
 def clog2(x: int) -> int:
@@ -827,7 +864,10 @@ def check(p: Params, c: Commitment, e) -> tuple:
             facts.append(_audit_check(i, audit, reg, a, p.schedule is not None and _tied_in(c.audits, c.windows, i)))
         except Finding as f:
             findings.append(f)
-    if (u := _unwired(p)) is not None:
+    if p.schedule is not None:
+        findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
+                     if not _wired(p, c.audits, reg)]
+    if (u := _untied(p)) is not None:
         findings.append(Finding(REJECT, u))
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
@@ -883,7 +923,7 @@ EXPECT = {
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": REJECT, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
-    "rows-tied-undrawn": REJECT,
+    "rows-prog-unwired": REJECT, "rows-tied-undrawn": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": REJECT,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
@@ -1060,14 +1100,25 @@ AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_si
                                  lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
 #: The stand-in unit's widths in bytes: one under, at and over the public output's 16 bits.
 UNIT_BYTES = (1, 2, 5, 40)
+#: A slot entry's stand-in (`SLOT_ENTRY`, as `io_shell.SlotEntry_v1` is named): one member a slot of link-window `W`,
+#: committing a proof unit's 16-bit public output, its `o0`.
+SLOT_UNIT = CompositeDefinition("SlotEntry", 1, ("OUT", "W"), _unit_sig,
+                                lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
+
+
+def slot_key(w: int) -> str:
+    """The descriptor id of link-window `w`'s slot entries' template."""
+    return bind(SLOT_UNIT, OUT=2, W=w).id
 
 
 @lru_cache(maxsize=None)
-def audit_descriptor(units: tuple[tuple[int, int], ...]) -> str:
+def audit_descriptor(units: tuple[tuple[int, int], ...], entries: tuple[tuple[int, int], ...] = ()) -> str:
     """The canonical descriptor of a compute audit's Program over the stand-in unit: `n` instances committing `out`
-    bytes each, for each `(n, out)` of `units` (each `out` its own template), one template as the window's population
-    program (`population_program`, `TemplateInstances_v1`), several as a mixed one."""
-    templates = [(bind(AUDIT_UNIT, OUT=out), n) for n, out in units]
+    bytes each, for each `(n, out)` of `units` (each `out` its own template), and `n` slot entries of link-window `w`
+    for each `(w, n)` of `entries` (`SLOT_UNIT`), one template as the window's population program
+    (`population_program`, `TemplateInstances_v1`), several as a mixed one."""
+    templates = [(bind(AUDIT_UNIT, OUT=out), n) for n, out in units] + \
+        [(bind(SLOT_UNIT, OUT=2, W=w), n) for w, n in entries]
     program = population.population_program(*templates[0]) if len(templates) == 1 else \
         population.mixed_population_program(templates)
     return D.canonical(codec.encode_program(program))
@@ -1077,6 +1128,10 @@ def audit_descriptor(units: tuple[tuple[int, int], ...]) -> str:
 #: another root or domain, the audit's entry at a port that is no unit's output, no `scan/prog` entry or one under
 #: another name, the output's entry in the scan's own registration and in no audit's, or neither entry's root a string
 UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
+#: How `rows-prog-unwired` breaks its link-window's wiring while its tie holds: the audit's entry at an output port
+#: (another unit's `o1`, or the slot entries' chunk's), at another `SlotEntry_v1` template's entries port than any of
+#: its Program's, or its Program's slot entries' template one member off a slot each
+UNWIRES = ("output", "key", "members")
 
 
 def _present(e: dict) -> dict:
@@ -1100,17 +1155,24 @@ def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None) -
     return [_present(x) for x in [e, *scan]]
 
 
-def _output_entries(rp: random.Random, i: int, ties: dict, T: int, aimed: int, untie: str | None) -> list[dict]:
-    """Audit `i`'s registration's `roots`: for each link-window's `prog` tied to it, the output port its tie names at
+def _output_entries(rp: random.Random, i: int, ties: dict, T: int, aimed: int, untie: str | None,
+                    unwire: str | None = None) -> list[dict]:
+    """Audit `i`'s registration's `roots`: for each link-window's `prog` tied to it, the entries port its tie names at
     the tie's root and domain (`T` leaves, a bucket's row each), and an input port's entry at another root; at
-    link-window `aimed`, broken as `untie` says."""
+    link-window `aimed`, broken as `untie` or `unwire` says."""
     out = []
     for w, x in ties.items():
         if x["audit"] != i or (w == aimed and untie == "scan"):
             continue
-        port = rp.choice([f"block-{w}/o0", f"block-{w}/prog", f"block-{w}/o01", "o1", f"block-{w}/O1", f"block-{w}/o",
-                          f"block-{w}/o1x", f"block-{w}/o\u0663", f"block-{w}/o\u00b9", 1]) \
-            if w == aimed and untie == "port" else x["port"]
+        port = x["port"]
+        if w == aimed and untie == "port":
+            port = rp.choice([f"block-{w}/o0", f"block-{w}/prog", f"block-{w}/o01", "o1", f"block-{w}/O1",
+                              f"block-{w}/o", f"block-{w}/o1x", f"block-{w}/o\u0663", f"block-{w}/o\u00b9", 1,
+                              port.replace("/c0/", "/c1/"), port.removeprefix(SLOT_ENTRY)])
+        elif w == aimed and unwire == "output":
+            port = rp.choice([f"block-{w}/o{rp.choice([1, 2, 10])}", port.removesuffix("o0") + "o1"])
+        elif w == aimed and unwire == "key":
+            port = entries_port(slot_key(rp.choice([w + 1000, -1 - w])))
         out.append(_present({"domain": x["domain"], "leaves": T, "port": port, "root": x["root"]}))
     out.append({"domain": rp.randbytes(64).hex(), "leaves": T, "port": f"block-{rp.randrange(4)}/prog",
                 "root": rp.randbytes(64).hex()})
@@ -1148,10 +1210,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
     t = r.randrange(1, n_windows) if m == "clock-reused" else r.randrange(n_windows)
     a = r.randrange(max(n_audits, 1))
-    ties = {w: {"audit": rp.randrange(n_audits), "port": f"block-{w}/o{rp.choice([1, 1, 2, 10])}",
+    ties = {w: {"audit": rp.randrange(n_audits), "port": entries_port(slot_key(w)),
                 "root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()}
             for w in range(first, first + n_windows)} if rows else {}
     untie = rp.choice(UNTIES) if m == "prog-untied" else None
+    unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
     if untie == "untyped":
         ties[first + t]["root"] = rp.choice([None, 7, False])
     if m == "tied-undrawn":
@@ -1357,14 +1420,19 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         windows.append({"answer": answer, "certificates": [_cert_json(c) for c in certificates]} | shown)
 
     audit_params, audit_regs, audits = [], [], []
+    slots = sched.window // sched.every * sched.lanes if rows else 0
     for i in range(n_audits):
         undrawn = i == a and m == "tied-undrawn"
+        entries = tuple((w, slots + (rp.choice([1, -1]) if slots > 1 else 1)
+                         if w == first + t and unwire == "members" else slots)
+                        for w, x in ties.items() if x["audit"] == i)
         units = r.randint(2 if undrawn else 1, 40)
         n_prog = units + (r.choice([1, -1]) if units > 1 else 1) if i == a and m == "audit-units" else units
+        units += sum(n for _, n in entries)
         split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
         outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
         desc = json.loads(audit_descriptor(((n_prog, outs[0]),) if split is None else
-                                           ((split, outs[0]), (n_prog - split, outs[1]))))
+                                           ((split, outs[0]), (n_prog - split, outs[1])), entries))
         prog = program_sha512(desc)
         k, strata = r.randint(1, units - 1) if undrawn else units if i in tied else r.randint(1, units), None
         law = {"k": k, "law": "subset"}
@@ -1379,12 +1447,13 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
         if rows:
-            rec["roots"] = _output_entries(rp, i, ties, sched.window, first + t, untie)
+            rec["roots"] = _output_entries(rp, i, ties, sched.window, first + t, untie, unwire)
         if i == a and m == "audit-program":
             if r.random() < 0.5:
                 rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])
             else:
-                desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),)))
+                desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),),
+                                                   entries))
         digest = registration_digest(rec)
         answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            r.randint(0, units), strata)
@@ -1676,7 +1745,7 @@ answer = reference
 KINDS = (ACCEPT, REJECT, UNDECIDED, "broken-params", "broken-commitment", "broken-evidence")
 #: Each form's changes (`build`'s `m`) by the kind they aim at: a rejection by the check itself, not by decoding, for
 #: `reject`; `case` breaks the line `serve` reads rather than the period, so no kind uses it. The rows form aims at no
-#: acceptance and no undecided answer: it refuses every period of a link-window (`UNWIRED`).
+#: acceptance and no undecided answer: it refuses every period of a link-window (`UNTIED`).
 AIMS: dict[str, dict[str, tuple[str, ...]]] = {
     form: {
         ACCEPT: tuple(m for m in ms if EXPECT[m] == ACCEPT),
