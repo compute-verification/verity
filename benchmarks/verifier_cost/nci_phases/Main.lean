@@ -3,7 +3,9 @@ import NciCheck
 /-!
 `nci-phases INSTANCE [TOP [BIG]]`: `NciCheck.Desc.evaluate`'s steps on one `nci-check --policy` instance, each timed, one
 `PHASE {json}` line per step on stdout (milliseconds, resident and peak RSS in MB): the file's read, the instance's JSON
-parse, `NciCheck.parse`, C-Flock's decoder (`Flock.Program.decode`, which parses the program's text again and hashes it),
+parse, `NciCheck.parse`, three of the decoder's parts on their own (the program text's JSON parse, `Flock.canon` of it and
+SHA-512 of that, each a step `Flock.Program.decode` takes, on the whole descriptor), C-Flock's decoder
+(`Flock.Program.decode`, which parses the program's text again and hashes it),
 `NciCheck.Widths.reinterpretation`, `Prog.orderViolation`, the layout checks, `walkable`, `analyze` split into each reached
 Definition's summary (`summarize`, callees first, the `TOP` slowest named with their body nodes and return pieces; one of
 at least `BIG` body nodes, 2^17 unless given, step by step: `summarizeTimed`) and the
@@ -125,6 +127,15 @@ def main (args : List String) : IO UInt32 := do
   let i ← orFail "instance" (NciCheck.parse j)
   report "instance" t [("program_bytes", toJson i.program.utf8ByteSize), ("theta", toJson i.theta.size),
     ("owner", toJson i.owner.size)]
+  let t ← IO.monoNanosNow
+  let pj ← orFail "decode_parse" (Json.parse i.program)
+  report "decode_parse" t
+  let t ← IO.monoNanosNow
+  let ct ← orFail "decode_canon" (Flock.canon pj)
+  report "decode_canon" t [("bytes", toJson ct.utf8ByteSize)]
+  let t ← IO.monoNanosNow
+  let h ← IO.lazyPure fun _ => Flock.Sha512.hash ct.toUTF8
+  report "decode_sha512" t [("digest_bytes", toJson h.size)]
   let t ← IO.monoNanosNow
   let P ← orFail "decode" (Flock.Program.decode i.program.toUTF8)
   let body := (P.defs[P.root]!).body
