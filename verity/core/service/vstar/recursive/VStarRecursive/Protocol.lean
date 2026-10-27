@@ -6,15 +6,16 @@ auditor runs (`flock-verify verify --zk` once per V* part with that part's recur
 * **params**: v1's, plus `recursive`, exactly `{"circuit", "draw", "parts", "public", "registration"}`: the SHA-512s of
   the inner statement's circuit file, its draw (`--rec-inner-draw`), its public file and the circuit registration
   (`--rec-inner-registration`, or null), and for each of V*'s statements at the inner shape, in `RecVStar.statements`'
-  order, exactly `{"bindings", "circuit", "partition", "program", "registered", "rows"}`: the part's `--rec-bindings`
-  object, its circuit's SHA-512, its partition object, its program's descriptor, its registered file (or null) and its
-  `--rec-rows` file (or null). The inner statement's program and partition are v1's `program` and `partition`, which
-  must not be null. Every one of them is the verifier's own and is fixed before any coin, `RecDeploy.RecX`'s statement;
+  order, exactly `{"bindings", "circuit", "partition", "program", "registered"}`: the part's `--rec-bindings` object,
+  its circuit's SHA-512, its partition object, its program's descriptor and its registered file (or null). The inner
+  statement's program and partition are v1's `program` and `partition`, which must not be null. Every one of
+  them is the verifier's own and is fixed before any coin, `RecDeploy.RecX`'s statement;
 * **commitment**: v1's (the registration record);
-* **evidence**: v1's without `verdicts`, with exactly one session, plus `recursive`, exactly `{"parts", "record",
-  "transcript"}`: the SHA-512s of the inner session's record and the coin server's transcript of the inner session, and
-  for each part `{"public", "record", "reps"}`: its staged public file's SHA-512, its `session.json`'s and
-  `{file: SHA-512}` naming at least each rep file its session reads;
+* **evidence**: v1's without `verdicts`, with exactly one session, plus `recursive`, exactly `{"parts", "record", "rows",
+  "transcript"}`: the SHA-512s of the inner session's record, of V*'s shared rows (`--rec-rows`, one file every part
+  reads: they register the prover's running sums, so the prover stages them, `RecDeploy.Stage.rows`) and of the coin
+  server's transcript of the inner session, and for each part `{"public", "record", "reps"}`: its staged public file's
+  SHA-512, its `session.json`'s and `{file: SHA-512}` naming at least each rep file its session reads;
 * **blobs**: the files those digests name (`Core.Blobs`);
 * **check**: the verifier's inner shape from the inner statement's files (`RecVStar.innerOf`, as `flock-verify
   rec-inner --program` writes it), and Flock's plain verifier's own checks on the inner statement at its draw
@@ -59,7 +60,6 @@ structure PartOwn where
   programJ : Json
   program : ByteArray
   registered : Option Json
-  rows : Option Json
 
 /-- The verifier's own inputs: the inner statement's circuit, public file, draw and registration digests, its program
 and partition, and the parts. -/
@@ -86,6 +86,7 @@ structure PartProof where
 /-- The recursive session's files, by SHA-512. -/
 structure Proofs where
   record : String
+  rows : String
   transcript : String
   parts : Array PartProof
 
@@ -116,12 +117,12 @@ private def without (j : Json) (k : String) : List (String × Json) :=
   | _ => []
 
 private def partOwnOf (j : Json) : V PartOwn := do
-  exactly j #["bindings", "circuit", "partition", "program", "registered", "rows"] "a part"
+  exactly j #["bindings", "circuit", "partition", "program", "registered"] "a part"
   let circuit ← digestOf (getD j "circuit") "a part's circuit"
   let (bindings@(.obj _), partition@(.obj _), programJ@(.obj _)) := (getD j "bindings", getD j "partition", getD j "program")
     | throw "a part's bindings, partition and program are not objects"
   pure { bindings, circuit, partition, programJ, program := (← Flock.canon programJ).toUTF8,
-         registered := ← objOrNull (getD j "registered") "a part's registered", rows := ← objOrNull (getD j "rows") "a part's rows" }
+         registered := ← objOrNull (getD j "registered") "a part's registered" }
 
 /-- The params' `recursive`, with v1's program and partition the inner statement's. -/
 def ownOf (rec_ programJ : Json) (partition : Option Json) : V Own := do
@@ -163,11 +164,11 @@ private def partProofOf (j : Json) : V PartProof := do
 
 /-- The evidence's `recursive`. -/
 def proofsOf (j : Json) : V Proofs := do
-  exactly j #["parts", "record", "transcript"] "the evidence's recursive"
-  let (.str record, .str transcript) := (getD j "record", getD j "transcript")
-    | throw "recursive: record and transcript are not digests"
+  exactly j #["parts", "record", "rows", "transcript"] "the evidence's recursive"
+  let (.str record, .str rows, .str transcript) := (getD j "record", getD j "rows", getD j "transcript")
+    | throw "recursive: record, rows and transcript are not digests"
   let .arr ps := getD j "parts" | throw "recursive: parts is not a list"
-  pure { record, transcript, parts := ← ps.mapM partProofOf }
+  pure { record, rows, transcript, parts := ← ps.mapM partProofOf }
 
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
@@ -233,8 +234,10 @@ def fits (b : ByteArray) (what : String) : V Unit :=
 
 /-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`): Flock's plain verifier sets the inner statement
 up as each part's setup is told to (`--statement verity/flock-circuit+plain-leaves --coins os`, the verifier's own
-partition and program, the inner statement's draw, no lookup tables, registered reads or identifier: `verifyCmd`'s
-plain path), its scope check passes (`ProvedScope.check`), and it carries a draw. -/
+partition and program, the inner statement's draw, `--stratified` at the population the verifier's partition object and
+program give (`85-rec-reprice.sh`'s inner `verify`: the inner session's full draw, `rec_live.full_draw`), no lookup
+tables, registered reads or identifier: `verifyCmd`'s plain path), its scope check passes (`ProvedScope.check`), and it
+carries a draw. The population is `HmRow.stratifiedLaw`'s at `K = 1`, which every nonempty population admits. -/
 def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let some tags := Flock.Tags.find? INNER_STATEMENT | throw s!"the statement {INNER_STATEMENT} is not known"
   let coins := Flock.Coins.os
@@ -243,10 +246,11 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let draw := some (Flock.norm (← (Json.parse t).mapError fun e => s!"draw: not JSON: {e}"))
   let partition := some o.partition
   let program := some o.program
+  let (_, n) ← Flock.HmRow.stratifiedLaw o.partition o.program 1
   if !rtags.hm96Rows then
     throw s!"{rtags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   Flock.RecSetup.checkInner none none (pure (none, none))
-  let (_, sts) ← Flock.Stmt.setupTables rtags circuitB pubB coins 1 [] draw partition program none none none none
+  let (_, sts) ← Flock.Stmt.setupTables rtags circuitB pubB coins 1 [] draw partition program none (some n) none none
   for st in sts do
     Flock.checkRegistered st none
     OneStageZk.checkIdentifier st
@@ -265,9 +269,11 @@ structure InnerHeld where
   bound : V (Option String × Option Flock.RecVStar.StackedShape)
   commits : Flock.RecVStar.InnerCommits
   link : Flock.RecVStar.InnerLink
+  rows : Array Flock.Registered.Port
 
 /-- The inner session's inputs on the blobs, as `verifyCmd` reads them before any session (`recInnerInput`,
-`RecCoins.filesInput`, `innerMetaRegistration`, `recTranscriptInput`, `recLinkInput`). -/
+`RecCoins.filesInput`, `innerMetaRegistration`, `recTranscriptInput`, `recLinkInput`), and V*'s shared rows the prover
+staged (`--rec-rows`), the one set every part reads. -/
 def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   let circuitB ← bs.get o.circuit "the inner circuit"
   let pubB ← bs.get o.pub "the inner public file"
@@ -293,7 +299,12 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   let link ← match Json.parse t with
     | .ok j => Flock.RecVStar.innerLink j record
     | .error e => throw s!"rec inner transcript: not JSON: {e}"
-  pure { shape, src, bound, commits, link }
+  let rowsB ← bs.get pr.rows "the staged rows"
+  fits rowsB "the staged rows"
+  let rows ← (do
+      let some t := String.fromUTF8? rowsB | throw "not UTF-8"
+      pure (← registeredOf (← (Json.parse t).mapError (s!"not JSON: " ++ ·))).1).mapError (s!"rec rows: " ++ ·)
+  pure { shape, src, bound, commits, link, rows }
 
 /-- One part's verdict: `verifyCmd`'s `--zk` path at part `j`'s recursive inputs and the inner session held, on its one
 session, `.ok ()` or the session's refusal. An input `verify` would refuse before any session (its exit 2) is the
@@ -312,7 +323,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
   let (registered, complete, known, regParams) ← match p.registered with
     | none => pure (none, false, #[], #[])
     | some r => (fun (own, c, k, ps) => (some own, c, k, ps)) <$> registeredOf r
-  let rows ← p.rows.mapM fun r => (do pure (← registeredOf r).1).mapError (s!"rec rows: " ++ ·)
+  let rows := some h.rows
   let bindings ← Flock.RecVStar.ownBindingsOfJson p.bindings
   let partition := some p.partition
   let program := some p.program

@@ -1,7 +1,9 @@
 """The recursive audit's verdict (`VStar.Recursive.partVerdicts`, `vstar-recursive verdicts`: V*'s compiled check over a
 whole recursive session, one part per V* statement at the verifier's inner shape) against `flock-verify verify --zk` at
 each part's flags, as pod 85's lean step runs them (`85-rec-reprice.sh` STEP=lean: `--rec-inner`, `--rec-part`,
-`--rec-rows`, `--rec-bindings`, the inner statement's files, `--rec-inner-session` and `--rec-inner-transcript`).
+`--rec-rows`, `--rec-bindings`, the inner statement's files, `--rec-inner-session` and `--rec-inner-transcript`). The rows
+are the one shared file every part is verified against (`rec_vstage.staged_shared_rows`, 85's ``rows.json``), which the
+compiled check reads from the evidence (the staged rows), not from the verifier's inputs.
 
 The verifier's own inputs (`own_json`) and the evidence's `recursive` (`proofs_json`) are built from the files those
 flags name, by SHA-512, and every file is handed to `verdicts` as a blob. The format tests hold that build to what
@@ -63,7 +65,7 @@ class Inner:
 
 class Part:
     """V*'s statement ``name`` as staged (``stmt``: its circuit, public file, partition, program and registered reads), the
-    verifier's ``rows`` and ``bindings`` files for it, and its proved session (``session``)."""
+    shared ``rows`` file and the verifier's ``bindings`` file for it, and its proved session (``session``)."""
 
     def __init__(self, name: str, stmt: Path, rows: Path, bindings: Path, session: Path):
         self.name, self.stmt, self.rows, self.bindings, self.session = name, stmt, rows, bindings, session
@@ -82,22 +84,22 @@ def own_json(inner: Inner, parts: list[Part]) -> dict:
     def part(p: Part) -> dict:
         reg = p.stmt / "registered.json"
         return {"bindings": _json(p.bindings), "circuit": sha(p.stmt / "circuit.txt"), "partition": _json(p.stmt / "partition.json"),
-                "program": _json(p.stmt / "program.json"), "registered": _json(reg) if reg.is_file() else None,
-                "rows": _json(p.rows)}
+                "program": _json(p.stmt / "program.json"), "registered": _json(reg) if reg.is_file() else None}
     return {"partition": _json(inner.partition), "program": _json(inner.program),
             "recursive": {"circuit": sha(inner.circuit), "draw": sha(inner.draw), "parts": [part(p) for p in parts],
                           "public": sha(inner.pub), "registration": None}}
 
 
 def proofs_json(inner: Inner, parts: list[Part]) -> dict:
-    """`proofsOf`'s input: the inner session's record and transcript, and each part's public file, record and rep files."""
+    """`proofsOf`'s input: the inner session's record and transcript, the staged shared rows, and each part's public file,
+    record and rep files."""
     return {"parts": [{"public": sha(p.stmt / "pub.bin"), "record": sha(p.session / "session.json"),
                        "reps": {f.name: sha(f) for f in p.reps()}} for p in parts],
-            "record": sha(inner.session / "session.json"), "transcript": sha(inner.transcript)}
+            "record": sha(inner.session / "session.json"), "rows": sha(parts[0].rows), "transcript": sha(inner.transcript)}
 
 
 def blobs(inner: Inner, parts: list[Part]) -> list[Path]:
-    fs = [inner.circuit, inner.pub, inner.draw, inner.session / "session.json", inner.transcript]
+    fs = [inner.circuit, inner.pub, inner.draw, inner.session / "session.json", inner.transcript, parts[0].rows]
     for p in parts:
         fs += [p.stmt / "circuit.txt", p.stmt / "pub.bin", p.session / "session.json", *p.reps()]
     return list(dict.fromkeys(fs))
@@ -151,13 +153,13 @@ D64 = "ab" * 64
 
 
 def _own(**rec) -> dict:
-    part = {"bindings": {}, "circuit": D64, "partition": {}, "program": {}, "registered": None, "rows": None}
+    part = {"bindings": {}, "circuit": D64, "partition": {}, "program": {}, "registered": None}
     return {"partition": {"program": D64}, "program": {"p": 1},
             "recursive": {"circuit": D64, "draw": D64, "parts": [part], "public": D64, "registration": None} | rec}
 
 
 def _proofs(**kw) -> dict:
-    return {"parts": [{"public": D64, "record": D64, "reps": {"circuit.rep0.bin": D64}}], "record": D64,
+    return {"parts": [{"public": D64, "record": D64, "reps": {"circuit.rep0.bin": D64}}], "record": D64, "rows": D64,
             "transcript": D64} | kw
 
 
@@ -213,7 +215,7 @@ DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/
 class Session:
     """85's data dir: the inner statement and its last inner session, V*'s statements at the verifier's inner shape
     (`rec-inner`, `rec-statements`), and for each the staged statement and proved session (``v-sess/<s>``, whose
-    ``<s>.stmt`` names its staged directory), with the verifier's rows and bindings as 85's lean step writes them."""
+    ``<s>.stmt`` names its staged directory), with the shared rows and each part's bindings as 85's lean step writes them."""
 
     def __init__(self, dd: Path, o: Path):
         from verity_flock import rec_bindings as RB
@@ -233,19 +235,14 @@ class Session:
                              text=True, check=True).stdout
         (line,) = [json.loads(ln[9:]) for ln in txt.splitlines() if ln.startswith("RECVSTAR ")]
         names = [s[0] for s in line["statements"]]
-        v = dd / "v"
-        shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
-                                [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
-                                 if (d / "registered.json").is_file()])["ports"]
+        rows = o / "rows.json"
+        rows.write_text(json.dumps(VS.staged_shared_rows(dd / "v")))
         by_unit = {}
         for s in sorted(p for p in (dd / "v-sess").iterdir() if p.is_dir() and not p.name.startswith("forged-")):
             c = Path((dd / "v-sess" / f"{s.name}.stmt").read_text().strip())
             with (c / "circuit.txt").open() as f:
                 unit = f.readline().split()[1]
-            ports = _json(c / "registered.json")["ports"]
-            rows, b = o / f"rows-{s.name}.json", o / f"bindings-{s.name}.json"
-            rows.write_text(json.dumps({"format": "verity/registered-reads/v0",
-                                        "ports": shared | ({"acc0": ports["acc"]} if "acc0" not in shared and "acc" in ports else {})}))
+            b = o / f"bindings-{s.name}.json"
             b.write_text(json.dumps(RB.bindings(_json(c / "partition.json"), _json(c / "program.json"))))
             by_unit[unit] = Part(unit, c, rows, b, s)
         missing = [n for n in names if n not in by_unit]
