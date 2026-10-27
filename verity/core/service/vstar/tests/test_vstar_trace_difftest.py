@@ -12,7 +12,6 @@ unless ``FLOCK_TRACE`` names a build of ``flock-trace`` (or ``FLOCK_CIRCUIT`` on
 from __future__ import annotations
 
 import json
-import os
 import random
 import subprocess
 import sys
@@ -22,23 +21,14 @@ import pytest
 import verity_difftest as D
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import test_vstar_in_difftest as IN  # noqa: E402
+import settings
+import test_vstar_in_difftest as IN
 
-from verity_flock import circuit as FC  # noqa: E402
-from verity_flock import rec_vstage as S  # noqa: E402
+from verity_flock import circuit as FC
+from verity_flock import rec_vstage as S
 
 LEAN = IN.LEAN
-
-
-def _rust() -> Path | None:
-    if os.environ.get("FLOCK_TRACE"):
-        return Path(os.environ["FLOCK_TRACE"])
-    if os.environ.get("FLOCK_CIRCUIT"):
-        return Path(os.environ["FLOCK_CIRCUIT"]).with_name("flock-trace")
-    return None
-
-
-RUST = _rust()
+RUST = settings.flock_trace()
 pytestmark = [IN.pytestmark, pytest.mark.skipif(not (RUST and RUST.exists()), reason="FLOCK_TRACE names no flock-trace build")]
 
 
