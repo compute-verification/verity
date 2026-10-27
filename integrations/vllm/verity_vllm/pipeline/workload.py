@@ -1,4 +1,4 @@
-"""sweep/workload.py — the ONE deterministic heterogeneous workload generator of the R12 sweep (BRIEF §12).
+"""sweep/workload.py — the ONE deterministic heterogeneous workload generator of the sweep.
 
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
@@ -58,7 +58,7 @@ SAMPLING = {
     "stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0},
     "stoch-t0.8-p1": {"temperature": 0.8, "top_p": 1.0, "top_k": 0},
 }
-NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (R11: 7.5–10.9 ms); converts arrival seconds -> arrive_step
+NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (7.5–10.9 ms); converts arrival seconds -> arrive_step
 ARRIVE_STEP_RULE = ("realized_arrive_steps of round(offset_s / nominal_step_s): an arrival after every earlier request has finished "
                     "is declared at the forward after the last of them, where the serving loop admits it")
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)
@@ -195,7 +195,7 @@ def prefix_sharers(p: dict) -> list[int]:
 # the §12 self-check
 # ---------------------------------------------------------------------------------------------------------------------------------
 def check_plan(p: dict) -> list[str]:
-    """BRIEF §12 requirements; returns the list of violations (empty = PASS).  The B >= 8 clauses apply only for B >= 8."""
+    """The sweep's workload requirements; returns the list of violations (empty = PASS).  The B >= 8 clauses apply only for B >= 8."""
     B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     L, C = [int(x) for x in p["input_lengths"]], [int(x) for x in p["output_caps"]]
     lo, olo = int(p["min_input"]), int(p["min_output"])
@@ -368,7 +368,7 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         "sweep": {k: p[k] for k in ("schema", "row_id", "seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling",
                                     "sampling_params", "arrivals", "input_lengths", "output_caps", "sampling_seeds", "arrival_offsets_s",
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
-        "note": (f"R12 sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
+        "note": (f"sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
                  f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
                  + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),
@@ -379,8 +379,8 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         doc["sweep"]["shared_prefix"] = n
         doc["note"] += (f"  Shared prefix: requests {sharers} (every prompt longer than {n} tokens) start with the same {n} tokens and "
                         f"prefix caching is on, so each after the first reuses its cached KV blocks.")
-    # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
-    # (#70 / #75: the execution label's VLLM_BATCH_INVARIANT, or what a `--target` declares; on a SYS target, where P2P hangs,
+    # a tensor-parallel workload (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
+    # (the execution label's VLLM_BATCH_INVARIANT, or what a `--target` declares; on a SYS target, where P2P hangs,
     # disable_custom_all_reduce and NCCL_P2P_DISABLE=1) and `sweep.tp`
     world = row_world(p["row_id"])
     if world > 1:
@@ -432,7 +432,7 @@ class Options:
                                 "runs with enable_prefix_caching (vLLM reuses whole KV blocks: N a multiple of the block size reuses all of it)")
     out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
     target: str | None = option("--target", default=None,
-                                help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
+                                help="TargetProfile overrides of the workload as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
                                 "to the row's `engine.target` (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
                                 "`engine.args`, a TP row's `engine.env` takes `TargetProfile.env()`) and `sweep.execution` = the profile's execution label")
     reason: list[str] = option("--reason", action="append", default=[], metavar="SWITCH=TEXT",

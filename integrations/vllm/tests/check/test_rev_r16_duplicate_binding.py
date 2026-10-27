@@ -1,12 +1,12 @@
-"""rev R16 F-r16-08 -- one identity, TWO leaf bindings: coverage passes, the replay silently reads the first.
+"""One identity, TWO leaf bindings: coverage passes, the replay silently reads the first.
 
-BRIEF §3 C1: "every required identity has ONE unambiguous binding".  `binding.coverage_check` enforces ">= 1" (duplicates of ANOTHER
+"every required identity has ONE unambiguous binding".  `binding.coverage_check` enforces ">= 1" (duplicates of ANOTHER
 identity cannot hide a missing one -- that part holds) and only REPORTS `physical_copies_n`; `opening.CommittedStore` keys the
 committed words by (request, step, op_path, member) and keeps the first entry (min invocation), so a second binding of the SAME identity
 to a different buffer is never read by form (A) and is not a named failure anywhere on the (A) path.  Honest records have 0 copies
-(153/153 R15/R16 coverage records), so gating on it costs nothing.
+(153/153 coverage records), so gating on it costs nothing.
 
-rev's file documented the hole with two plain tests + two strict xfails; the fix (pin, F-r16-08) flips them: `coverage_check` counts a
+This file documented the hole with two plain tests + two strict xfails; the fix flips them: `coverage_check` counts a
 required identity bound by >1 covering leaf entry as AMBIGUOUS (`ambiguous_n`, `unambiguous`, first 12 named with where each copy lives)
 and `ok` requires `ambiguous_n == 0`; `CommittedStore` keeps every entry of a key and `words` refuses by name when more than one entry of
 the lowest invocation covers the requested slice.  The honest shapes (one entry per identity; chunked entries with DISJOINT ranges; a
