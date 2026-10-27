@@ -1,0 +1,80 @@
+# Network accounting's benchmarks into one `benchmarks/network_certifier/`, and the datacenter model to network's first example:
+# what `tools/move/layout.py --map tools/move/reorg_net_map.toml` moves and rewrites (TOP-103 item 4, network-accounting's
+# NET-108; note:memory-accounting/20261027T0040Z-draft-reorg-examples-benchmarks).
+#
+# - `benchmarks/network_e2e/` is network accounting end to end on a served model: the certifier-serve rehearsal, N2's
+#   verdicts, the proved head checks, the negatives and the chain. It moves whole to `benchmarks/network_certifier/e2e/`,
+#   with its `encodings/` and `traces/`. No code in `verity/` imports `encodings/`; core and the certifier name its paths in
+#   docstrings only.
+# - `benchmarks/network_sim/` is the mock datacenter of network namespaces running the real certifier, to
+#   `benchmarks/network_certifier/sim/`, with its `workload/`.
+# - `benchmarks/datacenter/` is the accounting layer's Python model of a datacenter and its night on a two-node rack
+#   (`python -m datacenter.demo`), to `examples/network/`. Its package keeps its import name, `datacenter`, which
+#   `network_certifier/sim` imports by path.
+# Each directory keeps its own suite and pyproject: merging them is an edit, not a move. An example's directory is
+# `[a-z0-9_]+` (`verity example NAME` reads a `-` as `_`), and each subdirectory's dotted name keeps `sim/workload`'s
+# relative imports as they are.
+# Left out:
+# - `benchmarks/network_traces/`, with `chain_record.py`: the challenger host's pinned tree. `pin.sh` and deploy.toml's
+#   `git archive` name it, and the auditor (`benchmarks/live_challenger/auditor.py`) runs its certifier, warden and load
+#   services from it. Its other scripts import those services from their own directory (chain_record imports
+#   certifier_serve, scan_zk and warden_chain), and the services' tests import the others, so no part of it leaves
+#   without code. It joins as `network_certifier/traces/` once infra re-pins the challenger from the new path.
+# - `benchmarks/network_sim/workload/`'s MLP, deleted rather than moved (its only check was N3, retired): it is the default
+#   workload of `workload/run.py`, `accounting.py` and `block.py`, `served.py` takes its interface, and `test_framing` and
+#   `test_placement` build it, so deleting it is network-accounting's code. Whatever of it is on main when the move is
+#   regenerated moves with `sim/`.
+# - `benchmarks/prove_path/`: three examples call it (vllm, the toy, all_protocols); it stays this round.
+# The move commit's parent (#4917) anchors each join that leaves its file's directory at the file (`Path(__file__).resolve()
+# .parents[N] / "benchmarks" / ...`), which layout.py recounts when the file moves down a level, where it doesn't recount a
+# join through an alias (`HERE.parents[1] / ...`); writes the two `encodings/` usages from the root rather than with
+# `../../../`, and test_datacenter's join by segment, so each rewrite is a moved path move-check reads; and gives
+# `benchmarks/datacenter` its `example.toml`. Nothing is split, edited or deleted, and no file is added. The format is
+# `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"benchmarks/network_e2e/" = "benchmarks/network_certifier/e2e/"
+"benchmarks/network_sim/" = "benchmarks/network_certifier/sim/"
+"benchmarks/datacenter/" = "examples/network/"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[split]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves), and files
+# whose bytes a digest pins. uv.lock is rewritten: it names the moved members' sources (`virtual = "benchmarks/network_e2e"`),
+# which `uv lock` can't relock from once they've moved.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "benchmarks/network_e2e/tests/data/**",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+# The certifier's slice fixtures are rewritten: each names its trace by path in `source`, which nothing pins and
+# `encodings/tests/test_served_window.py` regenerates and compares.
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json",
+           "verity/core/protocols/certifier/tests/fixtures/compile_slice_*.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`); none of these directories is a package, so they rename only
+# the names layout.py reads a file's relative imports from
+"benchmarks.datacenter" = "examples.network"
+"benchmarks.network_e2e" = "benchmarks.network_certifier.e2e"
+"benchmarks.network_sim" = "benchmarks.network_certifier.sim"
