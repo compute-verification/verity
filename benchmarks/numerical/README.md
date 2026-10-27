@@ -8,7 +8,7 @@ workloads.
 Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST`. `verity_numerical.reference`
 is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. `security` is the soundness
 calculator for A-GKR and B-Ligero (`accounting`, `census`). The archived systems' exporter, drivers, explorations and
-red-team forgeries were deleted with `archive/`.
+red-team forgeries were deleted with the archive in `2091252fe3`.
 
 ## The subcircuit catalog
 
@@ -29,7 +29,7 @@ run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref cir
 ## WP1: independence audit of the existing columns
 
 The target names three executable columns of the finite-domain step: Python `verity.ml.circuits.silicon.silicon`, Rust
-`tc.rs` (SP1's guest, deleted with `archive/`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
+`tc.rs` (SP1's guest, deleted with the archive in `2091252fe3`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
 casts). Reading them against Hawkeye's pinned simulator (`verity/ml/circuits/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
 

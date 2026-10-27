@@ -138,7 +138,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the firewall |
 | "verifier gateway" | the challenger |
-| "batch verifier" (outside `archive/`, where B-Ligero's is another thing) | the verifier |
+| "batch verifier" (B-Ligero's was another thing) | the verifier |
 | "GPU workers" | workers |
 | "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` and the module docs of the `Protocol.lean` files | spec |
@@ -213,7 +213,7 @@ Some words keep a different, narrower sense:
   runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value; in private circuits it
   is the circuit of one proof block, so the developer's circuit is hidden like any value.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
-- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend in `archive/vole`, not C-Flock.
+- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not C-Flock.
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).
 
 ## Terms of one area

@@ -11,7 +11,7 @@ authenticated.
 `vectors.json` (schema `veritor/proof-format-v3/vectors/v1`) was **generated** by veritor's
 `test_format3_equivalence.py::test_write_vectors` (the Python reference, which decided every
 vector; `expected` is its verdict) and is frozen. D-SP1's guest kernel replayed it
-(`format3_equivalence.rs`, deleted with `archive/` in `2091252fe3`). Gate set
+(`format3_equivalence.rs`, deleted with the archive in `2091252fe3`). Gate set
 `veritor.word-arithmetic@2` at width 16; packed leaves of 8 `u16le` words under
 `verity-vllm/leaf/v1` framing; frame-v3 (`u16`) leaves for the multiproof family.
 
