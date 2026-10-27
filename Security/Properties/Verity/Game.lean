@@ -17,7 +17,7 @@ then the composition of the subprotocols that decide a period over the blobs the
 | subprotocol | `Audit` | component |
 | --- | --- | --- |
 | sampled proofs | `.sampled` | `SampledProofs.OneStageZk.protocol` (v2) |
-| PoUW | `.pouw` | `PouwCheck.protocol` (compute-accounting's period protocol `PouwCheck.period` once posted) |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` |
 | the bandwidth audit | `.poub` | `RemoteAudit.Protocol.protocol` |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` |
@@ -76,7 +76,7 @@ open scoped ENNReal
 /-- The compiled component of onsite that decides `Audit` `a`. -/
 def component : Audit → BlobProtocol
   | .sampled => SampledProofs.OneStageZk.protocol
-  | .pouw => PouwCheck.protocol
+  | .pouw => PouwCheck.Period.protocol
   | .pous => PousCheck.RunProtocol.protocol
   | .poub => RemoteAudit.Protocol.protocol
   | .network => NetworkCheck.Period.protocol
