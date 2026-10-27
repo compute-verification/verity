@@ -18,12 +18,14 @@ period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2` sa
   everything. A prover that does nothing (`idle`) leaves the period's capacity to other work worth 46, against at most
   32 for any honest strategy (`value_le`), so wherever it is accepted its shortfall is at least 12 (`shortfall_ge`) and
   its moment at least `e^{12/7} > 1`, which no moment of average at most 1 is everywhere.
-* `FleetSound_honest`: at a fleet of `n + 1` replicas of the witness, each with its own coins (the challenger's
+* `FleetSound_honest_at n`: at a fleet of `n + 1` replicas of the witness, each with its own coins (the challenger's
   randomness is every replica's coins, `coin = id`), each replica's moment holds at the honest verdict, the coins are
   the replicas' own (`OwnDither`), and the honest fleet reads no replica's coins (`CoinsConfidential`).
-* `FleetSound_nontrivial`: at that fleet, the verifier that accepts everything, `δ_coin = 1/2` and `κ_max = 0`, the idle
-  fleet is accepted with every replica's shortfall at least 12, past the fleet's luck `7 (n + 1) ln 2`, on every
-  oracle and coins, so `FleetSound`'s event has probability 1.
+* `FleetSound_nontrivial_at n`: at that fleet, the verifier that accepts everything, `δ_coin = 1/2` and `κ_max = 0`,
+  the idle fleet is accepted with every replica's shortfall at least 12, past the fleet's luck `7 (n + 1) ln 2`, on
+  every oracle and coins, so `FleetSound`'s event has probability 1.
+* `FleetSound_honest` and `FleetSound_nontrivial`, the witnesses the lock lists: both at a fleet of two replicas
+  (`n = 1`), closed at that one instance.
 -/
 
 namespace Pouw.SecurityProofs.DitherWitness
@@ -212,10 +214,10 @@ theorem WorkSound_nontrivial :
   rw [hC, value_eight] at hval
   linarith [value_le W' z' hfit, twε_lt idle]
 
-/-- **`FleetSound`'s honest witness** (LEAN-66): at a fleet of `n + 1` replicas of the witness, the challenger's
-randomness every replica's coins (`coin = id`), each replica's moment holds at the honest verdict (`witness_moment`),
-each replica's coins are its own, the honest fleet reads no replica's coins, and the verdict accepts it. -/
-theorem FleetSound_honest (n : ℕ) :
+/-- `FleetSound`'s honest witness at a fleet of `n + 1` replicas of the witness: the challenger's randomness every
+replica's coins (`coin = id`), each replica's moment holds at the honest verdict (`witness_moment`), each replica's
+coins are its own, the honest fleet reads no replica's coins, and the verdict accepts it. -/
+theorem FleetSound_honest_at (n : ℕ) :
     MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) ∧
       OwnDither twRound 2 (n + 1) (fun ω : Fin (n + 1) → Fin 2 → TDraw × Fin 2 => ω) ∧
       CoinsConfidential (G := tw) (P := twRound) (k := 2) (N := n + 1)
@@ -223,10 +225,10 @@ theorem FleetSound_honest (n : ℕ) :
       ∀ (u : Fin (n + 1)) (ω : Fin (n + 1) → Fin 2 → TDraw × Fin 2) (o : Unit), honest.Passes twVerdict twDev o (ω u) :=
   ⟨witness_moment, fun _ => rfl, fun _ _ _ _ => rfl, fun u ω o => honest_passes o (ω u)⟩
 
-/-- **`FleetSound`'s nontrivial witness** (LEAN-66): at the fleet of `FleetSound_honest`, the verifier that accepts
+/-- `FleetSound`'s nontrivial witness at the fleet of `FleetSound_honest_at n`: at the verifier that accepts
 everything, `δ_coin = 1/2` and `κ_max = 0`, some prover's fleet breaks `FleetSound`'s bound: its event has
 probability 1. -/
-theorem FleetSound_nontrivial (n : ℕ) :
+theorem FleetSound_nontrivial_at (n : ℕ) :
     ∃ A : Prover tw twRound 2, ¬ prob (fun oω : Unit × (Fin (n + 1) → Fin 2 → TDraw × Fin 2) =>
       ∃ S : Finset (Fin (n + 1)), S.Nonempty ∧ ∃ z : Fin (n + 1) → twPd.J → ℝ,
         (∀ u ∈ S, A.Passes (fun _ _ _ _ => True) twDev oω.1 (oω.2 u) ∧ twPd.Fits (A.timedUse oω.1 (oω.2 u)) (z u)) ∧
@@ -258,5 +260,24 @@ theorem FleetSound_nontrivial (n : ℕ) :
   have hn : (0 : ℝ) < (n : ℝ) + 1 := by positivity
   have hl : Real.log 2 ≤ 1 := by linarith [Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)]
   nlinarith [mul_le_mul_of_nonneg_left hl hn.le]
+
+/-- **`FleetSound`'s honest witness**: `FleetSound_honest_at` at a fleet of two replicas of the witness. -/
+theorem FleetSound_honest :
+    MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) ∧
+      OwnDither twRound 2 (1 + 1) (fun ω : Fin (1 + 1) → Fin 2 → TDraw × Fin 2 => ω) ∧
+      CoinsConfidential (G := tw) (P := twRound) (k := 2) (N := 1 + 1)
+        (fun ω : Fin (1 + 1) → Fin 2 → TDraw × Fin 2 => ω) (fun _ _ => honest) ∧
+      ∀ (u : Fin (1 + 1)) (ω : Fin (1 + 1) → Fin 2 → TDraw × Fin 2) (o : Unit), honest.Passes twVerdict twDev o (ω u) :=
+  FleetSound_honest_at 1
+
+/-- **`FleetSound`'s nontrivial witness**: `FleetSound_nontrivial_at` at the fleet of two replicas of
+`FleetSound_honest`. -/
+theorem FleetSound_nontrivial :
+    ∃ A : Prover tw twRound 2, ¬ prob (fun oω : Unit × (Fin (1 + 1) → Fin 2 → TDraw × Fin 2) =>
+      ∃ S : Finset (Fin (1 + 1)), S.Nonempty ∧ ∃ z : Fin (1 + 1) → twPd.J → ℝ,
+        (∀ u ∈ S, A.Passes (fun _ _ _ _ => True) twDev oω.1 (oω.2 u) ∧ twPd.Fits (A.timedUse oω.1 (oω.2 u)) (z u)) ∧
+        ¬ ∃ d : Fin (1 + 1) → ℝ, (∀ u ∈ S, 0 ≤ d u ∧ twPd.FreedWithin 1 (z u) (1 / 7 + d u / 14) 14) ∧
+          ∑ u ∈ S, d u ≤ fleetLuck (fun _ => twη) S twδ) ≤ twδ + ∑ _u : Fin (1 + 1), (0 : ℝ) :=
+  FleetSound_nontrivial_at 1
 
 end Pouw.SecurityProofs.Dither

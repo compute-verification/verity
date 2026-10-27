@@ -1738,6 +1738,10 @@
    "owner": "@compute-research",
    "digest": "e949ee029843f8f5bc79bfda13d760ac651fd046dd707daab5a2088010d9c450"
   },
+  "Pouw.Dither.AnswersFit": {
+   "owner": "@compute-research",
+   "digest": "e570fd22138edd4a4ac2b18e176f0e54d0cec0cc7eaab177a8b7105cfe6cdd29"
+  },
   "Pouw.Dither.CallsAtPub": {
    "owner": "@compute-research",
    "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201"
@@ -2121,10 +2125,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Pouw.Dither.AnswersFit": {
-   "owner": "@compute-research",
-   "digest": "e570fd22138edd4a4ac2b18e176f0e54d0cec0cc7eaab177a8b7105cfe6cdd29"
   }
  },
  "meaning": [
