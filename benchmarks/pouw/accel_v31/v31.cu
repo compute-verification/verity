@@ -3071,7 +3071,6 @@ static void kernel_attrs(FILE* f) {
                       {"leaf_persist_m6", (const void*)leaf_persist<V31Row, 6>},
                       {"leaf_persist_lt", (const void*)leaf_persist<LtRow>}, {"leaf_persist_lt_m6", (const void*)leaf_persist<LtRow, 6>},
                       {"leaf_persist_served", (const void*)leaf_persist<ServedRow>},
-                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>},
                       {"leaf_persist_served_m6", (const void*)leaf_persist<ServedRow, 6>},
                       {"leaf_persist_served_m8", (const void*)leaf_persist<ServedRow, 8>}};
   fprintf(f, "{");
@@ -3083,8 +3082,14 @@ static void kernel_attrs(FILE* f) {
                       {"wg_256_r4", (const void*)wgp::gemm_r4<256, FusedLeaves>},
                       {"wg_128_r4", (const void*)wgp::gemm_r4<128, FusedLeaves>},
                       {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>},
-                      {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>}};
-  for (const KAttr& w : wk) kernel_attr(f, w, false);
+                      {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>},
+                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>}};
+  for (const KAttr& w : wk) {
+    cudaFuncAttributes a;
+    CK(cudaFuncGetAttributes(&a, w.fn));
+    fprintf(f, ", \"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", w.name, a.numRegs, a.localSizeBytes,
+            a.sharedSizeBytes);
+  }
 #endif
   fprintf(f, "}");
 }

@@ -916,16 +916,11 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
     return 0 if rep["exact"] else 1
 
 
-def fill_variant(r: dict) -> str:
-    """A fill-bench line's knobs, as fill-table labels its rows."""
-    return (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
-            + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
-            + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
-            + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
-            + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
-            + (f" m{r['lminb']}" if r.get("lminb", 5) != 5 else "") + (" sa" if r.get("sahead") else "")
+def commit_labels(r: dict) -> str:
+    """A fill-bench line's commit knobs off their defaults, as fill-table labels its rows after the call's knobs."""
+    return ((f" m{r['lminb']}" if r.get("lminb", 5) not in (4, 5) else "")
             + (f" sm{r['sminb']}" if r.get("sminb", 5) != 5 else "") + (" cf" if r.get("lfold") == 1 else "")
-            + (" nofull" if r.get("full") == 0 else "") + (f" np{r['lpieces']}" if r.get("lpieces", 1) > 1 else ""))
+            + (" nofull" if r.get("full") == 0 else ""))
 
 
 def cmd_fill_table(a: argparse.Namespace) -> int:
@@ -940,7 +935,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     Then the commit's parts alone (lines that carry them): each part's SHA-512 compressions a SM-cycle at its median time
     and clock, over the build's own compression rate (the sha arm, commit_gpu's ruler), and with ``--bar`` (the card's
     fastest full-output compression a SM-cycle) over that bar."""
-    rows = []
+    rows, named = [], []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
             if line.startswith("{") and '"fill": true' in line:
@@ -955,7 +950,14 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
-        variant = fill_variant(r)
+        variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
+                   + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
+                   + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
+                   + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
+                   + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
+                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+        variant += commit_labels(r)
+        named.append((r, variant))
         fused = "-"
         if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
             fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
@@ -970,7 +972,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
               f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
               f"{100 / duty:.1f}% | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
               f"{fused} |")
-    parts = [r for r in rows if "per_sm_cycle" in r]
+    parts = [(r, variant) for r, variant in named if "per_sm_cycle" in r]
     if not parts:
         return 0
 
@@ -983,12 +985,12 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     print()
     print("| shape | variant | sha / SM-cycle | part | ms | MHz | compressions | / SM-cycle | of sha | of bar |")
     print("|---|---|---|---|---|---|---|---|---|---|")
-    for r in parts:
+    for r, variant in parts:
         pc, cm = r["per_sm_cycle"], r["comp"]
         for part, comp in (("leaf", cm["leaf"]), ("leaf_nomem", cm["leaf"]), ("salt", cm["salt"]),
                            ("commit", cm["leaf"] + cm["salt"])):
             arm = r["arms"].get(part, {})
-            print(f"| {r['shape']} | {fill_variant(r)} | {c(pc['sha'])} | {part} | {g(arm.get('ms'))} | {arm.get('mhz', '-')} | "
+            print(f"| {r['shape']} | {variant} | {c(pc['sha'])} | {part} | {g(arm.get('ms'))} | {arm.get('mhz', '-')} | "
                   f"{comp:.0f} | {c(pc[part])} | {g(r['of_sha'][part])} | {of(pc[part], a.bar)} |")
     return 0
 
