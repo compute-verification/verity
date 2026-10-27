@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from verity_vllm.engine import capture as C
-from verity_vllm.engine import pinned
+from verity_vllm.observe import capture as C
+from verity_vllm.observe import pinned
 
 
 class _View:

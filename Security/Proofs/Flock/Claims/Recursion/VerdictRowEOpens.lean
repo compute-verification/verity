@@ -1,6 +1,5 @@
 import Proofs.Flock.Claims.Recursion.CapOpens
 import Proofs.Flock.C3.RegLevels.AccReads
-import Proofs.Flock.Claims.Recursion.RowsShared
 
 /-!
 # A rec-open part's `acc` and `acc_out` slots are registered `rec-acc` rows at their chain positions
@@ -17,9 +16,9 @@ read names. This is that per-part fact, at a staged `.recOpen` part the witness 
   (`accPort_of_checks`, `accReads_recOpen`).
 
 The part's reads file is present (`registered_recOpen`: `RecCoins.check` refuses a rec-open unit without one). The unit's
-label is taken as `n` (`hidx`, as `check5_bytes` takes it). Two staged parts of one statement read one `acc0`: their
-setups parse one `--rec-rows` (`insO_staged_rows`, `readX`'s `rowsShared`), so their ports' sites agree
-(`accRow_site_eq`).
+label is taken as `n` (`hidx`, as `check5_bytes` takes it). Two parts staged at one staging message read one `acc0`:
+their setups parse the one set of V*'s shared rows the staging round carries (`Stage.rows`, `partRaw`'s `recRows`)
+(`insO_staged_rows`), so their ports' sites agree (`accRow_site_eq`).
 -/
 
 namespace RecDeploy
@@ -49,22 +48,24 @@ theorem ins_of_insO_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)
   · simp at h
   exact toOption_eq_some (by simpa using h)
 
-/-- **Two staged parts of one statement read the same rows**: each setup's `rows` is the parse of its part's
-`--rec-rows`, which `readX` holds equal across the parts (`partRaw_recRows_eq`). -/
-theorem insO_staged_rows {st st' : Stage} {x : Msg} {ms ms' : List (Msg × Claims.Out)} {s s' : ℕ} {i i' : RecIns}
-    (h : insO (staged st x ms s) = some i) (h' : insO (staged st' x ms' s') = some i') : i.rows = i'.rows := by
-  obtain ⟨r, p, hr, hp, hi⟩ := ins_of_insO_staged h
-  obtain ⟨r', p', hr', hp', hi'⟩ := ins_of_insO_staged h'
+/-- **Two parts staged at one staging message read the same rows**: each setup's `rows` is the parse of its part's
+`--rec-rows`, which is the staging round's one set of V*'s shared rows for every part (`partRaw`'s `recRows`,
+`st.rows x ms`). -/
+theorem insO_staged_rows {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s s' : ℕ} {i i' : RecIns}
+    (h : insO (staged st x ms s) = some i) (h' : insO (staged st x ms s') = some i') : i.rows = i'.rows := by
+  obtain ⟨r, p, hr, -, hi⟩ := ins_of_insO_staged h
+  obtain ⟨r', p', hr', -, hi'⟩ := ins_of_insO_staged h'
   rw [hr] at hr'
   cases hr'
   have e := RecRaw.ins_rows hi
-  rw [partRaw_recRows_eq hr hp hp' st st' ms ms', RecRaw.ins_rows hi'] at e
+  have hrr : (partRaw r st x ms s p).recRows = (partRaw r st x ms s' p').recRows := rfl
+  rw [hrr, RecRaw.ins_rows hi'] at e
   exact (Except.ok.inj e).symm
 
 /-- **Two staged parts' `rec-acc` ports have one site**: where each port's site is its setup's rows' `acc0`'s
-(`accRow_table`), and the two setups are of staged parts of one statement (`insO_staged_rows`). -/
-theorem accRow_site_eq {st st' : Stage} {x : Msg} {ms ms' : List (Msg × Claims.Out)} {s s' : ℕ} {i i' : RecIns}
-    (h : insO (staged st x ms s) = some i) (h' : insO (staged st' x ms' s') = some i')
+(`accRow_table`), and the two setups are of parts staged at one staging message (`insO_staged_rows`). -/
+theorem accRow_site_eq {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s s' : ℕ} {i i' : RecIns}
+    (h : insO (staged st x ms s) = some i) (h' : insO (staged st x ms s') = some i')
     {rws rws' : Array Registered.Port} {a0 a0' reg reg' : Registered.Port} (hrw : i.rows = some rws)
     (ha : rws.find? (·.name == "acc0") = some a0) (hs : FlockVBridge.Family.site reg = FlockVBridge.Family.site a0)
     (hrw' : i'.rows = some rws') (ha' : rws'.find? (·.name == "acc0") = some a0')

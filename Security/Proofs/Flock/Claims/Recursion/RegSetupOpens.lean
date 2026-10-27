@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 Wherever the recursive setup accepts a V\* statement (`setupO`), it ran `checkRegistered` on each of its statements
 (`OpensReads`' `RecIns.setup_registered`), so `checkPort` accepted each of the verifier's registered ports there, and
-every row of its table opens the registered root at its position through its path (`checkPort_rows`). So every
+the row each instance's ref names opens the registered root at its position through its path (`checkPort_at`). So every
 opening `regOpenings` lists opens (`regOpenings_opens`), and `bc_eq_of_setup` is `bc_eq_of_regOpenings` with nothing
 about the openings assumed.
 -/
@@ -46,18 +46,19 @@ end Flock.Registered
 
 namespace RecDeploy
 
-/-- **A statement `checkRegistered` accepts at the verifier's `own` opens every row `portOpenings` lists.** -/
+/-- **A statement `checkRegistered` accepts at the verifier's `own` opens every row `portOpenings` lists**: each is the
+row an instance's ref names, which `checkPort` opens (`checkPort_at`). -/
 theorem portOpenings_opens {st : _root_.Flock.Stmt} {own : Array _root_.Flock.Registered.Port}
     (h : _root_.Flock.checkRegistered st (some own) = .ok ()) {reg : _root_.Flock.Registered.Port}
     (hreg : reg ∈ own.toList) : ∀ o ∈ portOpenings st reg, _root_.Flock.Registered.opens reg o.1 o.2.1 o.2.2 = true := by
   obtain ⟨t, _, ht, -, hports⟩ :=
     FlockSoundness.Discharge.ZkReg.check_tables (FlockSoundness.Discharge.ZkReg.checkRegistered_ok h)
-  obtain ⟨p, positions, paths, hp, he, hrows⟩ :=
-    _root_.Flock.Registered.checkPort_rows (hports reg (by simpa using hreg))
+  obtain ⟨p, positions, paths, hp, he, hall⟩ :=
+    FlockSoundness.Discharge.ZkReg.checkPort_at (hports reg (by simpa using hreg))
   intro o ho
   simp only [portOpenings, ht, hp, he, List.mem_map, List.mem_range] at ho
-  obtain ⟨r, hr, rfl⟩ := ho
-  exact hrows r hr
+  obtain ⟨i, hi, rfl⟩ := ho
+  exact (hall i hi).2.2
 
 /-- **Every opening the recursive setup lists opens.** -/
 theorem regOpenings_opens {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port} {bc path : ByteArray} {pos : ℕ}

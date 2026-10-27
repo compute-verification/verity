@@ -524,13 +524,14 @@ theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   obtain ⟨hqd, ptd, hptd, hwords, hcols⟩ := dirsCols_staged (w := w) hS hr hss hsv hpc hx ht hdin i
   obtain ⟨prog, hprog, hpv⟩ := check5_bytes_lt hS hck hr hpc hsu h0 hidx hown hdv hqd hnN hnr hnp
   have hst : openSetupSt (RecCoins.Source.atC3 i0.src i0.inner i0.commits) sts[0] =
-      commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE) := by
+      commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ++
+        commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE) := by
     unfold openSetupSt
     simp only [hpar, hf, hinn, hprog, Except.toOption, hrows]
-  have hmemS : ∀ u ∈ openSetupSt (RecCoins.Source.atC3 i0.src i0.inner i0.commits) sts[0], u ∈ b.setup xO :=
+  have hmemS : ∀ u ∈ commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE), u ∈ b.setup xO :=
     fun u hu => hset u (by
-      unfold resSetup; rw [hsu]; exact List.mem_flatMap.2 ⟨sts[0], by simp, List.mem_append_right _ hu⟩)
-  rw [hst] at hmemS
+      unfold resSetup; rw [hsu]
+      exact List.mem_flatMap.2 ⟨sts[0], by simp, List.mem_append_right _ (by rw [hst]; exact List.mem_append_right _ hu)⟩)
   have hci : rowInput (RecCoins.padTo dr[i]! (Registered.rowWords dr[i]!.size 16)) ∈
         commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE) ∧
       (Hm96.Default512.saltPrefix ++ RecCoins.verifierSalt prog RecCoins.DIRS_VALUE i).data.toList ∈

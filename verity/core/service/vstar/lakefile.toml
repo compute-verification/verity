@@ -2,7 +2,7 @@
 # `RecOpen{LANES, H}` statement and each `InnerRepCheck{S}` part of the algebra, emitted as the `flock-circuit` file
 # `Flock.Circuit` parses) is in C-Flock's verifier's package, whose `Flock.RecVStar` holds a V* statement's circuit file to it.
 name = "core_vstar"
-defaultTargets = ["vstar", "vstar-difftest"]
+defaultTargets = ["vstar", "vstar-difftest", "vstar-trace"]
 
 [leanOptions]
 autoImplicit = false
@@ -23,3 +23,7 @@ root = "VStarMain"
 [[lean_exe]]
 name = "vstar-difftest"
 root = "VStarDifftest"
+
+[[lean_exe]]
+name = "vstar-trace"
+root = "VStarTrace"

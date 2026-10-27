@@ -55,9 +55,11 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 
 When the session reads a window's openings coin, and what its draw fixes (the code's half of the opening draw's
-`Refused` and `Live`), is `Properties.RemoteAudit.Coins`. That the verifier's process, which takes the events one
-request at a time on the coins the challenger sent and settles each window's check later, accepts what `Session.run`
-accepts on the events its transcript records is `Properties.RemoteAudit.Live` (`LiveIsRun`).
+`Refused` and `Live`), is `Properties.RemoteAudit.Coins`, and at one openings coin over `g` windows
+(`groups_per_coin`, `Shared.run g`) `Properties.RemoteAudit.Shared`. That the verifier's process, which takes the events
+one request at a time on the coins the challenger sent and settles each window's check later, accepts what
+`Shared.run g` (`Session.run` at g = 1) accepts on the events its transcript records, at two windows in flight, is
+`Properties.RemoteAudit.Live` (`LiveIsRun`).
 -/
 
 open RemoteAudit

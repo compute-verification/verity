@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 import Proofs.Flock.Claims.Recursion.BindsDeployed
 import Proofs.Flock.Claims.Recursion.LayoutBAcc
+import Proofs.Flock.Claims.KS.PlainR
 
 /-!
 # The deployed parameters of the bound record at `nextR` (U8)
@@ -10,6 +11,9 @@ import Proofs.Flock.Claims.Recursion.LayoutBAcc
 The bound record at the recursive verifier, `bdDeployed rel (nextR rdR) cols wER joinR rowInDeployed finalR wR`, at
 V\*'s bound layout `layR elem` (`layoutBTops (finOpen (restR elem))` with the output rows', check 5's and the
 `rec-acc` chain's calls, `moreCalls`), fixes every choice the code side makes:
+
+* **The columns** are the reader's, the trimmed plain record's at `rdR` (`deployPlainTrimR rel rdR`), as
+  `RecursiveKSAt` reads them: `bdR` is `RecDeploy.bdR rdR wER finalR wR`.
 
 * **The weights** (ASK-72): `DE`'s is the deployed plain record's (`wER`), `γ`'s at `IVStar` its cover (`wR`,
   `wCover`). **The join** is `FlockDeploy.joinR`, the rows' digest input `rowInDeployed`.
@@ -197,7 +201,8 @@ def ElemFramed (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × L
 /-- The deployed bound record at `nextR rdR`. -/
 noncomputable abbrev bdR : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace :=
   bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rdR)
-    (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wER FlockDeploy.joinR rowInDeployed finalR wR
+    (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rdR).cols wER FlockDeploy.joinR rowInDeployed finalR
+    wR
 
 /-! ## The output rows' calls -/
 
@@ -249,12 +254,13 @@ def portCalls (c : Circuit) (nm : String) (q n : ℕ) : List (Msg × List HmNets
 verifier's values, and `out`, its zero rows. -/
 def resPorts : List String := ["v", "out"]
 
-/-- The port check 5 holds to the verifier's own rows at a `rec-open` part (`RecCoins.checkOpen`): `dirs`, the
-directions of the positions the verifier drew. -/
-def openPorts : List String := ["dirs"]
+/-- The ports check 5 holds to the verifier's own rows at a `rec-open` part (`RecCoins.checkOpen`): `coef`, the
+coefficients at the verifier's coins, and `dirs`, the directions of the positions the verifier drew. -/
+def openPorts : List String := ["coef", "dirs"]
 
 /-- **The rows check 5 holds at part `s`**, with the port's index: at an algebra part (`.inner`), ports `v` and `out`
-(`resPorts`) at each of its two instances; at a `rec-open` part of `n` instances, port `dirs` (`openPorts`) at each. -/
+(`resPorts`) at each of its two instances; at a `rec-open` part of `n` instances, ports `coef` and `dirs` (`openPorts`)
+at each. -/
 def valPorts (r : XR) (s : ℕ) : List (String × ℕ × ℕ) :=
   match (RecVStar.statements r.shape).toOption.bind (·[s]?), r.w.parts[s]?.bind partCircuit with
   | some (.inner _ _ _), some c => resPorts.flatMap fun nm => match c.ports.findIdx? (·.name == nm) with

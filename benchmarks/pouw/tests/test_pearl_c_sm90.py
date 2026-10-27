@@ -180,10 +180,65 @@ def test_kernel_constants_match_the_reference():
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
 
 
+def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
+    """`Pipeline.reads_bf16`: a split pd pipeline, from a cubin with BF16_ROWS_MARK, under BF16_ROWS.  Its ``rows_a`` then
+    gives pd_commit the rows set on it (`rows_bf16`) at p15 and their count at i5, and mode 0 and unset rows launch as
+    before; rows set on a pipeline that doesn't read them are refused.  `widen_a` with `pdl` False launches plainly."""
+    launched = []
+
+    class D:
+        def __init__(self, marked):
+            self.marked, self.pd_smem = marked, {851: 0}
+
+        def has(self, name):
+            return self.marked and name == RUN.BF16_ROWS_MARK
+
+        def launch(self, name, grid, block, smem=0, p=(), i=(), stream=None, **kw):
+            launched.append((name, tuple(p), tuple(i), kw))
+
+    pipe = RUN.Pipeline.__new__(RUN.Pipeline)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes"), 1)
+    pipe.keys = dict.fromkeys(("unit", "dom_a", "salt_key", "hm"), 2)
+    pipe.pd, pipe.split_a, pipe.stamps, pipe.k, pipe.m, pipe.m_real = 851, True, 0, 4096, 64, 16
+    for marked in (True, False):
+        pipe.dev, pipe.rows_bf16 = D(marked), None
+        assert pipe.reads_bf16() is marked
+        launched.clear()
+        pipe.pd_commit(1)
+        assert launched[0][0] == "pd_commit_851" and len(launched[0][1]) == 14 and launched[0][2] == (16, 4096, 1, 64)
+        pipe.rows_bf16 = (777, 8)
+        if not marked:
+            with pytest.raises(RuntimeError, match="reads_bf16"):
+                pipe.pd_commit(1)
+            continue
+        launched.clear()
+        pipe.pd_commit(1)
+        pipe.pd_commit(0)
+        assert launched[0][1][14:] == (0, 777) and launched[0][2] == (16, 4096, 1, 64, 0, 8)
+        assert len(launched[1][1]) == 14 and launched[1][2] == (16, 4096, 0, 64)
+    pipe.dev = D(True)
+    pipe.split_a = False
+    assert not pipe.reads_bf16()
+    pipe.split_a = True
+    monkeypatch.setattr(RUN, "BF16_ROWS", False)
+    assert not pipe.reads_bf16()
+    assert f"void {RUN.BF16_ROWS_MARK}() {{}}" in SOURCE
+
+    calls = []
+    dev = RUN.Dev.__new__(RUN.Dev)
+    dev.cu = SimpleNamespace(cuLaunchKernelEx=lambda *a: calls.append("programmatic") or 0,
+                             cuLaunchKernel=lambda *a: calls.append("plain") or 0)
+    dev.fns, dev.stream, dev.pdl_names = {"widen_a": RUN.vp()}, None, RUN.PDL_ENTRY_KERNELS
+    RUN.widen_a(dev, 1, 2, 8, 16, 4096)
+    RUN.widen_a(dev, 1, 2, 8, 16, 4096, pdl=False)
+    assert calls == ["programmatic", "plain"]
+
+
 def test_a_programmatic_launch_waits_at_its_entry():
     """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
     once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't
-    read a stale line), the forming and pa_w first; and pd_commit lets the forming launch behind it.  The Pearl-C GEMMs
+    read a stale line), pa_w, widen_a and pd_commit first, and the forming once it has read the weight's F lines (p3) and F_B^T
+    bytes (p7), which only the weight's job writes (`lines_fa`, `lines_fb`); and pd_commit then lets the forming launch behind it.  The Pearl-C GEMMs
     (LATE) read only P_A of what the launch before them (pa_w, pa) writes, so only their producer waits, before its first
     P_A box; pa_w waits at its entry, so what they read before that was written by launches that had completed."""
     def body(start):
@@ -202,14 +257,27 @@ def test_a_programmatic_launch_waits_at_its_entry():
     assert re.search(r"pdl_wait\(\) \{ asm volatile\(\"griddepcontrol\.wait;\"", SOURCE)
     assert re.search(r"pdl_launch\(\) \{ asm volatile\(\"griddepcontrol\.launch_dependents;\"", SOURCE)
     assert "cp.async.bulk.prefetch.tensor.2d.L2.global" in body("DEV void tma_prefetch_l2")
-    for b in (form, pa_w):
+    for b in (pa_w, body('void widen_a(')):
         head = b[:b.index("pdl_entry();")]
         assert "reinterpret_cast" not in head and "return" not in head, head
+    head = form[:form.index("pdl_entry();")]
+    assert set(re.findall(r"a\.p\[(\d+)\]", head)) == {"3", "5", "7"} and "return" not in head
+    assert "if constexpr (!GR) stage_f();\n  pdl_entry();\n  if constexpr (GR) stage_f();" in form
+    run = (HERE / "run.py").read_text()
+    assert 'form_side("a", m, "xa", "ea_codes", "fa_codes", "at"' in run and 'form_side("b", n, "xb", "eb_codes", "fb_codes"' in run
+    assert 'b["ea_codes"], b["fa_codes"], b["at"], b["beta_a"],\n' in run and 'b["epa_codes"], b["fbT32"], b["af_win"]' in run
+    job = run[run.index("        job = ["):run.index("        mr, tiles = ")]
+    assert '"fa_codes", b["faT32"])' in job and '"fb_codes", b["fbT32"], b["fbT128"])' in job
     assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
     assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
+    assert RUN.PDL_ENTRY_KERNELS == {"widen_a"} | {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
+    assert f'void {RUN.PDL_ENTRY_MARK}() {{}}' in SOURCE
     assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
-    assert "#ifdef PD_PDL\n  asm volatile(\"griddepcontrol.launch_dependents;\"" in pd
+    entry = pd[pd.index("DEV void pd_commit_t("):]
+    entry = entry[:entry.index("#endif")]
+    assert "#ifdef PD_PDL" in entry and 'asm volatile("griddepcontrol.wait;\\n\\tgriddepcontrol.launch_dependents;"' in entry
+    assert "a.p[" not in entry[:entry.index("#ifdef PD_PDL")]
 
 
 SASS_OK = "\n".join([
@@ -335,10 +403,11 @@ KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(?!__launc
 #: s512_pads.
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
                "s512_tree_small", "s512_seeds"}
-#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, each served variant's commitment (whole, and split
-#: into pd_commit's mode 1 and pd_tree) and tile leaves, and its stamp twin's commitment
-PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tree", "tiles")),
-               *(f"pd_commit_{v}" for v in RUN.PD_STAMPED)}
+#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, each served variant's tile leaves, and its
+#: commitment (whole, and split into pd_commit's mode 1 and pd_tree) and its stamp twin's on the variant without PD_GROUP
+#: (run.py's ONE_COMMIT)
+PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v & ~RUN.PD_GROUP}" for v in RUN.PD_SERVED for kind in ("commit", "tree")),
+               *(f"pd_tiles_{v}" for v in RUN.PD_SERVED), *(f"pd_commit_{v & ~RUN.PD_GROUP}" for v in RUN.PD_STAMPED)}
 #: hash_prefill.cuh's launches (run.py's chain "pl", the default past pd)
 PL_LAUNCHED = {f"pl_{kind}_{RUN.PL_VARIANT}" for kind in PL_KINDS}
 
@@ -358,8 +427,12 @@ def grouped_kernels() -> list[str]:
     return [n for n in re.findall(KERNEL, SOURCE) if n.endswith("_g")] + names + [g + "_smem" for g in names] + pd
 
 
+#: the cubin's empty kernels, which run.py looks for and never launches
+MARKS = (RUN.PDL_MARK, RUN.PDL_ENTRY_MARK, RUN.BF16_ROWS_MARK)
+
+
 def own_kernels() -> list[str]:
-    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", RUN.PDL_MARK} - set(grouped_kernels())
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", *MARKS} - set(grouped_kernels())
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
@@ -369,7 +442,7 @@ def kernel_names() -> list[str]:
     (hash_h3.cuh, hash_fast.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
     pl = [f"pl_{kind}_{v}" for v in PL_BUILT for kind in PL_KINDS]
-    return own_kernels() + [RUN.PDL_MARK] + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
+    return own_kernels() + list(MARKS) + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
@@ -549,6 +622,11 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     r2 = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=old, capture_output=True,
                         text=True)
     assert r2.returncode == 4 and json.loads(r2.stdout.splitlines()[1])["pdl"] is False, r2.stderr
+    # a cubin without PDL_ENTRY_MARK (its widen_a and pd_commit don't wait) still launches its PDL_KERNELS programmatically
+    entryless = tmp_path / "entryless.jsonl"
+    r3 = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], capture_output=True, text=True,
+                        env=dry_env(ship, entryless, FAKE_KERNELS=",".join(n for n in kernel_names() if n != RUN.PDL_ENTRY_MARK)))
+    assert r3.returncode == 4 and any(json.loads(x).get("pdl") for x in entryless.read_text().splitlines()), r3.stderr
     assert not any(json.loads(x).get("pdl") for x in unmarked.read_text().splitlines())   # a cubin whose kernels don't wait
     assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
     failed = rows[2]["variants"]["h100"]["failed"]
@@ -619,9 +697,9 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     names = {ev["name"] for ev in launched}
     assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "form_s5_epw", "pa_w", "gemm_words"} <= names
     assert {ev["i"][0] for ev in launched if ev["name"] == "form_s5_epw"} == {64}
-    # the main lane's PDL_KERNELS start behind the launch before them, and no other launch does
-    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep",
-                                                                                           "form_s5_epw"}
+    # the main lane's PDL_KERNELS and PDL_ENTRY_KERNELS start behind the launch before them, and no other launch does
+    pdl = (RUN.PDL_KERNELS | RUN.PDL_ENTRY_KERNELS) & names
+    assert {ev["name"] for ev in launched if ev.get("pdl")} == pdl >= {"gemm_pearlc_d", "pa_w", "form_s5_ep", "form_s5_epw"}
     wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
     assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)
 

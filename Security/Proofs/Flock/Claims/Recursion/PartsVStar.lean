@@ -66,7 +66,7 @@ theorem partVStar_of_setup {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Cl
     {p : PartX} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hsh : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape)
     (hi : (partRaw r st x ms s p).ins = .ok i) (hs : i.setup = .ok (spec, sts)) (hck : i.base.read.check = .ok ()) :
-    ∃ f vs sv, ownBindings r.w.bindings = some f ∧ RecVStar.statements r.shape = .ok vs ∧ vs[s]? = some sv ∧
+    ∃ f vs sv, ownBindings p.bindings = some f ∧ RecVStar.statements r.shape = .ok vs ∧ vs[s]? = some sv ∧
       partVStar r.shape f sv p = true := by
   obtain ⟨hin, -⟩ := RecRaw.ins_inner_src hi
   have hinner : i.inner = some r.shape := by
@@ -114,12 +114,12 @@ theorem partVStar_of_setup {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Cl
     rw [hib]
     simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some]
     rw [← htg, ← hcf3, ← htb3, ← hcf2, ← htb, hc0]
-  have hown : ownBindings r.w.bindings = some f := by
+  have hown : ownBindings p.bindings = some f := by
     dsimp only [partRaw] at hb
     simp only [Option.mapM_some] at hb
     rw [hf] at hb
     unfold ownBindings
-    cases he : (do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" r.w.bindings)) with
+    cases he : (do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" p.bindings)) with
     | error e => rw [he] at hb; cases hb
     | ok v =>
       rw [he] at hb
@@ -149,14 +149,14 @@ theorem readX_of_sessions {x : Claims.Msg} {r : XR} (hr : readXPre x = some r)
   obtain ⟨f, vs', sv, hown, hvs', hsv, hp⟩ := partVStar_of_setup hsh hi hset hck
   rw [hvs] at hvs'
   cases hvs'
-  simp only [hown, List.getElem?_eq_getElem hs', hsv]
+  simp only [List.getElem?_eq_getElem hs', hsv, hown]
   exact hp
 
-/-- **What `readX` read of each part**: the verifier's own bindings read, and each part's circuit is V\*'s statement's
+/-- **What `readX` read of each part**: the verifier's own bindings of it read, and its circuit is V\*'s statement's
 of its index (`partVStar`). -/
 theorem readX_partVStar {x : Claims.Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧
-      ∀ s (hs : s < vs.size), ∃ f p c, ownBindings r.w.bindings = some f ∧ r.w.parts[s]? = some p ∧
+      ∀ s (hs : s < vs.size), ∃ f p c, ownBindings p.bindings = some f ∧ r.w.parts[s]? = some p ∧
         partCircuit p = some c ∧ RecVStar.checkFile vs[s] f p.base.circuit r.shape.holo = .ok () ∧
         RecVStar.checkParsed vs[s] c = .ok () ∧ RecVStar.checkPart vs[s] c = .ok () := by
   obtain ⟨vs, hvs, hp⟩ := readX_parts h
@@ -167,7 +167,8 @@ theorem readX_partVStar {x : Claims.Msg} {r : XR} (h : readX x = some r) :
   have hall := List.all_eq_true.1 hp s (List.mem_range.2 hs)
   have hs' : s < r.w.parts.length := by omega
   rw [List.getElem?_eq_getElem hs', Array.getElem?_eq_getElem hs] at hall
-  cases hf : ownBindings r.w.bindings with
+  simp only at hall
+  cases hf : ownBindings r.w.parts[s].bindings with
   | none => rw [hf] at hall; simp at hall
   | some f =>
     rw [hf] at hall
@@ -179,7 +180,7 @@ theorem readX_partVStar {x : Claims.Msg} {r : XR} (h : readX x = some r) :
       rw [hc] at hall
       simp only [Bool.and_eq_true] at hall
       obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, -⟩, -⟩ := hall
-      refine ⟨f, r.w.parts[s], c, rfl, List.getElem?_eq_getElem hs', hc, ?_, ?_, ?_⟩
+      refine ⟨f, r.w.parts[s], c, hf, List.getElem?_eq_getElem hs', hc, ?_, ?_, ?_⟩
       · revert h1; cases RecVStar.checkFile vs[s] f r.w.parts[s].base.circuit r.shape.holo <;>
           simp [Except.isOk, Except.toBool]
       · revert h2; cases RecVStar.checkParsed vs[s] c <;> simp [Except.isOk, Except.toBool]
@@ -199,7 +200,8 @@ theorem readX_partNamed {x : Claims.Msg} {r : XR} (h : readX x = some r) :
   have hall := List.all_eq_true.1 hp s (List.mem_range.2 hs)
   have hs' : s < r.w.parts.length := by omega
   rw [List.getElem?_eq_getElem hs', Array.getElem?_eq_getElem hs] at hall
-  cases hf : ownBindings r.w.bindings with
+  simp only at hall
+  cases hf : ownBindings r.w.parts[s].bindings with
   | none => rw [hf] at hall; simp at hall
   | some f =>
     rw [hf] at hall

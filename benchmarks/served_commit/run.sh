@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# `verity bench served_commit [ARGS]`: served vLLM against served vLLM with every value committed (the arms of arm.py),
+# `verity bench served_commit [ARGS]`: served vLLM against served vLLM with every value committed (the spec's Commit arm,
+# prof_arm.py's rows-sha512 arm in the served specs),
 # interleaved, through `verity-bench vllm` on one GPU, from the source tree: the spec SPEC (default
 # qwen3-8b-bf16-h200-served) with its arms, sweep and reps unless ARGS name others (`--sweep quick --reps 1`). The
 # result, its table and the run's log go to $OUT (a research run's, else ./out).

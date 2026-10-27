@@ -25,9 +25,10 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
   it: their law is the full draw, which draws every unit at every byte string (`execOS_subset_full_mem`,
-  `execOS_subset_full_escape`), so `RecursiveSound`, `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3`
-  are proved from their forms with no A3 premise (`…NoA3`). Those are fork forms and state no bits; the recursion's
-  knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
+  `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3` (and `RecursiveSound`,
+  which the lock retired, PRF-212) are proved from their forms with no A3 premise (`…NoA3`). Those are fork forms and
+  state no bits; the recursion's guarantee is its knowledge form at the deployed reader, `Flock.Guarantees.RecursiveKS`,
+  and the knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
   deployed shape, below the 100-bit floor and the 2^-128 target under every weight (ASK-73). Route 2C's bound λ₂
   (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
   `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from a premise still

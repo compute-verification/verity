@@ -9,8 +9,10 @@ the oracle, which `DecompBV`'s and `JointV`'s escape (`setupCalls`) searches. Th
 
 * check 5's (`ResLower.resSetup`): `checkValue`'s and `checkZero`'s commit inputs at each `rec-residuals` statement,
   `checkOpen`'s at each `rec-open` statement;
-* the registered reads' (`regIns`): each registered port's table row's tree leaf, its frame-v3 leaf and each climb
-  node, as `checkRegistered` opens them.
+* the registered reads' (`regIns`): for the table row each instance's ref names in each registered port, its tree leaf,
+  its frame-v3 leaf and each climb node, as `checkRegistered` opens them. `checkRegistered` also opens rows no instance
+  references, and those evaluations are left out: no conclusion reads an unreferenced row, so its climb needs no
+  escape.
 
 `deployedSetup xO` is the two, and `deployedB b` is `b` with that setup. Both read `xO` alone (its recursive setup,
 `setupO xO`), never a decision, a witness or the prover's run, so whatever the prover sends, the setup at an accepted
