@@ -473,7 +473,8 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
             raise ValueError(f"request {rid}: Program has {len(man['steps'])} steps, the declaration caps {reqs[r]['max_tokens']} tokens: wrong component")
         parts[rid] = man
         if r == len(reqs) - 1:
-            out.append(compose_global(fixture, parts, reqs, workload_digest=stdin_digest() if wds[k] == "-" else wds[k], ranks=world))
+            out.append(compose_global(fixture, parts, reqs, workload_digest=stdin_digest() if wds[k] == "-" else wds[k], rank=ranks[k],
+                                      ranks=world))
             parts.clear()
 
     build_components(tasks, jobs=jobs, after=after, budget_gb=budget_gb, log=log)

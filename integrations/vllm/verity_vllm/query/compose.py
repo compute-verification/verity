@@ -15,7 +15,7 @@ __all__ = ["compose_global", "merge_ranks"]
 
 
 def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any]], reqs: list[dict[str, Any]], *, workload_digest: str | None,
-                   ranks: int = 1) -> dict[str, Any]:
+                   rank: int = 0, ranks: int = 1) -> dict[str, Any]:
     """`parts` = {request label: component manifest}; `reqs` = the declared requests in (arrive_step, index) order with `request_id` = label."""
     component_digests = sorted({p["program_digest"] for p in parts.values()})
     pdig = str(workload_digest) if workload_digest else fmt.components_fold_digest(component_digests)
