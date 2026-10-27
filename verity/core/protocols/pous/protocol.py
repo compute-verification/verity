@@ -2,7 +2,7 @@
 
 A scheme (`Scheme`) is a keyed, rate-1 encoding of `W`, one segment at a time, together with the certificate its audit
 carries at its parameters (`Certificate`).  It implements `encode_segment` and `decode_segment`, and `respond` when an
-honest answer is more than the stored block.  Everything else is written once, here:
+honest answer is more than the stored label.  Everything else is written once, here:
 
 1. **Commit.** The server commits to `W` before any salt exists (`commit`).
 2. **Salt.** The verifier draws the salt after the commitment (`draw_salt`).
@@ -60,17 +60,28 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("feistel-indifferentiability", "assumption",
           "REFUTED: a 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound. "
           "It does not: a prover keeps five 200-byte post-absorb round states per 64 KiB block (1.53% of C) and "
-          "rebuilds any label in 481 sequential Keccak-f (red team, 4 Oct 2026, art:7617c8017e80)",
+          "rebuilds any label in 481 sequential Keccak-f",
           "Feistel-SHAKE256 as ideal (refuted)", "conjectured"),
     Entry("m1-ideal-permutations", "model",
           "Model M1: independent forward-only ideal permutations, one per block, each block the inverse image of its "
           "data", "M1"),
     Entry("sms-m1-instantiation", "assumption",
           "Square-mask-square with fresh per-block keys instantiates M1's slow-inverse permutation (novel and "
-          "algebraic; pending Daniel)", "SMS as M1", "conjectured"),
+          "algebraic; not accepted)", "SMS as M1", "conjectured"),
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
           "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),
+    # Lean's `Pous.P2.Assumptions.P2RingRoundSecureWide` (Security/Definitions/Pous/Assumptions/P2.lean)
+    Entry("p2-ring-round-secure-wide", "assumption",
+          "P2 in the ring model, per round, at every block count N from 2^19 to 2^27: outside a bad event of mass k·ε₀, "
+          "a state of at most ⌊ρ·|C|⌋ bits answers each fresh uniform challenge with probability at most 1 − p, with "
+          "(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130; nobody has checked a proof's ε₀ against N above 2^25",
+          "P2 ring rounds to 2^27", "conjectured"),
+    # Lean's `Pous.Period.RingDeviceAt` (Security/Properties/Pous/PeriodAt.lean)
+    Entry("pous-ring-device-at", "model",
+          "PoUS ring device at the store's block count: pous-ring-device, pous-ring-instantiation and prf/sha-512 per "
+          "run, read over the ring game at N, the blocks the point's session challenges",
+          "PoUS ring device at N"),
 )}
 """Claims a certificate cites that `verity.core.claims` does not hold yet, in its id format.  Each moves to core when a
 render cites it; the tests fail once core defines an id this table still holds."""
@@ -153,7 +164,7 @@ class Scheme(ABC):
     up by name (`schemes.get`), with its conformance vectors pinned under the name (`tests/fixtures/schemes/`).  A
     subclass sets `name` (its byte-format version string), `backend` (the reference primitives for its parameters) and
     `certificate` (and `certificates`, when it has several).  It implements `encode_segment` and `decode_segment`, and
-    `respond` only when an honest answer is more than the stored block.
+    `respond` only when an honest answer is more than the stored label.
 
     **Segment `s` must be keyed injectively in `s`**, across every segment of `W`: `tag_s = salt ‖ u64 s`
     (`labels.tag`), or one salt with global indices.  With a shared domain, identical segments get identical labels,
@@ -189,14 +200,14 @@ class Scheme(ABC):
 
     @abstractmethod
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
-        """Segment `s` of `C`: `blocks_per_segment` blocks of `block_bytes` bytes, from segment `s` of `W`."""
+        """Segment `s` of `C`: `blocks_per_segment` labels of `block_bytes` bytes, from segment `s` of `W`."""
 
     @abstractmethod
     def decode_segment(self, salt: bytes, s: int, blocks: Sequence[bytes]) -> bytes:
         """Segment `s` of `W`, bit-exact, from segment `s` of `C`."""
 
     def respond(self, block: Callable[[int], bytes], i: int) -> bytes:
-        """The honest answer to challenge `i`, from the stored blocks of `C`: the block itself."""
+        """The honest answer to challenge `i`, from the stored labels of `C`: the label itself."""
         return block(i)
 
     def codec(self) -> Codec:
@@ -241,7 +252,7 @@ def decode(scheme: Scheme, salt: bytes, encoded: Iterable[Sequence[bytes]]) -> b
 
 
 def decode_tensor(scheme: Scheme, layout: Layout, salt: bytes, name: str, block: Callable[[int], bytes]) -> bytes:
-    """One tensor of `layout`, decoded from the segments of `C` it overlaps (`block(i)` is block `i` of `C`)."""
+    """One tensor of `layout`, decoded from the segments of `C` it overlaps (`block(i)` is label `i` of `C`)."""
     if layout.params != scheme.params:
         raise ValueError("the layout's parameters are not the scheme's")
     return _decode_tensor(layout, scheme.prims, salt, name, block, codec=scheme.codec())
@@ -269,12 +280,12 @@ def verifier_key(scheme: Scheme, commitment: bytes, salt: bytes, *, mode: str = 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
     """The audit's key, bound to `vk`'s root and salt; `source` is the memory challenger's own secret, kept secret until
     the audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover
-    compute the challenged indices before the audit and rebuild only those blocks within the deadline."""
+    compute the challenged indices before the audit and rebuild only those labels within the deadline."""
     return audit.challenge_key(source, vk)
 
 
 def responder(scheme: Scheme, block: Callable[[int], bytes]) -> Callable[[int], bytes]:
-    """The honest responder: challenge `i` answered by `scheme.respond` from the stored blocks."""
+    """The honest responder: challenge `i` answered by `scheme.respond` from the stored labels."""
     return lambda i: scheme.respond(block, i)
 
 

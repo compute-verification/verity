@@ -1,4 +1,4 @@
-"""CA's banded reference itself on a few J10-banded units: `circuit.banded.banded_reference` (#2866) from the tree on
+"""The credit's banded reference itself on a few J10-banded units: `circuit.banded.banded_reference` from the tree on
 PYTHONPATH, which the banded kernels' z and receipts are held to.
 
     PYTHONPATH=TREE python j10ca_ref.py IN.json OUT.json [WORKERS]
@@ -34,7 +34,7 @@ def main() -> int:
     with ProcessPoolExecutor(workers) as pool:
         out = list(pool.map(one, units))
     open(sys.argv[2], "w").write(json.dumps({"banded": BD.__file__, "peeled": True, "units": out,
-                                             "noise": "j10-banded (CA #2866 @ 1a4d1de024)"}))
+                                             "noise": "j10-banded (credit's banded reference @ 1a4d1de024)"}))
     return 0
 
 

@@ -13,8 +13,8 @@ dependent chains (`chain.py`) and their gates; the SASS gate again on anything l
 to steady state (`--warmup-s`); every entry's timed item sized to the same device time (`--item-ms`: calls, or a chain's
 replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; the consistency
 gate; after the timed items, each arm's transcript from poisoned buffers and its no-write control (`poison_dump`, for an arm
-with `dump`: panel rule, 11:50Z); the report (`report.py`), whose panel rows carry both sides' reps and clocks
-(08:50Z). Every failure stops what it guards and writes no timing for it.
+with `dump`: a panel rule); the report (`report.py`), whose panel rows carry both sides' reps and clocks. Every failure
+stops what it guards and writes no timing for it.
 
 Exit codes: 0 ok; 2 identity or usage (also a configuration --lt-enumerate-names names that the enumeration didn't take); 3 a
 device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its gate, or it couldn't run); 6 the
@@ -215,7 +215,7 @@ class Bench:
         t0 = self.clock()
         try:
             ok, detail = fn()
-        except Exception as ex:  # noqa: BLE001 - a control that can't run shows nothing; the run stops
+        except Exception as ex:
             self.negatives.append({"key": list(key), "rejected": None, "error": f"{type(ex).__name__}: {ex}",
                                    "wall_s": self.clock() - t0})
             raise NegativeControlFailed(f"{'/'.join(map(str, key))} couldn't run: {ex}") from ex
@@ -379,7 +379,7 @@ def _flip_control(dev, arm, shape, flags, call, checked: dict):
     return run
 
 
-#: what fills every buffer a transcript reads before the call it dumps (the panel rule, 11:50Z)
+#: what fills every buffer a transcript reads before the call it dumps (the panel rule)
 POISON = 0xA5
 
 
@@ -550,7 +550,7 @@ def names_not_taken(fam: str, label: str, missing: list[str], enumeration: dict,
 
 
 def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
-                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.LtPick(),
+                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.EVERY,
                    sched_fams: frozenset = frozenset()) -> dict:
     """Every family's candidates, each gated on the gate set (cuBLASLt's configurations enumerated for the families in
     `enumerate_fams`, those `pick` takes; the CUTLASS 3.x kernels in every tile order for those in `sched_fams`); at the
@@ -945,7 +945,7 @@ def chained(args, shape) -> bool:
 
 
 def panel_reps(items: list[dict], arm_key: tuple, base_key: tuple, method: str = "graph") -> dict:
-    """The panel row's two sides, rep by rep (08:50Z): per-call ms, item ms and SM clock of the arm's and the
+    """The panel row's two sides, rep by rep: per-call ms, item ms and SM clock of the arm's and the
     baseline's items, interleaved in the same reps on this die; `panel.py`'s --sm-clock-arm and --sm-clock-base; each side's
     median clock and "clock gap" (medians more than CLOCK_GAP apart)."""
     out: dict = {"reps": {}}
@@ -1190,7 +1190,7 @@ def timed_clocks(items: list[dict]) -> dict:
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def main(argv: list[str] | None = None) -> int:

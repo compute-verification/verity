@@ -1,5 +1,5 @@
 """GPU run of the router-tap exactness property (`verity_vllm.properties.router_tap_exactness`): check the tap build on this GPU against
-the installed `_moe_C.topk_softmax` and the IR's ordered router, the router-softmax source on vLLM's routing path, and live on vLLM
+the installed `_moe_C.topk_softmax` and the circuit's ordered router, the router-softmax source on vLLM's routing path, and live on vLLM
 engines serving tiny random-weight models of the two served router shapes (OLMoE's, Qwen3-MoE's); write the sealed record `<out>/router_tap_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a record's
 digest and verdict without a GPU.
 
@@ -40,7 +40,7 @@ def _bf16(v: float) -> int:
 
 
 def edge_rows(E: int, rng: random.Random) -> dict[str, list[int]]:
-    """Named bf16 logit rows at the router's edges (vu-export's `router_eq.cases`, the rows PR #86 was checked on, plus a NaN and a
+    """Named bf16 logit rows at the router's edges (vu-export's `router_eq.cases`, plus a NaN and a
     subnormal at the head of a thread's columns, where the max's NaN and subnormal handling decide it)."""
     g = lambda: [_bf16(rng.gauss(0.0, 1.0)) for _ in range(E)]   # noqa: E731
     out: dict[str, list[int]] = {"all +0": [PZ] * E, "all -0": [NZ] * E, "mixed +-0": [PZ if i % 2 else NZ for i in range(E)],
@@ -412,7 +412,7 @@ def _guarded(fn, base: dict[str, Any], *args) -> dict[str, Any]:
 
 def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, Any]:
     """Check the tap build at `so` on this GPU and write the sealed record to `<out>/router_tap_exactness.json`."""
-    pool = mp.get_context("fork").Pool(max(2, min(32, (os.cpu_count() or 4) - 2)))   # before CUDA: the IR evaluation needs none
+    pool = mp.get_context("fork").Pool(max(2, min(32, (os.cpu_count() or 4) - 2)))   # before CUDA: the circuit evaluation needs none
     from verity_vllm.engine import engine_profile as prof
 
     env_flags = prof.apply_env()                               # the engine's pins (batch invariance, in-process core, no FlashInfer sampler)
@@ -420,7 +420,7 @@ def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, 
     os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
     import torch
     import vllm
-    import vllm._custom_ops  # noqa: F401  -- loads the installed _moe_C ops
+    import vllm._custom_ops  # loads the installed _moe_C ops
 
     from verity_vllm.acquire.router_tap_src.build_ext import NAME, TAP_VERSION
 

@@ -328,6 +328,59 @@ theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
     div_le_div_of_nonneg_right h4 (by positivity)
   linarith
 
+/-! ## The finder's output, from openings -/
+
+section Out
+
+variable {O : Type} (op : τ → Val → O) (collide : O → O → List UInt8 × List UInt8)
+
+open Classical in
+/-- **The finder's output from openings**: a collision from two openings with different values, the first from its first
+trial, the second from that trial or from the first further trial that reads anything. `op e v` is an opening trial `e`
+found for value `v`, and `collide` turns two openings into the two byte strings. -/
+noncomputable def outOf (x : τ × List τ) : Option (List UInt8 × List UInt8) :=
+  if h : ∃ p : τ × Val × Val, p.2.1 ≠ p.2.2 ∧ p.2.1 ∈ rd x.1 ∧ p.2.2 ∈ rd p.1 ∧
+      (p.1 = x.1 ∨ nextRead rd x.2 = some p.1) then
+    some (collide (op x.1 (Classical.choose h).2.1) (op (Classical.choose h).1 (Classical.choose h).2.2))
+  else none
+
+omit [Fintype Val] in
+/-- **Every success of the finder outputs a collision**, when every reading comes with an opening of its value (`hop`)
+and two openings of different values collide (`hcol`). -/
+theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (Good : O → Prop) (val : O → Val)
+    (hop : ∀ e v, v ∈ rd e → Good (op e v) ∧ val (op e v) = v)
+    (hcol : ∀ o o', Good o → Good o' → val o ≠ val o' →
+      (collide o o').1 ≠ (collide o o').2 ∧ Hc (collide o o').1 = Hc (collide o o').2)
+    (x : τ × List τ) (hS : Succ rd x) :
+    ∃ a b, outOf rd op collide x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
+  classical
+  have hex : ∃ p : τ × Val × Val, p.2.1 ≠ p.2.2 ∧ p.2.1 ∈ rd x.1 ∧ p.2.2 ∈ rd p.1 ∧
+      (p.1 = x.1 ∨ nextRead rd x.2 = some p.1) := by
+    rcases hS with h2 | ⟨v, hv, e', hn, hne⟩
+    · obtain ⟨a, ha, b, hb, hab⟩ := Finset.one_lt_card.1 (by omega : 1 < (rd x.1).card)
+      exact ⟨(x.1, a, b), hab, ha, hb, Or.inl rfl⟩
+    · have hnon : (rd e').Nonempty := by
+        have := List.find?_some hn
+        simpa using this
+      have hw : ∃ w ∈ rd e', w ≠ v := by
+        by_contra hall
+        push Not at hall
+        apply hne
+        obtain ⟨w₀, hw₀⟩ := hnon
+        refine Finset.eq_singleton_iff_unique_mem.2 ⟨?_, hall⟩
+        rw [← hall w₀ hw₀]
+        exact hw₀
+      obtain ⟨w, hw, hwv⟩ := hw
+      exact ⟨(e', v, w), Ne.symm hwv, by rw [hv]; exact Finset.mem_singleton_self v, hw, Or.inr hn⟩
+  unfold outOf
+  rw [dite_eq_left_of_eq_true (eq_true hex)]
+  obtain ⟨hne, h1, h2, -⟩ := Classical.choose_spec hex
+  have s1 := hop _ _ h1
+  have s2 := hop _ _ h2
+  exact ⟨_, _, rfl, hcol _ _ s1.1 s2.1 (by rw [s1.2, s2.2]; exact hne)⟩
+
+end Out
+
 end LinkFinder
 
 end FlockSoundness

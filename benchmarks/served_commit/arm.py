@@ -1,29 +1,28 @@
-"""Commit under served vLLM as `verity-bench` experimental arms (``--arm-module served_commit.arm:SERVED_COMMIT``, with
-``benchmarks`` on ``PYTHONPATH`` as `benchmarks/harness/env.sh` puts it).
+"""The base of the `verity-bench` experimental arms that Commit under served vLLM, `prof_arm`'s
+(``--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS``, with ``benchmarks`` on ``PYTHONPATH`` as
+`benchmarks/harness/env.sh` puts it).
 
-The arm's engine is the preset's, as vLLM serves it (``serving_defaults``: torch.compile, its CUDA-graph mode and
+An arm's engine is the preset's, as vLLM serves it (``serving_defaults``: torch.compile, its CUDA-graph mode and
 capture sizes, no batch invariance), with every value of every engine step committed:
 `served_compiled_source.ServedCompiledSource` acquires them (Inductor wrapper hooks; under a CUDA graph, slot copies
 captured into the graph and drained at the logits), and the native collector (`NativeCollectCommitter`, windowed
 staging) hashes them into one root per step. Its control is ``stock`` token for token: committing must not change what
 is served.
 
-An arm commits under its ``commit_scheme``, and ``install`` refuses ``vllm-v1`` by name. These two arms, and
-every `prof_arm` arm that doesn't name ``rows-sha512``, are ``vllm-v1`` (SHA-256), the record as it was before the Commit's default
-became ``rows-sha512``: their runs of record stay readable (`benchmarks/g2/curve.py` reads an arm's scheme from its name), and they
-run no new one. The Commit is what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`)
-measure.
+An arm commits under its ``commit_scheme``, and ``install`` refuses the default, ``vllm-v1`` (SHA-256), by name, so an
+arm that runs names ``rows-sha512``; `benchmarks/g2/curve.py` reads a recorded run's scheme from its arm's name. The Commit is
+what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`) measure.
 
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
-``end_run`` finalizes the run's commitment (inside the timed window, so a run's time includes the hashing backlog), and
-the run's checks happen after the window, before the next run or when the harness reads ``extras`` or ``gate``: the
+``end_run`` finalizes the run's commitment (inside the timed period, so a run's time includes the hashing backlog), and
+the run's checks happen after that period, before the next run or when the harness reads ``extras`` or ``gate``: the
 collector's errors and, with the values retained, `linkage` (each request's committed input id at a step is the token
 committed as its sample at the step before). The source's hooks are made through ``target.hooks``; the committer's
 patches of the model runner are its own, installed by ``begin_run`` and removed by ``end_run``.
 
-Two arms differ in what the Commit keeps for openings: ``served-commit`` copies the values to host memory (what an
-opening reads, and what `linkage` checks); ``served-commit-noretain`` keeps only the authentication state, so its values
-open by replay and its runs are checked by the collector's errors alone.
+An arm's ``retain`` is what the Commit keeps for openings: ``host`` copies the values to host memory (what an opening
+reads, and what `linkage` checks); ``none`` keeps only the authentication state, so its values open by replay and its runs
+are checked by the collector's errors alone.
 
 Staging is the collector's default: a ring of 256 MiB device windows, bounded (a step whose plan is new copies at most
 ``VERITY_LEARN_HOST_BUDGET_MB`` to host to re-hash), and tree levels only when values are kept. The harness's gate and warm-up
@@ -162,7 +161,3 @@ class ServedCommitArm:
     def close(self) -> None:
         if self.committer is not None:
             self.committer.close()
-
-
-SERVED_COMMIT = ServedCommitArm("served-commit", retain="host")
-SERVED_COMMIT_NORETAIN = ServedCommitArm("served-commit-noretain", retain="none")

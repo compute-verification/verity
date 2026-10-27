@@ -1,4 +1,4 @@
-description = "adopted-bd-lm-pv with P in blocks of 256 keys (p_block = 256, key 0 its own block): each block its own scale and strip, which bounds the fresh bit c's noise to half a step of the block's peak (note:20261017T0030Z-draft-checked-strip, Result 3: gamma_PV about 1.375)"
+description = "adopted-bd-lm-pv with P in blocks of 256 keys (p_block = 256, key 0 its own block): each block its own scale and strip, which bounds the fresh bit c's noise to half a step of the block's peak (gamma_PV about 1.375)"
 
 [[linear]]
 step = "smooth"
