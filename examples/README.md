@@ -3,16 +3,13 @@
 One directory per example (Daniel, 25 Oct). An example holds what is its own: the workload it serves, its placement (where
 each party runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the
 integration's (`integrations/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from
-`examples/` (`tests/test_boundaries.py`), and `verity example NAME` runs `examples/<NAME>/`'s `run.py` or `run.sh`; a `-` in
-NAME is a `_`, so a directory's name is lowercase letters, digits and `_`.
+`examples/` (`tests/test_boundaries.py`), and `verity example NAME` runs `examples/<NAME>/`'s `run.py` or `run.sh`.
 
-## The ladder
-
-Each example stands at a level of doneness (Daniel, 26 Oct), and a milestone is a set of (example, level) pairs, which top
+Each example stands on a ladder of doneness (Daniel, 26 Oct), and a milestone is a set of (example, level) pairs, which top
 keeps. Its `example.toml` says where it stands (`vllm/example.toml` is one): its `protocol` (a package under
 `verity/core/protocols/`, the composite `onsite` or `remote`, or a list), its `workload` (a directory under `integrations/`,
 or `none`), its `[placement]` (each role to a machine class), its `level`, and the `[evidence]` that level and every one
-below it need:
+below it need. A directory's name is lowercase letters, digits and `_`, since `verity example` reads a `-` in NAME as a `_`.
 
 | level | name | evidence |
 | --- | --- | --- |
@@ -28,5 +25,4 @@ below it need:
 `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `ROLES`, with its side.
 
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, each closed Commit window
-  audited on the prove path. Its scripts reach the integration by `PYTHONPATH`; it is not a package. Level 1: its Lean
-  verifier runs on a node the prover runs.
+  audited on the prove path. Its scripts reach the integration by `PYTHONPATH`; it is not a package.

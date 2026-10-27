@@ -1,13 +1,13 @@
-# The vLLM example's rung on the ladder (examples/README.md). Level 2 needs the Lean verifier off the prover's nodes: the
-# README's placement runs it on vy-nebius-cpu-2 beside the prover, and the demo of record ran it on vy-nebius-1.
+# The vLLM example's rung on the ladder (examples/README.md), placed where its runs of record ran. Level 2 needs the Lean
+# verifier off the nodes the prover runs: those runs ran it on vy-nebius-1 with the endpoint and the prover.
 protocol = "sampled_proofs"
 workload = "vllm"
 level = 1
 
 [placement]
 endpoint = "gpu-node"        # vy-nebius-1, one leased RTX PRO 6000
-prover = "cpu-node"          # vy-nebius-cpu-2
-verifier = "cpu-node"        # vy-nebius-cpu-2, the Lean verifier
+prover = "gpu-node"          # vy-nebius-1
+verifier = "gpu-node"        # vy-nebius-1, the Lean verifier
 challenger = "auditor-host"  # vy-challenger-1, through infra's gate (PP_CHALLENGER)
 
 [evidence]
