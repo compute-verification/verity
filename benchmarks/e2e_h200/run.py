@@ -1,5 +1,5 @@
-"""The H200 walking skeleton (CMP-96): steps of the frozen MQA shape (or a small one) on the plain INT8 weights loaded once
-into the device's memory (Demo A; ``--weights staged`` is M4's decode-to-staging path), every op's output committed per step,
+"""The H200 walking skeleton: steps of the frozen MQA shape (or a small one) on the plain INT8 weights loaded once
+into the device's memory (``--weights staged`` decodes them from the store into staging), every op's output committed per step,
 drawn units replayed bit for bit, each leg run or named, and the replay bundle and block record written to ``--out``.
 
     python benchmarks/e2e_h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B]
