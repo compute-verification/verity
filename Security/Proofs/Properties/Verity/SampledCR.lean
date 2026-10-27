@@ -35,12 +35,19 @@ open scoped ENNReal
 
 /-- `H512` and the compiled SHA-512 agree on collisions. -/
 theorem H512_eq_iff (u v : List UInt8) : H512 u = H512 v ↔ Verity.sha512Msg u = Verity.sha512Msg v := by
+  rw [Subtype.ext_iff]
+  unfold H512 Verity.sha512Msg
+  try dsimp only
+  -- `hash` is opaque to the proof: unifying through it unfolds SHA-512 on a symbolic input.
+  generalize Flock.Sha512.hash ⟨u.toArray⟩ = a
+  generalize Flock.Sha512.hash ⟨v.toArray⟩ = b
   constructor
   · intro h
-    exact congrArg (fun d : Dig => d.1.data.toList) h
+    rw [h]
   · intro h
-    have hd : (Flock.Sha512.hash ⟨u.toArray⟩).data = (Flock.Sha512.hash ⟨v.toArray⟩).data := Array.toList_inj.mp h
-    exact Subtype.ext (congrArg ByteArray.mk hd)
+    cases a
+    cases b
+    exact congrArg ByteArray.mk (Array.toList_inj.mp h)
 
 /-- A strict-time finder of C-Flock's on its tape, at the constant cost `⌈q⌉`. -/
 noncomputable def strictComp (Fd : StrictCR.Finder StrictCR.Pair) (q : ℝ) : Claims.Finder :=
@@ -130,7 +137,7 @@ noncomputable def linkComp (τ : Strategy A.G) (c : A.LinkPos) : Claims.Finder :
       (cont (A.sim τ)) c.1 A.k A.Rw) A.M)
     (outCZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c.1)
     (fun x => ⌈finderCost (rdTZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ))
-      (cont (A.sim τ)) c.1) (cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ)) x⌉₊)
+      (cont (A.sim τ)) c.1) (cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ)) x⌉₊))
 
 /-- **The finders at `τ`**: every table's knowledge finders after every draw, every link finder, and one more
 (`none`). -/
@@ -265,5 +272,28 @@ theorem SampledDeploy.cr_of (V : Vocab d α) (kd : ByteArray → ℕ) (desc : By
     rw [← hfinder θ F c σ r hr hreg]
     exact hcr
   exact (A θ F c σ r hr).CR_of_crFinder _ _ hB (hbF θ F c σ r hr) (hbS θ F c σ r hr) (hbL θ F c σ r hr)
+
+/-- **`SampledDeploy`'s `finder_ge` field.** At a vocabulary whose sampled finder, at registered files that parse, is
+`crFinder` with the play's replay finder of `col` in its spare slot (`hfinder`, `cr_of`'s at that `extra`), and where
+`kMax θ` is at least the number of C-Flock's finders (`hk`), the replay finder succeeds at most `kMax θ` times as often
+as the vocabulary's finder (`extra_le`). -/
+theorem SampledDeploy.finder_ge_of (V : Vocab d α) (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
+    (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
+      Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
+    (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
+      (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
+    (col : ByteArray → ByteArray → ByteArray → Outcome → Option (Claims.Msg × Claims.Msg)) (kMax : ByteArray → ℕ)
+    (hfinder : ∀ θ F c σ r hr, V.Registered θ F →
+      V.finder .sampled θ F c σ = (A θ F c σ r hr).crFinder (τOf θ F c σ r hr)
+        (V.replayFinder θ F c σ (col θ F c) (V.cost θ F c σ)))
+    (hk : ∀ θ F c σ r hr, Fintype.card ((A θ F c σ r hr).Ix (τOf θ F c σ r hr)) ≤ kMax θ) :
+    ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed),
+      V.parsed F = some r → V.Registered θ F →
+      (V.replayFinder θ F c σ (col θ F c) (V.cost θ F c σ)).Pr sha512Msg ≤
+        kMax θ * (V.finder .sampled θ F c σ).Pr sha512Msg := by
+  intro θ F c σ r hr hreg
+  rw [hfinder θ F c σ r hr hreg]
+  exact ((A θ F c σ r hr).extra_le _ _).trans
+    (mul_le_mul_of_nonneg_right (by exact_mod_cast hk θ F c σ r hr) (Claims.Pr_nonneg _))
 
 end Verity

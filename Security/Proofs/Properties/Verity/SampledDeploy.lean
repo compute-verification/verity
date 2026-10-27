@@ -21,9 +21,10 @@ each its owner's:
   verdict at most as likely as the session's acceptance (ONE-3t's
   `acc_of_accepts` and a decode of `ComponentAccepts`; ONE-4's coupling of the device's releases to the session's
   coins and `DrawnByDevice`);
-* `finder_ge`: the vocabulary's sampled finder outputs a collision at least as often as the replay finder of `col`
-  (`Vocab.replayFinder`), so `break_le` follows (`break_le_of`) at the additive loss (`loss_ge`: `x ≤ loss x`, which
-  every deployment's `loss` has by ruling, stated here once until `Vocab` carries it); the forgery is the vocabulary's
+* `finder_ge`: the replay finder of `col` (`Vocab.replayFinder`) outputs a collision at most `kMax θ` times as often
+  as the vocabulary's sampled finder (`SampledDeploy.finder_ge_of`, where that finder is the uniform mixture of
+  C-Flock's finders with the replay finder in its spare slot), so `break_le` follows (`break_le_of`) at the additive
+  loss (`loss_ge`: `kMax θ · x ≤ loss x`, stated here once until `Vocab` carries it); the forgery is the vocabulary's
   own term (`Vocab.forges`), never reduced to a collision;
 * `unbound_le`: the unbound units at most the session's faulty ones (`LiveAt.faultyE`; `place`'s openings bridge,
   ONE-7);
@@ -91,18 +92,20 @@ theorem prob_colEvent_eq (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strate
     Game.prob (ColEvent col) (V.game θ F c) σ = ENNReal.ofReal ((V.replayFinder θ F c σ col k).Pr sha512Msg) :=
   Game.prob_eq_ofReal_Pr sha512Msg (V.game θ F c) σ col fun _ => k
 
-/-- **`break_le` from the vocabulary's finder.** Where the vocabulary's sampled-proofs finder at `σ` outputs a collision
-at least as often as the replay finder of `col` (`hF`; the vocabulary's finder is that finder, or a combined finder
-that runs it), and the loss is at least its argument (`hloss`: the collision term is additive by ruling, never
-`loss = 0`; `SampledDeploy.loss_ge` until `Vocab` carries it), the collision event `col` reads off
-the play is at most the loss at the finder: `SampledIn.break_le` at `Brk := ColEvent col`. -/
+/-- **`break_le` from the vocabulary's finder.** Where the replay finder of `col` outputs a collision at most `m` times
+as often as the vocabulary's sampled-proofs finder at `σ` (`hF`; `m = 1` where the vocabulary's finder is the replay
+finder, `m` the members of a uniform mixture that holds it), and the loss is at least `m` times its argument (`hloss`:
+the collision term is additive, never `loss = 0`; `SampledDeploy.loss_ge` until `Vocab` carries it), the collision
+event `col` reads off the play is at most the loss at the finder: `SampledIn.break_le` at `Brk := ColEvent col`. -/
 theorem break_le_of (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
-    (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ)
-    (hF : (V.replayFinder θ F c σ col k).Pr sha512Msg ≤ (V.finder .sampled θ F c σ).Pr sha512Msg)
-    (hloss : ∀ x, x ≤ V.loss .sampled θ x) :
+    (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k m : ℕ)
+    (hF : (V.replayFinder θ F c σ col k).Pr sha512Msg ≤ m * (V.finder .sampled θ F c σ).Pr sha512Msg)
+    (hloss : ∀ x, (m : ℝ≥0∞) * x ≤ V.loss .sampled θ x) :
     Game.prob (ColEvent col) (V.game θ F c) σ ≤ V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ) := by
   rw [prob_colEvent_eq V θ F c σ col k]
-  exact (ENNReal.ofReal_le_ofReal hF).trans (hloss _)
+  refine (ENNReal.ofReal_le_ofReal hF).trans ?_
+  rw [ENNReal.ofReal_mul (Nat.cast_nonneg m), ENNReal.ofReal_natCast]
+  exact hloss _
 
 /-- The values the session's extractor opens at `τ`: its witness's openings in the sampling statement. -/
 noncomputable abbrev _root_.Flock.Guarantees.LiveAt.valE {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit}
@@ -226,9 +229,12 @@ structure SampledDeploy (V : Vocab d α) where
     Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (col θ F c) o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
       FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
         (A θ F c σ r hr).G (τOf θ F c σ r hr)
-  finder_ge : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
-    (V.replayFinder θ F c σ (col θ F c) (V.cost θ F c σ)).Pr sha512Msg ≤ (V.finder .sampled θ F c σ).Pr sha512Msg
-  loss_ge : ∀ θ x, x ≤ V.loss .sampled θ x
+  kMax : ByteArray → ℕ
+  finder_ge : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed),
+    V.parsed F = some r → V.Registered θ F →
+    (V.replayFinder θ F c σ (col θ F c) (V.cost θ F c σ)).Pr sha512Msg ≤
+      kMax θ * (V.finder .sampled θ F c σ).Pr sha512Msg
+  loss_ge : ∀ θ x, (kMax θ : ℝ≥0∞) * x ≤ V.loss .sampled θ x
   unbound_le : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
     (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤
@@ -272,7 +278,8 @@ noncomputable def sampledIn (Dp : SampledDeploy V) (θ F c : ByteArray) (σ : Ga
   hε := Flock.Guarantees.LiveAt.sound_honest (n := r.n) _ (mul_nonneg (Dp.ε_nonneg θ) (Nat.cast_nonneg _))
   Brk := ColEvent (Dp.col θ F c)
   accept_le := Dp.accept_le θ F c σ r hr hreg
-  break_le := break_le_of V θ F c σ (Dp.col θ F c) (V.cost θ F c σ) (Dp.finder_ge θ F c σ) (Dp.loss_ge θ)
+  break_le := break_le_of V θ F c σ (Dp.col θ F c) (V.cost θ F c σ) (Dp.kMax θ) (Dp.finder_ge θ F c σ r hr hreg)
+    (Dp.loss_ge θ)
   unbound_le := Dp.unbound_le θ F c σ r hr hreg
   cr := Dp.cr θ F c σ r hr hreg
   delta_le := by
