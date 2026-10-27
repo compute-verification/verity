@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The drawn-unit replay bundle proved (prove_bundle.py; M1): the bundle PB_BUNDLE (its .bin beside it) of the
-# window PB_WINDOW; without PB_WINDOW, the store's art:1cd702b1 (BUNDLE_WINDOW: a W8A8 MLP's window under a test key, its
+# window PB_WINDOW; without PB_WINDOW, the store's art:d0b6e81f (BUNDLE_WINDOW: a W8A8 MLP's window under a test key, its
 # tampered twin and e2e_demo's bundle of four drawn units under the window's registered subset:4, a fixture's draw).
 # Each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
@@ -26,7 +26,7 @@ PY=$REPO/.venv/bin/python
 
 STAMP=$(git rev-parse HEAD:verity/ml/flock HEAD:verity/core/service/flock 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
-BUNDLE_WINDOW=art:1cd702b13ac6c9d885670a4939beadaa34c297e16d318291732b059b7c46427f
+BUNDLE_WINDOW=art:d0b6e81fa20a0e2c9c6701ca4495e8092434ad8c9e7c08038d114ad42210980c
 FX=$W/bundle-window
 if [ -n "${PB_WINDOW:-}" ]; then
   BUNDLE=${PB_BUNDLE:?PB_WINDOW needs its PB_BUNDLE} WINDOW=$PB_WINDOW TAMPERED=${PB_TAMPERED:-}

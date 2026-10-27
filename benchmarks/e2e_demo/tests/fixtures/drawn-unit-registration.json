@@ -1937,6 +1937,26 @@
  "scheme": "frame-v3-sha512/hm96-sha512",
  "window": {
   "circuit": "ba4bf2d44bcaf17f56d352c7bc367cfb910d4ff42d0a90b56e449c11301d6b50cef9760dcffe59f8cba167f7726094a009e5a9155013b984c9493888a232e50d",
+  "commitment": {
+   "blocks": [
+    {
+     "block": 0,
+     "domain": "d3f2469c7d02224f409263fabc78484070eca75edb38fb0ae81fdde64b7e017ce698bf0f697d74a428890b809dc4fb43d03958b98189b1b783cd114d716ebf7e",
+     "root": "23b260ba4f79645b7cf85f42a47bab8ff50f4e677ebe4ceceb11c2ee0c1134e970ab4889d032f242829d5caa087808cac8dd74bd7aa5af25ae9302d22e10911c",
+     "steps": [
+      {
+       "domain": "8d8def2d4e64bea51b0cf5f6feb1f149c85411a666ff53d288d33d7800fcd836d59eabd5a698f4462cb9d23d3eeb4b44155a528339824da9c61dac8cf8c4ac80",
+       "root": "ba6b519e756da149c264e8dffc2a021a9985a847432627adccd970173108b2ce2939427e72adf777711de6ced3e738baf4d9e5eafcdf95bb218e3ac518dadcbc",
+       "step": 0
+      }
+     ]
+    }
+   ],
+   "context": "27f56535b8055162db53c0103194512bd998aad35424caf118feb936b475bd4b34a85a21249048948f4e2197d9b82d5b7d4dd25c8efa0535bb118809f56af72b",
+   "format": "verity/commit-slots/v1",
+   "layout_digest": "aebdfa18e854ab9e4c452530f1ae5828809a6ffc324c90041f33d5931280800304339fa32da6c49bc83b996fa4ec5a36f327ef0aadc3f7f706d9b3454406bfee",
+   "slots": 2
+  },
   "index": "e7065f82f4cc63a324d83a01ac3746fbfd1a6ecd35f4936b0982b1984d6df8da5080729468c6547501f1cd452968240dd5c61c83957af2e8a94f9f721f1d5c26",
   "kind": "served",
   "loop": "torch-loop",

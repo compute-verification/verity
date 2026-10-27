@@ -51,12 +51,15 @@ from .plan import Entry, Map, Table, Units
 from .shape import PV_K, Shape, forms
 from .units import sources
 from e2e_h200 import served_weights as SW
+from verity.ml.commitments import layout as L
 
 ROW = 1024
 KEPT = ("wk", "wv")
 FROZEN_ROWS = 21_857
 FROZEN_DIGEST = ("eb7937f19e2e8e3a0daf9f7b85f33d837b267a079cd0c5c60d3581e8c2b1675b"
                  "095d54fd36f2e8434c67734213533c0aba0e40d9f2601cc4307ca9474e403a03")
+FROZEN_JSON_DIGEST = ("f8d6252c5933f22c8c276c911a7c22e84c7ea12d846d7de8f9ee90e312c68005"
+                      "3d41a525a4350c921f9cf12b80fc0dc9d43d3034c8b7a33f83bc069c1e656a9f")
 WRITERS_SCHEMA = "circuits/shared-row-bindings/v2"
 
 
@@ -121,7 +124,7 @@ def _sources(entries: list[Entry]) -> dict[str, int]:
     return out
 
 
-def _shared_group(S: Any, entries: list[Entry], row: int) -> Any:
+def _shared_group(entries: list[Entry], row: int) -> L.Group:
     src = _sources(entries)
     sizes = [n for t, _ in entries for n in ([t.nbytes, 4] if t.quant else [t.nbytes])]
     rows: list[Any] = []
@@ -129,13 +132,13 @@ def _shared_group(S: Any, entries: list[Entry], row: int) -> Any:
     for t, us in entries:
         s, k = src[t.op], _kind(t)
         if k == "tiled":
-            rows += [S.Row((S.Part(s, o, min(row, t.nbytes - o)),)) for o in range(0, t.nbytes, row)]
+            rows += [L.Row((L.Part(s, o, min(row, t.nbytes - o)),)) for o in range(0, t.nbytes, row)]
         elif k == "kept":
             (g,) = [u for u in us if u.template == "AllGather_v1"]
-            rows += [S.Row((S.Part(s, g.offset + i * g.stride, g.nbytes),)) for i in range(g.count)]
+            rows += [L.Row((L.Part(s, g.offset + i * g.stride, g.nbytes),)) for i in range(g.count)]
         elif k == "quant":
             (q,) = us
-            rows += [S.Row((S.Part(s, q.offset + i * q.stride, q.nbytes), S.Part(s + 1, 0, 4))) for i in range(q.count)]
+            rows += [L.Row((L.Part(s, q.offset + i * q.stride, q.nbytes), L.Part(s + 1, 0, 4))) for i in range(q.count)]
         else:
             if t.nbytes > row:
                 raise ValueError(f"{t.op}: {t.nbytes} B doesn't pool into {row} B rows")
@@ -146,18 +149,33 @@ def _shared_group(S: Any, entries: list[Entry], row: int) -> Any:
                 pool.append([(s, t.nbytes)])
                 rows.append(k)
     taken = {k: iter(v) for k, v in pools.items()}
-    rows = [S.Row(tuple(S.Part(s, 0, n) for s, n in next(taken[r]))) if isinstance(r, str) else r for r in rows]
-    return S.Group(tuple(sizes), tuple((r,) for r in rows))
+    rows = [L.Row(tuple(L.Part(s, 0, n) for s, n in next(taken[r]))) if isinstance(r, str) else r for r in rows]
+    return L.Group(tuple(sizes), tuple((r,) for r in rows))
 
 
 def shared_layout(shape: Shape, row: int = ROW) -> Any:
     """FAMILIES' shared-row layout at ``shape``, one commit unit a row of at most ``row`` bytes (a quantizer's row is its
-    chunk's codes and the scale); every layer's group is one `slots.Group`."""
+    chunk's codes and the scale), as the `slots.Layout` that commits it; every layer's group is one `L.Group`."""
     S, _ = _slots()
     m = Map(shape)
-    layer = _shared_group(S, m.layer(0), row)
-    groups = [layer if 1 <= i <= shape.layers else _shared_group(S, entries, row) for i, entries in enumerate(m.groups())]
-    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b/v1", tuple(groups))
+    layer = _shared_group(m.layer(0), row)
+    groups = [layer if 1 <= i <= shape.layers else _shared_group(entries, row) for i, entries in enumerate(m.groups())]
+    lay = S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b/v1", tuple(groups))
+    check_shared(lay, m)
+    return lay
+
+
+def check_shared(layout: Any, m: Map) -> None:
+    """`L.check_shared` on ``layout`` with every producer unit's output in each of its distinct groups (the layers' one group
+    once): refuses a layout of the map's tables that isn't shared-row."""
+    outputs, seen = [], set()
+    for gi, (g, entries) in enumerate(zip(layout.groups, m.groups(), strict=True)):
+        if id(g) not in seen:
+            seen.add(id(g))
+            src = _sources(entries)
+            outputs += [(gi, src[t.op], u.offset + i * u.stride, u.nbytes)
+                        for t, us in entries for u in us if u.template != "AllGather_v1" for i in range(u.count)]
+    L.check_shared(L.Layout(layout.name, tuple(layout.groups)), outputs)
 
 
 @dataclass(frozen=True)
@@ -489,7 +507,8 @@ class Window:
     def writers(self) -> list[dict[str, Any]]:
         """Every producer family's window rule, in circuits' writers schema (`WRITERS_SCHEMA`): unit i writes bytes
         ``row_offset + window_bytes (i % G) ..`` of commit unit ``first + i // G`` (one commit unit a row: the shared
-        layout's)."""
+        layout's). Refuses a layout `check_shared` refuses."""
+        check_shared(self.layout, self.map)
         out = []
         for name in self.families():
             u = self.units[name]
@@ -498,8 +517,6 @@ class Window:
             a = ix.parts[s]
             lo = u.offset + np.arange(u.count) * u.stride
             k = np.searchsorted(a[:, 0], lo, side="right") - 1
-            if not (lo + u.nbytes <= a[k, 1]).all():
-                raise ValueError(f"{name}: a unit's output isn't a window of one row")
             row, off = base + a[k, 2], a[k, 3] + lo - a[k, 0]
             g = int(np.sum(row == row[0]))
             i = np.arange(u.count)

@@ -23,7 +23,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 DRAW = (5, 200, 300, 511)
 PATHS = "its paths do not reach its unit, slot and step roots"
 #: `B.digests` of the fixture: a change to the bundle's bytes changes these
-GOLDEN = {"json": "a9e10ec969ab5ebcf41b00fa68cfb5a292dc634e4b01e7d0c23f399ede8a77b31ffc9e91a808fadf2c986e2b84dd7df137745e52a29c8047269841d20b933a18",
+GOLDEN = {"json": "fb509ff3a87ce874cc7fa2bbf5536e3cb7365c0d88153f81ae024fba511b169369e45c43fffa3e669189eeee76dcc6429eb45b820328ada7cbe4008961642cd7",
           "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
 #: SHA-512 of kernels' fixtures/commit-slots-v1.json at the commit `B.REFERENCE` pins, which `S.fixture()` writes as
 #: ``json.dumps(fixture, indent=1) + "\n"``
@@ -195,6 +195,23 @@ def test_a_tampered_output_is_refused_by_replay(bundle) -> None:
     bad = bytearray(payload)
     bad[o["row"][0]] ^= 1
     assert B.replay(u, payload) and not B.replay(u, bytes(bad))
+
+
+def test_a_boolean_template_replays_its_bits_in_word_order() -> None:
+    """A Boolean-profile template's rows are its ports' bits packed little-endian into u16 words: an argmax over bf16 words
+    replays to the index numpy finds, and a flipped low or high index bit is refused."""
+    import numpy as np
+
+    logits = np.array([0.5, -3.0, 2.25, 7.5, 1.0, -0.25, 6.0, 0.0, 3.5, -7.0, 4.0, 5.5, 1.5, 2.0, -1.0, 0.75], np.float32)
+    words = (logits.view(np.uint32) >> 16).astype("<u2").tobytes()
+    unit = {"template": {"id": "Argmax_v2{V=16}"},
+            "rows": [{"port": "logits", "row": [0, 32]}, {"port": "o0", "row": [32, 2]}]}
+    payload = words + int(np.argmax(logits)).to_bytes(2, "little")
+    assert B.replay(unit, payload)
+    for bit in (0, 15):
+        bad = bytearray(payload)
+        bad[32 + bit // 8] ^= 1 << (bit % 8)
+        assert not B.replay(unit, bytes(bad))
 
 
 def test_the_fixture_is_its_digests(bundle, registration) -> None:
