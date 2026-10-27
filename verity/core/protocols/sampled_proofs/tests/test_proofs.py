@@ -238,10 +238,10 @@ ROUND0, ROUND1 = _msg(b"\x01" * 40, 5), _msg(b"\x02", 4)
 
 
 def _record(**over) -> dict:
-    """A session record with what `session_uses` reads: two tables' root_B digests, out of key order, five link points
-    and the statement's first rep stream with two retained rounds beside its second with none."""
+    """A session record with what `session_uses` reads: the statement's table's root_B digest, five link points and
+    its first rep stream with two retained rounds beside its second with none."""
     r = {"link": {"points": [["0" * 32, "1" * 32, "2" * 32], ["3" * 32, "4" * 32]],
-                  "root_b_sha512": {"b": "bb" * 64, "a": "aa" * 64}},
+                  "root_b_sha512": {"circuit": "aa" * 64}},
          "streams": [{"stream": "circuit/rep0", "rounds": [_round(ROUND0, ["5" * 32] * 5),
                                                            _round(ROUND1, ["6" * 32] * 4)]},
                      {"stream": "circuit/rep1", "rounds": []}]}
@@ -259,9 +259,12 @@ def _record(**over) -> dict:
 
 #: records `session_uses` refuses, each by one field (`_record`'s dotted path) or as a whole
 REFUSED = {"points not a list": _record(**{"link.points": {}}), "a point not hex strings": _record(**{"link.points.1": [3]}),
-           "no root_B digests": _record(**{"link.root_b_sha512": []}),
-           "a short root_B digest": _record(**{"link.root_b_sha512.a": "aa" * 63}),
-           "a root_B digest not hex": _record(**{"link.root_b_sha512.a": "zz" * 64}),
+           "root_B digests not an object": _record(**{"link.root_b_sha512": []}),
+           "no root_B digests": _record(**{"link.root_b_sha512": {}}),
+           "a root_B digest of another table": _record(**{"link.root_b_sha512": {"t": "aa" * 64}}),
+           "a root_B digest beside the table's": _record(**{"link.root_b_sha512.t": "bb" * 64}),
+           "a short root_B digest": _record(**{"link.root_b_sha512.circuit": "aa" * 63}),
+           "a root_B digest not hex": _record(**{"link.root_b_sha512.circuit": "zz" * 64}),
            "streams not a list": _record(streams={}), "a stream unnamed": _record(**{"streams.1.stream": 1}),
            "rounds not a list": _record(**{"streams.1.rounds": None}),
            "a stream named as the points' family": _record(**{"streams.1.stream": "session"}),
@@ -290,12 +293,13 @@ def _uses(slot: int, text: str) -> dict:
 
 def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_digest():
     """`session_uses` (the prover's side of v2's round-coins check, `OneStageZk.roundsWhy`): the link points after the
-    SHA-512 of the tables' root_B digests in key order, then each round after its own digest, a 64-byte coin for each
-    four F128s, under the session's slot. A record whose streams aren't the statement's rep streams, each once, or
-    whose round doesn't retain its message, ending in the squeeze header of its coins, is refused."""
+    SHA-512 of the table's root_B digest, then each round after its own digest, a 64-byte coin for each four F128s,
+    under the session's slot. A record whose link names other than the statement's one table, whose streams aren't its
+    rep streams, each once, or whose round doesn't retain its message, ending in the squeeze header of its coins, is
+    refused."""
     pts = ["0" * 32, "1" * 32, "2" * 32, "3" * 32, "4" * 32]
     assert PF.session_uses(3, json.dumps(_record())) == [
-        ("slot/3/session", hashlib.sha512(b"\xaa" * 64 + b"\xbb" * 64).digest(), 2, pts),
+        ("slot/3/session", hashlib.sha512(b"\xaa" * 64).digest(), 2, pts),
         ("slot/3/circuit/rep0", hashlib.sha512(ROUND0).digest(), 2, ["5" * 32] * 5),
         ("slot/3/circuit/rep0", hashlib.sha512(ROUND1).digest(), 1, ["6" * 32] * 4)]
     for name, r in REFUSED.items():

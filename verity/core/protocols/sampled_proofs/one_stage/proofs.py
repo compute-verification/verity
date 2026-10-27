@@ -270,7 +270,7 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
     after the SHA-512 of its tables' `link.root_b_sha512` digests in key order, then each stream's rounds in the
     record's order, of family `slot/<slot>/<stream>` after the round's ``msg_sha512``; ceil(n/4) coins of 64 bytes for
     n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Lean
-    reads them (`usesOf`) only once the record's streams and rounds are what `_rounds_ok` asks. Raises ValueError with
+    reads them (`usesOf`) only once the record's link, streams and rounds are what `_rounds_ok` asks. Raises ValueError with
     Lean's reason."""
     j = json.loads(record)
     link = j.get("link") if isinstance(j, dict) else None
@@ -308,12 +308,15 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
                 raise ValueError(f"record: a round of {name}'s msg_sha512 is not 64 bytes of hex")
             cs = _hexes(r.get("coins"), f"the coins of a round of {name}")
             out.append((f"slot/{slot}/{name}", _unhex(sha), (len(cs) + 3) // 4, cs))
-    _rounds_ok(streams)
+    _rounds_ok(rbs, streams)
     return out
 
 
+#: Lean `OneStageZk.TABLES`: the statement's one table, the only table a record's link may name.
+TABLES = ("circuit",)
+
 #: Lean `OneStageZk.STREAMS`: the statement's one table's two rep streams, the only streams a record may hold.
-STREAMS = ("circuit/rep0", "circuit/rep1")
+STREAMS = tuple(f"{t}/rep{r}" for t in TABLES for r in (0, 1))
 
 
 def squeeze_count(x: bytes) -> int | None:
@@ -324,9 +327,12 @@ def squeeze_count(x: bytes) -> int | None:
     return int.from_bytes(x[-8:], "little")
 
 
-def _rounds_ok(streams: list) -> None:
-    """Lean `OneStageZk.roundsOk`, on a record `session_uses` has read: each stream one of `STREAMS`, none named twice,
-    each round's retained ``msg`` its ``msg_sha512``'s and ending in the squeeze header of its coins."""
+def _rounds_ok(rbs: dict, streams: list) -> None:
+    """Lean `OneStageZk.roundsOk`, on a record `session_uses` has read: its link's root_B digests named by `TABLES`
+    exactly, each stream one of `STREAMS`, none named twice, each round's retained ``msg`` its ``msg_sha512``'s and
+    ending in the squeeze header of its coins."""
+    if tuple(sorted(rbs)) != TABLES:
+        raise ValueError("record: link.root_b_sha512 does not name exactly the statement's table")
     seen: set[str] = set()
     for s in streams:
         name = s["stream"]
