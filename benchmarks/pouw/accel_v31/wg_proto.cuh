@@ -147,9 +147,9 @@ template <int BN, int CM> __device__ void body(const Args& p) {
   if (wg == NWG) {
     regs_dec<40>();
     if (tid == NWG * 128) {
-      tma_prefetch(&p.a);
-      tma_prefetch(&p.b);
-      if (TT) { tma_prefetch(&p.pa); tma_prefetch(&p.pb); }
+      wgp::tma_prefetch(&p.a);
+      wgp::tma_prefetch(&p.b);
+      if (TT) { wgp::tma_prefetch(&p.pa); wgp::tma_prefetch(&p.pb); }
       int s = 0;
       uint32_t ph = 0;
       for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
@@ -161,11 +161,11 @@ template <int BN, int CM> __device__ void body(const Args& p) {
           mbar_expect_tx(full, T::STAGE);
           if (i < TT) {
             const int kt = tail_step(i, p.lp, p.dz, p.dy).kt;
-            tma_load(st, &p.pa, full, kt * BK, tm * TM);
-            tma_load(st + T::A_BYTES, &p.pb, full, kt * BK, tn * BN);
+            wgp::tma_load(st, &p.pa, full, kt * BK, tm * TM);
+            wgp::tma_load(st + T::A_BYTES, &p.pb, full, kt * BK, tn * BN);
           } else {
-            tma_load(st, &p.a, full, (i - TT) * BK, tm * TM);
-            tma_load(st + T::A_BYTES, &p.b, full, (i - TT) * BK, tn * BN);
+            wgp::tma_load(st, &p.a, full, (i - TT) * BK, tm * TM);
+            wgp::tma_load(st + T::A_BYTES, &p.b, full, (i - TT) * BK, tn * BN);
           }
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
