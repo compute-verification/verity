@@ -5,7 +5,7 @@ node's registered store the node made. `PROTOCOL.md` has the semantics, the byte
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`; Daniel, 18 Oct: Lean is the definition and the
+The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is the definition and the
 verifier of record, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
 the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
@@ -123,7 +123,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
-  sessions, at δ = 1% and 10⁻⁶: pooled by #4413's count bound (all but M − 1 sessions certify), with each session at
+  sessions, at δ = 1% and 10⁻⁶: pooled by `prCoin_count_le_choose`'s count bound (all but M − 1 sessions certify;
+  `short_sessions` in `verity/core/protocols/pous/wipe_monitoring.py`, shared with the wipe's), with each session at
   δ/T beside it. The deployment's machines and window are parameters.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and

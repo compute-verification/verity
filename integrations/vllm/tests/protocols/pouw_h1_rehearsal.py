@@ -68,8 +68,8 @@ Each stratum's circuit file is the long CPU step at the 32 × 32 tile, so build 
 ``--circuits DIR``: ``python -m tests.protocols.pouw_h1_circuits --program PROGRAM_DIR --out $OUT``.
 
 **The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (on
-vy-nebius-2), the auditor's pin (art:d12f85becc), the declared Program's ``window-program.meta.json`` sent (a
-``--program-only`` run's, or a rehearsal's ``out/program/``, as rehearsal r20261021-024645-c83a's, digest b9f82db9…),
+vy-nebius-2), the auditor's pin, the declared Program's ``window-program.meta.json`` sent (a
+``--program-only`` run's, or a rehearsal's ``out/program/``),
 its circuit files' directory (``--circuits``), and no ``--tree``:
 
     research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json \\
@@ -84,7 +84,7 @@ its circuit files' directory (``--circuits``), and no ``--tree``:
 What changes from the rehearsal: the gate is vy-challenger-1's forced command over ssh (``by`` the lane the key is
 registered for, ``vllm``), not ``python -I local_gate.py DIR``; `MODEL`'s registration under the period's circuit is
 vy-admin's, made before the run (the run registers nothing); its key is ``lms.DEPLOYED``, pinned by ``--key-sha512``
-(the auditor's ``public_sha512``, art:d12f85becc, which the run checks against ``GATE pubkey``), not a test key made in a
+(the auditor's ``public_sha512``, which the run checks against ``GATE pubkey``), not a test key made in a
 temporary directory; serve.py on vy-challenger-1 reaches the serving node by its certifier coin link, the peer named
 in ``/etc/vy/peers`` (``--peer``, the serving node), whose 127.0.0.1:PORT the window connects to, PORT the one the open
 answers (7811..7899, `pouw_h1_window.at_port`), not 27811.. on the node itself; its coins are the Lean verifier's on
