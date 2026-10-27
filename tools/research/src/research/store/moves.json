@@ -1510,6 +1510,12 @@
         "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
         "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/streamed_wipe/demo.sh": "examples/wipe/demo.sh",
+        "benchmarks/pous/streamed_wipe/peer.sh": "examples/wipe/peer.sh"
+      }
     }
   ]
 }

@@ -6,7 +6,7 @@
 # Lean builds into it):
 #
 #   research run --on NODE --project verity --source . --cwd clone --timeout 90m -- \
-#     bash benchmarks/pous/streamed_wipe/demo.sh [--dry-run] [OPTIONS]
+#     bash examples/wipe/demo.sh [--dry-run] [OPTIONS]
 #
 #   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
 #                        run but the size and the placement (trusted-nebius-host unmet)
@@ -48,7 +48,7 @@
 # mktemp -d, removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
 set -euo pipefail
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
-ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)
+ROOT=$(cd "$(dirname "$SELF")/../.." && pwd)
 cd "$ROOT"
 export O=${OUT:-${RESEARCH_RUN_DIR:-$PWD}/out}
 mkdir -p "$O"
