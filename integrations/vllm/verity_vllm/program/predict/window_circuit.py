@@ -49,9 +49,13 @@ the units, their feeds, gathers and weight reads, and wires them):
   read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
   `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
   `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
-- Any other attention version (FA3's `Attention_v4` on sm_90) is its heads, a unit each of its own head Definition
-  (`AttentionHead_v4{T}`), while T is at most `KEYS`: a head's keys and values are one row a KV group, an
-  `AllGather_v1{T, D}` over every key's own row, and past `KEYS` keys it is refused.
+- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way (VLLM-127): its first visited block
+  `AttnBlockFirst_v1` (FA3's first iteration is FA2's word for word), each full block below it
+  `AttnBlock_v4{FIRST=False, CHECK = b >= MASKED_FROM}` and its end `AttnHeadEnd_v1{D, INV=Fa3InvSum_v1}`. `CUTS` names
+  the versions cut by key block and the cut of each.
+- Any other attention version (`Attention_v2`, as `fa3_construction = "guard-every-block"` binds) is its heads, a unit
+  each of its own head Definition (`AttentionHead_v2{T}`), while T is at most `KEYS`: a head's keys and values are one row
+  a KV group, an `AllGather_v1{T, D}` over every key's own row, and past `KEYS` keys it is refused.
 - `TokenSelect_v4{V}` is its function at ``grain.select`` logits a chunk (its body's own form at another C): chunks
   `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and `TokenSelectCombine_v2{V, C}` over them:
   ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and ``x0`` (``logits[0]``) from one
@@ -99,6 +103,7 @@ from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19
+from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
 
 from . import scan_state as SS
@@ -112,6 +117,9 @@ GREEDY = {"kind": "greedy"}
 #: the most keys a head reads through one `AllGather_v1{T, D}` where its attention's version has no per-key-block cut (its
 #: gather's T parts and output within a unit's 256 rows, with room for its reader's cut)
 KEYS = 136
+#: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
+#: by v19, FA3's v4 by v20
+CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
 
 
 @dataclass(frozen=True)
@@ -442,17 +450,18 @@ class _Program:
         self.outs[j] = [(0, H * D, Row(tid, u, "o0", D))]
 
     def _plan(self, fn: Any, NH: int) -> list[tuple[Any, list[tuple[str, tuple[str, tuple[Any, ...]]]]]]:
-        """``fn``'s heads as `Attention_v19`'s, read once a Definition (`_Builder.plans`): each Call of `AttentionHead_v19`'s
-        body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys [a, b)) or
-        ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
+        """``fn``'s heads as its cut's (`CUTS`: `Attention_v19`'s or v20's), read once a Definition (`_Builder.plans`): each
+        Call of the cut's head's body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys
+        [a, b)) or ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
         key = descriptor_id(fn)
         if key in self.b.plans:
             return self.b.plans[key]
+        cut = CUTS[fn.version]
         try:
-            head = self._heads(bind(AttentionV19, **fn.bindings), "AttentionHead", NH)
+            head = self._heads(bind(cut, **fn.bindings), "AttentionHead", NH)
             body = head.body
         except (TypeError, ValueError, KeyError) as e:
-            raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v19`'s ({e})") from None
+            raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v{cut.version}`'s ({e})") from None
         params, D = [p for p, _ in head.signature()[0]], fn.bindings["D"]
         plan = []
         for i, n in enumerate(body.nodes):
@@ -511,7 +520,7 @@ class _Program:
     def _Attention(self, j: int, node: Any) -> None:
         s = node.fn.bindings
         T, NH, KVH, D, BN = s["T"], s["NH"], s["KVH"], s["D"], s["BN"]
-        if node.fn.version not in (18, 19):
+        if node.fn.version not in CUTS:
             self._whole_heads(j, node)
             return
         plan = self._plan(node.fn, NH)
@@ -533,14 +542,16 @@ class _Program:
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
 
     def _whole_heads(self, j: int, node: Any) -> None:
-        """An attention whose version has no per-key-block cut (FA3's `Attention_v4`): a unit a head of its own head
-        Definition, its keys and values each one row a KV group, an `AllGather_v1{T, D}` over every key's row (`_cache`'s),
-        refused past `KEYS` keys."""
+        """An attention whose version has no per-key-block cut (not in `CUTS`): a unit a head of its own head Definition, its
+        keys and values each one row a KV group, an `AllGather_v1{T, D}` over every key's row (`_cache`'s), refused past
+        `KEYS` keys."""
         s = node.fn.bindings
         T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
         if T > KEYS:
+            cut = ", ".join(map(str, sorted(CUTS)))
             raise Unexpressible(f"{node.fn.id}: a head of {T} keys, past the {KEYS} one `AllGather_v1` reads; the window's "
-                                f"lowering cuts only `Attention_v18`'s and v19's heads by key block, not v{node.fn.version}'s")
+                                f"lowering cuts a head by key block only at `Attention` versions {cut} (`CUTS`), not "
+                                f"{node.fn.version}")
         head = self._heads(node.fn, "AttentionHead", NH)
         q, kc, vc = node.args
         tid, u = self.b.unit(head, NH)
@@ -740,5 +751,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, name)
 
 
-__all__ = ["CLASS_OF_RECORD", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "WindowClass", "class_circuit", "class_program",
-           "stop_ids", "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "WindowClass", "class_circuit",
+           "class_program", "stop_ids", "window_circuit"]
