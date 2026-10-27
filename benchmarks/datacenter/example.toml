@@ -1,0 +1,14 @@
+# The datacenter model's rung on the ladder (examples/README.md), network accounting's first example: the accounting layer's
+# night on a two-node rack (`python -m datacenter.demo`), run honestly and then with an adversary whose five deviations the
+# audit refuses, every party a Python object on one CPU machine.
+protocol = "onsite"
+workload = "none"         # the demo's two-stage BF16 model (`datacenter.models`), not an integration
+run = "moved"
+proof = "none"
+
+[placement]
+prover = "local"          # the rack's nodes, as `observe.run` executes the placement
+certifier = "local"       # each node's certifier, the trusted device whose records the audit reads
+verifier = "local"        # the audit and the account
+
+[evidence]
