@@ -64,3 +64,6 @@ Resend your waiting runs to vy-nebius-cpu-6 or cpu-2 (briefs/common.md, "New slo
 
 ## 22:10Z NEW ORDER (briefs/common.md)
 STOP the refusal batches (3c71, b624's rounds/sizes, the RecordDrawn refusals): push and checkpoint them, and cancel their waiting tries. KEEP #5330: mark it when 8c33 passes. Then you move to the registration cluster's sampled-proofs Lean side (PRF-268); I'll brief you when you end your turn.
+
+## 23:10Z: NCI retires (Daniel 3:46 PM PDT)
+NCI retires entirely. Drop the NciCheck.Baseline switch from cursor/soundness-reg-digest-7827: revert that file and its lock change, and keep PoUW and the network check. Commit, push, and, if the records runs already started, rerun only what the gate asks for at the new head.
