@@ -41,8 +41,8 @@ theorem honestHolds_sampled (G : Given d α) (h : SampledHonest G) :
     (vocab G).HonestHolds G.commit (audit .sampled) := by
   intro θ F hreg
   obtain ⟨hc, ho, hε⟩ := h θ F hreg
-  exact prob_play_eq_zero _ θ F _ _ (fun log e hn => hn ((vocab G).holds_sampled_of_opens θ F (G.commit θ F)
-    ((vocab G).honest θ F (G.commit θ F)) ⟨θ, F, G.commit θ F, log, e⟩ hc ho hε)) _
+  exact prob_play_eq_zero _ _ θ F _ _ (fun log e b hn => hn ((vocab G).holds_sampled_of_opens θ F (G.commit θ F)
+    ((vocab G).honest θ F (G.commit θ F)) ⟨θ, F, G.commit θ F, log, e, b⟩ hc ho hε)) _
 
 /-- **The network certifier's claim at the honest commitment**, from its honest lemma. -/
 theorem honestHolds_network (G : Given d α) (h : NetworkHonest G) :
@@ -100,8 +100,8 @@ theorem not_honestHolds_sampled_of_unopened (commit : ByteArray → ByteArray �
     have hh' : ((Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
         (V.certOf θ).ε * V.units F := hh
     exact lt_irrefl _ (hlt.trans_le ((Nat.cast_le.2 hcard).trans hh'))
-  have h1 := prob_play_eq_one (V.rounds θ) θ F c (fun o => ¬ V.Holds θ F c (V.honest θ F c) .sampled o)
-    (fun log e => hfail _ _) (V.honest θ F c)
+  have h1 := prob_play_eq_one (V.rounds θ) (V.sign θ) θ F c (fun o => ¬ V.Holds θ F c (V.honest θ F c) .sampled o)
+    (fun log e b => hfail _ _) (V.honest θ F c)
   subst hc
   have h0 := h θ F hreg
   exact one_ne_zero (h1.symm.trans h0)

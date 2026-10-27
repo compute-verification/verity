@@ -77,35 +77,38 @@ def inertFinder : Claims.Finder where
 * `read`: v2's reading of the committed blob (ONE-3b, ONE3B).
 * `place`, `programDigest`, `registered`: the positions, the circuit file's digest in the parameters and the registered
   blob (ONE-7; #4754 gives `Flock.Bridge.circuitOf`, none of these).
-* `rounds`, `coinsRead`: the device's rounds and the releases each component's check read (ONE-4, #4888).
+* `rounds`, `sign`, `key`, `coinsRead`: the device's rounds, its signer and registered LMS key, and the releases each
+  component's check read (ONE-4, #4888).
 * `extract`: the extractor applied to a strategy (ONE-8, `XplurZC`).
 * `finder`, `callsMul`, `callsAdd`, `finder_calls`: each decided claim's collision finder and its SHA-512 calls in
   those of the strategy (ONE-8 for sampled proofs, network-accounting for the network certifier).
-* `forger`, `forgery`: each decided claim's LMS forger on the play's outcome, and what a forgery is there (ONE-4, with
-  ONE-8 and network-accounting for their claims' forgers).
+* `forger`: each decided claim's LMS forger on the play's outcome (ONE-4 and soundness; what a forgery is, F3 defines,
+  `Vocab.forgery`).
 * `cost`: the strategy's SHA-512 calls, declared, as `Vocab.cost` is (`Verity.Game` has no call model; ONETHM).
 * `world`: the world each play realizes (ONE-12, the network certifier's realized run, `commWithin`).
 * `certOf`, `crBound`, `delta`, `loss`: what the product publishes, from the parameters alone (ONE-19; its `deltaPub`
   is in the proofs tree, which a statement can't read).
-* `commit`, `answer`, `evidence`: the honest prover's commitment, each round's bytes from the releases so far, and its
-  evidence from the device's log (`records_audit.py`, `serve.py`: C-Flock's prover and the integration's commit). -/
+* `commit`, `answer`, `evidence`, `blobs`: the honest prover's commitment, each round's bytes from the releases so far,
+  and its evidence and the blobs the components fetch by digest (v2's circuit and public files, each session's record
+  and rep files), from the device's log (`records_audit.py`, `serve.py`: C-Flock's prover and the integration's commit). -/
 structure Given {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   read : ByteArray → FileRead
   place : (θ F c : ByteArray) → Fin (read F).circuit.N → Option Place
   programDigest : ByteArray → Option Hash.Digest
   registered : ByteArray → ByteArray
   rounds : ByteArray → List ℕ
+  sign : ByteArray → ByteArray → List Bool → ByteArray × ByteArray
+  key : ByteArray → Lms.Params × ByteArray
   coinsRead : Index → Sent → List Release
-  extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
-  finder : Index → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
+  extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → (read F).circuit.Transcript
+  finder : Index → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Claims.Finder
   forger : Index → ByteArray → Outcome → Option (ByteArray × ByteArray)
-  forgery : ByteArray → Outcome → ByteArray → ByteArray → Prop
-  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
+  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → ℕ
   callsMul : ByteArray → Index → ℕ
   callsAdd : ByteArray → Index → ℕ
   finder_calls : ∀ k θ F c σ (x : (finder k θ F c σ).S),
     (finder k θ F c σ).cost x ≤ callsMul θ k * cost θ F c σ + callsAdd θ k
-  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → World d α
+  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Outcome → World d α
   certOf : ByteArray → Certificates
   crBound : ByteArray → Index → ℕ → ℝ
   delta : ByteArray → Index → ℕ → ℝ≥0∞
@@ -113,6 +116,7 @@ structure Given {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   commit : ByteArray → ByteArray → ByteArray
   answer : (θ F c : ByteArray) → List Release → ByteArray
   evidence : (θ F c : ByteArray) → List Release → ByteArray
+  blobs : (θ F c : ByteArray) → List Release → Array ByteArray
 
 /-- A strategy of `g.bind f`: `s` in `g`, then `t a` in `f a` once `g` ended with `a`. -/
 def bindStrategy {α β : Type} : (g : Game α) → (f : α → Game β) → Game.Strategy g →
@@ -123,18 +127,21 @@ def bindStrategy {α β : Type} : (g : Game α) → (f : α → Game β) → Gam
 
 /-- **The device's rounds against a prover that answers from the releases so far**: before each release, the prover
 sends `ans pre`, where `pre` is the releases before it. -/
-def releasesBy (ans : List Release → ByteArray) (pre : List Release) :
-    (ns : List ℕ) → Game.Strategy (releases ns)
+def releasesBy (sign : ByteArray → List Bool → ByteArray × ByteArray) (ans : List Release → ByteArray)
+    (pre : List Release) : (ns : List ℕ) → Game.Strategy (releases sign ns)
   | [] => PUnit.unit
-  | _ :: ns => ⟨ans pre, fun x => Game.Strategy.toMap _ (releases ns)
-      (releasesBy ans (pre ++ [⟨ans pre, List.ofFn x⟩]) ns)⟩
+  | _ :: ns => ⟨ans pre, fun x => Game.Strategy.toMap _ (releases sign ns)
+      (releasesBy sign ans
+        (pre ++ [⟨ans pre, List.ofFn x, (sign (ans pre) (List.ofFn x)).1, (sign (ans pre) (List.ofFn x)).2⟩]) ns)⟩
 
 /-- **The toy's honest prover**: each round's bytes from the releases so far, then the evidence from the device's
-log. -/
+log, with the blobs the components fetch. -/
 def honest {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G : Given d α) (θ F c : ByteArray) :
-    Game.Strategy (play (G.rounds θ) θ F c) :=
-  bindStrategy (releases (G.rounds θ)) (fun log => .send ByteArray fun e => .ret (⟨θ, F, c, log, e⟩ : Outcome))
-    (releasesBy (G.answer θ F c) [] (G.rounds θ)) fun log => ⟨G.evidence θ F c log, PUnit.unit⟩
+    Game.Strategy (play (G.rounds θ) (G.sign θ) θ F c) :=
+  bindStrategy (releases (G.sign θ) (G.rounds θ))
+    (fun log => .send (ByteArray × Array ByteArray) fun eb => .ret (⟨θ, F, c, log, eb.1, eb.2⟩ : Outcome))
+    (releasesBy (G.sign θ) (G.answer θ F c) [] (G.rounds θ))
+    fun log => ⟨(G.evidence θ F c log, G.blobs θ F c log), PUnit.unit⟩
 
 /-- **The toy's vocabulary**: `G`'s fields, the toy's at the claims it decides and inert at the others, no gates
 computed, and the toy's honest prover. -/
@@ -144,6 +151,8 @@ noncomputable def vocab {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G 
   programDigest := G.programDigest
   registered := G.registered
   rounds := G.rounds
+  sign := G.sign
+  key := G.key
   coinsRead a s := match ofAudit a with
     | some k => G.coinsRead k s
     | none => []
@@ -154,7 +163,6 @@ noncomputable def vocab {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G 
   forger a θ o := match ofAudit a with
     | some k => G.forger k θ o
     | none => none
-  forgery := G.forgery
   cost := G.cost
   callsMul θ a := match ofAudit a with
     | some k => G.callsMul θ k
