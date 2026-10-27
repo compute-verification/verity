@@ -75,7 +75,8 @@ env_files = ["/root/.config/verity/relay.env", "{dir}/notion.env"]
 needs = ["{dir}/top-asks.json"]
 
 # top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
-# thread, main stalled while next is ahead, idle H200s from fleet's samples
+# thread, main stalled while next is ahead, idle H200s from fleet's samples, and the Linear audit with relay.env's Linear app
+# credentials (LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET), whose lines go to {dir}/linear-audit.jsonl
 [[loop]]
 name = "top-sweep"
 argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]

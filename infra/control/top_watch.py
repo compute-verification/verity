@@ -4,7 +4,8 @@ top's VM (asks-relay-v4, admin-hourly-v3) and stopped whenever it was suspended.
 inbox doorbells, and whatever needs judgment rings @top instead of being decided.
 
     top_watch.py asks  [--every 900]  [--state PATH] [--once] [--seed] [--dry-run]    $NOTION_API_KEY, $SLACK_BOT_TOKEN
-    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY
+    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY,
+                                                                                      $LINEAR_CLIENT_ID, $LINEAR_CLIENT_SECRET
 
 **asks**, every 15 min: the Asks for Daniel pages (the registry's #ask-daniel `pages`) edited since the last pass, and every
 Default-kind page still Waiting on Daniel past its Deadline.
@@ -27,6 +28,11 @@ seen.
 4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): @ci.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
    ($FLEET_DIR): @top, with the numbers.
+6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
+   <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
+   posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
+   lists them (findings with no lane: @top); once a day after 15:00Z, @top with the totals and their change from the line
+   24 h earlier.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -50,7 +56,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from research import slack
+from research import linear, slack
 
 QUOTE_MAX = 600
 KEEP_S = 14 * 86400
@@ -60,6 +66,9 @@ RULES_THREAD = "1792037552.043289"
 STALL_S = 3600
 H200_BUSY_PCT = 10
 REPORT_HOUR_UTC = 15
+LANE_RING_S = 12 * 3600
+AUDIT_LOG = "linear-audit.jsonl"
+DAY_BEFORE_S = 86400 - 1800             # the line 24 h earlier: the newest one at least this old (passes drift within the hour)
 REPO = "compute-verification/verity"
 OPEN = ("Waiting on Daniel", "Revising")
 HANDLE_LEAD = re.compile(r"^\s*@[a-z0-9][a-z0-9._-]*")
@@ -353,6 +362,59 @@ def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> No
     state["h200_day"] = day
 
 
+def _change(n: int, then) -> str:
+    return f" ({n - then:+d})" if isinstance(then, int) else ""
+
+
+def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Callable[[], dict], log_path: Path | None) -> None:
+    """The audit's line appended to `log_path` (None: a dry run, which appends nothing), each lane's ring and @top's daily one.
+    A volume that can't be read leaves the line's `volume` null."""
+    found = audit()
+    counts = linear.tally(found)
+    kinds = {k: sum(c.get(k, 0) for c in counts.values()) for k in linear.AUDIT_KINDS}
+    try:
+        totals = volume()["totals"]
+        vol = {k: totals[k] for k in ("posts", "words", "over")}
+    except (RuntimeError, ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as e:
+        log(f"linear: the volume not read: {type(e).__name__}: {e}")
+        vol = None
+    earlier = None
+    if log_path is not None:
+        for raw in log_path.read_text().splitlines() if log_path.is_file() else []:
+            try:
+                x = json.loads(raw)
+            except ValueError:
+                continue
+            if str(x.get("t", "")) <= iso(now - DAY_BEFORE_S):
+                earlier = x
+        with log_path.open("a") as f:
+            f.write(json.dumps({"t": iso(now), "findings": len(found), "kinds": kinds, "lanes": counts, "volume": vol},
+                               sort_keys=True) + "\n")
+    bucket = int(now // LANE_RING_S)
+    for lane, c in counts.items():
+        name, whose = ("top", "issues with no lane") if lane == linear.NO_LANE else (lane, "your open issues")
+        once_each(state, f"linear:{lane}:{bucket}", ring, name,
+                  f"{name}: the Linear audit finds {sum(c.values())} on {whose} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
+                  f"`research msg linear audit --lane {lane}` lists them, one line each with its fix.", None, now)
+    if time.gmtime(now).tm_hour < REPORT_HOUR_UTC:
+        return
+
+    def then(*keys: str):
+        x = earlier
+        for k in keys:
+            x = x.get(k) if isinstance(x, dict) else None
+        return x
+    body = (f"top: the Linear audit at {iso(now)}: {len(found)} findings{_change(len(found), then('findings'))} ("
+            + ", ".join(f"{k} {n}{_change(n, then('kinds', k))}" for k, n in kinds.items()) + ")")
+    if vol:
+        body += f"; #{slack.FRONT_DOOR}'s last 24 h: " + ", ".join(
+            f"{vol[k]} {what}{_change(vol[k], then('volume', k))}"
+            for k, what in (("posts", "posts"), ("words", "words"), ("over", f"over {slack.VOLUME_WORDS} words")))
+    body += (f"; changes from {earlier['t']}" if earlier else "; no line 24 h earlier yet") + "; by lane: " + ", ".join(
+        f"{lane} {sum(c.values())}" for lane, c in sorted(counts.items(), key=lambda kv: -sum(kv[1].values())))
+    once_each(state, f"linear:day:{iso(now)[:10]}", ring, "top", body, None, now)
+
+
 def sweep_pass(state: dict, ring: Ringer | None, checks: dict[str, Callable[[], None]]) -> None:
     for name, check in checks.items():
         try:
@@ -374,6 +436,14 @@ def traffic_json() -> dict:
                         "--json"], capture_output=True, text=True, timeout=600)
     if r.returncode != 0:
         raise RuntimeError(f"research msg traffic exited {r.returncode}: {r.stderr.strip()[-300:]}")
+    return json.loads(r.stdout)
+
+
+def volume_json() -> dict:
+    r = subprocess.run([sys.executable, "-m", "research", "msg", "traffic", "--volume", "--hours", "24", "--json"],
+                       capture_output=True, text=True, timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError(f"research msg traffic --volume exited {r.returncode}: {r.stderr.strip()[-300:]}")
     return json.loads(r.stdout)
 
 
@@ -414,7 +484,9 @@ def main(argv: list[str] | None = None) -> int:
                     "agents": lambda: holderless(state, ring, now, cursor_agents, known_holders(reg, routes)),
                     "rules thread": lambda: rules_thread(state, ring, api, reg, now),
                     "main": lambda: main_stalled(state, ring, now),
-                    "h200": lambda: h200s(state, ring, now, fleet_samples)})
+                    "h200": lambda: h200s(state, ring, now, fleet_samples),
+                    "linear": lambda: linear_audit(state, ring, now, lambda: linear.Linear().audit(linear.owners(reg), now=now),
+                                                   volume_json, None if ns.dry_run else state_path.parent / AUDIT_LOG)})
                 prune(state, now)
             if not ns.dry_run:
                 tmp = state_path.with_suffix(".tmp")
