@@ -51,8 +51,8 @@ offset t0 − 1, with row −1, the first link-window's, the empty state's, sinc
 
 **The Programs' row** (`prog_encode`) at bucket t is NR entries, entry j its own port `prog<j>`, one row of
 `entry_bits`: `read` (1 bit), n (u32) and KO output ids of IDB bits (`entry_layout`), then zeros to a whole 16-bit
-word, vllm's `SlotEntry_v1` row (71 words at w63's class). Entry j is the outputs of the Program in slot j of the
-boundary at or before t, its `read` 1. The unit reads entry j only where slot j is due and occupied (anchored at t,
+word (71 words at w63's class), the row `SlotEntry_v1` writes once it carries the read bit. Entry j is the outputs
+of the Program in slot j of the boundary at or before t, its `read` 1. The unit reads entry j only where slot j is due and occupied (anchored at t,
 `occ` 1 in S_{t−1}); every other entry, and every entry's padding, is ignored, so a link-window's buckets of one
 timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n and `out` zero: an empty slot's
 outputs are masked by its occupancy word and never reach the egress. An occupied slot whose entry is absent (`read` 0)
