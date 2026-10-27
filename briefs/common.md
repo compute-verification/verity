@@ -48,3 +48,4 @@ wire strings (the verdict keys `integrity`, `communication`) and `Core.Protocol`
   deployed instance) and `<name>_nontrivial` (the conclusion fails for an accept-everything verifier).
 
 - **Smaller tree (Daniel, 9:53 PM PDT, via top 05:00Z):** every PR that adds code says in its body what it deletes or unifies, or why nothing can go. Prefer one definition over a second; delete superseded statements, scaffolding and copies in the same PR that replaces them. main must be below 223.4 MB / 13,768 files by Wed 23:00Z, then smaller daily.
+- **Linear writes go through the app only** (top, 06:25Z): `research msg linear comment|state …` or `research msg ask`, never the Linear MCP connector (it writes as Daniel). Reading through the connector is fine.
