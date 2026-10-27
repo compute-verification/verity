@@ -66,8 +66,8 @@ def certified(s: Scenario) -> dict | None:
     out = {"prompts": cert.prompts(c), "intake": cert.intake_of(c), "channels": loc.hosts * (cert.timing + cert.side),
            "links": loc.links, "declared": cert.declared, "given": cert.ingress is not None}
     if cert.declared:
-        out |= {"r_in": cert.r_in, "r_out": cert.r_out, "declared_x": cert.declared_x,
-                "faulty_unit_bits": cert.faulty_unit_bits}
+        out |= {"r_in": cert.r_in, "r_out": cert.r_out, "window_buckets": cert.window_buckets,
+                "declared_x": cert.declared_x, "faulty_unit_bits": cert.faulty_unit_bits}
     return out
 
 
@@ -78,10 +78,10 @@ def certified_md(d: dict | None) -> list[str]:
         basis = "given directly (`ingress`)"
     elif d["declared"]:
         basis = (f"{fmt(d['declared_x'])} × each server's declared inputs, r_in = {fmt(d['r_in'])} bit/s (r_out = "
-                 f"{fmt(d['r_out'])} bit/s out), at the warden form's public parameters, the honest-δ form of "
-                 f"draft:NET-92's bound (a faulty ingress unit's {fmt(d['faulty_unit_bits'])} bits are excluded until "
-                 f"every ingress unit is drawn); line rate, {fmt(d['links'])} bit/s, is its upper end until NET-92's "
-                 f"PR 5")
+                 f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket link-window, at the warden "
+                 f"form's public parameters, the honest-δ form of draft:NET-92's bound (a faulty ingress unit's "
+                 f"{fmt(d['faulty_unit_bits'])} bits are excluded until every ingress unit is drawn); line rate, "
+                 f"{fmt(d['links'])} bit/s, is its upper end until NET-92's PR 5")
     else:
         basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:NET-92)"
     return [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "

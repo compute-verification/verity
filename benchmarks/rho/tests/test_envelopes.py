@@ -1,3 +1,4 @@
+import dataclasses
 import importlib.util
 import math
 from pathlib import Path
@@ -178,32 +179,44 @@ def test_the_links_form_is_what_windows_proves():
     assert lean.weakest(envelopes.regime(REG, "onsite").cites()) == "draft"
 
 
-def test_the_declared_io_bound_at_w63_is_pr_5s_honest_delta_form():
+def test_the_declared_io_bound_at_w63_is_pr_5s_per_window_honest_delta_form():
     """NET-92's per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 21, KO 64, τ_b
-    100 ms), PR 5's `requestBits` and `windowBits` (note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee):
-    K = 45 ids a cell; 36,107 bits in a request, the plan's 36,067 and `requestSlack`'s 32 + 1 + 6 + 1; 12 bits a bucket,
-    `lanes ⌈log₂(r + 1)⌉`; and 1,095 out (1,088 id bits and the count). So a server takes at most 65.8 kbit/s in and
-    2.0 kbit/s out, against the warden's line rate of 655 kbit/s each way, and a faulty ingress unit, which this
-    honest-δ form excludes, would free 209,964 bits more (8 · 512 · 16 + 4 · 36,107). `regime.onsite` doesn't take it."""
+    100 ms, 32-bucket link-windows), PR 5's `requestBits`, `windowRequests` and `windowBits`
+    (note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee): K = 45 ids a cell; 36,107 bits in a
+    request, the plan's 36,067 and `requestSlack`'s 32 + 1 + 6 + 1; 12 bits a bucket, `lanes ⌈log₂(r + 1)⌉`; and 1,095
+    out (1,088 id bits and the count). A link-window anchors `4 ⌈32 / 22⌉ = 8` requests, so a server takes at most
+    289,240 bits in a 3.2 s window, 90.4 kbit/s in and 2.7 kbit/s out, against the warden's line rate of 655 kbit/s each
+    way. That is never less than the rate over many windows, 65.8 kbit/s, which it equals only at T = D + 1, and at
+    T = 600 it is the note's 67.5 kbit/s. A faulty ingress unit, which this honest-δ form excludes, would free 209,964
+    bits more (8 · 512 · 16 + 4 · 36,107). `regime.onsite` doesn't take it."""
     c = envelopes.regime(REG, "onsite-w63").certifier
-    assert (c.ids_per_cell, c.request_slack, c.request_in, c.bucket_in, c.request_out) == (45, 40, 36_107, 12, 1_095)
-    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (65.8, 2.0, 655_360)
-    assert c.r_in == pytest.approx(4 * 36_107 / 2.2 + 120) and c.faulty_unit_bits == 209_964
-    # a lane anchors a request at most every D + 1 = 22 buckets
-    assert c.period_bits(22) == (4 * 36_107 + 22 * 12, 4 * 1_095)
-    assert c.period_bits(23) == (8 * 36_107 + 23 * 12, 8 * 1_095)
+    assert (c.ids_per_cell, c.request_slack, c.request_in, c.bucket_in, c.request_out, c.window_buckets) == (
+        45, 40, 36_107, 12, 1_095, 32)
+    assert c.window_bits(32) == (289_240, 8_760) == (8 * 36_107 + 32 * 12, 8 * 1_095)
+    assert (c.r_in, c.r_out) == (pytest.approx(289_240 / 3.2), pytest.approx(8_760 / 3.2))
+    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (90.4, 2.7, 655_360)
+    assert c.faulty_unit_bits == 209_964
+    # a lane anchors a request at most every D + 1 = 22 buckets, so the ceiling steps past 22
+    assert c.window_bits(22) == (4 * 36_107 + 22 * 12, 4 * 1_095)
+    assert c.window_bits(23) == (8 * 36_107 + 23 * 12, 8 * 1_095)
+    long_run = 4 * 36_107 / 2.2 + 120
+    at = {t: dataclasses.replace(c, window_buckets=t).r_in for t in (22, 32, 600)}
+    assert at[22] == pytest.approx(long_run) and all(r >= long_run for r in at.values())
+    assert round(at[600] / 1e3, 1) == 67.5
     assert [envelopes.clog2(x) for x in (1, 2, 5, 48, 65)] == [0, 1, 3, 6, 7]
     assert not envelopes.regime(REG, "onsite").certifier.declared
     for refused in (lambda: Certifier(declared=True),
                     lambda: envelopes.regime(REG.override({"regime.onsite.declared": True}), "onsite")):
         with pytest.raises(ValueError, match=r"declared I/O bound needs \['cell_bytes'"):
             refused()
+    with pytest.raises(ValueError, match=r"declared I/O bound needs \['window_buckets'\]"):
+        dataclasses.replace(c, window_buckets=math.nan)
 
 
 def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_upper_end():
     """`regime.onsite`'s certified ingress is `intake · α Φ`, cited to draft:NET-92 (a server's ingress only its
     declared inputs, at most α Φ at full use). With `declared` (`regime.onsite-w63`) it is `hosts · r_in`, cited to the
-    plan and PR 5 notes too: as an intake `r_in / (α Φ_s)`, 0.0133 at Kimi K2's policy on an H200 server. `declared_x`
+    plan and PR 5 notes too: as an intake `r_in / (α Φ_s)`, 0.0183 at Kimi K2's policy on an H200 server. `declared_x`
     scales it up to at most the location's links (its high end is line rate, the upper end until NET-92's PR 5)."""
     line = REG.override({"regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
     on, off, at_line = (envelopes.regime(REG, "onsite-w63"), envelopes.regime(REG, "onsite"),
@@ -218,22 +231,23 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
         assert at_line.rate_in(ctx) == pytest.approx(loc.links + loc.hosts * (c.timing + c.side))
         assert off.rate_in(ctx) == pytest.approx(alpha_phi + loc.hosts * (c.timing + c.side))
         assert off.certifier.intake_of(ctx) == 1
-    assert c.intake_of(context("reference-h200")) == pytest.approx(0.01329, rel=1e-3)
+    assert c.intake_of(context("reference-h200")) == pytest.approx(0.01827, rel=1e-3)
     assert {"draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan",
             "note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee"} <= set(on.cites())
     assert "draft:NET-92" in off.cites() and not any("NET-35" in c for c in on.cites() + off.cites())
 
 
 def test_onsite_w63_beside_the_reference():
-    """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 65.8 kbit/s,
-    0.0204 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.58e10 bits and ρ's lower end, which a dark
-    share of 1% caps near 100, rises from 98.7 to 99.8; at line rate both are vacuous (2.35). The cadence feeds the
-    serving rho credits only if outputs outnumber prompts more than 28:1, so it isn't the default."""
+    """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 90.4 kbit/s
+    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and ρ's
+    lower end, which a dark share of 1% caps near 100, rises from 98.7 to 99.8; at line rate both are vacuous (2.35).
+    The cadence feeds the serving rho credits only if outputs outnumber prompts more than 20:1, so it isn't the
+    default."""
     reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
     ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
-    assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.584e10, rel=1e-3)]
-    assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.02036, rel=1e-3)
+    assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.797e10, rel=1e-3)]
+    assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.02798, rel=1e-3)
     assert [(round(r.lo, 1), round(r.hi)) for r in (ref, w63)] == [(98.7, 249), (99.8, 250)]
     line = reg.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
                          "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
