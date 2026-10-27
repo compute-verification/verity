@@ -97,7 +97,7 @@
   {
    "at": "2026-09-19T02:59:16Z",
    "by": "r12-dC",
-   "note": "new entry only (role MISTRAL7B); frozen entries unchanged",
+   "note": "new entry only (role MISTRAL7B); frozen entries unchanged (R12 sweep)",
    "repos": [
     "unsloth/mistral-7b-v0.3"
    ]
@@ -1593,7 +1593,7 @@
    },
    "gated": false,
    "local_path": "/workspace/hf/hub/models--unsloth--mistral-7b-v0.3/snapshots/9ea1b83f5ced5663c5fa89c300fe59f9bdcd2b10",
-   "note": "new entry only: ungated mirror of mistralai/Mistral-7B-v0.3 (MistralForCausalLM); revision = HF main resolved on cp-dC at download; safetensors sha256 recomputed from the downloaded shards on the pod == hub-lfs",
+   "note": "new entry only (R12 sweep, lane dC): ungated mirror of mistralai/Mistral-7B-v0.3 (MistralForCausalLM); revision = HF main resolved on cp-dC at download; safetensors sha256 recomputed from the downloaded shards on the pod == hub-lfs",
    "repo": "unsloth/mistral-7b-v0.3",
    "resolved_at": "2026-09-19T02:59:16Z",
    "resolved_by": "r12-dC (cp-dC, L40S)",
