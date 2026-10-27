@@ -1095,6 +1095,32 @@ def _reads_of(tid: str, lo: int, n: int, reads: _ReadIndex, rows: Mapping[str, i
     return out
 
 
+class _Drawn:
+    """A window's registered reads as `Window.close` commits them, each (value, position) the window reads drawn once: by
+    parameter, the positions its members read (sorted), their salts (`rows.value_salts`, one pass where the value's salts
+    draw many) and their paths' hex. Each member's salts and header entry are core's ``Registered.statement``'s for its
+    positions, which draws each position's salt again in pure Python and makes its row's ints for every member that reads
+    it: the 4,32,4 class's members read 5,282,498 positions, 37,788 of them distinct."""
+
+    def __init__(self, values: Mapping[str, Any], read: Mapping[str, Sequence[Sequence[int]]]) -> None:
+        self._at: dict[str, tuple[Any, np.ndarray, np.ndarray, list[str]]] = {}
+        for param, ps in read.items():
+            v, at = values[param], np.unique(np.concatenate([np.asarray(p, dtype=np.int64) for p in ps]))
+            ys = np.frombuffer(CS.value_salts(v, at), dtype=np.uint8).reshape(len(at), CS.SALT_BYTES)
+            self._at[param] = (v, at, ys, [v.path(int(p)).hex() for p in at])
+
+    def salts(self, param: str, positions: Sequence[int] | np.ndarray) -> bytes:
+        """Rows ``positions`` of ``param``'s value: their salts concatenated."""
+        _v, at, ys, _ = self._at[param]
+        return ys[np.searchsorted(at, positions)].tobytes()
+
+    def entry(self, param: str, positions: Sequence[int] | np.ndarray) -> dict[str, Any]:
+        """Core's ``Registered.statement(positions)``'s header entry: ``{"value", "positions", "paths"}``."""
+        v, at, _, paths = self._at[param]
+        return {"value": v.value, "positions": [int(p) for p in positions],
+                "paths": [paths[i] for i in np.searchsorted(at, positions)]}
+
+
 def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
              wires: Sequence[Wire], cuts: Mapping[str, Mapping[str, int]] | None = None,
              servers: Mapping[str, Sequence[int]] | None = None, reads: Sequence[Read] = ()) -> tuple[CS.Member, ...]:
@@ -1637,15 +1663,28 @@ class Window:
         """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salt_key``:
         tests only (`rows.commit`). A parameter recorded by reference (`record`) is committed as what it reads: a registered
         read's rows as its value's (`rows.ValueRows`), a wired row as its writer's output row (`rows.WIRED`); refused for a
-        row that is neither."""
+        row that is neither. Each registered row the window reads has its salt drawn and its path made once (`_Drawn`)."""
         missing = {tid: (self.count(tid), n) for tid, (_, n) in zip(self.circuit.ids, self.circuit.templates)
                    if self.count(tid) != n}
         if missing:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a window closes over all of them")
         committed = _ReadIndex(committed_reads(self.circuit.registered))
-        base, cat, by = self._bases(), {}, self.circuit._by_id
-        data, salts_of, self._entries = [], {}, {}
+        base, cat, by, values = self._bases(), {}, self.circuit._by_id, self.registered or {}
+        read_by, wanted = [], {}
         for m in self.window.members:
+            words = dict(m.rows + m.outs)
+            read_by.append(reads := _reads_of(m.template, m.base - base[m.template], m.n, committed, words))
+            for p, (param, positions, _refs) in reads.items():
+                if (v := values.get(param)) is None:
+                    raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value"
+                                     + (" (`Window.supply`)" if param.rsplit("/", 1)[-1] in SUPPLIED else ""))
+                if v.words != words[p]:
+                    raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} words, not the port's "
+                                     f"{words[p]}")
+                wanted.setdefault(param, []).append(positions)
+        drawn = _Drawn(values, wanted)
+        data, salts_of, self._entries = [], {}, {}
+        for m, reads in zip(self.window.members, read_by, strict=True):
             lay = by[m.template][1]
             if m.template not in cat:
                 cat[m.template] = self._words(m.template)
@@ -1657,35 +1696,27 @@ class Window:
                     # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`Layout.cut`)
                     d["rows"][row_name(p, j, k)] = (None if ports[g] is None else ports[g][lo:lo + m.n] if k == 1 else
                                                     np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
-            reads = _reads_of(m.template, m.base - base[m.template], m.n, committed, dict(m.rows + m.outs))
             if reads:
                 d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in m.rows], axis=1)
                 for p, (param, positions, refs) in reads.items():
-                    if (v := (self.registered or {}).get(param)) is None:
-                        raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value"
-                                         + (" (`Window.supply`)" if param.rsplit("/", 1)[-1] in SUPPLIED else ""))
-                    if v.words != dict(m.rows + m.outs)[p]:
-                        raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} words, not the port's "
-                                         f"{dict(m.rows + m.outs)[p]}")
                     if p in d["outs"]:
                         # an output row stays the unit's own, committed under the value's salt, so a row other than
                         # the value's opens no pinned root
-                        _rows, salts, entry = v.statement([positions[int(i)] for i in refs])
-                        salts_of[m.port(p)] = b"".join(salts)
-                        self._entries.setdefault(m.key, {})[p] = entry
+                        at = np.asarray(positions, dtype=np.int64)[refs]
+                        salts_of[m.port(p)] = drawn.salts(param, at)
+                        self._entries.setdefault(m.key, {})[p] = drawn.entry(param, at)
                         continue
                     if d["rows"][p] is None:
-                        d["rows"][p] = CS.ValueRows(v, tuple(int(x) for x in positions))
-                        self._entries.setdefault(m.key, {})[p] = v.statement(positions)[2]
+                        d["rows"][p] = CS.ValueRows(values[param], tuple(int(x) for x in positions), drawn.salts(param, positions))
+                        self._entries.setdefault(m.key, {})[p] = drawn.entry(param, positions)
                         continue
                     first = [int(np.flatnonzero(refs == j)[0]) for j in range(len(positions))]
                     rows = d["rows"][p][first]
                     if not np.array_equal(rows[refs], d["rows"][p]):
                         raise ValueError(f"{m.key} {p}: two units recorded two rows for one row of {param!r}")
-                    _rows, salts, entry = v.statement(positions)
                     d["rows"][p] = rows
-                    salts_of[m.port(p)] = b"".join(salts)
-                    self._entries.setdefault(m.key, {})[p] = entry
+                    salts_of[m.port(p)] = drawn.salts(param, positions)
+                    self._entries.setdefault(m.key, {})[p] = drawn.entry(param, positions)
             wired = {q for q, _o, _ws in m.wired}
             for r, x in d["rows"].items():
                 if x is None:

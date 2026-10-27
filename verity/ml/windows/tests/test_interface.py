@@ -538,17 +538,20 @@ def test_coalesce_merges_runs_of_like_patterns():
 
 class Held:
     """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` u16 words,
-    one salt a row, a root (a stand-in's), and a statement's table of the rows at some positions (the paths are core's;
-    none here)."""
+    one salt a row, a root and each row's path (a stand-in's), and a statement's table of the rows at some positions."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
         self.name, self.rows, self.words, self.leaves = name, rows, rows.shape[1], len(rows)
+        self.value = name
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(CS.SALT_BYTES) for i in range(len(rows))]
         self.root = hashlib.sha512(b"root " + name.encode()).digest()
 
+    def path(self, position: int) -> bytes:
+        return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
+
     def statement(self, positions):
         return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
-                {"value": self.name, "positions": list(positions), "paths": []})
+                {"value": self.name, "positions": list(positions), "paths": [self.path(p).hex() for p in positions]})
 
 
 class Supplied(Held):
@@ -665,7 +668,7 @@ def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_und
     assert m1.tables == (("x", 4), ("sx", 4), ("wrow", 2), ("sw", 4))
     assert np.array_equal(c.rows[m1.port("wrow")], w.rows[[2, 3]]) and c.salts[m1.port("wrow")] == w.salts[2] + w.salts[3]
     assert c.refs[1][:, 2].tolist() == [0, 0, 1, 1] and c.refs[1][:, 0].tolist() == [0, 1, 2, 3]
-    assert win._entries[m1.key] == {"wrow": {"value": "w", "positions": [2, 3], "paths": []}}
+    assert win._entries[m1.key] == {"wrow": w.statement([2, 3])[2]} and w.statement([2, 3])[2]["paths"][1] == w.path(3).hex()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
     assert mine.members == win.window.members
@@ -862,6 +865,36 @@ def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_gi
         free.close(salt_key=bytes(32))
 
 
+class _Counted(list):
+    """A value's salts, each read counted."""
+
+    reads = 0
+
+    def __getitem__(self, i):
+        self.reads += 1
+        return super().__getitem__(i)
+
+
+def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
+    """`fed_chain`'s chain members, two a layer, each read their layer's one row of ``w``: committing and writing the window
+    reads each row's salt once, however many members read it, and asks for no statement. Core's ``Registered.statement``
+    draws a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
+    them a third time: 10,565,136 draws at the 4,32,4 class, whose members read 37,788 distinct rows."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    w.salts = _Counted(w.salts)
+    monkeypatch.setattr(Bound, "statement", lambda *_: pytest.fail("a statement of the reads drew their salts again"))
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    c = win.close(salt_key=bytes(32))
+    reads = [e["w"]["positions"] for e in win._entries.values()]
+    assert w.salts.reads == LAYERS and len(reads) == 2 * LAYERS and sorted(reads) == [[0], [0], [1], [1]]
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
+                         "digest": staticmethod(lambda rec: "d")})
+    win.write(c, tmp_path, {"by": "test"}, registrar=reg)
+    assert w.salts.reads == LAYERS
+
+
 def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):
     """`sliced`'s position units recorded with ``x`` by reference and ``w`` in full: each cut row ``x#j`` is its slice's
     output row, committed as the full record commits it; one template's parameter is by reference for all its units or
@@ -908,13 +941,15 @@ def _like(value: Bound, **fields) -> Bound:
     return out
 
 
-def _value_rows(value=None, positions=None):
-    """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)``, each as given when None."""
+def _value_rows(value=None, positions=None, salts=None):
+    """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)`` under ``salts(the salts
+    `Window.close` drew)``, each as given when None (the salts drawn again by `rows.commit` when the positions change)."""
     def edit(window: CS.Window, data: list[dict]) -> CS.Window:
         k = _first(window, GID)
         src = data[k]["rows"]["w"]
         data[k]["rows"]["w"] = CS.ValueRows(src.value if value is None else value(src.value),
-                                            src.positions if positions is None else positions)
+                                            src.positions if positions is None else positions,
+                                            (src.salts if positions is None else None) if salts is None else salts(src.salts))
         return window
     return edit
 
@@ -947,6 +982,7 @@ REFUSED = {
     "a position past the value's rows": (_value_rows(positions=(LAYERS,)), f"positions outside its {LAYERS} rows"),
     "a negative position": (_value_rows(positions=(-1,)), f"positions outside its {LAYERS} rows"),
     "two rows for the port's one": (_value_rows(positions=(0, 1)), "2 rows, not 1"),
+    "salts short of its rows": (_value_rows(salts=lambda s: s[:-1]), f"salts not one {CS.SALT_BYTES}-byte salt a row"),
     "wired rows on a port no wire writes": (_feed_x_wired, f"given as {CS.WIRED} rows, but no wire writes it"),
     "rows by reference in a window with row tables": (_beside_a_row_table, "in a window with row tables"),
 }
@@ -956,7 +992,8 @@ REFUSED = {
 def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(monkeypatch, edit, why):
     """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width, schema or
     leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
-    than the port's rows; `rows.WIRED` rows on a port no wire writes; and a port by reference in a window with row tables,
+    than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a port no wire writes; and a port by
+    reference in a window with row tables,
     whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
     is refused."""
     window, data, _w = given_by_reference(monkeypatch)
