@@ -1,4 +1,4 @@
-"""`credit.pearl_c_period_credit` (CMP-82, LIVESALT2's Pearl-C period rule): a live Pearl-C pass earns only inside a
+"""`credit.pearl_c_period_credit` (the Pearl-C period rule): a live Pearl-C pass earns only inside a
 Pearl-C period, which earns only when the presented passes' epochs are exactly its close's sessions, every session is a
 Pearl-C salt session, credited and pinned, every pass is accepted, each weights' root's epochs are numbered on from the
 lane's earlier credited periods with no gap, and no two passes of one epoch hold one call index. An honest sequence of
@@ -327,7 +327,7 @@ def test_a_gap_in_k_spends_the_weights_root():
 
 
 def test_two_passes_of_one_epoch_sharing_a_call_index_refuse_the_period():
-    """Clause 6 (CMP-84's `passes_distinct`): a call index two passes of one epoch hold repeats its seeds and tickets."""
+    """Clause 6 (`passes_distinct`): a call index two passes of one epoch hold repeats its seeds and tickets."""
     lane, a, _, _ = _two_periods("distinct")
     p0, _, p1 = a
     sid = json.loads(bytes.fromhex(p0["manifest"]))["session"]["session"]

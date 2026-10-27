@@ -100,7 +100,7 @@ def test_a_registration_of_another_window_is_refused():
     """The challenger builds the window's program from its own counts, so a record over another split of the same N
     (`R2-program`), over the templates in the other order (`query`), or over one template's population, is refused, and
     so are counts that miss a template, name another, give one none or a boolean, number other than N, or come to a
-    single unit's stream (`population`)."""
+    single proof block's stream (`population`)."""
     stream = _stream()
     other = {P.template_id(PAIR): 2, P.template_id(TRIPLE): 8}
     assert "R2-program" in _refused(lambda: stream.register(_record(other), _ports(), counts=COUNTS))
@@ -122,8 +122,8 @@ def test_a_registration_of_another_window_is_refused():
 
 
 def test_a_stratum_short_of_its_floor_is_refused():
-    """A record whose law draws PAIR's stratum none (below its floor of one) is refused (`R1-law`), and a draw short of
-    a stratum, from a sampler that draws only TRIPLE's units, is refused at the select (`check_draw`), before any proof."""
+    """A record whose sampling design draws PAIR's stratum none (below its floor of one) is refused (`R1-law`), and a draw short of
+    a stratum, from a sampler that draws only TRIPLE's proof blocks, is refused at the select (`check_draw`), before any proof."""
     rec = _record()
     short = {**rec, "law": {**rec["law"], "strata": [{**rec["law"]["strata"][0], "k": 0}, *rec["law"]["strata"][1:]]}}
     assert "R1-law" in _refused(lambda: _stream().register(short, _ports(), counts=COUNTS))

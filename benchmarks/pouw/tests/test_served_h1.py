@@ -936,7 +936,7 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
 
 def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_any_other_error_at_once():
     """An onsite window's client retries a refused connect (no hello, no coin) until the session's tunnel listens, every
-    half second up to `wait_s` on the injected clock; past it the refusal raises, and any other error raises at once."""
+    half second up to `wait_s` on the injected clock; past it `CoinError` refuses it, and any other error raises at once."""
     at = CO.Session(SID, "127.0.0.1:7811", b"\x01" * 32)
     challenger = CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("challenger").randbytes)
 
@@ -962,7 +962,7 @@ def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_an
 
     cs = run([ConnectionRefusedError(), ConnectionRefusedError(), challenger])
     assert cs.challenger is challenger and cs.source == "off-node" and (run.calls, run.slept) == (3, [0.5, 0.5])
-    with pytest.raises(ConnectionRefusedError):
+    with pytest.raises(CO.Ch.CoinError, match="nothing listened"):
         run([ConnectionRefusedError()], wait_s=2)
     assert (run.calls, run.slept) == (5, [0.5] * 4)
     with pytest.raises(ConnectionResetError):

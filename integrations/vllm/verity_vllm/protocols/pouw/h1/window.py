@@ -90,7 +90,7 @@ def connect(at: str, given: Mapping[str, Any], wait_s: float = remote.TUNNEL_WAI
     """The session the gate's answer `given` (`pouw_h1_challenger.session_of`) opened, on the challenger at `at`: its hello carries the
     answer's ``secret`` when it has one, and a challenger whose coin commitment isn't the answer's is closed and refused
     (ValueError) before its first coin, since another process's challenger on that port would serve other coins. While
-    the session's tunnel isn't up yet (the auditor host's ``ssh -R`` to this machine) the connection is refused before any
+    the session's port on this machine isn't up yet (its certifier coin link) the connection is refused before any
     hello, and it is tried again for up to `wait_s` (`remote.connect_when_listening`)."""
     secret = given.get("secret")
     client = remote.connect_when_listening(at, None if secret is None else bytes.fromhex(secret), None, wait_s, clock,
@@ -159,13 +159,16 @@ def period_reason(period: Mapping[str, Any] | None, reserved: Mapping[str, Any] 
 
 def _live(entry: str, at: str, steps: int, given: Mapping[str, Any],
           layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason,
-          sleep: Callable[[float], Any] = time.sleep) -> tuple[Any, LiveCommitment]:
-    """The session the gate's answer `given` opened on the challenger at `at` (`connect`, `sleep` between its tries) and
-    its coin commitment, of the layout `layout` refuses none of (a live epoch's, or Pearl-C's salt coin alone,
-    `window.salt_epoch_reason`) with at least `steps` round coins; on a refusal the session is closed and ValueError
-    raised."""
+          wait: Callable[[float], Any] = time.sleep, clock: Callable[[], float] = time.monotonic
+          ) -> tuple[Any, LiveCommitment]:
+    """The session the gate's answer `given` opened on the challenger at `at` (`connect` on `clock`, `wait` between its
+    tries) and its coin commitment, of the layout `layout` refuses none of (a live epoch's, or Pearl-C's salt coin
+    alone, `window.salt_epoch_reason`) with at least `steps` round coins; on a refusal the session is closed and
+    ValueError raised (`CoinError` when the challenger refused or nothing listened)."""
     try:
-        client = connect(at, given, sleep=sleep)
+        client = connect(at, given, clock=clock, sleep=wait)
+    except CoinError as e:
+        raise CoinError(f"{entry}: {e}") from e
     except ValueError as e:
         raise ValueError(f"{entry}: {e}") from e
     c = client.commitment
@@ -208,10 +211,11 @@ def gate_of(call: Callable[..., Mapping[str, Any]]) -> Gate:
 
 def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, named: str,
            wait: Callable[[float], Any] = time.sleep,
-           layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason
-           ) -> tuple[Any, LiveCommitment, LiveOpening, dict[str, Any]]:
+           layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason,
+           clock: Callable[[], float] = time.monotonic) -> tuple[Any, LiveCommitment, LiveOpening, dict[str, Any]]:
     """Reserved session `sid` opened by `gate` on `root` (`named` names that root in a refusal), reached at `at`'s host on
-    the port the answer names (`at_port`; tried again while it refuses connections, `connect`, `wait` between), of
+    the port the answer names (`at_port`; tried again while it refuses connections, `connect` on `clock`, `wait`
+    between), of
     `layout` with at least `steps` round coins (`_live`), and its salt coin opened after `root`. Returns the session,
     its coin commitment, the salt coin's opening and the gate's answer. Refused (ValueError, the session closed when it
     was reached): an answer that isn't the gate's open of `sid` on `root`, or a challenger off it; `CoinError` is the
@@ -222,7 +226,7 @@ def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, n
         raise ValueError(f"{entry}: the gate's answer to opening session {sid}: {e}") from e
     if answer is None or (answer["session"], answer["root"]) != (sid, root.hex()):
         raise ValueError(f"{entry}: the gate's answer is not session {sid} opened on {named} {root.hex()[:16]}...")
-    client, c = _live(entry, at_port(at, answer.get("port")), steps, answer, layout, wait)
+    client, c = _live(entry, at_port(at, answer.get("port")), steps, answer, layout, wait, clock)
     try:
         opening = LiveRecord(client, Wd.SALT).record(root)
     except BaseException:
@@ -271,7 +275,8 @@ def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], It
 
 
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
-                 at: str = "127.0.0.1:0", wait: Callable[[float], Any] = time.sleep
+                 at: str = "127.0.0.1:0", wait: Callable[[float], Any] = time.sleep,
+                 clock: Callable[[], float] = time.monotonic
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any]]:
     """Reserved session `sid` opened at infra's gate, as words (`gate_of`), on salt epoch `k`'s root over the
     weights' root `root` (`salt.epoch_open_root`), reached at `at`'s host on the port the answer names, its coins the salt
@@ -280,7 +285,7 @@ def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, r
     commitment, the salt coin's opening, the epoch's salt (`audit.salt_of` over `root`) and the gate's answer as a run
     carries it (`pouw_h1_challenger.carried`)."""
     client, c, opening, given = opened(entry, at, 0, gate_of(gate), sid, PS.epoch_open_root(root, k),
-                                       f"salt epoch {k}'s root", wait, Wd.salt_epoch_reason)
+                                       f"salt epoch {k}'s root", wait, Wd.salt_epoch_reason, clock)
     return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given)
 
 
