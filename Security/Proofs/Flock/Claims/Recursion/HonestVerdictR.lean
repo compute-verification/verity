@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.NextRTables
 import Proofs.Flock.Claims.Complete.Replay.ProverOk
+import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # The honest run passes `nextR`'s checks
@@ -117,6 +118,56 @@ open Flock FlockComplete
 section
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+
+/-! ## The last message's openings -/
+
+open RecDeploy.DeployedR (opensOf)
+
+/-- `absorbedFrom` takes from the last message's proof only its openings. -/
+theorem absorbedFrom_opensOf (c : RepCtx) (a q : Flock.Proof) : absorbedFrom c a (opensOf q) = absorbedFrom c a q :=
+  rfl
+
+theorem readRep_opensOf (c : RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) :
+    readRep c rows (opensOf q) = readRep c rows q := by
+  simp only [readRep, absorbedFrom_opensOf]
+
+/-- **`readPs` reads the same at the proofs' openings.** -/
+theorem readPs_opensOf {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
+    {rss : List (List ByteArray)} {cs : List Coin} {fl fl' : FinalP} (hps : fl.ps = fl'.ps.map opensOf) :
+    readPs spec sts c₁ r₀ rss cs fl = readPs spec sts c₁ r₀ rss cs fl' := by
+  have hsz : fl.ps.size = fl'.ps.size := by rw [hps, Array.size_map]
+  have hk : ∀ k, readRep (repCtx spec sts c₁ r₀ cs k) ((cutLens (repLens spec sts) rss).getD k []) fl.ps[k]! =
+      readRep (repCtx spec sts c₁ r₀ cs k) ((cutLens (repLens spec sts) rss).getD k []) fl'.ps[k]! := by
+    intro k
+    by_cases h : k < fl'.ps.size
+    · have e : fl.ps[k]! = opensOf fl'.ps[k]! := by
+        rw [getElem!_pos fl.ps k (by omega), getElem!_pos fl'.ps k h]
+        simp only [hps, Array.getElem_map]
+      rw [e]
+      exact readRep_opensOf ..
+    · rw [getElem!_neg fl.ps k (by omega), getElem!_neg fl'.ps k h]
+  unfold readPs
+  simp only [hsz, hk]
+
+/-- **`decR` decides the same where the last message reads as the proofs' openings**, at the same statement. -/
+theorem decR_opensOf {rd rd' : Claims.Msg → Option FinalP} {x last : Claims.Msg} {as : List Claims.Msg}
+    {cs : List Coin} {fl fl' : FinalP} (hl : as.getLast? = some last) (hrd : rd last = some fl)
+    (hrd' : rd' last = some fl') (hst : fl.stmt = fl'.stmt) (hps : fl.ps = fl'.ps.map opensOf) :
+    decR rd x as cs = decR rd' x as cs := by
+  have hr : ∀ spec sts c₁ r₀ rss cs', readPs spec sts c₁ r₀ rss cs' fl = readPs spec sts c₁ r₀ rss cs' fl' :=
+    fun _ _ _ _ _ _ => readPs_opensOf hps
+  by_cases hx : fl'.stmt = x
+  · have h1 : (rd last).filter (·.stmt == x) = some fl :=
+      Option.filter_eq_some_iff.2 ⟨hrd, beq_iff_eq.2 (hst.trans hx)⟩
+    have h2 : (rd' last).filter (·.stmt == x) = some fl' := Option.filter_eq_some_iff.2 ⟨hrd', beq_iff_eq.2 hx⟩
+    simp only [decR, hl, h1, h2, hr, Option.bind_eq_bind, Option.bind_some]
+  · have h1 : (rd last).filter (·.stmt == x) = none := by
+      rw [hrd]
+      simp [Option.filter, hst, hx]
+    have h2 : (rd' last).filter (·.stmt == x) = none := by
+      rw [hrd']
+      simp [Option.filter, hx]
+    simp only [decR, hl, h1, h2, Option.bind_eq_bind, Option.bind_some, Option.bind_none]
 
 /-! ## The honest decision -/
 
