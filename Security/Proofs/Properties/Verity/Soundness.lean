@@ -138,7 +138,7 @@ theorem prob_play_eq_zero (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → 
 
 /-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
 which subprotocol `a`'s claim fails with probability above the errors summed makes the conclusion fail for a verifier
-that accepts everything. So the one model-level failing instance (ONE19's, through that subprotocol's `_nontrivial`)
+that accepts everything. So the one model-level failing instance (through that subprotocol's `_nontrivial`)
 gives the theorem's, with no instance of its own. -/
 theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hreg : V.Registered θ F) (a : Audit)
