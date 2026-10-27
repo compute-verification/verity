@@ -369,7 +369,7 @@ theorem sampledKSLivePub_nontrivial :
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
           fun _ => Discharge.ZkHidden.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
-    let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
+    let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) Bridge.kDep (2 ^ 192)
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
     -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
@@ -414,7 +414,9 @@ theorem sampledKSLivePub_nontrivial :
     rw [hkdn]
     exact Nat.le_mul_of_pos_left n hK1
   have hlt := Bridge.deltaPubR_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW ht0 htv hv0 hv hR0 hR
-  exact not_le.2 (Bridge.exceeds_of_forall τ (fun _ => Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _
-    (Bridge.commitDep_opens_none Cc _ hr D.unroll n _ _) _ (by positivity) hg hgi) hlt) h
+  refine absurd h (not_le.2 (Bridge.exceeds_of_forall τ ?_ hlt))
+  intro o
+  exact Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _ (Bridge.commitDep_opens_none Cc _ hr D.unroll n _ _) _
+    (by positivity) hg hgi
 
 end Flock.Guarantees
