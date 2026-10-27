@@ -1733,11 +1733,6 @@ DEV void fold_vb(int dom, u64* levels, u64 width, u32 cnt, int L, u64 vb) {
     }
   }
 }
-DEV int log2_cnt(u32 cnt) {
-  int L = 0;
-  while ((1u << L) < cnt) ++L;
-  return L;
-}
 // Ks as a launch's argument (C.ks and C.ks_m8's values), for a salt phase on its own stream: no copy into C races it
 struct KsArg {
   u64 ks[8], ks_m8[8];
@@ -1806,12 +1801,13 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   st8(S + 16 * pos + 8, c);
 }
 // salt_small<true> (slot 0) a group at a time: S and F for positions below n (salted at off + pos), the pads up to width,
-// and the subtrees of groups that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C; MINB its CTAs an
-// SM by registers (4: 128 a thread, as many CTAs as a cap of 4 lets in anyway)
+// and fl levels of the subtrees of groups that hold only pads (nvb = ceil(width / 128); fl 0 when the leaf phase's level
+// kernels fold every group, Lanes::lfold); KP: Ks from ka, else from C; MINB its CTAs an SM by registers (4: 128 a thread,
+// as many CTAs as a cap of 4 lets in anyway)
 template <bool KP = false, int MINB = SMALL_MINB>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
-                 u64* levels, u64 off, const __grid_constant__ KsArg ka) {
+                 u64* levels, u64 off, int fl, const __grid_constant__ KsArg ka) {
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   if (persist_claim(p))
     for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
@@ -1826,7 +1822,7 @@ __global__ void __launch_bounds__(SMALL_THREADS, MINB)
         pad(dom, pos, o);
         st8(levels + 8 * pos, o);
       }
-      if ((u64)vb * cnt >= n) fold_vb(dom, levels, width, cnt, log2_cnt(cnt), vb);
+      if ((u64)vb * cnt >= n) fold_vb(dom, levels, width, cnt, fl, vb);
     }
   persist_done(p);
 }
@@ -2135,8 +2131,9 @@ static std::string env_str(const char* name, const char* dflt) {
 // call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves; V31_FULL 0, rows of
 // a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks; V31_LPIECES, the
 // pieces a row's chunks are cut into (Pieces; 0, the default: 8 when the groups outnumber the CTAs the caps allow, else 1);
-// V31_SMINB 4 or 5 (the default), salt_persist's MINB; V31_LFOLD 1, a group's levels (1 .. 7) folded by the group's CTA,
-// whose other warps wait while a few fold, rather than (0, the default) by a level_kernel launch a level after the leaf phase.
+// V31_SMINB 4 or 5 (the default), salt_persist's MINB; V31_LFOLD 1, a group's levels (1 .. 7) folded by the group's CTA
+// (the leaf phase's for a group of leaves, the salt phase's for a group of pads alone), whose other warps wait while a few
+// fold, rather than (0, the default) by a level_kernel launch a level, over the whole width, after the leaf phase.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
@@ -2209,34 +2206,41 @@ struct Lanes {
     return Persist{ctl, claim, epoch, (u32)ccta, (u32)nvb};
   }
   unsigned grid(u64 nvb, int ccta) const { return (unsigned)std::min<u64>(nvb, 2ull * ccta * nsm); }
+  // the levels a group of a width-leaf tree holds (7, or fewer in a smaller tree)
+  static int group_levels(u64 width) {
+    int L = 0;
+    while ((1ull << L) < std::min<u64>(width, SMALL_THREADS)) ++L;
+    return L;
+  }
+  // whether leaves_nodes folds every group's levels on level kernels (lfold 0), so neither phase's CTAs fold their own
+  bool folds_after(int ccta) const { return ccta && !lfold; }
   // leaf pos salted prf_salt(Ks, off + pos), Ks from ka when given, else from C; commit_gpu's small path (ccta 0) salts at
   // offset 0 from C only
   void salts(Committer& cm, int ccta, cudaStream_t st, u64 off = 0, const KsArg* ka = nullptr) {
     if (!ccta && !off && !ka) { cm.salts<true>(nullptr, st); return; }
+    const int fl = folds_after(ccta) ? 0 : group_levels(cm.width);
     if (!ccta) ccta = 8;
     const u64 nvb = (cm.width + SMALL_THREADS - 1) / SMALL_THREADS;
     const unsigned g = grid(nvb, ccta);
     const Persist p = persist(nvb, ccta);
     const KsArg k = ka ? *ka : KsArg{};
-    if (ka && sminb == 4) salt_persist<true, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
-    else if (ka) salt_persist<true><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
-    else if (sminb == 4) salt_persist<false, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
-    else salt_persist<false><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
+    if (ka && sminb == 4) salt_persist<true, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
+    else if (ka) salt_persist<true><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
+    else if (sminb == 4) salt_persist<false, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
+    else salt_persist<false><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
   }
   template <class Row>
   void leaves_nodes(Committer& cm, const Row& rows, int ccta, cudaStream_t st) {
     if (!ccta) {
       cm.leaves(rows, st);
     } else {
-      const u64 ng = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS, cnt = std::min<u64>(cm.width, SMALL_THREADS);
+      const u64 ng = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
       const u32 np = pieces(rows, cm.n, ng, ccta);
       const u64 nu = ng * np;
       const Persist p = persist(nu, ccta);
       const Pieces pc{xs, flag, np, (u32)ng};
       const unsigned g = grid(nu, ccta);
-      int L = 0;
-      while ((1ull << L) < cnt) ++L;
-      const int fl = lfold ? L : 0;
+      const int L = group_levels(cm.width), fl = folds_after(ccta) ? 0 : L;
       if (lminb == 4) {
         leaf_persist<Row, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
       } else if (lminb == 6 || lminb == 8) {
@@ -2251,10 +2255,10 @@ struct Lanes {
       } else {
         leaf_persist<Row><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
       }
-      for (int d = fl; d < L; ++d) {
-        const u64 n_out = (ng * cnt) >> (d + 1);
+      for (int d = fl; d < L; ++d) {   // the whole width: salts left the groups of pads alone to these too
+        const u64 n_out = cm.width >> (d + 1);
         level_kernel<<<(unsigned)((n_out + SMALL_THREADS - 1) / SMALL_THREADS), SMALL_THREADS, 0, st>>>(
-            cm.dom, cm.lv[d], cm.lv[d + 1], (ng * cnt) >> d, d);
+            cm.dom, cm.lv[d], cm.lv[d + 1], cm.width >> d, d);
       }
     }
     cm.nodes(st);
@@ -2700,6 +2704,8 @@ struct Fill {
       CK(cudaStreamGetPriority(s1, &pr));
       CK(cudaStreamCreateWithPriority(&s2, cudaStreamNonBlocking, pr));
       pls.init(nsm);
+      pls.sminb = kn.sminb;
+      pls.lfold = kn.lfold;   // so its salts leave the groups of pads alone to pl's level kernels exactly when those fold them
       for (int b = 0; b < 2; b++) CK(cudaEventCreateWithFlags(&ev_salt[b], cudaEventDisableTiming));
     }
     const size_t mk = (size_t)m * k, nk = (size_t)n * k;
@@ -3172,14 +3178,16 @@ __global__ void sha_ruler(u64* io, int reps) {
 // nblk chunks in a tree of width leaves (width >= SMALL_THREADS): the leaf phase, nblk + 3 a leaf (the row, h's two, the frame
 // leaf's second) and two a node of the groups that hold data and of the levels above the groups; the salt phase, 6 a leaf
 // (the PRF's three, the salt digest's two, the frame leaf's first; the mask is no compression), two a pad and a node of the
-// groups of pads alone; the ruler, RULER_CHAIN a thread.
+// groups of pads alone, which are the leaf phase's when its level kernels fold every group (after, Lanes::folds_after);
+// the ruler, RULER_CHAIN a thread.
 struct CommitCounts {
   double leaf, salt, sha;
 };
-static CommitCounts commit_counts(u64 n, u64 width, u32 nblk, int nsm) {
+static CommitCounts commit_counts(u64 n, u64 width, u32 nblk, int nsm, bool after) {
   const u64 ng = (n + SMALL_THREADS - 1) / SMALL_THREADS, wg = width / SMALL_THREADS;
-  return CommitCounts{(double)n * (nblk + 3) + 2.0 * ((double)ng * (SMALL_THREADS - 1) + (double)(wg - 1)),
-                      6.0 * (double)n + 2.0 * (double)(width - n) + 2.0 * (SMALL_THREADS - 1) * (double)(wg - ng),
+  const double pad_groups = 2.0 * (SMALL_THREADS - 1) * (double)(wg - ng);
+  return CommitCounts{(double)n * (nblk + 3) + 2.0 * ((double)ng * (SMALL_THREADS - 1) + (double)(wg - 1)) + (after ? pad_groups : 0),
+                      6.0 * (double)n + 2.0 * (double)(width - n) + (after ? 0 : pad_groups),
                       (double)nsm * RULER_CTAS * 256 * RULER_CHAIN};
 }
 
@@ -3747,7 +3755,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              "\"gamma_gemm_cutlass\": %s, \"cutlass_over_lt\": %s, ",
              jn(at("ovl") / med[ICUT]).c_str(), jn(at("ovl_w") / med[ICUT]).c_str(), jn(at("ovl_pad") / med[ICUT]).c_str(),
              jn(at("gemm") / med[ICUT]).c_str(), jn(med[ICUT] / l).c_str());
-    const CommitCounts cc = commit_counts(f.leaves, f.cm[0].width, nblk, f.nsm);
+    const CommitCounts cc = commit_counts(f.leaves, f.cm[0].width, nblk, f.nsm, f.pl.folds_after(f.kn.ccta));
     auto per_cycle = [&](const char* nm, double c) {   // compressions a SM-cycle at the arm's median time and clock
       for (size_t a = 0; a < arms.size(); a++)
         if (arms[a].name == nm) return c / (med[a] * 1e-3) / ((double)f.nsm * mhz[a] * 1e6);
