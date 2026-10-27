@@ -121,7 +121,7 @@ theorem soundness_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ
   have h1 := prob_play_eq_one (V.rounds θ) (V.sign θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧
       ((∃ a, ¬ V.Holds θ F c σ a o) ∨ ∃ s, ¬ W.Holds θ F c σ s o))
-    (fun _ _ => ⟨trivial, hreg, Or.inl ⟨a, hfail _⟩⟩) σ
+    (fun _ _ _ => ⟨trivial, hreg, Or.inl ⟨a, hfail _⟩⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 end Vocab
