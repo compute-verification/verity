@@ -335,7 +335,7 @@ def sender(environ: dict[str, str] | None = None) -> str | None:
 WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
 NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64")
 # A VM stopped since before USN-8944-1 boots trusting the roots that cross-signed the compromised eMudhra intermediates, and its
-# image's apt timers are off, so a wake upgrades ca-certificates before the run (INF-314); a patched VM skips it at once.
+# image's apt timers are off, so a wake upgrades ca-certificates before the run; a patched VM skips it at once.
 TRUST_UPGRADE = ("ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root' || exit 0; "
                  "sudo -n apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive "
                  "NEEDRESTART_MODE=l apt-get -o DPkg::Lock::Timeout=120 install -y -qq --only-upgrade ca-certificates 'libnss3*'")
