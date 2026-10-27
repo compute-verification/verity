@@ -7,7 +7,7 @@ numerator scaling) and the sampler lane's compare, selects, bit AND and integer 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
 ``rms_triton_model.cpp``, and ``live/src/ir_tail.rs``): the piece computes the table index, reads the pinned table
 (:func:`table_read`, a ``gf2`` lookup, which a Flock statement proves with a lookup slot: M0's ``live/src/lookup.rs``) and
-finishes the result. The RSQ, SQRT and RCP circuits around the read are M0's (``verity_flock.tail``, verity PR #83); EX2's and
+finishes the result. The RSQ, SQRT and RCP circuits around the read are M0's (``verity_flock.tail``); EX2's and
 FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations

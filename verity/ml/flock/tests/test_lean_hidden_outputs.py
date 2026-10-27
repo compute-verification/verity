@@ -31,7 +31,6 @@ VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the four sets (`flat/` and `typed/`, each `rope-head/` and `gemm-coordinate/`: the statement's `stage/` files and CASES'
 #: `records-cpu/`), recorded by 60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 (TYPED=1 for `typed/`) at 455a01049
-#: (`art:dae0b537`, the same bytes)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs"
 SETS = {("flat", "rope-head"): "verity/flock-circuit@f5df3bbc+seed-injection",
         ("flat", "gemm-coordinate"): "verity/flock-circuit@f5df3bbc+seed-injection",
