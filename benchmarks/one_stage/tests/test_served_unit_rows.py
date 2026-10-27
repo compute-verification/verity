@@ -1,23 +1,19 @@
 """The served partitions' chunked templates (each ``glm53_*.json``'s ``chunk_cap``) keep their statements in ``circuit.json``
 (`serving_rows.circuit_record`: the rows C-Flock's stager stages, `chunk_rows.unit_rows`, and their `chunk_rows.reads`) byte for
-byte: ``STATEMENTS`` is their SHA-512 as vLLM's own chunk and split rows built them, before both called `interface.unit_rows`.
-The window is a stand-in holding one bit-row member per template, since its population program would lower them."""
-
-from __future__ import annotations
-
+byte, at the SHA-512 vLLM's own chunk and split rows gave them. The window stands in: its population program would lower them."""
 import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
+
+from verity.ml.windows import interface as IF
+from verity_vllm.pipeline import serving_rows as SRW
 
 STATEMENTS = ("dbda90083c381ad2053d9bd617ab8ac3f92a90dd4a2fe872014603060828ee21"
               "bb3be5150e804ba58584c4f37f5f4ef9cb2e9608bb9ac87118c2579b21e2f843")
 
 
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):
-    from verity.ml.windows import interface as IF
-    from verity_vllm.pipeline import serving_rows as SRW
-
     tmpls = sorted({t for f in Path(__file__).parents[1].glob("glm53_*.json") for t in json.loads(f.read_text()).get("chunk_cap", {})})
     monkeypatch.setattr(IF, "templates_of", lambda _w: [])
     monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts: sts)
