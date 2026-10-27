@@ -37,6 +37,10 @@ over it names no architecture (`prims`), and a refusal for any other step:
                                       `ScaledMmS8Coordinate_v1{K, DOT}` on the concatenations of x's and wrow's R parts, so
                                       that each operand is R rows of at most 262,144 bits (`UNIT_CLASS_MAX`) when K is
                                       past 32,768
+    ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}  (ScaledMmS8CoordinateRows_v1's ports, r: bf16) -> bf16: the residual
+                                      add in the coordinate's epilogue, `Bf16AddF2fp_v1(r, ScaledMmS8CoordinateRows_v1{K, R,
+                                      DOT})`: the coordinate rounded to bf16, then added to the residual stream's word r
+                                      as `Bf16AddRow_v1` adds it, so the projection's own word is never committed
     ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
 
@@ -71,7 +75,7 @@ from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
            "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
            "GemmCoordinateNvf4", "GemmCoordinatePad", "KEY_COUNT", "PvRow", "PvRowPad", "S8_K_LIMIT", "ScaledMmS8",
-           "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "s8_gemm"]
+           "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "ScaledMmS8ResidualCoordinateRows", "s8_gemm"]
 
 _SCALE = Value(8)
 
@@ -304,6 +308,18 @@ def ScaledMmS8CoordinateRows(B, S, *ports):
     cat = lambda parts: Coll(Array(S.K, S8), concat([p.refs for p in parts]))
     x, sx, wrow, sw = cat(ports[:R]), ports[R], cat(ports[R + 1:2 * R + 1]), ports[2 * R + 1]
     return B.call(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, wrow, sw)
+
+
+@composite("ScaledMmS8ResidualCoordinateRows", 1, ["K", "R", "DOT"],
+           lambda S: ((*ScaledMmS8CoordinateRows.signature(S)[0], ("r", BF16)), BF16),
+           conformance=ScaledMmS8Coordinate.conformance, refuse=_refuse_r(_S8))
+def ScaledMmS8ResidualCoordinateRows(B, S, *ports):
+    """The residual add in a W8A8 coordinate's epilogue: `Bf16AddF2fp_v1(r, y)`, y `ScaledMmS8CoordinateRows_v1{K, R, DOT}`
+    of the other ports (its bf16 word, `cvt.rn.bf16.f32` of the scaled sum) and r the residual stream's word, in
+    `Bf16AddRow_v1`'s order (a the stream, b the projection). The same word as that add of the coordinate's word for every
+    input, with y never a committed value of its own."""
+    y = B.call(bind(ScaledMmS8CoordinateRows, K=S.K, R=S.R, DOT=S.DOT), *ports[:-1])
+    return B.call(F.Bf16AddF2fp, ports[-1], y)
 
 
 @composite("ScaledMmS8", 1, ["K", "N", "DOT"],

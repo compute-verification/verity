@@ -10,7 +10,8 @@ def _boolean_roots() -> list[Any]:
     K = 32 and the PV row on it at T = 1, 8 and 32 of K = 32 with D = 64 (and padded to T = 32 with its key count an input),
     the GEMM at K = 32, N = 3, the E4M3 coordinate on
     the three FP8 steps at K = 64, the NVFP4 and MXFP4 coordinates at K = 128, the s8 accumulator and scaled coordinate at
-    K = 64, the scaled coordinate on two rows an operand at K = 64, and the scaled s8 linear at K = 64, N = 3."""
+    K = 64, the scaled coordinate on two rows an operand at K = 64 (and with the residual add in its epilogue), and the
+    scaled s8 linear at K = 64, N = 3."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 
@@ -33,6 +34,7 @@ def _boolean_roots() -> list[Any]:
         bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8),
         bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8),
         bind(BG.ScaledMmS8CoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8),
+        bind(BG.ScaledMmS8ResidualCoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8),
         bind(BG.ScaledMmS8, K=64, N=3, **BG.GEMM_SM120_S8),
     ]
 

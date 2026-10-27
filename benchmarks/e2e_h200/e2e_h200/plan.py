@@ -23,6 +23,13 @@ again as the rows its readers read. With `shape.Forms`' chunk of C words (128 at
 
 A key's DOT is the step `replay` binds: the s8 coordinates' ``GEMM_SM90_S8`` and PV's ``GEMM_HOPPER``. At the frozen shape a
 slot commits 6,102,102 units in 6,102,832 rows, 5,970,688 of them s8 coordinates' 16-bit rows.
+
+``fused`` names the map's fusions (CIR-107; M1's map has none), each a proof block whose intermediate is never committed:
+
+* ``residual``: each residual add in its projection's W8A8 epilogue. ``wo``'s and ``wdown``'s coordinates are
+  ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``, coordinate i adding the projection's word to the residual stream's
+  word i, and write the residual's table (``attn_residual``, ``mlp_residual``); the projections' own tables and the
+  ``Bf16AddRow_v2`` families go.
 """
 from __future__ import annotations
 
@@ -33,8 +40,10 @@ from .shape import PV_K, Shape, forms
 
 DEFINITION, PENDING = "definition", "pending-definition"
 #: the map's Definitions on main (#4517, `verity_vllm`'s registry, #4482); the rest are circuits' open PRs
-ON_MAIN = frozenset({"ScaledMmS8CoordinateRows_v1", "AllGather_v1", "EmbeddingCoordinate_v1"})
+ON_MAIN = frozenset({"ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1", "AllGather_v1",
+                     "EmbeddingCoordinate_v1"})
 EPS_KEY = 1e-05
+FUSIONS = frozenset({"residual"})
 
 
 @dataclass(frozen=True)
@@ -81,10 +90,13 @@ def _units(name: str, k: str, table: str, count: int, nbytes: int, offset: int =
 
 
 class Map:
-    """The map at ``shape``: `groups` in the order a step writes them (the embedding, each layer, the head)."""
+    """The map at ``shape`` with the fusions ``fused`` (`FUSIONS`): `groups` in the order a step writes them (the embedding,
+    each layer, the head)."""
 
-    def __init__(self, shape: Shape) -> None:
-        self.shape, self.f = shape, forms(shape)
+    def __init__(self, shape: Shape, fused: frozenset[str] = frozenset()) -> None:
+        if not fused <= FUSIONS:
+            raise ValueError(f"the map's fusions are {sorted(FUSIONS)}, not {sorted(fused - FUSIONS)}")
+        self.shape, self.f, self.fused = shape, forms(shape), frozenset(fused)
 
     # -- the ops
 
@@ -107,15 +119,24 @@ class Map:
         codes = _units(op + "_quant", key("QuantChunkS8_v1", N=q, RELU=relu), op + "_quant", n // q, q, scale=True)
         return [(Table(op + "_amax", 2 * parts), tuple(amax)), (Table(op + "_quant", n, True), (codes,))]
 
-    def linear(self, op: str, n: int, k: int, world: int) -> list[Entry]:
-        """The W8A8 linear ``op`` (n coordinates over K = k), gathered ``world`` coordinates a row."""
-        coord = _units(op, key("ScaledMmS8CoordinateRows_v1", K=k, R=k // self.f.qchunk(k), DOT=RP.G.GEMM_SM90_S8["DOT"]), op, n, 2)
-        gather = _units(op + ".gather", key("AllGather_v1", WORLD=world, N=1), op, n // world, 2 * world)
-        return [(Table(op, 2 * n), (coord, gather))]
+    def linear(self, op: str, n: int, k: int, world: int, residual: str | None = None) -> list[Entry]:
+        """The W8A8 linear ``op`` (n coordinates over K = k), gathered ``world`` coordinates a row. With ``residual``, the
+        residual add ``residual`` in its epilogue: its coordinates write that table, and ``op`` has none."""
+        table, name = (residual, "ScaledMmS8ResidualCoordinateRows_v1") if residual else (op, "ScaledMmS8CoordinateRows_v1")
+        coord = _units(op, key(name, K=k, R=k // self.f.qchunk(k), DOT=RP.G.GEMM_SM90_S8["DOT"]), table, n, 2)
+        gather = _units(op + ".gather", key("AllGather_v1", WORLD=world, N=1), table, n // world, 2 * world)
+        return [(Table(table, 2 * n), (coord, gather))]
 
     def residual(self, op: str) -> list[Entry]:
         c, n = self.f.chunk, self.shape.width
         return [(Table(op, 2 * n), (_units(op, key("Bf16AddRow_v2", N=c), op, n // c, 2 * c),))]
+
+    def projection(self, op: str, k: int, residual: str) -> list[Entry]:
+        """The linear ``op`` back to the width (K = k), then the residual add ``residual``: fused under ``residual``."""
+        n, c = self.shape.width, self.f.chunk
+        if "residual" in self.fused:
+            return self.linear(op, n, k, c, residual)
+        return self.linear(op, n, k, c) + self.residual(residual)
 
     # -- the groups
 
@@ -136,9 +157,9 @@ class Map:
                                                     p + "pv", h, 2 * d),
                                              _units(p + "pv.gather", key("AllGather_v1", WORLD=c // d, N=d), p + "pv",
                                                     h * d // c, 2 * c)))]
-        out += self.quant(p + "o", w, False) + self.linear(p + "wo", w, h * d, c) + self.residual(p + "attn_residual")
+        out += self.quant(p + "o", w, False) + self.projection(p + "wo", h * d, p + "attn_residual")
         out += self.norm(p + "mlp") + self.quant(p + "up", w, False) + self.linear(p + "wup", sh.mlp, w, c)
-        out += self.quant(p + "down", sh.mlp, True) + self.linear(p + "wdown", w, sh.mlp, c) + self.residual(p + "mlp_residual")
+        out += self.quant(p + "down", sh.mlp, True) + self.projection(p + "wdown", sh.mlp, p + "mlp_residual")
         return out
 
     def head(self) -> list[Entry]:

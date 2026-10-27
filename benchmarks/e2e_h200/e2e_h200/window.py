@@ -46,7 +46,7 @@ from typing import Any
 
 import numpy as np
 
-from .commit import _slots
+from .commit import _slots, fusion_tag
 from .plan import Entry, Map, Table, Units
 from .shape import PV_K, Shape, forms
 from .units import sources
@@ -150,14 +150,15 @@ def _shared_group(S: Any, entries: list[Entry], row: int) -> Any:
     return S.Group(tuple(sizes), tuple((r,) for r in rows))
 
 
-def shared_layout(shape: Shape, row: int = ROW) -> Any:
-    """FAMILIES' shared-row layout at ``shape``, one commit unit a row of at most ``row`` bytes (a quantizer's row is its
-    chunk's codes and the scale); every layer's group is one `slots.Group`."""
+def shared_layout(shape: Shape, row: int = ROW, fused: frozenset[str] = frozenset()) -> Any:
+    """FAMILIES' shared-row layout at ``shape`` with the map's fusions ``fused``, one commit unit a row of at most ``row``
+    bytes (a quantizer's row is its chunk's codes and the scale); every layer's group is one `slots.Group`."""
     S, _ = _slots()
-    m = Map(shape)
+    m = Map(shape, fused)
     layer = _shared_group(S, m.layer(0), row)
     groups = [layer if 1 <= i <= shape.layers else _shared_group(S, entries, row) for i, entries in enumerate(m.groups())]
-    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b/v1", tuple(groups))
+    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
+                    tuple(groups))
 
 
 @dataclass(frozen=True)
@@ -209,12 +210,13 @@ class _Index:
 class Window:
     """Proof blocks' reads and outputs in the step commitments of a run at ``shape``: ``schedule[s]`` has ``slots`` and
     ``positions`` (`commit.StepTables`, `driver.StepResult`), batch row b of step s being sequence ``slots[b]`` at position
-    ``positions[b]``; ``layout`` is `shared_layout` (by default) or any layout of the map's tables."""
+    ``positions[b]``; ``layout`` is `shared_layout` (by default) or any layout of the map's tables, ``fused`` the map's
+    fusions."""
 
-    def __init__(self, shape: Shape, schedule: Sequence[Any], layout: Any = None) -> None:
+    def __init__(self, shape: Shape, schedule: Sequence[Any], layout: Any = None, fused: frozenset[str] = frozenset()) -> None:
         self.shape, self.schedule = shape, schedule
-        self.layout = shared_layout(shape) if layout is None else layout
-        self.map, self.f, self.src = Map(shape), forms(shape), sources(shape)
+        self.layout = shared_layout(shape, fused=fused) if layout is None else layout
+        self.map, self.f, self.src = Map(shape, fused), forms(shape), sources(shape)
         groups = self.map.groups()
         if len(groups) != len(self.layout.groups):
             raise ValueError(f"the layout has {len(self.layout.groups)} groups, the map {len(groups)}")
@@ -312,9 +314,10 @@ class Window:
     def ports(self, family: str) -> tuple[str, ...]:
         u = self.family(family)
         t = u.template
-        if t == "ScaledMmS8CoordinateRows_v1":
+        if t in ("ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1"):
             r = self._r(u)
-            return tuple(f"x{i}" for i in range(r)) + ("sx",) + tuple(f"wrow{i}" for i in range(r)) + ("sw",)
+            ports = tuple(f"x{i}" for i in range(r)) + ("sx",) + tuple(f"wrow{i}" for i in range(r)) + ("sw",)
+            return ports + ("r",) if t == "ScaledMmS8ResidualCoordinateRows_v1" else ports
         if t == "PvRow_v1":
             return ("p",) + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
         return {"EmbeddingCoordinate_v1": ("tok", "col", "pos"), "RmsSumSqChunks_v1": ("x",),
@@ -322,7 +325,7 @@ class Window:
                 "QkSoftmaxRowPad_v1": ("q", "k", "n"), "Bf16AddRow_v2": ("a", "b"), "Argmax_v2": ("logits",)}[t]
 
     def _r(self, u: Units) -> int:
-        k = self.tables[self.src[u.table] + "_quant"][2].nbytes
+        k = self.tables[self.src[u.name] + "_quant"][2].nbytes
         return k // self.f.qchunk(k)
 
     def _check(self, step: int, slot: int, u: Units, index: int) -> None:
@@ -366,18 +369,20 @@ class Window:
             n = self.tables[amax][2].nbytes
             return {"x": lambda: seg(self.src[u.table], 2 * u.nbytes * i, 2 * u.nbytes * (i + 1)),
                     "amax": lambda: seg(amax, n - 2, n)}[port]()
-        if t == "ScaledMmS8CoordinateRows_v1":
-            qop = self.src[u.table] + "_quant"
+        if t in ("ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1"):
+            qop = self.src[u.name] + "_quant"
             k = self.tables[qop][2].nbytes
             q = self.f.qchunk(k)
+            if port == "r":
+                return seg(self.src[u.table][0], 2 * i, 2 * (i + 1))
             if port == "sx":
                 (x0,) = seg(qop, 0, q)
                 return (self._scale(step, slot, qop, x0),)
             if port == "sw":
-                return self._registered(u.table + ".scale", 4 * i, 4 * (i + 1))
+                return self._registered(u.name + ".scale", 4 * i, 4 * (i + 1))
             r = int(port.removeprefix("wrow").removeprefix("x"))
             if port.startswith("wrow"):
-                return self._registered(u.table, k * i + r * q, k * i + (r + 1) * q)
+                return self._registered(u.name, k * i + r * q, k * i + (r + 1) * q)
             return seg(qop, r * q, (r + 1) * q)
         if t in ("QkSoftmaxRowPad_v1", "PvRow_v1"):
             layer, d = u.table.split(".")[0], self.shape.head_dim
