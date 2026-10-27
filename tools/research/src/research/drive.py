@@ -382,7 +382,7 @@ def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci"
     if lead := re.match(r"(?:@[\w.-]+ )+", text):
         text = " ".join([*(n for n in lead[0].split() if n != f"@{sender}"), text[lead.end():]])
     r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", sender, "--thread", _merge_thread(),
-                        *(["--to", *others] if others else []), "--quiet", "--text", text], capture_output=True, text=True)
+                        *(["--to", *others] if others else []), "--quiet", "--machine", "--text", text], capture_output=True, text=True)
     return r.returncode == 0
 
 
