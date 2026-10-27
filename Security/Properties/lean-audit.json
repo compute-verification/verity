@@ -201,6 +201,10 @@
    "owner": "@memory-accounting",
    "digest": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
   },
+  "Pouw.Assumptions.SAKServed": {
+   "owner": "@compute-research",
+   "digest": "f0e12824cc546338a62a6ffb8bd14f09157e056e8b2143a7e6a6334209ff1c1a"
+  },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
    "digest": "f80df2c5f11cf37bad8e1410b455c5c011a86a3f6cf2d332c1a29daf9974be77"
@@ -238,10 +242,12 @@
    "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572"
   },
   "Properties.Pouw.Served.FixedAreRight": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "digest": "9be619b683c72f950f517a112a029aa40bbf146b2b3c751dc6122dcc6d01d74f"
   },
   "Properties.Pouw.Served.FixedBeforeSalt": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "digest": "cbe84fdbd51a7a9a6aa58fa57c4ccf1dad0c50b4906eea8f5fdae2fffea79153"
   },
   "Properties.RemoteAudit.Line.Registered": {
    "owner": "@memory-accounting",
@@ -250,10 +256,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Pouw.Assumptions.SAKServed": {
-   "owner": "@compute-research",
-   "digest": "f0e12824cc546338a62a6ffb8bd14f09157e056e8b2143a7e6a6334209ff1c1a"
   }
  },
  "meaning": [
