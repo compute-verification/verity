@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shlex
 import sys
 import tarfile
 from datetime import datetime, UTC
@@ -68,7 +69,11 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
                                     "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
-    assert doc["runs"]["chain"].endswith("--endpoint ART --eos-ids 128001")
+    run = shlex.split(doc["runs"]["chain"])
+    assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
+    inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
+    assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
+        "chain", "ART", "128001", 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
     assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
                                                  "--disk-floor-gb 40"))
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
@@ -217,6 +222,8 @@ def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_
     (art / SS.USERS).unlink()
     assert SS.main([*argv[:-4], "--endpoint", str(art), "--eos-ids", "128001"]) == 2
     assert f"no {SS.USERS} beside an advice_trace.jsonl" in capsys.readouterr().err
+    assert SS.main([*argv[:-4], "--endpoint", "art:other", "--eos-ids", "128001"]) == 2
+    assert "only when launched with --store-read" in capsys.readouterr().err
 
 
 def _gate_chain(tmp_path, monkeypatch, peer):

@@ -30,7 +30,7 @@ the diff from its tip either way.  The merge commit carries a `Check: <attempt i
 --dry-run), 1 a failure past the gate (git's merge, the push, the sweep, a train's offending ref), 2 usage, 3 refused
 (`research.gates.refuse`: the gate, the push guard, a train or its build).
 
-With --verdicts (opt-in; CI-108) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
+With --verdicts (opt-in) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
 admitted when the target's `check.py --plan REF --packs-only --base HEAD` (`PLAN`, `verdict_gate`) shows every part it
 requires passed under its key at REF, each by a pass that a recorded check's verdict pack holds: an attempt of the tool that
 ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`); or a
@@ -438,7 +438,7 @@ AUDIT = "lean-audit/audit.json"
 
 class Unreadable(Exception):
     """A check's Lean report says it regenerated lock records, or can't be read to say whether it did, and they can't be read:
-    whoever would land its tree holds it (CI-122: train 7c3809278800 landed without the lock its check regenerated)."""
+    whoever would land its tree holds it, or the tree would land without the locks its check regenerated."""
 
 
 def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[str, tuple[str, Path | None]] | None:
@@ -528,7 +528,7 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
                        maps=None, deferred: str | None = None, fetch=None, ran: str | None = None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
-    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited (CI-64).
+    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.
 
     ``deferred`` is the Lean check drive lands the parent on (`Driver._unvouched`), which may have no passing attempt yet: it
     vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
@@ -1234,7 +1234,7 @@ def _removals(text: str) -> dict[str, Counter]:
 def reverted(repo: Path, base: str, tip: str, pins: list[tuple[str, str]], allow: tuple[str, ...] = ()) -> list[str]:
     """What the train ``tip`` removes from ``base`` that no ref of ``pins`` removes in a commit of its own (a non-merge commit
     of ``base..SHA``; a layout move's restack commit, trailer `Restack-move`, counts as none): a line a merge in a ref's history
-    dropped, as #1142's merge of main dropped #1012's lines and its train `25157eb17` silently undid #1012. Lines match by
+    dropped (a merge of main that drops another PR's lines would otherwise silently undo that PR). Lines match by
     content, wherever a ref's commit removed them, so a removal survives a move of its file. One line per path, none for a
     path in ``allow`` or in a merge's `Regenerated:` trailer (a generated file, rewritten by its command: `regenerate`)."""
     own: Counter = Counter()
@@ -1351,7 +1351,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         _git(repo, "branch", "-D", branch, check=False)
 
 
-#: gh has no timeout of its own: a call on a dead connection held a drive tick for 5 min (14 Oct 00:46Z)
+#: gh has no timeout of its own: a call on a dead connection can hold a drive tick for minutes
 GH_TIMEOUT_S = 120
 
 
@@ -1440,12 +1440,12 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
                      check=False)
             if r.returncode:
                 log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
-    # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (17 Oct: 2,119 of the
-    # repository's 3,543 branches were already on main); the most recently merged, not created, first (26 Oct: `gh pr list`'s
-    # newest 200 by number left out 20 PRs that waited in the queue, whose branches stayed)
+    # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (most branches
+    # are already on main); the most recently merged, not created, first (`gh pr list`'s newest 200 by number leave out PRs
+    # that waited in the queue, whose branches would stay)
     merged = json.loads(gh("api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-f", f"query={MERGED_QUERY}",
                            "--jq", ".data.repository.pullRequests.nodes"))
-    # only a branch still at the merged head: a lease on a branch already gone fails as "stale info" (17 Oct: 58 a tick)
+    # only a branch still at the merged head: a lease on a branch already gone fails as "stale info"
     heads = {ref.removeprefix("refs/heads/"): sha for sha, ref in (
         line.split() for line in _git(repo, "ls-remote", "--heads", remote).stdout.splitlines())}
     for p in merged:
@@ -1552,8 +1552,8 @@ def _mirror_target(name: str) -> tuple[list[str], str]:
 
 def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
     """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward, past this checkout's own pre-push
-    guard, which judges pushes that move origin's main (a hand landing has no check attempt of its tree, and the guard refused
-    node 1's copy of 61f64824c and 24aa9a9a4, 7 Oct). False, after one line naming the failure and the command that reruns it,
+    guard, which judges pushes that move origin's main (a hand landing has no check attempt of its tree, so the guard would refuse
+    node 1's copy of it). False, after one line naming the failure and the command that reruns it,
     when it doesn't land."""
     from .remote import git_push_url
 
@@ -1624,7 +1624,7 @@ AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (12 Oct: drive's queue clone is reset and cleaned every tick, and d779760ce's `post_train.py` lost its `.venv` mid-run).
+    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
     None when ``repo`` can't make one."""
     import shutil
 
@@ -1640,7 +1640,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
     does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
     ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
-    `Check:` trailer, and the Lean check one lands on may have no passed attempt in the store yet (CI-81).  Returns the argv started,
+    `Check:` trailer, and the Lean check one lands on may have no passed attempt in the store yet.  Returns the argv started,
     None when the declaration names none."""
     from .store import tools_registry
 
@@ -1753,7 +1753,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
 #: what a landing merged, in its own subject or its train's (`prepare`): a pull request, a branch of origin, or a commit
 MERGED_REF = re.compile(r"Merge (#\d+|origin/\S+|[0-9a-f]{12,40}) \([0-9a-f]{7,40}\)|^Queue: (#\d+) ")
 CHECK_TRAILER = re.compile(r"^Check(?:ed)?: (.*)$", re.M)
-#: a run id, or the lander's `r20261010-*-9827` for one whose launch time it didn't copy
+#: a run id, or the lander's form with `*` for a launch time it didn't copy
 RUN_ID = re.compile(r"r20\d{6}-(?:\d{6}|\*)-[0-9a-f]{4}")
 
 
@@ -1770,7 +1770,7 @@ def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None =
                   runs: dict[str, str] | None = None) -> list[str]:
     """One line per commit on ``tip``'s first-parent line after ``start``: what it merged (pull requests, or the branches and
     commits ``prs``, head branch or head sha to number, doesn't map to one) and the runs its `Check:` or `Checked:` trailer
-    names, else the run ``runs`` gives for it (a queue commit `research queue drive` fast-forwarded has no trailer).  Read from main's log, since a pull request's state can't stand in: a stacked member such as #1706 reads closed on
+    names, else the run ``runs`` gives for it (a queue commit `research queue drive` fast-forwarded has no trailer).  Read from main's log, since a pull request's state can't stand in: a stacked member can read closed on
     GitHub without having landed on its own."""
     prs = prs or {}
     lines = []
@@ -1900,7 +1900,7 @@ def main_line(repo: Path, tip: str, idx) -> list[str]:
 def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
                     runs: dict[str, str] | None = None) -> bool:
     """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
-    whoever pushed it (two of 10 Oct's were missing from the lander's own reports).  True when posted or there was nothing to
+    whoever pushed it.  True when posted or there was nothing to
     post; a failure is printed and returns False, and nothing raises, since the landings stand."""
     from .monitors import MERGE_THREAD
     from .slack import FRONT_DOOR, QUIET, Slack, _footer, load_registry, registry_path

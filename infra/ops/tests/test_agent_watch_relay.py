@@ -362,7 +362,7 @@ def test_doorbells_count_ring_runs_doorbell_for_ready_to_wake(relay, monkeypatch
 
 
 def test_a_failure_the_watch_acted_on_leads_with_its_owner_and_rings_that_inbox(relay):
-    """Daniel, 19 Oct: ring the owner at once. A coordinator's owner is top; a worker's, its launcher's handle."""
+    """Ring the owner at once. A coordinator's owner is top; a worker's, its launcher's handle."""
     top, proofs = (relay.slack.tag(relay.slack.entry(relay.REG, h)) for h in ("top", "proofs"))
     w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
     relay.log_text["text"] = "\n".join(json.dumps(r) for r in [

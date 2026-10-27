@@ -14,6 +14,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static
 from verity.ml.definitions.registry.fp8 import weight_blocks
 
@@ -51,15 +52,15 @@ EVALUATORS = {
 #: The H200 capture that holds cuteDSL `LLBf16SplitK`'s words to `bf16_gemm_check.splitk_rows`, word for word, at each gate's every
 #: split-K M (the dispatch table's SPLIT_K, the launch's grid.z): the split-K-off record and the served default's (vLLM's cuBLAS
 #: switch does not reach the cuteDSL tier).
+_CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
 PROVENANCE = {"LlBf16SplitKGemm_v1": {
     "property": "glm53_bf16_gemm_capture (verity-vllm/glm53-bf16-gemm-capture/v3), tests/properties/glm53_bf16_gemm_capture_gpu.py",
-    "run": "r20261016-234133-bbc8",
-    "record": "c0e09902b0a2057a77d81b7cda6ba8952fd15ee2836bd69f25dbac83b91d5100",
-    "record_served_default": "fe538de7a4602a9f1888c7f4eddafbf0f950db8b13008333f9488fb39aaf507f",
-    "art": {"record": "art:5fcc5a4937ac75ceec31bd22abc11194ec0c55d27e77ffd3690b1ad8976feeaf",
-            "run": "art:4bc894c68a07c3947a61c23263c4e062762359b73c7883dca4b3b2fca9ff16fc"},
+    "run": _CAPTURE["run"],
+    "record": _CAPTURE["record"],
+    "record_served_default": _CAPTURE["record_served_default"],
+    "art": _CAPTURE["art"],
     "device": "vy-glm53-eu, cc 9.0 with 132 SMs, driver 580.173.02, torch 2.13.0+cu129, vLLM 0.28.1rc1.dev472+gd9105ea80",
-    "captured_utc": "2026-10-16",
+    "captured_utc": _CAPTURE["captured_utc"],
     "variants": {"split_k_off": "GO", "served_default": "GO"},
     "cases": {
         "glm53/router/mlp.gate": {"K": 6144, "N": 256, "TILE_K": 256, "WARPS": 4,
