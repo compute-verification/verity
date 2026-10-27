@@ -70,6 +70,7 @@ theorem toy_mem_io1 : (⟨1, by decide⟩ : Fin toyCircuit.N) ∈ toyPartition.i
 /-- **The one unit is wrong at every registration and transcript**: an opening of the input's commit string carries
 `1`, the input's value in `Xv`; then the circuit computes `0` at the negation, and its commit string opens only to
 `1`. -/
+omit [Fintype K] [DecidableEq K] in
 theorem toy_mem_wrongRegZ {Dh : Type} (Hc : List UInt8 → Dh) (R : Reg) (Xv : Fin toyCircuit.N → Bool) :
     (0 : Fin 1) ∈ wrongRegZ A toyPartition planZ tab (toyBinding A planZ tab Hc) R Xv := by
   refine (mem_wrongRegZ A toyPartition planZ tab (toyBinding A planZ tab Hc)).2 ?_
@@ -88,6 +89,7 @@ theorem toy_mem_wrongRegZ {Dh : Type} (Hc : List UInt8 → Dh) (R : Reg) (Xv : F
   exact absurd h1 (by decide)
 
 /-- **The layer's lowering holds where no message satisfies the tables**: there is nothing to decode. -/
+omit [Fintype K] [DecidableEq K] in
 theorem toy_lowering
     (hunsat : ∀ S R u M, ¬ (tabOfZ planZ tab S R u).S.Satisfies (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M)) :
     LoweringSoundZK A toyPartition planZ tab (toyDecode planZ tab) :=
@@ -145,7 +147,7 @@ theorem countPrReg_nontrivial {mPts : ℕ} {Reg : Type} {I : Discharge.Exec.Inpu
   refine lt_of_le_of_lt ?_ (exceeds_of σ (Finset.one_le_card.2
     ⟨0, toy_mem_wrongRegZ execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512 (reg σ) _⟩) hlt)
   rw [L.miss_eq_zero_of_draw_univ hL le_rfl]
-  exact le_trans (add_le_add (add_le_add (zero_le _) (ksAvgZC_le_pr execArith hs512 (planZHJ dj y₀) kDep (reg σ)
+  exact le_trans (add_le_add (add_le_add zero_le (ksAvgZC_le_pr execArith hs512 (planZHJ dj y₀) kDep (reg σ)
     (cont σ))) le_rfl) hle
 
 end Flock.Bridge
