@@ -1,8 +1,8 @@
-"""I2's served window as one Circuit (VLLM-103's V3b, `verity.ml.windows.interface`): the window *class's* circuit, every
+"""I2's served window as one Circuit (`verity.ml.windows.interface`): the window *class's* circuit, every
 unit's output a committed row and every input row wired, registered or ingress.
 
-A window class (`WindowClass`, N1's scan class: note:network-accounting/20261025T0830Z-report-net68-scan-router) has a
-fixed number of slots a network timestep (ASK-122): ``lanes`` slots at each boundary, one every ``every`` scan buckets from the
+A window class (`WindowClass`, N1's scan class) has a
+fixed number of slots a network timestep: ``lanes`` slots at each boundary, one every ``every`` scan buckets from the
 window's start, ``slots`` in all, each of at most ``prompt`` prompt ids and ``outputs`` outputs. Slot 4b + j at the class of
 record is boundary b's lane j, anchored at bucket 16b. Its circuit is one class Program a slot, whatever the traffic
 (`class_circuit`): the Build's greedy request Program at one prompt row and P - 1 decode steps, P = prompt + outputs - 1
@@ -32,13 +32,20 @@ the units, their feeds, gathers and weight reads, and wires them):
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
   aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
-- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut (#4263, CIR-96): each head's Calls (`AttentionHead_v19`'s
+- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut: each head's Calls (`AttentionHead_v19`'s
   body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
   nb = ⌈T / BN⌉), each full block below it `AttnBlock_v5` and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each
   block's running state its predecessor's rows. A block's keys and values are one row a KV group, which its group's heads
   read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
   `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
   `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
+- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way: its first visited block
+  `AttnBlockFirst_v1` (FA3's first iteration is FA2's word for word), each full block below it
+  `AttnBlock_v4{FIRST=False, CHECK = b >= MASKED_FROM}` and its end `AttnHeadEnd_v1{D, INV=Fa3InvSum_v1}`. `CUTS` names
+  the versions cut by key block and the cut of each.
+- Any other attention version (`Attention_v2`, as `fa3_construction = "guard-every-block"` binds) is its heads, a unit
+  each of its own head Definition (`AttentionHead_v2{T}`), while T is at most `KEYS`: a head's keys and values are one row
+  a KV group, an `AllGather_v1{T, D}` over every key's own row, and past `KEYS` keys it is refused.
 - `TokenSelect_v4{V}` is its function at ``grain.select`` logits a chunk (its body's own form at another C): chunks
   `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and `TokenSelectCombine_v2{V, C}` over them:
   ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and ``x0`` (``logits[0]``) from one
@@ -47,8 +54,8 @@ the units, their feeds, gathers and weight reads, and wires them):
 
 The weights record is never one registered parameter: each weight a port reads is its own at the port's row width
 (`window_builder.weight_param`: ``weights/<label>@<words>``, a tied embedding twice, once as its table's rows and once as the
-LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows and the window's
-members take its rows as registered rows (`interface.members`). A pin of `WEIGHTS` pins them all.
+LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows, by its own name,
+and the window's members take its rows as registered rows (`interface.members`).
 
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
 divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
@@ -68,9 +75,15 @@ Refused by name (`Unexpressible`): a window past its class's slots (more request
 than its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose last
 output is past the window's last bucket (`ACROSS`), a request whose Program would read more than its prompt and the weights
 (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's peers), a request a Commit window carries in or out,
-byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16 words, a row form the cut rule
-can't state and a unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran
+byte ingress, a family this lowering doesn't know, a head past `KEYS` keys of an attention version with no per-key-block
+cut, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a unit of more than ``grain.rows``
+rows. The circuit is completeness only: that it computes what serving ran
 is held by the units' proofs on their committed rows, never by this lowering.
+
+Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
+verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
+registration records for it; anywhere else they are free. The pins are the hiding roots the committer registered once per
+model and key, never roots the verifier computes (`window_weights`).
 """
 from __future__ import annotations
 
@@ -86,6 +99,7 @@ from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19
+from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
 
 from .build import Unexpressible
@@ -95,20 +109,26 @@ from .window_builder import WEIGHTS, Grain, Row, _Builder, _step
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
-#: the Definition that reads a slot's ingress row, (occupancy, prompt length, ids). A placeholder for the row network-
-#: accounting's BLOCKS-NET PR names (ASK-122: token ids in a committed row with a private occupancy word, tied to the
-#: certified bytes by #4548's id form); the lowering reads a slot's row only through this
+#: the Definition that reads a slot's ingress row, (occupancy, prompt length, ids). A placeholder for network
+#: accounting's row: token ids in a committed row with a private occupancy word, tied to the certified bytes by their
+#: id form; the lowering reads a slot's row only through this
 SLOT_ROW = IO.SlotRow
 #: a request held across the window's end, which the class doesn't take: whether the network certifier's lanes hold one
-#: across a window boundary is open (thread 1793030365.246499), and a slot that does needs a Program running into the next
+#: across a window boundary is open, and a slot that does needs a Program running into the next
 #: window
 ACROSS = "held across the window's end"
+#: the most keys a head reads through one `AllGather_v1{T, D}` where its attention's version has no per-key-block cut (its
+#: gather's T parts and output within a unit's 256 rows, with room for its reader's cut)
+KEYS = 136
+#: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
+#: by v19, FA3's v4 by v20
+CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
 
 
 @dataclass(frozen=True)
 class WindowClass:
-    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (ASK-122:
-    fixed slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
+    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (fixed
+    slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
     ``outputs`` outputs, ``lanes`` of them anchored at each boundary, one every ``every`` scan buckets from the window's
     start (lanes 0: every slot at the window's one boundary). Slot ``lanes · b + j`` is boundary b's lane j, anchored at bucket
     ``every · b``, and the window is ``buckets`` = every · (slots / lanes) buckets."""
@@ -145,7 +165,7 @@ class WindowClass:
         return self.boundaries[slot // self.lanes]
 
 
-#: the class of record, the certifier run of record's envelope at ASK-122's slots (network-accounting took vllm's pick):
+#: the class of record, the network certifier's envelope at these fixed slots:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
@@ -417,17 +437,18 @@ class _Program:
         self.outs[j] = [(0, H * D, Row(tid, u, "o0", D))]
 
     def _plan(self, fn: Any, NH: int) -> list[tuple[Any, list[tuple[str, tuple[str, tuple[Any, ...]]]]]]:
-        """``fn``'s heads as `Attention_v19`'s, read once a Definition (`_Builder.plans`): each Call of `AttentionHead_v19`'s
-        body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys [a, b)) or
-        ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
+        """``fn``'s heads as its cut's (`CUTS`: `Attention_v19`'s or v20's), read once a Definition (`_Builder.plans`): each
+        Call of the cut's head's body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys
+        [a, b)) or ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
         key = descriptor_id(fn)
         if key in self.b.plans:
             return self.b.plans[key]
+        cut = CUTS[fn.version]
         try:
-            head = self._heads(bind(AttentionV19, **fn.bindings), "AttentionHead", NH)
+            head = self._heads(bind(cut, **fn.bindings), "AttentionHead", NH)
             body = head.body
         except (TypeError, ValueError, KeyError) as e:
-            raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v19`'s ({e})") from None
+            raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v{cut.version}`'s ({e})") from None
         params, D = [p for p, _ in head.signature()[0]], fn.bindings["D"]
         plan = []
         for i, n in enumerate(body.nodes):
@@ -485,10 +506,10 @@ class _Program:
 
     def _Attention(self, j: int, node: Any) -> None:
         s = node.fn.bindings
-        if node.fn.version not in (18, 19):
-            raise Unexpressible(f"{node.fn.id}: the window's lowering cuts `Attention_v18`'s heads as v19's, not "
-                                f"v{node.fn.version}'s")
         T, NH, KVH, D, BN = s["T"], s["NH"], s["KVH"], s["D"], s["BN"]
+        if node.fn.version not in CUTS:
+            self._whole_heads(j, node)
+            return
         plan = self._plan(node.fn, NH)
         q, kc, vc = node.args
         keys = {"k": self._cache("k", kc, T, KVH), "v": self._cache("v", vc, T, KVH)}
@@ -505,6 +526,27 @@ class _Program:
                 else:
                     self._each(tid, port, u, [(r,) for r in self._block(keys[kind], *x, BN)], NH // KVH)
             calls.append((tid, u))
+        self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
+
+    def _whole_heads(self, j: int, node: Any) -> None:
+        """An attention whose version has no per-key-block cut (not in `CUTS`): a unit a head of its own head Definition, its
+        keys and values each one row a KV group, an `AllGather_v1{T, D}` over every key's row (`_cache`'s), refused past
+        `KEYS` keys."""
+        s = node.fn.bindings
+        T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
+        if T > KEYS:
+            cut = ", ".join(map(str, sorted(CUTS)))
+            raise Unexpressible(f"{node.fn.id}: a head of {T} keys, past the {KEYS} one `AllGather_v1` reads; the window's "
+                                f"lowering cuts a head by key block only at `Attention` versions {cut} (`CUTS`), not "
+                                f"{node.fn.version}")
+        head = self._heads(node.fn, "AttentionHead", NH)
+        q, kc, vc = node.args
+        tid, u = self.b.unit(head, NH)
+        self._each(tid, "q", u, self._split(q.refs, NH))
+        for port, c in (("k", kc), ("v", vc)):
+            rows = self._cache(port, c, T, KVH).rows
+            self._each(tid, port, u, [(r,) for r in self.b.gathers([tuple(r[g] for r in rows) for g in range(KVH)])],
+                       NH // KVH)
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
 
     def _TokenSelect(self, j: int, node: Any) -> None:
@@ -673,5 +715,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, name)
 
 
-__all__ = ["ACROSS", "CLASS_OF_RECORD", "FAMILIES", "Grain", "NAME", "Row", "SLOT_ROW", "WindowClass", "class_circuit",
+__all__ = ["ACROSS", "CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "SLOT_ROW", "WindowClass", "class_circuit",
            "class_program", "window_circuit"]

@@ -2,7 +2,7 @@
 
 The Build (`pipeline.build`) traces vLLM's model class on meta with torch.export and lets the binding rules translate each node;
 this module writes the same Program down directly from φ (`phi.Phi`: the checkpoint's `config.json`, the declared target, the
-wrapper shape and the sampling policy), with the same IR calls the derive makes: one `Builder` over the wrapper's user inputs and
+wrapper shape and the sampling policy), with the same circuit-building calls the derive makes: one `Builder` over the wrapper's user inputs and
 the weights record (vLLM's parameters in module order, then its buffers), one call per row of each launch, the vocabulary's kinds
 (`rules.vocab.PROFILE_B1_EAGER_V3.kind`) with the statics the rules select through `frontend.targets`, the flat body wrapped as
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
@@ -120,7 +120,7 @@ def model_shape(hf: dict) -> ModelShape:
     sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for the families whose vLLM code hands it to FA2
     (the `dense2` patterns); `build_program` refuses a history longer than it."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
-    from verity_vllm.engine.profiles.generic import effective_sliding_window
+    from verity_vllm.observe.fold.profiles.generic import effective_sliding_window
     from verity_vllm.program import model as analytic
     family = str(hf.get("model_type", "")).lower()
     ff = FAMILY_FACTS.get(family)

@@ -193,8 +193,8 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
 
 
 def _profile(role: str | None, world: int, files: set[str], config: tuple[dict[str, Any] | None, str]) -> dict[str, Any]:
-    from verity_vllm.engine import profiles
-    from verity_vllm.engine.profiles import generic
+    from verity_vllm.observe.fold import profiles
+    from verity_vllm.observe.fold.profiles import generic
     cfg, source = config
     if cfg is None:
         return {"refused": f"no config.json: {source}"}

@@ -1,4 +1,4 @@
-description = "co32c-u16-cohalf (H1, decision 82) with the LUT softmax with K one scale per (layer, KV head) calibrated (the calibration windows' keys, the window's clamped into it) (PPL-LUT)"
+description = "co32c-u16-cohalf (H1) with the LUT softmax with K one scale per (layer, KV head) calibrated (the calibration windows' keys, the window's clamped into it)"
 
 [[linear]]
 step = "smooth"

@@ -26,7 +26,7 @@ from research.queue import (DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, R
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
-from test_merge_gate import CHECK_FILES, CHECKED
+from test_merge_gate import CHECK_FILES
 
 RULES = 'hold_label = "hold"\n'
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
@@ -625,6 +625,87 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
+def test_a_pr_holding_an_older_head_of_an_unmarked_pr_waits_for_it_and_shared_history_alone_holds_nothing(world):
+    """CI-178, 25 Oct: #4412 branched from #4382 at an older head; #4382 moved on unmarked, and drive, which looked only for
+    #4382's current head, admitted #4412 with #4382's unmarked commits in it."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`
+    q = world.queue()
+    q.sync()                                                                    # the queue sees #5 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # #5 moved on from `old`, unmarked
+    base = world.change({"m.txt": "landed\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    world.gh.put(8, world.change({"y.txt": "y\n"}, base=base))                 # shares only `main`'s history with #5
+    world.gh.put(9, world.change({"z.txt": "z\n"}, base=world.gh.prs[5].head))  # on #5's current head: as before
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [8]
+    assert entries[7].state == "waiting" and entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+    assert entries[7].after == entries[7].older == (5,) and entries[5].after == ()
+    assert entries[8].after == () and entries[9].why == "contains #5, which isn't admitted" and entries[9].older == ()
+    assert q.status()[7].why == entries[7].why
+    world.gh.ready.add((5, world.gh.prs[5].head))
+    assert [m.pr for m in q.sync()[0]] == [8, 5, 7, 9]
+
+
+@pytest.mark.parametrize("marked_at", ["nowhere", "older head"])
+def test_a_pr_holding_an_older_head_of_a_pr_not_admitted_at_its_current_head_waits_for_it(world, marked_at):
+    """CI-178: as above, with #5 unmarked or marked only at the older head #7 holds."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=marked_at == "older head")
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`, marked
+    q = world.queue()
+    q.sync()
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # #5 moved on from `old`
+    members, entries = q.sync()
+    assert 7 not in [m.pr for m in members] and entries[7].state == "waiting", entries[7].why
+    world.gh.ready.add((5, world.gh.prs[5].head))
+    assert [m.pr for m in q.sync()[0]] == [5, 7]
+
+
+def _merge(world: World, into: str, other: str) -> str:
+    """A merge commit of ``other`` into ``into`` (first parent ``into``)."""
+    _git(world.dev, "checkout", "-q", "--detach", into)
+    _git(world.dev, "merge", "-q", "--no-edit", other)
+    sha = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+@pytest.mark.parametrize("marked", [True, False])
+def test_the_pr_that_merged_another_prs_branch_waits_for_it_and_never_the_other_way_by_number(world, marked):
+    """27 Oct (infra's hold of #4429 at a03f1af6): #4772, opened first, merged #4855's branch, and #4855 moved on; a rule that
+    took the lower number to carry the higher one's commits made #4855, queued, wait for #4772.  The shared commits are on
+    #4855's first-parent line and reach #4772 only through a merge, so #4772 carries #4855: #4772 waits for #4855, #4855 for
+    nothing.  The queue never saw #4855 at the merged head: ancestry alone decides it."""
+    period = world.change({"p.txt": "period\n"})
+    world.gh.put(6, world.change({"m.txt": "merged main\n"}, base=period))        # #4855's branch
+    soundness = world.change({"s.txt": "soundness\n"})
+    world.gh.put(5, _merge(world, soundness, world.gh.prs[6].head))              # #4772 merges #4855's branch
+    world.gh.put(6, world.change({"p.txt": "period 2\n"}, base=world.gh.prs[6].head), ready=marked)  # #4855 moves on
+    members, entries = world.queue().sync()
+    assert entries[6].after == () and entries[5].after == entries[5].older == (6,)
+    if marked:
+        assert [m.pr for m in members] == [6, 5]
+    else:
+        assert members == [] and entries[6].why.startswith("not marked ready")
+        assert entries[5].why == "contains #6's commits (at an older head), which isn't admitted"
+
+
+def test_prs_that_merely_share_commits_wait_for_nothing(world):
+    """Two PRs that each merged a third branch (on neither first-parent line), and two forked from a commit the queue never saw
+    either at (on both): neither knows which carries the other, so neither waits, whatever their numbers."""
+    third = world.change({"t.txt": "third\n"})
+    world.gh.put(9, _merge(world, world.change({"a9.txt": "9\n"}), third), ready=False)
+    world.gh.put(10, _merge(world, world.change({"a10.txt": "10\n"}), third))
+    fork = world.change({"f.txt": "fork\n"})
+    world.gh.put(11, world.change({"a11.txt": "11\n"}, base=fork), ready=False)
+    world.gh.put(12, world.change({"a12.txt": "12\n"}, base=fork))
+    members, entries = world.queue().sync()
+    assert {n: entries[n].after for n in (9, 10, 11, 12)} == {9: (), 10: (), 11: (), 12: ()}
+    assert [m.pr for m in members] == [10, 12]
+
+
 def _resolved_main(world: World, head: str) -> str:
     """``head`` with `main` merged into it, each conflict taken from `main`: it contains ``head`` but no longer conflicts."""
     _git(world.dev, "fetch", "-q", "origin")
@@ -906,31 +987,6 @@ def test_a_rewritten_pr_head_is_fetched_by_force_and_merged(world):
     assert members[0].head == new and _git(world.origin, "show", "refs/heads/next:a.txt") == "rewritten"
 
 
-def test_land_fast_forwards_main_to_the_newest_commit_with_a_passing_check_and_shadow_lands_nothing(world, monkeypatch):
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    main_before = _git(world.origin, "rev-parse", "main")
-    shadow = world.queue(shadow=True)
-    shadow.sync()
-    assert _git(world.origin, "rev-parse", f"refs/heads/{SHADOW_BRANCH}") and world.on_next(shadow) == [1, 2, 3]
-    members, _ = world.queue().sync()
-    monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    for m, command in ((members[1], CHECKED), (members[2], ("false",))):
-        tree = world.tmp / f"check-{m.pr}"
-        _git(world.dev, "fetch", "-q", "origin")
-        _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), m.commit)
-        monkeypatch.chdir(tree)
-        research_main(["run", "--runs-dir", str(world.tmp / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
-                       "--cwd", "source", "--", *command])
-    shadow.land()                                               # whatever it finds, a shadow queue never moves `main`
-    assert _git(world.origin, "rev-parse", "main") == main_before
-    q = world.queue()
-    assert q.land(dry_run=True) == members[1] and _git(world.origin, "rev-parse", "main") == main_before
-    assert q.land() == members[1]
-    assert _git(world.origin, "rev-parse", "main") == members[1].commit      # a fast-forward: exactly the checked commit
-    assert world.on_next(q) == [3]
-
-
 def test_pr_label_targets(tmp_path, monkeypatch):
     head = "0123456789abcdef0123456789abcdef01234567"
     assert ids.is_pr(label_target(12, head)) and ids.kind_of_id(f"pr:12@{head}") == "pr"
@@ -1157,7 +1213,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
 
 def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
     """23 Oct: GitHub's rulesets let only drive's App move `main` and `next`, and verity-agents[bot] force-pushed `next` at 07:07Z
-    from a VM's `research queue eject`, which synced. Off drive an eject only withdraws the mark; sync and land refuse."""
+    from a VM's `research queue eject`, which synced. Off drive an eject only withdraws the mark; sync refuses."""
     import research.drive as D
     import research.queue as Qm
 
@@ -1167,7 +1223,7 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]
-    for verb in ("sync", "land"):
+    for verb in ("sync",):
         assert research_main(["queue", verb, *base]) == 1
         assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
     refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
@@ -1526,7 +1582,7 @@ def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_t
 
 def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_unjudged(world, capsys):
     """With no credentials (or no source holding it), the suite that reads it isn't collected, so it can't refuse on bytes it
-    never had; one note names the suite and the fixtures, and the head is marked: the train's check fetches them."""
+    never had; one note names the suite and the fixtures, and the head is marked: the after-landing run fetches them."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     files, _ = _fixture_tree(world)
@@ -1537,7 +1593,7 @@ def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if "preflight" in s)
     note = (f"pkg not judged: 1 of the 1 fixture(s) the suites read weren't fetched (no credentials for the store's remote: "
-            f"{BIG_PATH}); the train's check fetches them")
+            f"{BIG_PATH}); the after-landing run fetches them")
     assert said.count(note) == 1 and "collected 1 suite(s) (.)" in said and "not judged" not in said.replace(note, ""), said
     assert calls == [[BIG_PATH]]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
@@ -2775,9 +2831,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
-                      (["queue", "drive"], "drive needs --on MACHINE"), (["queue", "report"], "report needs --on MACHINE")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync and drive only"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and drive only"),
+                      (["queue", "drive"], "drive needs --on MACHINE")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
@@ -2876,6 +2932,25 @@ def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
     q.fetch()
     assert [q.handle(p) for p in prs] == ["circuits", "infra", "circuits"]
     assert len(shows) == 2
+
+
+def test_a_fetch_moves_a_clone_main_has_passed_to_main_and_keeps_one_that_contains_main(world):
+    """The merge drivers run from the clone's checkout: 27 Oct, an agent VM's clone still checked out at 21 Oct judged #4835's
+    lean-audit.json with that day's merge.py and refused a merge main's resolves.  Drive's checkout, `next`'s tip, stays."""
+    q = world.queue()
+    q._clone()
+    q.fetch()
+    old = _git(q.workdir, "rev-parse", "HEAD")
+    main = world.change({"a.txt": "new\n"})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    q.fetch()
+    assert _git(q.workdir, "rev-parse", "HEAD") == main != old
+    ahead = world.change({"b.txt": "on next\n"})
+    _git(world.dev, "push", "-q", "origin", f"{ahead}:refs/heads/next")
+    q.fetch()
+    _git(q.workdir, "checkout", "-q", "--detach", ahead)
+    q.fetch()
+    assert _git(q.workdir, "rev-parse", "HEAD") == ahead
 
 
 def test_a_lane_line_names_its_handle_without_a_trailing_period():
