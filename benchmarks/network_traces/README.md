@@ -41,15 +41,22 @@ keeps the wipe uncounted otherwise.
 `served_session.py` is the runbook of NET-83's session of record, the network certifier in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
 the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
-vy-dc-h200-2's `serve-openai` on :18782, at the scan's class: prompts of KI = 1,024 ids from a fresh secret seed, and 64
-ids out a request. It runs at a given UTC time when asked. The lane's fetch, with `witness/`, stays in a 0700
+vy-dc-h200-2's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (the
+class's 1,024 reach the warden late, NET-107), each answered greedily with at most 64 ids, ending at the base model's
+EOS id 128001. It runs at a given UTC time when asked. vllm starts the endpoint by hand (serve-openai directly with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, and posts its
+records as an art without `requests.jsonl`, whose prompt ids stay on the served node, and with `request_users.jsonl`,
+each engine request's `engine_id` and its warden user in `requests.jsonl`'s order (#5303). `chain` rebuilds `requests.jsonl` from that map and the kept warden run's
+certified I/O in a 0700 directory beside the kept fetch, so the endpoint step checks the endpoint's trace against the
+certified I/O. The lane's fetch, with `witness/`, stays in a 0700
 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs
 the chain's warden path on the kept fetch, and only from a tree with the record's leak guard. `session --gate local`
 is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins
 gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain runs on (vy-nebius-cpu-2),
 which the challenger's coin link reaches through that node's own line of `/etc/vy/coin-ports`. It refuses the served
-node as the draw's peer, since the gate key and the warden run's witness never go on the prover's machine. Until the
-auditor's node has its line, the chain draws on the verifier's coins (`--coins verifier`, the default).
+node as the draw's peer, since the gate key and the warden run's witness never go on the prover's machine.
+vy-nebius-cpu-2 has its line (ports 7821-7830) since 27 Oct; without the gate's coins the chain draws on the
+verifier's (`--coins verifier`, the default).
 
 ## The chain's run of record
 
