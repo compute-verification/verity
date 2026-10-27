@@ -96,9 +96,10 @@ def _interior_window(tmp_path, gap=None):
     leds = _ledgers()
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
     d = tmp_path / "windows" / "w6"
-    seal = lambda: ss.seal_window(com, rc, d, rec={"window": 6, "run_id": "t/w6", "steps": len(rc.steps), "passed": True},  # noqa: E731
-                                  reqs=reqs, request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={},
-                                  label="serve-openai:t")
+
+    def seal():
+        return ss.seal_window(com, rc, d, rec={"window": 6, "run_id": "t/w6", "steps": len(rc.steps), "passed": True}, reqs=reqs,
+                              request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
     return SimpleNamespace(stream=stream, lo=lo, hi=hi, C=C, committed=used + com._gpu_blocks[1][1], d=d, seal=seal)
 
 
