@@ -1,4 +1,4 @@
-# sha512_rows: the serve-time commit's SHA-512 engine (HASH-20)
+# sha512_rows: the serve-time commit's SHA-512 engine
 
 A device engine for the commitment's hashes, bit for bit the CPU reference's (`verity.ml.commitments`):
 
@@ -6,7 +6,7 @@ A device engine for the commitment's hashes, bit for bit the CPU reference's (`v
 - its hm96-sha512 hiding leaf: b = x ⊕ M·y, c = SHA-512(salt prefix ‖ y), h = SHA-512(leaf prefix(key) ‖ b ‖ c), `hm96.SHA512`;
 - that leaf's frame-v3-sha512 leaf, and frame-v3-sha512 nodes and pads a level at a time, `merkle.CommitmentDomain`.
 
-It is built for commit_slots (HASH-13, KCOMMIT's commit path beside this directory) to adopt where it's faster: the calls below
+commit_slots (the commit path beside this directory) runs on it: the calls below
 are its inner "hash these rows" and "hash this level" steps. The compression is `sha512x.cuh`'s `compress<V, ROLL>`, with
 `sha::compress`'s contract (`benchmarks/pouw/commit_gpu/sha512.cuh`), so a kernel can also swap just the compression in.
 
@@ -40,7 +40,7 @@ tensors, which at 4,096 slots fills the GPU better than one layer a call (25 row
 16-byte columns in its own order (`mask_column`), so that a warp's loads of T fall in distinct bank groups whatever the salt
 bytes; the mask is a XOR over the columns, so the order changes no byte. Each thread's 192 salt bytes sit in shared memory
 beside T (112 KB a block) rather than in registers. The leaf kernel comes at 1 or 2 blocks an SM (`leaves(..., minb=)`):
-1, the default, holds its 193 registers without spilling, and on an H200 beats 2's 128 registers with spills by 5%.
+1, the default, holds its registers without spilling; at 2 an SM they spill.
 Its persistent grid fills the device's SMs, or `leaves(..., sms=)` of them, for a stream on a green context of that
 many (commit_slots' `Plan(sms=)`). Calls run on the current torch stream.
 
@@ -70,28 +70,12 @@ What each hash costs, and what is shared (a row's leaf is five compressions and 
 
 A trailing `s` runs the rounds straight-line (`engine.variant_flags`).
 
-On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split could issue more than the ALU alone,
-but on the H200 every variant that moves rotations there measured slower, as `SHA_ROT` did for commit_gpu on sm_120. The
-default is `0000`, plain funnel shifts, and `pouw` (commit_gpu's `sha::compress`, the loop commit_slots runs) is within 1%
-of it. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
+On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split can issue more than the ALU alone.
+The default is `0000`, plain funnel shifts; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
 
-Mode 3 is the balanced schedule (HASH-23). `0033` takes S0 and S1 off the ALU. Its SASS has 2,637 ALU instructions and
-2,328 IMAD slots a compression (IMAD.WIDE counts 2), where the default has 3,405 and 152, so the pipe bound falls from 53.2
-SM-clocks to 41.2 (1.29x). On commit_gpu's ruler (`ruler.sh`, run r20261026-045623-03b9, 1,980 MHz throughout) it runs
-at 4.50 G/s, 0.94x of commit_gpu's default (4.79), which is 58.1 SM-clocks. The default is ALU-bound (ncu: ALU pipe 97.6%
-busy). `0033` is bound by no one pipe (ALU 71%, FMA heavy 63%, issue 59%): its 58.1 clocks lie between the slower pipe's
-41.2 and the two pipes' sum, 77.6, because the scheduler overlaps them only in part. Its ~5.3 warps a scheduler stall on
-pipe throttle and on dispatch, which the default never does. Two of the schedule's forms don't survive ptxas: a mad.wide
-with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's addend costs
-two moves. `rotr3` uses neither.
-
-## Measured
-
-On the H200 at 1,980 MHz (run r20261026-011257-b954, bench.py at 4 layers a call), a whole step at the frozen shape takes
-0.257 s at 4,096 slots (141.4 GB committed, 551 GB/s) and 1.015 s at 16,384 (565.6 GB, 557 GB/s). That covers every row's
-digest and hm96 leaf, each slot's tree over its 1,300 units and the step's tree. The row kernel is 91% of it, at 4.8 G
-compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/s of the 4.8 available, and power is 530 of
-700 W, with the clock at its maximum.
+Mode 3 is the balanced schedule: `0033` takes S0 and S1 off the ALU. Two of the schedule's forms don't survive ptxas: a
+mad.wide with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's
+addend costs two moves. `rotr3` uses neither.
 
 ## Files
 
@@ -110,5 +94,5 @@ compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/
 
 ```bash
 research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-  --env GPU_LEASE_WHO=kernels-kp2dec -- bash benchmarks/torch_gpu/sha512_rows/gpu.sh
+  --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/gpu.sh
 ```

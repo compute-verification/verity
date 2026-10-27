@@ -1,10 +1,10 @@
-# J10-R's units on the H200: fixtures, check, bench and an exact fallback (HASH-22)
+# J10-R's units on the H200: fixtures, check, bench and an exact fallback
 
 J10-R's per-call-noise PoUW unit (`PouwH1Tile_v5` / `_v6`, `h1tile.j10r_reference` in
 `verity/core/protocols/pouw/circuit/h1tile.py`) at the frozen shape's linears on one H200 (sm_90a): the values any build
 of the unit must reproduce, a check that holds a build to them bit for bit, a bench that times it against plain exact
 INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels' `benchmarks/hash/dither/h1u.cu`
-(`kh_seeds_j10r`, `kh_units_multi_j10r` and `_sm`), built for sm_90a by HASH-21.
+(`kh_seeds_j10r`, `kh_units_multi_j10r` and `_sm`), built for sm_90a.
 
 ## The calls
 
@@ -19,10 +19,10 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
 | down | 16,384 | 65,536 | 65,536 | 262,144 | 4,102 |
 | head | 256 | 16,384 | 1,024 | 4,096 | 1,030 |
 
-- **B** is the demo's served weights, restated from ALLP-IFACE's seeded generator (`verity/seeded-weights/v1`, seed
+- **B** is the demo's served weights, restated from the seeded generator (`verity/seeded-weights/v1`, seed
   `verity/cmp92/h200/weights/v1`): layer 0's tensors (kv is wk's 64 rows then wv's), the head's own. Each 64-byte block
   of a row is SHA-512 of the tensor key, the row and the block index; the suite holds them to values read from
-  ALLP-IFACE's module. Channel scales the same way.
+  the generator's module (`verity_torch_loop.weights`). Channel scales the same way.
 - **A** is the same counter stream under its own seed, with rows 0 to 5 and the last six set to the extremes (all 127,
   all -128, alternating, zero, and near either end of the range).
 - The salt is fixed and public here (`SALT`), standing in for the window's live salt. The roots are stand-ins for
@@ -36,8 +36,7 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
 
 - `fixtures.py expected --out DIR`: each sampled unit through `j10r_reference` (v5; v6 too on 2 units a call, which must
   agree). Writes `DIR/expected.npz` (per call: units, receipts, z, seed_c, sigma) and `DIR/fixtures.json` (each call's
-  public inputs, each sampled unit's operand digests, each array's sha256, the Definition's source digests). A unit
-  takes about 7 s of pure Python at K = 16,384 and 27 s at K = 65,536.
+  public inputs, each sampled unit's operand digests, each array's sha256, the Definition's source digests).
 - `j10r_ref.cu` (`j10r_ref.so`): the fallback unit, slow but exact. One CTA a unit and one thread a (lane, chain) of
   `h1tile.Layout`. Integers only, no tensor cores, every value in the Definition's order. Each unit hashes its own
   noise blocks from seed_c and its fold keys from sigma_R. Exports `jr_seeds`, `jr_units` (receipts) and `jr_z` (z by
@@ -75,7 +74,3 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
   its files were sent, and generates the operands. Then, under one lease, it runs the check, the bench and the
   profile (`STEPS`). `build` and `cpu` do the fallback's build and the fixtures on a node with nvcc. The file's header
   gives the commands.
-
-## Results
-
-Evidence lives in the run store, not here.

@@ -1,10 +1,10 @@
 # p2_stage: the staging decode
 
-The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on one H200 (Linear HASH-12): decode a
+The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on one H200: decode a
 layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext staging buffer, then run the exact GEMM
 on that buffer.
 
-- `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from CMP-95 item 2's
+- `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
   layout JSON (memory-accounting's `p2_v1/store.py layout`, or its toy's `toy.json`): each tensor from a block boundary,
   zero past its end, and at its `staging_offset` in its layer's staging buffer. `Weights` is the plaintext, the seeded
   weights stream (`verity_torch_loop.weights`), and `payloads` lays it out as the store's W. `decode_block` is P2's
@@ -23,7 +23,7 @@ on that buffer.
   each batch M). Every staged tensor is held to the stream's bytes and to the weights manifest's SHA-256 (the digests
   memory-accounting held W to). `check.py` runs on the CPU afterwards: every block of the layer against the reference,
   and the samples against the Definition.
-- `full.py`: the whole store a step (HASH-6, Demo B's M4): every tensor of the 52 layers and the head staged one at a
+- `full.py`: the whole store a step: every tensor of the 52 layers and the head staged one at a
   time from the store's segment files (each held to its SHA-512), the last timed decode of each held to the weights
   manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
   KS8-SIMPLE (`s8_simple.linear`) against the twin. `check.py --sample N` checks N blocks of every tensor of the store
