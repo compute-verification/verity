@@ -252,7 +252,7 @@ def _utc(s: str) -> float:
 
 
 def derive_from_logs(row_dir: Path) -> dict[str, Any] | None:
-    """Rows run by a runner WITHOUT the timeline (r15-int-6b / r16-int-1): the row's stages.txt is itself timestamped -- a `release <tag> <utc>`
+    """Rows run by a runner WITHOUT the timeline: the row's stages.txt is itself timestamped -- a `release <tag> <utc>`
     line at every attempt start, then `<stage> <verdict> <utc> ... wall=<N>s` per stage (row_pod verdict()). The LAST attempt is reported,
     plus commit.log's own measured lines (engine build, weight registration). Labelled `derived`."""
     stages_txt = row_dir / "stages.txt"
@@ -291,7 +291,7 @@ def derive_from_logs(row_dir: Path) -> dict[str, Any] | None:
 
 def collect(dirs: list[Path]) -> dict[str, Any]:
     """One table over many rows: per row the §5 categories, engine starts/reuses and hot/cold from `timeline*.jsonl` when the runner wrote
-    one, else the log-derived envelopes; totals over the set (the coordinator's 'engine starts vs reuses as they accumulate')."""
+    one, else the log-derived envelopes; totals over the set (engine starts vs reuses as they accumulate)."""
     rows: list[dict[str, Any]] = []
     for d in dirs:
         if not d.is_dir():
