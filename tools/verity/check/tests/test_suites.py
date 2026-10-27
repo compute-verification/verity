@@ -216,7 +216,7 @@ def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_h
 
 
 def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
-    """INF-118: on cpu-2 a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
+    """On a node with no cgroup cap, a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
     monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
@@ -874,7 +874,7 @@ def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_p
 
 
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
-    """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
+    """A suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite
     alone, and the other is listed as reused, citing the run that earned its pass."""
     root = tmp_path / "tree"
@@ -1739,8 +1739,7 @@ def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
 
 
 def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb_holds(tmp_path, monkeypatch):
-    """16 Oct 13:53Z: check r20261016-133552-a7e9's pytest ran verity_ml_flock on 38 xdist workers of 15.6 GB each beside
-    circuit-check, and the OOM killer took its workers at the session's 600 GiB cap (CI-35)."""
+    """A suite whose workers each need `worker_gb` runs only as many as its memory holds, or the OOM killer takes them."""
     S = _suites(monkeypatch, tmp_path)
     heavy = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
     assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
@@ -1827,8 +1826,8 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
 
 
 def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_tree_build_in_turn(tmp_path, monkeypatch):
-    """CI-147: on a node every run of a commit shares its source tree, and a train's check and its touched-suites run built the
-    verifier's `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output gone).  `lake` runs under
+    """On a node every run of a commit shares its source tree, so two runs could build the verifier's `.lake` there at once.
+    `lake` runs under
     `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
     mod = _suites(monkeypatch, tmp_path)
     lean = tmp_path / "verity" / "core" / "service" / "flock"

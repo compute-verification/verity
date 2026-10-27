@@ -52,7 +52,7 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
-#: (Daniel, 20 Oct: "this shouldn't be like a database of shit that went wrong"; `.agents/skills/authoring-skills/`).
+#: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
 #: Skills over SKILL_SIZE_CAP on 20 Oct, each capped at its size then (the largest at any open PR's head, rounded up, plus
 #: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
@@ -78,13 +78,13 @@ ALLOWLIST = {
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
-#: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
+#: what the spec alert shows when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
 #: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
 #: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB since 26 Oct:
-#: the E2E demo's fixtures (#4454, #4455) took the tree to 40.1 MiB; register the next large one rather than raising it again.
+#: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
