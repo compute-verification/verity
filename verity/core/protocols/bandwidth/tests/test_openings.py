@@ -46,16 +46,15 @@ def test_draw_refuses_a_malformed_window(counts, s):
 
 @pytest.mark.parametrize("blocks", [1000, 2**10, 2**19])
 @pytest.mark.parametrize("error_log2", [-20, -40, -42])
-def test_samples_agree_with_v0(blocks, error_log2):
-    assert o.samples_for(1 / 64, error_log2, blocks) == audit.samples_for(blocks, error_log2, Fraction(1, 64))
-    assert o.samples_for(1 / 64, error_log2) >= o.samples_for(1 / 64, error_log2, blocks)
+def test_the_window_needs_the_fewest_samples_its_error_allows(blocks, error_log2):
+    eps = Fraction(1, 64)
+    s = o.samples_for(eps, error_log2, blocks)
+    assert audit.sampling_error(blocks, s, eps) <= 2.0 ** error_log2 < audit.sampling_error(blocks, s - 1, eps)
+    assert o.samples_for(eps, error_log2) >= s
 
 
-def test_window_error_is_v0s_sampling_term():
-    n = 2**19
-    k = audit.certified_blocks(n)
-    assert o.window_error(n, 1 / 64, audit.SAMPLES) == pytest.approx(math.exp(audit.SAMPLES * math.log((k - 1) / n)))
-    assert o.window_error(n, 1 / 64, audit.SAMPLES) <= (63 / 64) ** audit.SAMPLES
+def test_the_sampling_error_is_below_the_unbounded_windows():
+    assert audit.sampling_error(2**19, audit.SAMPLES) <= (63 / 64) ** audit.SAMPLES
 
 
 def test_crude_slack_is_v0s():
