@@ -17,11 +17,13 @@ since the link term does not read it, under expected-time collision resistance o
   extraction from the runs found reads at `c` (`rdTZC`), and costs `t'` per run it plays (`cTZC`), `t'(1 + k)` in
   expectation.
 * **The value layer** (`XplurZC`) is the plurality of the trial's single readings at each commit string.
-* **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions (`outCZC_spec`), so under
-  A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256 + 1/(eM)`.
+* **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions (`outCZC_spec`), so the
+  trial's link mass at `c` is at most the finder's collision probability plus `1/(eM)` (`trial_mass_le_prZC`), and
+  under A2 at most `2t'(1 + k)/2^256 + 1/(eM)`.
 
-A2 is asked of one prover at a time (`LinkCRZC`), and the bound is `⊤` at any other (`linkBoundZC`). With `π c` the
-probability that a draw reads `c` (`zk_linkSoundC`):
+So `δ_link` is at most `Σ_c π_c·(Pr[c's finder outputs a collision] + 1/(eM) + k/(eR_w))/(1 − ρ)` at every prover, with
+no hash premise (`zk_linkSoundPr`, `linkPrZC`). A2 is asked of one prover at a time (`LinkCRZC`), and the closed form is
+`⊤` at any other (`linkBoundZC`). With `π c` the probability that a draw reads `c` (`zk_linkSoundC`):
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2(1+k)\,t'}{2^{256}}+\frac{1}{eM}+
 \frac{k}{eR_w}\Big),\qquad Q_s=\sum_c\pi_c,$$
 with `ρ ≥ N₀/(ek)` for every table, `N₀` its level-0 positions.
@@ -382,24 +384,34 @@ theorem readsAt_eq_emptyZC {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsDrawZ A P planZ
   rintro ⟨o, u, hu, hrd, -⟩
   exact h ⟨u, hu, hrd⟩
 
-/-- **The trial's link mass at `c`**, under A2 for the finder: at most
-`2t'(1 + k)/2^256 + 1/(eM)`. -/
-theorem trial_mass_leZC (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
-    [Nonempty (ΩcZ A P planZ tab vb L c)]
-    (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
-      (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
-      (finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t'))) :
+open Classical in
+/-- **The link finder's collision probability at `c`**: the probability that the finder built on the trial for `c`
+outputs a collision of `Hc` (`0` at a commit string no draw reads, which has no trial). -/
+noncomputable def linkFinderPrZC (c : vb.Pos) (k Rw M : ℕ) : ℝ :=
+  if _ : Nonempty (ΩcZ A P planZ tab vb L c) then
+    (prob (fun x => ∃ a b, outCZC A Hs P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b)
+      (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
+      (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M)).toReal
+  else 0
+
+theorem linkFinderPrZC_nonneg (c : vb.Pos) (k Rw M : ℕ) : 0 ≤ linkFinderPrZC A Hs P planZ tab vb R τ c k Rw M := by
+  unfold linkFinderPrZC
+  split_ifs
+  · exact ENNReal.toReal_nonneg
+  · exact le_rfl
+
+/-- **The trial's link mass at `c`** at its finder's collision probability: at most
+`Pr[the finder outputs a collision of Hc] + 1/(eM)`. -/
+theorem trial_mass_le_prZC (k Rw M : ℕ) (hM : 1 ≤ M) (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] :
     expect (trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c))
         (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤
-      2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by
+      linkFinderPrZC A Hs P planZ tab vb R τ c k Rw M + 1 / (Real.exp 1 * M) := by
   set T := trialGZC A Hs P planZ tab vb R τ c k Rw
   set sT := trialStratZC A Hs P planZ tab vb R τ c k Rw
   set rd := rdTZC A Hs P planZ tab vb R τ c
   set Xv := XvalZC A Hs P planZ tab vb R τ k Rw c
-  have hmass := link_mass_le T sT rd Hc (outCZC A Hs P planZ tab vb R τ c) (cTZC planZ R t')
-    (cT_nonnegZC planZ R ht) M hM (outCZC_spec A Hs P planZ tab vb R τ c) hCR
-    (Xval_maxZC A Hs P planZ tab vb R τ k Rw c)
-  have hcost := expect_cT_leZC A Hs P planZ tab vb R τ c k Rw ht
+  have hmass := link_mass_le_pr T sT rd Hc (outCZC A Hs P planZ tab vb R τ c) M hM
+    (outCZC_spec A Hs P planZ tab vb R τ c) (Xval_maxZC A Hs P planZ tab vb R τ k Rw c)
   have heq : expect (trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c)) T sT =
       sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) := by
     rw [show trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c) =
@@ -411,33 +423,68 @@ theorem trial_mass_leZC (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t')
     rw [this]
     unfold pRd
     ring
-  have h2 : 2 * expect (cTZC planZ R t') T sT / 2 ^ (256 : ℝ) ≤
-      2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) :=
-    div_le_div_of_nonneg_right (by linarith) (by positivity)
-  linarith
+  rw [heq]
+  unfold linkFinderPrZC
+  rw [dif_pos hne]
+  exact hmass
 
-/-- **The ideal link mass at `c`**: the audit extractor's reading of `c` other than the
-plurality, jointly with acceptance and averaged over the draw, is at most `π c` times the trial's
-bound plus `k/(eRw)` for the waits that give up. -/
-theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t')
-    (c : vb.Pos)
+/-- **The link finder's collision probability under A2**: at a commit string whose finder satisfies
+`Assumptions.SHA512CRExpected`, at most `2t'(1 + k)/2^256`. -/
+theorem linkFinderPrZC_le (k Rw M : ℕ) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
       (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
       (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
       (finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t'))) :
+    linkFinderPrZC A Hs P planZ tab vb R τ c k Rw M ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) := by
+  unfold linkFinderPrZC
+  split_ifs with hne
+  · have h3 := hCR hne
+    unfold Assumptions.SHA512CRExpected at h3
+    have h4 := expect_finderCost_le (trialGZC A Hs P planZ tab vb R τ c k Rw)
+      (trialStratZC A Hs P planZ tab vb R τ c k Rw) (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t')
+      (cT_nonnegZC planZ R ht) M
+    have hcost := expect_cT_leZC A Hs P planZ tab vb R τ c k Rw ht
+    have h5 : expect (finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t'))
+        (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
+        (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) / 2 ^ (256 : ℝ) ≤
+        2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) :=
+      div_le_div_of_nonneg_right (by linarith) (by positivity)
+    linarith
+  · positivity
+
+/-- **The trial's link mass at `c`**, under A2 for the finder: at most
+`2t'(1 + k)/2^256 + 1/(eM)`. -/
+theorem trial_mass_leZC (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
+    [Nonempty (ΩcZ A P planZ tab vb L c)]
+    (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
+      (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
+      (finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t'))) :
+    expect (trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c))
+        (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤
+      2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) :=
+  (trial_mass_le_prZC A Hs P planZ tab vb R τ k Rw M hM c).trans
+    (add_le_add (linkFinderPrZC_le A Hs P planZ tab vb R τ k Rw M ht c fun _ => hCR) le_rfl)
+
+/-- **The ideal link mass at `c`, at any bound `b` on the trial's** (`hmass`): the audit extractor's reading of `c`
+other than the plurality, jointly with acceptance and averaged over the draw, is at most `π c` times `b + 1/(eM)` plus
+`k/(eRw)` for the waits that give up. -/
+theorem ideal_mass_le_ofZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) {b : ℝ} (hb : 0 ≤ b)
+    (hmass : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c),
+      expect (trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c))
+        (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤
+      b + 1 / (Real.exp 1 * M)) :
     (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
         expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
           (psiZC A Hs P planZ tab vb R τ k Rw c ω)) / Fintype.card L.Ω ≤
       (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
-        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) := by
+        (b + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) := by
   classical
   set f : L.Ω → ℝ := fun ω => expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω)
       (stratωZC A Hs planZ R τ ω).2 *
     expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
       (psiZC A Hs P planZ tab vb R τ k Rw c ω) with hf
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
-  have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) +
-      k / (Real.exp 1 * Rw) := by positivity
+  have hB : 0 ≤ b + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw) := by positivity
   -- off the draws that read `c`, the trace vanishes
   have hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
     intro ω hω
@@ -460,7 +507,7 @@ theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ
       expectAcc_le_waits _ _ _ k Rw hRw _ (psi_nonnegZC A Hs P planZ tab vb R τ k Rw c w.1)
         (psi_le_oneZC A Hs P planZ tab vb R τ k Rw c w.1)
     have htr := expect_trialValZC A Hs P planZ tab vb R τ c k Rw (psiZC A Hs P planZ tab vb R τ k Rw c)
-    have hmass := trial_mass_leZC A Hs P planZ tab vb R τ k Rw M hM ht c (hCR hne)
+    have hmass := hmass hne
     have hcard : (0 : ℝ) < Fintype.card (ΩcZ A P planZ tab vb L c) := by exact_mod_cast Fintype.card_pos
     rw [htr, div_le_iff₀ hcard] at hmass
     calc ∑ w : ΩcZ A P planZ tab vb L c, f w.1
@@ -481,8 +528,7 @@ theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ
                 psiZC A Hs P planZ tab vb R τ k Rw c w.1 bs)) +
           Fintype.card (ΩcZ A P planZ tab vb L c) * (k / (Real.exp 1 * Rw)) := by
         rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
-      _ ≤ (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M)) *
-            Fintype.card (ΩcZ A P planZ tab vb L c) +
+      _ ≤ (b + 1 / (Real.exp 1 * M)) * Fintype.card (ΩcZ A P planZ tab vb L c) +
           Fintype.card (ΩcZ A P planZ tab vb L c) * (k / (Real.exp 1 * Rw)) := by linarith
       _ = _ := by field_simp
   · have hempty : ∀ w : ΩcZ A P planZ tab vb L c, False := fun w => hne ⟨w⟩
@@ -490,9 +536,37 @@ theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ
       Finset.sum_eq_zero fun w _ => (hempty w).elim
     rw [h0]
     have : 0 ≤ (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
-        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) :=
+        (b + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) :=
       mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
     nlinarith
+
+/-- **The ideal link mass at `c`** at the finder's collision probability (`ideal_mass_le_ofZC` at
+`linkFinderPrZC`). -/
+theorem ideal_mass_le_prZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) (c : vb.Pos) :
+    (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
+        expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+          (psiZC A Hs P planZ tab vb R τ k Rw c ω)) / Fintype.card L.Ω ≤
+      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+        (linkFinderPrZC A Hs P planZ tab vb R τ c k Rw M + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) :=
+  ideal_mass_le_ofZC A Hs P planZ tab vb R τ k Rw M hRw c (linkFinderPrZC_nonneg A Hs P planZ tab vb R τ c k Rw M)
+    fun _ => trial_mass_le_prZC A Hs P planZ tab vb R τ k Rw M hM c
+
+/-- **The ideal link mass at `c`**: the audit extractor's reading of `c` other than the
+plurality, jointly with acceptance and averaged over the draw, is at most `π c` times the trial's
+bound plus `k/(eRw)` for the waits that give up. -/
+theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t')
+    (c : vb.Pos)
+    (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
+      (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
+      (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
+      (finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t'))) :
+    (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
+        expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+          (psiZC A Hs P planZ tab vb R τ k Rw c ω)) / Fintype.card L.Ω ≤
+      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) :=
+  ideal_mass_le_ofZC A Hs P planZ tab vb R τ k Rw M hRw c (by positivity)
+    fun hne => trial_mass_leZC A Hs P planZ tab vb R τ k Rw M hM ht c (hCR hne)
 
 /-! ## The link theorem -/
 
@@ -567,28 +641,54 @@ noncomputable def linkBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
-with the expected-time extractor (`analysisZC`, at any knowledge bound) and the plurality value layer (`XplurZC`), given
-the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRZC`),
-$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
-with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on every table's `N₀/(ek)`,
-`t'` the SHA-512 evaluations of one session run, `M` the finder's further trials and `Rw` the waits' length. At any other
-prover the bound is `⊤` (`linkBoundZC`). -/
-theorem zk_linkSoundC
+/-- **The link bound at the link finders' collision probabilities**, prover by prover:
+`Σ_c π_c·(Pr[c's finder outputs a collision] + 1/(eM) + k/(eR_w))/(1 − ρ)`, with `π_c` the probability that a draw
+reads commit string `c` and `Pr[…]` its finder's (`linkFinderPrZC`). -/
+noncomputable def linkPrZC (k Rw M : ℕ) (ρ : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) : ℝ≥0∞ :=
+  ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+    (linkFinderPrZC A Hs P planZ tab vb R τ c k Rw M + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ))
+
+/-- **`linkPrZC` under A2**: at most `linkBoundZC`, which is its closed form at a prover whose link finders satisfy A2
+(`LinkCRZC`, `linkFinderPrZC_le`) and `⊤` at any other. -/
+theorem linkPrZC_le_linkBoundZC {k Rw M : ℕ} {ρ : ℝ} (hρ : ρ < 1) {t' : ℝ} (ht : 0 ≤ t') (R : Reg)
+    (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) :
+    linkPrZC A Hs P planZ tab vb k Rw M ρ R τ ≤ linkBoundZC A Hs P planZ tab vb k Rw M ρ t' R τ := by
+  unfold linkBoundZC
+  split_ifs with hCR
+  · refine ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right ?_ (by linarith))
+    rw [Finset.sum_mul]
+    exact Finset.sum_le_sum fun c _ => mul_le_mul_of_nonneg_left
+      (by linarith [linkFinderPrZC_le A Hs P planZ tab vb R τ k Rw M ht c (hCR c)]) (by positivity)
+  · exact le_top
+
+/-- **`linkPrZC` in closed form under A2**: at a prover whose link finders satisfy A2 (`LinkCRZC`),
+`linkPrZC ≤ Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`. -/
+theorem linkPrZC_le_closed {k Rw M : ℕ} {ρ : ℝ} (hρ : ρ < 1) {t' : ℝ} (ht : 0 ≤ t') (R : Reg)
+    (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) (hA2 : LinkCRZC A Hs P planZ tab vb R τ k Rw M t') :
+    linkPrZC A Hs P planZ tab vb k Rw M ρ R τ ≤
+      ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω) *
+        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) := by
+  have h := linkPrZC_le_linkBoundZC A Hs P planZ tab vb (k := k) (Rw := Rw) (M := M) hρ ht R τ
+  rwa [linkBoundZC, if_pos hA2] at h
+
+/-- **The link theorem: `δ_link` at the link finders' collision probabilities, prover by prover.** For the batched
+audit with the expected-time extractor (`analysisZC`, at any knowledge bound) and the plurality value layer (`XplurZC`),
+given the binding of wires to commit strings (`ValueBindingZ`), at every prover,
+$$\delta_{\rm link}\le\frac{1}{1-\rho}\sum_c\pi_c\Big(\Pr[B_c\text{ outputs a collision}]+\frac{1}{eM}+
+\frac{k}{eR_w}\Big),$$
+with `B_c` the explicit finder built from the prover for commit string `c` (`linkFinderPrZC`), `π_c` the probability
+that a draw reads `c`, `ρ` a bound on every table's `N₀/(ek)`, `M` the finder's further trials and `Rw` the waits'
+length (`linkPrZC`). No hash premise: A2 enters only in `linkPrZC_le_linkBoundZC`. -/
+theorem zk_linkSoundPr
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
-    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
+    (hj : JointZC A Hs planZ k a) :
     (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
         (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
-      (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := by
+      (linkPrZC A Hs P planZ tab vb k Rw M ρ) := by
   intro R τ tgt
-  unfold linkBoundZC
-  split_ifs with hCR
-  swap
-  · exact le_top
-  set B := 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)
-    with hBdef
+  unfold linkPrZC
   have hρ1 : 0 < 1 - ρ := by linarith
   set f : vb.Pos → L.Ω → ℝ := fun c ω => expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω)
       (stratωZC A Hs planZ R τ ω).2 *
@@ -648,15 +748,31 @@ theorem zk_linkSoundC
   apply ENNReal.ofReal_le_ofReal
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hc : ∀ c, (∑ ω, f c ω) / Fintype.card L.Ω ≤
-      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω * B := fun c =>
-    ideal_mass_leZC A Hs P planZ tab vb R τ k Rw M hRw hM ht c (hCR c)
+      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+        (linkFinderPrZC A Hs P planZ tab vb R τ c k Rw M + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) := fun c =>
+    ideal_mass_le_prZC A Hs P planZ tab vb R τ k Rw M hRw hM c
   calc (∑ ω, Λ ω) / Fintype.card L.Ω
       = (∑ c, (∑ ω, f c ω) / Fintype.card L.Ω) / (1 - ρ) := by
         simp only [hΛ, div_eq_mul_inv, ← Finset.sum_mul]
         rw [Finset.sum_comm]
         ring
-    _ ≤ (∑ c, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω * B) / (1 - ρ) :=
-        div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
-    _ = _ := by rw [← Finset.sum_mul]
+    _ ≤ _ := div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
+
+
+/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** `zk_linkSoundPr` at
+`linkPrZC_le_linkBoundZC`: at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRZC`),
+$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
+with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read and `t'` the SHA-512 evaluations of one
+session run. At any other prover the bound is `⊤` (`linkBoundZC`). -/
+theorem zk_linkSoundC
+    (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
+    (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
+    (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+      (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := fun R τ tgt =>
+  (zk_linkSoundPr A Hs P planZ tab vb hlow hRw hM hρ hr hj R τ tgt).trans
+    (linkPrZC_le_linkBoundZC A Hs P planZ tab vb hρ ht R τ)
 
 end FlockSoundness.Discharge.ZkLink
