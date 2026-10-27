@@ -342,7 +342,7 @@ def test_fill_verdicts(cheat, served, L):
 def test_both_shapes_refuse_t_past_8():
     """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise period"), in v3.1's Shape and in
     Fill: L 8,192 at L' 256 is refused at K 16,384 and L 4,096 at L' 512 passes, as do the defaults, L >= K at
-    L' >= K / 8, and every call the GPU's gates (v31lib.GATES) and fill_dither.py's cases build."""
+    L' >= K / 8, and every call the GPU's gates (v31lib.GATES and PIPELINE) and fill_dither.py's cases build."""
     with pytest.raises(ValueError, match="at most 8"):
         v31.Shape(128, 128, 16384, 256, 32)
     with pytest.raises(ValueError, match="at most 8"):
@@ -355,6 +355,8 @@ def test_both_shapes_refuse_t_past_8():
         v31.Fill(*map(int, dims), kind == "served")
     for line in fill_dither.CASES.strip().splitlines():
         v31.Fill(*map(int, line.split()[1:7]), line.split()[7] == "served")
+    for dims, served in v31lib.PIPELINE:
+        v31.Fill(*dims, served)
 
 
 @pytest.mark.parametrize("served", [False, True])
