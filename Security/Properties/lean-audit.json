@@ -253,7 +253,7 @@
    "owner": "@network-accounting"
   },
   "Verity.Toy.SampledHonest": {
-   "owner": "@proofs"
+   "owner": "@soundness"
   }
  },
  "meaning": [
