@@ -180,11 +180,12 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
 def specialized(name: str, version: int, statics: Sequence[str], build: Callable,
                 signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]], doc: str = "", word: Any = None,
-                register: bool = True) -> CompositeDefinition:
+                register: bool = True, refuse: Callable[[dict], str | None] | None = None, ports: Any = None,
+                conformance: str = "exact-model-tested") -> CompositeDefinition:
     """The Boolean Definition ``name_v{version}{statics}`` whose circuit for bindings S is the builder ``build(S)`` traced over
     ``signature(S)`` (`trace.trace`), so that a constant or a length the statics name is folded into its gates, never an operand.
     Traced once per binding, on first use; ``traced(S)``. ``word``, a function of the bindings, names the word Definition it
-    computes (`trace.word_of`)."""
+    computes (`trace.word_of`). ``refuse``, ``ports`` and ``conformance`` are `CompositeDefinition`'s."""
     made: dict[tuple, Traced] = {}
 
     def types(S) -> tuple[list[Type], Type]:
@@ -198,8 +199,8 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
         return made[key]
 
     d = CompositeDefinition(name, version, tuple(statics), signature,
-                            lambda B, S, *c: emit(traced(S), *types(S), B, *c), doc=doc, conformance="exact-model-tested",
-                            register=register)
+                            lambda B, S, *c: emit(traced(S), *types(S), B, *c), doc=doc, conformance=conformance,
+                            register=register, refuse=refuse, ports=ports)
     d.traced = traced  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
     return d
