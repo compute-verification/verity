@@ -7,7 +7,11 @@ peel's tail stages, the T_s stores and the epilogue: the tensor side), its hashi
 `commit`, the leaves and the tree) and its other CUDA-core work (`form` and `wrap`). The residual is 1 - W / (step θ),
 W the step's MACs and θ the H200's sheet rate (4,096 MACs an SM a clock, 132 SMs, 1,830 MHz; #4940).
 
-    python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06]
+--model 8b: the demo's model instead (HIGHUTIL, CMP-172), Llama-3-8B's 32 layers of QKV (6,144, 4,096), O (4,096, 4,096),
+gate-up (28,672, 4,096) and down (4,096, 14,336), no head. Where every call has the `wgl` arm (V31_GEMM 1: wgmma.linear
+itself, timed beside the protocol's arms), gamma is taken against that step, with its ratio to the 1.05 target.
+
+    python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06] [--model h200|8b]
 """
 from __future__ import annotations
 
@@ -18,6 +22,9 @@ from pathlib import Path
 LAYERS = 52
 CALLS = {(16384, 16384): 2 * LAYERS, (128, 16384): LAYERS, (65536, 16384): LAYERS, (16384, 65536): LAYERS,
          (256, 16384): 1}
+CALLS_8B = {(6144, 4096): 32, (4096, 4096): 32, (28672, 4096): 32, (4096, 14336): 32}
+MODELS = {"h200": CALLS, "8b": CALLS_8B}
+TARGET = 1.05
 THETA = 4096 * 132 * 1.83e9
 ARMS = ("lt", "plain", "coins", "form", "wrap", "gemm", "commit", "call", "ovl")
 
@@ -32,19 +39,20 @@ def rows(paths: list[str]) -> list[dict]:
     return out
 
 
-def steps(lines: list[dict], m: int = 16384) -> dict[tuple[int, int, int, str], dict]:
+def steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], int] = CALLS) -> dict[tuple[int, int, int, str], dict]:
     """Per (L', t, ROW, variant): each arm's seconds a step and the step's MACs, for groups that timed every call."""
     groups: dict[tuple[int, int, int, str], dict[tuple[int, int], dict]] = {}
     for r in lines:
-        if r["m"] == m and (r["n"], r["k"]) in CALLS:
+        if r["m"] == m and (r["n"], r["k"]) in calls:
             groups.setdefault((r["lp"], r["t"], r["row"], r.get("variant", "")), {})[(r["n"], r["k"])] = r
     out = {}
     for key, by in sorted(groups.items()):
-        if set(by) != set(CALLS):
+        if set(by) != set(calls):
             continue
-        sec = {a: sum(CALLS[nk] * by[nk]["arms"][a]["ms"] for nk in CALLS) / 1e3 for a in ARMS}
-        macs = sum(CALLS[nk] * m * nk[0] * nk[1] for nk in CALLS)
-        mhz = [by[nk]["arms"]["ovl"]["mhz"] for nk in CALLS if by[nk]["arms"]["ovl"]["mhz"]]
+        arms = ARMS + (("wgl",) if all("wgl" in by[nk]["arms"] for nk in calls) else ())
+        sec = {a: sum(calls[nk] * by[nk]["arms"][a]["ms"] for nk in calls) / 1e3 for a in arms}
+        macs = sum(calls[nk] * m * nk[0] * nk[1] for nk in calls)
+        mhz = [by[nk]["arms"]["ovl"]["mhz"] for nk in calls if by[nk]["arms"]["ovl"]["mhz"]]
         out[key] = {"s": sec, "macs": macs, "mhz": (min(mhz), max(mhz)) if mhz else None}
     return out
 
@@ -52,9 +60,10 @@ def steps(lines: list[dict], m: int = 16384) -> dict[tuple[int, int, int, str], 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="+")
-    ap.add_argument("--wgmma", type=float, default=3.06, help="wgmma.linear's step at M = 16,384, s (HASH-22)")
+    ap.add_argument("--wgmma", type=float, default=3.06, help="wgmma.linear's step at M = 16,384, s (HASH-22), without a wgl arm")
+    ap.add_argument("--model", choices=sorted(MODELS), default="h200")
     a = ap.parse_args()
-    st = steps(rows(a.files))
+    st = steps(rows(a.files), calls=MODELS[a.model])
     print("| L' | t | L | ROW | variant | ovl s | gamma_u ovl | call s | gamma_u call | gemm s | coins + commit s | "
           "form + wrap s | plain s | cuBLASLt s | residual (ovl) | SM MHz (ovl) |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -66,9 +75,11 @@ def main() -> int:
               f"{s['plain']:.3f} | {s['lt']:.3f} | {1 - v['macs'] / (s['ovl'] * THETA):.3f} | {mhz} |")
     for (lp, t, row, var), v in st.items():
         s = v["s"]
-        print(f"summary: L {lp * t} row {row} {var}: step {s['ovl']:.3f} s overlapped, gamma_u {s['ovl'] / a.wgmma:.3f} against "
-              f"wgmma's {a.wgmma} s; serial {s['call']:.3f} s; gemm {s['gemm']:.3f}, hashing {s['coins'] + s['commit']:.3f}, "
-              f"other {s['form'] + s['wrap']:.3f} s")
+        base, what = (s["wgl"], "wgmma.linear's step timed beside it") if "wgl" in s else (a.wgmma, "wgmma's")
+        g = s["ovl"] / base
+        print(f"summary: {a.model} L' {lp} L {lp * t} row {row} {var}: step {s['ovl']:.3f} s overlapped, gamma_u {g:.3f} against "
+              f"{what} {base:.3f} s ({g / TARGET:.3f} x the {TARGET} target); serial {s['call']:.3f} s; gemm {s['gemm']:.3f} "
+              f"(gemm / base {s['gemm'] / base:.3f}), hashing {s['coins'] + s['commit']:.3f}, other {s['form'] + s['wrap']:.3f} s")
     if not st:
         print("summary: no complete step (a bench shape is missing)")
     return 0 if st else 1

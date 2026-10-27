@@ -13,13 +13,17 @@
 #   research run --on vy-dc-h200 --project verity --campaign cmp-172 --source . --cwd source --timeout 120m \
 #     --env GPU_LEASE_WHO=kernels-kcommitfb -- bash benchmarks/pouw/accel_v31/h200.sh
 #
-# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, and run.sh's.
+# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, MODEL (h200_step.py's
+# --model: h200, or 8b with SHAPES8B's calls), and run.sh's (NVFLAGS=-DV31_WG with a gemm=1 variant: wg_proto.cuh's GEMMs).
+# SHAPES8B: the demo's 8B calls at M = 16,384 (Llama-3-8B: QKV, O, gate-up, down).
 set -uo pipefail
 D=benchmarks/pouw/accel_v31
 O=${OUT:?}
 PY=${PY:-uv run -q --no-project --with numpy python}
 export GENCODE=arch=compute_90a,code=sm_90a CUTLASS=${CUTLASS:-0} LP=512 ROW=1024
 export VARIANTS=${VARIANTS:-row=1024 row=8192} REPS=${REPS:-5}
+SHAPES8B="8b-qkv:16384:6144:4096 8b-o:16384:4096:4096 8b-up:16384:28672:4096 8b-down:16384:4096:14336"
+[ "${MODEL:-h200}" = 8b ] && SHAPES=${SHAPES:-$SHAPES8B}
 export SHAPES=${SHAPES:-"h200-q:16384:16384:16384 h200-kv:16384:128:16384 h200-up:16384:65536:16384
 h200-down:16384:16384:65536 h200-head:16384:256:16384"}
 ALL="
@@ -54,7 +58,7 @@ c-t$t-skip 256 256 16384 llm skip:3 512 $t 1024"
   echo "t$t run.sh rc $?" >> "$O/rc.txt"
   first=0
 done
-$PY $D/h200_step.py "$O"/t*/bench-*.jsonl > "$O/step.md" 2> "$O/step.err"
+$PY $D/h200_step.py --model "${MODEL:-h200}" "$O"/t*/bench-*.jsonl > "$O/step.md" 2> "$O/step.err"
 echo "step rc $?" >> "$O/rc.txt"
 for t in ${TS:-8 16}; do
   echo "== t$t"; cat "$O/t$t/rc.txt" 2>/dev/null; cat "$O/t$t/verdicts.txt" 2>/dev/null; cat "$O/t$t/table.md" 2>/dev/null
