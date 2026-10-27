@@ -14208,9 +14208,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "6945bb9ecaa153c65e168d1533abaf4494ce6063665bbf185151c648ef43d871",
+   "digest": "77b78cb52f57fcafb09e1644489d1a4bef94371c2bad382f7aba3ffd551c4a16",
    "definitions": {
-    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "a814d6d909d86a3dc22a1c847b7837cdfd9c225975a50d9f069cc4def0ff36e1"
+    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "b10a36eec4d17baa7edf6b188e692c903a52df1a36d20e28cf726f31fe9ef8eb"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
