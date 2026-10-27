@@ -1,7 +1,7 @@
 """The H200 window writer (CIR-115): where each proof block's input ports read their bytes in the step commitments, the
 counterpart of the toy's ``torch_loop_window`` (`verity_e2e_demo.replay_bundle`) for circuits' FAMILIES map (`plan.Map`).
 
-**The layout.** `shared_layout` is FAMILIES' shared-row commit layout (CIR-113, CMP-149), one commit unit a row of at most
+**The layout.** `shared_layout` is FAMILIES' shared-row commit layout, one commit unit a row of at most
 ``row`` bytes (1 KiB), built from the map's groups (the embedding, each layer, the head):
 
 - tiled: every table its readers share (the linears' coordinates, the embedding, the norm outputs, the residuals, softmax
@@ -11,28 +11,28 @@ counterpart of the toy's ``torch_loop_window`` (`verity_e2e_demo.replay_bundle`)
 - folded: each quantizer chunk's codes and its table's f32 scale, one row of two parts;
 - kept: K and V (``wk`` and ``wv``), a slot's one row each, since their positions are read at later steps.
 
-At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST` (art:16f2faa0…), and its
-writers (`writers`) are art:8ce57586…'s. Under the ``residual`` fusion (`plan.FUSIONS`) the projections' rows go: 18,529
-rows and 24,008,260 B a slot, 1,099 writers (art:1fe9f909…). With ``norm`` as well each norm's output rows go too: 15,169
-rows and 20,569,300 B a slot, 1,204 writers (art:64a7469f…).
+At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST`, and its
+writers (`writers`) are circuits' writers artifact's. Under the ``residual`` fusion (`plan.FUSIONS`) the projections' rows
+go: 18,529 rows and 24,008,260 B a slot, 1,099 writers. With ``norm`` as well each norm's output rows go too: 15,169 rows
+and 20,569,300 B a slot, 1,204 writers.
 
 **The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 
 - `Segment`: bytes of one committed row, named by the step whose commitment holds it, the commitment's slot at that step
   (the batch row the sequence ran at), the row's index in the slot's layout, and the bytes within it;
 - `Registered`: bytes of a row of a registered weight, in no step commitment: the tensor's little-endian bytes cut into rows
-  of `Tensor.words` u16 words, the positions its registration opens (CMP-160). At the frozen shape a row of a linear is
+  of `Tensor.words` u16 words, the positions its registration opens. At the frozen shape a row of a linear is
   8,192 codes, so ``wrow{r}`` of coordinate n is its row n R + r whole and ``sw`` the scale's row n;
 - `Run`: a run input of the step's Program, ``token`` (ingress) or ``n`` (position + 1, kind position);
 - `Absent`: a key row at or past ``n``, never opened, which the Definition masks; assembled as zero bytes.
 
 A proof block is unit ``index`` of a family (the map's op path, coords ``op``) at a step and slot; its ports are its
-Definition's (#4687's Program: `PvRowPad_v2`'s ``p, v0 .. v31, n`` for PV). An attention block at step s on a slot at
+Definition's (the Program's: `PvRowPad_v2`'s ``p, v0 .. v31, n`` for PV). An attention block at step s on a slot at
 position p reads key j < n = p + 1 at step s - p + j, in the row that sequence held then (`Replayer.history`'s rule). A
 read opens the widest row holding its bytes and an output the narrowest, so the same calls work on today's
 ``families/v1`` layout (`commit.layout`), where a gather's row re-commits its parts' bytes.
 
-`Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (CMP-161: a ``Read``'s
+`Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (a ``Read``'s
 commit unit and rank, the port word it fills and its bytes in the row; ``n`` a ``Position``; an output that is one whole
 row as ``(unit, rank, None)``). Binding a port's words to the segments of rows opened under the step roots is that bundle's
 and C-Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
@@ -52,13 +52,16 @@ from .commit import _slots, fusion_tag
 from .plan import Entry, Map, Table, Units
 from .shape import PV_K, Shape, forms
 from .units import sources
-from verity_torch_loop import weights as SW
+from e2e_h200 import served_weights as SW
+from verity.ml.commitments import layout as L
 
 ROW = 1024
 KEPT = ("wk", "wv")
 FROZEN_ROWS = 21_857
 FROZEN_DIGEST = ("eb7937f19e2e8e3a0daf9f7b85f33d837b267a079cd0c5c60d3581e8c2b1675b"
                  "095d54fd36f2e8434c67734213533c0aba0e40d9f2601cc4307ca9474e403a03")
+FROZEN_JSON_DIGEST = ("f8d6252c5933f22c8c276c911a7c22e84c7ea12d846d7de8f9ee90e312c68005"
+                      "3d41a525a4350c921f9cf12b80fc0dc9d43d3034c8b7a33f83bc069c1e656a9f")
 WRITERS_SCHEMA = "circuits/shared-row-bindings/v2"
 
 
@@ -123,7 +126,7 @@ def _sources(entries: list[Entry]) -> dict[str, int]:
     return out
 
 
-def _shared_group(S: Any, entries: list[Entry], row: int) -> Any:
+def _shared_group(entries: list[Entry], row: int) -> L.Group:
     src = _sources(entries)
     sizes = [n for t, _ in entries for n in ([t.nbytes, 4] if t.quant else [t.nbytes])]
     rows: list[Any] = []
@@ -131,13 +134,13 @@ def _shared_group(S: Any, entries: list[Entry], row: int) -> Any:
     for t, us in entries:
         s, k = src[t.op], _kind(t)
         if k == "tiled":
-            rows += [S.Row((S.Part(s, o, min(row, t.nbytes - o)),)) for o in range(0, t.nbytes, row)]
+            rows += [L.Row((L.Part(s, o, min(row, t.nbytes - o)),)) for o in range(0, t.nbytes, row)]
         elif k == "kept":
             (g,) = [u for u in us if u.template == "AllGather_v1"]
-            rows += [S.Row((S.Part(s, g.offset + i * g.stride, g.nbytes),)) for i in range(g.count)]
+            rows += [L.Row((L.Part(s, g.offset + i * g.stride, g.nbytes),)) for i in range(g.count)]
         elif k == "quant":
             (q,) = [u for u in us if u.scale or u.scale_only]
-            rows += [S.Row((S.Part(s, q.offset + i * q.stride, q.stride), S.Part(s + 1, 0, 4))) for i in range(q.count)]
+            rows += [L.Row((L.Part(s, q.offset + i * q.stride, q.stride), L.Part(s + 1, 0, 4))) for i in range(q.count)]
         else:
             if t.nbytes > row:
                 raise ValueError(f"{t.op}: {t.nbytes} B doesn't pool into {row} B rows")
@@ -148,19 +151,35 @@ def _shared_group(S: Any, entries: list[Entry], row: int) -> Any:
                 pool.append([(s, t.nbytes)])
                 rows.append(k)
     taken = {k: iter(v) for k, v in pools.items()}
-    rows = [S.Row(tuple(S.Part(s, 0, n) for s, n in next(taken[r]))) if isinstance(r, str) else r for r in rows]
-    return S.Group(tuple(sizes), tuple((r,) for r in rows))
+    rows = [L.Row(tuple(L.Part(s, 0, n) for s, n in next(taken[r]))) if isinstance(r, str) else r for r in rows]
+    return L.Group(tuple(sizes), tuple((r,) for r in rows))
 
 
 def shared_layout(shape: Shape, row: int = ROW, fused: frozenset[str] = frozenset()) -> Any:
     """FAMILIES' shared-row layout at ``shape`` with the map's fusions ``fused``, one commit unit a row of at most ``row``
-    bytes (a quantizer's row is its chunk's codes and the scale); every layer's group is one `slots.Group`."""
+    bytes (a quantizer's row is its chunk's codes and the scale), as the `slots.Layout` that commits it; every layer's group
+    is one `L.Group`."""
     S, _ = _slots()
     m = Map(shape, fused)
-    layer = _shared_group(S, m.layer(0), row)
-    groups = [layer if 1 <= i <= shape.layers else _shared_group(S, entries, row) for i, entries in enumerate(m.groups())]
-    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
-                    tuple(groups))
+    layer = _shared_group(m.layer(0), row)
+    groups = [layer if 1 <= i <= shape.layers else _shared_group(entries, row) for i, entries in enumerate(m.groups())]
+    lay = S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
+                   tuple(groups))
+    check_shared(lay, m)
+    return lay
+
+
+def check_shared(layout: Any, m: Map) -> None:
+    """`L.check_shared` on ``layout`` with every producer unit's output in each of its distinct groups (the layers' one group
+    once): refuses a layout of the map's tables that isn't shared-row."""
+    outputs, seen = [], set()
+    for gi, (g, entries) in enumerate(zip(layout.groups, m.groups(), strict=True)):
+        if id(g) not in seen:
+            seen.add(id(g))
+            src = _sources(entries)
+            outputs += [(gi, src[t.op] + 1, 0, 4) if u.scale_only else (gi, src[t.op], u.offset + i * u.stride, u.nbytes)
+                        for t, us in entries for u in us if u.template != "AllGather_v1" for i in range(u.count)]
+    L.check_shared(L.Layout(layout.name, tuple(layout.groups)), outputs)
 
 
 @dataclass(frozen=True)
@@ -427,7 +446,7 @@ class Window:
         return (codes, (self._scale(step, slot, u.table, index),)) if u.scale else (codes,)
 
     def bundle(self, step: int, slot: int, family: str, index: int, port: str) -> Any:
-        """Port ``port`` of the block as the drawn-block bundle's ``locate`` returns it (CMP-161's stub, KVREADS 20:58Z):
+        """Port ``port`` of the block as the drawn-block bundle's ``locate`` returns it (the bundle's stub):
 
         - an output row (``o0``, a quantizer's scale ``o1``) that is one whole committed row: ``(unit, rank, None)``;
         - otherwise a list of pieces, each a ``Read``'s fields ``{step, slot, unit, rank, at, start, nbytes}`` or a
@@ -506,9 +525,10 @@ class Window:
     # -- the writers
 
     def writers(self) -> list[dict[str, Any]]:
-        """Every producer family's window rule, art:8ce57586's schema (`WRITERS_SCHEMA`): unit i writes bytes
+        """Every producer family's window rule, in circuits' writers schema (`WRITERS_SCHEMA`): unit i writes bytes
         ``row_offset + window_bytes (i % G) ..`` of commit unit ``first + i // G`` (one commit unit a row: the shared
-        layout's)."""
+        layout's). Refuses a layout `check_shared` refuses."""
+        check_shared(self.layout, self.map)
         out = []
         for name in self.families():
             u = self.units[name]
@@ -517,8 +537,6 @@ class Window:
             a = ix.parts[s]
             lo = u.offset + np.arange(u.count) * u.stride
             k = np.searchsorted(a[:, 0], lo, side="right") - 1
-            if not (lo + (1 if u.scale_only else u.nbytes) <= a[k, 1]).all():
-                raise ValueError(f"{name}: a unit's output isn't a window of one row")
             row, off = base + a[k, 2], a[k, 3] + lo - a[k, 0]
             if u.scale_only:
                 at = {int(r): int(o) for _, _, r, o in ix.parts[s + 1]}

@@ -74,7 +74,7 @@ def test_the_pinned_cases_get_their_codes():
 
 
 def test_an_output_entry_is_refused_as_an_unknown_kind():
-    """θ holds registered public data only, never an earlier run's output (Daniel, 21 Oct). The pinned `output` entry
+    """θ holds registered public data only, never an earlier run's output. The pinned `output` entry
     cites a port that an earlier record of the log holds under the root the run registers the parameter with, in the form
     the check took until then: it is refused `theta-provenance`, the code of an entry of an unknown kind, while the same
     record's registered value of that root, cited as `registered`, is accepted."""

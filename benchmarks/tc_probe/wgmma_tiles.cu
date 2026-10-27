@@ -5,7 +5,7 @@
 //   wgmma_bf16_m64n8k16_tiles   wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16   A 64x16 bf16 (SS: A in shared memory)
 //   wgmma_bf16_m64n8k16_rs_tiles                                                      the same with A from registers (RS)
 //
-// Written for lane tc-probe-fp8 of the Verity silicon campaign after veritor `gpu/tc-fp8/wgmma_fp8_probe.py`, which reached the
+// Written after veritor `gpu/tc-fp8/wgmma_fp8_probe.py`, which reached the
 // instruction through Triton (`tl.dot` on a 64x64x32 tile) and confirmed a single QGMMA in the SASS; here the instruction is
 // issued directly so that the probe needs only nvcc.  One warpgroup (128 threads, one block) executes exactly one
 // `wgmma.mma_async` on one tile: every output word D[i][j] is the hardware's own function of (C[i][j], A[i][:], B[:][j]) with

@@ -28,8 +28,7 @@ def parse(argv: list[str]) -> dict:
 FLOCK_PURE = Tool(
     name="flock_pure", version="1",
     command=["bash", "verity/ml/flock/pod/20-pure.sh"],
-    closure=["verity/ml/flock/**", "verity/core/service/flock/**", "benchmarks/numerical/**", "archive/direct/ligero/relations.py",
-             "archive/direct/ligero/hashauth.py", "archive/direct/ligero/auth.py", "archive/direct/ligero/timing_guard.py", *CORE],
+    closure=["verity/ml/flock/**", "verity/core/service/flock/**", "benchmarks/numerical/**", *CORE],
     key_params=["REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS"],
     key_conditions=["hw.family"],
     caches=[],

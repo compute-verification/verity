@@ -1,5 +1,4 @@
-"""Circuits' FAMILIES map at a shape (PRF-166, comment db928eb0, with circuits' decisions of 04:32Z, 05:20Z, 05:33Z and
-05:40Z on it): the step's tables, one op's outputs each, and for each table the units whose output rows are its bytes.
+"""Circuits' FAMILIES map at a shape: the step's tables, one op's outputs each, and for each table the units whose output rows are its bytes.
 
 A table is one op's output at one step, one row a sequence slot (`Table`; a quantizer's also has the f32 scale as the row's
 word). Its `Units` are a family of one template: unit i's output is one committed row, ``nbytes`` at ``offset + i * stride``
