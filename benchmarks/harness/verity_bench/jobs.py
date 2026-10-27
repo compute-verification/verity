@@ -108,7 +108,7 @@ class StoreCompletion:
     @property
     def store(self) -> Any:
         if self._store is None:
-            from research.store.local import LocalStore  # noqa: PLC0415
+            from research.store.local import LocalStore
 
             self._store = LocalStore()
         return self._store
@@ -136,8 +136,8 @@ class StoreCompletion:
         """Fetch and index the remote's attempts started since `started` (Unix seconds, less `COMMIT_MARGIN_S`) that this
         store lacks; how many it indexed."""
 
-        from research.store import ids  # noqa: PLC0415
-        from research.store.local import StoreError  # noqa: PLC0415
+        from research.store import ids
+        from research.store.local import StoreError
 
         store = self.store
         remote = store.remote
@@ -337,7 +337,7 @@ def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Pat
         "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
         "--run-max", f"{minutes * 60:g}",
         "--",
-        # Without --max-min a lease has no end, which gpu-lease refuses while a booked window lies ahead; a guest's GPU
+        # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU
         # job is preemptible, as the queued point's is.
         "gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible",
         "--",

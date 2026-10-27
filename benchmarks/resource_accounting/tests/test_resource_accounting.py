@@ -125,8 +125,8 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert "S_chip – (this run recorded no registers a SM, so no Q_cert)" in R.markdown(doc_no_regs, {}, "fixture")
     assert "T = 1,354,057 ns, the RTT at P2's cap (354,000 ns) inside the rebuild floor of 1,708,058 ns" in md
     assert ("not a per-run covert bound: a per-run compute residual holds only conditional on BudgetAbort for the deployed "
-            "cost model (Daniel's decision 9; #1821's CovertResidualPerRun, and #1827") in md
-    assert "Note: first fetches are charged to the bandwidth account, not compute (Daniel's ruling)" in md
+            "cost model (CovertResidualPerRun; BudgetAbort holds for constant-cost models") in md
+    assert "Note: first fetches are charged to the bandwidth account, not compute; a priced-sum column" in md
     assert ("larger FP32 price at the point's (n, k) (#1809): cube8192 (8192, 8192) 0.36949%; llama31_8b's layout, the max "
             "over its linears, 0.38912%.") in md
     assert "sidecar" not in md

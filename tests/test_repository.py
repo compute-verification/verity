@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
-#: The Glossary's second file, at the root only: no directory holds a glossary (Daniel, 26 Oct).
+#: The Glossary's second file, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
@@ -58,16 +58,13 @@ BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the vLLM checkpoint
-#: manifest (append-only; most of its readers don't read the sibling manifests yet) and three vLLM workload specs. Each is
-#: capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over
-#: BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: manifest (append-only; most of its readers don't read the sibling manifests yet). Each is capped at its size rounded up
+#: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
+#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
-    "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -156,7 +153,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
         return None
     if os.path.basename(path) == "SKILL.md":
         return (f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; compact it: keep the current "
-                "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to Daniel's "
+                "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to the "
                 "decisions log or a note (.agents/skills/authoring-skills/SKILL.md)")
     where = f"one file per entry under {d}" if (d := split_dir(path)) else "the notes store (cite it by note:<id>)"
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"

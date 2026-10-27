@@ -194,6 +194,11 @@ def Coins.sized (coins : Coins) (rounds : Nat) : Coins :=
   | .os => .os
   | .seed => .seed
 
+/-- The keyed coin tree the coins name, which `Hello`'s `coins` carries (`helloOf`); none for the OS's coins or a seed's. -/
+def Coins.tree? : Coins → Option CoinTree.Spec
+  | .tree s => some s
+  | _ => none
+
 /-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
 (`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
 def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
@@ -217,6 +222,8 @@ structure Stmt where
   digest : ByteArray
   sigma : ByteArray
   hello : String
+  /-- the keyed coin tree `hello` names, from the setup's sized coins (`Coins.sized`, `Coins.tree?`) -/
+  coinTree : Option CoinTree.Spec
   merkle : MerkleScheme
   /-- what the statement check established about the partition (`HmRow.PartitionFinding`), for the verdict; null before e51e2b86 -/
   partition : Json := Json.null
@@ -259,7 +266,8 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let digest := Sha256.hash h
   let sigma := Sha256.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (Flock.zkRounds m c.kLog regions.size))
-  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello, merkle }
+  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello,
+           coinTree := (coins.sized (Flock.zkRounds m c.kLog regions.size)).tree?, merkle }
 
 namespace Stmt
 
@@ -270,7 +278,7 @@ def zkRounds (st : Stmt) : Nat := Flock.zkRounds st.m st.c.kLog st.regions.size
 def spec (st : Stmt) : SessionSpec :=
   { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
     retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
-    sha512Digests := st.tags.hm96Rows, coinTree := CoinTree.ofHello st.hello }
+    sha512Digests := st.tags.hm96Rows, coinTree := st.coinTree }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=

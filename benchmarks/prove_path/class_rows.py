@@ -1,5 +1,5 @@
 """The class circuit's row census (V3c): per template, its units' input rows by what fills them (``wired``, ``registered``
-(the weights'), ``value`` (a per-window registered value's, such as the slot rows), ``table_root``, ``opening``, else
+(the weights'), ``value`` (a per-window registered value's, such as the scan state rows), ``table_root``, ``opening``, else
 ``free``) and their bytes, its output rows and their bytes, and the SHA-512
 compressions a by-reference commit spends on them: every output row hashed fresh, every input row only re-leafed in its
 port's tree, since a wired row's b||c is its writer's and a registered row's the registration's.

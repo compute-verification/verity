@@ -159,7 +159,7 @@ class Found:
 
 def _labels(store: Any, targets: Sequence[str], pull: bool) -> list[dict[str, Any]]:
     if pull:
-        from research.store import labels_sync  # noqa: PLC0415
+        from research.store import labels_sync
 
         labels_sync.pull_targets(store, list(targets))
     found = [label for target in targets for label in store.labels(target)]
@@ -369,7 +369,7 @@ def breakdown_points(store: Any, entry: Breakdown, pull: bool, skipped: list[dic
     """`verity_bench.breakdown`'s attribution at every point of `entry`'s runs; a run that can't stand goes to
     `skipped`."""
 
-    from verity_bench import breakdown  # noqa: PLC0415  (breakdown imports this module)
+    from verity_bench import breakdown
 
     points = []
     for run, named_by in record_runs(store, entry.record):
@@ -482,7 +482,7 @@ def _ms(summary: Mapping[str, Any]) -> str:
 
 
 def _breakdown(points: Sequence[Mapping[str, Any]]) -> list[str]:
-    from verity_bench.breakdown import AUDIT, AUDIT_SPANS, DECODE_ROWS, PLAIN, PLAIN_SPANS  # noqa: PLC0415
+    from verity_bench.breakdown import AUDIT, AUDIT_SPANS, DECODE_ROWS, PLAIN, PLAIN_SPANS
 
     lines = [
         "",

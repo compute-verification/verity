@@ -1,12 +1,12 @@
-"""The class-of-record window's commit against CMP-149's target (VLLM-128): a `class_rows.py` census priced in SHA-512
-compressions, seconds on the H200 and AND gates, beside the served window's ANDs and seconds, each lever alone and all of them
-stacked; the pad pass (positions whose values the engine never computed, recomputed) at three traffics; the registration's
-size; and the totals over monitoring periods of one week, one month and one year.
+"""The class-of-record window's commit against its target, 0.20 to 0.25 of the served window: a `class_rows.py` census priced in
+SHA-512 compressions, seconds on the H200 and AND gates, beside the served window's ANDs and seconds, each lever alone and
+all of them stacked; the pad pass (positions whose values the engine never computed, recomputed) at three traffics; the
+registration's size; and the totals over monitoring periods of one week, one month and one year.
 
 Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nbytes) and its b bytes) and `Costs.fresh` more
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
-`ENGINE` is the HASH-20 engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
+`ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
 in ANDs at `SHA512_ANDS` each; the served window is the class circuit's ANDs (`unit_ands`).
 
 Levers (`LEVERS`), each a change to the circuit's layout or the commitment's format, not to what the model computes:
@@ -14,7 +14,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``L1``, one FA3 tile. `fa3_tile` launches 64 × 192 when max_seqlen_q · (query heads a KV head) <= 64 and 192 × 128
   otherwise, so at Llama-3.2-1B a pure decode launch has key blocks of 192 and a prefill or mixed launch blocks of 128, and the
   class circuit, cut at the decode's 192, is inexact past 128 keys for every prompt position and every decode row of a mixed
-  launch (r20261026-230245-33cf). One tile at every launch (the pinned FA3's ``use_one_mma_wg`` off) makes every position the
+  launch. One tile at every launch (the pinned FA3's ``use_one_mma_wg`` off) makes every position the
   circuit's at blocks of 128 (`Heads.units` at ``BN=128``), so the engine's own values are the circuit's: no pad pass for a
   position the engine ran.
 - ``L2``, constants. An empty slot computes token 0 and then decodes greedily, a function of the weights and the class, and
@@ -28,7 +28,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
   reader; as one row it is one.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
   (a drawn member's port tree is derived at the audit), so no input row is re-leafed.
-- ``P``, shared output rows (CIR-113, `commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
+- ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
 - ``L4``, one member root: the registration is O(members) today (`Registration`), every member's public body (every row's
@@ -64,18 +64,18 @@ import class_size as CS  # noqa: E402
 FIRST, END, GATHER = "AttnBlockFirst_v1", "AttnHeadEnd_v1", "AllGather_v1"
 #: a full key block by target: FA3's (sm_90) and FA2's (sm_120)
 BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
-#: prefill is exact against the decode-shaped Definitions at this many keys or fewer (r20261026-230245-33cf)
+#: prefill is exact against the decode-shaped Definitions at this many keys or fewer
 EXACT_KEYS = 128
 #: the key group `L3a` reads a first block's keys in
 GROUP = 16
-#: a shared output row's bytes (`P`): CIR-113's 1 KiB rows
+#: a shared output row's bytes (`P`): 1 KiB rows
 ROW_BYTES = 1024
-#: a member's units: V3c's cap (note:20261026T2036Z-report-v3c-window-commit Q3)
+#: a member's units: V3c's cap
 CAP = 64
 #: one port root's entry in `registration.json` (``indent=1``): a port name of about 40 characters, 128 hex of root and of
 #: domain, leaves
 ROOT_JSON_BYTES = 360
-#: the H200's rates, compressions a second: #4666's measured step and commit_gpu's peak (`commit_slots`)
+#: the H200's rates, compressions a second: a measured step and commit_gpu's peak (`commit_slots`)
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
 #: the reference datacenter (`benchmarks/census/deployments.json`, dc-12500-machines-600s)
 GPUS = 12_500 * 8
@@ -496,8 +496,7 @@ def pad_pass(heads: Heads, traffic: Traffic, levers: frozenset[str], base_ands: 
 #: (three compressions) and the engine's fresh row
 STREAM_ROW_BYTES = 4096
 STREAM_ROW = CR.blocks(128 + STREAM_ROW_BYTES) + 3 + ENGINE.fresh
-#: the seal's store, bytes a second: VLLM-102's before arm (r20261027-054922-0f54) stored 29,327,490,072 committed bytes in
-#: 90.581 s
+#: the seal's store, bytes a second: a measured seal stored 29,327,490,072 committed bytes in 90.581 s
 SEAL_BYTES_S = 29_327_490_072 / 90.581
 STREAM_LEVER = "F: the attention interiors (fa*.m1) not committed"
 
@@ -569,9 +568,9 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
     for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
     bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
     every position as often (`TokenFeed_v1` at its prompt position, `SlotRow_v1` at the first). No lever but ``P``, whose
-    shared rows are another layout (``step.py export --shared``), changes a template's output rows outside attention."""
+    shared rows are another layout (`e2e_h200.window.shared_layout`), changes a template's output rows outside attention."""
     if "P" in levers:
-        raise ValueError("P's shared rows are commit_slots' own layout (step.py export --shared --row-bytes), not this one")
+        raise ValueError("P's shared rows are FAMILIES' shared-row layout (e2e_h200.window.shared_layout), not this one")
     S, P, BN = heads.S, heads.P, EXACT_KEYS if "L1" in levers else heads.BN
     here = []
     for u in rest:
@@ -747,7 +746,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--target", choices=("h200", "sm120"), default="h200")
     ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (V3c's estimate: 4 prefill and 63 "
                     "decode steps)")
-    ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (the dry run's, r20261026-195741-11d7)")
+    ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (a dry run's)")
     ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS",
                     help="price a one-Program probe's projection to this class (`project`)")
     cpu = ap.add_mutually_exclusive_group()
