@@ -16,8 +16,8 @@
 #
 # It runs on a tree where every path to or from these directories is in a form `layout.py` rewrites (#4910). `layout.py`
 # rewrites neither a single segment off an alias (`HERE.parent / "network_traces"`) nor a path after a `-` (a shell
-# default, `${X:-benchmarks/…}`). The move is ef9be866a5 (#4916). Carry an open branch across it with
-# `tools/move/restack.py BRANCH --move-commit ef9be866a5 --script-arg=--no-lock --script-arg=--map
+# default, `${X:-benchmarks/…}`). The move is the commit this map wrote (#4916, M below). Carry an open branch across it with
+# `tools/move/restack.py BRANCH --move-commit M --script-arg=--no-lock --script-arg=--map
 # --script-arg="$PWD/tools/move/reorg_proofs_map.toml"`.
 
 [roots]
