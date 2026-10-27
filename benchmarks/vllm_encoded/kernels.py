@@ -107,11 +107,11 @@ class WideLib:
         so.ww_set_key.argtypes = [v, i, v, v, v, v]
         so.ww_decode.argtypes = [v, v, q, q, i, v, i, v]
         so.ww_encode.argtypes = [v, v, q, q, i, i, v]
-        so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v, v, i, v]
-        so.ww_gemm_occupancy.argtypes = [i, i, i, i]
+        so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, i, v]
+        so.ww_gemm_occupancy.argtypes = [i, i, i]
         cs = (ctypes.c_int * 32)()
         so.ww_constants(cs)
-        self.constants = list(cs[:21])
+        self.constants = list(cs[:14])
         self.bits, self.limbs, self.payload, self.lane_words, self.kmax = (cs[0], cs[1], cs[2], cs[3], cs[7])
         self.field = _wide().field(self.bits)
         f = self.field
@@ -390,14 +390,14 @@ class WideLinear(Linear):
 
     def candidates(self, m: int) -> list[Config]:
         w = self.wlib
-        occ = w.so.ww_gemm_occupancy(self.k, m, 0, 1)
+        occ = w.so.ww_gemm_occupancy(self.k, m, 1)
         return [Config(3)] + ([Config(3, ahead=occ * w.sms)] if occ > 0 else [])
 
     def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
         if cfg.form != 3:
             raise ValueError(f"the wide GEMM has one form, not {cfg.name}")
         self.wlib.call("ww_gemm", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n,
-                       self.kd, self.base, int(partials), None, None, cfg.ahead, stream())
+                       self.kd, self.base, int(partials), cfg.ahead, stream())
 
     def decoded(self) -> torch.Tensor:
         if not self.k:
