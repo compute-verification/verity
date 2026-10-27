@@ -86,9 +86,12 @@ PROTOCOLS = (
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
     Protocol("PoUS bandwidth audit (#3847)", (), "bandwidth-audit", None,
              record=("art:953934e2c78a694c2156e8547fd3c4487f2ca77cec6ff006463bff8cdac67290",)),
-    # art:33b8cc62's three results (#3817); its meta names no runs.
-    Protocol("Commit (#3817)", (), "commit@compiled", None,
-             record=("r20261024-172755-61f0", "r20261024-172748-dd9d", "r20261024-172623-d8fe")),
+    # b1, b8 and b32 of the width spec on each device: the RTX PRO 6000's are art:33b8cc62's three results (#3817; its meta
+    # names no runs), the H200's (vy-dc-h200-2) and B200's (vy-dc-b200) the -h200 and -b200 specs' at de382026 (BENCH-26).
+    Protocol("Commit (#3817, BENCH-26)", (), "commit@compiled", None,
+             record=("r20261024-172755-61f0", "r20261024-172748-dd9d", "r20261024-172623-d8fe",
+                     "r20261027-052910-4bcb", "r20261027-051642-8a98", "r20261027-051645-575b",
+                     "r20261027-061530-0f1c", "r20261027-061540-c4f3", "r20261027-061543-2056")),
     # art:a94655c4's quiet runs at 595cce6dda (#3939): the served spec's b8 and b32, then the H1 spec's.
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record=("r20261025-113633-fd71", "r20261025-113621-0c4a", "r20261025-113639-775f",
