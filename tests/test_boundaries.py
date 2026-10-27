@@ -178,10 +178,6 @@ BENCHMARKS_IMPORTERS = {
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
-    "integrations/torch_loop/verity_torch_loop/pouw.py": "compute-accounting: a live window's salt session "
-                                                         "(`benchmarks/pouw/window_salt/window_salt.py`)",
-    "integrations/torch_loop/verity_torch_loop/pouw_audit.py": "compute-accounting: the one-stage audit from the records "
-                                                               "(`benchmarks/prove_path/records_audit.py`)",
     "verity/core/protocols/pous/check/timed_audit.py": "memory-accounting: the memory challenger, the strict timed audit's "
                                                        "reference (`benchmarks/pous/band_gpu/memory_challenger.py`)",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
@@ -229,15 +225,13 @@ BENCHMARKS_IMPORTERS = {
                     "(`benchmarks/pous/band_gpu`)"),
     "verity/ml/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("integrations/torch_loop/tests/test_pouw.py", "integrations/vllm/tests/protocols/pouw_h1_circuits.py",
+    **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
                      "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
                      "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `benchmarks/live_challenger`)"),
     **dict.fromkeys(("integrations/vllm/tests/protocols/challenger_host.py", "integrations/vllm/tests/protocols/local_gate.py"),
                     "proofs: the live challenger's gate and model registry (`benchmarks/live_challenger`)"),
-    "integrations/torch_loop/tests/test_checkpoint.py": "circuits: the live challenger's model registry "
-                                                        "(`benchmarks/live_challenger/models.py`)",
     **dict.fromkeys(("integrations/vllm/tests/engine/ppl_oracle.py", "integrations/vllm/tests/engine/fattn_oracle.py",
                      "integrations/vllm/tests/engine/int8_store_gpu.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
