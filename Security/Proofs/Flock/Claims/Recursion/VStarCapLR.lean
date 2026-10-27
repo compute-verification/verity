@@ -226,11 +226,11 @@ theorem roundRows_cap_take {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
 
 /-! ## The cap's port `top` -/
 
+set_option maxHeartbeats 1000000 in
 /-- **Level `topsBefore k + e + 1`'s cap reads, at instance `j / R · n + t`, stream round `j`'s top-`e` row `t`**, at
 the fitted port inputs: at stream round `j < 2R` (round `k = j % R` of rep `j / R`) whose `e`-th top has `n` nodes,
 where the cap at part `capsFrom + topsBefore k + e` is V\*'s parsed `.cap l N` with `N = 2n`, the history holds both
 reps' rounds, and the reps' tops at level `l` differ (`hd`: `sameTop`, which would merge them, refuses them). -/
-set_option maxHeartbeats 1000000 in
 theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} {rs : Array RecVStar.SchedRound} {j e N : ℕ} {c : Circuit}
     (hr : readX x = some r) (hrs : repSched r.shape = some rs) (hj : j < 2 * rs.size)
@@ -328,7 +328,9 @@ theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     have hcr : capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum j t =
         capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum (0 * rs.size + j % rs.size) t := by
       rw [hj']
-    rw [h, Nat.zero_mul, Nat.zero_add, hcr]
+    have hi : j / rs.size * ((rs.getD (j % rs.size) default).2.1).getD e 0 + t = t := by
+      rw [h, Nat.zero_mul, Nat.zero_add]
+    rw [hi, hcr]
     rw [portRow_fitPin, pair_append, portRow_ownRows (by simp at ht ⊢; omega) (by simp at ht ⊢; omega), Option.map_some, hpw]
     simp only [List.getElem_toArray]
     rw [List.getElem_append_left (by simpa using ht), List.getElem_append_left (by simpa using ht)]
