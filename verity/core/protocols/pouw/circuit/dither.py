@@ -54,10 +54,11 @@ The reference: `words` is a call's T (S × m × n); `cell_words` one cell's from
 from __future__ import annotations
 
 import hashlib
+import struct
+from array import array
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Sequence
-
-import numpy as np
+from operator import mul
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, add, and_reduce
@@ -182,6 +183,9 @@ class Shape:
 
 # -- the coins and the pad -------------------------------------------------------------------------------------------------------
 
+Rows = list[list[int]]
+
+
 def _digest(what: str, v: bytes) -> bytes:
     if len(v) != 64:
         raise ValueError(f"{what} is a 64-byte digest, not {len(v)} bytes")
@@ -200,103 +204,132 @@ def prg(seed: bytes, tag: str, idx: int) -> bytes:
     return hashlib.sha512(_digest("a seed", seed) + tag.encode().ljust(8, b"\0") + idx.to_bytes(8, "big")).digest()
 
 
-def _blocks(seed: bytes, tag: str, idx: Sequence[int]) -> bytes:
+def _blocks(seed: bytes, tag: str, idx: Iterable[int]) -> bytes:
     return b"".join(prg(seed, tag, b) for b in idx)
 
 
-def pad_rows(seeds: Mapping[str, bytes], k: int, rows: Sequence[int]) -> np.ndarray:
+def pad_rows(seeds: Mapping[str, bytes], k: int, rows: Sequence[int]) -> Rows:
     """The pad's rows `rows` at contraction k (len(rows) × k int8 values): row i is the first k bytes of blocks
     i ceil(k / 64) .. of the pad stream."""
     kb = -(-k // 64)
-    raw = np.frombuffer(_blocks(seeds["pad"], "pad", [i * kb + b for i in rows for b in range(kb)]), dtype=np.int8)
-    return raw.reshape(len(rows), kb * 64)[:, :k].astype(np.int64)
+    return [array("b", _blocks(seeds["pad"], "pad", range(i * kb, (i + 1) * kb))[:k]).tolist() for i in rows]
 
 
-def _bits(seed: bytes, tag: str, rows: Sequence[int], k: int) -> np.ndarray:
+def _bits(seed: bytes, tag: str, rows: Sequence[int], k: int) -> Rows:
     kb = -(-k // 512)
-    raw = np.frombuffer(_blocks(seed, tag, [i * kb + b for i in rows for b in range(kb)]), dtype=np.uint8)
-    return np.unpackbits(raw.reshape(len(rows), kb * 64), axis=1, bitorder="little")[:, :k].astype(np.int64)
-
-
-def _noise(seed: bytes, tag: str, rows: Sequence[int], lp: int) -> np.ndarray:
-    per = lp // 16
-    w = np.frombuffer(_blocks(seed, tag, [r * per + b for r in rows for b in range(per)]), dtype="<u4").astype(np.uint64)
-    return (((w * np.uint64(2 * NOISE + 1)) >> np.uint64(32)).astype(np.int64) - NOISE).reshape(len(rows), lp)
-
-
-def perms(seeds: Mapping[str, bytes], k: int, lp: int) -> np.ndarray:
-    """π_τ for each of the K / L′ noise tiles, (K / L′) × L′."""
-    tiles = k // lp
-    w = np.frombuffer(_blocks(seeds["P"], "P", range(-(-tiles * lp // 16))), dtype="<u4")[:tiles * lp].reshape(tiles, lp)
-    out = np.empty((tiles, lp), dtype=np.int64)
-    for tau in range(tiles):
-        p = list(range(lp))
-        for c in range(lp - 1, 0, -1):
-            x = (int(w[tau, c]) * (c + 1)) >> 32
-            p[c], p[x] = p[x], p[c]
-        out[tau] = p
+    out = []
+    for i in rows:
+        raw = _blocks(seed, tag, range(i * kb, (i + 1) * kb))
+        out.append([(raw[c >> 3] >> (c & 7)) & 1 for c in range(k)])
     return out
 
 
-def noise_a(sh: Shape, seeds: Mapping[str, bytes], rows: Sequence[int]) -> np.ndarray:
+def _words32(seed: bytes, tag: str, first: int, count: int) -> tuple[int, ...]:
+    """Little-endian u32 words [16 first, 16 first + count) of a stream (first in blocks)."""
+    raw = _blocks(seed, tag, range(first, first + -(-count // 16)))
+    return struct.unpack(f"<{count}I", raw[:4 * count])
+
+
+def _noise(seed: bytes, tag: str, rows: Sequence[int], lp: int) -> Rows:
+    return [[((w * (2 * NOISE + 1)) >> 32) - NOISE for w in _words32(seed, tag, r * (lp // 16), lp)] for r in rows]
+
+
+def perms(seeds: Mapping[str, bytes], k: int, lp: int) -> Rows:
+    """π_τ for each of the K / L′ noise tiles, (K / L′) × L′."""
+    tiles = k // lp
+    w = _words32(seeds["P"], "P", 0, tiles * lp)
+    out = []
+    for tau in range(tiles):
+        p = list(range(lp))
+        for c in range(lp - 1, 0, -1):
+            x = (w[tau * lp + c] * (c + 1)) >> 32
+            p[c], p[x] = p[x], p[c]
+        out.append(p)
+    return out
+
+
+def noise_a(sh: Shape, seeds: Mapping[str, bytes], rows: Sequence[int]) -> Rows:
     """na = d_A + V[k mod L′] for A's rows `rows` (len(rows) × K, each in [-80, 81])."""
-    return _bits(seeds["dA"], "dA", rows, sh.k) + np.tile(_noise(seeds["V"], "V", rows, sh.lp), (1, sh.k // sh.lp))
+    V = _noise(seeds["V"], "V", rows, sh.lp)
+    return [[d + v[c % sh.lp] for c, d in enumerate(ds)] for ds, v in zip(_bits(seeds["dA"], "dA", rows, sh.k), V)]
 
 
-def noise_b(sh: Shape, seeds: Mapping[str, bytes], rows: Sequence[int], pi: np.ndarray | None = None) -> np.ndarray:
+def noise_b(sh: Shape, seeds: Mapping[str, bytes], rows: Sequence[int], pi: Rows | None = None) -> Rows:
     """nb = d_B + U[π_τ(k mod L′)] for B's rows `rows` (len(rows) × K, each in [-80, 81])."""
     pi = perms(seeds, sh.k, sh.lp) if pi is None else pi
     U = _noise(seeds["U"], "U", rows, sh.lp)
-    return _bits(seeds["dB"], "dB", rows, sh.k) + np.concatenate([U[:, pi[tau]] for tau in range(sh.k // sh.lp)], axis=1)
+    lp = sh.lp
+    return [[d + u[pi[c // lp][c % lp]] for c, d in enumerate(ds)]
+            for ds, u in zip(_bits(seeds["dB"], "dB", rows, sh.k), U)]
 
 
-def wrap8(x: np.ndarray) -> np.ndarray:
+def wrap8(x):
+    """x mod 2^8 as an int8 (an int, or anything with integer arithmetic)."""
     return ((x + 128) & 255) - 128
 
 
 # -- the words -------------------------------------------------------------------------------------------------------------------
 
-def _imatmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """a bᵀ exactly (float64: every partial sum of int8 products here is below 2^53)."""
-    if a.shape[1] * 128 * 128 >= 2 ** 53:
-        raise ValueError(f"K = {a.shape[1]} is past float64's exact products")
-    return np.rint(a.astype(np.float64) @ b.astype(np.float64).T).astype(np.int64)
+def _row(what: str, v: Sequence[int], k: int) -> list[int]:
+    out = [int(x) for x in v]
+    if len(out) != k:
+        raise ValueError(f"{what} has K = {k} entries, not {len(out)}")
+    return out
 
 
-def _prefix_words(sh: Shape, X: np.ndarray, W: np.ndarray) -> np.ndarray:
-    acc = np.zeros((X.shape[0], W.shape[0]), dtype=np.int64)
-    T = np.zeros((sh.S, X.shape[0], W.shape[0]), dtype=np.int64)
-    for s in range(1, sh.S + 1):
+def _noised(a: Sequence[int], n: Sequence[int]) -> list[int]:
+    return [wrap8(x + y) for x, y in zip(a, n, strict=True)]
+
+
+def _operands(sh: Shape, seeds: Mapping[str, bytes], ii: Sequence[int], jj: Sequence[int], B: Mapping[int, Sequence[int]],
+              A: Mapping[int, Sequence[int]] | None) -> tuple[Rows, Rows]:
+    """X's rows ii and W′'s rows jj, B's (and A's, else the pad's) rows by index."""
+    a = pad_rows(seeds, sh.k, ii) if A is None else [_row(f"A's row {i}", A[i], sh.k) for i in ii]
+    b = [_row(f"B's row {j}", B[j], sh.k) for j in jj]
+    return ([_noised(r, n) for r, n in zip(a, noise_a(sh, seeds, ii))],
+            [_noised(r, n) for r, n in zip(b, noise_b(sh, seeds, jj))])
+
+
+def _prefix(sh: Shape, x: Sequence[int], w: Sequence[int], upto: int) -> list[int]:
+    """T_1 .. T_upto of one cell from its X row and W′ row."""
+    out, acc = [], 0
+    for s in range(1, upto + 1):
         a, b = sh.seg(s)
-        acc += _imatmul(X[:, a:b], W[:, a:b])
-        T[s - 1] = acc & M16
-    return T.astype(np.uint16)
+        acc += sum(map(mul, x[a:b], w[a:b]))
+        out.append(acc & M16)
+    return out
 
 
-def words(sh: Shape, seeds: Mapping[str, bytes], B: np.ndarray, A: np.ndarray | None = None) -> np.ndarray:
-    """The call's words T (S × m × n, u16) on weights B (n × K int8), A the pad (or `A`, a served call's operand)."""
-    if B.shape != (sh.n, sh.k):
-        raise ValueError(f"B is n × K = {sh.n} × {sh.k}, not {B.shape}")
-    A = pad_rows(seeds, sh.k, range(sh.m)) if A is None else np.asarray(A, dtype=np.int64)
-    X = wrap8(A + noise_a(sh, seeds, range(sh.m)))
-    W = wrap8(np.asarray(B, dtype=np.int64) + noise_b(sh, seeds, range(sh.n)))
-    return _prefix_words(sh, X, W)
+def words(sh: Shape, seeds: Mapping[str, bytes], B: Sequence[Sequence[int]],
+          A: Sequence[Sequence[int]] | None = None) -> list[Rows]:
+    """The call's words T (S × m × n, as T[s - 1][i][j]) on weights B (n × K int8), A the pad (or `A`, a served call's
+    operand)."""
+    if len(B) != sh.n:
+        raise ValueError(f"B has n = {sh.n} rows, not {len(B)}")
+    if A is not None and len(A) != sh.m:
+        raise ValueError(f"A has m = {sh.m} rows, not {len(A)}")
+    X, W = _operands(sh, seeds, range(sh.m), range(sh.n), B, A)
+    cells = [[_prefix(sh, x, w, sh.S) for w in W] for x in X]
+    return [[[c[s] for c in row] for row in cells] for s in range(sh.S)]
 
 
 def cell_words(sh: Shape, seeds: Mapping[str, bytes], b_j: Sequence[int], i: int, j: int,
                a_i: Sequence[int] | None = None) -> list[int]:
     """T_1 .. T_S of cell (i, j) from B's row j (`b_j`) and the coins alone, A's row i the pad's (or `a_i`)."""
-    a = pad_rows(seeds, sh.k, [i])[0] if a_i is None else np.asarray(a_i, dtype=np.int64)
-    x = wrap8(a + noise_a(sh, seeds, [i])[0])
-    w = wrap8(np.asarray(b_j, dtype=np.int64) + noise_b(sh, seeds, [j])[0])
-    return [int((x[:b] * w[:b]).sum()) & M16 for b in (sh.seg(s)[1] for s in range(1, sh.S + 1))]
+    X, W = _operands(sh, seeds, [i], [j], {j: b_j}, None if a_i is None else {i: a_i})
+    return _prefix(sh, X[0], W[0], sh.S)
 
 
-def words_buffer(sh: Shape, T: np.ndarray) -> bytes:
+def words_buffer(sh: Shape, T: Sequence[Sequence[Sequence[int]]]) -> bytes:
     """Per tile, per segment, the tile's T_s in row-major cell order as little-endian u16."""
-    tm, tn = sh.m // TILE, sh.n // TILE
-    w = np.asarray(T).astype("<u2").reshape(sh.S, tm, TILE, tn, TILE).transpose(1, 3, 0, 2, 4)
-    return np.ascontiguousarray(w).tobytes()
+    pack = struct.Struct(f"<{TILE}H").pack
+    out = bytearray()
+    for tm in range(sh.m // TILE):
+        for tn in range(sh.n // TILE):
+            for s in range(sh.S):
+                for r in range(tm * TILE, (tm + 1) * TILE):
+                    out += pack(*(int(v) & M16 for v in T[s][r][tn * TILE:(tn + 1) * TILE]))
+    return bytes(out)
 
 
 def row_bytes(sh: Shape, buf: bytes, pos: int) -> bytes:
@@ -305,17 +338,15 @@ def row_bytes(sh: Shape, buf: bytes, pos: int) -> bytes:
     return buf[pos * sh.row:(pos + 1) * sh.row]
 
 
-def leaf_row(sh: Shape, seeds: Mapping[str, bytes], B: np.ndarray, pos: int, A: np.ndarray | None = None) -> bytes:
+def leaf_row(sh: Shape, seeds: Mapping[str, bytes], B: Sequence[Sequence[int]], pos: int,
+             A: Sequence[Sequence[int]] | None = None) -> bytes:
     """Leaf `pos`'s row from only the cells it holds: their pad rows (or `A`'s), their rows of B (n × K) and the coins."""
     s, cells = sh.leaf_cells(pos)
     ii, jj = sorted({i for i, _ in cells}), sorted({j for _, j in cells})
-    a = pad_rows(seeds, sh.k, ii) if A is None else np.asarray(A, dtype=np.int64)[ii]
-    X = wrap8(a + noise_a(sh, seeds, ii))
-    W = wrap8(np.asarray(B, dtype=np.int64)[jj] + noise_b(sh, seeds, jj))
-    end = sh.seg(s)[1]
-    T = _imatmul(X[:, :end], W[:, :end]) & M16
+    X, W = _operands(sh, seeds, ii, jj, {j: B[j] for j in jj}, None if A is None else {i: A[i] for i in ii})
     ri, rj = {i: x for x, i in enumerate(ii)}, {j: x for x, j in enumerate(jj)}
-    return np.array([T[ri[i], rj[j]] for i, j in cells], dtype="<u2").tobytes()
+    end = sh.seg(s)[1]
+    return struct.pack(f"<{len(cells)}H", *(sum(map(mul, X[ri[i]][:end], W[rj[j]][:end])) & M16 for i, j in cells))
 
 
 # -- the leaves and the tree -----------------------------------------------------------------------------------------------------
@@ -349,7 +380,7 @@ class Committed:
         return tuple(self.levels[d][(pos >> d) ^ 1] for d in range(len(self.levels) - 1))
 
 
-def commit(sh: Shape, T: np.ndarray, salt: Callable[[int], bytes]) -> Committed:
+def commit(sh: Shape, T: Sequence[Sequence[Sequence[int]]], salt: Callable[[int], bytes]) -> Committed:
     """The call's words T under one frame-v3-sha512 tree, leaf p's salt ``salt(p)``."""
     buf = words_buffer(sh, T)
     dom = sh.domain()
@@ -449,8 +480,9 @@ def block_inputs(sh: Shape, seeds: Mapping[str, bytes], b_j: Sequence[int], i: i
     """Proof block (i, j, s)'s inputs to `PouwDitherBlock` at L = its segment's length and FIRST = (s = 1), as word
     lists: a (the pad's row segment, or `a_i`'s), na, b (`b_j`'s segment), nb, then t0 (but at s = 1) and t1."""
     lo, hi = sh.seg(s)
-    a = pad_rows(seeds, sh.k, [i])[0] if a_i is None else np.asarray(a_i, dtype=np.int64)
-    ins = [_int8s(a[lo:hi]), _int8s(noise_a(sh, seeds, [i])[0][lo:hi]), _int8s(np.asarray(b_j)[lo:hi]),
+    a = pad_rows(seeds, sh.k, [i])[0] if a_i is None else _row(f"A's row {i}", a_i, sh.k)
+    b = _row(f"B's row {j}", b_j, sh.k)
+    ins = [_int8s(a[lo:hi]), _int8s(noise_a(sh, seeds, [i])[0][lo:hi]), _int8s(b[lo:hi]),
            _int8s(noise_b(sh, seeds, [j])[0][lo:hi])]
     return ins + ([] if s == 1 else [[t0 & M16]]) + [[t1 & M16]]
 
