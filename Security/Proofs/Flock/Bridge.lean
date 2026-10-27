@@ -14,6 +14,7 @@ import Proofs.Flock.Bridge.Rows
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.KSLive
 import Proofs.Flock.Bridge.Public
+import Proofs.Flock.Bridge.RowsReg
 import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.PublicWitnesses
@@ -28,9 +29,11 @@ import Proofs.Flock.Bridge.HiddenModelWitness
 of `SampledKSLive` is recorded. `KSLive`: `Flock.Bridge.sampledKSLiveXr : Flock.Bridge.SampledKSLiveXr`, the sampled
 statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 ports) and the constants `κ` and `canonAt`, with
 the claims at the extracted values, proved (`Flock.Bridge.assemblyTargetC` with every target it takes);
-`Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`, the claims at the registrant's rows, from the
-count curve at the rows link (`Rows`, `RowsC`); and `Flock.SecurityProofs.SampledKSLiveV3 :
-Flock.Guarantees.SampledKSLiveV3`, V2 with its file preconditions read off the verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
+and `Flock.Bridge.sampledKSLiveV2Z`, the claims at the registrant's rows under `verify --zk`, from the count curve at
+the rows link (`Rows`, `RowsC`). `RowsReg`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
+the claims at the registrant's rows under `verify --zk --registered F`, from those two, and
+`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its file preconditions read off the
+verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
 (`Flock.Bridge.lowers`).
 `FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`), at any claims values
 that are the evaluation on its wires (`Flock.Bridge.faultyRows`). `Public`:

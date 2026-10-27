@@ -8,15 +8,15 @@ import Proofs.Flock.Bridge.Rows
 import Proofs.Flock.Bridge.Transports
 
 /-!
-# `SampledKSLiveV2` and `SampledKSLiveV3`, proved
+# The sampled audit's knowledge soundness at the extracted values and under `verify --zk`, proved
 
 `Flock.Bridge.sampledKSLiveXr : Flock.Bridge.SampledKSLiveXr`: `AssemblyTargetC` (`assemblyTargetC`) with canonical
 transport (`transportsLiveC`), M1's core (`faultyRightTargetC`), the slot count (`partRus`), the count lemma (`count`)
 and `EndToEndHiddenC` (`endToEndHiddenC_of`, from `openingsCanon`) plugged in.
-`Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`: the claims at the registrant's rows, from
-the count curve at the rows link (`sampledKSLiveV2_of_count`), canonical transport, the count lemma and canonical
-openings. `Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`: V2 with its file preconditions read
-off the verifiers' acceptance (`sampledKSLiveV3_of`).
+`Flock.Bridge.sampledKSLiveV2Z : Flock.Guarantees.SampledKSLiveV2Z`: the claims at the registrant's rows under
+`verify --zk`, from the count curve at the rows link (`sampledKSLiveV2Z_of_count`), canonical transport, the count lemma
+and canonical openings. `SampledKSLiveV2`, `SampledKSLiveV3` (`RowsReg`) and `SampledKSLivePub` (`Public`) are proved
+from these two.
 -/
 
 /-- **The sampled audit's knowledge soundness, live, at the extracted values** (`Flock.Bridge.SampledKSLiveXr`). -/
@@ -24,11 +24,7 @@ theorem Flock.Bridge.sampledKSLiveXr : Flock.Bridge.SampledKSLiveXr :=
   Flock.Bridge.assemblyTargetC Flock.Bridge.transportsLiveC Flock.Bridge.faultyRightTargetC Flock.Bridge.partRus
     Flock.Bridge.count (Flock.Bridge.endToEndHiddenC_of Flock.Bridge.openingsCanon)
 
-/-- **The sampled audit's knowledge soundness, live, at the registrant's rows** (`Flock.Guarantees.SampledKSLiveV2`). -/
-theorem Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2 :=
-  Flock.Bridge.sampledKSLiveV2_of_count Flock.Bridge.transportsLiveC Flock.Bridge.count Flock.Bridge.openingsCanon
-
-/-- **The sampled audit's knowledge soundness, live, on the event that the verifiers accept the files**
-(`Flock.Guarantees.SampledKSLiveV3`): no hypothesis on the files' rows, names, roots or population order. -/
-theorem Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3 :=
-  Flock.Guarantees.sampledKSLiveV3_of Flock.SecurityProofs.SampledKSLiveV2
+/-- **The sampled audit's knowledge soundness, live, at the registrant's rows, under `verify --zk`**
+(`Flock.Guarantees.SampledKSLiveV2Z`). -/
+theorem Flock.Bridge.sampledKSLiveV2Z : Flock.Guarantees.SampledKSLiveV2Z :=
+  Flock.Bridge.sampledKSLiveV2Z_of_count Flock.Bridge.transportsLiveC Flock.Bridge.count Flock.Bridge.openingsCanon

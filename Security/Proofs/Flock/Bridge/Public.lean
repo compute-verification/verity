@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 /-!
 # The sampled audit's knowledge soundness at the registrant's rows, with a public error
 
-`SampledKSLiveV2` bounds `Pr[flock-verify accepts ∧ ¬ RelS]`, the claims read at the rows the registrant opens, by four
+`SampledKSLiveV2Z` bounds `Pr[flock-verify accepts ∧ ¬ RelS]`, the claims read at the rows the registrant opens, by four
 terms, three of which read the prover's run: its knowledge finders' collision probabilities (`ksAvgPrZ`), its link
 finders' (`linkPrZC`) and the rows term (`rowsPrZC`). `SampledKSLivePub` states it in the additive form
 `δ + f(Pr[B^τ])`: a public error `δ` (`Bridge.deltaPubR`) plus a loss `f` (`Bridge.lossPubR`) in the probability that
@@ -293,7 +293,7 @@ theorem _root_.Flock.Bridge.lossPub_nonneg (k W : ℕ) {ρ p : ℝ} (hρ : ρ < 
     (Real.sqrt_nonneg _)) h) (div_nonneg (mul_nonneg (Nat.cast_nonneg _) hp) h)
 
 open Classical FlockSoundness.Discharge.ZkReg in
-/-- **`SampledKSLivePub` from `Bridge.SampledKSLiveXr` and `SampledKSLiveV2`.** At `p = K·Pr[B^τ]` each member of
+/-- **`SampledKSLivePub` from `Bridge.SampledKSLiveXr` and `SampledKSLiveV2Z`.** At `p = K·Pr[B^τ]` each member of
 `B^τ` succeeds with probability at most `p` (`pubFamR_le`), so `pubFinder`'s do (`pubFam_le_R`) and the bound's first
 three terms are at most `δ + f(J²p)` (`Bridge.boundPr_le_pub_of`). The registered reads' leaves are the public file's
 at every registration, so `rd.Off` is one proposition.
@@ -302,9 +302,9 @@ at every registration, so `rd.Off` is one proposition.
   (`checked_of_acceptsHJ`, `Registered.ReadsX.offAt_conflict`), the registered reads' finder's output on that play, so
   such outcomes are at most `p`; at every other outcome the claims are `Bridge.SampledKSLiveXr`'s.
 * **Not off**: the registrant's openings open the registered commitments at every read, the claims are
-  `SampledKSLiveV2`'s at every outcome, and its rows term is at most `W·(p + k/(eR_w))/(1 − ρ)` (`rowsPrZC_le_pr`,
+  `SampledKSLiveV2Z`'s at every outcome, and its rows term is at most `W·(p + k/(eR_w))/(1 − ρ)` (`rowsPrZC_le_pr`,
   `rowsFinderPrZC_le_mix`, `qs_le_io`). -/
-theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2) : SampledKSLivePub := by
+theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2Z) : SampledKSLivePub := by
   intro n Reg own I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω
     _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' K₀ hK₀ τ v qR q L G P vb wo σ Xr δ Cc rows roots Cd κ vreg B
   have hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ := fun S R j =>
@@ -464,4 +464,4 @@ end Flock.Guarantees
 /-- **The sampled audit's knowledge soundness, live, at the registrant's rows, in the additive form**
 (`Flock.Guarantees.SampledKSLivePub`). -/
 theorem Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub :=
-  Flock.Guarantees.sampledKSLivePub_of Flock.Bridge.sampledKSLiveXr Flock.SecurityProofs.SampledKSLiveV2
+  Flock.Guarantees.sampledKSLivePub_of Flock.Bridge.sampledKSLiveXr Flock.Bridge.sampledKSLiveV2Z

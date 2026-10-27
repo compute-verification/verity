@@ -33,8 +33,9 @@ targets read them:
   plurality (`XplurZC`);
 * `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `Bridge.SampledKSLiveXr`.
 
-`SampledKSLiveV2` (`Rows`) is its setting with the claims' values at the registrant's rows. `SampledKSLiveV3`
-(`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail them.
+`SampledKSLiveV2Z` (`Rows`) is its setting with the claims' values at the registrant's rows, and `SampledKSLiveV2`
+(`RowsReg`) the same under `verify --zk --registered F`. `SampledKSLiveV3` (`RowsReg`, `Refused`) reads V2's file
+preconditions off the verifiers' acceptance, which refuses files that fail them.
 -/
 
 namespace Flock.Bridge

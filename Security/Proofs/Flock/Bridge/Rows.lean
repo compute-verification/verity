@@ -6,21 +6,25 @@ import Proofs.Flock.Soundness.Registered.ReadsX
 import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 
 /-!
-# The sampled audit's knowledge soundness at the registrant's rows (`SampledKSLiveV2`)
+# The sampled audit's knowledge soundness at the registrant's rows, under `verify --zk` (`SampledKSLiveV2Z`)
 
 `Bridge.SampledKSLiveXr` reads the claims' values off the extracted plurality (`XplurZC`): every wire carries its value
 in the circuit's evaluation on `XplurZC`'s inputs, so a unit that computes correctly on whatever rows the session
-committed passes, whatever rows were registered. `SampledKSLiveV2` reads them at the rows the registrant opens: at each
+committed passes, whatever rows were registered. `SampledKSLiveV2Z` reads them at the rows the registrant opens: at each
 of the session's registered reads (`Registered.ReadsX`, as `EndToEndRegisteredRows` takes them) the bit of the
 registrant's row (`rd.wv`), and elsewhere the evaluation on `XplurZC`'s inputs. So a unit that is correct on the
 session's rows but not on the registrant's fails the claim. Its bound is `Bridge.SampledKSLiveXr`'s plus the rows term
 `rowsPrZC`: the audit extractor's mass at the registered reads where it reads a value other than the registrant's.
 
-`Flock.Bridge.sampledKSLiveV2_of_count` proves it from `TransportsLiveC`, `CountTarget` and `OpeningsCanonTarget`: a
+`Flock.Bridge.sampledKSLiveV2Z_of_count` proves it from `TransportsLiveC`, `CountTarget` and `OpeningsCanonTarget`: a
 faulty population slot is a unit wrong on the registration with canonical openings or off the registrant's rows
 (`faultyRows`: a unit in neither carries the evaluation at every committed wire, by `Partition.correct_eval`), so the
 count curve at `wrongRegZc ∪ rowsWrongZ` (`ZkLink.zk_flock_countPr_rowsC`) bounds the event by
 `miss + ε_ks + δ_link + rowsPrZC`, each term at the finders' collision probabilities, with no hash premise.
+
+Its event is `verify --zk`'s acceptance, which checks no registered read, so its rows term is at the finders only where
+the registrant's leaves are the registered ones. `SampledKSLiveV2` (`RowsReg`) states it under
+`verify --zk --registered F`, and `SampledKSLivePub` in the additive form; both are proved from this.
 -/
 
 namespace Flock.Guarantees
@@ -32,7 +36,8 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **The sampled audit's knowledge soundness, live, at the registrant's rows.** `Bridge.SampledKSLiveXr`'s setting
+/-- **The sampled audit's knowledge soundness, live, at the registrant's rows, under `verify --zk`.**
+`Bridge.SampledKSLiveXr`'s setting
 (circuit files of `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` ports, `Bridge.RowsOk`, each of one name,
 with no colliding pair of roots, and a descriptor and query that evaluate to the game's `n` units in order), with a
 registrant's opening `rd` of the session's registered reads (`Registered.ReadsX`, as in `EndToEndRegisteredRows`). The
@@ -44,7 +49,7 @@ $$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witR
 `ε_ks`, `δ_link` `Bridge.SampledKSLiveXr`'s, its finders' probabilities of outputting a SHA-512 collision, and
 `δ_rows` the rows term `rowsPrZC` at the registrant's openings. No collision-resistance hypothesis; its named assumptions
 are A3 and `live-verifier`. -/
-def SampledKSLiveV2 : Prop :=
+def SampledKSLiveV2Z : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
@@ -114,10 +119,10 @@ def SampledKSLiveV2 : Prop :=
               1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ)) +
         rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo k ρ (reg σ) (cont σ)
 
-/-- **`SampledKSLiveV2` from the count curve at the registrant's rows**, canonical transport, the count lemma and
+/-- **`SampledKSLiveV2Z` from the count curve at the registrant's rows**, canonical transport, the count lemma and
 canonical openings. -/
-theorem _root_.Flock.Bridge.sampledKSLiveV2_of_count (hT : Bridge.TransportsLiveC) (hC : Bridge.CountTarget)
-    (hOC : Bridge.OpeningsCanonTarget) : SampledKSLiveV2 := by
+theorem _root_.Flock.Bridge.sampledKSLiveV2Z_of_count (hT : Bridge.TransportsLiveC) (hC : Bridge.CountTarget)
+    (hOC : Bridge.OpeningsCanonTarget) : SampledKSLiveV2Z := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω
     _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ q L P vb wo σ Xr δ Cc rows roots Cd κ vreg
   by_cases hk0 : kd = 0
