@@ -170,8 +170,8 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
 
 
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
-    """A copy of some 8 GB under `lean-deps/<k>.lock` held check's lean-audit, which moves the dependencies in under that lock,
-    for as long as it took (red team). Under the lock only hard links are made; the copy is taken from them after, and
+    """A copy of some 8 GB under `lean-deps/<k>.lock` would hold check's lean-audit, which moves the dependencies in under that
+    lock, for as long as it takes. Under the lock only hard links are made; the copy is taken from them after, and
     they are gone once it's done, or at the next run in that tree when one died mid-copy."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     k = LC.LA.deps_key(repo / "a")
@@ -223,8 +223,8 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
 
 
 def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, capsys):
-    """A write of `links.json` in place that failed on a full disk after truncating it left it empty, and every later
-    run on that slot's tree failed reading it (r20261019-232316-c617). The tree takes its dependencies again, as a new
+    """A write of `links.json` in place that fails on a full disk after truncating it leaves it empty, and every later
+    run on that slot's tree would fail reading it. The tree takes its dependencies again, as a new
     tree does, and the file is replaced whole."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     k = LC.LA.deps_key(repo / "a")
@@ -347,7 +347,7 @@ def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys, m
 
 def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_path, monkeypatch, capsys):
     """A node without SLOTS gives every `--records` run the one `local` tree; a second run waits for the first instead of
-    refusing in 0 s (vy-nebius-cpu-2, 19 Oct), and then runs, naming itself as the holder."""
+    refusing in 0 s, and then runs, naming itself as the holder."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     tree.mkdir(parents=True)
     held = open(tree / ".lock", "w")
@@ -359,8 +359,8 @@ def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_pat
 
 
 def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):
-    """`--tree` naming check's lean-changed tree, whose links.json says its dependencies are linked: the fast path kept those
-    hard links to check's lean-deps and built on them unsandboxed (red team). Only a tree under lean-records/ is its own."""
+    """`--tree` naming check's lean-changed tree, whose links.json says its dependencies are linked: the fast path would keep
+    those hard links to check's lean-deps and build on them unsandboxed. Only a tree under lean-records/ is its own."""
     deps, cache = tmp_path / "deps", tmp_path / "cache"
     k = LC.LA.deps_key(repo / "a")
     (deps / k / "dep").mkdir(parents=True)
@@ -448,8 +448,8 @@ def test_the_record_update_wrote_is_kept_so_its_commit_runs_nothing_and_requirer
 
 def test_a_package_that_reads_the_same_files_as_one_that_passed_still_runs(reuse, tmp_path, monkeypatch, capsys):
     """`Security` and `Security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
-    `--records Security`, whose requirer `Security/Properties` failed, was taken as that requirer's: `--records
-    Security/Properties --update` then ran nothing and wrote no record (r20261026-050354-87cc). Here `a` requires `p` by
+    `--records Security`, whose requirer `Security/Properties` failed, must not be taken as that requirer's, or `--records
+    Security/Properties --update` runs nothing and writes no record. Here `a` requires `p` by
     path and `p` is proved in `a`."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')

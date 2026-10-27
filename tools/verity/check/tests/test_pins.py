@@ -159,7 +159,8 @@ def lake_repo(tmp_path, monkeypatch):
 
 def _side(root: Path, base: str, name: str, before: bool, top: bool = True) -> str:
     """A branch off ``base`` whose `base` package requires a new package ``name`` by path (first in its lakefile, or last), with
-    base's manifest regenerated there, and top's and the pin unless not ``top`` (as #1524 and #1497 left Security/Proofs')."""
+    base's manifest regenerated there, and top's and the pin unless not ``top`` (as a branch that leaves Security/Proofs' does).
+    """
     subprocess.run(["git", "checkout", "-q", "-b", name, base], cwd=root, check=True, env=ENV)
     (root / name).mkdir()
     (root / name / "lakefile.toml").write_text(f'name = "{name}"\n')

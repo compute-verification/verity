@@ -16,7 +16,8 @@ A, B, C, D = (f"art:{c * 64}" for c in "abcd")
 
 
 def test_two_prs_that_each_register_a_fixture_merge_and_a_key_set_two_ways_refuses():
-    """12 Oct: #1870 ejected from `next` for a text conflict with #1847, each having added a key."""
+    """Two PRs that each add a key to the registry merge, rather than eject from `next` for a text conflict; a key added on
+    both sides differently refuses."""
     base = {A: "f/a.json"}
     merged, why = MM.merge(base, {A: "f/a.json", B: "f/b.json"}, {A: "f/a.json", C: "f/c.json"})
     assert why == [] and merged == {A: "f/a.json", B: "f/b.json", C: "f/c.json"}
