@@ -151,10 +151,9 @@ theorem soundness_of_subprotocols_honest {ι α : Type} [Fintype α] {d : Device
         ≤ V.error a θ F c (V.honest θ F c)) ∧
       Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o)
         (V.game θ F c) (V.honest θ F c) = 0 := by
-  subst hc
-  have h0 : ∀ a, Game.prob (fun o => ¬ V.Holds θ F (commit θ F) (V.honest θ F (commit θ F)) a o)
-      (V.game θ F (commit θ F)) (V.honest θ F (commit θ F)) = 0 :=
-    fun a => h a θ F hreg
+  have h0 : ∀ a, Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0 := by
+    subst hc
+    exact fun a => h a θ F hreg
   refine ⟨fun a => ?_, le_antisymm ?_ zero_le⟩
   · refine le_trans (Game.prob_mono (p := fun o => V.Verdict a o ∧ ¬ V.Holds θ F c (V.honest θ F c) a o)
       (q := fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (fun o ho => ho.2) _ _) ?_
@@ -222,7 +221,6 @@ theorem soundness_at_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Voc
     Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
         ∃ a, D.Decides a ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0 := by
   classical
-  subst hc
   refine le_antisymm ?_ zero_le
   calc Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
           ∃ a, D.Decides a ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c)
@@ -232,7 +230,7 @@ theorem soundness_at_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Voc
     _ ≤ ∑ a ∈ Finset.univ.filter D.Decides,
           Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) :=
         prob_exists_finset_le _ _ _ _
-    _ = 0 := Finset.sum_eq_zero fun a ha => h a (Finset.mem_filter.1 ha).2 θ F hreg
+    _ = 0 := Finset.sum_eq_zero fun a ha => by subst hc; exact h a (Finset.mem_filter.1 ha).2 θ F hreg
 
 /-- **One decided claim's failing instance is the deployment's theorem's**: `soundness_of_subprotocols_nontrivial_of`
 at the deployment `D`, for a claim `a` that `D` decides. -/
