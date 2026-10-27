@@ -98,10 +98,12 @@ variable (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wir
 `InstKeysRow` from the parse at the reference setup's statement. -/
 noncomputable abbrev rsShHI : Binding.HmRowsX (layShHI dj y₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
   instRowsH (sitesShHI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (sitesShHI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowH (zkTyped ht) hc dj y₀.x hU hpr hw)
 
 theorem rsShHI_computes : (rsShHI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesShHI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHI_bcSite dj y₀ ht hc hrf hpub)
     (instKeysRowH (zkTyped ht) hc dj y₀.x hU hpr hw)
 
@@ -264,10 +266,12 @@ theorem instKeysRowHJ : InstKeysRow c (portRowW c) :=
 `sitesShHJI_bcSite` and `InstKeysRow` from `instKeysRowHJ`. -/
 noncomputable abbrev rsShHJI : Binding.HmRowsX (layShHJI dj y₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
   instRowsH (sitesShHJI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (sitesShHJI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowHJ y₀ ht hc hU hpr hw)
 
 theorem rsShHJI_computes : (rsShHJI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesShHJI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHJI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowHJ y₀ ht hc hU hpr hw)
 
 /-- **Each drawn unit's place in its hidden-output `--zk` table at `J` tables, at `instProg`**: `instPlaceH`'s place

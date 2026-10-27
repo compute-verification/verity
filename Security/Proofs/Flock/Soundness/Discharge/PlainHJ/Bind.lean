@@ -136,11 +136,13 @@ theorem instKeysRowPHJ : InstKeysRow c (portRowW c) :=
 `InstKeysRow` from `instKeysRowPHJ`. -/
 noncomputable abbrev rsPHJI : Binding.HmRowsX (layPHJI dj x₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
   instRowsH (sitesPHJI_parse dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS ht hc hrf.1)
     (sitesPHJI_bcSite dj x₀ ht hc hrf hpub) (instKeysRowPHJ x₀ ht hc hU hpr hw)
 
 /-- **`hHm` at the plan's rows, at `instProg`** (`instRowsH_computes`, a unit per VU from the check). -/
 theorem rsPHJI_computes : (rsPHJI dj x₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesPHJI_parse dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS ht hc hrf.1)
     (checkFactsH ht hc).upv_pos (sitesPHJI_bcSite dj x₀ ht hc hrf hpub) (instKeysRowPHJ x₀ ht hc hU hpr hw)
 
 /-! ## Where the wires feed neither the unit nor the outputs: the unit's key program
