@@ -30,7 +30,16 @@
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Period": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "CoreProtocol.Blobs", "CoreProtocol.Profile", "SampledProofs.OneStageZk", "SampledProofs.Partition", "Flock.Program", "Flock.Public"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "CoreProtocol.Blobs",
+    "CoreProtocol.Profile",
+    "SampledProofs.OneStageZk",
+    "SampledProofs.Partition",
+    "Flock.Program",
+    "Flock.Public"
+   ],
    "except": [],
    "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, N2's link-window public row and opening, the core interface with its blobs and integrity profile (to read one-stage's answers), one-stage v2 (to run it on each link-window's proof), C-Flock's program decoder (the scan's Program, whose templates give its terms) and C-Flock's frame-v3 hash (the rows' domain), no Mathlib and nothing of Security"
   },
@@ -219,6 +228,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+  "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
  }
 }
