@@ -4,7 +4,7 @@ import Definitions.Pouw.Guarantees.Eps1
 # M3's basic lemmas for Dither's lower bounds
 
 Runs exist and are unique, a block's outside slots, the zero instance's fiber and the information count (QSTAR's
-Theorem B; gap list E1–E5: note:20261017T0801Z-draft-lean-stmt).
+Theorem B; gap list E1–E5).
 -/
 
 namespace Pouw.SecurityProofs.Eps1

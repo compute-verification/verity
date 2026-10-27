@@ -39,9 +39,9 @@
   window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
   ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, #4404's ``certifier.answer.json``,
   its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
-  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``), #4404's
-  `block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is ``network-period
-  check``'s own on its case (`decide_period`; `block_entry`).
+  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
+  `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
+  ``network-period check``'s own on its case (`decide_period`; `block_entry`).
 * **The warden path** (``--job``'s ``path``, `WARDEN`): every step reads an active warden's own run (the gate's
   ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's, whose input is
   refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the warden's own offline check on its witness
@@ -58,7 +58,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import math
 import os
@@ -122,11 +121,12 @@ WARDEN_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
+#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, and the certifier doesn't meet J there:
+#: an offset the prover chooses within a bucket reaches the client
+JITTER = "assumed (J)"
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
-#: the all-protocols runner's network accounting, whose `block_leg` is the block record's one certifier entry
-ALLP_CERTIFIER = HERE.parent / "all_protocols" / "legs" / "certifier.py"
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
                     "answer) beside each link-window's N2 registration, and this report has neither")
@@ -506,10 +506,10 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
 
 
 def free_inputs(circuit: dict) -> int:
-    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``, by the rule of #4404's
-    ``legs/certifier.free_inputs``: every unit's input-row bits (each template's units times its statement's
-    ``in_rows`` widths), less each unit's rows whose every port a wire feeds from another unit's output (``wires``) or
-    ``external`` names as the system's I/O. A row the registration's anchors register still counts, an overcount."""
+    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``, by #4404's rule: every unit's
+    input-row bits (each template's units times its statement's ``in_rows`` widths), less each unit's rows whose every
+    port a wire feeds from another unit's output (``wires``) or ``external`` names as the system's I/O. A row the
+    registration's anchors register still counts, an overcount."""
     from verity.ml.windows.interface import Wire
 
     units = {t: n for t, n in circuit["templates"]}
@@ -538,8 +538,9 @@ def free_inputs(circuit: dict) -> int:
 def audit_of(d: Path) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its units, the
     units its law draws (a subset law's ``k``, a stratified law's ``Σ k``, as `NetworkCheck.Period` counts them), the
-    least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs (`free_inputs`); no
-    jitter term, N2 holding the egress counts exactly."""
+    least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
+    (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
+    within a bucket."""
     reg = json.loads((d / "registration.json").read_text())
     law, n = reg["law"], reg["population"]
     if law.get("law") == "subset":
@@ -561,7 +562,8 @@ def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     counts it: the faulty units paid once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of
     its compute audits (a stratified audit's least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits, and the cells')
     + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability
-    ``δ + Σ_i (e_i + e'_i)``. #4367 is conditional on its per-window inputs, so this K is cited as conditional."""
+    ``δ + Σ_i (e_i + e'_i)``. `HorizonLeakAccepted` is conditional on its per-window inputs, so this K is cited as
+    conditional, and its jitter term as `JITTER` (``jitter_term``)."""
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)
@@ -570,7 +572,7 @@ def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     k = sum(terms.values())
     return {"delta": str(delta), "q": str(q), "Fmax": fmax, "units": n, "terms": terms, "K": k,
             "share": k / (OUT_BITS * n), "eps": f"{delta} + Σ_i (e_i + e'_i) over {len(audits)} audits",
-            "conditional": HORIZON_CONDITION}
+            "conditional": HORIZON_CONDITION, "jitter_term": JITTER}
 
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
@@ -681,7 +683,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"log2_Ss": 0, "cap_per_request": cap, "free": free, "faulty": 0, "jitter": 0,
-                      "b": NS + NV, "fmax": {f"{d:g}": math.ceil(math.log(1 / d)) for d in LEAK_DELTAS}},
+                      "jitter_term": JITTER, "b": NS + NV,
+                      "fmax": {f"{d:g}": math.ceil(math.log(1 / d)) for d in LEAK_DELTAS}},
             "weights_bits": weights_bits, "rows": rows,
             "theorems": {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted (#4326, #4349, #4373, #4370)",
                          "pooled": "HorizonLeakAccepted (#4367), conditional: hesc and hleak await SampledKSLive "
@@ -691,6 +694,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "a claim, with lean and Daniel",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
                 "and the server can't move an admission (not met today)",
+                f"the jitter term is 0 at D_j = 1, {JITTER}, which the certifier doesn't meet: an offset the prover "
+                "chooses within a bucket reaches the client",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
                 "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
@@ -707,7 +712,7 @@ def leak_markdown(doc: dict) -> str:
     share = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:.3g}×" if x < 100 else f"{x:,.0f}×"
     lines = []
     for reading, title in READINGS.items():
-        lines += [f"**{title}**, bits, and the share of the weights:", "",
+        lines += [f"**{title}**, bits, and the share of the weights (the jitter term 0, {JITTER}):", "",
                   "| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |",
                   "|---|---|---|---|---|---|"]
         lines += [f"| {r['period']} | {r['machines']:,} | {bits(r['pooled'][d1])} ({share(r['pooled_share'][d1])}) | "
@@ -752,22 +757,16 @@ def stubbed(job: dict, custody_doc: dict) -> list[str]:
     return out
 
 
-def _allp():
-    name = "network_traces_allp_certifier"
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, ALLP_CERTIFIER)
-        sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[name])
-    return sys.modules[name]
-
-
 def decide_period(case: dict) -> dict:
     """``network-period check`` on ``case``: certifier/v0's answer by its verifier (`NetworkCheck.Period`, the
-    executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as #4404's runner decides a period."""
+    executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as #4404's runner decides a period
+    (`block_certifier.check`)."""
+    from block_certifier import check
+
     exe = os.environ.get("VERITY_NETWORK_PERIOD_EXE")
     if not exe:
         raise RuntimeError("no VERITY_NETWORK_PERIOD_EXE: no network-period executable to re-decide the case")
-    return _allp().check(exe, case)
+    return check(exe, case)
 
 
 def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], audits: list[dict]) -> str | None:
@@ -814,11 +813,13 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
 
 def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server: str | None, runs: list[str],
                 chain: dict) -> dict:
-    """The block record's certifier entry: #4404's `block_leg` of certifier/v0's period ``answer`` on ``server``, from
-    ``runs``. Written only when the chain itself is accepted, the answer is held to it (`period_binding` on ``chain``:
+    """The block record's certifier entry: `block_certifier.block_leg` of certifier/v0's period ``answer`` on
+    ``server``, from ``runs``. Written only when the chain itself is accepted, the answer is held to it (`period_binding` on ``chain``:
     its certificates, N2's registrations and the ``--audit`` registrations) and ``network-period check`` gives exactly
     that answer on its ``case`` (`decide_period`), so neither a refused chain nor another period's answer carries a K;
     else why not, `block_leg`'s refusal included."""
+    from block_certifier import block_leg
+
     why = (NO_PERIOD_ANSWER if answer is None else
            f"the chain is {verdict}: only an accepted chain carries a K" if verdict != "accepted" else
            "no --server: the node the block ran on" if not server else
@@ -834,7 +835,7 @@ def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server:
         return {"written": False, "why": f"network-period check on the case answers {again.get('verdict')} with K "
                 f"{(again.get('public') or {}).get('K')}, not the given answer: it isn't the verifier's on this case"}
     try:
-        return {"written": True, "entry": _allp().block_leg(answer, server=server, runs=runs, source="real")}
+        return {"written": True, "entry": block_leg(answer, server=server, runs=runs, source="real")}
     except ValueError as e:
         return {"written": False, "why": f"block_leg: {e}"}
 
@@ -944,8 +945,8 @@ def markdown(r: dict) -> str:
     for delta, h in k.items():
         if isinstance(h, dict) and "K" in h:
             lines.append(f"- K at δ = {delta}: {h['K']} bits, {h['share']:.3g}× the {h['units']} units' "
-                         f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}; "
-                         f"{h['conditional']}")
+                         f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}, "
+                         f"the jitter term {JITTER}; {h['conditional']}")
     lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
     b = r.get("block") or {}
     if b.get("written"):

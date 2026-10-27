@@ -282,8 +282,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
       commitment and a 32-byte setup salt. That goes with the rest of the spec's setup framing (its leaves and
       challenge derivation), which the generic protocol does not yet follow;
     - `p2-16448/v2`: ChaCha8 keyed by a 32-byte seed per segment (`SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)`), with
-      nonce = the block index. It is **nonconforming** to F4, and its `experimental` reason says so. It is kept
-      because its keys cost about 1% of the device's decode work, and `benchmarks/pous`'s `p2-gpu` arm measures it.
+      nonce = the block index. It is **nonconforming** to F4, and its `experimental` reason says so. Its keys cost
+      about 1% of the device's decode work.
   - Both certificates are the pinned `Pous.SecurityProofs.P2SlackFamilyUncond` at the spec's k = 105 (decision F6):
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and

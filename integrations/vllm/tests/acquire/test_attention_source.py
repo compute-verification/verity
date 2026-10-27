@@ -153,7 +153,7 @@ def test_pitched_2d_is_the_native_collectors_staging_rule():
 @pytest.mark.slow
 def test_every_value_handed_to_the_committer_is_one_the_native_collector_stages(runs):
     """The native collector stages a contiguous tensor or equally spaced contiguous rows and raises on anything else ("layout is
-    not 2-D pitched", every rank of r20261013-002759-c965 on 8x H200). The W_UK_T product of a step of more than one token is a
+    not 2-D pitched", every rank on 8x H200). The W_UK_T product of a step of more than one token is a
     transposed bmm output, so the source hands the committer a contiguous copy of it, word-equal to it
     (`test_each_bound_value_is_the_one_the_layer_computed`)."""
     for r in runs.values():

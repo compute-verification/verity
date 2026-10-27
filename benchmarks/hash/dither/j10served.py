@@ -1,16 +1,16 @@
 """J10 banded noise served (kernels-j10; measured only, nothing here is served or credited): sbench.py through hb_sbench.py,
 plus each credited one-stream arm's twin on J10 banded noise at bands of G column tiles, paired with it in one run. Every
-banded arm's gate holds it to CA's banded reference itself (#2866, `banded.banded_reference` under the tree
+banded arm's gate holds it to CA's banded reference itself (`banded.banded_reference` under the tree
 `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and requires it; its check docs carry `j10b_ref.CA_LABEL`.
 
     dither-1s-hbk-bG     (H200, B200) dither-1s-hbk with h1u.cu's kh_one_peel_band at G in place of kh_one_peel, from the
-                         same .so (HB_H1U_KSPLIT): h1j_noise hashes each band's row blocks once, into its leader's
+                         same .so (HB_H1U_KSPLIT): h1j_noise hashes each band's row tiles once, into its leader's
                          workspace region, and every unit's columns. Gated as dither-1s-hbk (hb_peel.check, its tokens
                          equal to exact's on the gate and every rep), with the receipts reference h1r_launch_band at G
                          (j10rtx.BandH1R), the CPU units' rows from their band leader's seed_j (j10b_ref.rows_of: in
                          dither_one.h1v3_unit and hb_peel.peel_cpu), and CA's banded_reference on the same units in place
                          of H1V3's tree (per-unit noise, which a non-leader doesn't use; CA's reference at G = 1 is it).
-    dither-a-hbk*-bG     (H200, B200) a dither-a arm on the hbk unit (ASK-71's option A, labelled by `forms.form_of`: beside) with
+    dither-a-hbk*-bG     (H200, B200) a dither-a arm on the hbk unit (option A, labelled by `forms.form_of`: beside) with
                          kh_one_band at G in its side unit's kh_one place, from the same .so. Gated as its base
                          (dither_a.check: commitments, z = int_mm, y, the no-write control and the fault), with the
                          same three swaps in dither_a's check: h1r_launch_band at G, leader rows, CA's banded_reference.

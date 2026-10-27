@@ -590,8 +590,8 @@ and `0 < b` makes the draw space nonempty. The
 scope is the model's: the arrival coins are the memory challenger's own randomness, independent of the setup and the
 answers; memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which
 the step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
-answers from 1.53% of `C` in 481 Keccak-f, under one call: red team, 4 Oct 2026, art:7617c8017e80). Proof:
-`PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
+answers from 1.53% of `C` in 481 Keccak-f, under one call: the red team's state attack, `primitives.pi2_keccak_f`).
+Proof: `PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
 def ContinuousTimeAverage : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β T a b : ℕ) (π : ℝ≥0∞), 0 < b → a ≤ b →
     TimedINC sch D Q β π →

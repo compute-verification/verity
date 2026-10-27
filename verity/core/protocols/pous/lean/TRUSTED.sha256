@@ -10,12 +10,12 @@ ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
 dfae08da1e146f1dea12f56c699f7f3b4e2f8d889f86260dad9472a5a7d2255a  ../../../../../Security/Proofs/lakefile.toml
 8609098f5954eea4f25ceb9279653bb306d1a49386eed63d79bd6e82119d505a  ../../../../../Security/Proofs/lake-manifest.json
 98b5fc072eb4664d744bd8ed1cb98222e7777c57b60fb759a89b072d688a53ca  ../../../../../Security/Definitions/Pous.lean
-7daaf4f385d45f2105692394c5a1fad4ec465b93f60fd3f9d44b805ec225ccf5  ../../../../../Security/Proofs/Pous/Statements.lean
+785a056678dd06eba68646071d54be3ff70cb07b61e36525829c7b6c47288b0f  ../../../../../Security/Proofs/Pous/Statements.lean
 57d86e4aa918aa43d237c72f4cf793324c1269dd6aa4a3c70550d7da7dc22c15  ../../../../../Security/Proofs/Pous/Sanity.lean
 7bd66e3b6894d7a96eba69163dfa99f8b9f4f9be5f9deddfc4d5fa2ed17ac137  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
 8d8d4c2d8c0d59f748a6aa62c9f8c96d28c0866c91e95d92f75ccd92514af590  ../../../../../Security/Definitions/Pous/Accounting/GradedMeets.lean
 f880248af5267b110f4cdfd91c67000c4a81917eb942429f7cae2ee5d4850f66  ../../../../../Security/Definitions/Pous/Accounting/LemmaA.lean
-730f8de8e2edaae95ea447c7340b39e581a9add7a77b97dd426b97b298e6c393  ../../../../../Security/Definitions/Pous/Accounting/Params.lean
+ac9965fb4f58f218a623c0d2bb61367a497e17f14da936662636fb04f4bfd63c  ../../../../../Security/Definitions/Pous/Accounting/Params.lean
 900c51a66e89220a189e1e48e2d7adf5746b7e201580c8f3f50c86f110c41544  ../../../../../Security/Definitions/Pous/Accounting/PubMeets.lean
 d288169b3dc60861ae150688cdc6facb8ae60d95a9ab91704852285843434db0  ../../../../../Security/Definitions/Pous/Accounting/Rebuild.lean
 80287395e1bd5ee050165df0215af429058d3a5903e4031d6830514caa24e9fe  ../../../../../Security/Definitions/Pous/Assumptions.lean
@@ -23,7 +23,7 @@ dd82bf99b9aa863b5018eb81207ed411ead20b6239e8386b139fa1d4ae59a93c  ../../../../..
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
 3a33b200d3d8f51c4b6a7ec993cab84e926f7a635fd240755d2f7c85ebdeaa5f  ../../../../../Security/Definitions/Pous/Guarantees.lean
-d0f70a392b1c2be585f0120acb9f35724dd801084221d39bd95678812f58ccd1  ../../../../../Security/Definitions/Pous/Guarantees/Obligation.lean
+623df150d61e97496ba6386d5f39cde87ea8f379f0f466ffecb21c5bf5429d72  ../../../../../Security/Definitions/Pous/Guarantees/Obligation.lean
 e42e5066c3a3ad7077406e623e58ffba216e6be149d5b09f4931518da6afb6fc  ../../../../../Security/Definitions/Pous/Guarantees/P2.lean
 553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
 2062ab1f060a0ce92f006f2deb4fcd7313fb294cebbd42caa57d60d8a43b70d3  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
@@ -32,7 +32,7 @@ b1ae1987eaad57aff9246dff623e1ff2f7a662719f7a5f6b43e035125e22b1f1  ../../../../..
 5a3a5196064a7b60bfd1c62a98076098d3093a8e4ceddc5bc5200fb51ff84ed9  ../../../../../Security/Definitions/Pous/Model/BandChain.lean
 de7f95a3337997aebdcc6bc391f32055040272e5262d9616a797cecdc003bc7f  ../../../../../Security/Definitions/Pous/Model/BandGraph.lean
 bf08a5d4fd4f4a182a5918df5719c8b3f1367ee558b8df44a55f48ff801791ca  ../../../../../Security/Definitions/Pous/Model/ColumnGame.lean
-eaa4b4080d1838ced23c6aab385daeeb89324337a758b8f1dd43c53f78927587  ../../../../../Security/Definitions/Pous/Model/Continuous.lean
+7f0735d8d8db451cd3ea942c44147fd027124b65d0d0009e01b4748ca6bdc268  ../../../../../Security/Definitions/Pous/Model/Continuous.lean
 4720078c803f1dc12bc5ae6b96a00982782e2cdf386d12c68868c92f4338df04  ../../../../../Security/Definitions/Pous/Model/Dense.lean
 f5c0663c315513f80228ee1d3eeb58a53bbf235852e1ce8c8010349e294dc253  ../../../../../Security/Definitions/Pous/Model/FreeBlocks.lean
 dbf67162f94885d3bfd7442a41564cdac0f154e5ab4f06f07a506dbe7dfed479  ../../../../../Security/Definitions/Pous/Model/Graded.lean
@@ -46,7 +46,7 @@ ffdd73ddee62b9bdb1e4f7c46f92646e31cb3a3962de0fe70c97111ba2d66728  ../../../../..
 f1cb69457a976ea0c34d38b6a6050ee2fd703b457c06875bd66c5705861597c4  ../../../../../Security/Definitions/Pous/Model/Pebbling.lean
 f17be8cbc547930461d46c4f41040ea165bfff15169972934aade312603dc129  ../../../../../Security/Definitions/Pous/Model/PubEncoder.lean
 3bc674296ecddb7085b7a283885dd8fe5a287a4cca359ca42830f4c874c32f49  ../../../../../Security/Definitions/Pous/Model/SampledAudit.lean
-1f3f7e30733ee1c47dde229d064fad37c6bfc5107e76e82b083ec7e96b498eba  ../../../../../Security/Definitions/Pous/Model/Scheme.lean
+a8742a4a816f812e808fd52187497102ec0c1bd4c02d425005d07fa6d9d753e0  ../../../../../Security/Definitions/Pous/Model/Scheme.lean
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 f5671be4b98bfe70d0cafff562ed2c79f5ac500482a652ac3c6d669e0fc836c1  ../../../../../Security/Definitions/Pous/Model/StreamedWipe.lean
 58c66950dee05bce6131152a168b1910b8059fd8d7967bc78259331ff96a15a5  ../../../../../Security/Definitions/Pous/P2/Cost.lean

@@ -351,6 +351,23 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
     return {"replay": sr, "linkage": lk.get("result")}
 
 
+def serving_rows(s: Site) -> None:
+    """The in-Commit hook (`serving_rows.readers`) at the C2 site of a run whose replay is deferred to its bundle: the window
+    committed from `s.com` over the Programs of record, as `evaluate` commits it in process, once the run's roots are final and
+    before any draw (the deferred replay draws on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
+    from verity_vllm.check.replay import driver as SR
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    bm = json.loads((s.out / f"binding_map_p{s.pair}.json").read_text())
+    rl = request_labels(s.reqs)
+    loaded, digs = programs_of_record(s, rl, definitions=False)
+    progs = {k: v["instances"] for k, v in loaded.items()}
+    arr, _moved = arrivals(s, rl)
+    k0 = next(iter(progs))
+    prefix = SR.ProgramIndex(progs[k0], program_dir=loaded[k0].get("dir")).prefix
+    SRW.readers(s.args.serving_rows, s.com, s.rc, s.weights_of(prefix), progs, bm, arr, loaded, s.manifest, s.args.label, digs)
+
+
 def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
