@@ -1,4 +1,4 @@
-"""The transition unit Check(x, y, h) and, by chaining, the proof unit.
+"""The transition unit Check(x, y, h) and, by chaining, the proof block.
 
     x = (c, a[0..k), b[0..k))     one FP32 word and 2k operand words
     y                             the FP32 word tc_dot(c, a, b) (an infinity when a group saturates)
@@ -159,7 +159,7 @@ def step_output(p: Params, c: int, a: Sequence[int], b: Sequence[int]) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# The proof unit
+# The proof block
 # ---------------------------------------------------------------------------------------------------------------------
 
 def gen_vu(p: Params, a: Sequence[int], b: Sequence[int]) -> dict:

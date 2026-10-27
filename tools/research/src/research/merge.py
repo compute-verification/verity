@@ -524,7 +524,7 @@ def _ran_on(store, rid: str, commit: str, fetch) -> bool:
 
 
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None, deferred: str | None = None, fetch=None) -> str | None:
+                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited (CI-64).
@@ -532,11 +532,14 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     ``deferred`` is the check drive lands the parent on with `--defer` while its deferred steps still run (`Driver.verdict`),
     which has no passing attempt yet: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its
     records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
-    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do."""
+    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
+    With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
+    commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
+    records, whatever the parent holds."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
-    parent = parents[0]
+    parent = ran if deferred is not None and ran else parents[0]
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}

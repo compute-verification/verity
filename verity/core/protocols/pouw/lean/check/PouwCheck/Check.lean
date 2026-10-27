@@ -167,7 +167,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else
-      let why := windowSaltReason p f.rootW e.salt
+      let why := windowSaltReason p c e.salt
       if why.isSome then .reject s!"salt: {why.getD ""}"
       else .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof
 

@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "PouwDitherBlock_v1{L=32,FIRST=False}": {
+   "and": 4535,
+   "type": "5aeb464c9e38dd651da1d44d330d5a1c171ffa536b02c24baf373b8c62bad99978c7a7448a5b22b567283f31bcc31e33b700157298bc93687b99e9e0af8f7591"
+  },
+  "PouwDitherBlock_v1{L=32,FIRST=True}": {
+   "and": 4520,
+   "type": "b630a438d36122ad05f2755442f4777d2682c72280c0b9b99787fcbc85c2ac93703d8bf00ed3441981384a72e1ba01a5c4b93e088580c49789f63c0eab25c313"
+  },
+  "PouwDitherBlock_v1{L=64,FIRST=False}": {
+   "and": 9040,
+   "type": "b0453f59f9520ab94cfe05a9bb9dafd2a4a340808620ff4131494de0ad232410419be65c82c50d7a3b25e3aa9d942d242afd5b8cbf3a70887e103a819eee8b84"
+  },
+  "PouwDitherBlock_v1{L=64,FIRST=True}": {
+   "and": 9025,
+   "type": "87f6df74df3431726fccb1b22cd327668b7af1582053a5ea4fea8c67bd6ca762a4b82596d0f70ae0aa14f2329f4453a6f6019e648510dedeaa6352cc38a963bc"
+  },
+  "PouwDitherBlock_v1{L=96,FIRST=False}": {
+   "and": 13545,
+   "type": "1e1b4397efe2cfe042ccef83975459256903c34bceb7a42849bdc54f4846cf5cd67899b2f618bafed5e2a58a86b927a928e4a5180fb0a106466654c09d21afac"
+  },
+  "PouwDitherBlock_v1{L=96,FIRST=True}": {
+   "and": 13530,
+   "type": "a5cb1e12292897ed6ff24539053d1d18828ff41d5e9ce624b2b78ae0740fc0e7c102486683c8c687c506538b348c7a07501a8247784dcf4a49b8870f629d0620"
+  },
+  "PouwDitherFirst_v2": {
+   "and": 15,
+   "type": "ba9bdb64c17d93cf1ebb07c052a1e3169b73b30571e9ac7e07074ed21cef265e166534a2259237cd16faf4e04eac788797179e1fff704632d32be2e1737444f8"
+  },
+  "PouwDitherStep_v2": {
+   "and": 30,
+   "type": "c7d4bae6f6ad995746e12f360cbbd6782b161d3a284352f41d9f6239b2d918da8e0618358c29f64f18fdc248d3be3ffb2512ca18df934920c4c36d7ebeedeeff"
+  }
+ }
+}

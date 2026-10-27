@@ -13,7 +13,7 @@ each read back; a mismatch raises, so a wrapped or truncated address shows befor
 keeps each frame (`receive_into`, read from the connection straight into staging), answers each read (`answer`), and
 `record()`s its timings: the fill from its first frame to its last, the copies' share, and each read's device latency.
 With `foreign=n` it is the cheat `wipe_period.Keeping` is on host memory: the first `n` labels' places keep prior content
-of its own, so a wipe of it must reject once `n` labels exceed `f·M`.
+of its own, so a wipe of it must reject once `n` labels exceed the published `foreign_bits` (`wipe_period.certify`).
 """
 
 from __future__ import annotations

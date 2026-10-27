@@ -58,19 +58,19 @@ def gate_run(d: Path) -> Path:
 def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
     got = WC.certificates(run)
-    assert (got["verdict"], got["why"], got["certified_windows"], got["windows"]) == ("accepted", None, sz.WINDOWS,
-                                                                                    sz.WINDOWS)
+    assert (got["verdict"], got["why"], got["certified_windows"], got["windows"]) == ("accepted", None, sz.W63.windows,
+                                                                                    sz.W63.windows)
     assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
     assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
-    assert io["accepted"] and io["requests"] == len(sz.PROMPTS) and not io["violations"]
-    assert [r["output"] for r in io["records"]] == [list(r) for r in sz.RESPONSES]
+    assert io["accepted"] and io["requests"] == len(sz.W63.prompts) and not io["violations"]
+    assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
     assert all(r["release"] is not None and r["frames"][0][1] >= r["release"] for r in io["records"])
     lw, dep, params = WC.link(run)
-    assert lw.warden.digest == params.digest and lw.charge == 0.0 and lw.windows == sz.WINDOWS
+    assert lw.warden.digest == params.digest and lw.charge == 0.0 and lw.windows == sz.W63.windows
     assert lw.grid(0) == lw.grid(1) and lw.link == "warden" and lw.run == dep["run_id"]
     pairs, refused = WC.pairs(run, dep)
-    assert len(pairs) == sz.WINDOWS and refused == []
+    assert len(pairs) == sz.W63.windows and refused == []
     assert all(lw.certified(w, [r.certificate for r in pair]) for w, pair in enumerate(pairs))
 
     public = run / "out" / "certificates.jsonl"
@@ -127,8 +127,8 @@ def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_
     s = json.loads((tmp_path / "n2" / "summary.json").read_text())
     assert s["warden_run"] == "00" * 32 and "no sync" in s["warden"]["syncs"] and s["gpu"] is True
     honest, tampered = (s["members"][k]["reference"] for k in ("honest", "tampered"))
-    assert [x["expect"] for x in honest] == [1] * sz.WINDOWS and all(not any(x["failed"].values()) for x in honest)
-    assert [x["expect"] for x in tampered] == [0] + [1] * (sz.WINDOWS - 1)
+    assert [x["expect"] for x in honest] == [1] * sz.W63.windows and all(not any(x["failed"].values()) for x in honest)
+    assert [x["expect"] for x in tampered] == [0] + [1] * (sz.W63.windows - 1)
     assert tampered[0]["failed"] == {"egress": ["signed"], "ingress": []}
     assert s["draw"]["selection"] == "all" and n2.OTHER not in s["members"]
 
@@ -179,7 +179,7 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.WARDEN_STUBBED)
     assert got["negatives_refused"] == {"tie/forged": True, "n2/tampered": True, "scan/forged": True}
-    assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.WINDOWS
+    assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
     assert "on the warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
