@@ -97,6 +97,15 @@ def verdict(verdicts: list[str]) -> str:
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
 
 
+def fitting_verdicts(answers: Callable[[], Any]) -> list[str]:
+    """The components' verdicts from `answers()`, else none when the case doesn't fit (it raises, or answers a reason)."""
+    try:
+        got = answers()
+    except (Reject, KeyError, TypeError):
+        return []
+    return [] if isinstance(got, str) else [a["verdict"] for _, a in got]
+
+
 @dataclass(frozen=True)
 class Ported:
     """A component whose port has replaced its stub: its id and its Python's answer to a `serve` case. One that reads
@@ -323,12 +332,11 @@ class Product:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case that fits the composition, else none."""
-        try:
-            case, blobs = self.split(case)
-            answers = self.run(self.params(case["params"]), self.evidence(P.unhex(case["evidence"])), blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        return fitting_verdicts(lambda: self.answers(case))
+
+    def answers(self, case: Any) -> Any:
+        case, blobs = self.split(case)
+        return self.run(self.params(case["params"]), self.evidence(P.unhex(case["evidence"])), blobs)
 
 
 @dataclass(frozen=True)
@@ -398,14 +406,13 @@ class Registered:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case whose components fit the composition, else none."""
-        try:
-            case, blobs = Product.split(case)
-            _, ps = self.params(case["params"])
-            _, ev = self.evidence(P.unhex(case["evidence"]))
-            answers = self.product.run(ps, ev, blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        return fitting_verdicts(lambda: self.answers(case))
+
+    def answers(self, case: Any) -> Any:
+        case, blobs = Product.split(case)
+        _, ps = self.params(case["params"])
+        _, ev = self.evidence(P.unhex(case["evidence"]))
+        return self.product.run(ps, ev, blobs)
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its

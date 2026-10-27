@@ -61,10 +61,10 @@ def test_authored_corresponds_to_ta1_across_broadcast_encodings(label, front, ta
     P_t = Program(bind(ta1, **statics))
     r = correspond(rep.program, P_t)
     assert r.corresponds, (label, [m.to_json() for m in r.mismatches][:3], [u.to_json() for u in r.unverified][:3])
-    # DC B.1 made TA1's builder emit the frontend's zero-stride Strided for broadcasts (descriptor-codec.md §6): the two
-    # AttentionHead cases and Attention{KVH=2} are now byte-identical; Attention{KVH=1} (the GQA head-sharing view, one
-    # kv head read by every q head) and the TINY Serve still correspond through same-references runs (lead, 2026-09-08,
-    # measured on the RC pod). Either way the correspondence, gate count and definition set are the claim.
+    # The builder emits the frontend's zero-stride Strided for broadcasts (descriptor-codec.md §6): the two
+    # AttentionHead cases and Attention{KVH=2} are byte-identical; Attention{KVH=1} (the GQA head-sharing view, one
+    # kv head read by every q head) and the TINY Serve still correspond through same-references runs.
+    # Either way the correspondence, gate count and definition set are the claim.
     assert r.root_out == "identical"
     if label in ("Attention{T=5,KVH=1}", "Serve{TINY,LP=3,STEPS=2}"):
         assert not r.digest_equal and r.same_references >= 1

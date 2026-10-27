@@ -1,5 +1,5 @@
-"""Demo A's report (CMP-98): one or more block records (`block_record`, ``verity/block-record/v1``) and a measurements
-file rendered as Markdown in the structure Daniel set (25 Oct 6:56 PM PDT): 1. ran and proved, on one H200, one block;
+"""Demo A's report: one or more block records (`block_record`, ``verity/block-record/v1``) and a measurements
+file rendered as Markdown in three parts: 1. ran and proved, on one H200, one block;
 2. measured on the demo, the inputs to the scaling claim; 3. computed from the same theorem and the measured costs, not
 run; then what the demo didn't show, and every number's source.
 
@@ -19,24 +19,24 @@ once at the top and in the sources table.
 block's server, reject when one rejected, pending otherwise, with their errors summed as
 ``Accounting.Guarantees.JointHorizonLive`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
-**The guarantee** cites LEAN-56's ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (locked by M3),
-else #4358's per-subcircuit bound, with the joint figure labelled unlocked.
+**The guarantee** cites ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (it is in the lock), else
+the per-subcircuit bound, with the joint figure labelled unlocked.
 
-**The draw** is a handful (Daniel, 25 Oct 7:34 PM PDT): k = `HANDFUL` units drawn uniformly over the whole partition by
-the live coins (PRF-171), never sized to a proving budget; a block that drew another k says so in the caveats.
+**The draw** is a handful: k = `HANDFUL` units drawn uniformly over the whole partition by
+the live coins, never sized to a proving budget; a block that drew another k says so in the caveats.
 
-**Part 3's H and B** are proofs' planner's (PRF-166, ``benchmarks/sampling_plan/demo_a.py``), read from a recorded run
+**Part 3's H and B** are proofs' planner's (``benchmarks/sampling_plan/demo_a.py``), read from a recorded run
 of it: `sampled_proofs.optimize.for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, its plan of
 record's ``free_compute`` and ``leak`` at δ = 1%. ``H_POOLED``, ``B_POOLED`` and ``PLANNER`` (the planner, its commit and
 its run) are filled together, each source naming the run.
-Part 3 is circuit size, counted in AND gates, with no FLOP figure or price (Daniel, 26 Oct, TOP-95): each share is
+Part 3 is circuit size, counted in AND gates, with no FLOP figure or price: each share is
 stated against the world's compute in AND gates (``WORLD_GATES_YEAR``, the adversary's resources) with the
 deployment's beside it.
 
 **Stubs.** Each of `STUBS` is a caveat until the measurements file's ``fixed`` names it, with the run that shows it
 fixed.
 
-**Visible failures** (top's row 68): the draw stays uniform over every unit, and a drawn unit that can't be proved (one
+**Visible failures**: the draw stays uniform over every unit, and a drawn unit that can't be proved (one
 landing in a PoUW tile lane) is a failure with no redraw. The measurements file's ``visible_failures`` names each, with
 its subcircuit, unit id, step, slot, why and run; part 1 lists them beside the verdict, and Demo A's verdict on the
 block counts them as failures, not skips. Left out, the list renders as ``⟨VISIBLE_FAILURES⟩``; an empty list says
@@ -52,7 +52,7 @@ measurement text included.
 **M3's report** (``m3.template``): when the measurements file has ``sections`` or ``proved``, the report is M3's,
 and no block record is needed. Each section row is one number with its run, its own verdict line quoted and its target
 (``{"op": "<=", "value": 0.95}``, or ``{"none": "why"}``); `render` computes its ratio and whether it met the target,
-and lists every miss under visible failures (top's row 68). ``proved`` is DRAWPROVE's run of record (PRF-172):
+and lists every miss under visible failures. ``proved`` is the drawn-block proving run of record:
 ``{"run", "drawn": [the coin's indices], "lines": [its output's VERDICT and PROVEBUNDLE lines, verbatim], "text",
 "rows"}``, rendered as the first section, one row per drawn proof block, then ``rows`` (section rows: the guarantee the
 draw certifies). The first line is `M3_STATUS` only when all `HANDFUL`
@@ -60,16 +60,16 @@ drawn proof blocks have a VERDICT line that says accepted (C-Flock ``--zk``, M0 
 line is ok with every negative refused; until then it is `FALLBACK_STATUS` (the file's ``status``, which may say
 nothing else), and each block not accepted is a visible failure.
 
-**Per-call noise's serving overhead** (CMP-126, 27 Oct 02:23Z) is `serve_noise_line`: the seconds it adds a step, its
-units' and commit's parts, and two ratios, against the commit-bound step γ_step was measured on and against #4562's
-served step, never γ_step alone; then the units' share of the tensor peak, and the commit's own overhead (CMP-149) as a
+**Per-call noise's serving overhead** is `serve_noise_line`: the seconds it adds a step, its
+units' and commit's parts, and two ratios, against the commit-bound step γ_step was measured on and against the plain
+served step, never γ_step alone; then the units' share of the tensor peak, and the commit's own overhead as a
 separate line. Demo A's part 2 renders it as ``⟨SERVE_NOISE⟩``; in M3's report a section with ``"serve_noise": true``
 ends with it, and a section row about per-call noise is refused.
 
 The measurements file::
 
     {"format": "verity/demo-a-measurements/v1",
-     "values": {"PROVING_GPU_S": {"value": 5400.0, "source": "PRF-171 run r..., sessions' GPU-seconds", "label": null}},
+     "values": {"PROVING_GPU_S": {"value": 5400.0, "source": "prove run r..., sessions' GPU-seconds", "label": null}},
      "subcircuits": [{"name": "...", "units": 1024, "drawn": 8, "ands_per_unit": 21963, "out_bits": 16,
                       "fixed_s": 30.0, "source": "..."}],
      "fixed": {"pouw-live-salt": "the run that shows it"},
@@ -98,7 +98,7 @@ MEASUREMENTS = "verity/demo-a-measurements/v1"
 DELTA = Fraction(1, 100)
 #: the share of compute spent on proving in part 3
 BUDGET = Fraction(1, 100)
-#: M3's draw: k units over the whole partition (PRF-171)
+#: M3's draw: k units over the whole partition
 HANDFUL = 8
 #: part 3's sampling block, in H200-seconds
 SAMPLING_BLOCK_S = 7 * 86400
@@ -710,7 +710,7 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
 
 
 def vocabulary(text: str) -> None:
-    """Refuses a report that says "leg", "window" or "template" (CMP-98's words), or a subprotocol's old name
+    """Refuses a report that says "leg", "window" or "template" (retired words), or a subprotocol's old name
     ("integrity", "work", "space", "communication"), outside a code span."""
     for n, line in enumerate(text.splitlines(), 1):
         if m := BANNED.search(CODE_SPAN.sub("", line)):
