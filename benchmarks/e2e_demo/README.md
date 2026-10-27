@@ -1,6 +1,6 @@
 # E2E demo interfaces
 
-The interfaces between the legs of the one-H200 E2E demo (P-CMP-1, CMP-95 items 5 and 6). Not a package: run the
+The interfaces between the subprotocols of the one-H200 E2E demo (P-CMP-1, CMP-95 items 5 and 6). Not a package: run the
 modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it, with `integrations/torch_loop`).
 
 ## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`)
@@ -39,7 +39,7 @@ builds it and pins its SHA-512s. `check` recomputes every string, path and domai
 
 ## The block record (`verity/block-record/v1`)
 
-`verity_e2e_demo/block_record.py`, schema `verity_e2e_demo/schemas/block-record.v1.schema.json`. What each leg writes
+`verity_e2e_demo/block_record.py`, schema `verity_e2e_demo/schemas/block-record.v1.schema.json`. What each subprotocol writes
 for one server-time block and what the composed verdict reads. It extends the all-protocols runner's report
 (`verity/all-protocols-period/v1` and `-window/v1`) with:
 
@@ -52,12 +52,13 @@ for one server-time block and what the composed verdict reads. It extends the al
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizon's
   union bound over that many blocks and the per-block error each δ needs.
 
-`check` recomputes every derived field from the legs.
+`check` recomputes every derived field from the subprotocols' entries.
 
     python -m verity_e2e_demo.block_record check tests/fixtures/block-record-r2-period0.json
     python -m verity_e2e_demo.block_record tonight --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
 
-The fixtures are real. `block-record-r2-period0` is period 0 of all-protocols run r20261025-210358-993e: five legs
+The fixtures are real. `block-record-r2-period0` is period 0 of all-protocols run r20261025-210358-993e: five subprotocols
 accept, and the wipe of run r20261025-224222-91e2 is carried but not composed, since it ran on another server. So the
-verdict is pending, and the error sum is at least integrity's 1/2 from its 2-unit draw. `block-record-r1-window10` is
-window 10 of r20261025-203534-186b: integrity at δ = 1/100 and the wipe on the same server, with the other legs absent.
+verdict is pending, and the error sum is at least sampled proofs' 1/2 from its 2-unit draw. `block-record-r1-window10` is
+window 10 of r20261025-203534-186b: sampled proofs at δ = 1/100 and the wipe on the same server, with the other
+subprotocols absent.

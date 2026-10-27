@@ -41,7 +41,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
     - `definitions`: the served workloads' kernel Definitions (`registry`, twins in `numerics`), their Boolean versions,
-      the proof-unit cut (`word`), and their encoding and digest (`encoding`).
+      the proof-block cut (`word`), and their encoding and digest (`encoding`).
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
@@ -123,7 +123,7 @@ the standing rulings stated nowhere else.
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  Partitions are private, and their properties are public. A proof block's outputs fit its size class, a public power of
   two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
   provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 
@@ -145,8 +145,8 @@ the standing rulings stated nowhere else.
   - BLAKE3 leaves the served path for `archive/`. There are two named exceptions:
     - Pearl's FP8 scheme, as Pearl defines it.
     - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
-      bind under the named premise H-μ⁺, which is the premise ledger's row R1
-      (`note:20261016T0219Z-report-premise-ledger`) and not yet in a lock.
+      bind under the named premise H-μ⁺, the premise ledger's row R1
+      (`note:20261016T0219Z-report-premise-ledger`), not yet in a lock.
 - **Live coins only.** Fiat–Shamir is out, with two exceptions, each at a rate where live coins are impractical:
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
@@ -172,7 +172,7 @@ the standing rulings stated nowhere else.
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
   assumption (`trusted-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
   active warden, in network steganography's sense, but "network certifier" is its one name: never "warden" or "tap"
-  (Daniel, 25 Oct; old names in `ARCHITECTURE.md`'s Glossary).
+  (Daniel, 25 Oct; old names in `glossary/`).
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
@@ -196,7 +196,7 @@ the standing rulings stated nowhere else.
 - **Integrations are frontends, and Verity is agnostic to them** (Daniel, 24 Oct). Verity's vocabulary is circuits,
   values, commitments, coins, proofs and verdicts. It has no notion of models, checkpoints, requests, batches or
   schedulers, and none enters `verity/`. An integration hands Verity only:
-  - a circuit, partitioned into proof units, with its public layout (which gates are the system's external I/O, such as
+  - a circuit, partitioned into proof blocks, with its public layout (which gates are the system's external I/O, such as
     the network frames the certifiers see), registered by digest;
   - when the circuit depends on choices made at run time, a registered compiler (itself a circuit, with a public length
     cap) and the advice it compiles: a bit string Verity never interprets, whose length is charged;

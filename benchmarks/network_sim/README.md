@@ -283,7 +283,7 @@ found nothing for window 1. The worst proxy tick was 4.6 ms late, of 25 ms of sl
 
 ## N3 in zero knowledge
 
-`workload/n3_unit.py` prototypes N3's proof unit for one port-window: a Boolean Definition, `N3Window_v3{FMT, N, G,
+`workload/n3_unit.py` prototypes N3's proof block for one port-window: a Boolean Definition, `N3Window_v3{FMT, N, G,
 SALTED, REC}`, evaluated in the clear; nothing proves it yet. N3 is a design and the simulator's behaviour, not a
 protocol: no proof-service Spec runs it. Its witness is the frames a certifier recorded on one link direction in one
 window, the descriptors of the committed layout that frame them, the rows of the units' outboxes that the descriptors

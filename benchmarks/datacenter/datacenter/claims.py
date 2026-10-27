@@ -6,7 +6,7 @@ question. Each claim is a fact a proof would establish about the prover *system*
 trusted clock:
 
 - `Computed(part, work)`: the values committed for a part of the Program are its evaluation (here by re-execution; in
-  Verity, sampled proofs at ε and δ over the part's proof units, `units` of the partition the profile names).
+  Verity, sampled proofs at ε and δ over the part's proof blocks, `units` of the partition the profile names).
 - `Carried(port, bits)`: a certifier port carried exactly the committed crossings in the declared occupancy, so its only
   freedom was `bits` of timing advice.
 - `Entered(input, bits)`: a run input's bits entered the computation from outside the blocks or from a device in one
@@ -46,7 +46,7 @@ class Computed:
     during: Interval
     epsilon: float = 0.0
     delta: float = 0.0
-    #: the proof units of the Program's partition that the claim rests on (0 when the profile names no partition)
+    #: the proof blocks of the Program's partition that the claim rests on (0 when the profile names no partition)
     units: int = 0
 
 
