@@ -546,7 +546,7 @@ def stale_mentions(pkg: Path, gone: list[str], files: list[str], mods: dict[str,
         if not f.endswith((".md", C.POLICY, "lakefile.toml")) or not (ROOT / f).is_file():
             continue
         text = (ROOT / f).read_text(errors="replace")
-        hits = sorted({x for x in paths if x in text} | {n for n in names if re.search(rf'"{re.escape(n)}(\.[^"]*)?"', text)})
+        hits = sorted({x for x in paths if x in text} | {n for n in names if f'"{n}"' in text})
         if hits:
             out.append(f"{f}: {', '.join(hits[:6])}" + (f" and {len(hits) - 6} more" if len(hits) > 6 else ""))
     return out

@@ -141,9 +141,14 @@ def test_delete_rewrites_the_imports_through_what_it_deleted(stand_in):
     doc = U.listing(pkg, U.decide(pkg, policy, used, [test], ["Prune.B.Old"]), {U.rel(pkg): policy}, used, [test])
     mods = U.C.lean_modules(pkg)
     (pkg / "README.md").write_text(f"`{U.rel(pkg)}/Prune/B/Group.lean` groups them\n")
+    (pkg / "x" / U.C.POLICY).parent.mkdir()
+    (pkg / "x" / U.C.POLICY).write_text('{"reads": {"Prune.B.Group.Sub": {}, "Prune.B.Group": {}}}\n')
+    (pkg / "y" / U.C.POLICY).parent.mkdir()
+    (pkg / "y" / U.C.POLICY).write_text('{"reads": {"Prune.B.Group.Sub": {}}}\n')
     assert U.delete(pkg, "B", doc, used, set()) == ["Prune.B.Group"]
-    assert U.stale_mentions(pkg, ["Prune.B.Group"], [f"{U.rel(pkg)}/README.md"], mods) == [
-        f"{U.rel(pkg)}/README.md: {U.rel(pkg)}/Prune/B/Group.lean"]
+    files = [f"{U.rel(pkg)}/{f}" for f in ("README.md", f"x/{U.C.POLICY}", f"y/{U.C.POLICY}")]
+    assert U.stale_mentions(pkg, ["Prune.B.Group"], files, mods) == [
+        f"{U.rel(pkg)}/README.md: {U.rel(pkg)}/Prune/B/Group.lean", f"{U.rel(pkg)}/x/{U.C.POLICY}: Prune.B.Group"]
     assert not (pkg / path_of("Prune.B.Group")).exists()
     assert (pkg / "Prune.lean").read_text() == "import Prune.A.Main\nimport Prune.B.Old\n"
     assert U.delete(pkg, "A", doc, used, set()) == ["Prune.A.Side"]
