@@ -1,7 +1,7 @@
 // The integer-pipe candidates beside full SHA-512, one interface: SHA-512 itself (compute-accounting's compression,
 // benchmarks/pouw/commit_gpu/sha512.cuh, unedited), SHA-512 at R < 80 rounds (the same round and schedule code with the
 // round count a compile-time constant: a speed curve, not a hash anyone serves), SHA-256 (FIPS 180-4) and BLAKE3
-// (archive/pouw-blake3/pearl_c/hash.cuh's compression, unedited).
+// (Pearl-C's hashing kernels' compression, pearl_c_hash.cuh, unedited).
 //
 // Each candidate H has: BLOCK (bytes a compression takes), state words of type `W`; `iv`, `comp` (one compression, the
 // message words' 16-word ring left as the schedule leaves it), `rate_step` (the raw rate's chained step: the block's first
@@ -11,7 +11,7 @@
 #include <cstdint>
 
 #include "../../pouw/commit_gpu/sha512.cuh"
-#include "../../../archive/pouw-blake3/pearl_c/hash.cuh"
+#include "pearl_c_hash.cuh"
 
 namespace ip {
 using u32 = uint32_t;
