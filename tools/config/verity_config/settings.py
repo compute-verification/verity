@@ -7,7 +7,7 @@ it owns::
 
     from verity_config.settings import VALUE, WHERE, Registry, Setting as S
     REGISTRY = Registry(__file__, ("PEARLC_",),
-        S("PEARLC_SPLIT", int, 1, VALUE, "the split-K factor of the Pearl-C GEMM"),
+        S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the Pearl-C arm's hashes run: deferred (served) or serial"),
         ...)
 
 and its code reads them by path, so two distributions' registries never shadow each other on ``sys.path`` (a ``research run``
@@ -15,7 +15,7 @@ puts every flat workspace member's directory there, so each ``settings.py`` woul
 
     from verity_config.settings import of
     S = of(__file__)        # the registry of the distribution this file is in
-    S.PEARLC_SPLIT          # parsed from the process environment at this read
+    S.PEARLC_SCHEDULE       # parsed from the process environment at this read
 
 A `Setting` has a name, a type (the parser of the variable's string), a default, a role and a doc.  The role says what it can
 change:
@@ -27,7 +27,7 @@ change:
 * ``debug`` (`DEBUG`): diagnostics that change nothing a run computes: dumps, traces, profiles, A/B probes of timing.  A run
   of record refuses them (`Registry.of_record`).
 
-Read a setting as an attribute (``S.PEARLC_SPLIT``) or by name (`Registry.get`): its value is parsed at each read, never
+Read a setting as an attribute (``S.PEARLC_SCHEDULE``) or by name (`Registry.get`): its value is parsed at each read, never
 cached, and is its default when the variable is unset or empty (`Setting.empty` keeps an empty string).  An undeclared name
 is an AttributeError, a string that doesn't parse a ValueError naming the variable.  A flag (`flag`) reads
 ``1``/``true``/``yes``/``on`` and ``0``/``false``/``no``/``off`` in any case and refuses anything else; `one` is on exactly
@@ -42,11 +42,16 @@ A registry's prefixes are its own: `Registry.validate_environ` refuses a variabl
 nor lists as read elsewhere, naming it, and `of` runs it when it first loads a registry, so a misspelt or retired knob fails
 the run instead of being ignored.
 
+A file that runs outside the tree (stdlib only, shipped beside the cubin it loads) can't import its registry, so it reads the
+environment itself; the registry still declares each variable it reads and names the file (``standalone``), and
+`Registry.standalone_problems`, which the distribution's suite runs, holds each read to its declaration.
+
 Stdlib only.  Outside the vLLM integration the environment is read in the registries (a module named ``settings.py``) and in
 the files ``tests/lint/allowlists/repo_env_reads.json`` still lists, which only shrinks.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -101,6 +106,11 @@ def paths(raw: str) -> tuple[str, ...]:
     return tuple(x for x in raw.split(os.pathsep) if x)
 
 
+def words(raw: str) -> tuple[str, ...]:
+    """A whitespace-separated list, in order (``SHAPES="8192 1024x1024x3072"``)."""
+    return tuple(raw.split())
+
+
 def stripped(raw: str) -> str:
     return raw.strip()
 
@@ -150,14 +160,19 @@ class Registry:
     """One distribution's settings, read from the process environment (or a mapping given in its place)."""
 
     def __init__(self, path: str | os.PathLike, prefixes: Iterable[str], *settings: Setting,
-                 families: Mapping[str, str] | None = None, elsewhere: Iterable[str] = (), shared: bool = True) -> None:
+                 families: Mapping[str, str] | None = None, elsewhere: Iterable[str] = (), standalone: Iterable[str] = (),
+                 shared: bool = True) -> None:
         """``path`` is the registry's file, for messages.  ``prefixes`` are the ones it owns (`validate_environ`), ``families``
         the role of each prefix of other libraries' variables it reads or passes on as a whole (``{"VLLM_": VALUE}``), and
-        ``elsewhere`` the owned-prefix names another distribution reads (a name ending ``_`` a family of them)."""
+        ``elsewhere`` the owned-prefix names another distribution reads (a name ending ``_`` a family of them).
+        ``standalone`` are the distribution's files, relative to the registry, that run outside the tree (stdlib only, shipped
+        beside what they load) and so read the environment themselves: `standalone_problems` holds each read to its
+        declaration here."""
         self.path = str(path)
         self.prefixes = tuple(prefixes)
         self.families = dict(families or {})
         self.elsewhere = frozenset(elsewhere)
+        self.standalone = tuple(standalone)
         own: dict[str, Setting] = {}
         for s in settings:
             if s.name in own or (shared and s.name in SHARED.settings):
@@ -278,6 +293,54 @@ class Registry:
             raise UnknownSetting(f"unknown setting{'s' * (len(bad) > 1)} {', '.join(bad)}: nothing reads {them}; unset {them}, "
                                  f"fix the name, or declare {them} in {self.path}")
 
+    # ------------------------------------------------------------------------------------------------------------ standalone
+
+    def standalone_problems(self) -> list[str]:
+        """Each read in a `standalone` file that its declaration here doesn't cover: a name not declared, or a literal default
+        (``os.environ.get("X", "2")``) that doesn't parse to the declared one.  A setting declared with no default (None)
+        takes each reader's own."""
+        out = []
+        for rel in self.standalone:
+            f = Path(self.path).parent / rel
+            for line, name, raw in direct_reads(f.read_text(encoding="utf-8")):
+                s = self.settings.get(name)
+                if s is None:
+                    out.append(f"{rel}:{line}: {name} is not declared in {self.path}")
+                elif raw is not None and s.default is not None:
+                    try:
+                        ok = s.type(raw) == s.default
+                    except ValueError:
+                        ok = False
+                    if not ok:
+                        out.append(f"{rel}:{line}: {name}'s default {raw!r} here is not its declared {s.default!r}")
+        return out
+
+
+def direct_reads(source: str) -> list[tuple[int, str, str | None]]:
+    """(line, name, literal default or None) of each read of a literal name in ``source``: ``os.environ.get``,
+    ``os.getenv``, ``os.environ[...]`` and ``in os.environ``."""
+    def environ(n: ast.AST) -> bool:
+        return isinstance(n, ast.Attribute) and n.attr == "environ" and isinstance(n.value, ast.Name) and n.value.id == "os"
+
+    def lit(n: ast.AST | None) -> str | None:
+        return n.value if isinstance(n, ast.Constant) and isinstance(n.value, str) else None
+
+    out = []
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.args and (
+                n.func.attr == "get" and environ(n.func.value)
+                or n.func.attr == "getenv" and isinstance(n.func.value, ast.Name) and n.func.value.id == "os"):
+            if (name := lit(n.args[0])) is not None:
+                out.append((n.lineno, name, lit(n.args[1]) if len(n.args) > 1 else None))
+        elif isinstance(n, ast.Subscript) and environ(n.value) and isinstance(n.ctx, ast.Load):
+            if (name := lit(n.slice)) is not None:
+                out.append((n.lineno, name, None))
+        elif isinstance(n, ast.Compare) and any(isinstance(o, (ast.In, ast.NotIn)) for o in n.ops) \
+                and any(environ(c) for c in n.comparators):
+            if (name := lit(n.left)) is not None:
+                out.append((n.lineno, name, None))
+    return sorted(out)
+
 
 SHARED = Registry(__file__, (), *(Setting(*a) for a in (
     ("RESEARCH_RUN_ID", str, None, WHERE, "the research run's id (research's runner sets it): it names a run's outputs"),
@@ -299,6 +362,9 @@ SHARED = Registry(__file__, (), *(Setting(*a) for a in (
     ("HF_HOME", str, None, WHERE, "Hugging Face's cache directory, where weights are read from"),
     ("PYTHONPATH", paths, (), WHERE, "Python's import roots (research's runner sets them from the workspace)"),
     ("OMP_NUM_THREADS", int, None, WHERE, "the threads of a CPU reference's BLAS: how fast it runs, not what it computes"),
+    ("FILL_JOB", str, None, WHERE, "the fill job a process runs as (research's fill runner sets it): it names a run's outputs"),
+    ("DITHER_NUMA_RECORD", json.loads, None, WHERE, "the NUMA binding benchmarks/hash/dither/numabind.py started the process "
+                                                    "under, as JSON (it sets it): where the process ran, which a run records"),
 )), shared=False)
 
 
