@@ -213,6 +213,11 @@ RC_HD void frame_leaf(const FrameK& K, u64 pos, const u64* v, u64* out) {
   frame_first<C>(K, pos, out);
   frame_second<SX, C>(K, pos, v, out);
 }
+template <int SX, int NB, class C = Sha>
+RC_HD void frame_leaf_nb(const FrameK& K, u64 pos, const u64* v, u64* out) {
+  frame_first_nb<NB, C>(K, pos, out);
+  frame_second_nb<SX, NB, C>(K, pos, v, out);
+}
 
 template <int NB, class C = Sha>
 RC_HD void pad_nb(const FrameK& K, u64 rank, u64* out) {
