@@ -314,7 +314,7 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
     out: dict[int, dict] = {}
     problems: list[str] = []
     sample_ids: dict[int, list[int]] = {}
-    sample_rows: dict[int, list[str]] = {}       # [GEN batch SHARED-CODE] request id per sampled row (StepStart.logits_rows)
+    sample_rows: dict[int, list[str]] = {}       # request id per sampled row (StepStart.logits_rows)
     for _pre, step in split_steps(read_log(a_dir / "log.jsonl.gz")):
         if not step:
             continue
@@ -521,7 +521,7 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
         sa = hashes_a["sample_ids"].get(s)
         sb = [t for v in (hashes_b["new_tokens"].get(s) or {}).values() for t in v]
         row["sampled_a"], row["sampled_b"] = sa, sb
-        # [GEN batch SHARED-CODE] the runner orders its batch by scheduled-token count, not by request: compare per request when the
+        # the runner orders its batch by scheduled-token count, not by request: compare per request when the
         # log names the request of each sampled row (StepStart.logits_rows); the positional result stays as a diagnostic
         rows_a = (hashes_a.get("sample_rows") or {}).get(s)
         if sa is not None and rows_a is not None and len(rows_a) == len(sa):
