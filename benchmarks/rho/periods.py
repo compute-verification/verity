@@ -7,7 +7,7 @@ scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`
 
 * **the overhead's lower bound** and its range: each ranged parameter alone at either end of its plausible range, the
   rest at reference (`analysis.tornado`), and the corner, all of them at their worse ends at once (`analysis.corner`);
-  against `μ / MFU`, below which it is vacuous;
+  and the padded size ratio `|A| / T_0` it comes from;
 * **its parts**: the citations of the bound that sets it, by kind (`KINDS`), each named premise with its standing at
   the block that binds;
 * **what is scaled**: a serving block's local minimum is a per-server-window bound (one server between two wipes,
@@ -23,7 +23,7 @@ structure's `s_×` and its gates per FLOP), and sets the step beside the FLOP mo
 
     uv run python benchmarks/rho/periods.py                # Markdown on stdout
     uv run python benchmarks/rho/periods.py --measured smollm2-135m-step
-    research run -- python benchmarks/rho/periods.py --out "$OUT"   # and periods.md and periods.json in its $OUT
+    uv run python benchmarks/rho/periods.py --out DIR        # and periods.md and periods.json in DIR
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ def evaluate(reg: Registry, names=SCENARIOS, fleets=FLEETS, periods=PERIODS) -> 
                 rows.append({
                     "scenario": name, "fleet": fleet, "where": label, "period": period,
                     "servers": r.scenario.context.fleet.count, "period_s": r.scenario.context.horizon.seconds,
-                    "overhead": r.lo, "unmonitored": r.unmonitored, "vacuous": r.vacuous(r.lo),
+                    "overhead": r.lo, "padded": run.padded(r), "mfu": r.scenario.mfu,
                     "range": [min(ends), max(ends)], "corner": corner.rho, "seconds": r.scenario.seconds(r.lo),
                     "family": f.family if f else None, "parts": parts(r, at), "scaled": scaled(r),
                     "attribution": [{"name": t.name, "share": t.share} for t in analysis.attribution(r)],
@@ -174,19 +174,21 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
            ("The overhead's lower bound at the measured H200 inputs, for each monitoring period, over "
             + _fleet_md(reg, fleets) + ". Each row is the scenario with its `fleet` and `horizon` choices set "
             "(`scenario.<name>.fleet`, `.horizon`). The range is each ranged parameter alone at either end of its "
-            "plausible range, the rest at reference; the corner is all of them at their worse ends at once. A lower "
-            "bound below `μ / MFU`, the adversary no protocol encumbers, is vacuous. The time to the target is "
-            "wall-clock, at least the overhead times `T_0 / Φ_total`."), "",
+            "plausible range, the rest at reference; the corner is all of them at their worse ends at once. The "
+            "overhead is the hardware multiple over the reference training algorithm at its MFU, MFU₀ (Lean's "
+            "`hardwareMultiple`, at least 1, so no protocol gives 1); the padded size ratio `|A| / T_0` is the "
+            "intermediate it comes from. The time to the target is wall-clock, at least the overhead times "
+            "`T_0 / (MFU₀ Φ_total)`."), "",
            *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
-           ("| scenario | over | period | overhead ≥ | range | corner | `μ / MFU` | status, premises | set by | "
+           ("| scenario | over | period | overhead ≥ | range | corner | padded size ratio | status, premises | set by | "
            "what sets it | time to the target ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|"]
     for x in rows:
         p = x["parts"]
         sets = ", ".join(f"{t['name']} {t['share']:.0%}" for t in x["attribution"][:2])
         beyond = " (beyond the period)" if x["seconds"] > x["period_s"] else ""
-        out.append(f"| {x['scenario']} | {x['where']} | {x['period']} | **{run.lower(x['overhead'], x['unmonitored'])}**"
-                   f" | {fmt(x['range'][0])} to {fmt(x['range'][1])} | {fmt(x['corner'])} | {fmt(x['unmonitored'])}"
+        out.append(f"| {x['scenario']} | {x['where']} | {x['period']} | **{fmt(x['overhead'])}**"
+                   f" | {fmt(x['range'][0])} to {fmt(x['range'][1])} | {fmt(x['corner'])} | {fmt(x['padded'])}"
                    f" | {p.get('status', '—')}, {p.get('premise') or '—'} | {p.get('setter') or '—'} | {sets} | "
                    f"{operating.human(x['seconds'])}{beyond} |")
     out += ["", "## Its parts", ""]
@@ -210,7 +212,7 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                            for b in sc["blocks"])
         counts = "; ".join(f"{g['where']}, {g['period']}: {fmt(b['count'])} of one server × "
                            f"{operating.human(b['seconds'])}" for g in group for b in g["scaled"]["blocks"])
-        out += [(f"| scaled | {sc['per_window_share']:.1%} of the bound: each serving block's local minimum is a "
+        out += [(f"| scaled | {sc['per_window_share']:.1%} of the overhead's rate: each serving block's local minimum is a "
                 f"per-server-window bound ({blocks}), summed over the blocks ({counts}) |"),
                 (f"| not scaled | the dark pool {sc['dark_share']:.1%} (`ε_dark` of the fleet, one pool), the "
                 f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`) |"),
@@ -262,7 +264,7 @@ def main() -> None:
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
     ap.add_argument("--measured", metavar="CIRCUIT",
                     help="a circuit of data/circuits.toml whose design replaces the FLOP model (circuits.in_place)")
-    ap.add_argument("--out", help="write periods.md and periods.json here (under `research run`, \"$OUT\")")
+    ap.add_argument("--out", metavar="DIR", help="write periods.md and periods.json to DIR")
     args = ap.parse_args()
     reg = Registry.load()
     if args.set:

@@ -1,9 +1,11 @@
 # rho: the overhead's lower bound on training
 
 This package computes, for each scenario and monitoring period, a lower bound on the **overhead** a training run pays
-under the regime: `overhead(𝒢, 𝒜′, η)` (`glossary/README.md`, Notation), the size of the actual circuit that reaches a
-training target over the reference construction's size `T_0`, on the datacenter the adversary actually runs. Beside it
-is the **time to the target** that size implies, at least the overhead times `T_0 / Φ_total` (a slowdown, wall-clock).
+under the regime: `overhead(𝒢, 𝒜′, η)` (`glossary/README.md`, Notation), the training cost over the admissible set
+divided by the reference training algorithm's GPU-hours, on the datacenter the adversary actually runs. It is Lean's
+`hardwareMultiple`: the hardware multiple over the reference at its MFU, `MFU₀`, at least 1, so no protocol gives 1.
+Beside it is the **time to the target** it implies, at least the overhead times `T_0 / (MFU₀ Φ_total)` (a slowdown,
+wall-clock).
 Every number it reads is a parameter with a public source and a status, so a bound is always at some choice of every
 parameter, and the package shows how the bound moves with each one.
 
@@ -11,19 +13,19 @@ A scenario is one choice from every part: a fleet (its location and dark share),
 NCI registration policy, a monitoring period (the horizon), a run (the target and its model), the algorithm families the
 adversary may use, and the bounds and attacks applied. For each one the package reports:
 
-- **the overhead's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. It comes
-  with its status, where its named premises stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a named
-  `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the time it
-  implies;
-- **the comparator** `μ / MFU` (`Result.unmonitored`): an adversary that no protocol encumbers trains at its MFU on a
-  circuit padded to capacity, so a lower bound below the comparator is **vacuous**, and is marked so;
-- **the hardware multiple** (`Result.multiple`): `ρ = max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's
-  `Nci.Dampener.remoteDampener`), how many times the hardware that adversary needs the bound demands, with the dark
-  share `s` training like it and the bound's other terms `x` counted at capacity. For a remote regime it is
-  `Nci.Guarantees.DampenerRemote`'s `ρ`; the overhead is that `ρ` at `MFU₀ = 1`. `benchmarks/nci` reads its compute
-  dampener `D` from `multiple_bound`;
+- **the overhead's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
+  bound it is `max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `Nci.Dampener.remoteDampener`), with the dark
+  share `s` training like the reference and the bound's other terms `x` counted at capacity; for a remote regime it is
+  `Nci.Guarantees.DampenerRemote`'s `ρ`, and `benchmarks/nci` reads its compute dampener `D` from `multiple_bound`. It
+  comes with its status, where its named premises stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
+  named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
+  time it implies;
+- **the padded size ratio** `|A| / T_0` (`Overhead.padded`): the size of the actual circuit that reaches the target,
+  each serving block padded to its capacity, over the reference construction's size `T_0`. It is the intermediate the
+  serving-block bound gives, and what a contradiction compares;
 - **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a serving block's layout,
-  reported beside the bound, not as an end of an interval around it. A bound above an attack is a **contradiction**:
+  its overhead `max(1, MFU₀ · |A| / T_0)`, reported beside the bound, not as an end of an interval around it. A bound
+  whose padded size ratio is above an attack's is a **contradiction**:
   one of its premises is false for that algorithm at that budget, and the contradiction names it;
 - **how it moves**: sweeps, a tornado, thresholds, dangers and rescues, the corner (every range at its worse end) and
   what sets the overhead (`analysis.py`); the time at operating points such as an optimizer step, a pretraining run or
@@ -32,12 +34,11 @@ adversary may use, and the bounds and attacks applied. For each one the package 
 ## Run
 
 ~~~sh
-research run -- verity bench rho    # every scenario; writes rho.md, rho.json and figures/ to $OUT and publishes them
+verity bench rho --out DIR    # every scenario; writes rho.md, rho.json and figures/ to DIR
 ~~~
 
-`verity bench rho` runs `run.py`, which prints Markdown and, with `$OUT` set (as `research run` sets it), writes
-`rho.md`, `rho.json` and `figures/` there. `research run` publishes them to the evidence store as an Attempt. `run.py`
-takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
+`verity bench rho` runs `run.py`, which prints Markdown and, with `--out DIR`, writes `rho.md`, `rho.json` and
+`figures/` there. `run.py` takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
 range, its parts by kind and its premises ranked; `periods.py --measured CIRCUIT` evaluates them with a measured training
 step's design in place of the FLOP model, after a table of the step beside it (`circuits.py`).
@@ -84,7 +85,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.faulty` (`Cut.uncertified`) |
 | `𝒜_a`, `δ_a`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
-| the overhead, the time to the target | `Overhead.rho`, `Scenario.seconds` |
+| the padded size ratio `\|A\| / T_0`, the overhead, the time to the target | `Overhead.padded`, `Overhead.rho`, `Scenario.seconds` |
 
 **The uncertified cap.** A bound counts an uncertified or dark gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
@@ -105,7 +106,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 | module | interface |
 |---|---|
-| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `multiple_bound` |
+| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
 | `attacks.py` | the same `Argument`, side `attack`, on a serving block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
@@ -132,10 +133,10 @@ uncertified or dark gates at a structure whose `s_×` is above 1, with the struc
 
 The package, its command and its outputs (`benchmarks/rho`, `verity bench rho`, `rho.md`, `rho.json`) and the
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` all name the overhead;
-`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The `ρ` of Lean's `Nci.Guarantees.DampenerRemote`
-(`remoteDampener`) and `benchmarks/nci`'s compute dampener `D` are not the overhead but the hardware multiple at the
-unconstrained developer's MFU, `Result.multiple`: the overhead is that multiple at `MFU₀ = 1`. The glossary's `ρ` is the
-ACCEL model's resource rate, not this number.
+`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The overhead is the `ρ` of Lean's
+`Nci.Guarantees.DampenerRemote` (`remoteDampener`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s compute
+dampener `D`; the padded size ratio `|A| / T_0` (`Overhead.padded`, `Estimate.padded`, the JSON's `padded`) is the
+intermediate, not the overhead. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
 
 ## Extending
 

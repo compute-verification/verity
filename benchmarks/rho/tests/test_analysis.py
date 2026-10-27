@@ -144,9 +144,11 @@ def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho(name)
     terms = analysis.attribution(r)
     assert sum(t.share for t in terms) == pytest.approx(1.0)
     assert terms == sorted(terms, key=lambda t: -t.part)
-    fam = min(r.families, key=lambda f: f.lo)
-    assert sum(t.part for t in terms) == pytest.approx(fam.profile.efficiency / r.lo)
-    assert all(t.ceiling >= r.lo * (1 - 1e-9) for t in terms)
+    fam = min(r.families, key=lambda f: (f.lo, f.combined.padded))
+    rate = sum(t.part for t in terms)
+    assert rate == pytest.approx(math.fsum(fam.combined.overhead.rates().values()))
+    assert r.lo == pytest.approx(max(1.0, 1 / rate))
+    assert all(t.ceiling >= min(r.lo, 1 / rate) * (1 - 1e-9) for t in terms)
     assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.eps_dark > 0)
 
 
@@ -177,31 +179,32 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     assert drawn == [(tmp_path / "figures", [10.0])]
 
 
-def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
-capsys):
-    """One number a scenario, the lower bound, flagged vacuous against `μ / MFU`, with the inference overhead beside
-    it (not modeled); the best known attack only in the attacks table, never as an interval's end."""
+def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
+                                                                                               capsys):
+    """One number a scenario, the lower bound: the hardware multiple over the reference at its MFU (1.12 remotely at
+    the H200), with the padded size ratio it comes from (2.8) and the inference overhead beside it (not modeled); the
+    best known attack only in the attacks table, never as an interval's end. No comparator: no protocol gives 1."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
 
     monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
     monkeypatch.setenv("OUT", str(tmp_path))
-    # nothing credited (residual 1) keeps remote below the comparator whatever the other inputs are
-    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200",
-                                      "--set", "regime.remote.residual=1"])
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200"])
     run.main()
     text = capsys.readouterr().out
     summary, rest = text.split("## Attacks", 1)
     attacks = rest.split("\n## ", 1)[0]
     row = next(line for line in summary.splitlines() if line.startswith("| reference-remote-h200 |"))
-    assert "(vacuous)** |" in row and "| 2.5 | not modeled |" in row and "[" not in row
+    assert "| **1.12** |" in row and "| 2.8 | not modeled |" in row and "[" not in row
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
     attack = record["attack"]
     assert f"| reference-remote-h200 | {attack['argument']} | {attack['family']} | {attack['status']} | " in attacks
     assert run.fmt(attack["rho"]) not in row.split("|")[2]
-    assert "With no protocol the adversary sits at **overhead 2.5**" in text and "**vacuous**" in text
-    assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
-    assert record["overhead"] < record["unmonitored"] <= attack["rho"]
+    assert "Lean's `hardwareMultiple`, at least 1, so no protocol gives 1" in text and "vacuous" not in text
+    assert record["mfu"] == pytest.approx(0.4) and record["padded"] == pytest.approx(2.8, abs=0.01)
+    assert record["overhead"] == pytest.approx(1.12, abs=5e-3) and record["overhead"] <= attack["rho"]
+    assert attack["rho"] == pytest.approx(max(1.0, 0.4 * attack["padded"]))
+    assert not {"unmonitored", "vacuous", "multiple"} & set(record)
     assert record["inference_overhead"]["value"] is None and record["inference_overhead"]["source"].startswith(
         "not modeled")
     assert "hi" not in record and "lo" not in record

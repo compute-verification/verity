@@ -8,6 +8,7 @@ from rho.classes import CLASSES
 from rho.envelopes import KINDS, PARTS, ROUTES
 from rho.params import Registry
 from rho.scenario import build, evaluate, evaluate_named, reads
+from rho.theorem import multiple_bound
 
 REG = Registry.load()
 
@@ -33,7 +34,7 @@ def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alon
     f = evaluate_named(REG, "reference-onsite-nvl72-elementary").families[0]
     ps = next(e for e in f.bounds if e.argument == "partial-sum")
     assert ps.premise == "refuted" and {s.cut for s in ps.overhead.serving.values()} == {"serving"}
-    assert f.lo < ps.rho / 10 and f.combined.premise != "refuted"
+    assert f.combined.padded < ps.padded / 10 and f.combined.premise != "refuted"
     assert all(e.rho <= f.lo * (1 + 1e-9) for e in f.bounds if e.overhead and e.premise != "refuted")
 
 
@@ -80,16 +81,20 @@ def test_s_times_and_gates_per_flop_come_from_one_source():
 
 
 def test_unmonitored_is_the_algorithm_alone():
-    """The bound counts every gate at capacity, so `lo = μ`; a construction trains at its MFU on a circuit padded to
-    capacity, so the best attack is `μ / MFU` and its time is the algorithm's at that MFU."""
+    """The bound counts every gate at capacity, so its padded size ratio is `μ`; a construction trains at its MFU on a
+    circuit padded to capacity, so the best attack's is `μ / MFU`. The overhead is against the reference at that MFU, so
+    no protocol gives `max(1, μ)` for the attack, 1 for the reference's own family, and the reference's time."""
     r = evaluate_named(REG, "unmonitored-h200-kimi")
     f0 = r.scenario.context.fleet
     mfu = f0.eps_dark * f0.dark_mfu + (1 - f0.eps_dark) * f0.mfu_train
-    assert all(math.isclose(f.lo, f.profile.efficiency) and math.isclose(f.attack, f.profile.efficiency / mfu)
-               for f in r.families)
+    assert r.scenario.mfu == pytest.approx(mfu)
+    for f in r.families:
+        mu = f.profile.efficiency
+        assert math.isclose(f.combined.padded, mu) and math.isclose(f.best_attack.padded, mu / mfu)
+        assert f.lo == pytest.approx(multiple_bound(mfu, f0.eps_dark / mu, (1 - f0.eps_dark) / mu))
+        assert f.attack == pytest.approx(max(1.0, mu))
     s = r.scenario
-    assert math.isclose(s.seconds(r.attack), min(f.profile.efficiency for f in r.families) * s.reference
-                        / (mfu * s.total_phi))
+    assert r.lo == r.attack == 1.0 and math.isclose(s.seconds(r.attack), s.reference / (mfu * s.total_phi))
 
 
 def test_onsite_adds_a_cut_so_its_lower_bound_is_never_below_remotes():
@@ -158,27 +163,29 @@ def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise(
     assert "draft:no-straddle" in f.combined.cites and f.combined.status == "draft"
     assert not any("draft:no-straddle" in a.cites for a in f.attacks)
     assert e.scenario.structure.cites() == () and "draft:no-straddle" not in e.families[0].combined.cites
-    assert e.attack == pytest.approx(r.attack, rel=1e-12) and e.lo * st.gates(w) == pytest.approx(r.lo, rel=1e-3)
+    assert e.attack == pytest.approx(r.attack, rel=1e-12)
+    assert e.families[0].combined.padded * st.gates(w) == pytest.approx(f.combined.padded, rel=1e-3)
     assert analysis.upto("conditional")(r) == pytest.approx(analysis.upto("conditional")(e), rel=1e-12)
 
 
-def test_the_comparator_is_the_unmonitored_adversary_at_its_mfu():
-    """`Result.unmonitored` is `μ / MFU`, the best construction's overhead with no protocol at all; a lower bound below
-    it is vacuous, as remote's is under PoUW as deployed on the H200 and isn't with the floor credit at the card table's
-    clock (2.75 against 2.5), or onsite."""
+def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mfu():
+    """The overhead is a hardware multiple over the reference training algorithm at `MFU₀` (0.4), at least 1, so the
+    adversary no protocol encumbers is at 1, as is remote under PoUW as deployed on the H200; remote with the floor
+    credit at the card table's clock is above it (its padded size ratio, 2.8 at capacity, over 2.5), and onsite far
+    above."""
     u = evaluate_named(REG, "unmonitored-h200-kimi")
-    assert u.unmonitored == pytest.approx(u.attack, rel=1e-12)
+    assert u.lo == u.attack == 1.0
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
     deployed = evaluate_named(REG, "reference-remote-h200-pouw")
-    assert remote.unmonitored == deployed.unmonitored == pytest.approx(1 / 0.4) and deployed.vacuous(deployed.lo)
-    assert not remote.vacuous(remote.lo) and remote.vacuous(2.0)
-    assert not onsite.vacuous(onsite.lo) and onsite.vacuous(2.0)
+    assert remote.scenario.mfu == onsite.scenario.mfu == pytest.approx(0.4) and deployed.lo == 1.0
+    assert remote.lo == pytest.approx(1.12, abs=5e-3) and remote.families[0].combined.padded == pytest.approx(2.8, abs=0.01)
+    assert onsite.lo > 100 and onsite.lo < onsite.families[0].combined.padded
 
 
-def test_the_time_to_the_target_is_rho_reference_gates_over_the_inventorys_capacity():
+def test_the_time_to_the_target_is_the_overhead_times_the_references_time():
     r = evaluate_named(REG, "reference-onsite-h200")
     s = r.scenario
     f, loc = s.context.fleet, s.context.location
     total = f.count * loc.phi / (1 - f.eps_dark)
     assert s.total_phi == pytest.approx(total)
-    assert s.seconds(r.lo) == pytest.approx(r.lo * s.context.units.gates(s.run.target(s.model)) / total)
+    assert s.seconds(r.lo) == pytest.approx(r.lo * s.context.units.gates(s.run.target(s.model)) / (s.mfu * total))
