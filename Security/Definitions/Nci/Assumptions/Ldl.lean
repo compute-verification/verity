@@ -53,8 +53,8 @@ activations and mixtures of layers and steps included; a measured code rate for 
 It fails once a block can hold a layer's update: the block then computes the layer's internal activations from the
 entries it receives, so `|V_I|` outgrows `(k' + Λ) / β` while `LDL_{t,R}(a_I) ≤ k'` (Lemma 1). At the onsite reference's
 serving block (`k_S ≈ 3.2·10¹¹` bits), one holding two layers of DeepSeek-V4-Pro's update and the entries of `3·10⁷`
-tokens at `β_x` has 18 times the activations it allows (note:training-20261027T0600Z-finding-activation-rate-serving).
-`HeldRate` is what survives: it charges the held weights and the entries, not the activations computed from them. -/
+tokens at `β_x` has 18 times the activations it allows (the held-layers attack; `activationRate_recompute` is it in
+miniature). `HeldRate` is what survives: it charges the held weights and the entries, not the activations computed from them. -/
 def ActivationRate {d : Declaration} {n : ℕ} {ι A : Type} [DecidableEq A] (β Λ : ℝ) (t : ℕ) (D : Decoder)
     (R : Registration d n) (M : Products d.D ι A) (a : Fin n → d.D.Transcript → List Bool) (X : d.D.Transcript) :
     Prop :=

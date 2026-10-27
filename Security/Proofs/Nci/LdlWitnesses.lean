@@ -3,7 +3,7 @@ import Proofs.Nci.Ldl
 /-!
 # Local description length: the serving-scale attack in miniature, and `HeldRate`'s witnesses
 
-One explicit circuit (note:training-20261027T0600Z-finding-activation-rate-serving's attack A2, at one bit a value):
+One explicit circuit (the held-layers attack, at one bit a value):
 two tokens' entries `x₀ x₁` and three layers' weights `w₀ w₁ w₂` (gates 0–4, one bit each, nothing registered), and
 one block that takes both tokens through the three layers, each layer's product `a ∧ w` (gates 5–10). The block reads
 5 bits; its 6 counted products read 6 activations, 4 of them computed inside it from the other two and the weights.

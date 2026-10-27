@@ -27,7 +27,7 @@ WINDOW = FlopBudget(5.5e20, 7.3e11)
 LAYER_PRODUCTS = 0.294 * 2.07e11 / (2 * 61)
 
 
-def _nci_slowdown():
+def _nci_search():
     path = Path(__file__).resolve().parents[2] / "nci" / "slowdown.py"
     spec = importlib.util.spec_from_file_location("nci_slowdown", path)
     module = importlib.util.module_from_spec(spec)
@@ -48,7 +48,7 @@ CASES = [
 
 @pytest.mark.parametrize("case", CASES)
 def test_the_shard_search_is_nci_search(case):
-    nci = _nci_slowdown()
+    nci = _nci_search()
     gamma = case[-1]
     work = attacks.search(*case)
     try:
@@ -63,7 +63,7 @@ def test_the_shard_allowance_is_the_counted_share_of_its_reference_work():
     case = (8e10, True, 2.07e11, 2 * 28672, 20, 0, 2e7, 6.4e16)
     a = ATTACKS["shard"].allowance(KIMI)(DECLARED)
     assert math.isclose(a, 0.602 / 2 * attacks.search(*case))
-    assert math.isclose(0.602 * 6.4e16 / (2 * a), _nci_slowdown().search(*case)["rho"], rel_tol=1e-12)
+    assert math.isclose(0.602 * 6.4e16 / (2 * a), _nci_search().search(*case)["rho"], rel_tol=1e-12)
 
 
 def test_a_shared_state_cap_only_removes_slices():
