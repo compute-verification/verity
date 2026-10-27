@@ -1006,7 +1006,7 @@ def test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unse
     bucket, padding sealed too, so it holds no frame's bytes and no run of zeros, and opened in order under the
     egress direction's keys it is the unsealed run's wire, byte for byte. The same secret seals the run to the same
     wire, and another secret to another wire with the same records. Without a pair (the default) the proxy is
-    today's."""
+    unsealed."""
     plain, plain_wire = honest_run
     pair, sealer = pair_halves()
     proxy, wire = asyncio.run(replay(honest(), pair=pair, sealer=sealer))
@@ -1743,7 +1743,7 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
 
 def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp_path):
     """Two proxies with the same ingress link name, certifier key (one signer, as a certifier restarted on its host
-    holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (RT4-INT-3: their p's collide): a request the challenger
+    holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (their p's collide): a request the challenger
     signed for one run is refused by the other and spends nothing there, and each answer names its own run and
     verifies for it and not for the other, so a consumer keying on (key id, run id, p) never takes one for the other.
     A `RemoteCertifier` refuses another run's answer that an endpoint replays whole, or relabels with its run, and

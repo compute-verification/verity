@@ -1,7 +1,7 @@
 """The ingress-ids tie (`io_ids`, a prototype on a fake upstream Commit and the warden's own ingress): `IoTieRequest`
 with the prompt ids' values held to the Commit's `c00.input/ids` rows, so the model computes on the prompt the user
-sent (REDTEAM phase 9 #1: IoTieRequest counts each request's prompt fields and checks each is a u32, and the ids'
-values were tied to nothing). Like IoTieRequest it is one unit a bucket row of the warden's registered ingress
+sent (IoTieRequest counts each request's prompt fields and checks each is a u32, but ties the ids' values to
+nothing). Like IoTieRequest it is one unit a bucket row of the warden's registered ingress
 (`warden_rows.bucket_port`).
 
 **The Commit side** (the fake upstream's layout, what PROVE-PATH's Commit exposes): one `hm96-sha512/row/v2` row a

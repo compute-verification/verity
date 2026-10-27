@@ -161,7 +161,7 @@ def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
 
 
 def test_the_row_past_a_stop_is_accepted_and_hands_no_frame():
-    """The red team's case: async scheduling runs one decode past the stopping EOS (the third step samples past a
+    """Async scheduling runs one decode past the stopping EOS (the third step samples past a
     request of 4 prompt and 2 kept tokens, 2 ingress frames released in bucket 0). Advice v0 accepts it and discards
     that sample, and N2 reads v0's outputs, so the window counts the 2 kept frames, released in buckets 1 and 2, and is
     accepted, and a frame for the discarded sample is extra egress."""
@@ -441,7 +441,7 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     built; and every window refuses an advice that releases more than R frames in a bucket (all in the last), a frame
     before its request could be (the first in bucket 0), or one past the link's windows; and a window that declares no
     sync, or one outside Σ_sync, is refused, and only that window: every other window's view is the honest one, since
-    every floor reads the sync the certifier ran (REDTEAM phase 15)."""
+    every floor reads the sync the certifier ran."""
     session = serve(SEEDS[0])
     run = Run(tmp_path, ties=StandInTie(session.certified))
     opening = run.lw.commit(0, run.issuer.certify(session.egress[0], Direction.EGRESS, P,
