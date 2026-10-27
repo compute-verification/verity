@@ -676,7 +676,9 @@ def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
     assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
     assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
-    record = lambda _program, *x, **k: {"x": json.dumps(x, sort_keys=True), **k}
+    def record(_program, *x, **k):
+        return {"x": json.dumps(x, sort_keys=True), **k}
+
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
     files = []
     for win, c, d in ((full, a, tmp_path / "full"), (refd, b, tmp_path / "refd")):
