@@ -15,7 +15,7 @@ import pytest
 import torch
 
 from verity.core.protocols.sampled_proofs.challenger import CoinError
-from verity_vllm.engine import engine_profile
+from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
@@ -38,12 +38,12 @@ PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]}
 class _Server:
     """The server's Commit as the arm sees it: the committer (`test_pouw_h1_commit.Committer`) with its step-input port
     and the bench row's int8 source at engine steps 0..S-1 of each window (the committer's steps restart at its reset),
-    the stand-in model, and the engine's runner, which `engine_profile.get_model_runner` hands H1."""
+    the stand-in model, and the engine's runner, which `handle.model_runner` hands H1."""
 
     def __init__(self, monkeypatch, quant=None):
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
         self.runner, self.model, self.com = Runner(), Model(), Committer()
-        monkeypatch.setattr(engine_profile, "get_model_runner", lambda llm: self.runner)
+        monkeypatch.setattr(handle, "model_runner", lambda llm: self.runner)
         self.port, self.src = _served_commit(self.com, self.model, _manifest_sites(range(STEPS)) if quant is None else quant)
         self.src.install()
 
