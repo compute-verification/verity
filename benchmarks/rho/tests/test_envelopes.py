@@ -195,12 +195,13 @@ def test_without_pouw_only_the_serving_cut_bounds():
 
 def test_pouw_as_deployed_on_the_h200_credits_under_one_percent_so_nothing_is_certified():
     """`regime.remote-h200-pouw`: per-call J10-R credits a step's 5.72e14 served INT8 MACs against the H200's 9.894e14
-    MACs/s (4,096 a SM-clock, 132 SMs, 1,830 MHz) over its 82.94 s, and the card runs to 1,980 MHz. With the hosts,
-    `r̂` caps at 1. onsite-today's twin carries the same PoUW envelope, and both differ from remote's in three keys."""
+    MACs/s (4,096 a SM-clock, 132 SMs, 1,830 MHz) over its 12.60 s (served 3.78, its commit 0.42, PoUW's units 5.59 and
+    their commit 2.81), and the card runs to 1,980 MHz. With the hosts, `r̂` caps at 1. onsite-today's twin carries the
+    same PoUW envelope, and both differ from remote's in three keys."""
     remote, today = envelopes.regime(REG, "remote-h200-pouw"), envelopes.regime(REG, "onsite-today-h200-pouw")
     assert today.pouw == remote.pouw and today.wipe == envelopes.regime(REG, "onsite-today").wipe
     macs = 4096 * (52 * (2 * 16384**2 + 2 * 16384 * 64 + 2 * 16384 * 65536) + 16384 * 256)
-    assert remote.pouw.residual == pytest.approx(1 - macs / (4096 * 132 * 1.83e9 * 82.94), abs=5e-4)
+    assert remote.pouw.residual == pytest.approx(1 - macs / (4096 * 132 * 1.83e9 * (3.78 + 0.42 + 5.59 + 2.81)), abs=5e-4)
     assert remote.pouw.clock_share == pytest.approx(1980 / 1830 - 1, abs=5e-4)
     p = remote.pouw
     assert dataclasses.replace(envelopes.regime(REG, "remote").pouw, residual=p.residual, clock_share=p.clock_share,

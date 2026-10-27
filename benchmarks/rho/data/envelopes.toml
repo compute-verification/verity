@@ -81,20 +81,21 @@ form = "links"
 
 # PoUW as deployed on the demo H200: per-call J10-R (CMP-126) on vy-dc-h200-2, every static INT8 matmul a unit (f = 1),
 # credit all or nothing per period (H1J10RCheckedCreditPeriod, #4541), which credits words, not time. C is the H200's
-# INT8 tensor capacity over the period at the clock it can run (benchmarks/pouw/machine_model sm_90 theta: 4,096 s8
-# MACs a SM-clock x 132 SMs, 9.894e14 MACs/s at the 1,830 MHz tensor clock Phi is quoted at); W_cert the served MACs
-# PoUW credits. The remote and onsite-today H200 regimes carry the same three keys (tests/test_envelopes.py holds them).
+# INT8 tensor capacity over the step (9.894e14 MACs/s, benchmarks/pouw/machine_model sm_90 theta's sheet figure at the
+# 1,830 MHz tensor clock Phi is quoted at); W_cert the step's served MACs at batch 4,096. clock_share and host are
+# provisional: compute-research's card table (CMP-165) supersedes them. The remote and onsite-today H200 regimes carry
+# the same three keys (tests/test_envelopes.py holds them).
 [regime.remote-h200-pouw]
 base = "remote"
-residual = { value = 0.993, low = 0, high = 1, source = "1 - W_cert/C on vy-dc-h200-2: W_cert = 5.722e14 MACs a step (52 layers x 2.686e9 + the head's 4.19e6 MACs a token, x 4,096), C = 82.94 s a step (r20261026-113133-5cb4's 88.46 s less its in-process 5.53 s check; 74.40 s served alone, r20261026-120015-3773: gamma_step 1.115) x 9.894e14 MACs/s, so 0.70% credited. The step is the commit's (commit_gpu 75 s on the ALU pipes, the tensor pipe idle), counted uncredited: theta prices the tensor pipe apart from the ALU's and nothing times the commit. low: PoUW fills the GPU with credited work at the tensor rate (0.237 at the served wgmma's measured 76% of the sheet, r20261026-023715-dd1e; 0.897 at kraqwxsc's own units, 10.3%); high: nothing credited (the run's credit is blocked on #4654's lanes and CMP-127)", status = "measured" }
-clock_share = { value = 0.082, low = 0, high = 0.082, source = "theta sm_90: f_max 1,980 MHz (the driver's maximum on vy-dc-h200, EPS1 DC) over the 1,830 MHz tensor clock Phi is quoted at, 1980/1830 - 1, the capacity above Phi as a share of it (J10-R credits words, so no clock is credited and C is at the clock the card can run); low: an auditor-read or locked clock, or theta's 1,518-1,797 MHz under a saturated wgmma taken as the ceiling", status = "measured" }
-host = { value = 1, low = 0, high = 1, source = "nothing credits or bounds the hosts: J10-R credits GPU words only, and theta sm_90's host.cpu is open (the prover chooses the host, P9; a tighter bound needs the node's inventory from someone else, a claim for Daniel); 2.9% of Phi at location.h200-hgx's two Xeon 8480Cs, 3.15% on vy-dc-h200-2's 8-core Xeon 8468 VM (theta host.int8); low: credited or bounded", status = "assumed" }
+residual = { value = 0.954, low = 0, high = 1, source = "1 - W_cert/C on vy-dc-h200-2 at batch 4,096: W_cert = 5.722e14 MACs a step (52 layers x 2.686e9 + the head's 4.19e6 MACs a token, x 4,096) over C = 12.60 s x 9.894e14 MACs/s, so 4.6% credited. The step: #4562's served step 3.78 s (r20261026-030611-8b64: forward 3.22 + attention 0.56), the commit at 1 KiB rows +0.42 s (#4915's KCOMMIT, r20261027-004614-d98c), PoUW's units 5.59 s and their commit 2.81 s (kraqwxsc, r20261026-113133-5cb4, steps 1-2). The same run's commit-bound 82.94 s step (FAMILIES' slot commit holding the forward at about 75 s, CMP-96) gave 0.993. low: PoUW fills the GPU with credited work at the tensor rate (0.237 at the served wgmma's measured 76% of the sheet, r20261026-023715-dd1e); high: nothing credited (the run's credit is blocked on #4654's lanes and CMP-127)", status = "measured" }
+clock_share = { value = 0.082, low = 0, high = 0.082, source = "provisional, superseded by compute-research's card table (CMP-165), which takes the clock at the SKU's true maximum: here f_max 1,980 MHz over the 1,830 MHz tensor clock Phi is quoted at, 1980/1830 - 1 (J10-R credits words, so no clock is credited); low: the clock at the true maximum or auditor-read", status = "assumed" }
+host = { value = 1, low = 0, high = 1, source = "provisional, superseded by compute-research's card table (CMP-165), the host at a measured peak: nothing credits or bounds the hosts (J10-R credits GPU words only), 2.9% of Phi at location.h200-hgx's two Xeon 8480Cs; low: credited or bounded", status = "assumed" }
 
 [regime.onsite-today-h200-pouw]
 base = "onsite-today"
-residual = { value = 0.993, low = 0, high = 1, source = "as regime.remote-h200-pouw residual", status = "measured" }
-clock_share = { value = 0.082, low = 0, high = 0.082, source = "as regime.remote-h200-pouw clock_share", status = "measured" }
-host = { value = 1, low = 0, high = 1, source = "as regime.remote-h200-pouw host", status = "assumed" }
+residual = { value = 0.954, low = 0, high = 1, source = "as regime.remote-h200-pouw residual", status = "measured" }
+clock_share = { value = 0.082, low = 0, high = 0.082, source = "as regime.remote-h200-pouw clock_share (provisional, CMP-165 supersedes)", status = "assumed" }
+host = { value = 1, low = 0, high = 1, source = "as regime.remote-h200-pouw host (provisional, CMP-165 supersedes)", status = "assumed" }
 
 # Wipes and certifiers with nothing credited: the serving cut alone.
 [regime.onsite-no-pouw]
