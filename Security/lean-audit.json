@@ -2101,6 +2101,10 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "NetTiming.ScopeAcc": {
+   "owner": "@network-accounting",
+   "digest": "821308a64d5196398ada88bfa7ad6b76b9ce025d2b6e50a102be1b7ee8f3d285"
   }
  },
  "meaning": [
@@ -9081,7 +9085,10 @@
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b"
   },
   "NetTiming.SecurityProofs.PeriodLeakUnion": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.PeriodLeakUnion : NetTiming.Guarantees.PeriodLeakUnion"],
+   "assumptions": [],
+   "type_hash": "194d4c3445af5dffe47d2a26ad933de25534767cddbbe7bafdfb4757c43f3ef2"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -17829,6 +17836,7 @@
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakUnion",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
@@ -18427,6 +18435,7 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakUnion",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -23599,6 +23608,7 @@
     "NetTiming.SecurityProofs.ExpectedRowCausal",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakUnion",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -23713,11 +23723,13 @@
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "c1a9ff2deb9efeb3d8a794d0715d85718b6c05be736cfc3984a60903b5d01371",
+   "digest": "a3dca71620a1c31cf38bcd76813bea1b55399491a58796cad09b84dcf52ce200",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "40b40ea29344f2cd0fa8f88dc624a5085cfe70b8df433327092504ee62ec8c74"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "40b40ea29344f2cd0fa8f88dc624a5085cfe70b8df433327092504ee62ec8c74",
+    "NetTiming.Guarantees.PeriodLeakUnion": "0f7fa5af3fe0e0d86acc24f6a18b59de953734eb1ac24e26dcfe77cb7c313470",
+    "NetTiming.Guarantees.WindowLeakFails": "b93452094d8f47f451bb5ddf2b309ea3fa37062ff17f96d32a1f22ab7a8baa85"
    },
-   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakUnion"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
    "digest": "011843baa3d4e1e3587bd9a91e9f5c488c455b5f39760438f4b3ed1dcc1120b5",
@@ -23884,6 +23896,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakUnion",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -23921,6 +23934,7 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakUnion",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -23944,6 +23958,7 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakUnion",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
    ]
@@ -24033,7 +24048,8 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.JointHorizonBlocksDeployed",
     "Accounting.SecurityProofs.JointHorizonBlocksDeployedA",
-    "NetTiming.SecurityProofs.PeriodLeakAccepted"
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakUnion"
    ]
   },
   "Definitions.NetworkCertifier.Warden": {
