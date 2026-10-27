@@ -2306,10 +2306,46 @@
    "type_hash": "2515137ac93d73406859ea8ad9ce731b4149fbcd172ee882f68ee2f394c75a61"
   },
   "Properties.RemoteAudit.codeLayoutTiles_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_honest :",
+    "  And",
+    "    (Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "      (Option.some (RemoteAudit.Plan.whole 130023424)))",
+    "    (And (Eq (Properties.RemoteAudit.runBlocks (RemoteAudit.Plan.whole 130023424).runs).length 130023424)",
+    "      (∀ (i : Nat),",
+    "        instLTNat.lt i 130023424 →",
+    "          Eq (Properties.RemoteAudit.tileAt 130023424 List.nil.toArray (RemoteAudit.Plan.whole 130023424).runs i)",
+    "            (Option.some { fst := 0, snd := i })))"
+   ],
+   "assumptions": [],
+   "type_hash": "f483e5157c582feaed1b998d0e5b38dd1d1c99b07763afe2a4f4a7d7b6d45930"
   },
   "Properties.RemoteAudit.codeLayoutTiles_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.tileAt 1 List.nil.toArray",
+    "        (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray (Fin.val 1))",
+    "      (Option.some",
+    "        {",
+    "          fst :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).fst.val,",
+    "          snd :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).snd.val }))"
+   ],
+   "assumptions": [],
+   "type_hash": "b1a0e78990ee83a63f36e10f8ae596b94b433ee6264e4d5c1c8493885235fd30"
   },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
@@ -2348,10 +2384,40 @@
    "type_hash": "111150eaa0d138025444b31c09ae5104f3f91a425059fdd7a751a2787faa2bbe"
   },
   "Properties.RemoteAudit.opensAtPosition_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun o =>",
+    "        And",
+    "          (Eq",
+    "            (RemoteAudit.Registration.make? (RemoteAudit.zeros 1) 130023424 reg.payloadRoot",
+    "              (RemoteAudit.zeros RemoteAudit.Codec.SEED_BYTES)",
+    "              { field := RemoteAudit.Codec.P1024, rounds := 3, masked := Bool.true } RemoteAudit.Kind.sketch Bool.false",
+    "              RemoteAudit.LAYOUT 16)",
+    "            (Except.ok reg))",
+    "          (And (Eq w.passes.size 1)",
+    "            (And (Eq (Array.instGetElem?NatLtSize.getElem! w.passes 0).plan (RemoteAudit.Plan.whole 130023424))",
+    "              (Eq",
+    "                (RemoteAudit.checkOpening reg reg.digest List.nil.toArray w (Properties.RemoteAudit.receipterOf reg w 0)",
+    "                  0 0 o)",
+    "                Option.none)))"
+   ],
+   "assumptions": [],
+   "type_hash": "114cbe4a14ae93089cb3c545b9839e5a831f14b3b5aea949a3d3c5f47b46483a"
   },
   "Properties.RemoteAudit.opensAtPosition_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_nontrivial (t : Nat) :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.position 130023424 List.nil.toArray ((RemoteAudit.Plan.whole 130023425).block 130023424))",
+    "      (Option.some { fst := t, snd := (RemoteAudit.Plan.whole 130023425).block 130023424 }))"
+   ],
+   "assumptions": [],
+   "type_hash": "4f579a80bcf7a45d83f0c6f86981146cbffb177eda129678a174a259fbad350e"
   },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
@@ -2378,10 +2444,35 @@
    "type_hash": "b52f9ab9527953b5d6389d4e21022197366698223b4ae485749e62cf43ba2f73"
   },
   "Properties.RemoteAudit.planBlocks_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_honest :",
+    "  Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "    (Option.some (RemoteAudit.Plan.whole 130023424))"
+   ],
+   "assumptions": [],
+   "type_hash": "93e2a89f675e16240675c6e4e5ca1336dd56105c8ade41ddff2dbcd1f6c806ee"
   },
   "Properties.RemoteAudit.planBlocks_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_nontrivial :",
+    "  Not",
+    "    (And",
+    "      (Eq { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length",
+    "        (Properties.RemoteAudit.runBlocks",
+    "            { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs).length)",
+    "      (∀ (p : Nat),",
+    "        instLTNat.lt p { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length →",
+    "          Eq",
+    "            (List.instGetElem?NatLtLength.getElem?",
+    "              (Properties.RemoteAudit.runBlocks",
+    "                { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs)",
+    "              p)",
+    "            (Option.some ({ blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.block p))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6e294008319128d1b11fc0e7d900c08ce145b23f97af56ee6ecb5879fe06844b"
   },
   "Properties.RemoteAudit.planReadsDistinct": {
    "owner": "@memory-accounting",
@@ -2451,10 +2542,33 @@
    "type_hash": "2128e84650a110e23a0c5b93de13ce647bc6798406445b474795a55a3f76c04b"
   },
   "Properties.RemoteAudit.steered_of_checked_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_honest :",
+    "  Exists fun sc =>",
+    "    Exists fun passes =>",
+    "      Exists fun b =>",
+    "        And (Eq (RemoteAudit.Schedule.check sc 130023424 792 passes List.nil.toArray) (Except.ok b))",
+    "          (∀ (s : Nat),",
+    "            instLTNat.lt s 96 →",
+    "              Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes s))",
+    "                (Option.some (RemoteAudit.Plan.whole 130023424).runs))"
+   ],
+   "assumptions": [],
+   "type_hash": "aec9d714beaf2c3410bc927cd5f6042b6c2e4b7a21b4d06b2b5b1db87f3ebe6c"
   },
   "Properties.RemoteAudit.steered_of_checked_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_nontrivial (steer : Unit → Fin 3 → Pous.Bits (instHAdd.hAdd 0 1)) :",
+    "  Not",
+    "    (Accounting.Assumptions.SteeredLayout",
+    "      (Properties.RemoteAudit.sessionLayout 3 (fun x => { toFun := fun x => { fst := 0, snd := 0 }, inj' := ⋯ })",
+    "        (fun x x_1 => List.nil.toArray) fun x y => (List.cons { fst := y.val, snd := 1 } List.nil).toArray)",
+    "      steer)"
+   ],
+   "assumptions": [],
+   "type_hash": "7e684951741d0df3f61602dc3f52764b1aa99754df33d776ada8c890c1b1e9cb"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
@@ -4697,7 +4811,8 @@
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.TS": {
@@ -6626,7 +6741,8 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCoversSession",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -7426,6 +7542,7 @@
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7771,6 +7888,7 @@
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7888,6 +8006,7 @@
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12505,6 +12624,7 @@
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12690,11 +12810,16 @@
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Properties.RemoteAudit.Shared": {
@@ -12870,20 +12995,26 @@
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
     "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "RemoteAudit.Codec": {
@@ -12956,6 +13087,7 @@
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -13124,18 +13256,24 @@
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
     "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_honest",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Pooled": {
@@ -13268,6 +13406,7 @@
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -13306,7 +13445,8 @@
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Session": {
@@ -13600,6 +13740,7 @@
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
