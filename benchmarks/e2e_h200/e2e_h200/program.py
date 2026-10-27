@@ -1,7 +1,7 @@
 """The toy's served core `Program`: one slot's decode step on circuits' FAMILIES map (`plan.Map`), every unit a Boolean
 Definition on main, one batch node a family.
 
-Its root parameters are the weight tensors by their names in `verity_torch_loop.weights.tensors(shape)` (registered, and
+Its root parameters are the weight tensors by their names in `e2e_h200.served_weights.tensors(shape)` (registered, and
 the model's weights), each typed as the tensor whole (an s8 linear ``Array<N, Array<K, s8 bits>>``, a scale ``Array<N, f32
 bits>``, a gain ``Array<H, bf16 bits>``, ``tok`` ``Array<H, Array<V, bf16 bits>>``), then the run inputs:
 
@@ -48,7 +48,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
-from verity_torch_loop import weights as SW
+from e2e_h200 import served_weights as SW
 
 from .plan import EPS_KEY, FUSIONS
 from .shape import PV_K, Shape, check, forms

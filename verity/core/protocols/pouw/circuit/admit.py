@@ -1,7 +1,7 @@
-"""A window's admission from its committed request queue (PADCREDIT's admit, coordinator 01:10Z on 19 Oct): slot s of a call
+"""A window's admission from its committed request queue (PADCREDIT's admit): slot s of a call
 at step t is selected iff the queue assigns it a request live at t, computed from the queue alone, and admitted iff it is
 selected and its row's committed scale is nonzero, so a selected slot holding the canonical empty row (K zero bytes, scale 0)
-is not admitted (RT-ALGO-4, note:20261019T0618Z-draft-rt-algo-r2).
+is not admitted.
 
 The **request queue** is an input committed before the window's first coin, two tables of hiding leaves:
 
@@ -17,7 +17,7 @@ admission, never grant it, so a row in a slot the queue leaves unassigned is nev
 
 The unit reads a row's scale and none of its bytes, so an admit bit says nothing of the bytes: a selected row of zero bytes
 under a nonzero scale (`scale_only`) is admitted, and so is a block of 32 of them, which is a dead tile to a tile that reads
-A's bytes and masks its receipt by them (RT4-LOGIC-4, note:20261019T2300Z-draft-rt4-logic).  Nothing here refuses such a
+A's bytes and masks its receipt by them.  Nothing here refuses such a
 row, and no window reads this unit yet.  So an admit bit is not a live tile: credit must count only tiles live in-circuit,
 and that is the served tally's to establish, not this unit's.  The unit is generic over the window: a window maps its call
 to t and its slots to groups of 16, and nothing else of the window reaches it (served_h1's A tables of T slots, the static
