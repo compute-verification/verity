@@ -341,7 +341,7 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   - on a TP Commit, `Capped` over `advice_windows.Traced`: the Build's Programs of record, refused unless they are of record.
     On a declared run it emits exactly what a correct compiler emits. I2 doesn't compile a TP rank's Programs yet.
   - on a single-GPU Commit, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice, under φ from the
-    row's declared inputs (`score.phi_of`: the row id, the served workload file, refused unless its digest is the record's, and
+    workload's declared inputs (`score.phi_of`: its row id, the served workload file, refused unless its digest is the record's, and
     the checkpoint's `config.json`), with each request's prompt and sampling from the record. Its digest names I2's code
     (`code_identity`: `verity` and `verity_vllm` as git lists them, docs and ignored build outputs aside), φ, the seed and ℓ.
     A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does, and held to
