@@ -273,3 +273,8 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
   - 18d7321954 = partbind 865fef87a6 (DeployedCounts:324 at recland's coef+dirs `openSetupSt`: `openRows_size_le`, `openSetupSt ≤ 2040`, `resSetup ≤ 131072`, constants 65792 -> 131072 through `hNK`; brings' d27e8279b8 ported; no consumer outside DeployedCounts; ae6a253d93's dsimp lines aren't in recland's file).
 - VerdictRowEInner:62 and VStarNets:109 are already fixed in f1asm (00d8265740, 95bc34cab4): nothing to take.
 - Tries at 18d7321954 on vy-nebius-1 (leanrec pool): DeployedCounts r20261027-024719-67c8, PartsVStar r20261027-024727-0e6a, VerdictRowEInner r20261027-024737-aad5, VStarNets r20261027-024746-67e9.
+
+## 02:56Z from RECDCOIN (bc-c6c64e04): 3702 GREEN on cpu-3, resp3-c064 b44b6d69fc
+- `Build completed successfully (11183 jobs).` `=== Proofs.Flock.Claims.Recursion.HresAsm rc=0 in 583s`.
+- `[propext, Classical.choice, Quot.sound]` for each of hres_deployed, hres_deployed_all, recursiveKS_deployed, accPorts_deployed, framePorts_D, endsW_of_reg and stepsWV_deployedA.
+- My warm copy is now cpu-3 only (cpu-1's is deleted). Standing by: send any error in a resp3 file to this inbox.
