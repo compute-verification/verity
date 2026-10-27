@@ -10,7 +10,8 @@ quantized input (QKV, 6144 rows of W), gate and up another (UP, 28672). Norms, R
 
     capture.py CFG --checkpoint DIR [--seqs 16] [--len 1024]
 
-writes A-NAME.bin (CFG's blocks x M x K int8, block t's rows at offset t M K, in shapes.txt's layer order) into CFG and
+writes A-NAME.bin for each call in shapes.txt (CFG's blocks x M x K int8, block t's rows at offset t M K; a K-slice of a
+linear, `down.0` and so on, holds the linear's input columns k0..k0 + K) into CFG and
 capture.json: the text's source and the SHA-256 of its token ids, each A file's SHA-256, and the forward's perplexity on
 the same tokens (next-token, all positions after the first), the check that the forward is the model's.
 """
@@ -105,9 +106,10 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     cfg_dir, dev = Path(a.cfg), "cuda"
     layers = [ln.split() for ln in (cfg_dir / "shapes.txt").read_text().splitlines() if ln.strip()]
-    names = [x[0] for x in layers]
-    if names != ["qkv", "o", "up", "down"]:
-        raise SystemExit(f"{cfg_dir}/shapes.txt: layers {names}, not the checkpoint's qkv o up down")
+    linears = list(dict.fromkeys(x[5] for x in layers))
+    if linears != ["qkv", "o", "up", "down"]:
+        raise SystemExit(f"{cfg_dir}/shapes.txt: linears {linears}, not the checkpoint's qkv o up down")
+    slices = {lin: [(x[0], int(x[6]), int(x[3])) for x in layers if x[5] == lin] for lin in linears}
     m, nb = int(layers[0][1]), int(layers[0][4])
     if m != a.seqs * a.len:
         raise SystemExit(f"shapes.txt's M {m} isn't --seqs x --len = {a.seqs * a.len}")
@@ -116,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     S, L, hd = a.seqs, a.len, c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
     nh, nkv, eps = c["num_attention_heads"], c["num_key_value_heads"], c["rms_norm_eps"]
     ids = tokens(ck, S, L)
-    out = {n: np.memmap(cfg_dir / f"A-{n}.bin", mode="w+", dtype=np.int8, shape=(nb, m, int(k))) for n, _, _, k, _ in layers}
+    out = {x[0]: np.memmap(cfg_dir / f"A-{x[0]}.bin", mode="w+", dtype=np.int8, shape=(nb, m, int(x[3]))) for x in layers}
     cos, sin = rope_tables(c, L, dev)
     t0 = time.monotonic()
     with torch.no_grad():
@@ -132,7 +134,9 @@ def main(argv: list[str] | None = None) -> int:
             def call(name: str, h: torch.Tensor, ws: tuple) -> torch.Tensor:
                 xq, sa = row_quant(h)
                 if keep:
-                    out[name][t] = xq.cpu().numpy()
+                    x8 = xq.cpu().numpy()
+                    for part, k0, k in slices[name]:
+                        out[part][t] = x8[:, k0:k0 + k]
                 return linear(xq, sa, *ws)
 
             qkv = call("qkv", rms(x, ck.get(p + "input_layernorm.weight"), eps),

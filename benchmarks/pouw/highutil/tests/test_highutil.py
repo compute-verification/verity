@@ -158,15 +158,27 @@ def test_a_skipping_prover_is_refused(small):
     assert r["verdict"].startswith("REFUSE")
 
 
+def test_down_runs_as_k_slices_whose_segments_are_at_most_t_max_noise_periods():
+    try:
+        P.configure({"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 16384})
+        assert P.calls(P.LINEARS) == [("qkv", 6144, 4096, "qkv", 0), ("o", 4096, 4096, "o", 0), ("up", 28672, 4096, "up", 0)] + \
+            [(f"down.{s}", 4096, 3584, "down", 3584 * s) for s in range(4)]
+        P.configure({"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 4096})
+        assert P.calls(P.LINEARS)[3] == ("down", 4096, 14336, "down", 0)
+    finally:
+        P.configure({"layers": [list(x) for x in P.LINEARS], "m": 16384, "nb": 32, "lp": 512, "L": 16384})
+
+
 def test_one_segment_a_call_when_L_exceeds_K(small, tmp_path):
-    """The run's setting, L past every layer's K (S = 1, the output's low 16 bits the only words): an honest period is
-    accepted and a skipping prover refused, as at S > 1."""
+    """The run's setting, L past every layer's K (S = 1, the output's low 16 bits the only words), with layer b (K = 2 x 8 L')
+    as two K-slices: an honest period is accepted and a skipping prover refused, as at S > 1."""
     cfg = tmp_path / "cfg"
     assert P.main(["prep", str(cfg), "--small", "--L", "2048"]) == 0
     prep = json.loads((cfg / "prep.json").read_text())
     try:
         P.configure(prep)
-        assert [P.shape(n, k, prep["row"]).S for _, n, k in P.LAYERS] == [1, 1]
+        assert [x[0] for x in P.LAYERS] == ["a", "b.0", "b.1"]
+        assert [P.shape(n, k, prep["row"]).S for _, n, k in P.LAYERS] == [1, 1, 1]
         secret = b"\x07" * 64
         per = P.Period(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
                        prep["row"], prep["source"], secret, tmp_path, _Serial())

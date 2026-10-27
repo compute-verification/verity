@@ -12,8 +12,11 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
 - The period's GPU driver (`period.GpuDriver`) runs each layer's calls through V31-GPU's binding (`v31lib.Prover` over
   `libv31.so`, one Prover a layer, all driven by one thread since the binding's contexts share their streams, each
   call's commit beside the next call's compute), with both operands of every transformer block on the GPU. L is 16,384,
-  so every layer has one segment (S = 1), and under `V31_LTW=1` (run.sh's default) a call at S = 1 takes cuBLASLt's int32
-  X W'^T in place of v31's GEMM; the plain arm is cuBLASLt (`torch._int_mm`) on the same calls.
+  so every call has one segment (S = 1), and under `V31_LTW=1` (run.sh's default) a call at S = 1 takes cuBLASLt's int32
+  X W'^T in place of v31's GEMM. Dither's argument covers a segment of at most 8 L' (`T_MAX`), and v31 takes L' <= 1024,
+  so down (K = 14,336) runs as four K-slices of 3,584 (`down.0` to `down.3`, t = 7; `period.calls`) whose outputs sum to
+  its own; QKV, O and gate-and-up are whole (t = 8). The plain arm is cuBLASLt (`torch._int_mm`) on the same linears, each
+  whole, so the slicing's cost counts against the protocol.
 - `hu_lib.cu` builds `libv31.so` from `v31.cu` with two functions more, so the host never waits on the device inside a
   block: `hu_point_b` points a call's weights at the block's device tensor (no `v31_set_b` copy and wait), and
   `hu_levels_async` copies each call's tree to page-locked memory behind its commit (no `v31_root` and `v31_levels`

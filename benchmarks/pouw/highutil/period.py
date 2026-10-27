@@ -3,7 +3,8 @@
 prover, with live coins, and the certified share of the GPU's tensor peak that the periods establish.
 
 **The workload.** Llama-3.1-8B's linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
-14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back. A step is one transformer block's four calls,
+14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back, down as four K-slices (`calls`: Dither's
+argument covers a segment of at most T_MAX L'). A step is one transformer block's calls,
 and step g runs block g mod NB, so NB = 32 consecutive steps are the prefill's every linear. B is the published
 checkpoint's weights (verity-int8/Llama-3.1-8B-INT8 at its pinned revision, q k v and gate up fused as served; `prep
 --checkpoint`, the shards' SHA-256 in the registration). A is the s8 input each linear gets in a W8A8 forward of that
@@ -73,10 +74,15 @@ from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, 
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
 
-LAYERS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down", 4096, 14336))
+#: the model's linears; a config's LAYERS are its calls (`calls`), the linears with down split along K
+LINEARS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down", 4096, 14336))
+LAYERS = LINEARS
 M = 16384
 NB = 32       # transformer blocks: step g runs block g mod NB
-LP, L = 512, 16384   # the noise period L' and the word interval L: S = ceil(K / L) = 1 at every layer's K (4,096 and 14,336)
+LP, L = 512, 16384   # the noise period L' and the word interval L: S = ceil(K / L) = 1 at every call's K
+#: Dither's argument covers segments of at most T_MAX L' inner indices (a proof block's cost goes as c_t / t; v3.2 proves it
+#: for t <= 8), and v31's Fill takes L' <= 1024, so a linear whose segment would be longer runs as K-slices (`calls`)
+T_MAX = 8
 TILE = v31.TILE
 SCHEME = "verity/highutil/period/v1"
 OPERANDS_TAG = "verity/highutil/operands/v1"
@@ -121,6 +127,19 @@ def u64(x: int) -> bytes:
 
 def shape(n: int, k: int, row: int, m: int | None = None) -> v31.Fill:
     return v31.Fill(M if m is None else m, n, k, LP, L, row)
+
+
+def calls(linears) -> list[tuple[str, int, int, str, int]]:
+    """Each linear's calls (name, n, k, linear, k0): the linear whole, or its fewest equal K-slices, each a multiple of L',
+    whose segment min(L, k) is at most T_MAX L'. A slice's X W'^T is the linear's over columns k0..k0 + k, and the
+    linear's output is its slices' sum."""
+    out = []
+    for name, n, k in linears:
+        d = next((d for d in range(1, k // LP + 1) if k % d == 0 and (k // d) % LP == 0 and min(L, k // d) <= T_MAX * LP), None)
+        if d is None:
+            raise SystemExit(f"{name}: no K-slice of {k} is a multiple of L' {LP} with its segment at most {T_MAX} L'")
+        out += [(name, n, k, name, 0)] if d == 1 else [(f"{name}.{s}", n, k // d, name, s * (k // d)) for s in range(d)]
+    return out
 
 
 def step_macs() -> int:
@@ -242,12 +261,15 @@ def cmd_prep(a: argparse.Namespace) -> int:
     if a.small:
         configure({"layers": [["a", 256, 1024], ["b", 128, 2048]], "m": 256, "nb": 2, "lp": 128, "L": a.L or 512})
     else:
-        configure({"layers": [list(x) for x in LAYERS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L or L})
+        configure({"layers": [list(x) for x in LINEARS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L or L})
+    linears = [x[0] for x in LAYERS]
+    parts = calls(LAYERS)
+    configure({"layers": [[c, n, k] for c, n, k, _, _ in parts], "m": M, "nb": NB, "lp": LP, "L": L})
     if a.checkpoint:
         ck = Path(a.checkpoint)
         if ck.name != CHECKPOINT["revision"]:
             raise SystemExit(f"{ck}: not the pinned revision {CHECKPOINT['revision']}")
-        if [x[0] for x in LAYERS] != [x[0] for x in FUSED]:
+        if linears != [x[0] for x in FUSED]:
             raise SystemExit("--checkpoint: the 8B layers only")
         shards = sorted(set(json.loads((ck / "model.safetensors.index.json").read_text())["weight_map"].values()))
         digests = {}
@@ -259,21 +281,24 @@ def cmd_prep(a: argparse.Namespace) -> int:
     else:
         source = {"weights": "seeded", "activations": "seeded", "seed": a.seed}
     lines = []
-    for li, (name, n, k) in enumerate(LAYERS):
+    for li, (name, n, k, linear, k0) in enumerate(parts):
         shape(n, k, a.row)
         with open(operand_file(d, "B", name), "wb") as f:
             for t in range(NB):
-                w = checkpoint_weights(Path(a.checkpoint), name, FUSED[li][1], t) if a.checkpoint else \
-                    seeded_weights(n, k, (a.seed * 16 + li) * 64 + t)
+                if a.checkpoint:
+                    w = checkpoint_weights(Path(a.checkpoint), linear, FUSED[linears.index(linear)][1], t)[:, k0:k0 + k]
+                else:
+                    w = seeded_weights(n, k, (a.seed * 16 + li) * 64 + t)
                 if w.shape != (n, k):
                     raise SystemExit(f"{name} block {t}: {w.shape}, not {(n, k)}")
-                w.tofile(f)
+                np.ascontiguousarray(w).tofile(f)
         if not a.checkpoint:
             with open(operand_file(d, "A", name), "wb") as f:
                 for t in range(NB):
                     seeded_activations(M, k, (a.seed * 16 + li) * 64 + 32 + t).tofile(f)
-        lines.append(f"{name} {M} {n} {k} {NB}")
+        lines.append(f"{name} {M} {n} {k} {NB} {linear} {k0}")
     (d / "shapes.txt").write_text("\n".join(lines) + "\n")
+    source["calls"] = {"t_max": T_MAX, "slices": [[c, linear, k0] for c, _, _, linear, k0 in parts]}
     (d / "prep.json").write_text(json.dumps({"row": a.row, "layers": LAYERS, "m": M, "nb": NB, "lp": LP, "L": L, "source": source}))
     return 0
 
@@ -385,10 +410,11 @@ def _split_cheat(cheat: str) -> tuple[str, int | None]:
 
 # --------------------------------------------------------------------------------------------------------- the drivers
 class GpuDriver:
-    """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, built from hu_lib.cu: one Prover a layer, every call on
-    the binding's shared streams in issue order, each commit beside the next call's compute) and plain cuBLASLt
-    (torch._int_mm) on the same calls. Both operands of every block sit on the GPU; step g's calls read block g mod NB
-    (hu_point_b, no copy). One thread drives every Prover, as the binding requires: a step's four calls are issued, then
+    """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, built from hu_lib.cu: one Prover a call of the step,
+    every call on the binding's shared streams in issue order, each commit beside the next call's compute) and plain
+    cuBLASLt (torch._int_mm) on the same linears, each whole (a K-sliced one as one GEMM). Both operands of every block sit
+    on the GPU; step g's calls read block g mod NB (hu_point_b, no copy). One thread drives every Prover, as the binding
+    requires: a step's calls are issued, then
     the step before's tree levels are queued for copy to page-locked host memory behind their commits (hu_levels_async,
     before each layer's call two after is issued), so the host never waits on the device inside a block but in v31's own
     wait for call c - 2's commit; the roots (each tree's last node) and the paths for the openings after the block's check
@@ -418,6 +444,13 @@ class GpuDriver:
                 dst.append(torch.from_numpy(x).cuda())
             self.out.append(torch.empty((M, n), dtype=torch.int32, device="cuda"))
             assert f.S == p.info()["S"]
+        # the plain arm runs each linear whole, as the model does: a K-sliced linear's operands joined along K
+        self.plain = []
+        for linear in dict.fromkeys(name.split(".")[0] for name, _, _ in LAYERS):
+            lis = [li for li, (name, _, _) in enumerate(LAYERS) if name.split(".")[0] == linear]
+            join = (lambda x: x[lis[0]]) if len(lis) == 1 else (lambda x: torch.cat([x[li] for li in lis], dim=2))  # noqa: E731
+            self.plain.append((join(self.A), join(self.B), self.out[lis[0]] if len(lis) == 1 else
+                               torch.empty((M, LAYERS[lis[0]][1]), dtype=torch.int32, device="cuda")))
         # each layer's trees of one block, rmax steps, as native u64 words (8 a node), page-locked for hu_levels_async
         self.levels = [torch.empty((rmax, 8 * (2 * w - 1)), dtype=torch.int64, pin_memory=True).numpy().view(np.uint64)
                        for w, _, _ in self.geom]
@@ -460,8 +493,8 @@ class GpuDriver:
             e0.record()
             for s in range(steps):
                 t = (g0 + s) % NB
-                for li in range(NL):
-                    torch._int_mm(self.A[li][t], self.B[li][t].t(), out=self.out[li])
+                for a, w, o in self.plain:
+                    torch._int_mm(a[t], w[t].t(), out=o)
             e1.record()
             e1.synchronize()
             return {"gpu_ms": e0.elapsed_time(e1), "host_ms": 1e3 * (time.monotonic() - t0), "flags": 0, "sm_mhz": self._mhz()}
