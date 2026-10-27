@@ -17,7 +17,7 @@ then the composition of the subprotocols that decide a period over the blobs the
 | subprotocol | `Audit` | component |
 | --- | --- | --- |
 | sampled proofs | `.sampled` | `SampledProofs.OneStageZk.protocol` (v2) |
-| PoUW | `.pouw` | `PouwCheck.protocol` (compute-accounting's period protocol `PouwCheck.period` once posted) |
+| PoUW | `.pouw` | `PouwCheck.protocol` (the period protocol `PouwCheck.period` once posted) |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` |
 | the bandwidth audit | `.poub` | `RemoteAudit.Protocol.protocol` |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` |

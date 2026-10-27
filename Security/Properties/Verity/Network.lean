@@ -7,9 +7,9 @@ import Properties.NetworkCertifier.Period
 `Verity.ComponentAccepts .network s` (onsite's network component, `NetworkCheck.Period.protocol`, a protocol that reads
 no blobs, so the same check on whatever blobs were sent, accepts its own case in what the prover sent) yields the
 period that case decodes to (`NetworkPeriod`) and the period check's acceptance of it (`componentAccepts_network`),
-which is `Properties.NetworkCertifier.PeriodAcceptMeans`'s hypothesis as it stands. With `PeriodAcceptMeans` (ONE-13),
+which is `Properties.NetworkCertifier.PeriodAcceptMeans`'s hypothesis as it stands. With `PeriodAcceptMeans`,
 every link-window of that period was accepted (`componentAccepts_network_windows`), as
-`Verity.Subprotocol.NetworkWindowLe` (ONE-12's `window_le`) reads it at the compiled verdict.
+`Verity.Subprotocol.NetworkWindowLe` (`window_le`) reads it at the compiled verdict.
 -/
 
 namespace Verity
@@ -39,7 +39,7 @@ theorem componentAccepts_network {s : Sent} (h : ComponentAccepts .network s) :
   obtain ⟨p, c, e, hp, hc, he, hacc⟩ := hda
   exact ⟨p, c, e, ⟨n, ps, b, d, k, ev, hd, x, hx, h1', hp, hc, he⟩, hacc⟩
 
-/-- **ONE-13 at onsite**: given `PeriodAcceptMeans`, when onsite's network component accepts, its case decodes to a
+/-- **Period acceptance at onsite**: given `PeriodAcceptMeans`, when onsite's network component accepts, its case decodes to a
 period whose every link-window was accepted in the parameters' form. -/
 theorem componentAccepts_network_windows (hP : PeriodAcceptMeans) {s : Sent} (h : ComponentAccepts .network s) :
     ∃ p c e, NetworkPeriod s p c e ∧ PeriodWindowsAccepted p c e :=
