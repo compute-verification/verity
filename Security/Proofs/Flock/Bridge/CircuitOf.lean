@@ -41,8 +41,6 @@ theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = C.toCircuit := rfl
 
 theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset := rfl
 
-theorem Circuit.ofAudit_outputs : (Circuit.ofAudit C).outputs = C.outputs := rfl
-
 theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
     (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) := rfl
 
@@ -57,8 +55,7 @@ theorem Partition.mem_committed_ofAudit (g : Fin C.N) :
     g ∈ (Partition.ofAudit P).committed ↔ g ∈ P.committed := by
   classical
   simp only [Partition.committed, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
-    Finset.mem_univ, true_and, Circuit.ofAudit_isInput, Circuit.ofAudit_reads, Circuit.ofAudit_outputs,
-    List.mem_toFinset, Partition.ofAudit_unit]
+    Finset.mem_univ, true_and, List.mem_toFinset, Partition.ofAudit_unit]
 
 theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
     (Partition.ofAudit P).localEval (Circuit.ofBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by

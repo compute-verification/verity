@@ -25,8 +25,18 @@ The lemmas about them are `Proofs.Flock.Bridge.CircuitOf`'s.
 namespace Verity
 
 /-- **A game circuit as core's**: the Boolean profile's circuit of it (`FlockSoundness.Audit.Circuit.toCircuit`), one
-bit a gate. -/
-abbrev Circuit.ofAudit (C : FlockSoundness.Audit.Circuit) : Circuit := C.toCircuit
+bit a gate, written out so that its gates reduce to the game circuit's. -/
+abbrev Circuit.ofAudit (C : FlockSoundness.Audit.Circuit) : Circuit where
+  N := C.N
+  w _ := 1
+  isInput g := (C.op g).isInput
+  reads g := (C.op g).args.toFinset
+  reads_lt g a ha := C.topo g a (List.mem_toFinset.1 ha)
+  input_reads g h := by simp [FlockSoundness.Audit.Op.args_of_isInput h]
+  op g v := BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0)
+  op_congr g v v' h := by
+    rw [FlockSoundness.Audit.Op.apply_congr (C.op g) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
+  outputs := C.outputs
 
 theorem Circuit.ofAudit_isInput {C : FlockSoundness.Audit.Circuit} (g : Fin C.N) :
     (Circuit.ofAudit C).isInput g = (C.op g).isInput :=
@@ -36,7 +46,7 @@ theorem Circuit.ofAudit_isInput {C : FlockSoundness.Audit.Circuit} (g : Fin C.N)
 def Partition.ofAudit {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
     Partition (Circuit.ofAudit C) n where
   unit := P.unit
-  input_iff g := (P.input_iff g).trans (by rw [Circuit.ofAudit_isInput])
+  input_iff g := P.input_iff g
 
 /-- The circuit with no gates: what files that don't parse register. -/
 def Circuit.empty : Circuit where
