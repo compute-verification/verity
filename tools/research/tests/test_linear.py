@@ -275,6 +275,18 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert rc != 0 and "give the STATE" in err
 
 
+def test_a_dry_run_writes_nothing_to_linear_and_prints_what_it_would_do(fake, registry, routes_dirs, capsys, lin):
+    """27 Oct 05:17Z (INF-285): a triage worker's --dry-run posted 58 comments, since only Slack sends were suppressed."""
+    lin.subscribers["I1"] = []
+    infra = inbox(fake, routes_dirs, "infra")
+    rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would move INF-1 to In Progress" and lin.moved == []
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "proofs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would comment on INF-1 as proofs: picked up"
+    assert lin.sent("commentCreate") == [] and bells(fake, infra) == []
+    rc, out, _ = run(capsys, "linear", "place", "INF-1", "Runs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would place INF-1 in Runs"
+
 def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
     """No one subscribes to Linear comments (each would echo its author), so a lane polled its issues instead (COMM-30)."""
     lin.subscribers["I1"] = []

@@ -1862,9 +1862,14 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             return 1 if found else 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "state":
-            print(f"{issue} {lin.move(issue, need(value, 'the STATE by name (e.g. In Progress)'))}")
+            state = need(value, 'the STATE by name (e.g. In Progress)')
+            print(f"dry-run: would move {issue} to {state}" if ns.dry_run else f"{issue} {lin.move(issue, state)}")
             return 0
         if ns.verb == "place":
+            if ns.dry_run:
+                print(f"dry-run: would place {issue} in {need(value, 'the PROJECT (a prefix of its name)')}"
+                      + (f" / {ns.milestone}" if ns.milestone else ""))
+                return 0
             p = lin.place(issue, need(value, "the PROJECT (a prefix of its name)"), ns.milestone)
             print(f"{issue} placed in {p['project']}" + (f" / {p['milestone']}" if p["milestone"] else ""))
             return 0
@@ -1888,6 +1893,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
                                  "no lane to comment as")
             author = f"{lane}/{ns.worker}"
+        if ns.dry_run:
+            print(f"dry-run: would comment on {issue} as {author}: {text}")
+            return 0
         lin.comment(info["id"], author, text)
         if ns.worker:
             print(f"{issue} commented as {author}")
