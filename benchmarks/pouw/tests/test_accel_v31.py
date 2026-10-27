@@ -1,8 +1,9 @@
 """Dither v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
 challenger's verdicts on an honest call and on calls that skip a noise tile or forge committed values; and Dither's
 no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table; and both shapes' bound
-on t = min(L, K) / L'. perm_kernel launches within its launch bounds, and with VERITY_POUW_V31_LIB naming a libv31.so built
-for the GPU in hand, the GPU forms W' at L' 1,024 and 2,048 under the permutation perm_kernel writes."""
+on t = min(L, K) / L'. perm_kernel launches within its launch bounds, v31lib binds only functions v31.cu's binding defines,
+and with VERITY_POUW_V31_LIB naming a libv31.so built for the GPU in hand, the GPU forms W' at L' 1,024 and 2,048 under the
+permutation perm_kernel writes."""
 from __future__ import annotations
 
 import hashlib
@@ -439,6 +440,15 @@ def test_perm_kernel_launches_within_its_bounds():
     assert cap <= bound <= 512
     launches = re.findall(r"perm_kernel<<<[^,]+, ([^,]+),", src)
     assert launches and set(launches) == {"PERM_THREADS(lp)"}
+
+
+def test_v31lib_binds_only_what_the_binding_defines():
+    """v31lib.Lib binds each function by name as it loads libv31.so, so one that v31.cu's binding (under V31_LIB) doesn't
+    define fails only on a GPU: highutil's driver among them, through v31_point_b, v31_levels_async and v31_lt_*."""
+    src = (Path(v31.__file__).parent / "v31.cu").read_text()
+    defined = set(re.findall(r"^(?:int|void\*?|const char\*) (v31_\w+)\(", src[src.index("#ifdef V31_LIB"):], re.M))
+    bound = set(re.findall(r'"(v31_\w+)": \(', Path(v31lib.__file__).read_text()))
+    assert {"v31_point_b", "v31_levels_async", "v31_lt_create", "v31_lt_run", "v31_lt_algo", "v31_lt_destroy"} <= bound <= defined
 
 
 @pytest.mark.skipif(not settings.V31_LIB, reason="VERITY_POUW_V31_LIB names a libv31.so (v31lib.build_lib) for the GPU in hand "

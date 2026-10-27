@@ -75,15 +75,21 @@ class Lib:
             "v31_create": ([i, i, i, i, i, i, i, ctypes.c_char_p, i], vp),
             "v31_info": ([vp, u64p], i),
             "v31_set_b": ([vp, vp, i], i),
+            "v31_point_b": ([vp, vp], i),
             "v31_load_a": ([vp, vp, i, ctypes.POINTER(vp)], i),
             "v31_prove": ([vp, u8p, u64, vp, ctypes.c_char_p, u64p], i),
             "v31_root": ([vp, u64, vp], i),
             "v31_open": ([vp, u64, u64p, i, vp, vp], i),
             "v31_values": ([vp, u64, vp], i),
             "v31_levels": ([vp, u64, vp], i),
+            "v31_levels_async": ([vp, u64, vp], i),
             "v31_pad": ([vp, vp], i),
             "v31_sync": ([vp], i),
             "v31_destroy": ([vp], None),
+            "v31_lt_create": ([i, i, i, vp, vp, vp, vp], vp),
+            "v31_lt_run": ([vp] * 5, i),
+            "v31_lt_algo": ([vp, vp], None),
+            "v31_lt_destroy": ([vp], None),
         }
         for name, (args, res) in sig.items():
             fn = getattr(d, name)

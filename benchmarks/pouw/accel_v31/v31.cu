@@ -3463,6 +3463,7 @@ static cudaStream_t g_s0 = nullptr, g_s1 = nullptr;
 struct LibCtx {
   Fill f;
   int dom = -1;
+  int8_t* own_b = nullptr;   // the context's own weights buffer, where v31_point_b(null), v31_set_b and v31_destroy point f.B
 };
 static int fail(const std::string& why) {
   g_err = why;
@@ -3500,6 +3501,7 @@ void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const 
   c->f.o = served != 0;
   c->f.setup(m, n, k, lp, L, row, read_params(params_path), dom, g_s0, g_s1);
   c->dom = dom;
+  c->own_b = c->f.B;
   g_dom[dom] = true;
   g_dev = dev;
   g_row = row;
@@ -3516,12 +3518,24 @@ int v31_info(void* h, uint64_t* out) {
   return 0;
 }
 
-// The weights (n x k int8, row-major) from host memory, or from device memory when on_device
+// The weights (n x k int8, row-major) from host memory, or from device memory when on_device, into the context's own buffer
 int v31_set_b(void* h, const void* B, int on_device) {
-  Fill& f = ctx_of(h)->f;
+  LibCtx* c = ctx_of(h);
+  Fill& f = c->f;
   CK(cudaStreamSynchronize(f.s0));
+  f.B = c->own_b;
   CK(cudaMemcpy(f.B, B, (size_t)f.n * f.k, on_device ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice));
   f.wformed = false;
+  return 0;
+}
+
+// The weights at device pointer B (n x k int8, which the caller keeps alive until the calls that read them are done) for
+// the next call's form, with no copy and no wait (v31_set_b waits for the compute stream): a kernel takes the pointer when
+// it is launched, so the calls already issued keep theirs. Null: the context's own buffer again.
+int v31_point_b(void* h, const void* B) {
+  LibCtx* c = ctx_of(h);
+  c->f.B = B ? static_cast<int8_t*>(const_cast<void*>(B)) : c->own_b;
+  c->f.wformed = false;
   return 0;
 }
 
@@ -3617,6 +3631,17 @@ int v31_levels(void* h, uint64_t c, uint8_t* out) {
   for (size_t i = 0; i < lv.size(); i++) sha::put_be64(out + 8 * i, lv[i]);
   return 0;
 }
+// Call c's tree levels as v31_levels orders them, each node 8 native u64 words (not big-endian bytes), into dst, page-locked
+// host memory the caller keeps until v31_sync: copied on the commit stream behind c's commit, returning at once. Call
+// c + 2's commit, which reuses the copy's buffer, runs after it in that stream's order.
+int v31_levels_async(void* h, uint64_t c, void* dst) {
+  Fill& f = ctx_of(h)->f;
+  if (c >= f.calls || c + 2 < f.calls) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  const int b = (int)(c & 1);
+  if (f.pend == b) f.flush();
+  CK(cudaMemcpyAsync(dst, f.cm[b].levels, f.levels_count() * 64, cudaMemcpyDeviceToHost, f.s1));
+  return 0;
+}
 int v31_pad(void* h, uint8_t* out) {
   Fill& f = ctx_of(h)->f;
   CK(cudaStreamSynchronize(f.s0));
@@ -3633,10 +3658,34 @@ int v31_sync(void* h) {
   return 0;
 }
 
+// cuBLASLt's int8 GEMM alone: D (m x n int32, row-major) = A (m x k int8) B^T (B n x k) through lt_setup (autotuned at these
+// pointers, on stream st) and lt_run, a V31_LTW call's X W'^T; a later run may take other pointers of the same shapes.
+void* v31_lt_create(int m, int n, int k, const void* A, const void* B, void* D, void* st) {
+  Lt* L = new Lt();
+  lt_setup(*L, m, n, k, static_cast<const int8_t*>(A), static_cast<const int8_t*>(B), static_cast<int*>(D),
+           static_cast<cudaStream_t>(st));
+  return L;
+}
+int v31_lt_run(void* h, const void* A, const void* B, void* D, void* st) {
+  lt_run(*static_cast<Lt*>(h), static_cast<const int8_t*>(A), static_cast<const int8_t*>(B), static_cast<int*>(D),
+         static_cast<cudaStream_t>(st));
+  return 0;
+}
+// the kernel cuBLASLt picked: algo id, tile id, stages and split-K into out[0..3]
+void v31_lt_algo(void* h, int* out) {
+  const Lt& L = *static_cast<Lt*>(h);
+  out[0] = L.algo_id, out[1] = L.tile, out[2] = L.stages, out[3] = L.splitk;
+}
+void v31_lt_destroy(void* h) {
+  lt_free(*static_cast<Lt*>(h));
+  delete static_cast<Lt*>(h);
+}
+
 void v31_destroy(void* h) {
   LibCtx* c = ctx_of(h);
   if (!c) return;
   c->f.flush();
+  c->f.B = c->own_b;
   c->f.release();
   g_dom[c->dom] = false;
   if (--g_live == 0) g_dev = -1;

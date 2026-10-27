@@ -19,17 +19,17 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   run.sh's default), or two of 7,168 at L' 1,024 (`LP_MAX=1024`, t = 7), which measured 1.7% more GPU time a step.
   QKV, O and gate-and-up are whole at L' = 512 (t = 8). The plain arm runs the same linears, each whole, so the slicing's cost counts
   against the protocol, through each of `--plain`'s baselines: cuBLASLt (`lt`, v31.cu's own autotuned `lt_setup`, the call
-  a `V31_LTW` call makes; `hu_lt_create` in `hu_lib.cu`), against which γ is reported, and `torch._int_mm` (`int_mm`,
+  a `V31_LTW` call makes; `v31_lt_create` in its binding), against which γ is reported, and `torch._int_mm` (`int_mm`,
   on the H200 CUTLASS's sm80 `mma.sync` kernel).
-- `hu_lib.cu` builds `libv31.so` from `v31.cu` with two functions more, so the host never waits on the device inside a
-  block: `hu_point_b` points a call's weights at the block's device tensor (no `v31_set_b` copy and wait), and
-  `hu_levels_async` copies each call's tree to page-locked memory behind its commit (no `v31_root` and `v31_levels`
-  wait), for the roots and the openings after the check coin.
+- The host never waits on the device inside a block, through two of the binding's functions: `v31_point_b` points a
+  call's weights at the block's device tensor (no `v31_set_b` copy and wait), and `v31_levels_async` copies each call's
+  tree to page-locked memory behind its commit (no `v31_root` and `v31_levels` wait), for the roots and the openings
+  after the check coin.
 - `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
   with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps), with `NCU=1` each kernel's
   tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `terms.py`: where θ x wall goes.
 - The prover is `benchmarks/pouw/accel_v31` (V31-GPU, with kernels' sm_90a port and no-fold fast path, #5118 and #5202):
-  `period.py` imports its `v31` and `v31lib`, and `hu_lib.cu` includes its `v31.cu`; `run.sh` records their hashes. It
-  builds for both cards: sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4`
+  `period.py` imports its `v31` and `v31lib`, and `run.sh` builds `libv31.so` from its `v31.cu` and records their hashes.
+  It builds for both cards: sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4`
   and `V31_SAHEAD 1` are #5202's timed knobs that act on a filler call. Its RP 4, `V31_HCHUNK` and `V31_GEMM` (which
   turns on the warpgroup GEMM for prefix sums, `V31_WGW`) are the served call's, which the period doesn't make.

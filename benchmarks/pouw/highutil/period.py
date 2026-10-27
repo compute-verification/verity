@@ -445,12 +445,12 @@ def _split_cheat(cheat: str) -> tuple[str, int | None]:
 
 # --------------------------------------------------------------------------------------------------------- the drivers
 class GpuDriver:
-    """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, built from hu_lib.cu: one Prover a call of the step,
+    """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, v31.cu's binding: one Prover a call of the step,
     every call on the binding's shared streams in issue order, each commit beside the next call's compute) and plain
     cuBLASLt (torch._int_mm) on the same linears, each whole (a K-sliced one as one GEMM). Both operands of every block sit
-    on the GPU; step g's calls read block g mod NB (hu_point_b, no copy). One thread drives every Prover, as the binding
+    on the GPU; step g's calls read block g mod NB (v31_point_b, no copy). One thread drives every Prover, as the binding
     requires: a step's calls are issued, then
-    the step before's tree levels are queued for copy to page-locked host memory behind their commits (hu_levels_async,
+    the step before's tree levels are queued for copy to page-locked host memory behind their commits (v31_levels_async,
     before each layer's call two after is issued), so the host never waits on the device inside a block but in v31's own
     wait for call c - 2's commit; the roots (each tree's last node) and the paths for the openings after the block's check
     coin are read from those copies once the block is done."""
@@ -462,16 +462,6 @@ class GpuDriver:
         import v31lib
         self.torch, self.rmax = torch, rmax
         self.lib = v31lib.Lib(lib)
-        self.point_b = ctypes.CDLL(lib).hu_point_b
-        self.point_b.argtypes, self.point_b.restype = [ctypes.c_void_p, ctypes.c_void_p], ctypes.c_int
-        self.levels_async = ctypes.CDLL(lib).hu_levels_async
-        self.levels_async.argtypes, self.levels_async.restype = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_void_p], ctypes.c_int
-        so = ctypes.CDLL(lib)
-        self.lt_create, self.lt_run, self.lt_algo, self.lt_destroy = so.hu_lt_create, so.hu_lt_run, so.hu_lt_algo, so.hu_lt_destroy
-        self.lt_create.argtypes, self.lt_create.restype = [ctypes.c_int] * 3 + [ctypes.c_void_p] * 4, ctypes.c_void_p
-        self.lt_run.argtypes, self.lt_run.restype = [ctypes.c_void_p] * 5, ctypes.c_int
-        self.lt_algo.argtypes, self.lt_algo.restype = [ctypes.c_void_p, ctypes.c_void_p], None
-        self.lt_destroy.argtypes, self.lt_destroy.restype = [ctypes.c_void_p], None
         self.params = Path(tempfile.mkdtemp(prefix="highutil-params-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
         self.ps, self.A, self.B, self.out, self.geom = [], [], [], [], []
         for name, n, k in LAYERS:
@@ -492,17 +482,17 @@ class GpuDriver:
             join = (lambda x: x[lis[0]]) if len(lis) == 1 else (lambda x: torch.cat([x[li] for li in lis], dim=2))
             self.plain.append((join(self.A), join(self.B), self.out[lis[0]] if len(lis) == 1 else
                                torch.empty((M, LAYERS[lis[0]][1]), dtype=torch.int32, device="cuda")))
-        # cuBLASLt's baseline (hu_lt_create: v31's own lt_setup, autotuned once a linear on block 0's operands), on
+        # cuBLASLt's baseline (v31_lt_create: v31's own lt_setup, autotuned once a linear on block 0's operands), on
         # torch's stream
         self.stream = torch.cuda.current_stream().cuda_stream
         self.lts, self.lt_algos = [], {}
         for (a, w, o), linear in zip(self.plain, dict.fromkeys(name.split(".")[0] for name, _, _ in LAYERS)):
-            h = self.lt_create(M, w.shape[1], w.shape[2], a[0].data_ptr(), w[0].data_ptr(), o.data_ptr(), self.stream)
+            h = self.lib.lt_create(M, w.shape[1], w.shape[2], a[0].data_ptr(), w[0].data_ptr(), o.data_ptr(), self.stream)
             self.lts.append(h)
             algo = (ctypes.c_int * 4)()
-            self.lt_algo(h, algo)
+            self.lib.lt_algo(h, algo)
             self.lt_algos[linear] = dict(zip(("algo", "tile", "stages", "splitk"), algo))
-        # each layer's trees of one block, rmax steps, as native u64 words (8 a node), page-locked for hu_levels_async
+        # each layer's trees of one block, rmax steps, as native u64 words (8 a node), page-locked for v31_levels_async
         self.levels = [torch.empty((rmax, 8 * (2 * w - 1)), dtype=torch.int64, pin_memory=True).numpy().view(np.uint64)
                        for w, _, _ in self.geom]
         torch.cuda.synchronize()
@@ -546,7 +536,7 @@ class GpuDriver:
                 t = (g0 + s) % NB
                 if base == "lt":
                     for (a, w, o), h in zip(self.plain, self.lts):
-                        self.lt_run(h, a[t].data_ptr(), w[t].data_ptr(), o.data_ptr(), self.stream)
+                        self.lib.lt_run(h, a[t].data_ptr(), w[t].data_ptr(), o.data_ptr(), self.stream)
                 else:
                     for a, w, o in self.plain:
                         torch._int_mm(a[t], w[t].t(), out=o)
@@ -561,7 +551,7 @@ class GpuDriver:
 
         def collect(s: int, li: int, c: int) -> None:
             p = self.ps[li]
-            self.lib.check(self.levels_async(p.h, c, self.levels[li][s].ctypes.data))
+            self.lib.check(self.lib.levels_async(p.h, c, self.levels[li][s].ctypes.data))
             self.keys[(s, li)] = (p.ks, p.calls[c]["off"])
 
         torch.cuda.synchronize()
@@ -571,7 +561,7 @@ class GpuDriver:
             t = (g0 + s) % NB
             cur = []
             for li, p in enumerate(self.ps):
-                self.lib.check(self.point_b(p.h, self.B[li][t].data_ptr()))
+                self.lib.check(self.lib.point_b(p.h, self.B[li][t].data_ptr()))
                 sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
                 cur.append((s, li, p.prove(sd, self.A[li][t].data_ptr(), bad[li])))
             for x in prev:
@@ -610,9 +600,8 @@ class GpuDriver:
             self.smi.terminate()
         self.torch.cuda.synchronize()
         for h in self.lts:
-            self.lt_destroy(h)
+            self.lib.lt_destroy(h)
         for p in self.ps:
-            self.point_b(p.h, None)
             p.close()
         shutil.rmtree(self.params, ignore_errors=True)
 
