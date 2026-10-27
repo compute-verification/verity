@@ -147,6 +147,9 @@ def _leaf_definition(name: str, statics: tuple[str, ...], signature: Callable, b
         return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
     d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
+    # C-Flock lowers an activation by its builder, commits included (`ir_lower._boolean_activation`, ``build(C, *e)`` for a
+    # Definition without statics): lowered gate by gate from the trace, a compression's linear forms grow without bound
+    d.build = build if statics else (lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
     d.traced = traced  # type: ignore[attr-defined]
     return d
 

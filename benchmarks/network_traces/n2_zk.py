@@ -351,7 +351,7 @@ def _one_stage():
 
 
 def builders() -> tuple:
-    """Give the traced parts the head check calls that carry no builder (`gates.lms._leaf_definition`'s; `head_check`'s,
+    """Give the traced parts the head check calls that carry no builder (`gates.lms._leaf_definition`'s, `head_check`'s,
     `frame_v3._part` and `boolean.trace.definition` keep one) the builder their trace was taken from, so C-Flock lowers
     each activation by it, commits included (`ir_lower._boolean_activation`, which calls ``build(C, S, *e)`` for a part
     with statics and ``build(C, *e)`` without). Gate by gate their linear forms grow without bound: one SHA-512
