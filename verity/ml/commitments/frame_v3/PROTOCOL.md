@@ -71,7 +71,7 @@ natively, as B-Ligero does. The layout still describes the whole-row digest, whi
 
 An NVFP4 row (an x row or W column of `k` E2M1 codes with one UE4M3 scale per 16 codes; k = 1536 gives 864 bytes)
 hashes the code buffer, then the scale buffer, as NVFP4 tensors hold them in memory, so a serving-side committer hashes
-rows without repacking (Daniel, 2026-09-26 01:05Z):
+rows without repacking:
 
 ~~~text
 nvfp4_row_bytes = codes packed two per byte (code 2i in the low nibble, 2i+1 in the high), in row order  (k/2 bytes)
@@ -98,8 +98,8 @@ results keep verifying. It is algebraic, so no core scheme configuration offers 
 
 ## 6. `frame-v3-sha512`
 
-frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, for SHA-512 data commitments (Daniel, 2026-09-26:
-SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
+frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, for SHA-512 data commitments
+(SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
 - a port's domain is `CommitmentDomain(binding, owner, positions, hash="sha512")`;
 - `FrameV3` over such ports is named `frame-v3-sha512`;
 - nothing recorded moves.
@@ -114,7 +114,7 @@ SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
 
 **The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
 weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under every frame it is 64 bytes, an
-`identity_digest_sha512` or another SHA-512 digest (Daniel's one-hash ruling: one hash, SHA-512), or 32 bytes, a SHA-256 identity
+`identity_digest_sha512` or another SHA-512 digest (one hash, SHA-512), or 32 bytes, a SHA-256 identity
 digest as recorded statements carry it. The domain message frames every part with its u64be length, so a 64-byte binding and a
 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
 `vectors_sha512.json` gives row trees over 64-byte bindings, each with its identity's tag and document, the positions' SHA-512
@@ -132,7 +132,7 @@ The prefix is one SHA-512 block, so a gadget starts from a constant midstate. Th
 with schema `sha512/row/v1`.
 
 **Bit rows: `sha512/row/v2`.** A row is a string of ℓ bits and nothing else: no format, role or word width enters its digest, since
-format labels stay outside every digest (Daniel, 2026-10-01). `BitRowLeaf(n_bits)` is its leaf.
+format labels stay outside every digest. `BitRowLeaf(n_bits)` is its leaf.
 
 ~~~text
 row bytes = the row's bits eight a byte: row bit i is bit (i mod 8) of byte ⌊i/8⌋, and the last byte's fill is zero bits  (⌈ℓ/8⌉ bytes)
@@ -169,7 +169,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
 
 **Segmented bit rows: `sha512/row-seg/v1`.** The same ℓ-bit row and row bytes as `sha512/row/v2`, cut into segments of 1024 bytes
 that hash independently, so a prover hashes them in parallel; one more hash combines them. It is the inner digest of PoUW's A rows
-(role X, the per-call rows on decode's path; Daniel's ruling, card 637f70c6).
+(role X, the per-call rows on decode's path).
 
 ~~~text
 s           = ⌈ℓ / 8192⌉                     segment j holds row bytes [1024 j, 1024 j + ⌈m_j / 8⌉)
@@ -218,7 +218,7 @@ tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_
 
 The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. Over a bit row's digest it is
 `hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). `rowleaf.row_leaf` accepts each at its width. The SHA-256 frame has no hiding
-row schema: every commitment is hm96 rows in `frame-v3-sha512` trees (Daniel's one-hash ruling).
+row schema: every commitment is hm96 rows in `frame-v3-sha512` trees (one hash, SHA-512).
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.

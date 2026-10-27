@@ -2,7 +2,7 @@
 //! carries now, as no-ops, and the prover's own randomness.
 //!
 //! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is drawn and kept where it
-//! is used again, so no premise on a stream generator is left on any of them (Daniel, 9 Oct, decision 4). Under the outer
+//! is used again, so no premise on a stream generator is left on any of them. Under the outer
 //! firewall the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
 //! `seed-injection`) can inject a [`ProverSeed`] instead, and then the prover is a deterministic function of (statement, witness,
 //! seed, verifier coins): no message byte depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on
@@ -72,9 +72,8 @@ impl ProverSeed {
 }
 
 /// The salts of one proof's `hm96-sha512/v1` Merkle leaves: every leaf's 192 bytes read from the OS (`getrandom`, the source of
-/// [`ProverSeed::from_os`]), a tree at a time in [`OS_PIECE`]-byte pieces on rayon's threads, never a stream generator's output
-/// (Daniel, 9 Oct, decision 4(a)). They replace a ChaCha20 expansion of one 32-byte key per proof, chosen on 27 Sep because
-/// salts read with one call per leaf cost +96% prover time at m = 33. Trees are numbered: the level-0 tree is id 0 (both reps
+/// [`ProverSeed::from_os`]), a tree at a time in [`OS_PIECE`]-byte pieces on rayon's threads, never a stream generator's output.
+/// Reading a tree at a time keeps the cost down: salts read with one call per leaf cost +96% prover time at m = 33. Trees are numbered: the level-0 tree is id 0 (both reps
 /// bind one root) and every later tree takes the next id. In a session of several tables, table `j` ([`LeafSalts::table`]) takes
 /// ids from `j << TABLE_SHIFT` instead. A tree's salts are read once, so no salt is used twice and every commitment to a tree
 /// sees one set: level 0's are kept for the proof ([`LeafSalts::level0`]: the session's `Commit`, both reps and the firewall's
