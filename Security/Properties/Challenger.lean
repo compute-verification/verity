@@ -390,7 +390,7 @@ def Session.rootsOf (s : Session) (label : String) : List ByteArray :=
 
 /-- Session `s`'s log receives every root of family `a` before any of family `b` (`receivedOrder`). -/
 def Session.Before (s : Session) (a b : String) : Prop :=
-  ∀ i j, (receivedOrder s.log)[i]? = some a → (receivedOrder s.log)[j]? = some b → i < j
+  ∀ i j : Nat, (receivedOrder s.log)[i]? = some a → (receivedOrder s.log)[j]? = some b → i < j
 
 /-- The record `roundCoins` reads use `i`'s coins from, as `drawCoins` reads it: `coins` with its `i`th segment as the
 segment. -/
@@ -405,10 +405,10 @@ def RoundsByDeviceAt
   ∀ (dev : Device) (key : ChallengerKey) (w : String) (us : List Use) (order : List (String × String)) (coins : Json)
     (ξs : List ByteArray), read key w us order coins = .ok ξs →
       (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧
-          (∀ i (u : Use), us[i]? = some u → ξs[i]? = some (s.released u.label u.after)) ∧
+          (∀ (i : Nat) (u : Use), us[i]? = some u → ξs[i]? = some (s.released u.label u.after)) ∧
           (∀ ℓ ∈ s.families.map (·.1), s.rootsOf ℓ = Use.roots us ℓ) ∧
           ∀ ab ∈ order, s.Before ab.1 ab.2) ∨
-        ∃ i (u : Use), us[i]? = some u ∧ Break dev key u.label (useCoins coins i)
+        ∃ (i : Nat) (u : Use), us[i]? = some u ∧ Break dev key u.label (useCoins coins i)
 
 /-- **Every coin a v2 window reads is its challenger's, one release a use, in the play's order.** For every challenger
 device, if `roundCoins` reads `ξs` for the uses `us` (each a family, the root its coins were released after, and how
