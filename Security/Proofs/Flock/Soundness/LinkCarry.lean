@@ -88,14 +88,14 @@ theorem expect_mixG (F : τ₁ ⊕ τ₂ → ℝ) :
   rw [expect_map, expect_map]
   norm_num
 
-variable {Val : Type} [Fintype Val] [DecidableEq Val] (rd₁ : τ₁ → Finset Val) (rd₂ : τ₂ → Finset Val)
+variable {Val : Type} [Fintype Val] (rd₁ : τ₁ → Finset Val) (rd₂ : τ₂ → Finset Val)
 
-omit [Fintype Val] [DecidableEq Val] in
+omit [Fintype Val] in
 theorem pRd_mixG (v : Val) :
     pRd (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) v = (pRd T₁ s₁ rd₁ v + pRd T₂ s₂ rd₂ v) / 2 :=
   expect_mixG T₁ s₁ T₂ s₂ _
 
-omit [Fintype Val] [DecidableEq Val] in
+omit [Fintype Val] in
 theorem sRd_mixG :
     sRd (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) = (sRd T₁ s₁ rd₁ + sRd T₂ s₂ rd₂) / 2 :=
   expect_mixG T₁ s₁ T₂ s₂ _
@@ -149,7 +149,11 @@ theorem pRd_image (v : Val) : pRd T sT (fun x => (rd x).image e) (e v) = pRd T s
   unfold pRd
   refine congrArg (fun f => expect f T sT) (funext fun x => ?_)
   unfold ind
-  exact if_congr (image_eq_singleton_iff he _ _) rfl rfl
+  split_ifs with h1 h2 h2
+  · rfl
+  · exact absurd ((image_eq_singleton_iff he _ _).1 h1) h2
+  · exact absurd ((image_eq_singleton_iff he _ _).2 h2) h1
+  · rfl
 
 omit [Fintype Val] [DecidableEq Val] [Inhabited Val] [Fintype V] in
 theorem pRd_image_out {w : V} (hw : ∀ v, e v ≠ w) : pRd T sT (fun x => (rd x).image e) w = 0 := by
@@ -217,6 +221,7 @@ def colMix : O₁ ⊕ O₂ → O₁ ⊕ O₂ → List UInt8 × List UInt8
   | .inl o, .inr o' => col₁₂ o o'
   | .inr o, .inl o' => ((col₁₂ o' o).2, (col₁₂ o' o).1)
 
+omit [DecidableEq Val₁] [DecidableEq Val₂] [Fintype V] in
 /-- **Every success of the mixture's finder outputs a collision**, given each session's openings and collisions and
 the cross collision between openings of the carried leaf whose values differ in `V`. -/
 theorem outMix_spec {Dh : Type} {Hc : List UInt8 → Dh} (he₁ : Function.Injective e₁) (he₂ : Function.Injective e₂)
