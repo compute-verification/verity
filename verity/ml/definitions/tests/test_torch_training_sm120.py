@@ -84,6 +84,19 @@ def test_the_cross_entropy_is_the_gpus(step) -> None:
     assert _sha(dx[0], "<u2") == str(step["loss_dx_sha256"])
 
 
+@pytest.mark.slow
+def test_the_cross_entropy_row_definitions_are_the_gpus(step) -> None:
+    """`LogSoftmaxRow_v1{V=49152}` and `LogSoftmaxNllBackwardRow_v1{V=49152}` on the kept row: its target log-probability and
+    every word of its logit gradient. Traces 48 expf's a lane, a minute or two."""
+    x, t, r = step["loss_x"][None], step["loss_t"], int(step["loss_row"])
+    _, mx, ls, _, _ = TK.log_softmax_forward(x)
+    _same(evaluate_words(bind(TL.LogSoftmaxRow, V=V), x, t[r:r + 1]), [[mx[0], ls[0], step["loss_lp"][r]]])
+    _, tw = TK.nll_loss(step["loss_lp"], t, V, True)
+    g = np.array([TK.nll_loss_backward(0x3F800000, tw, True)], np.uint32)
+    dx = evaluate_words(bind(TL.LogSoftmaxNllBackwardRow, V=V), x, t[r:r + 1], mx, ls, g)
+    assert _sha(np.asarray(dx).reshape(-1), "<u2") == str(step["loss_dx_sha256"])
+
+
 def test_the_embedding_backward_is_the_gpus(step) -> None:
     """embedding_dense_backward's feature kernel (M = 256 ids) on 13 of the 576 features of every entry the step's tokens
     hold, the model and `EmbeddingBackwardFeature_v1{M=256}`."""
