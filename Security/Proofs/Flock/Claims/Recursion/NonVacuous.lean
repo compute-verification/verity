@@ -12,7 +12,7 @@ import Proofs.Flock.Claims.KS.PlainR
 /-!
 # `RecursiveKS`'s premise at `nextR`, from the verdict's rows
 
-The recursion sprint's top statement. `RecursiveKS` (#3638) takes one premise, that V\*'s parts decompose the inner
+The recursion's top statement. `RecursiveKS` takes one premise, that V\*'s parts decompose the inner
 verifier (`DecompB` at `PartAccepts`). At the deployed reader `nextR` that premise is `RecKSDecompR` below, and
 `recKSDecompR_of_targets` proves it from named targets, one per open obligation. Each target is a `def … : Prop` with a
 fixed statement: a row's owner proves `theorem … : Target…` against it, and the integration replaces the argument with
@@ -325,7 +325,7 @@ abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ →
   PartAccepts FlockDeploy.sha512 (recR rd b aux nOf hd rest fin wE final w) (deployZkRec _root_.Flock.Readable.relation)
     (layR fin) Claims.Recursion.Form.Dense (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead)
 
-/-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` (#3638) with `IVStar`'s last
+/-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` with `IVStar`'s last
 step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the coin server's record, V\*'s bound
 layout and the deployed outer `--zk` record, wherever every part's circuit accepts at a dense compiled statement,
 `IVStar` accepts or two of the parts' recorded calls collide. -/

@@ -121,9 +121,9 @@ noncomputable def recBoundAt (rel : _root_.Flock.Readable.Parsed → _root_.Floc
 
 /-- **`KSBound` at the deployment**, the guarantee option (d) states: at SHA-512, the compiled record `deployRec` whose
 inner view runs `IVStar` at V*'s bound layout (`recBoundAt`), the deployed bound record (`bdDeployed`) and the deployed
-outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` (ASK-72) it is `KSBoundCover`. Its level
+outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. Its level
 (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s
-weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's
+weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight. Route 2C's
 bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but
 `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
 (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
