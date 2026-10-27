@@ -847,7 +847,7 @@ rate_value = 1.3903
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and 16 alu lanes a warp instruction"
 argument = "the warp's 32 predicates to a word (or a predicate) a lane. A fold in the card's lane opcodes (LEA, 2 words in) is 31 alu lanes, past the 16 the card spends, so no fold of `lane`s dominates it at the card's rate; beside LOP3 the card spends about half a LOP3 of alu on each VOTE (LOP3 + VOTE/2 = 1.930, 1.955, 2.000 at Q 16, 32, 64), so a collective charging 16 alu lanes does"
-source = "collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): VOTE.ANY 1.3903, VOTE.ALL 0.4716 alone; mix_vote_lop3_16, 32, 64"
+source = "collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): VOTE.ANY 1.3903, VOTE.ALL 0.4716 alone; mix_vote_lop3_16, 32, 64; r20261027-022445-0a1b the same, collective_verdict.py: held"
 
 [[row]]
 ops = ["REDUX"]
@@ -862,7 +862,7 @@ rate_value = 0.4990
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and a unit of collective a warp instruction"
 argument = "32 words to one uniform word. A fold of IADD3s is 16 alu lanes and beside LOP3 the card spends less (LOP3 + MOV + REDUX/2 = 2.007, 0.35% past the cap: RM7), but REDUX runs on MATCH.ANY's unit: 0.4990 alone, 0.2498 + 0.2498 beside MATCH.ANY, so it is a unit of `collective` at 0.5"
-source = "collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64"
+source = "collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64; r20261027-022445-0a1b the same, collective_verdict.py: held"
 
 [[row]]
 ops = ["MATCH"]
@@ -878,7 +878,7 @@ rate_value = 0.24997
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and 2 units of collective a warp instruction"
 argument = "32 word pairs to a mask a lane; .U64 runs at half MATCH.ANY's rate on its unit (0.25/k for k classes), 2 units"
-source = "match.cu, r20261027-002237-fa90: .U64 0.24997 (1 class), 0.00781 (32)"
+source = "match.cu, r20261027-002237-fa90: .U64 0.24997 (1 class), 0.00781 (32); r20261027-022445-0a1b the same, collective_verdict.py: held"
 
 [[row]]
 ops = ["MATCH"]
@@ -907,7 +907,7 @@ rate_value = 0.4999
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and a unit of collective a warp instruction"
 argument = "32 words to a mask a lane. `lane`s simulate it in about 280 alu lanes (4 words in), or 119 provisional 6-word units, past ρ beside LOP3 and FFMA (a load of 1.11); it runs on a unit of its own beside the issue slots at 0.5/k warp instructions a SM-clock for k distinct values, which REDUX shares, so it is a unit of `collective`: 0.4999 at 1 class"
-source = "match.cu, r20261027-002237-fa90: alone 0.4999 (1 class), 0.24998 (2), 0.12500 (4), 0.01562 (32); beside LOP3 and FFMA 0.3790 with 1.516 and 1.516 (mix_u32_lop3_32_ffma_32); r20261027-001518-aaf8 the same within 0.3%; r20261027-004019-4f84 (REDUX beside it)"
+source = "match.cu, r20261027-002237-fa90: alone 0.4999 (1 class), 0.24998 (2), 0.12500 (4), 0.01562 (32); beside LOP3 and FFMA 0.3790 with 1.516 and 1.516 (mix_u32_lop3_32_ffma_32); r20261027-001518-aaf8 the same within 0.3%; r20261027-004019-4f84 (REDUX beside it); r20261027-022445-0a1b the same, collective_verdict.py: held"
 
 [[row]]
 ops = ["MATCH", "REDUX", "VOTE", "VOTEU"]
