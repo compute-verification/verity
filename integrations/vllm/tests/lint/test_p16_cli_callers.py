@@ -38,6 +38,7 @@ PUBLIC_COMMANDS: dict[str, str] = {
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
     "serve-openai": "benchmarks/one_stage/llama1b_serve_seal.sh",
     "served-match": "benchmarks/hash/maxtput/build_job.sh",
+    "weights-tie": "benchmarks/prove_path/run.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "sweep": "an operator's night (`verity-vllm sweep plan`, tools/research/src/research/pods/nebius/sky/submit.sh)",

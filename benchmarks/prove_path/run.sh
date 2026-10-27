@@ -379,7 +379,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   TLAW=${PP_LAW:-work:1} TCAP=${PP_TORCH_LOOP_CAP:-16} F=$W/tie-fixture
   (cd integrations/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
     || { tail -20 $O/tie-fixture.err; exit 8; }
-  WT="$PY -m verity_vllm.program.predict.weights_tie"
+  WT="$PY -m verity_vllm.pipeline.cli weights-tie"
   tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
            # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
            # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own

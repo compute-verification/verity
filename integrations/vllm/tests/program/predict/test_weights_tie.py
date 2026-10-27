@@ -20,6 +20,7 @@ from tests.check.test_weights_of_record import write_safetensors
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import GRAIN, KEY, _checkpoint
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.pipeline import cli
 from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.protocols.pouw.h1 import registered as H1R
@@ -140,7 +141,7 @@ def test_the_honest_registration_is_accepted(x, tmp_path):
     assert win.mismatches(kernel="auto") == {}
     assert _ends(win) == {f"{c.name}/sha512": IF.digest_words(c.digest) for c in t.chains}
     c = win.close()
-    win.write(c, tmp_path / "w", {"tie": WT.TIE}, registrar=R)
+    win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
     rec = json.loads((tmp_path / "w" / "registration.json").read_text())
     roots = rec["window"]["registered_roots"]
     assert {p: roots[p] for p in registration["values"]} == WW.WeightsRegistration.of(registration, "r").roots
@@ -174,24 +175,58 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     pins = _pins(WT.audit_inputs(registration, record, t, LAW, CAP))
     ends = {(m.key, "o0") for m in win.window.members if m.template in _ends_of(win)}
     c = win.close()
-    win.write(c, tmp_path / "w", {"tie": WT.TIE}, registrar=R)
+    win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
     assert len(ends) == len(t.chains) and _unopened(win, c, tmp_path / "w", pins) == ends
     _r, _t, forged = WT.commit(reg, KEY, d, man, law=LAW, cap=CAP, grain=GRAIN, served=served, forge_digest=True)
     assert _ends(forged) == digests
     assert forged.mismatches(kernel="auto") == {t: [0] for t in _ends_of(forged)}
     fc = forged.close()
-    forged.write(fc, tmp_path / "f", {"tie": WT.TIE}, registrar=R)
+    forged.write(fc, tmp_path / "f", {"tie": WT.TIE_TAG}, registrar=R)
     assert _unopened(forged, fc, tmp_path / "f", pins) == set()
     roots = WW.WeightsRegistration.of(registration, "r").roots
     for bad, why in [({"ok": False}, "didn't accept"), ({"forged": {"ok": True}}, "didn't accept"),
                      ({"run_root": "00" * 64}, "another circuit or run"),
-                     ({"outputs": {"units": t.units(), "proved": False}}, "not every one")]:
+                     ({"outputs": {"units": t.units(), "proved": False}}, "not every one"),
+                     ({"registered": {}}, "held no registered pins")]:
         with pytest.raises(ValueError, match=why):
             WT.checked_pins(registration, record, t, _summary(t, registration, record, roots, **bad), LAW, CAP)
     other = {**roots, next(iter(roots)): "ab" * 64}
     with pytest.raises(ValueError, match="roots for .* aren't the registration's"):
         WT.checked_pins(registration, record, t, _summary(t, registration, record, other), LAW, CAP)
     assert WT.checked_pins(registration, record, t, _summary(t, registration, record, roots), LAW, CAP) == roots
+
+
+def test_the_command_pins_only_on_an_accepting_audit(x, tmp_path, capsys):
+    """`verity-vllm weights-tie` as `benchmarks/prove_path/run.sh` runs it: ``commit`` writes the registration (its key
+    drawn 0600) and the tie window, ``verify`` the verifier's tie of the same circuit, run and units, and ``pins`` writes
+    the roots on an accepting audit's summary and nothing (exit 1) on one that refused; a forged digest without served
+    words is a usage error."""
+    reg, (d, man) = S._registered(), x
+    (tmp_path / "phi.json").write_text(json.dumps(reg.phi.to_json()))
+    common = ["--phi", str(tmp_path / "phi.json"), "--checkpoint-dir", d, "--manifest", man,
+              "--grain", f"{GRAIN.gemm_words},{GRAIN.rows},{GRAIN.select}", "--law", "work:1", "--cap", str(CAP)]
+    path, key = tmp_path / "registration.json", tmp_path / "key"
+    with pytest.raises(SystemExit) as e:
+        cli.main(["weights-tie", "commit", *common, "--key-file", str(key), "--registration-out", str(path),
+                  "--out", str(tmp_path / "w"), "--forge-digest"])
+    assert e.value.code == 2 and not key.exists()
+    assert cli.main(["weights-tie", "commit", *common, "--key-file", str(key), "--registration-out", str(path),
+                     "--out", str(tmp_path / "w")]) == 0
+    committed = json.loads(capsys.readouterr().out)
+    assert key.stat().st_mode & 0o777 == 0o600 and committed["mismatched"] == {}
+    assert cli.main(["weights-tie", "verify", *common, "--registration", str(path), "--out", str(tmp_path / "v")]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown == json.loads((tmp_path / "v" / "tie.json").read_text()) == {k: committed[k] for k in ("circuit", "run", "units")}
+    registration, record = json.loads(path.read_text()), WW.weights_record(reg, d, man, grain=GRAIN)
+    t = WT.tie(reg, d, man, grain=GRAIN)
+    accepting = _summary(t, registration, record, committed["roots"])
+    pins = tmp_path / "pins.json"
+    for summary, rc in (({**accepting, "ok": False}, 1), (accepting, 0)):
+        (tmp_path / "summary.json").write_text(json.dumps(summary))
+        assert cli.main(["weights-tie", "pins", *common, "--registration", str(path), "--summary", str(tmp_path / "summary.json"),
+                         "--out", str(pins)]) == rc
+        assert json.loads(capsys.readouterr().out)["pinned"] is (rc == 0) and pins.exists() is (rc == 0)
+    assert json.loads(pins.read_text()) == WW.registration_pins(registration, record)
 
 
 def _rewrite(d: str, man: str, tensors: dict, *, gap: str | None = None, tail: bytes = b"") -> None:
