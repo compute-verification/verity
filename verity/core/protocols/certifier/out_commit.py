@@ -35,6 +35,11 @@ receives:
 
 `check_out` is the verifier's read of it: the root to pin (`registration.check`'s `pinned`), or `OutRefused` naming the
 check that fails (`REFUSALS`).
+
+**The shape** (`OutShape`) is what both sides take from the reading program's registration, never from a flag: the
+value's program, name, `words` leaves a row (the row width of the port every read of the value names), `rows`, the
+leaves' `word_bits` and the row `schema`. The certifier commits at it (`commit_out`), and the verifier holds a record
+to it (`check_out`): another width, word size or row schema is `out-width`, another row count `out-rows`.
 """
 
 from __future__ import annotations
@@ -67,7 +72,9 @@ REFUSALS = {
     "out-session": "the record is of another certifier session",
     "out-link": "the certificate is of another link or direction",
     "out-window": "the certificate is of another window",
-    "out-domain": "the record's domain isn't the verifier's, or isn't its own fields'",
+    "out-width": "the record's words a row, word bits or row schema aren't the registered read's",
+    "out-rows": "the record's row count isn't the registration's",
+    "out-domain": "the record's program or value isn't the verifier's, or its domain isn't the one its fields name",
     "out-digest": "the certificate doesn't sign the record's head",
     "out-signature": "the signature doesn't verify under the key in the session for the link-window",
 }
@@ -89,6 +96,49 @@ def _program(program: str | Program) -> str:
     if not (isinstance(program, str) and _HEX64.fullmatch(program)):
         raise ValueError(f"a program digest is lowercase hex of 64 bytes, not {program!r}")
     return program
+
+
+_SHAPE_KEYS = ("program", "value", "words", "rows", "word_bits", "row_schema")
+
+
+@dataclass(frozen=True, slots=True)
+class OutShape:
+    """The output value's shape as the reading program's registration fixes it (module docstring, "The shape"):
+    `program` its digest (lowercase hex), `rows` rows of `words` leaves of `word_bits` bits in row format `schema`."""
+
+    program: str
+    value: str
+    words: int
+    rows: int
+    word_bits: int = G.WORD_BITS
+    schema: str = G.SCHEMA_V2
+
+    def __post_init__(self) -> None:
+        _program(self.program)
+        if not (isinstance(self.value, str) and self.value):
+            raise ValueError(f"an out value has a name, not {self.value!r}")
+        for k in ("words", "rows", "word_bits"):
+            v = getattr(self, k)
+            if not isinstance(v, int) or isinstance(v, bool) or v < 1:
+                raise ValueError(f"an out shape's {k} is a positive int, not {v!r}")
+        if self.schema not in G.SCHEMAS:
+            raise ValueError(f"an out shape's row schema is one of {list(G.SCHEMAS)}, not {self.schema!r}")
+
+    @property
+    def domain(self) -> CommitmentDomain:
+        """The domain the verifier derives for the value, pinned (held across windows, `registered_entries`)."""
+        return G.domain(self.program, self.value, self.words, self.rows, self.word_bits)
+
+    def doc(self) -> dict[str, Any]:
+        return {"program": self.program, "value": self.value, "words": self.words, "rows": self.rows,
+                "word_bits": self.word_bits, "row_schema": self.schema}
+
+    @classmethod
+    def of(cls, doc: Any) -> OutShape:
+        """`doc` read back, refused (ValueError) unless it is exactly `doc`'s keys."""
+        if not isinstance(doc, Mapping) or set(doc) != set(_SHAPE_KEYS):
+            raise ValueError(f"an out shape is a JSON object of exactly {list(_SHAPE_KEYS)}, not {doc!r}")
+        return cls(doc["program"], doc["value"], doc["words"], doc["rows"], doc["word_bits"], doc["row_schema"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,24 +217,25 @@ def read_witness(blob: bytes) -> list[bytes]:
     return [blob[i:i + SALT_BYTES] for i in range(0, len(blob), SALT_BYTES)]
 
 
-def commit_out(rows: Sequence[Sequence[int]], *, program: str | Program, value: str = VALUE, words: int,
-               word_bits: int = G.WORD_BITS, schema: str = G.SCHEMA_V2, key: Signer | Issuer, session: bytes,
-               window: int, link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
-    """The output value the certifier relayed, committed under the domain the verifier derives for the reading program's
-    pinned `value` and its head signed for the egress link-window `(link, window)` in certifier session `session`.
+def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | Issuer, session: bytes, window: int,
+               link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
+    """The output value the certifier relayed, committed at the registration's `shape` under the domain the verifier
+    derives for the reading program's pinned value, and its head signed for the egress link-window `(link, window)` in
+    certifier session `session`.
 
-    `rows`: the value's rows, each `words` leaves of `word_bits` bits. `program`: the reading program, or its digest.
-    `key`: the certifier's signer (which starts `session` at its first signature and refuses any other session), or
-    its running `Issuer` in `session`. `salts`: one a row
-    (default: fresh from the operating system; a test injects its own). Raises ValueError on rows of another width and
-    `SignerRefused` when the signer refuses, so the window has no out certificate."""
-    if not rows or any(len(r) != words for r in rows):
-        raise ValueError(f"the out value is at least one row, each of {words} leaves")
+    `rows`: the value's rows, exactly `shape.rows` of `shape.words` leaves of `shape.word_bits` bits. `key`: the
+    certifier's signer (which starts `session` at its first signature and refuses any other session), or its running
+    `Issuer` in `session`. `salts`: one a row (default: fresh from the operating system; a test injects its own). Raises
+    ValueError on rows of another width or count and `SignerRefused` when the signer refuses, so the window has no out
+    certificate."""
+    if len(rows) != shape.rows or any(len(r) != shape.words for r in rows):
+        raise ValueError(f"the out value is {shape.rows} rows of {shape.words} leaves, not {len(rows)} rows of "
+                         f"{sorted({len(r) for r in rows})} leaves")
     issuer = key if isinstance(key, Issuer) else Issuer(key, session)
     if issuer.session != session:
         raise ValueError("the issuer signs in another certifier session than `session`")
-    committed = G.Registered.commit(_program(program), value, rows, salts, word_bits, schema)
-    head = OutHead(value, bytes.fromhex(committed.program), committed.words, committed.leaves, committed.word_bits,
+    committed = G.Registered.commit(shape.program, shape.value, rows, salts, shape.word_bits, shape.schema)
+    head = OutHead(shape.value, bytes.fromhex(committed.program), committed.words, committed.leaves, committed.word_bits,
                    committed.schema, committed.domain.domain_id, committed.root)
     certificate = issuer.sign(link, DIRECTION, window, head.digest())
     if certificate is None:
@@ -228,17 +279,16 @@ def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
     return head, cert, bytes.fromhex(doc["session"])
 
 
-def check_out(certificate: Any, key: PublicKey, session: bytes, expected_domain: str | CommitmentDomain, *,
-              window: int, link: str = LINK) -> str:
+def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape, *, window: int,
+              link: str = LINK) -> str:
     """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress link-window
     `(link, window)` it expects, under the network certifier's `key` in certifier session `session`: the root to pin
-    (lowercase hex, `registration.check`'s `pinned` form), or `OutRefused` naming the first check that fails.
-    `expected_domain` is the domain the verifier derives for the value (`registered_entries(...)[value]["domain"]`, with
-    the value among `fixed`, as `registration.check` takes a pinned value's), as hex or a `CommitmentDomain`."""
-    want = expected_domain.domain_id.hex() if isinstance(expected_domain, CommitmentDomain) else expected_domain
-    if not (isinstance(want, str) and _HEX64.fullmatch(want)):
-        raise ValueError(f"the expected domain is lowercase hex of 64 bytes or a CommitmentDomain, not "
-                         f"{expected_domain!r}")
+    (lowercase hex, `registration.check`'s `pinned` form), or `OutRefused` naming the first check that fails. `shape`
+    is the verifier's own, from its registration of the reading program (module docstring, "The shape"), whose
+    `domain` is the one `registered_entries` derives for the value pinned."""
+    if not isinstance(shape, OutShape):
+        raise ValueError(f"the verifier's out shape is an OutShape, not {shape!r}")
+    want = shape.domain.domain_id.hex()
     head, cert, named = _read(certificate)
     if cert.key_id != key.key_id:
         raise OutRefused("out-key", f"the certificate is key {cert.key_id.hex()[:16]}…'s, not the certifier's "
@@ -250,6 +300,15 @@ def check_out(certificate: Any, key: PublicKey, session: bytes, expected_domain:
                                      f"{DIRECTION.value}")
     if cert.window != window:
         raise OutRefused("out-window", f"the certificate is of window {cert.window}, not {window}")
+    if (head.words, head.word_bits, head.schema) != (shape.words, shape.word_bits, shape.schema):
+        raise OutRefused("out-width", f"the record's rows are {head.words} leaves of {head.word_bits} bits in "
+                                      f"{head.schema}, and the registered read's {shape.words} of {shape.word_bits} in "
+                                      f"{shape.schema}")
+    if head.rows != shape.rows:
+        raise OutRefused("out-rows", f"the record holds {head.rows} rows, and the registration {shape.rows}")
+    if (head.program.hex(), head.value) != (shape.program, shape.value):
+        raise OutRefused("out-domain", f"the record is of value {head.value!r} of program {head.program.hex()[:16]}…, "
+                                       f"not the verifier's {shape.value!r} of {shape.program[:16]}…")
     if head.domain.hex() != want:
         raise OutRefused("out-domain", f"the record's domain is {head.domain.hex()[:16]}…, and the verifier's "
                                        f"{want[:16]}…")
@@ -269,4 +328,4 @@ def check_out(certificate: Any, key: PublicKey, session: bytes, expected_domain:
 
 
 __all__ = ["DIRECTION", "LINK", "OUT_TAG", "RECORD", "REFUSALS", "SALT_BYTES", "VALUE", "CertifiedOut", "OutHead",
-           "OutRefused", "check_out", "commit_out", "read_witness"]
+           "OutRefused", "OutShape", "check_out", "commit_out", "read_witness"]

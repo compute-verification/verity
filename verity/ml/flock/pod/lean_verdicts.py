@@ -16,13 +16,20 @@ parts run, nothing could refuse it, and it is "not covered by the parts run", wh
 refused. One line per part, then the count; the exit is 0 only when there is a part, every honest part passes and every
 forgery is refused.
 
-    python3 verity/ml/flock/pod/lean_verdicts.py DIR PART...
+With ``--compose BIN`` (85's V* parts), the recursive statement's verdict is Lean's, not this script's:
+``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json`` and the V*
+parts' logs (the honest parts 85 gave V*'s inputs, ``own-PART.txt``) accepts only when there is one part per V* statement,
+each accepted at the SHA-512 of that one rows file, and the step fails unless it does. Each forgery of a V* part, put in
+that part's place, must be refused by it too. A run of some of V*'s parts (``LEVELS``) is not composed, and says so.
+
+    python3 verity/ml/flock/pod/lean_verdicts.py [--compose BIN] DIR PART...
     python3 verity/ml/flock/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
 """
 from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -117,7 +124,51 @@ def kind_of(part: str, honest: list[str]) -> str:
     return name[: -len(max(ends, key=len)) - 1] if ends else name
 
 
+def statements(d: Path) -> int:
+    """How many statements V* has: ``rec-statements.txt``'s ``RECVSTAR`` line (85's), 0 without one."""
+    f = d / "rec-statements.txt"
+    lines = [ln for ln in f.read_text(errors="replace").splitlines() if ln.startswith("RECVSTAR ")] if f.exists() else []
+    return len(json.loads(lines[0][9:])["statements"]) if lines else 0
+
+
+def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool, str]:
+    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json`` and ``rows.json``: (accepted, its line)."""
+    r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
+                        *map(str, logs)], capture_output=True, text=True, check=False)
+    line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
+    return r.returncode == 0 and line is not None, line or f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"
+
+
+def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str]],
+             results: dict[str, tuple[bool, bool, bool, str]]) -> bool:
+    """The V* parts composed by Lean (`compose`): the honest ones must compose, and each forgery of one of them, put in
+    its place, must not; a forgery Lean never checked (not exercised) is judged above, not here. True when a run of only
+    some of V*'s parts is not composed."""
+    vparts = [p for p in honest if (d / f"own-{p}.txt").exists()]
+    n = statements(d)
+    if len(vparts) < n or n == 0:
+        print(f"lean compose: {len(vparts)} of V*'s {n} parts run, so the recursive statement is not composed")
+        return True
+    ok, line = compose(binary, d, [d / f"{p}.log" for p in vparts])
+    print(f"lean compose: {line}{'' if ok else '  <- FAILS'}")
+    for k, ps in groups.items():
+        for p in ps:
+            part = p.removeprefix(f"forged-{k}-")
+            if part not in vparts or results[p][2]:
+                continue
+            accepted, fline = compose(binary, d, [d / f"{p if q == part else q}.log" for q in vparts])
+            print(f"lean compose {p}: {fline}{'  <- FAILS' if accepted else ''}")
+            ok = ok and not accepted
+    return ok
+
+
 def main(argv: list[str]) -> int:
+    binary = None
+    if argv[:1] == ["--compose"]:
+        if len(argv) < 2:
+            print("lean_verdicts.py --compose BIN DIR PART...", file=sys.stderr)
+            return 2
+        binary, argv = argv[1], argv[2:]
     if not argv:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
@@ -164,6 +215,8 @@ def main(argv: list[str]) -> int:
     if unexercised:
         count += f", {len(unexercised)} not exercised (no proof produced)"
     ok = bool(parts) and all(results[p][0] for p in honest) and all(refused.values())
+    if binary:
+        ok = composed(binary, d, honest, groups, results) and ok
     print(count + ("" if ok else ": the step fails" if parts else ": no part to check, the step fails"))
     return 0 if ok else 1
 

@@ -125,7 +125,8 @@ theorem rowsCheck_ok {p : Params} {s : Schedule} {sd : ByteArray} {w : Nat} {d :
 
 theorem factsOf_ok {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f : Facts}
     (h : factsOf what prof pub = .ok f) :
-    ∃ l b, prof.levels = #[l] ∧ ((∃ k, l.draw = some (.subset k)) ∨ ∃ ss, l.draw = some (.stratified ss)) ∧
+    ∃ l b, prof.levels = #[l] ∧ f.units = l.size ∧
+      ((∃ k, l.draw = some (.subset k)) ∨ ∃ ss, l.draw = some (.stratified ss)) ∧
       Flock.J.nat pub "bound" "public" = .ok b := by
   by_cases hl : ∃ l, prof.levels = #[l]
   · obtain ⟨l, hl⟩ := hl
@@ -146,12 +147,14 @@ theorem factsOf_ok {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f 
     · rename_i k hk
       split at h
       · rename_i b hb
-        exact ⟨l, b, hl, Or.inl ⟨k, hk⟩, hb⟩
+        cases h
+        exact ⟨l, b, hl, rfl, Or.inl ⟨k, hk⟩, hb⟩
       · cases h
     · rename_i ss hss
       split at h
       · rename_i b hb
-        exact ⟨l, b, hl, Or.inr ⟨ss, hss⟩, hb⟩
+        cases h
+        exact ⟨l, b, hl, rfl, Or.inr ⟨ss, hss⟩, hb⟩
       · cases h
     · cases h
   · exfalso
@@ -200,11 +203,19 @@ theorem rowsWindowCheck_ok {p : Params} {s : Schedule} {sd : ByteArray} {w : Nat
               · cases h
               · rename_i v ha
                 obtain ⟨a1, a2, a3, prof, a4, a5, a6⟩ := answered_ok ha
-                obtain ⟨l, b, hl, hd, hb⟩ := factsOf_ok h
+                split at h
+                · cases h
+                rename_i f' hf
+                obtain ⟨l, b, hl, hu, hd, hb⟩ := factsOf_ok hf
+                have hun : l.size = 2 * s.window := by
+                  rw [← hu]
+                  cases hc : (f'.units == 2 * s.window) with
+                  | true => exact beq_iff_eq.mp hc
+                  | false => simp [hc] at h
                 have hh : holds reg ri = true ∧ holds reg re = true :=
                   ⟨Array.all_eq_true.mp c4 0 (by simp), Array.all_eq_true.mp c4 1 (by simp)⟩
                 refine ⟨c1, ?_, ⟨ri, re, hx, rowsCheck_ok hi, rowsCheck_ok he, hh.1, hh.2⟩,
-                  a1, a2, a3, v.2, prof, v.1, l, b, a4, a5, a6, hl, hd, hb⟩
+                  a1, a2, a3, v.2, prof, v.1, l, b, a4, a5, a6, hl, hun, hd, hb⟩
                 obtain ⟨hs, hall⟩ := (Bool.and_eq_true _ _).mp c2
                 unfold PeriodRowsCertified
                 generalize x.certificates = cs at hs hall
@@ -256,14 +267,14 @@ theorem periodAcceptMeans : PeriodAcceptMeans := by
     exact ⟨hc, he⟩
   rcases hform : p.form with ss | ⟨s, sd, scan⟩
   · simp only [hform] at hall
-    have h0 := hall _ (List.mem_append_left _ (List.mem_map.2 ⟨_, Array.mem_toList_iff.2
-      (Array.mem_map.2 ⟨_, hmem, rfl⟩), rfl⟩))
+    have h0 := hall _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_map.2 ⟨_, Array.mem_toList_iff.2
+      (Array.mem_map.2 ⟨_, hmem, rfl⟩), rfl⟩)))
     obtain ⟨_, ha⟩ := Period.findingOf_none h0
     obtain ⟨u, hu⟩ := Period.map_ok ha
     exact Period.windowCheck_ok hu
   · simp only [hform] at hall
-    have h0 := hall _ (List.mem_append_left _ (List.mem_map.2 ⟨_, Array.mem_toList_iff.2
-      (Array.mem_map.2 ⟨_, hmem, rfl⟩), rfl⟩))
+    have h0 := hall _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_map.2 ⟨_, Array.mem_toList_iff.2
+      (Array.mem_map.2 ⟨_, hmem, rfl⟩), rfl⟩)))
     obtain ⟨_, ha⟩ := Period.findingOf_none h0
     obtain ⟨f, hu⟩ := Period.map_ok ha
     exact Period.rowsWindowCheck_ok hu
