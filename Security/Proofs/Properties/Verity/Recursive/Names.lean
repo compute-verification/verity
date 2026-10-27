@@ -21,8 +21,9 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
   `innerHeld`'s; and `w`'s registration the registration blob `Own` names;
 * `PartNames`: one part per part of the verifier's, part `j`'s raw statement the one `partVerdict` runs: its circuit
   the part's circuit blob, its form `PartForm` (statement `STATEMENT` under `--zk` at one table), the part's partition,
-  program, registered reads and rows, `w`'s one bindings file the part's bindings, and its draw the one compiled part
-  `j` reads off the part's record blob. The part's public file is the staged one, which piece C relates to the run.
+  program and registered reads, the part's own bindings (`PartX.bindings`) the verifier's bindings of that part, and
+  its draw the one compiled part `j` reads off the part's record blob. The part's public file and V*'s shared rows are
+  the staged ones (`Stage.pub`, `Stage.rows`), which piece C and `RowsShow` relate to the run.
 
 `readX_of_names`: where the component's inner session is held (`innerHeld`), V*'s list at its shape has one statement
 per part, Flock's own checks pass on the inner statement (`InnerOkAt`, which the compiled `innerHeld` does not run,
@@ -69,19 +70,18 @@ def PartForm (b : FlockDeploy.Raw) : Prop :=
   b.statement = VStar.Recursive.STATEMENT ∧ b.zk = true ∧ b.osCoins = false ∧ b.count = 1 ∧ b.tables = [] ∧
     b.work = none ∧ b.workTable = none ∧ b.stratified = none ∧ b.closure = none ∧ b.publicInputs = none
 
-/-- **Part `j`'s raw statement is the one the component's part `j` runs**, but for its staged public file: its circuit,
-form, partition, program, registered reads and rows `po`'s, `w`'s one bindings file `po`'s bindings, and its draw the one
-compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else none`, at the
-part's tags), as the model's `Raw.ins` reads a draw. -/
-structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartProof) (bs : Core.Blobs) (w : RecX)
-    (j : ℕ) (q : PartX) : Prop where
-  bindings : jsonOf "rec-bindings" w.bindings = .ok po.bindings
+/-- **Part `j`'s statement is the one the component's part `j` runs**, but for its staged public file and the staged
+shared rows: its circuit, form, partition, program and registered reads `po`'s, its own bindings `po`'s bindings, and its
+draw the one compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else
+none`, at the part's tags), as the model's `Raw.ins` reads a draw. -/
+structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartProof) (bs : Core.Blobs) (j : ℕ)
+    (q : PartX) : Prop where
+  bindings : jsonOf "rec-bindings" q.bindings = .ok po.bindings
   circuit : bs.get po.circuit s!"part {j}'s circuit" = .ok q.base.circuit
   form : PartForm q.base
   partition : q.base.partition.map (jsonOf "partition") = some (.ok po.partition)
   program : q.base.program = some po.program
   registered : q.base.registered.map (jsonOf "registered") = po.registered.map Except.ok
-  rows : q.rows.map (jsonOf "rec-rows") = po.rows.map Except.ok
   draw : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
     bs.get pp.record s!"part {j}'s record" = .ok recordB → String.fromUTF8? recordB = some record →
     (q.base.draw.mapM (jsonOf "draw")).map (Option.map Flock.norm) =
@@ -94,7 +94,7 @@ def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core
   ∃ w ri, decodeX x = some w ∧ FlockDeploy.decode w.inner = some ri ∧ InnerNames p.own e.proofs bs w ri ∧
     w.parts.length = p.own.parts.size ∧
     ∀ j q po pp, w.parts[j]? = some q → p.own.parts[j]? = some po → e.proofs.parts[j]? = some pp →
-      PartNames po pp bs w j q
+      PartNames po pp bs j q
 
 /-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the draw, partition
 and program, its scope check, a draw, the header's draw at one table). The compiled `innerHeld` runs none of them;
@@ -153,7 +153,7 @@ theorem shapeOf_ok {cB pB : ByteArray} {P : Json} {prog : ByteArray} {i : RecVSt
     have hv := innerOf_eta hI
     simp only [bind, Except.bind, pure, Except.pure, Except.mapError] at h
     repeat' split at h
-    all_goals first | (cases h; done) | (cases h; first | exact congrArg Except.ok hv.symm | rw [hv] | rw [hI, hv])
+    all_goals first | (cases h; done) | (cases h; exact congrArg Except.ok hv.symm)
 
 /-- `innerOf` at a public inner circuit is dense: no holo, no RecSparse shape, no stacked shape. -/
 theorem innerOf_dense {cB pB : ByteArray} {pa : Option Json} {pr : Option ByteArray} {v : RecVStar.Inner}
