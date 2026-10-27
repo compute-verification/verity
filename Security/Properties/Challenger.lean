@@ -494,16 +494,19 @@ def oneStageReads : ReadsChallenger SampledProofs.OneStage.protocol SampledProof
 
 /-! ## The device's registered key -/
 
+/-- A registered component's parameters as v2 reads its own: `OneStageZk.paramsOfJson` on their canonical JSON. -/
+def paramsOfNamed (n : Core.Composition.Named) : Except String OneStageZk.Params :=
+  Core.canonicalJson n.params.toUTF8 >>= OneStageZk.paramsOfJson
+
 /-- **The challenger key v2's compiled check reads from the registered components' parameters `ps`** (as
 `Core.Composition.decodeRegisteredParams` decodes them): the entry named v2's id, its parameters read as v2 reads its own
-(`OneStageZk.paramsOfJson` on their canonical JSON), and the key of the challenger they name, which `roundsWhy` and
+(`paramsOfNamed`), and the key of the challenger they name, which `roundsWhy` and
 `OneStage.coinsOf` hand `roundCoins` and `drawCoins`. None when no entry is v2's, its parameters don't read, or they
 name no challenger, where v2 refuses every window (`ROUNDS_NEED_CHALLENGER`). The entry is the first with v2's id, the
 one the composition pairs with v2 when the components' ids are distinct. -/
 def keyOfParams (ps : List Core.Composition.Named) : Option ChallengerKey :=
   (ps.find? (·.id == OneStageZk.PROTOCOL)).bind fun n =>
-    (Core.canonicalJson n.params.toUTF8 >>= OneStageZk.paramsOfJson).toOption.bind fun p =>
-      p.base.challenger.map (·.1)
+    (paramsOfNamed n).toOption.bind fun p => p.base.challenger.map (·.1)
 
 /-- A key as LMS's parameters and public key; LMS's deployed parameters and the empty key where there is none. -/
 def lmsKey : Option ChallengerKey → Lms.Params × ByteArray

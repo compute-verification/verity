@@ -121,14 +121,13 @@ parameters v2 reads (`OneStageZk.paramsOfJson` on their canonical JSON) whose ch
 hands `roundCoins` and `OneStage.coinsOf` hands `drawCoins`. -/
 theorem keyOfParams_eq_some {ps : List Core.Composition.Named} {k : SampledProofs.Challenger.ChallengerKey} :
     keyOfParams ps = some k ↔ ∃ n p label, ps.find? (·.id == SampledProofs.OneStageZk.PROTOCOL) = some n ∧
-      (Core.canonicalJson n.params.toUTF8 >>= SampledProofs.OneStageZk.paramsOfJson) = .ok p ∧
-        p.base.challenger = some (k, label) := by
+      paramsOfNamed n = .ok p ∧ p.base.challenger = some (k, label) := by
   unfold keyOfParams
   cases hn : ps.find? (·.id == SampledProofs.OneStageZk.PROTOCOL) with
   | none => simp
   | some n =>
     simp only [Option.bind, Option.some.injEq, exists_eq_left']
-    cases hp : (Core.canonicalJson n.params.toUTF8 >>= SampledProofs.OneStageZk.paramsOfJson) with
+    cases hp : paramsOfNamed n with
     | error e => simp [Except.toOption]
     | ok p =>
       simp only [Except.toOption, Except.ok.injEq, exists_eq_left']
