@@ -1,81 +1,83 @@
-# The toy's integrity by sampled proofs: one run of the torch loop (integrations/torch_loop) audited by the proof service.
-# `verity run examples/toy_network/config.toml --local` runs every role on this machine; on several,
-# each machine runs `verity run CONFIG --party ROLE` for the roles placed on it. The roles are README.md's.
+# The deployment configuration of sampled-proofs and certifier on the toy workload (`verity config new`), every party
+# on local: `verity run` this file. Parameters it doesn't state are their declarations' defaults.
 format = "verity/config/v0"
-protocols = ["sampled-proofs"]
+protocols = ["sampled-proofs", "certifier"]
 
-# The toy's shape: one decode step of one request of three tokens, a member at most `cap` units, one sampling block.
 [workload]
 name = "toy"
-requests = [3]
-steps = 1
-cap = 8
-blocks = 1
 
-# The proof service's selection: a uniform subset of 8 members of each sampling block. What the draw establishes (the
-# bound on wrong units at its δ) is the verdict's, never the configuration's.
 [service]
-law = "subset:8"
+law = "work:64"
+
+[program]
+commit = "ed7f3bdcea6d1966c489c0b8e1cbccabe7cd89bc"
 
 [[party]]
 name = "workers"
-machine = "prover-1"
-principal = "prover"
-
-[[party]]
-name = "firewall"
-machine = "prover-1"
-principal = "prover"
+machine = "local"
+principal = "developer"
 
 [[party]]
 name = "challenger"
-machine = "auditor-1"
+machine = "local"
 principal = "auditor"
 
 [[party]]
+name = "firewall"
+machine = "local"
+principal = "developer"
+
+[[party]]
 name = "verifier"
-machine = "auditor-1"
+machine = "local"
 principal = "auditor"
 
-# A sampling block's registration (its circuit, root and window) goes to the verifier before any coin is drawn.
+[[party]]
+name = "network-certifier"
+machine = "local"
+principal = "auditor"
+
 [[channel]]
 from = "workers"
 to = "verifier"
 messages = ["registration"]
 
-# The verifier asks for the block's one session only after its registration is in: live coins, drawn after the commitment.
 [[channel]]
 from = "verifier"
 to = "challenger"
 messages = ["open", "finish"]
-after = "registration"
+after = ["registration"]
 
-# The session's coins, released to the verifier's client once the commitment is signed; then its signed record
-# (commitment, releases, close), its ledger and pins log.
 [[channel]]
 from = "challenger"
 to = "verifier"
 messages = ["coins", "record"]
-after = "open"
+after = ["open"]
 
-# The members the coins drew.
 [[channel]]
 from = "verifier"
 to = "workers"
 messages = ["draw"]
-after = "coins"
+after = ["coins"]
 
-# The drawn members' witnesses go to the firewall on the prover's own machine only (WitnessPathPrivate).
 [[channel]]
 from = "workers"
 to = "firewall"
 messages = ["witness"]
-after = "draw"
-private = true
+after = ["draw"]
 
-# Each drawn member's zero-knowledge proof, one at a time, through the firewall.
 [[channel]]
 from = "firewall"
 to = "verifier"
 messages = ["proof"]
-after = "draw"
+after = ["draw"]
+
+[[channel]]
+from = "network-certifier"
+to = "workers"
+messages = ["out-opening"]
+
+[[channel]]
+from = "network-certifier"
+to = "verifier"
+messages = ["out-record"]
