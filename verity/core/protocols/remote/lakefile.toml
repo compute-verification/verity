@@ -29,11 +29,6 @@ path = "../../service/sampled_proofs"
 name = "pouw_check"
 path = "../pouw/lean/check"
 
-# Sampled proofs' choice of form: one-stage v2's audit or the recursive audit, V*'s compiled check (`VStar.Recursive`).
-[[require]]
-name = "core_vstar_recursive"
-path = "../../service/vstar/recursive"
-
 [[lean_lib]]
 name = "CoreRemote"
 

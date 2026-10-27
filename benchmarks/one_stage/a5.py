@@ -895,8 +895,8 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio), in ``out/case.json``, and
     today's Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
-    evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`) in sampled proofs' one-stage form
-    (`case_with_form`), in ``out/case-v2.json``, or why there is none in ``out/case-v2-error.txt``."""
+    evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there
+    is none in ``out/case-v2-error.txt``."""
     try:
         import replay as RP
 
@@ -914,7 +914,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     try:
         if isinstance(v2, str):
             raise ValueError(v2)
-        (out / "case-v2.json").write_text(json.dumps(case_with_form(case_v2(c.case(), sessions, **v2)), sort_keys=True))
+        (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
     except Exception as x:  # noqa: BLE001: as the v1 case's
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
@@ -933,24 +933,6 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registe
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
             "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
-
-
-#: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
-#: whichever form its params and evidence name
-SAMPLED_PROOFS = "verity/sampled-proofs/v1"
-
-
-def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and its
-    evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
-    rest."""
-    import replay as RP
-
-    evidence = json.loads(bytes.fromhex(case["evidence"]))
-    if not isinstance(evidence, dict) or "form" in evidence or "form" in case["params"]:
-        raise ValueError("the case's params and evidence must be objects that name no form")
-    return {**case, "evidence": RP.DT.canonical(evidence | {"form": form}).encode().hex(),
-            "params": {**case["params"], "form": form}}
 
 
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
