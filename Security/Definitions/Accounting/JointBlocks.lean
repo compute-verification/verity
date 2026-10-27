@@ -21,7 +21,7 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
   capacity account doesn't hold (`BlocksRun.undeclared`), is at most `σ · M + S_chip + c`, where
   `c = ∑_i cap_i · T_read` is what the side channels bring in over a round, the read deadline `T_read`. The share is
   the one PoUS's guarantee certifies for the block's store on that device, not a policy of the joint statements; at the
-  demo's store it is `0.1163` (`demoMemoryShare`, `Pous.Guarantees.ObligationDemo`'s). It is stated at the challenge
+  demo's store it is `0.1211` (`demoMemoryShare`, `Pous.Guarantees.ObligationDemo`'s). It is stated at the challenge
   times only, until the continuous audit (`Pous.Guarantees.ContinuousAudit`) is tied in.
 
 There is one wipe per block, the one that opens it (so block 0 has one too, which bounds what survives from before the
@@ -93,9 +93,9 @@ def MemoryTerm [Fintype ι] (σ : ℝ) (b : Fin B) (ξ : (i : I) → Ω i) : Pro
 
 end BlocksRun
 
-/-- **The demo's memory share**, `0.1163`: at the demo's store, `Pous.Guarantees.ObligationDemo` bounds the bits of the
-device's memory `M` above the state bound `S₀` by `0.1163 · M`, so the demo's memory term is
+/-- **The demo's memory share**, `0.1211`: at the demo's store, `Pous.Guarantees.ObligationDemo` bounds the bits of the
+device's memory `M` above the state bound `S₀` by `0.1211 · M`, so the demo's memory term is
 `BlocksRun.MemoryTerm demoMemoryShare`. -/
-noncomputable def demoMemoryShare : ℝ := 1163 / 10000
+noncomputable def demoMemoryShare : ℝ := 1211 / 10000
 
 end Accounting
