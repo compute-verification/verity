@@ -316,7 +316,7 @@ theorem provenance_ok (j tr : Json) (h : Baseline.provenance j tr (fun _ k => k)
   rcases h4 : trustedOf tr with e | T <;> simp only [h4] at h
   · cases h
   by_cases hprog : (strAt T.log[T.run]! "program" != some (Flock.hexOf P.sha512)) = true
-  · simp [hprog, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  · simp [hprog, throw, throwThe, MonadExceptOf.throw] at h
   simp only [hprog, Bool.false_eq_true, ite_false] at h
   refine ⟨i, P, ps, T, by first | exact h1 | rfl, by first | exact h2 | rfl, by first | exact h3 | rfl,
     by first | exact h4 | rfl, by simpa using hprog, ?_⟩
