@@ -81,7 +81,8 @@ theorem recursiveKSAt_ofVD (rd : Msg → Option FinalP)
           (RecDeploy.deployZkRec _root_.Flock.Readable.relation) (RecDeploy.DeployedR.layR rest) shape
           (RecDeploy.ResLower.showsDec RecDeploy.recRead { b with tr := RecDeploy.recTr aux nOf hd recRest })
           (RecDeploy.cmtTr RecDeploy.recRead))
-        fun x xs ws => RecDeploy.ResLower.XsStaged b.st x xs ws.length) :
+        fun x xs ws =>
+          RecDeploy.ResLower.XsStaged { b with tr := RecDeploy.recTr aux nOf hd recRest }.st x xs ws.length) :
     Flock.Guarantees.RecursiveKSAt rd final rest wE w b aux nOf hd recRest :=
   RecDeploy.ksLin2_deployedR_layRVD rd b aux nOf hd recRest rest wE FlockDeploy.joinR final w hIn
     (RecDeploy.MoreSlots.moreSlotsTrue_deployed _) hD

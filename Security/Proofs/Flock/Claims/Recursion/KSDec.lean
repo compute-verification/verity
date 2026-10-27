@@ -110,7 +110,7 @@ theorem ksLin2_stepsC_atVD (nextE : Msg → List Msg → List Coin → Claims.OC
       Claims.Recursion.VStarB.DecompBVS FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAcceptsV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (ResLower.showsDec recRead bR) (cmtTr recRead))
-        fun x xs ws => ResLower.XsStaged b.st x xs ws.length) →
+        fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR Bd D hRT hHe hPO hD
@@ -118,7 +118,7 @@ theorem ksLin2_stepsC_atVD (nextE : Msg → List Msg → List Coin → Claims.OC
   have hrb : ReadsBackB FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (fun _ => True) recRead :=
     readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl
   refine ksLin2_route_stagedVS _root_.Flock.Readable.relation _root_.Flock.Readable.relation bR L hRows hHW
-    FlockDeploy.KS.CpDep (fun x xs ws => ResLower.XsStaged b.st x xs ws.length) nextE colsE wE join rowInDeployed final
+    FlockDeploy.KS.CpDep (fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) nextE colsE wE join rowInDeployed final
     w hKS (binds_deployed _ _ _ wE join final w) hEC hCF FlockDeploy.KS.zk_KS_outer ?_ hRT
   intro shape hsh
   obtain rfl := List.mem_singleton.1 hsh
@@ -148,7 +148,7 @@ theorem ksLin2_stepsC_layRVD (nextE : Msg → List Msg → List Coin → Claims.
       Claims.Recursion.VStarB.DecompBVS FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAcceptsV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (ResLower.showsDec recRead bR) (cmtTr recRead))
-        fun x xs ws => ResLower.XsStaged b.st x xs ws.length) →
+        fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   fun hD => ksLin2_stepsC_atVD nextE colsE b aux nOf hd recRest (DeployedR.layR elem) (readsRows_layR elem)
@@ -173,7 +173,7 @@ theorem ksLin2_deployedR_layRVD (rd : Msg → Option FinalP) (b : Brings)
       Claims.Recursion.VStarB.DecompBVS FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAcceptsV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (ResLower.showsDec recRead bR) (cmtTr recRead))
-        fun x xs ws => ResLower.XsStaged b.st x xs ws.length) →
+        fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   ksLin2_stepsC_layRVD _ _ b aux nOf hd recRest elem wE join final w (stepsBase_R rd wE join final w hIn) hM
@@ -203,18 +203,11 @@ prefix of messages (`ResLower.XsStaged`, which an accepted run's are: `okRuns_de
 def RecKSDecompLVD : Prop :=
   DecompBVS FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w).IVStar L
     Claims.Recursion.Form.Dense (acceptsLVD rd b aux nOf hd rest wE final w L)
-    fun x xs ws => ResLower.XsStaged b.st x xs ws.length
+    fun x xs ws => ResLower.XsStaged (bB b aux nOf hd rest).st x xs ws.length
 
 end Statement
 
 end
-
-/-- `XsStaged` at `b`'s stage is at `bB`'s. -/
-theorem xsStaged_bB {b : Brings} {aux : Msg → ℕ → Flock.RecRecord.Round} {nOf : Msg → ℕ → ℕ}
-    {hd : Msg → Flock.RecRecord.Record} {rest : Msg → List (Msg × Out) → List UInt8} {x : Msg} {xs : List Msg}
-    {n : ℕ} (h : ResLower.XsStaged b.st x xs n) : ResLower.XsStaged (bB b aux nOf hd rest).st x xs n := by
-  dsimp only [bB]
-  exact h
 
 /-- **`ResLowJPD` at the deployed layout from `ResLoweredPD`**: one statement at the brings `bB`, `Dense`, `recRead`
 and `cmtTr recRead`. -/
@@ -282,8 +275,8 @@ theorem recKSDecompLV_of_leavesJD
     RecKSDecompLVD rd b aux nOf hd rest wE final w L :=
   recKSDecompLV_of_leavesJS rd b aux nOf hd rest wE final w L resP key elemAt vvAt side posAt ownR
     (ResLower.showsDec recRead (bB b aux nOf hd rest)) (fun h => h.1)
-    (fun x xs ws => ResLower.XsStaged b.st x xs ws.length) hRdep hDm hEJ hB hF hLn hRd hSR hOwn hlowR
-    (fun x st hx hf c xs ws hJ hms s hs => hres x st hx hf c xs ws hJ (xsStaged_bB hms) s hs) hSch hO hDirs hTop
+    (fun x xs ws => ResLower.XsStaged (bB b aux nOf hd rest).st x xs ws.length) hRdep hDm hEJ hB hF hLn hRd hSR hOwn
+    hlowR hres hSch hO hDirs hTop
 
 end Assembly
 
