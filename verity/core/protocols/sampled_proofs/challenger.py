@@ -109,12 +109,12 @@ circuit the window's sessions prove, its canonical JSON without annotations (the
 check is one SHA-512 over the descriptor, never a walk over the circuit it unrolls to (`circuit_reason`).  A window in
 no period, in a period that committed no circuit, or whose descriptor hashes to another circuit counts toward none.
 
-**A session runs main's code** only when the host's pins log records its pin (`pinned_session`, RT4-INT-40).  The open's
+**A session runs main's code** only when the host's pins log records its pin (`pinned_session`).  The open's
 `pinned` is the commit the host's tree was pinned to.  The host keeps an append-only pins log, a line per pin as the
 auditor writes it (`pin_line`):
 
     pin     = {commit, main, pinned_utc}        commit: the pin; main: the origin/main commit whose history held it
-                                                 when vy-challenger-pin pinned it (each 40 lowercase hex)
+                                                 when the pin command pinned it (each 40 lowercase hex)
     open    = body {..., pinned, pins: {lines, sha512}}        the pins log as it stood when the gate admitted the open
 
 and each open seals the log as it stood (`pins_seal`), under the open's signature.  The session counts only when the
@@ -742,7 +742,7 @@ def leaf_of(sig: Any) -> int:
 
 
 def lane_of(e: dict) -> str:
-    """A reserve's or an open's prover: the lane vy-admin reserved or opened it for (`for`), else its requester (`by`)."""
+    """A reserve's or an open's prover: the lane an operator reserved or opened it for (`for`), else its requester (`by`)."""
     return e["body"].get("for") or e["body"]["by"]
 
 
@@ -1270,8 +1270,8 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     pinned = opened.get("pinned")
     if pinned not in commits[:n]:
         return (f"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's "
-                "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-                "window there")
+                "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+                "rerun the window there")
     return None
 
 
@@ -1288,7 +1288,7 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
         return (f"session {session} ran commit {pinned}, which the host's pins log records but which is not on main's "
                 "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                 "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-                "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+                "commit on main's first-parent line (with its pin command) and rerun the window there")
     return None
 
 
