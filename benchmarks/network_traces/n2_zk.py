@@ -158,7 +158,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
     verdict the verifier of record should reach on an honest proof of the opening. With ``warden``, ``run`` is an active
     warden's run (`warden_link`), its records and certificates the warden's own and no sync declared.
 
-    With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
+    With ``clock``, for a report on runs nothing is proved for (network_certifier/e2e), also on N2's stream as certifier-serve's
     check takes it: each link-window registered (``digest``), selected (Selection All) and decided before the next by
     `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
     if warden:

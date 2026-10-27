@@ -29,7 +29,7 @@
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
 #      own client/, else its honest directory, never a file of another gate run)  CR_DEPLOYED=1 (certs refuses a key that
 #      isn't LMS at lms.DEPLOYED, H = 20)
-#      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
+#      CR_ENDPOINT (the endpoint's records, network_certifier/e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory)
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
 #      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the

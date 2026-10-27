@@ -1,4 +1,4 @@
-# network_e2e
+# network_certifier/e2e
 
 Network accounting end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:

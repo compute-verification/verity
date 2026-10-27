@@ -28,7 +28,7 @@ Its generated ids are SHA-512's, not a model's: byte k of the counter-mode strea
 ``verity/demo-stub/v1/outputs``, 0x00, then the prompt's bytes, mod ``--vocab``.
 
 **With ``--out``** it keeps the records a `verity-vllm serve-openai` endpoint writes, the ones network accounting's
-endpoint step binds to the certified I/O (`network_e2e/chain.py`'s ``served_advice``, through `verity-vllm advice`): a
+endpoint step binds to the certified I/O (`network_certifier/e2e/chain.py`'s ``served_advice``, through `verity-vllm advice`): a
 class request goes through `demo_endpoint`'s scheduler (`Toy`, the class's outputs as its engine: vLLM V1's synchronous
 FCFS as network-e2e's derivation models it, each request one prefill row of its prompt, then a decode row a step), and
 each id goes to its connection as an id event as its step samples it, the trailer after the last. The bytes are the
