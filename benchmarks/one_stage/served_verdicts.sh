@@ -32,7 +32,13 @@
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
 #     made for a piece that didn't run. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
-#     reads what it wrote in the serve dir.
+#     reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (e.g.
+#     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'), serve() calls it in TREE, under the serve's lease
+#     and before serve-openai starts, with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and
+#     says its last line as WIPE. The record reads its pieces/wipe/answer.json and composes the wipe only when that answer
+#     accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or
+#     failed before its judge) leaves the wipe missing, one served elsewhere stays missing, and one whose answer rejects
+#     makes the record reject: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
