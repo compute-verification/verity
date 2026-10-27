@@ -31,7 +31,7 @@ open Claims.Recursion.VStarB
 def AccEndHeldW : Prop :=
   ∀ (x : Msg) (r : XR), readX x = some r → r.shape.holo = false → r.shape.sparse = none →
     ∀ (ss : Array VStar.Stmt), _root_.Flock.RecVStar.statements r.shape = .ok ss →
-    ∃ s j nm pt, ss[s]? = some (.inner j nm pt) ∧ "acc1" ∈ pt.S.ports.map (·.1)
+    ∃ (s : ℕ) j nm pt, ss[s]? = some (.inner j nm pt) ∧ "acc1" ∈ pt.S.ports.map (·.1)
 
 /-! ## The levels' rows -/
 
@@ -122,7 +122,7 @@ theorem acc_of_holding {r : XR} {ss : Array VStar.Stmt} (hss : _root_.Flock.RecV
   have hR : accRead r (.recOpen lv LANES HH n) "acc" u = some p := by
     simpa using (List.mem_filter.1 hh).2
   have hu : u < 2 * (sch.levels[lv]!).q := by
-    have := lt_of_accRead hA (fun _ _ _ h => by cases h) (by simp [hR])
+    have := MoreSlots.lt_of_accRead hA (fun _ _ _ h => by cases h) (by simp [hR])
     simpa using this
   refine ⟨hu, ?_⟩
   unfold accRead at hR
