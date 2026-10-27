@@ -415,4 +415,124 @@ theorem rowLeaf_accepts (reg : Registered.Port) (V : Hash.RowLeaf.Verifier) (hv2
   rw [hv2, hkey]
   exact ha
 
+/-! ## An opening `commitDep` accepts -/
+
+/-- At a file whose ports are all row/v2 rows, an opening's row message is its row's `sha512/row/v2` bytes. -/
+theorem rowDep_v2 {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt} {c : Flock.Circuit}
+    (hv2 : RowsV2 c) (place : ℕ → (w : ℕ) × Fin w) (bits : Claims.Msg → ℕ → Bool) (o : Opening Bool) :
+    rowDep C rows c place bits o = FlockLevel3.RowV2.enc (SamplingDeploy.rowBits place bits o) := by
+  unfold rowDep
+  cases hp : portOfPos C rows c o.pos with
+  | none => rfl
+  | some p =>
+    obtain ⟨r, -, hr⟩ := Option.bind_eq_some_iff.mp hp
+    obtain ⟨hq, rfl⟩ := Array.getElem?_eq_some_iff.mp hr
+    have h := (Array.all_eq_true.mp hv2) r.port hq
+    simp only [Bool.and_eq_true, Option.isNone_iff_eq_none] at h
+    simp only [rowMsg, h.1, h.2, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+
+/-- **What `commitDep` checked at SHA-512**: the position's row and root, the registered port whose root it is, and that
+port's check of the hm96 leaf over the row's `sha512/row/v2` digest and the opening's salt, through its path. -/
+theorem commitDep_opens {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt} {c : Flock.Circuit}
+    {nl : ℕ} {roots : List Claims.Msg} (hv2 : RowsV2 c) {o : Opening Bool}
+    (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true) :
+    ∃ r rt reg, rowOfPos C rows o.pos = some r ∧ roots[r.port]? = some rt ∧
+      (portsOf c nl roots).find? (fun p => decide (bs p.root = rt)) = some reg ∧
+      Registered.opensLeaf reg (bytes (Hash.Hm96.leaf Verity.sha512 key512 (Hash.RowV2.digest Verity.sha512
+        (SamplingDeploy.rowBits (placeOf C rows) (bitsOf (log2ceil nl)) o)) (saltOf o)).bytes) r.leaf
+        (bytes (pathOf (log2ceil nl) o)) = true := by
+  have hrow : rowDep C rows c (placeOf C rows) (bitsOf (log2ceil nl)) =
+      fun o => FlockLevel3.RowV2.enc (SamplingDeploy.rowBits (placeOf C rows) (bitsOf (log2ceil nl)) o) :=
+    funext (rowDep_v2 hv2 _ _)
+  unfold Commitment.Opens commitDep pathCommit at h
+  rw [hrow] at h
+  dsimp only at h
+  cases hat : atOf C rows roots o.pos with
+  | none => rw [hat] at h; simp [OC.eval] at h
+  | some ri =>
+    rw [hat] at h
+    dsimp only at h
+    rw [ocBind_eval, hm96Leaf_spec] at h
+    dsimp only at h
+    obtain ⟨reg, hf, hopen⟩ := (regPath_sha512 _ _ _ _ _).mp h
+    obtain ⟨r, hr, hm⟩ := Option.bind_eq_some_iff.mp hat
+    obtain ⟨rt, hrt, rfl⟩ := Option.map_eq_some_iff.mp hm
+    exact ⟨r, rt, reg, hr, hrt, hf, hopen⟩
+
+theorem portsOf_mem {c : Flock.Circuit} {nl : ℕ} {roots : List Claims.Msg} {reg : Registered.Port}
+    (h : reg ∈ portsOf c nl roots) :
+    ∃ q < c.ports.size, reg.leaves = nl ∧ reg.domain = domOf c q ∧ reg.schema = schemaOf c q := by
+  unfold portsOf at h
+  obtain ⟨q, hq, rfl⟩ := Array.mem_map.mp h
+  exact ⟨q, Array.mem_range.mp hq, rfl, rfl, rfl⟩
+
+theorem schemaOf_v2 {c : Flock.Circuit} (hv2 : RowsV2 c) {q : ℕ} (hq : q < c.ports.size) :
+    schemaOf c q = Hash.RowLeaf.Format.v2.schema := by
+  have h := (Array.all_eq_true.mp hv2) q hq
+  simp only [Bool.and_eq_true, Option.isNone_iff_eq_none] at h
+  simp [schemaOf, Array.getElem?_eq_getElem hq, Registered.portSchema, h.1, h.2, HmRow.ROW_SCHEMA_V2,
+    Hash.RowLeaf.Format.schema]
+
+theorem climbL_size (dom : ByteArray) : ∀ (ss : List ByteArray) (cur : ByteArray) (idx d : ℕ), cur.size = 64 →
+    (Registered.climbL dom cur idx d ss).size = 64
+  | [], _, _, _, h => h
+  | _ :: ss, _, _, _, _ => by
+    simp only [Registered.climbL]
+    apply climbL_size dom ss
+    split_ifs <;> rw [Registered.node_eq] <;> exact hash_size _
+
+/-- A registered root an opening reached is a 64-byte digest. -/
+theorem root_size {reg : Registered.Port} {payload path : ByteArray} {pos : ℕ}
+    (h : Registered.opensLeaf reg payload pos path = true) : reg.root.size = 64 := by
+  simp only [Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at h
+  rw [← h.2, Registered.climb]
+  exact climbL_size _ _ _ _ _ (by rw [Registered.leafAs_eq]; exact hash_size _)
+
+/-- At a depth of at least 1, an accepted path's length fixes the salt's: 192 bytes. -/
+theorem saltOf_length {d : ℕ} (hd : 1 ≤ d) {o : Opening Bool} (h : (pathOf d o).length = 64 * d) :
+    (saltOf o).length = Hash.Hm96.SALT_BYTES := by
+  unfold pathOf at h
+  unfold saltOf saltLen Hash.Hm96.SALT_BYTES
+  simp only [List.length_take, List.length_drop] at h ⊢
+  omega
+
+theorem log2ceil_pos {n : ℕ} (hn : 2 ≤ n) : 1 ≤ log2ceil n := by
+  unfold log2ceil
+  rw [if_neg (by omega)]
+  omega
+
+/-- The spec's verifier of a registered row/v2 port: the domain of id `id`, the ranks as positions and the port's
+leaves as count, the default key. -/
+def verifierOf (id : Hash.Digest) (reg : Registered.Port) : Hash.RowLeaf.Verifier :=
+  ⟨⟨id, reg.leaves, fun r => r⟩, key512, .v2⟩
+
+theorem rowBits_place (place : ℕ → (w : ℕ) × Fin w) (bits : Claims.Msg → ℕ → Bool) (o : Opening Bool) :
+    (SamplingDeploy.rowBits place bits o)[((place o.pos).2 : ℕ)]? = some o.val := by
+  simp [SamplingDeploy.rowBits]
+
+/-- **An opening `commitDep` accepts at SHA-512 is a spec row-leaf opening**: at a file whose ports are all row/v2 rows
+and at least two leaves a port, the position's row is opened at its leaf index under the registered port whose root is
+the position's, which the spec's verifier of that port (`verifierOf`, at a domain id whose bytes are the port's domain)
+accepts at the root's digest, with the opened bit at its place. -/
+theorem commitDep_accepts {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt} {c : Flock.Circuit}
+    {nl : ℕ} {roots : List Claims.Msg} (hv2 : RowsV2 c) (hnl : 2 ≤ nl) (hlt : nl < 2 ^ 64) {o : Opening Bool}
+    (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true) :
+    ∃ r rt reg, rowOfPos C rows o.pos = some r ∧ roots[r.port]? = some rt ∧
+      (portsOf c nl roots).find? (fun p => decide (bs p.root = rt)) = some reg ∧
+      ∀ id : Hash.Digest, id.bytes = bs reg.domain → (placeOf C rows o.pos).1 < 2 ^ 64 →
+        Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 (verifierOf id reg) (digOf reg.root) r.leaf
+          ⟨SamplingDeploy.rowBits (placeOf C rows) (bitsOf (log2ceil nl)) o, saltOf o,
+            (Registered.sibs (bytes (pathOf (log2ceil nl) o)) (log2ceil nl)).map digOf⟩ := by
+  obtain ⟨r, rt, reg, hr, hrt, hf, hopen⟩ := commitDep_opens hv2 h
+  refine ⟨r, rt, reg, hr, hrt, hf, fun id hid hw => ?_⟩
+  obtain ⟨q, hq, hleaves, -, hschema⟩ := portsOf_mem (Array.mem_of_find?_eq_some hf)
+  have hpath : (pathOf (log2ceil nl) o).length = 64 * log2ceil nl := by
+    have := hopen
+    simp only [Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq, size_bytes, hleaves] at this
+    exact this.1.2
+  have ha := rowLeaf_accepts reg (verifierOf id reg) rfl (hschema.trans (schemaOf_v2 hv2 hq)) rfl hid
+    (fun _ => rfl) rfl (hleaves ▸ hlt) (digOf reg.root) (digOf_bytes (root_size hopen)).symm _
+    (by simpa [SamplingDeploy.rowBits] using hw) (saltOf o) (saltOf_length (log2ceil_pos hnl) hpath) r.leaf _ hopen
+  rwa [hleaves] at ha
+
 end Flock.Bridge.Openings
