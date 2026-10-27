@@ -1,4 +1,4 @@
-"""NCCL's transport and vLLM's custom all-reduce per device class: what a tensor-parallel row's engines run with.
+"""NCCL's transport and vLLM's custom all-reduce per device class: what a tensor-parallel workload's engines run with.
 
 On a box whose GPUs reach each other only across PCIe and the CPU interconnect (`nvidia-smi topo -m`: SYS), NCCL's P2P transport
 hangs vLLM's all-reduce (#70 / #75), so a TP workload for such a target requires NCCL_P2P_DISABLE=1 in its `engine.env` and
