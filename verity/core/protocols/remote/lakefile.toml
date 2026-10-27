@@ -20,7 +20,7 @@ path = "../interface"
 name = "core_composition"
 path = "../composition"
 
-# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
+# The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
 [[require]]
 name = "core_sampled_proofs"
 path = "../../service/sampled_proofs"

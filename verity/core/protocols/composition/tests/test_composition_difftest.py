@@ -1,12 +1,14 @@
-"""Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
-reference (`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the
-core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
-fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the
-network certifier's period `build`; space's and bandwidth's from the small periods of their hooks, `periods.py`), then
-often breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other
+"""Onsite's and remote's Lean (`onsite serve`, `remote serve`: each composite's executable, the core CLI, and `product
+IDS serve` over each one's subprotocols, the composite `verity run`'s verifier runs) against the Python reference
+(`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the core interface and
+the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be undecided or fail to decode
+(from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the network
+certifier's period `build`; space's and bandwidth's from the small periods of their hooks, `periods.py`), then often
+breaks the composition's own inputs (a subprotocol dropped, unknown, repeated or out of order, a case under other
 params, a wrong or short commitment, non-canonical or malformed evidence) or the case itself (a field missing or not hex,
-not an object), and every field of the outcome but its reason must agree exactly: the components' certified quantities
-and profiles among them."""
+not an object), and every field of the outcome but its reason must agree exactly: the subprotocols' certified quantities
+and profiles among them. `product IDS id` names remote and onsite for their subprotocols and refuses every other set:
+the same two composites a configuration may list (`verity.core.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ import collections
 import itertools
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -23,6 +26,9 @@ import periods
 import reference as R
 import verity_difftest as D
 from verity_difftest import canonical
+
+from verity.core.deploy import config as K
+from verity.core.protocols.sampled_proofs import parties as SPP
 
 PROTOCOLS = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -160,17 +166,28 @@ def reference(product: R.Product, seen: collections.Counter):
     return answer
 
 
-def port(name: str, product: R.Product, seen: collections.Counter) -> D.ProtocolPort:
-    """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
+def port(name: str, product: R.Product, seen: collections.Counter, serve: tuple[str, ...] = ("serve",),
+         package: str | None = None) -> D.ProtocolPort:
+    """`name serve` (or `name SERVE`) of the Lake package in `package` (default `name`), on the product's cases and,
+    one draw in ten, any JSON line."""
     return D.ProtocolPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
-                          package=PROTOCOLS / name)
+                          package=PROTOCOLS / (package or name), serve=serve)
+
+
+def ids(product: R.Product) -> str:
+    return ",".join(C.id for C in product.components)
 
 
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"])
 REMOTE = port("remote", R.REMOTE, SEEN["remote"])
+#: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
+PRODUCT = {p.id: port("product", p, SEEN[n], serve=(ids(p), "serve"), package="onsite")
+           for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE))}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
+product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
+product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
 
 
 @pytest.fixture(scope="module")
@@ -209,6 +226,39 @@ def test_remote_agrees(remote_server):
 @pytest.mark.slow
 def test_onsite_agrees(onsite_server, recorded):
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
+
+
+def test_product_names_only_the_two_composites():
+    """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
+    configuration's composites (`verity.core.deploy.config.COMPOSITES`), and refuses every other set (exit 64)."""
+    exe = D.build(PROTOCOLS / "onsite", "product")
+    by_name = {**SPP.IDS, "wipe": "verity/wipe/v0"}
+
+    def named(xs: list[str]) -> tuple[int, str]:
+        p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
+        return p.returncode, p.stdout.strip()
+
+    assert {cid: sorted(by_name[n] for n in names) for cid, names in K.COMPOSITES.items()} == {
+        p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE)}
+    for cid, names in K.COMPOSITES.items():
+        assert named([by_name[n] for n in names]) == (0, cid)
+        assert named([by_name[n] for n in reversed(names)]) == (0, cid)
+    others = [s for k in range(len(by_name) + 1) for s in itertools.combinations(sorted(by_name), k)
+              if sorted(s) not in [sorted(v) for v in K.COMPOSITES.values()]]
+    assert len(others) == 2 ** len(by_name) - 2
+    for s in others:
+        assert named([by_name[n] for n in s])[0] == 64, s
+    assert named([SPP.IDS["pouw"], SPP.IDS["pouw"], SPP.IDS["sampled-proofs"]])[0] == 64
+
+
+@pytest.mark.slow
+def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
+    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 200)
+
+
+@pytest.mark.slow
+def test_product_over_onsites_subprotocols_is_onsite(product_onsite_server, recorded):
+    _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], 200)
 
 
 class Trial(R.Product):

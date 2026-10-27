@@ -1,6 +1,6 @@
 /-
 Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardware of its own at the site. Its
-components are integrity by sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`) and work by proof of
+subprotocols are integrity by sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`) and work by proof of
 useful work (`PouwCheck.protocol`). `Core.Composition.product` composes them: both accept or remote doesn't, and either
 one's rejection rejects remote whatever the other answers.
 -/
@@ -12,12 +12,12 @@ namespace Core.Remote
 
 open Composition
 
-/-- Remote's components, in the order of their ids. -/
+/-- Remote's subprotocols, in the order of their ids. -/
 def components : List Protocol := [PouwCheck.protocol, SampledProofs.OneStage.protocol]
 
 def protocol : Protocol := product "verity/remote/v0" components
 
-/-- A case its component's own `answer` refuses: empty parameters, commitment and evidence. -/
+/-- A case its subprotocol's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : Protocol) : Case :=
   { id := P.id, params := "{}", commitment := ByteArray.empty, evidence := ByteArray.empty }
 

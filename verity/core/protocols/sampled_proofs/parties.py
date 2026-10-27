@@ -17,23 +17,24 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   and pinned on main's first-parent commit ``pin``;
 - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
   drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product, or
-  None; ``component(block, name) -> (answer, case) | None``, another listed component's; and ``product(ids, cases,
-  digests) -> {"product", "verdict", "reason"}``, `Core.Composition.product` over exactly those components.
+  None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
+  digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
+  remote or onsite).
 
 A capability that can't do its step raises `Unavailable` with its reason, and the party finishes refused by its step's
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
 is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
 
-The run's parameters (`params_of`) are its sampling blocks (``blocks``), the configuration's listed components
-(``components``, `IDS`' names, sampled proofs among them) and what its coins are (``coins``: ``simulated`` when the
-challenger's host is a machine the prover's parties share, else ``development``, a key made for the session).
+The run's parameters (`params_of`) are its sampling blocks (``blocks``), the configuration's listed subprotocols
+(``components``, `IDS`' names: exactly one composite's, `verity.core.deploy.config.COMPOSITES`) and what its coins are
+(``coins``: ``simulated`` when the challenger's host is a machine the prover's parties share, else ``development``, a
+key made for the session).
 
 The verifier audits block ``i`` once its registration, the firewall's pin and the challenger's address are all in, in
 order of the blocks, so no coin is drawn for a block before its registration (live coins, after the commitment). It
 holds the audit's commitment to the registration the workers sent: an accepting audit of another record rejects, its
-case withheld from the product. A
-listed component with no answer is ``absent``, its case `NO_CASE`, which its own decoders refuse, so the product never
-accepts over it. Each block's line is an output entry of the record and the verifier's outcome:
+case withheld from the composite. A listed subprotocol with no answer is ``absent``, its case `NO_CASE`, which its own
+decoders refuse, so the composite never accepts over it. Each block's line is an output entry of the record and the verifier's outcome:
 
     {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
      "registration": DIGEST, "verdict": V, "reason": R}
@@ -56,6 +57,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from verity.core.deploy.config import COMPOSITES
 from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, Record, Send
 from verity.core.deploy.runtime import ProtocolDef
@@ -66,13 +68,13 @@ from .one_stage import registration as R
 ID = R.PROTOCOL
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
-#: a configuration's component names and their protocol ids, the ones `Core.Onsite.components` holds
+#: a configuration's subprotocol names and their protocol ids, the ones `Core.Onsite.components` holds
 IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0", "pous": "verity/pous/p2/v4/run",
        "pouw": "verity/pouw/v1", "sampled-proofs": ID}
 COMPONENT = "sampled-proofs"
 #: what a run's coins are (module docstring)
 COINS = ("simulated", "development")
-#: a listed component whose party gave no case: its own decoders refuse it
+#: a listed subprotocol whose party gave no case: its own decoders refuse it
 NO_CASE = {"commitment": "", "evidence": "", "params": {}}
 ABSENT = "absent"
 MAX_BLOCKS = 1 << 16
@@ -97,8 +99,8 @@ def params_of(blocks: int, components: Sequence[str], coins: str) -> dict[str, A
     if type(blocks) is not int or not 1 <= blocks <= MAX_BLOCKS:
         raise ValueError(f"blocks is an integer in [1, {MAX_BLOCKS}], not {blocks!r}")
     listed = list(components)
-    if COMPONENT not in listed or len(set(listed)) != len(listed) or not set(listed) <= set(IDS):
-        raise ValueError(f"components lists {COMPONENT} and others of {sorted(IDS)}, each once, not {listed}")
+    if len(set(listed)) != len(listed) or sorted(listed) not in [sorted(c) for c in COMPOSITES.values()]:
+        raise ValueError(f"components lists one composite's subprotocols, each once ({COMPOSITES}), not {listed}")
     if coins not in COINS:
         raise ValueError(f"coins is one of {COINS}, not {coins!r}")
     return {"blocks": blocks, "components": listed, "coins": coins}
@@ -175,7 +177,7 @@ class Workers:
 
 
 class Verifier:
-    """The verifier: each block audited on the challenger's coins, then the product over the listed components (module
+    """The verifier: each block audited on the challenger's coins, then the composite of the listed subprotocols (module
     docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:

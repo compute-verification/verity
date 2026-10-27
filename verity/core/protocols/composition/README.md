@@ -4,16 +4,21 @@ Verity's two composite protocols, onsite and remote, are each one verdict over a
 hold them, each on C-Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
 subprotocols' packages, with no Mathlib:
 
-- `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
+- `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id subprotocols`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
   stub subprotocols (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, proof of useful
   bandwidth (PoUB) and network certification.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW.
 
-The rule and the formats are written once, over any list of subprotocols, and the two products are values of it that
-differ in their id and subprotocols. Each product's executable is the core CLI (`onsite id | check | serve`,
+The rule and the formats are written once, over any list of subprotocols, and the two composites are values of it that
+differ in their id and subprotocols. Each composite's executable is the core CLI (`onsite id | check | serve`,
 `remote id | check | serve`), and its `serve` is what the difftest drives.
+
+These two are the only composites a verifier runs. `product IDS id | check | serve` (`../onsite/CoreComposites.lean`,
+`Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's subprotocols, is onsite's CLI for
+onsite's subprotocols and remote's for remote's, in any order, and refuses every other set, since protocol soundness
+covers only these two.
 
 ## The protocol
 
@@ -84,11 +89,14 @@ Lean to:
   unverified), whose Lean their packages' difftests hold to those verifiers (`../pous/check/tests/test_run_protocol.py`,
   `../remote_bandwidth/lean/tests/test_protocol.py`).
 
-Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
+Hypothesis draws 1000 cases a composite (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to
+decode (one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
 composition's inputs or the case itself are often broken. `test_a_reference_without_reject_dominance_is_caught` shows the
 difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a case where
-one subprotocol rejects and another is undecided.
+one subprotocol rejects and another is undecided. `product` names the two composites and refuses every other subset of
+onsite's subprotocols (`test_product_names_only_the_two_composites`), and over each composite's subprotocols its `serve`
+gives that composite's verdicts (`test_product_over_remotes_subprotocols_is_remote`,
+`test_product_over_onsites_subprotocols_is_onsite`).
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.

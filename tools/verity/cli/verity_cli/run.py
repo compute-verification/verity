@@ -6,9 +6,10 @@
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, then runs the parties it places on this machine (``--on``, default
-``local``), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state ``--state`` (default
-a new directory under the system's temporary one). Step 0's parties are those of the static table `REGISTRY` names.
+`verity run` checks the configuration, refusing any set of subprotocols that is neither remote's nor onsite's
+(``composite``, `verity.core.deploy.config.COMPOSITES`: protocol soundness covers only those two composites), then runs
+the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
+periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). Step 0's parties are those of the static table `REGISTRY` names.
 It names none since the toy it ran was removed, so `verity run` and `verity config` are refused by name (``no-table``)
 until a workload's protocols bring their table; `verity_cli`'s tests run one (`tools/verity/cli/tests/step0.py`). A
 party that is an entry there, a function of the configuration, the state and
@@ -18,8 +19,8 @@ order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. T
 this process when all of them are here, else meeting the rest over TCP at the configuration's ``address`` and
 ``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
 
-When the verifier runs here, each period's verdict is its own: the product over exactly the listed components, printed
-as a line and written to ``STATE/record/verdicts.jsonl``:
+When the verifier runs here, each period's verdict is its own: the composite of the listed subprotocols (remote or
+onsite, its id the line's ``product``), printed as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
@@ -82,8 +83,8 @@ class Registry:
     live: Callable[[Mapping[str, Any], Path, Sequence[str]], Any]
 
     def entries(self, cfg: Mapping[str, Any], party: str) -> list[tuple[str, Entry | str]]:
-        """``party``'s entries under ``cfg``: the workload's party, or each listed component's that declares it, a
-        component's after those it requires; refused by name where a component has none yet."""
+        """``party``'s entries under ``cfg``: the workload's party, or each listed subprotocol's that declares it, a
+        subprotocol's after those it requires; refused by name where a subprotocol has none yet."""
         w = cfg["workload"]["name"]
         if party in self.workloads[w].parties:
             return [(w, self.workers[w])]
@@ -389,7 +390,8 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("new", help="a configuration that states only its choices")
     p.add_argument("--workload", required=True)
-    p.add_argument("--protocols", required=True, help="the components, comma-separated")
+    p.add_argument("--protocols", required=True, help="the subprotocols, comma-separated: remote's (sampled-proofs,pouw) "
+                   "or onsite's")
     p.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help=f"every party's machine (default {K.LOCAL})")
     p.add_argument("--commit", help="the program's commit (default the running tree's HEAD)")
     p.add_argument("--out", help="write it here (default stdout)")
