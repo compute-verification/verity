@@ -2572,7 +2572,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
 
     def proved(pkg, policy, facts, work, moved, ready):
         order.append("proved")
-        return [], facts | {"pins": {"P.g": {"kind": "theorem"}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
+        return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 
     def stub(name, result):
         def f(*args):
