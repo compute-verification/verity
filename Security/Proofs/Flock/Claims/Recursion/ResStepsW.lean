@@ -272,14 +272,16 @@ def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → 
           (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) (chainW x ws)
 
 /-- **The 22:25Z ruling's side condition** at the per-part acceptance `A` (`AccV`): part statements `xs`, each part
-accepted at its own (`xs.getD s []`), and no collision among the layout's calls and the parts' setups. -/
+accepted at its own (`xs.getD s []`), no collision among the layout's calls and the parts' setups, and `xs` staged at
+one prefix of messages (`XsStaged`). -/
 def XsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (A : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop)
     (x : Msg) (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : Prop :=
   ∃ xs : List Msg, (∀ s' (hs' : s' < ws.length), A s' x c (xs.getD s' []) ws[s'] ((DeployedR.layR elem).msgs x ws)) ∧
     (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
-      Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false
+      Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false ∧
+    XsStaged b.st x xs ws.length
 
 /-- `StepsW` is `StepsWG` with no side condition. -/
 theorem stepsW_of_G {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {wE : Msg → ℝ}

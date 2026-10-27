@@ -346,7 +346,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
       ((DeployedR.layR elem).msgs x ws))
     (hcol : (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
       Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false)
-    {r : XR} (hr : readX x = some r) {s s' : ℕ}
+    (hms : XsStaged b.st x xs ws.length) {r : XR} (hr : readX x = some r) {s s' : ℕ}
     {cc cc' : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some cc)
     (hpc' : r.w.parts[s']?.bind partCircuit = some cc') {wt wt' : Claims.Flock.Wit} (hw : ws[s]? = some wt)
     (hw' : ws[s']? = some wt') {sch : Schedule} (hsch : fast100 r.shape.m = some sch) {nm nm' : String}
@@ -357,6 +357,9 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
   obtain ⟨hs', rfl⟩ := List.getElem?_eq_some_iff.1 hw'
   obtain ⟨i, spec, sts, hS, hck, hsu, h0, hidx, hI⟩ := tiePremises_of_accV (hxs s hs)
   obtain ⟨i', spec', sts', hS', hck', hsu', h0', hidx', hI'⟩ := tiePremises_of_accV (hxs s' hs')
+  obtain ⟨ms, hms⟩ := hms
+  have hxO := hms s hs
+  have hxO' := hms s' hs'
   have hxs1 := getD_mem_of_setup hsu
   have hxs1' := getD_mem_of_setup hsu'
   have hD : RegListed (DRL rd wE final w b elem) := regListed_recBound _ hRS _ _
@@ -370,7 +373,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     obtain ⟨own', hown'⟩ := hreg' (Or.inl ⟨_, _, _, _, rfl⟩)
     have hn2 : m ≤ sts[0].pub.n := hn
     have hn2' : m' ≤ sts'[0].pub.n := hn'
-    exact accCommit_eq hS hS' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnd hnd' hq hq'
+    exact accCommit_eq hS hS' hxO hxO' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnd hnd' hq hq'
       hu (by omega) hu' (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
   · have hm := recOpen_n hx hf hr hsch hsv
     obtain ⟨hn, hreg⟩ := hI r hr _ hsv
@@ -379,7 +382,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     obtain ⟨own', hown'⟩ := hreg' (Or.inr ⟨_, _, _, rfl⟩)
     have hn2 : m ≤ sts[0].pub.n := hn
     have hn2' : 2 ≤ sts'[0].pub.n := hn'
-    exact (innerAccCommit_eq hS' hS hck' hck hr hpc' hpc hsv' hsv hsch hsu' hsu h0' h0 hidx' hidx hown' hown hnm' hd'
+    exact (innerAccCommit_eq hS' hS hxO' hxO hck' hck hr hpc' hpc hsv' hsv hsch hsu' hsu h0' h0 hidx' hidx hown' hown hnm' hd'
       hnd hq' hq (by omega) hu (by omega) (hP'.symm.trans hP) hD hl hcol hxs1' hxs1).symm
   · have hm' := recOpen_n hx hf hr hsch hsv'
     obtain ⟨hn, hreg⟩ := hI r hr _ hsv
@@ -388,7 +391,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     obtain ⟨own', hown'⟩ := hreg' (Or.inl ⟨_, _, _, _, rfl⟩)
     have hn2 : 2 ≤ sts[0].pub.n := hn
     have hn2' : m' ≤ sts'[0].pub.n := hn'
-    exact innerAccCommit_eq hS hS' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
+    exact innerAccCommit_eq hS hS' hxO hxO' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
       hnd' hq hq' (by omega) hu' (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
   · obtain ⟨hn, hreg⟩ := hI r hr _ hsv
     obtain ⟨hn', hreg'⟩ := hI' r hr _ hsv'
@@ -396,7 +399,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     obtain ⟨own', hown'⟩ := hreg' (Or.inr ⟨_, _, _, rfl⟩)
     have hn2 : 2 ≤ sts[0].pub.n := hn
     have hn2' : 2 ≤ sts'[0].pub.n := hn'
-    exact innerInnerCommit_eq hS hS' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
+    exact innerInnerCommit_eq hS hS' hxO hxO' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
       hnm' hd' hq hq' (by omega) (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
 
 /-! ## STEPSW's and RESP3's ties, with every part's acceptance in `xs` and `hcol` -/
@@ -416,6 +419,7 @@ def AccCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → 
       ws[s'] ((DeployedR.layR elem).msgs x ws)) →
     (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
       Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false →
+    XsStaged b.st x xs ws.length →
     ∀ (r : XR), readX x = some r → ∀ (s s' : ℕ) (cc cc' : Circuit) (wt wt' : Claims.Flock.Wit),
       r.w.parts[s]?.bind partCircuit = some cc → r.w.parts[s']?.bind partCircuit = some cc' →
       ws[s]? = some wt → ws[s']? = some wt' →
@@ -431,7 +435,7 @@ theorem accCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg 
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) (hRS : RegSetup b) :
     AccCommitV rd wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ xs hxs hcol r hr s s' cc cc' wt wt' hpc hpc' hw hw' p u nm d hnd hh h' hh' qn q' hq hq'
+  intro x st hx hf c ws hJ xs hxs hcol hms r hr s s' cc cc' wt wt' hpc hpc' hw hw' p u nm d hnd hh h' hh' qn q' hq hq'
   obtain ⟨sch, hsch⟩ := fast100_of_read hr
   have hstk := stacked_none hx hf hr
   have h1 : SlotAt r sch s nm u (p + d) := by
@@ -440,7 +444,7 @@ theorem accCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg 
     · rw [Nat.add_zero]
       exact slotAt_of_holding hstk hsch hh
     · exact slotAt_out hstk hsch hh
-  exact slotCommit_eq hRS hx hf hJ.2.1 hxs hcol hr hpc hpc' hw hw' hsch h1 (slotAt_of_holding hstk hsch hh') hq hq'
+  exact slotCommit_eq hRS hx hf hJ.2.1 hxs hcol hms hr hpc hpc' hw hw' hsch h1 (slotAt_of_holding hstk hsch hh') hq hq'
 
 /-- **`InnerAccTie` with the parts' staged statements** (`hxs`, `hcol` as in `AccCommitV`): wherever part `s` (an
 algebra part) holds row `p` at `h` (port `q`) and `accCanon` names the row's owner `(o, co, ho)`, the owner's port
@@ -457,6 +461,7 @@ def InnerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
       ws[s'] ((DeployedR.layR elem).msgs x ws)) →
     (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
       Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false →
+    XsStaged b.st x xs ws.length →
     ∀ (r : XR), readX x = some r → ∀ s (cS : Circuit), r.w.parts[s]?.bind partCircuit = some cS →
     ∀ (j : ℕ) (nm : String) (pt : VStar.Part),
       (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner j nm pt) →
@@ -475,7 +480,7 @@ theorem innerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
     (cmt : Msg → ℕ → Msg → Msg) (hRS : RegSetup b) :
     InnerAccTieV rd wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ xs hxs hcol r hr s cS hpc _ _ _ _ p h hh o co ho hcan wt wo hw hwo q hq
+  intro x st hx hf c ws hJ xs hxs hcol hms r hr s cS hpc _ _ _ _ p h hh o co ho hcan wt wo hw hwo q hq
   obtain ⟨-, hpco, hhd⟩ := accCanon_spec hcan
   dsimp only at hpco hhd
   have hho : ho ∈ accHoldings r o p := List.mem_of_mem_head? hhd
@@ -483,7 +488,7 @@ theorem innerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ)
   refine ⟨q', hq', ?_⟩
   obtain ⟨sch, hsch⟩ := fast100_of_read hr
   have hstk := stacked_none hx hf hr
-  exact slotCommit_eq hRS hx hf hJ.2.1 hxs hcol hr hpc hpco hw hwo hsch (slotAt_of_holding hstk hsch hh)
+  exact slotCommit_eq hRS hx hf hJ.2.1 hxs hcol hms hr hpc hpco hw hwo hsch (slotAt_of_holding hstk hsch hh)
     (slotAt_of_holding hstk hsch hho) hq hq'
 
 end

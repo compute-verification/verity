@@ -38,6 +38,29 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
+/-- **An accepted run's V\* statement for part `s` is staged at the run's rounds before the sessions.** -/
+theorem runVstar_getD_staged {W Ω : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
+    (ivScope : Msg → Bool) (b : Brings) (x : Msg) (P : Claims.Prover Ω) (ω : Ω)
+    (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin)
+    (hacc : (Claims.run H P (deployRec I.V ivScope b).V x ω r).out = .acc) {s : ℕ}
+    (hs : s < (deployRec I.V ivScope b).nS x) :
+    (Claims.Recursion.runVstar H (deployRec I.V ivScope b) I P x ω r).getD s [] =
+      staged b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s := by
+  change (Claims.run H P (V I.V b.st) x ω r).out = .acc at hacc
+  change s < nS x at hs
+  obtain ⟨hnum, -⟩ := run_round H I.V b.st x P ω r hacc hs rfl rfl
+  show (vstar b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))).getD s [] = _
+  rw [vstar_getD b.st x _ hs]
+  unfold vstarAt
+  rw [ite_eq_left hnum]
+
+/-- **An accepted run's V\* statements are staged at one prefix of its messages** (`runVstar_getD_staged`). -/
+theorem okRuns_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
+    (b : Brings) (shape : Claims.Recursion.Form → Prop) :
+    OkRuns H (deployRec I.V ivScope b) I shape fun x xs ws => ResLower.XsStaged b.st x xs ws.length := by
+  intro x st hst hf Ω P ω r hacc ws hl
+  exact ⟨_, fun s hs => runVstar_getD_staged H I ivScope b x P ω r hacc (lt_of_lt_of_eq hs hl)⟩
+
 /-- **`StagedB` at `showsDec`**: `stagedB_deployRec_part`, and each part's staged statement on an accepted run decided
 (`ResLower.partDec_run`). -/
 theorem stagedB_deployRec_dec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
@@ -48,15 +71,9 @@ theorem stagedB_deployRec_dec {W : Type} (H : Msg → Msg) (I : Claims.Recursion
   intro x st hst hf Ω P ω r hacc s hs
   obtain ⟨h1, h2⟩ := stagedB_deployRec_part H I ivScope b untr L shape hrb hHeld x st hst hf Ω P ω r hacc s hs
   refine ⟨⟨h1, fun i spec sts hsu => ?_⟩, h2⟩
+  have hv := runVstar_getD_staged H I ivScope b x P ω r hacc hs
   change (Claims.run H P (V I.V b.st) x ω r).out = .acc at hacc
   change s < nS x at hs
-  obtain ⟨hnum, -⟩ := run_round H I.V b.st x P ω r hacc hs rfl rfl
-  have hv : (Claims.Recursion.runVstar H (deployRec I.V ivScope b) I P x ω r).getD s [] =
-      staged b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s := by
-    show (vstar b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))).getD s [] = _
-    rw [vstar_getD b.st x _ hs]
-    unfold vstarAt
-    rw [ite_eq_left hnum]
   rw [hv] at hsu ⊢
   exact ResLower.partDec_run H I.V b.st x P ω r hacc hs hsu
 
@@ -90,25 +107,28 @@ theorem ksLin2_stepsC_atVD (nextE : Msg → List Msg → List Coin → Claims.OC
     (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
       Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s) →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
-      Claims.Recursion.VStarB.DecompBV FlockDeploy.sha512 D Bd.IVStar L shape
+      Claims.Recursion.VStarB.DecompBVS FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAcceptsV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
-          shape (ResLower.showsDec recRead bR) (cmtTr recRead))) →
+          shape (ResLower.showsDec recRead bR) (cmtTr recRead))
+        fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR Bd D hRT hHe hPO hD
   obtain ⟨hKS, hEC, hCF⟩ := hB
   have hrb : ReadsBackB FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (fun _ => True) recRead :=
     readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl
-  refine ksLin2_route_stagedV _root_.Flock.Readable.relation _root_.Flock.Readable.relation bR L hRows hHW
-    FlockDeploy.KS.CpDep nextE colsE wE join rowInDeployed final w hKS (binds_deployed _ _ _ wE join final w) hEC hCF
-    FlockDeploy.KS.zk_KS_outer ?_ hRT
+  refine ksLin2_route_stagedVS _root_.Flock.Readable.relation _root_.Flock.Readable.relation bR L hRows hHW
+    FlockDeploy.KS.CpDep (fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) nextE colsE wE join rowInDeployed final
+    w hKS (binds_deployed _ _ _ wE join final w) hEC hCF FlockDeploy.KS.zk_KS_outer ?_ hRT
   intro shape hsh
   obtain rfl := List.mem_singleton.1 hsh
   exact ⟨ResLower.showsDec recRead bR, cmtTr recRead, hHe,
     fun decI => stagedB_deployRec_dec FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
       (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } recRead L _
       (fun x st hst _ => hrb x st hst trivial) (hHe decI),
-    fun s => OpenLower.partOpensB_shows (fun h => h.1) (hPO s), hD _ hsh⟩
+    fun s => OpenLower.partOpensB_shows (fun h => h.1) (hPO s),
+    fun decI => okRuns_deployRec FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
+      (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } _, hD _ hsh⟩
 
 /-- **`ksLin2_stepsC_layRV` at `showsDec`**: `ksLin2_stepsC_atVD` at `layR`. -/
 theorem ksLin2_stepsC_layRVD (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -125,9 +145,10 @@ theorem ksLin2_stepsC_layRVD (nextE : Msg → List Msg → List Coin → Claims.
     let Bd := bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
-      Claims.Recursion.VStarB.DecompBV FlockDeploy.sha512 D Bd.IVStar L shape
+      Claims.Recursion.VStarB.DecompBVS FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAcceptsV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
-          shape (ResLower.showsDec recRead bR) (cmtTr recRead))) →
+          shape (ResLower.showsDec recRead bR) (cmtTr recRead))
+        fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   fun hD => ksLin2_stepsC_atVD nextE colsE b aux nOf hd recRest (DeployedR.layR elem) (readsRows_layR elem)
@@ -149,9 +170,10 @@ theorem ksLin2_deployedR_layRVD (rd : Msg → Option FinalP) (b : Brings)
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
-      Claims.Recursion.VStarB.DecompBV FlockDeploy.sha512 D Bd.IVStar L shape
+      Claims.Recursion.VStarB.DecompBVS FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAcceptsV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
-          shape (ResLower.showsDec recRead bR) (cmtTr recRead))) →
+          shape (ResLower.showsDec recRead bR) (cmtTr recRead))
+        fun x xs ws => ResLower.XsStaged bR.st x xs ws.length) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   ksLin2_stepsC_layRVD _ _ b aux nOf hd recRest elem wE join final w (stepsBase_R rd wE join final w hIn) hM
@@ -175,11 +197,13 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (L : LayoutB)
 
-/-- **`RecKSDecompLV` at each part's decision**: `DecompBV` at `acceptsLVD`, the form
+/-- **`RecKSDecompLV` at each part's decision**: `DecompBVS` at `acceptsLVD` and the parts' statements staged at one
+prefix of messages (`ResLower.XsStaged`, which an accepted run's are: `okRuns_deployRec`), the form
 `Flock.SecurityProofs.recursiveKSAt_ofVD` takes. -/
 def RecKSDecompLVD : Prop :=
-  DecompBV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w).IVStar L
+  DecompBVS FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w).IVStar L
     Claims.Recursion.Form.Dense (acceptsLVD rd b aux nOf hd rest wE final w L)
+    fun x xs ws => ResLower.XsStaged b.st x xs ws.length
 
 end Statement
 
@@ -197,7 +221,7 @@ theorem resLowJPD_of_resLoweredPD (rd : Msg → Option FinalP) (b : Brings) (aux
     (h : ResLower.ResLoweredPD rd wE final w (bB b aux nOf hd rest) elem Claims.Recursion.Form.Dense recRead
       (cmtTr recRead) pieces ownQ elemAt vvAt) :
     ResLowJPD rd b aux nOf hd rest wE final w (DeployedR.layR elem) pieces elemAt vvAt ownQ :=
-  fun x st hx hf c xs ws hJ s hs => h x st hx hf c xs ws hJ s hs
+  fun x st hx hf c xs ws hJ hms s hs => h x st hx hf c xs ws hJ hms s hs
 
 end RecDeploy.DecompBR
 
@@ -251,7 +275,7 @@ theorem recKSDecompLV_of_leavesJD
     RecKSDecompLVD rd b aux nOf hd rest wE final w L :=
   recKSDecompLV_of_leavesJS rd b aux nOf hd rest wE final w L resP key elemAt vvAt side posAt ownR
     (ResLower.showsDec recRead (bB b aux nOf hd rest)) (fun h => h.1)
-    hRdep hDm hEJ hB hF hLn hRd hSR hOwn hlowR hres hSch hO hDirs hTop
+    (fun x xs ws => ResLower.XsStaged b.st x xs ws.length) hRdep hDm hEJ hB hF hLn hRd hSR hOwn hlowR hres hSch hO hDirs hTop
 
 end Assembly
 

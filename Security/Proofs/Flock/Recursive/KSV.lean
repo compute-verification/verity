@@ -52,7 +52,8 @@ theorem recursiveKSAt_ofV (rd : Msg → Option FinalP)
   RecDeploy.ksLin2_deployedR_layRV rd b aux nOf hd recRest rest wE FlockDeploy.joinR final w hIn
     (RecDeploy.MoreSlots.moreSlotsTrue_deployed _) hD
 
-/-- **`recursiveKSAt_ofV` at each part's decision**: `DecompBV` at `PartAcceptsV` over `ResLower.showsDec`, through
+/-- **`recursiveKSAt_ofV` at each part's decision**: `DecompBVS` at `PartAcceptsV` over `ResLower.showsDec`, where the
+parts' statements are staged at one prefix of messages (`ResLower.XsStaged`, which an accepted run's are), through
 `RecDeploy.ksLin2_deployedR_layRVD`. -/
 theorem recursiveKSAt_ofVD (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
@@ -61,7 +62,7 @@ theorem recursiveKSAt_ofVD (rd : Msg → Option FinalP)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
     (hD : ∀ shape ∈ [Claims.Recursion.Form.Dense],
-      Claims.Recursion.VStarB.DecompBV FlockDeploy.sha512
+      Claims.Recursion.VStarB.DecompBVS FlockDeploy.sha512
         (RecDeploy.recBound _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
           (RecDeploy.DeployedR.layR rest)
           (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
@@ -79,7 +80,8 @@ theorem recursiveKSAt_ofVD (rd : Msg → Option FinalP)
               RecDeploy.rowInDeployed final w).IVStar)
           (RecDeploy.deployZkRec _root_.Flock.Readable.relation) (RecDeploy.DeployedR.layR rest) shape
           (RecDeploy.ResLower.showsDec RecDeploy.recRead { b with tr := RecDeploy.recTr aux nOf hd recRest })
-          (RecDeploy.cmtTr RecDeploy.recRead))) :
+          (RecDeploy.cmtTr RecDeploy.recRead))
+        fun x xs ws => RecDeploy.ResLower.XsStaged b.st x xs ws.length) :
     Flock.Guarantees.RecursiveKSAt rd final rest wE w b aux nOf hd recRest :=
   RecDeploy.ksLin2_deployedR_layRVD rd b aux nOf hd recRest rest wE FlockDeploy.joinR final w hIn
     (RecDeploy.MoreSlots.moreSlotsTrue_deployed _) hD

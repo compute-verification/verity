@@ -8,8 +8,10 @@ only at a full draw, which only the decision checks), and a joint acceptance at 
 decision travels beside the staged statement, in what each part shows (`showsDec`: `showsPart` and `PartDec` wherever
 the statement sets up). The chain's commit ties between two parts read both parts' setups and a collision with the
 verifier's own evaluations there (`accCommit_eq`), so `ResLoweredPD` is `ResLoweredP` at `JointV` over `showsDec` (the
-parts' staged statements `xs`), and `DecompBR.ResLowJPD` is `ResLowJP` there. KS holds `JointV` where it reads `hres`,
-and at an accepted run each part's staged statement shows it (`staged_deployRec_part`, `partDec_run`).
+parts' staged statements `xs`, staged at one prefix of messages: `XsStaged`, which the ties read too), and
+`DecompBR.ResLowJPD` is `ResLowJP` there. KS holds `JointV` where it reads `hres`, and at an accepted run each part's
+staged statement shows it (`staged_deployRec_part`, `partDec_run`) and the run's V\* statements are staged at one prefix
+of its messages (`okRuns_deployRec`).
 
 `resLowered_D`: `ResLoweredPD` at the dense form, `recRead`, `cmtTr recRead`, the concrete pieces and owners, `elemAt
 := Rows.elemReadC (Top.accRC rd key)` and `vvAt := Rows.resVRead`, from the frame ports (P2) at `JointP` over
@@ -48,7 +50,8 @@ open RecDeploy.OpenLower (jointP_shows)
 noncomputable section
 
 /-- **`ResLoweredP` with each part's decision, at the parts' staged statements** (`JointV` over `showsDec`: the
-collision conjunct widened to the verifier's own evaluations at `xs`, which the chain's commit ties read). -/
+collision conjunct widened to the verifier's own evaluations at `xs`, which the chain's commit ties read, with `xs`
+staged at one prefix of messages, `XsStaged`). -/
 def ResLoweredPD (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
@@ -58,7 +61,7 @@ def ResLoweredPD (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
   ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointV FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
-      (AccV rd wE final w b elem shape untr cmt) x c xs ws →
+      (AccV rd wE final w b elem shape untr cmt) x c xs ws → XsStaged b.st x xs ws.length →
     ∀ s < (DRL rd wE final w b elem).nS x,
       PiecesComputes (_root_.RecDeploy.bdR rd wE final w) (DRL rd wE final w b elem) pieces (resHolds elemAt vvAt) ownQ
         s x c ((DeployedR.layR elem).msgs x ws)
@@ -76,7 +79,7 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     (hA : AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense recRead (cmtTr recRead)) :
     ResLoweredPD rd wE final w b elem Claims.Recursion.Form.Dense recRead (cmtTr recRead) DecompBR.resPD
       DecompBR.ownRD (Rows.elemReadC (Top.accRC rd key)) Rows.resVRead := by
-  intro x st hx hf c xs ws hJV s hs
+  intro x st hx hf c xs ws hJV hms s hs
   have hJ : RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem Claims.Recursion.Form.Dense recRead (cmtTr recRead)) x c ws :=
     jointP_shows (shows := showsDec recRead b) (fun h => h.1) (RecDeploy.OpenLower.jointP_of_jointV hJV)
@@ -104,8 +107,8 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     hSt m k cl jj sh holo S' ns nv hpar hshp hholo hpart
   have hFr := hF x st hx hf c ws hJ s ws[s] hw r' hr' ss' hss' _ nm' pt' hsv' xO _ hxO hck hsh hAg hT hc q' hq' ho'
     ht m k cl jj sh holo S' ns nv hpar hshp hholo hpart
-  have hAc := hA x st hx hf c ws hJ xs hJV.2.2.2 hJV.2.2.1 s ws[s] hw r' hr' ss' hss' _ nm' pt' hsv' xO _ hxs hxO hck
-    hsh hAg hT hc q' hq' ho' ht m k cl jj sh holo S' ns nv hpar hshp hholo hpart
+  have hAc := hA x st hx hf c ws hJ xs hJV.2.2.2 hJV.2.2.1 hms s ws[s] hw r' hr' ss' hss' _ nm' pt' hsv' xO _ hxs hxO
+    hck hsh hAg hT hc q' hq' ho' ht m k cl jj sh holo S' ns nv hpar hshp hholo hpart
   -- the unit name is the read shape's, at group `q'.key.1`
   obtain ⟨p', r'', sv, hx', -, -, hr'', ⟨ss'', hss'', hsv''⟩, -, htab⟩ := stagedTables hsh.2
   obtain rfl : p' = { i.base.read with sts } := Option.some.inj (hx'.symm.trans hxO)
@@ -222,7 +225,7 @@ def ResLowJPD : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
       OpenLower.JointV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
-        (acceptsLVD rd b aux nOf hd rest wE final w L) x c xs ws →
+        (acceptsLVD rd b aux nOf hd rest wE final w L) x c xs ws → ResLower.XsStaged b.st x xs ws.length →
       ∀ s < nS x, PiecesComputes (bdR rd wE final w) (recL rd b aux nOf hd rest wE final w L) resP
         (resHolds elemAt vvAt) ownR s x c (L.msgs x ws)
 
@@ -243,7 +246,7 @@ theorem resLowJP_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
       recRead (cmtTr recRead)) :
     ResLowJPD rd (deployedB b) aux nOf hd rest wE final w (DeployedR.layR elem) resPD
       (Rows.elemReadC (Top.accRC rd key)) Rows.resVRead ownRD :=
-  fun x st hx hf c xs ws hJ s hs =>
-    ResLower.resLowered_DB rd key wE final w b aux nOf hd rest elem hBs hRd hF hA x st hx hf c xs ws hJ s hs
+  fun x st hx hf c xs ws hJ hms s hs =>
+    ResLower.resLowered_DB rd key wE final w b aux nOf hd rest elem hBs hRd hF hA x st hx hf c xs ws hJ hms s hs
 
 end RecDeploy.DecompBR

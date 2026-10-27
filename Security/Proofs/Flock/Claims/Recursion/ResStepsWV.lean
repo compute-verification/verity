@@ -39,8 +39,8 @@ theorem stepsWV_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
       (XsW rd wE final w b elem (AccV rd wE final w b elem Claims.Recursion.Form.Dense untr cmt)) :=
   stepsWG_of_commits rd key wE final w b elem untr cmt _ hL hO hC
     (fun x st hx hf c ws hJ hΦ => by
-      obtain ⟨xs, hxs, hcol⟩ := hΦ
-      exact accCommitV rd wE final w b elem untr cmt hRS x st hx hf c ws hJ xs hxs hcol)
+      obtain ⟨xs, hxs, hcol, hms⟩ := hΦ
+      exact accCommitV rd wE final w b elem untr cmt hRS x st hx hf c ws hJ xs hxs hcol hms)
     hN
 
 /-- **`StepsWG` at `XsW … AccV` at the deployed readers**: `stepsWV_of` with the copy's outputs (`levelOutsW`) and

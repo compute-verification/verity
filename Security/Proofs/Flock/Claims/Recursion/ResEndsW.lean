@@ -289,8 +289,8 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (hC : InnerAccTieV rd wE final w b elem Claims.Recursion.Form.Dense untr cmt) :
     EndsW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ xs hxs hcol s wt hw r hr ss hss j nm pt hsv xO p hxs0 hxO hck hsh hAg hT hc q hq ho ht m k
-    cl jj sh holo S ns nv hpar hshp hholo hpart os last hfin hos D e j' he hj
+  intro x st hx hf c ws hJ xs hxs hcol hms s wt hw r hr ss hss j nm pt hsv xO p hxs0 hxO hck hsh hAg hT hc q hq ho ht
+    m k cl jj sh holo S ns nv hpar hshp hholo hpart os last hfin hos D e j' he hj
   -- the piece's part is group `q.key.1`'s, at the read shape
   obtain ⟨r', ss', nm', pt', hr', hss', hsv'⟩ := DecompBR.ownRD_some ho
   obtain rfl : r = r' := Option.some.inj (hr.symm.trans hr')
@@ -399,8 +399,8 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     dsimp only at e1
     rw [← e1]
     exact held_chainW elem hJ.2.1 hJ.2.2.1 hr hl hpc hh' hw hfind
-      (fun o' co ho' hcan wo hwo => hC x st hx hf c ws hJ xs hxs hcol r hr s cS hpc _ nm pt hsvO row (nmb, r0) hh' o'
-        co ho' hcan wt wo hw hwo i hfind) 0 ho2
+      (fun o' co ho' hcan wo hwo => hC x st hx hf c ws hJ xs hxs hcol hms r hr s cS hpc _ nm pt hsvO row (nmb, r0) hh'
+        o' co ho' hcan wt wo hw hwo i hfind) 0 ho2
   rw [hkn, ← _root_.Flock.RecAlgebra.getElem!_el]
   have hn22 : r0 / 2 = 0 := by omega
   have hn2m : r0 % 2 = r0 := Nat.mod_eq_of_lt hr0
@@ -442,7 +442,7 @@ theorem stepsWX_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     (h : StepsWG rd key wE final w b elem shape untr cmt
       (XsW rd wE final w b elem (AccV rd wE final w b elem shape untr cmt))) :
     StepsWX rd key wE final w b elem shape untr cmt :=
-  fun x st hx hf c ws hJ xs hxs hcol => h x st hx hf c ws hJ ⟨xs, hxs, hcol⟩
+  fun x st hx hf c ws hJ xs hxs hcol hms => h x st hx hf c ws hJ ⟨xs, hxs, hcol, hms⟩
 
 /-- **P3 from `StepsWG` at `XsW`** (STEPSW's form), wherever the brings list the registered reads. -/
 theorem accPorts_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)

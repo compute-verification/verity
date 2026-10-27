@@ -97,6 +97,12 @@ abbrev AccV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opt
   PartAcceptsV FlockDeploy.sha512 (DRL rd wE final w b elem) (deployZkRec _root_.Flock.Readable.relation)
     (DeployedR.layR elem) shape (showsDec untr b) cmt
 
+/-- **The parts' statements `xs` staged at one prefix `ms` of messages**: the first `n` of them are `staged st x ms`'s,
+as an accepted run's V\* statements are (`RecDeploy.okRuns_deployRec`). The commit ties between two parts read both
+parts' rows at one `ms` (`accCommit_eq`). -/
+abbrev XsStaged (st : Stage) (x : Msg) (xs : List Msg) (n : ℕ) : Prop :=
+  ∃ ms : List (Msg × Claims.Out), ∀ s < n, xs.getD s [] = staged st x ms s
+
 /-- Past `xs`'s end `getD` reads `[]`, which doesn't set up (`insO_nil`): a part's staged statement that sets up is one
 of `xs`. -/
 theorem getD_mem_of_setup {xs : List Msg} {s : ℕ} {v : RecIns × SessionSpec × Array Stmt}
@@ -153,8 +159,8 @@ def PortsAt (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opt
 
 /-- **`PortsAt` at the parts' staged statements `xs`**: `PortsAt`'s context, with every part's check at
 `xs.getD s' []` showing its decision (`AccV`), no collision among the recorded calls and the verifier's own
-evaluations at `xs` (`setupCalls`), and part `s`'s statement `xO` the one at `xs.getD s []`. This is what `JointV` over
-`showsDec` gives; a commit tie between two parts (`accCommit_eq`) reads both parts' setups and decisions, and the
+evaluations at `xs` (`setupCalls`), `xs` staged at one prefix of messages (`XsStaged`), and part `s`'s statement `xO`
+the one at `xs.getD s []`. This is what `JointV` over `showsDec` gives at an accepted run; a commit tie between two parts (`accCommit_eq`) reads both parts' setups and decisions, and the
 collision, there (`getD_mem_of_setup` puts each staged statement in `xs`). -/
 def PortsAtV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -169,6 +175,7 @@ def PortsAtV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Op
         AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' []) ws[s'] ((DeployedR.layR elem).msgs x ws)) →
       (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
         Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false →
+      XsStaged b.st x xs ws.length →
     ∀ s (wt : Claims.Flock.Wit), ws[s]? = some wt →
     ∀ (r : XR), readX x = some r → ∀ (ss : Array VStar.Stmt), RecVStar.statements r.shape = .ok ss →
     ∀ (j : ℕ) (nm : String) (pt : VStar.Part), ss[s]? = some (.inner j nm pt) →
