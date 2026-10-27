@@ -539,15 +539,128 @@ def Session0 (label : String) (draw : Challenger.Use) (bs : Core.Blobs) (s0 : Se
     (us0.map (·.1.label)).eraseDups ∈ groups ∧
     ∀ u ∈ uses.drop (us0.length + 1), ∃ i n, 1 ≤ i ∧ u.label = Hello.slotStream i n
 
+/-- **The uses `roundsWhy` runs the round coins at**, and their wants, order, groups and coins, before it runs them:
+the draw's use after the registration's digest, then each session's (`sessionUses`), with the evidence's coins and
+every session's segments after the draw's. -/
+def roundsIn (label : String) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+    Flock.V (Array Challenger.Use × Array (Option (String × Array String)) × Array (String × String) ×
+      Array (List String) × Json) := do
+  let draw := getD e.base.coins "segment"
+  let .arr opened := getD draw "openings" | throw Challenger.SEGMENT_FORM
+  let mut uses : Array Challenger.Use := #[{ label, after := c.digest, coins := opened.size }]
+  let mut wants : Array (Option (String × Array String)) := #[none]
+  let mut segments : Array Json := #[draw]
+  let mut order : Array (String × String) := #[]
+  let mut groups : Array (List String) := #[]
+  for (s, i) in e.sessions.toList.zipIdx do
+    let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+      | throw s!"session {s.name}'s record is not UTF-8"
+    let us ← (sessionUses i record).mapError (s!"session {s.name}: {·}")
+    unless s.coins.size == us.length do
+      throw s!"session {s.name}: {s.coins.size} segments for its {us.length} uses of the challenger's coins"
+    let points := Hello.slotStream i POINTS
+    let fams := (us.map (·.1.label)).eraseDups
+    order := order ++ (fams.map (label, ·)).toArray ++ ((fams.filter (· != points)).map (points, ·)).toArray
+    groups := groups.push fams
+    uses := uses ++ us.toArray.map (·.1)
+    wants := wants ++ us.toArray.map fun (u, hs) => some (s!"{s.name}'s {u.label}", hs)
+    segments := segments ++ s.coins
+  let coins := Json.mkObj [("ledger", getD e.base.coins "ledger"), ("main", getD e.base.coins "main"),
+    ("pins", getD e.base.coins "pins"), ("segments", Json.arr segments), ("session", getD e.base.coins "session")]
+  return (uses, wants, order, groups, coins)
+
+/-- **`roundsWhy` passes only at the uses `roundsIn` reads**: where it names no reason, v2's parameters name a
+challenger key and label and a window root, `roundsIn` reads the uses, wants, order, groups and coins, and
+`roundCoins` returns on them under that key on that window. -/
+theorem roundsIn_of_roundsWhy {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
+    (h : roundsWhy p c e bs = none) :
+    ∃ key label w uses wants order groups coins ξs, p.base.challenger = some (key, label) ∧
+      p.base.verifier.windowRoot = some w ∧ roundsIn label c e bs = .ok (uses, wants, order, groups, coins) ∧
+      Challenger.roundCoins key w uses.toList order.toList groups.toList coins = .ok ξs := by
+  unfold roundsWhy at h
+  split at h
+  · rename_i key label w hc hw
+    dsimp only at h
+    split at h
+    · rename_i hr
+      unfold roundsIn
+      simp only [bind, Except.bind, pure, Except.pure] at hr ⊢
+      repeat' split at hr
+      all_goals try (cases hr; done)
+      rename_i hop _ st hf _ ξs hq _ _ _
+      refine ⟨key, label, w, st.1, st.2.1, st.2.2.2.1, st.2.2.2.2, _, ξs, hc, hw, ?_, hq⟩
+      simp only [hop]
+      split
+      · rename_i hx; cases hx.symm.trans hf
+      · rename_i hx; cases hx.symm.trans hf; rfl
+    · cases h
+  · cases h
+
+/-- An invariant of a loop's state that each step keeps holds of the state the loop returns. -/
+theorem forIn_except_inv {α σ ε : Type} (I : σ → Prop) {f : α → σ → Except ε (ForInStep σ)}
+    (hf : ∀ x s r, I s → f x s = .ok r → I r.value) : ∀ (l : List α) (s s' : σ), I s → forIn l s f = .ok s' → I s'
+  | [], s, s', hs, h => by
+    simp only [List.forIn_nil, pure, Except.pure] at h
+    cases h
+    exact hs
+  | x :: l, s, s', hs, h => by
+    rw [List.forIn_cons] at h
+    simp only [bind, Except.bind] at h
+    split at h
+    · cases h
+    · rename_i r hr
+      have hI := hf x s r hs hr
+      cases r with
+      | done b => cases h; exact hI
+      | yield b => exact forIn_except_inv I hf l b s' hI h
+
+/-- **`roundsIn`'s first use is the draw's**, released after the registration's digest, and its coins carry the
+evidence's, with the draw's segment first. -/
+theorem roundsIn_draw {label : String} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
+    {uses : Array Challenger.Use} {wants : Array (Option (String × Array String))} {order : Array (String × String)}
+    {groups : Array (List String)} {coins : Json}
+    (h : roundsIn label c e bs = .ok (uses, wants, order, groups, coins)) :
+    ∃ k segs, uses.toList[0]? = some ⟨label, c.digest, k⟩ ∧ segs[0]? = some (getD e.base.coins "segment") ∧
+      coins = Json.mkObj [("ledger", getD e.base.coins "ledger"), ("main", getD e.base.coins "main"),
+        ("pins", getD e.base.coins "pins"), ("segments", Json.arr segs), ("session", getD e.base.coins "session")] := by
+  unfold roundsIn at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · rename_i opened _
+    split at h
+    · cases h
+    · rename_i st hf
+      cases h
+      have hI := forIn_except_inv (fun st : Array Challenger.Use × Array (Option (String × Array String)) × Array Json ×
+          Array (String × String) × Array (List String) =>
+          st.1[0]? = some ⟨label, c.digest, opened.size⟩ ∧ st.2.2.1[0]? = some (getD e.base.coins "segment"))
+        (fun x s r hs hr => by
+          try simp only at hr
+          repeat' split at hr
+          all_goals first
+            | (cases hr; done)
+            | (cases hr; exact hs)
+            | (cases hr; simp only [ForInStep.value]; exact ⟨by rw [Array.getElem?_append_left (by
+                  have := Array.getElem?_eq_some_iff.1 hs.1; exact this.1)]; exact hs.1,
+                by rw [Array.getElem?_append_left (by
+                  have := Array.getElem?_eq_some_iff.1 hs.2; exact this.1)]; exact hs.2⟩))
+        _ _ _ ⟨rfl, rfl⟩ hf
+      refine ⟨opened.size, st.2.2.1, ?_, hI.2, rfl⟩
+      rw [Array.getElem?_toList]
+      exact hI.1
+  · cases h
+
 /-- **What `roundsWhy` runs, where it names no reason**: v2's parameters name a challenger key and label and a window
-root, the draw's segment opens `opened`, and `roundCoins` returns `ξs` for its uses, order, groups and coins; every coin
-a session's record holds is the challenger's (`coinsMismatch`, use by use); and session 0's uses are read as
+root, the draw's segment opens `opened`, and `roundCoins` returns `ξs` for its uses, order, groups and coins, the ones
+`roundsIn` reads; every coin a session's record holds is the challenger's (`coinsMismatch`, use by use); and session 0's uses are read as
 `Session0` says. -/
 theorem roundsWhy_spec {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
     (h : roundsWhy p c e bs = none) :
     ∃ key label w opened uses wants order groups coins ξs, p.base.challenger = some (key, label) ∧
       p.base.verifier.windowRoot = some w ∧ getD (getD e.base.coins "segment") "openings" = .arr opened ∧
       Challenger.roundCoins key w uses order groups coins = .ok ξs ∧
+      roundsIn label c e bs =
+        .ok (List.toArray uses, List.toArray wants, List.toArray order, List.toArray groups, coins) ∧
       (∀ x ∈ ξs.zip wants, ∀ what hs, x.2 = some (what, hs) → coinsMismatch hs x.1 = none) ∧
       ∀ s0 rest, e.sessions.toList = s0 :: rest →
         Session0 label ⟨label, c.digest, opened.size⟩ bs s0 uses wants order groups := by
@@ -569,7 +682,13 @@ theorem roundsWhy_spec {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs
             split at hr
             · cases hr
             · rename_i u hchk
-              refine ⟨key, label, w, opened, v.1.toList, v.2.1.toList, v.2.2.2.1.toList, v.2.2.2.2.toList, _, ξs, hc, hw, hop, hrc, ?_, ?_⟩
+              refine ⟨key, label, w, opened, v.1.toList, v.2.1.toList, v.2.2.2.1.toList, v.2.2.2.2.toList, _, ξs, hc, hw, hop, hrc,
+                ?_, ?_, ?_⟩
+              · unfold roundsIn
+                simp only [bind, Except.bind, pure, Except.pure, hop]
+                split
+                · rename_i hx; cases hx.symm.trans hfor
+                · rename_i hx; cases hx.symm.trans hfor; rfl
               · intro x hx what hs hxs
                 obtain ⟨r, hr⟩ := loop_each (fun x r hr => by
                     repeat' split at hr
@@ -1799,7 +1918,7 @@ theorem session0_coins {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.
             ∃ l : List Bool, uses[j + 1]? = some d.1 ∧ ξs[j + 1]? = some (PlayDevice.bytesOfBits l) ∧
               d.2 = Array.ofFn fun i : Fin d.2.size =>
                 FlockLevel3.GF128.val (coinF128s d.2.size (fun t => l.getD t.val false) i) := by
-  obtain ⟨key, label, w, opened, uses, wants, order, groups, coins, ξs, hc, hw, hop, hrc, hmis, hS⟩ :=
+  obtain ⟨key, label, w, opened, uses, wants, order, groups, coins, ξs, hc, hw, hop, hrc, -, hmis, hS⟩ :=
     SampledProofs.OneStageZk.roundsWhy_spec h
   have hS0 := hS s0 rest hs0
   unfold SampledProofs.OneStageZk.Session0 at hS0
