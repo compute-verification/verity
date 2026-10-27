@@ -15,6 +15,10 @@ import Mathlib.Algebra.BigOperators.Field
   with probability at most `x ^ M`, for `x ≤ 1`. It is `FlockSoundness.Audit.Law.horizon_escape`'s induction on the
   period's game tree: sampling block `i`'s weight is fixed by the strategy that plays it, before its coins.
 
+* `period_unionE`: `period_union` against bounds `ε i + f i τ` that read the strategy: the sum gains `f`'s expectation
+  at the strategy that plays each sampling block (`periodE`). `expect_compTo` is that expectation as a game's: a game
+  played after the period's sampling blocks up to one (`compTo`).
+
 Both are inductions on the sampling blocks; within a sampling block, `value_runBind_le_add` and `value_runBind_le_mul`
 take the sampling block's own probability out of the run, with the rest of the period bounded at every end of the
 sampling block.
@@ -412,7 +416,7 @@ theorem expect_compTo {γ : Type} (G : (i : ℕ) → Game (β i)) (F : γ → �
         periodE G (fun j τ => expect F (K j τ) (KS j τ)) d i T s
   | _, _, 0, h, _ => absurd h (Nat.not_lt_zero _)
   | 0, _, _ + 1, _, _ => rfl
-  | d + 1, i, T + 1, h, s =>
+  | d + 1, i, T + 1, _, s =>
       (expect_runBind F _ _ _ (G i) s).trans
         (endsE_congr (fun _ s' => expect_compTo G F K KS d (i + 1) T _ s') (G i) s)
 
