@@ -172,7 +172,7 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
-from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402, F401
+from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
