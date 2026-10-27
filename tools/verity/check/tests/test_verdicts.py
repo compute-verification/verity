@@ -81,6 +81,16 @@ def test_a_pack_carries_the_verdicts_and_nothing_else_and_never_replaces_an_entr
     assert not (b["check"] / "lean-deps").exists() and not (b["tests"] / "durations.json").exists()
 
 
+def test_an_import_of_one_part_takes_only_its_entries(tmp_path, monkeypatch):
+    """`check.py --no-cache --circuit-cache` (drive's after-landing run) imports circuit-check's entries of a pack alone, so no
+    suite, Lean or step pass it carries is here for a step to reuse."""
+    _fill(_machine(tmp_path, monkeypatch, "a"))
+    V.export(pack := tmp_path / "pack.tar.gz")
+    _machine(tmp_path, monkeypatch, "b")
+    assert V.import_(pack, "check/circuit-check/") == (1, 0)
+    assert sorted(V.entries()) == ["check/circuit-check/v1/d/e1.json"]
+
+
 def test_the_lean_build_trees_are_never_walked(tmp_path, monkeypatch):
     """A recorded check snapshots and exports the caches around its steps, and a Lean build tree holds a package's whole
     dependency copy (some 170k files); its `.json` files (records, `lake-manifest.json`, `links.json`) were packed as verdicts

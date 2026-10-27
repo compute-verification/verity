@@ -101,11 +101,12 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 _VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.silicon (and verity) from the shipped tree
-for _src in (_VERITY_SRC, _VERITY_SRC / "catalog"):
+for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 import k32  # noqa: E402
 import model5  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 MAX_TILES_PER_CALL = 1 << 14
 
@@ -348,7 +349,7 @@ class Probe:
         return {"device": name.value.decode(), "compute_capability": f"{major.value}.{minor.value}",
                 "nvidia_smi": smi.stdout.strip() if smi.returncode == 0 else None,
                 "driver": fields[1] if len(fields) > 1 else None, "gpu_uuid": cuda_uuid or (fields[3] if len(fields) > 3 else None),
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES,
                 "hostname": platform.node(), "has_mxf4": bool(self.lib.has_mxf4()), "backend": "tcgen05" if self.tcgen05 else "mma.sync"}
 
     def clocks(self, uuid: str | None) -> dict | None:
@@ -1233,7 +1234,7 @@ class FakeProbe:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "nvidia_smi": None, "driver": None,
-                "gpu_uuid": "GPU-fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "hostname": platform.node(),
+                "gpu_uuid": "GPU-fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES, "hostname": platform.node(),
                 "has_mxf4": True, "backend": "fake"}
 
     def clocks(self, uuid):
@@ -1509,7 +1510,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--chain2 is a tcgen05 option")
     if args.chain < 1 or (args.chain > 1 and instr not in ROW_KIND):
         ap.error("--chain L (L >= 2) is for the mma.sync rows " + ", ".join(sorted(ROW_KIND)))
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
     if args.sass_only:
         args.sass_check = True
@@ -1766,7 +1767,7 @@ def main(argv: list[str] | None = None) -> int:
     results["failures"] = failures
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         agree = {}
         first_mism: list = []

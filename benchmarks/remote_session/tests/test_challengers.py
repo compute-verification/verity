@@ -7,8 +7,8 @@ for the same window and a challenger whose commitment isn't the open's are each 
 verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
 complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
 its verifier, at the commit its host run recorded, on the auditor's first-parent list of main, it and its period closed
-complete, the Lean accepted it, the host's pins log its open sealed records its pin, a commit on that list too
-(RT4-INT-40, CMP-74), and the verifier bound the store to the model, reporting filler held beside weights held. The
+complete, the Lean accepted it, the host's pins log its open sealed records its pin, a commit on that list too, and
+the verifier bound the store to the model, reporting filler held beside weights held. The
 peer a gate session's ledger entries must carry is the one the run's record names."""
 from __future__ import annotations
 
@@ -290,7 +290,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         (tmp_path / "served").mkdir()
         source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", python=str(python))
     pace = verifier.pace_of("1:4:160:2", 1.0)
-    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source, verdict="python",
+    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
     w = honest["windows"]
     end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
@@ -318,8 +318,8 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
     got = {}
     pace = verifier.pace_of("1:4:160:2", 1.0)
     sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")),
-                               challenger=host.gate(out / "challenger", peer=peer), verdict="python",
-                               defer_openings=defer_openings, groups_per_coin=groups_per_coin,
+                               challenger=host.gate(out / "challenger", peer=peer), defer_openings=defer_openings,
+                               groups_per_coin=groups_per_coin,
                                then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     return sessions, got["reg"], desc
 
