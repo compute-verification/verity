@@ -321,6 +321,8 @@ class Window:
             return ports + ("r",) if t == "ScaledMmS8ResidualCoordinateRows_v1" else ports
         if t == "PvRow_v1":
             return ("p",) + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
+        if t == "QkSoftmaxPvPad_v1":
+            return ("q", "k") + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
         return {"EmbeddingCoordinate_v1": ("tok", "col", "pos"), "RmsSumSqChunks_v1": ("x",),
                 "RmsNormOutSums_v1": ("x", "w", "s"), "RowAbsMax_v1": ("x",), "QuantChunkS8_v1": ("x", "amax"),
                 "RmsNormAbsMax_v1": ("x", "w", "s"), "RmsNormQuantChunk_v1": ("x", "w", "s", "amax"),
@@ -393,7 +395,7 @@ class Window:
             if port.startswith("wrow"):
                 return self._registered(u.name, k * i + r * q, k * i + (r + 1) * q)
             return seg(qop, r * q, (r + 1) * q)
-        if t in ("QkSoftmaxRowPad_v1", "PvRow_v1"):
+        if t in ("QkSoftmaxRowPad_v1", "PvRow_v1", "QkSoftmaxPvPad_v1"):
             layer, d = u.table.split(".")[0], self.shape.head_dim
             if port == "n":
                 return (Run("n"),)
