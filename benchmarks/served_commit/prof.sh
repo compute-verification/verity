@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One served_commit sweep with the measurement arms of prof_arm.py (ARMS, default stock + the rows-sha512 arm; the
+# One served_commit sweep of the spec SPEC with the measurement arms of prof_arm.py (ARMS, default stock + the rows-sha512 arm; the
 # vllm-v1 arms refuse to run: arm.py), under nsys
 # when NSYS=1 (then nsys_summary.py over the last profiled run of each arm, or over every run with NSYS_EACH=1). Measurement only.
 # PIN_BUILD=<served-match's build.json>: every arm's process compiles into one fresh Inductor dir seeded with the Build of record's
@@ -47,7 +47,7 @@ for a in ${ARMS//,/ }; do
     served-commit-noretain) mods+=(--arm-module served_commit.arm:SERVED_COMMIT_NORETAIN);;
   esac
 done
-bench=("$VENV/bin/python" -m verity_bench vllm --preset "${SPEC:-llama32-1b-bf16-h200-served}" --out "$OUT/bench" --arms "$ARMS" "${mods[@]}"
+bench=("$VENV/bin/python" -m verity_bench vllm --preset "${SPEC:?SPEC names a served spec, e.g. llama32-1b-bf16-rtx-served-arm}" --out "$OUT/bench" --arms "$ARMS" "${mods[@]}"
        --sweep "${SWEEP:-b32}" --reps "${REPS:-1}")
 if [ "${NSYS:-1}" = 1 ]; then
   nsys profile -t cuda,nvtx -s none --cpuctxsw=none --cuda-graph-trace=node --trace-fork-before-exec=true -f true -o "$OUT/served" \
