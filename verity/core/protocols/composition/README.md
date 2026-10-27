@@ -84,7 +84,7 @@ a `[[require]]` of each product, keeping each list in the order of its ids (`ord
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
 own difftest or its period hook. Every component of both products is ported. Onsite's registration check is NCI's
-(`NciCheck.Protocol.protocol`, `nci_check`, `../network/nci/lean`, `verity/nci/v1`: the declaration's isolation units
+(`NciCheck.Protocol.protocol`, `nci_check`, `../network/nci/lean`, `verity/nci/v1`: the declaration's isolation blocks
 each read at most `α` novel bits per gate); the trial's reconciling is not a component yet.
 
 ## The difftest

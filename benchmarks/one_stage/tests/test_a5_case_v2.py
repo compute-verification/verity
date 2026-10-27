@@ -95,8 +95,5 @@ def test_case_with_form_names_the_form_in_the_params_and_the_evidence(RP):
     assert got["evidence"] == RP.DT.canonical(evidence | {"form": "one-stage"}).encode().hex()
     assert json.loads(bytes.fromhex(a5.case_with_form(case, "recursive")["evidence"]))["form"] == "recursive"
     for bad in ({**case, "params": {"form": "x"}}, {**case, "evidence": RP.DT.canonical([1]).encode().hex()}):
-        try:
+        with pytest.raises(ValueError):
             a5.case_with_form(bad)
-        except ValueError:
-            continue
-        raise AssertionError(f"case_with_form accepted {bad}")

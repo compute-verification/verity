@@ -8,28 +8,28 @@ every machine of a census deployment, the pooled total first and the per-window 
 - `verity_all_protocols/monitoring.py`: the monitoring-period report (`$OUT/monitoring-period.json`). A monitoring period
   of a deployment (`benchmarks/census/deployments.json`: its machines and window length, stated parameters) is
   `T = machines × ⌊period/window⌋` windows, each on its own live draw of `kd` of its `n` units (`q = kd/n`).
-  - Pooled (the result): `IntegrityHorizon` (#4358; its sampling core `horizon_escape_log`, #4350). If every window is
+  - Pooled (the result): `IntegrityHorizon` (its sampling core `horizon_escape_log`). If every window is
     accepted, the period's faulty proof blocks total fewer than `ln(1/δ)/q`, except with probability `δ + Σ_t (ε_ks,t + δ_link,t)`.
     At k = 64 of n = 1024 that is at most 73 units at δ = 1% and 221 at 10⁻⁶, whatever `T` is.
-  - Per window (beside it): `IntegrityPeriod` (#4358) at `δ/T` a window, the exact hypergeometric threshold.
+  - Per window (beside it): `IntegrityPeriod` at `δ/T` a window, the exact hypergeometric threshold.
   - Proved: each window's verdict, by the Lean verifier of record. Scaled: the number of windows, and that every window
     is audited as the run's are. The run doesn't compute `ε_ks` or `δ_link`, so each figure names that term.
   - PoUS, the bandwidth audit and the network certifier pool from the run's own answers over the same `T`, when they
     report. PoUS's is a count: its shortness reads each window's own coins, so the period certifies at least `T − M + 1`
-    windows at each δ, by `pooledShort`'s Chernoff form at `p` the windows' `eps` (#4418, given `FixedBefore`; #4413).
+    windows at each δ, by `pooledShort`'s Chernoff form at `p` the windows' `eps` (given `FixedBefore`).
     The bandwidth audit fails with probability `T · eps`, not `eps`. The network certifier pays each window's own
     terms of its itemized K every window and the faulty proof blocks once, `⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))` bits
-    (`HorizonLeakAccepted`, #4367, conditional on its per-window inputs until they are discharged).
+    (`HorizonLeakAccepted`, conditional on its per-window inputs until they are discharged).
   - `python -m verity_all_protocols.monitoring A/reports.jsonl B/reports.jsonl` pools windows run on several machines.
   - Communication per machine, beside it: the network certifier's `K` over a week, a month and a year
     (`communication`, `compose.communication`), at δ = 1/100 and 10⁻⁶. Where `resources.communication` pools every
     machine's windows as one sequence, this pools one machine's: each window draws its own live coins, so the faulty
-    proof blocks are paid for once over that machine's windows (`HorizonLeakAccepted`, #4367): `Fmax = ⌈ln(1/δ)/q⌉` with `q`
+    proof blocks are paid for once over that machine's windows (`HorizonLeakAccepted`): `Fmax = ⌈ln(1/δ)/q⌉` with `q`
     the least `k_i/n_i`, `16 · Fmax + ⌈log2 (N + 1)^Fmax⌉` bits for them with `N = Σ n_i`, plus each window's schedule,
     cell, free-input and jitter terms, which add over the period (free inputs dominate while the loop's window registers
     none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. Its `share` is K over the period's output bits,
     16 a unit; `fleet` is the deployment's machines joined by a union bound at δ/machines each (not in Lean); each
-    window's own `K` stands beside it. #4367 is conditional on two per-window inputs not yet discharged (proofs' `SampledKSLive`
+    window's own `K` stands beside it. `HorizonLeakAccepted` is conditional on two per-window inputs not yet discharged (proofs' `SampledKSLive`
     and the live `SampledLeakAccepted`), so this K is cited as conditional.
 - `verity_all_protocols/table.py`: the protocols (`TABLE`) and the one subprotocol interface. A subprotocol is
   `legs/<component>.py` defining `leg(period_dir, node, out) -> dict`. `period_dir` is the window's loop records (the
@@ -42,12 +42,8 @@ every machine of a census deployment, the pooled total first and the per-window 
 - `legs/sampled_proofs.py`: sampled proofs, real. `benchmarks/prove_path/records_audit.py` on the window, from its records
   alone, at k = 64 and δ = 1/100 by default: live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of
   record's audit record, turned into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`). It also hands on
-  `sampled-proofs.case.json`, onsite's sampled proofs case (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`)
-  in its one-stage form, the one `SampledProofs.OneStageZk` reads (one-stage v2, the audit on the proofs themselves:
-  written by `benchmarks/one_stage/a5.py`, `case_with_form` naming the form, its `blobs` the session's files, which `onsite
-  check` reads after the evidence). v2 verifies one table's `--zk` sessions, so a window of several drawn members or of
-  plain sessions has none (`case-check.json`'s `v2_error`) and onsite rejects integrity there. The v1 case stays beside
-  it (`sampled-proofs.v1.case.json`), with whether `OneStage.check`'s Python on it gives the subprotocol's verdict.
+  `sampled-proofs.case.json`, the case `SampledProofs.OneStage` reads (written by `benchmarks/one_stage/a5.py`), with
+  whether `OneStage.check`'s Python on it gives the subprotocol's verdict (`case-check.json`).
 - `verity_all_protocols/compose.py`: the composed verdict. A rejecting subprotocol rejects it (onsite's reject dominance). It is
   `pending-ports` while a subprotocol is missing or has no case, or any of onsite's components (read from `CoreOnsite.lean`) is
   still a stub, since a stub answers for itself, not for the protocol. Once all of them are ports, `onsite check` decides
@@ -81,8 +77,8 @@ every machine of a census deployment, the pooled total first and the per-window 
   `$OUT/warden-session/`. Its link-window 0 is proved by the scan (`scan_zk.py prove --warden-run --draw`), and a period
   whose every link-window has a scan answer is decided in certifier/v0's rows form; a later period waits on
   `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them. `block_leg`
-  turns a period's accepted answer of either path into the block record's `certifier` entry (`verity/block-record/v1`,
-  CMP-95 item 6), the one shape a loop's run and the H200 fallback write.
+  turns a period's accepted answer of either path into the block record's `certifier` entry (`verity/block-record/v1`),
+  the one shape a loop's run and the H200 fallback write.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and
   one `ALLP` line per window, led by the monitoring period. Outer proofs go through the firewall one at a time, one
   firewalled session on the run whichever window it belongs to, so the windows are audited one after another and each
