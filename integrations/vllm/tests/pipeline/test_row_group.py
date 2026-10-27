@@ -109,7 +109,7 @@ def test_the_lead_refuses_by_name_a_group_it_cannot_run(tmp_path):
                         (lambda r: setattr(r.ck_, "replay_deferred", "0"), "--replay-deferred"),
                         (lambda r: setattr(r.ck_, "hot_engine", "1"), "--hot-engine 1"),
                         (lambda r: setattr(r.ck_, "serving_rows", "p.json"), "--serving-rows"),
-                        (lambda r: setattr(r, "protocols", ("pouw:ncp", "sampled-proofs:vllm-v1")), "protocol options")]:
+                        (lambda r: setattr(r, "protocols", ("pouw:ncp", "sampled-proofs:rows-sha512")), "protocol options")]:
         r = Fake(tmp_path, "a")
         change(r)
         assert why in RG.refusal(r)
