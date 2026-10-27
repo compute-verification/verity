@@ -919,7 +919,7 @@ severity = "open"
 envelope = "collective"
 pipe = "collective"
 words = [64, 1]
-argument = "on sm_120 MATCH.ANY and REDUX share a unit at 0.5 warp instructions a SM-clock and VOTE spends 16 alu lanes; no H200 run measures them (match.cu and collective.cu on sm_90a wait on the coordinator's OK for an H200)"
+argument = "on sm_120 MATCH.ANY and REDUX share a unit at 0.5 warp instructions a SM-clock and VOTE spends 16 alu lanes; no H200 run measures them: match.cu and collective.cu build and gate for sm_90a (r20261027-022612-3c62, 32 probes), and their timing (`../dc/emp.sh time`, collective_verdict.py) waits on an H200"
 source = "census REDUX (sm_90: issue rows only)"
 
 [[row]]
