@@ -88,6 +88,22 @@ def test_the_no_fold_step_takes_a_served_calls_per_call_weight_side_and_a_filler
             "gamma_u 0.256 against wgmma's 3.06 s, gamma_lt 3.000 against cuBLASLt's 0.261 s") in out
 
 
+def test_the_no_fold_step_is_against_the_lines_own_wgmma_linear(tmp_path, capsys, monkeypatch):
+    """A -DV31_WG build's served lines time wgmma.linear (`wgl`): the 8B step's gamma_u is against its step from them."""
+    calls = h200_step.MODELS["8b"]
+    lines = [json.loads(_fill_line(n, k, True)) for n, k in calls]
+    for x in lines:
+        x["arms"]["wgl"] = {"ms": 1.2, "mhz": 1980}
+    f = tmp_path / "fill-bench-served1-gemm1-rp4.jsonl"
+    f.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    st = h200_step.fill_steps(h200_step.rows([str(f)]), calls=calls)
+    assert st[(256, 4096, 16384, True, "served1-gemm1-rp4")]["s"]["wgl"] == pytest.approx(128 * 1.2e-3)
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
+    assert h200_step.main() == 0
+    assert ("summary: 8b no-fold served L 4096 L' 256 row 16384 served1-gemm1-rp4: step 0.384 s (ovl_w), gamma_u 2.500 "
+            "against wgmma.linear's 0.154 s (these lines' wgl), gamma_lt 3.000 against cuBLASLt's 0.128 s") in capsys.readouterr().out
+
+
 def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, capsys):
     """h200_pipes.py: a pipe's busy time is its share of peak over the kernel's elapsed cycles (active / elapsed scales
     it) times the kernel's duration (in ncu's unit, refused when it's none it knows), the larger of its issue and
