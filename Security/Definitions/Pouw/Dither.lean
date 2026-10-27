@@ -15,7 +15,7 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
 * **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
   commitment (the SHA-512 Merkle root over the words' leaves), and the check, parametric in the protocol (R-ACCEL-2),
   with the no-fold protocol as one instance (`NoFold`, `noFoldRound`) whose knobs are parameters, so protocol v1 and
-  v2 are instances;
+  v2 are instances, and the served sampling block, checked where its selection coin picks it (`ditherSelected`);
 * **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
   `SAKMatmul`, `ShaSpeed`), in units of priced cost, outside a degenerate set of dithers;
@@ -134,7 +134,8 @@ of the words the commitment binds (`ExtractAdv` links them).
 * `commit o T` is the honest commitment, the Merkle root over `T`'s leaves; no premise asks a prover to compute it for
   every `T` (W1).
 * The round's check may select no cell: a round is checked independently with a live Bernoulli coin inside `Chk`, at a
-  probability set from its public shape (RT-PROTO-2 P15, P20), and `ok` and `opens` hold where it isn't selected.
+  probability set from its public shape (RT-PROTO-2 P15, P20), and `ok` and `opens` hold where it isn't selected
+  (`ditherSelected`, the served design; `noFoldRound` checks its cells on every coin).
 
 The commitment's hash is the random oracle `Orc` (a uniform table: SHA-512 as a random oracle, the named use pending
 Daniel), which `commit`, `opens` and `accept` read. The proof layer (C-Flock's proofs of the opened words) is the
@@ -218,6 +219,26 @@ def noFoldRound (k : NoFold) : RoundProto where
 /-- **The honest words**: every segment prefix sum of the noised product. -/
 def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
   fun i j b => noFoldWord k (k.noise a d) i j b
+
+/-- **The served Dither sampling block: selected or not** (RT-PROTO-2 P15, P20; SAK-LB F2). The no-fold round at its
+knobs `k`, its check coin carrying a selection coin `Sel` beside the cells' coin: the block is checked where its
+selection coin is `picked`, with probability `π = Pr[picked]`, and then on the `s` cells its cells' coin selects, as
+in `noFoldRound`; where it isn't picked, `ok`, `opens` and `accept` hold with no cell checked. The selection is decided
+by the check coin, issued after the block's commitment, so `WorkSound`'s `sel` is `picked` of its first part, and an
+unselected block is never answered. `π` is one probability for the period's blocks, which share the knobs' shape
+(`n`, `n'`, `nb`, `L`, `s`), so a probability proportional to a block's public cost is one `π` here. -/
+def ditherSelected (k : NoFold) (Sel : Type) [Fintype Sel] (picked : Sel → Prop) : RoundProto where
+  Inst := (noFoldRound k).Inst
+  Draw := k.Draw
+  Chk := Sel × k.Chk
+  Orc := k.Orc
+  Tr := (noFoldRound k).Tr
+  Root := k.Root
+  commit := k.merkle
+  ok a d c T := picked c.1 → (noFoldRound k).ok a d c.2 T
+  opens o r c T := picked c.1 → (noFoldRound k).opens o r c.2 T
+  Ans := (noFoldRound k).Ans
+  accept o a d c r y := picked c.1 → (noFoldRound k).accept o a d c.2 r y
 
 end Round
 

@@ -77,7 +77,8 @@ structured), so the premise needs `η · pub ≤ π s (1 − p)`, `π` the sampl
 (RT-PROTO-2 P15, P20) and `s` its checked cells. That is necessary only against small skipped fractions: for `s ≥ 2`,
 skipping the whole sampling block binds first. The sufficient condition is `η · pub ≤ π` (`Pouw.SakLb.rate_bern`),
 sharp at `−log(1 − π (1 − p^s))` (`rate_bern_sharp`, at `p = 0`: past `−log(1 − π)` a program that skips the block
-wins). -/
+wins). On the served block, selected or not (`ditherSelected`), the premise follows from `Pouw.SakLb.SAKResidual` at
+that rate (`Pouw.SakLb.sakMatmul_of_residual_bern`). -/
 def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Inst) (pub η : P.Inst → ℝ)
     (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →

@@ -71,7 +71,9 @@ their commit phases and work) with
 
 The rate `η`, per priced cost, is one rate for every sampling block (RT-PROTO-2 P15, P20): a block selected by a
 Bernoulli coin at a probability proportional to its public cost meets its premises at `η = q/C` at `q` checks, so
-the luck term is `ln(1/δ)/q`. The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the
+the luck term is `ln(1/δ)/q`. The served block is `ditherSelected` (its check coin carries the selection), with
+`sel` its selection; there SAK(matmul) at this rate follows from `Pouw.SakLb.SAKResidual` at the luck allowance
+`lam_w` once `η H_w / H_mm,w · (pub_mm,w + lam_w) ≤ π` (`Pouw.SakLb.workSound_sakMatmul_selected`). The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the
 honest kernel and hashing are the public best), the honest work that is neither (no lower bound, full weight), the
 sampling luck (`ε_skip`'s at `δ_coin = δ`), the exchanged bits, and the walk and log the extraction adds.
 
