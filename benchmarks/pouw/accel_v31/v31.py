@@ -579,7 +579,7 @@ def verdict(sh: Shape, ch: StubChallenger, call: int, prover: Prover, q: int) ->
 # min(s L, K) inner indices) mod 2^16 at L of the prover's choosing, and a served call's O = (A + d_A)(B + d_B)^T mod 2^32.
 # A served call (`Fill.o`) commits T_1 .. T_{S-1} and O (T_S is implied by O; at L >= K, O alone) under SERVED_TAG, A the
 # call's activations and its seeds from the challenger's raw coin after the operand roots (dither.seeds); a filler call
-# commits T_1 .. T_S under FILL_TAG, A the per-call pad and its seeds from its live coin after its window's salt
+# commits T_1 .. T_S under FILL_TAG, A the per-call pad and its seeds from its live coin after its period's salt
 # (dither.fill_seeds). Per tile, its tile-segments' prefix sums (u16, 32 KiB each), then its O (u32, 64 KiB), cells row-major, in
 # leaf rows under dither.Shape.domain; leaf pos of a call at salt offset off is salted prf_salt(Ks, off + pos).
 SERVED_TAG = "verity/pouw/dither/call/v1"
@@ -696,9 +696,9 @@ def served_seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
 
 
 def fill_seeds(salt: bytes, coin: bytes) -> dict[str, bytes]:
-    """dither.fill_seeds: a filler call's seeds from its live coin `coin`, in the window whose salt is `salt`."""
+    """dither.fill_seeds: a filler call's seeds from its live coin `coin`, in the period whose salt is `salt`."""
     if len(salt) != 64 or len(coin) != 64:
-        raise ValueError("the window's salt and the call's coin are 64-byte digests")
+        raise ValueError("the period's salt and the call's coin are 64-byte digests")
     head = FILL_SEEDS_TAG + salt + coin
     return {x: hashlib.sha512(head + _x(x)).digest() for x in FILL_STREAMS}
 
@@ -1139,7 +1139,7 @@ def cmd_params(a: argparse.Namespace) -> int:
     return 0
 
 
-# D6 v1.1's predictions (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef), RTX PRO 6000, v3.1 at
+# D6 v1.1's predictions (the number table verity/core/protocols/pouw/dither/PROTOCOL.md cites), RTX PRO 6000, v3.1 at
 # L' 256, t 3, m 8192, overlapped as served: (K, N) -> (model, gamma). V4's 7168 x 64 and the F32 mHC 28672 x 24 aren't
 # 128-column tiles and are left out here.
 D6 = {
@@ -1219,7 +1219,7 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     """`v31 once` under V31_ONCE_OVL in Nsight Systems (its `nsys stats -r cuda_gpu_trace` CSV): each kernel's time in the
     second serial call and its median over the steady overlapped calls (each one's compute beside the previous call's
     commit, the first overlapped call's left out), with the share of it that ran beside the other stream; the steady
-    period (GEMM end to GEMM end); and the steady window's time with compute alone, the commit alone, both, and neither.
+    period (GEMM end to GEMM end); and the steady calls' time with compute alone, the commit alone, both, and neither.
     The GEMM is the kernel whose name --gemm matches (cuBLASLt's under V31_LTW), and it counts the calls. A kernel's k-th
     launch belongs to call k // (its launches / the calls); a compute kernel launched in some calls only (`v31 fill-once`'s
     weight side, formed once a period) to the call whose GEMM comes next. --from NAME drops what ran before NAME's first
@@ -1292,7 +1292,7 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     comp, comm = sum(e - s for s, e in cs), sum(e - s for s, e in ms)
     both = sum(covered(ms, s, e) for s, e in cs)
     win = w1 - w0
-    print(f"steady window {win / 1e6:.3f} ms: compute alone {(comp - both) / win:.1%}, commit alone {(comm - both) / win:.1%}, "
+    print(f"steady calls {win / 1e6:.3f} ms: compute alone {(comp - both) / win:.1%}, commit alone {(comm - both) / win:.1%}, "
           f"both {both / win:.1%}, neither {(win - comp - comm + both) / win:.1%}")
     return 0
 

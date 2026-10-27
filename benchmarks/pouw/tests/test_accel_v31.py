@@ -185,7 +185,7 @@ def test_timeline_splits_calls_and_measures_the_overlap(tmp_path, capsys):
     assert "| gemm_kernel<true> | ? x ?, ? regs, 0 KB | 1 | 20.000 | 25.000 | 1.25 |" in out
     assert "| leaf_persist<V31Row> | ? x ?, ? regs, 0 KB | 1 | 30.000 | 40.000 | 1.33 | 68% |" in out
     assert "steady period (GEMM end to GEMM end): median 40.000 ms, 40.000, 40.000, 40.000" in out
-    assert "steady window 120.000 ms: compute alone 0.0%, commit alone 4.2%, both 95.8%, neither 0.0%" in out
+    assert "steady calls 120.000 ms: compute alone 0.0%, commit alone 4.2%, both 95.8%, neither 0.0%" in out
 
 
 def test_timeline_of_fill_once_under_ltw(tmp_path, capsys):
@@ -224,7 +224,7 @@ def test_timeline_of_fill_once_under_ltw(tmp_path, capsys):
     assert "| bits_kernel | 1 x 128, 32 regs, 0 KB | 1 | 1.000 | 1.000 | 1.00 |" in out
     assert "fill_b_kernel" not in out
     assert "serial call: 19.000 ms; steady period (GEMM end to GEMM end): median 14.000 ms, 14.000, 14.000, 14.000" in out
-    assert "steady window 42.000 ms: compute alone 50.0%, commit alone 0.0%, both 50.0%, neither 0.0%" in out
+    assert "steady calls 42.000 ms: compute alone 50.0%, commit alone 0.0%, both 50.0%, neither 0.0%" in out
     assert v31.main(["v31", "timeline", str(tmp_path / "t.csv"), "--gemm", "gemm", "--from", "wrap4_kernel"]) == 2
     capsys.readouterr()
 

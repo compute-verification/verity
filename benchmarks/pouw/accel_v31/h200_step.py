@@ -122,7 +122,7 @@ def main() -> int:
         if not st:
             continue
         found, ref = True, wg.get(model)
-        print(f"\n{model}, Dither's no-fold call\n\n| L' | L | ROW | unit | variant | step s | arm | gamma_u | gamma_lt | "
+        print(f"\n{model}, Dither's no-fold call\n\n| L' | L | ROW | kind | variant | step s | arm | gamma_u | gamma_lt | "
               "ovl s | ovl_w s | ovl_pad s | call s | tensor s | hashing s | other s | hashing share | cuBLASLt s | "
               "residual | SM MHz |")
         print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
