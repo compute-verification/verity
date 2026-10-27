@@ -10,7 +10,7 @@ banded arm's gate holds it to CA's banded reference itself (#2866, `banded.bande
                          (j10rtx.BandH1R), the CPU units' rows from their band leader's seed_j (j10b_ref.rows_of: in
                          dither_one.h1v3_unit and hb_peel.peel_cpu), and CA's banded_reference on the same units in place
                          of H1V3's tree (per-unit noise, which a non-leader doesn't use; CA's reference at G = 1 is it).
-    dither-a-hbk*-bG     (H200, B200) a dither-a arm on the hbk unit (ASK-71's option A, labelled by `forms.form_of`: beside) with
+    dither-a-hbk*-bG     (H200, B200) a dither-a arm on the hbk unit (option A, labelled by `forms.form_of`: beside) with
                          kh_one_band at G in its side unit's kh_one place, from the same .so. Gated as its base
                          (dither_a.check: commitments, z = int_mm, y, the no-write control and the fault), with the
                          same three swaps in dither_a's check: h1r_launch_band at G, leader rows, CA's banded_reference.

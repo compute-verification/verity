@@ -47,6 +47,7 @@ runs/
 **/.lake/
 
 # Fetched fixtures: registered in fixtures/artifacts.json, fetched by `research data fetch-fixtures` (store README §7.3)
+verity/ml/commitments/tests/fixtures/layouts
 benchmarks/nci/sources
 archive/direct/fixtures/crosscheck_units.json
 verity/ml/flock/tests/fixtures/f1-gate
@@ -59,6 +60,13 @@ verity/ml/flock/tests/fixtures/rec-c3-inner
 verity/ml/flock/tests/fixtures/rec-coins
 verity/ml/flock/tests/fixtures/zk-sessions
 integrations/vllm/tests/protocols/fixtures/challenger_periods
+benchmarks/network_e2e/encodings/tests/fixtures
+benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl
+benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
+verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json
+verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
+verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json
+verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json
 archive/gkr/fixtures/babybear-transcripts/transcript_vu4.json
 archive/gkr/fixtures/babybear-transcripts/transcript_vu64.json
 archive/gkr/fixtures/v2_synth/circuit.txt
@@ -125,10 +133,9 @@ fixtures/lean-vectors
 fixtures/redteam-v2/gkr
 verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
-integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy
-integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/out_q.npy
-integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/in_q.npy
-integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/out_q.npy
+integrations/vllm/data/logs/m1.jsonl.gz
+integrations/vllm/data/logs/m6/log.jsonl.gz
+integrations/vllm/tests/regression/files.toml
 integrations/vllm/tests/program/data/topp_split_fixture/fixture.npz
 integrations/vllm/tests/program/data/topp_split_fixture/fstoch01_rows.npz
 integrations/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json

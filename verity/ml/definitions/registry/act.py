@@ -3,7 +3,7 @@
   _C.silu_and_mul   act_and_mul_kernel<bf16, silu_kernel>   ->  SiluMul_v2{I} over SiluMulBf16_v2
   aten.gelu (erf)   torch's GeluCUDAKernelImpl              ->  GeluErf_v1{N} over GeluErfBf16_v1
 
-PROMOTED from `verity_vllm.program.quarantine.act` (the X-08 pattern): each Definition below is the quarantine module's
+PROMOTED from `verity_vllm.program.quarantine.act`: each Definition below is the quarantine module's
 body VERBATIM — same name, same version, same gates — so its specialization ids are the quarantine's. The quarantine modules
 re-export these objects (their difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID`s are unchanged). Bound as the `silu_mul` kind
 of the `b1-eager-v3` vocabulary (`frontend/rules/vocab.py`), asked for by `SiluAndMulRule`; `SiluMul_v1` (b1) stays registered,
@@ -15,8 +15,8 @@ the kind of the older vocabularies and of the bodies that call it directly. The 
     silu_kernel(x):  (T)(f / (1.0f + expf(-f)))          f = (float)x; cvt.rn.bf16.f32 (NaN -> 0x7FFF)
     out = (T)(ACT(gate) * ((float)up + beta))           beta = 0.0f: up = -0 enters as +0, identity otherwise
 
-`SiluMulBf16_v1` (prims) is this function except on the words the red-team measured on sm_120 (labels on
-r20260930-092038-7dbc, `silu-edge-cases`):
+`SiluMulBf16_v1` (prims) is this function except on the words measured on sm_120 (the
+`silu-edge-cases` labels):
   * NaN results are 0x7FFF, not 0x7FC0;
   * up = -0 is +0 after `+ beta`, so the product's zero takes the gate's sign (`[g=0x3F80 | u=0x8000]` -> 0x0000);
   * gate -inf is `-inf / (1 + inf)` = NaN, not the limit -0;

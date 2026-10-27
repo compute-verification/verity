@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # J10-R's per-call-noise units (h1u.cu's kh_units_multi_j10r and _sm; PouwH1Tile_v5 / _v6's receipt) on the H200, sm_90a
-# (HASH-21): the served RTX arms built for sm_90a with nothing else changed, and the sm_90a arm (HASH-22):
+# the served RTX arms built for sm_90a with nothing else changed, and the sm_90a arm:
 #   kr        the receipts-only base (job.sh's kr: H1U_KSPLIT = 4, H1K_AUTO, H1K_RONLY)
 #   kra       A: kr + H1U_JCTA, H1U_WARPS = 4, H1U_JX, H1U_JBW
 #   kraq      AQ: kra + H1U_PF, H1U_JPI, H1U_JCS = 2 (H1U_JXS stays off: it stalls under PREQ on the RTX)
