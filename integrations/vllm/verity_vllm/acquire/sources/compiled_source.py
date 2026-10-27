@@ -1,11 +1,11 @@
-"""Graph-replay-safe acquisition for `Execution=compiled` rows (vLLM torch.compile + CUDA graphs, enforce_eager=False).
+"""Graph-replay-safe acquisition for `Execution=compiled` workloads (vLLM torch.compile + CUDA graphs, enforce_eager=False).
 
 Why the eager collector cannot see anything here: vLLM compiles `LlamaModel.forward` with Dynamo `fullgraph=True`
 (`support_torch_compile`) and replays the Inductor-compiled pieces as CUDA graphs.  The committer's module-forward wrappers are installed AFTER
 the model was compiled, so Dynamo's guards were already skipped (`TorchCompileWrapperWithCustomDispatcher`) and the wrappers are never traced;
-during graph replay no Python runs at all.  Result at rc3: 1 of 189 required tensors per step (the sampled ids), Commit FAIL.
+during graph replay no Python runs at all.  The eager collector binds 1 of 189 required tensors per step (the sampled ids): Commit FAIL.
 
-The boundary chosen here (option A of the lane brief: graph-replay-safe taps):
+The boundary chosen here (graph-replay-safe taps):
 
   * `torch.ops.verity.collect_c(x, id)` -- a side-effecting custom op with NO outputs whose body is a device-to-device copy of `x` into a
     preallocated per-(module, invocation) staging slot ("ring").  The op is inserted into the FX graph by wrapping `module.forward` of every
