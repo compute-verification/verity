@@ -48,6 +48,8 @@ commitment opening every gate that isn't a constant to them; the parse's constan
 
 namespace Flock.Bridge
 
+open FlockSoundness.Discharge.ZkLink
+
 /-- **`deltaPub` at the deployment's parameters, plus a term of at most `2^-200`, is the draw's miss plus at most
 `2^-100`** (`deltaPub_le_deployed` with the slack its proof leaves). -/
 theorem deltaPub_add_le_deployed (n kd K₀ W : ℕ) (hW : W ≤ 2 ^ 40) {qF qS t' x : ℝ} (hF0 : 0 ≤ qF)
@@ -83,7 +85,10 @@ theorem rootTerm_le {qS : ℝ} (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) : qS ^ 2 / 
   rw [h513]
   have hq2 : qS ^ 2 ≤ 2 ^ 164 := by nlinarith [mul_le_mul hS hS hS0 (by norm_num : (0 : ℝ) ≤ 2 ^ 82)]
   calc qS ^ 2 / 2 ^ (513 : ℕ) ≤ 2 ^ 164 / 2 ^ (513 : ℕ) := by gcongr
-    _ ≤ 1 / 2 ^ (200 : ℕ) := by norm_num
+    _ = 1 / 2 ^ (349 : ℕ) := by
+      rw [show (513 : ℕ) = 164 + 349 from rfl, pow_add, div_mul_eq_div_div, div_self (by positivity)]
+    _ ≤ 1 / 2 ^ (200 : ℕ) :=
+      one_div_le_one_div_of_le (by positivity) (pow_le_pow_right₀ (by norm_num) (by norm_num))
 
 end Flock.Bridge
 
@@ -135,7 +140,7 @@ theorem deltaPub_root_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Buil
 
 theorem ofReal_add_le_of {a b c : ℝ} (hb : 0 ≤ b) (h : a + b ≤ c) (hbc : b ≤ c) :
     ENNReal.ofReal a + ENNReal.ofReal b ≤ ENNReal.ofReal c := by
-  rcases le_or_lt 0 a with ha | ha
+  rcases le_or_gt 0 a with ha | ha
   · rw [← ENNReal.ofReal_add ha hb]
     exact ENNReal.ofReal_le_ofReal h
   · rw [ENNReal.ofReal_of_nonpos ha.le, zero_add]
