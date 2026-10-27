@@ -687,7 +687,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
     for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
   let digest ← hs.sha512 h
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
-  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (zkRounds m c.kLog regions.size))
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (Flock.zkRounds m c.kLog regions.size))
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
@@ -870,7 +870,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
   let digest ← hs.sha512 h
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
-  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (zkRounds m c.kLog regions.size))
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (Flock.zkRounds m c.kLog regions.size))
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
