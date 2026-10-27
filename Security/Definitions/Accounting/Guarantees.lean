@@ -25,8 +25,9 @@ import Definitions.Accounting.Guarantees.Headline
 import Definitions.Accounting.Guarantees.HeadlineDc
 import Definitions.Accounting.Guarantees.Joint
 import Definitions.Accounting.Guarantees.JointLive
+import Definitions.Accounting.Guarantees.JointLive.Honest
 import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
-import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfRemoteLinePeriod
+import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfRemoteLineLive
 import Definitions.Accounting.Guarantees.Localization
 import Definitions.Accounting.Guarantees.Memory
 import Definitions.Accounting.Guarantees.PerRun

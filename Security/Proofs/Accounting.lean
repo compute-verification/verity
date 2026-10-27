@@ -16,8 +16,8 @@ import Proofs.Accounting.JointBridge.WorkOfCreditedWords
 import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
 import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Proofs.Accounting.JointLive
-import Proofs.Accounting.JointBlocks.Honest
-import Proofs.Accounting.JointBridge.BandwidthOfRemoteLinePeriod
+import Proofs.Accounting.JointLive.Honest
+import Proofs.Accounting.JointBridge.BandwidthOfRemoteLineLive
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Proofs.Accounting.JointBridge.HonestH200
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod

@@ -1,28 +1,26 @@
-import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfRemoteLinePeriod
-import Proofs.Pouw.Prob
+import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfRemoteLineLive
+import Proofs.Core.Game.Prob
 
 /-!
-# Proof that PoUB's per-period guarantee is the remote bandwidth audit's
+# Proof that PoUB's per-period guarantee over the causal game is the remote bandwidth audit's
 
-PoUB's coordinate of the coins is the session's coins (`coin`), so the joint event, PoUB accepting while the bandwidth
-account read fewer than `Q` bits, maps into the session's: the verdict is the session's (`accepts_iff`), and
-`Q ≤ credit ≤ readBits ≤ read` on an accepted period (`cert_le`, `read_le`) unless the line credits more bits than the
-node read. Uniform coins carried by an equivalence keep their probabilities (`Pouw.pr_equiv`).
+On every run of every strategy, PoUB accepting while the bandwidth account read fewer than `Q` bits is the session
+accepting while its line credits more bits read than the node read: the verdict is the session's (`accepts_iff`), and
+`Q ≤ credit` on an accepted run (`cert_le`) while `readBits ≤ read` (`read_le`). The probability is monotone in the
+event (`Verity.Game.prob_mono`).
 -/
 
 namespace Accounting.SecurityProofs.Bridge
 
-open Accounting
+open Accounting Verity.Game
 
-/-- **PoUB's per-period guarantee is the remote bandwidth audit's**
-(`Accounting.Guarantees.Bridge.BandwidthOfRemoteLinePeriod`). -/
-theorem BandwidthOfRemoteLinePeriod : Accounting.Guarantees.Bridge.BandwidthOfRemoteLinePeriod := by
-  intro ι α I _ _ Ω _ d C r c p X _ acc credit readBits δ real hQ ξ
-  refine le_trans (Pouw.pr_mono ?_)
-    ((Pouw.pr_equiv real.coin (fun x => acc ξ x ∧ readBits ξ x < credit ξ x)).le.trans (hQ ξ))
-  rintro y ⟨hacc, hshort⟩
-  have hacc' := (real.accepts_iff ξ y).1 hacc
+/-- **PoUB's per-period guarantee over the causal game is the remote bandwidth audit's**
+(`Accounting.Guarantees.Bridge.BandwidthOfRemoteLineLive`). -/
+theorem BandwidthOfRemoteLineLive : Accounting.Guarantees.Bridge.BandwidthOfRemoteLineLive := by
+  intro ι α _ d C O G r c acc credit readBits err real hQ s
+  refine le_trans (prob_mono (fun o ⟨hacc, hshort⟩ => ?_) G s) (hQ s)
+  have hacc' := (real.accepts_iff o).1 hacc
   refine ⟨hacc', lt_of_not_ge fun hle => hshort ?_⟩
-  exact (real.cert_le ξ y hacc').trans (hle.trans (real.read_le ξ y))
+  exact (real.cert_le o hacc').trans (hle.trans (real.read_le s o))
 
 end Accounting.SecurityProofs.Bridge
