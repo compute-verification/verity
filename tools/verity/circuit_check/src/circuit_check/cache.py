@@ -50,7 +50,8 @@ package an enumerator listed (`targets.load_registries`, the vLLM registry's ``c
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
-own version is the digest of this package's sources less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
+own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
+comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
 peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
 `cli.heavy`) and the known failures (`KNOWN`, which decide only the run's summary).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
@@ -1639,16 +1640,43 @@ def _dist(root: Path, top: str) -> str | None:
         return None
 
 
+class _Prose(ast.NodeTransformer):
+    """A module's AST without its statements that are a string alone (its docstrings among them)."""
+
+    def visit_Expr(self, node: ast.Expr) -> ast.AST | None:
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            return None
+        return self.generic_visit(node)
+
+
+_CODE: dict[bytes, bytes] = {}
+
+
+def _code(p: Path) -> bytes:
+    """A file of the checker as its version holds it: a module by the digest of its AST with every string-alone statement cut
+    (`_Prose`; the AST holds no comment, formatting or line number), so an edit to its prose keeps the version; a file that is
+    no module, or does not parse, by its bytes.  Memoized by the bytes, since `key` reads every file again for each entry."""
+    data = p.read_bytes()
+    if p.suffix != ".py":
+        return data
+    if data not in _CODE:
+        try:
+            _CODE[data] = b"ast:" + hashlib.sha512(ast.dump(_Prose().visit(ast.parse(data))).encode()).digest()
+        except (SyntaxError, ValueError):
+            _CODE[data] = data
+    return _CODE[data]
+
+
 def version() -> str:
-    """The checker's own version: the digest of this package's sources, less `targets.py` and ``pins/`` (each target holds
-    its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
+    """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
+    ``pins/`` (each target holds its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
             if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0])
                     and PINS not in p.parents and KNOWN[1] not in p.parents):
-                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
     finally:
         _INTERNAL.pop()
     return h.hexdigest()
