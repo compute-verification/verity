@@ -158,7 +158,8 @@ def cmd_eval(a) -> int:
                     "windows": part, "arms": a.spec, "plugins": a.plugin or [], "seeds": list(seeds),
                     "out": str(tmp / f"shard{i}"), "device": a.device, "threads": threads}
             (tmp / f"task{i}.json").write_text(json.dumps(task))
-            env = {**os.environ, "CUDA_VISIBLE_DEVICES": devs[i]}
+            env = {**os.environ, "CUDA_VISIBLE_DEVICES": devs[i], "PPL_STREAM_DIR": str(tmp / "stream"),
+                   "PPL_STREAM_READERS": str(len(parts))}
             if threads:
                 env.update({v: str(threads) for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")})
             log = open(out / f"shard{i}.log", "w")
@@ -198,10 +199,16 @@ def merge(a, arms, seeds, wrec, shard_out, nll, seconds, n_gpus) -> dict:
     if g.log["hf_reference"]["checked"] == 0:
         g.record("hf_reference", False, "check window", g.log["hf_reference"].get("skipped", "never compared"))
     passed = g.passed
+    try:
+        import transformers
+        tf_version = transformers.__version__
+    except ImportError:
+        tf_version = None
     res = {"schema": "ppl-bench/v1", "model": a.model, "set": a.set, "ctx": a.ctx, "n_windows": n,
            "windows": [0, n - 1], "scored_tokens": methodology.scored_tokens(a.ctx), "window_digest": wrec["sha256"],
            "seeds": list(seeds), "gates": g.log, "passed": passed, "gpus": n_gpus, "seconds": seconds,
-           "env": {"torch": torch.__version__, "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
+           "env": {"torch": torch.__version__, "transformers": tf_version,
+                   "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
                    "run": os.environ.get("RESEARCH_RUN_ID", "")},
            "arms": {}}
     all_arms = [spec.BF16] + list(arms)

@@ -362,6 +362,37 @@ def test_shards_are_deleted_once_read(hub, glm_snap):
     assert not W.hub.dir.exists()
 
 
+def test_readers_share_one_pull(hub, glm_snap, tmp_path, monkeypatch):
+    """Under PPL_STREAM_DIR (a run's shard processes), two readers pull each shard once, as PPL_STREAM_PARTS byte
+    ranges joined in order, read the same bytes, and the last of PPL_STREAM_READERS done with a shard deletes it."""
+    pin, snap, _ = hub
+    stream.ensure(pin, snap)
+    shared = tmp_path / "shared"
+    for k, v in (("PPL_STREAM_DIR", str(shared)), ("PPL_STREAM_READERS", "2"), ("PPL_STREAM_PARTS", "3")):
+        monkeypatch.setenv(k, v)
+    calls, fake = [], stream.curl
+
+    def curl(src, dst, *flags):
+        calls.append((src.rsplit("/", 1)[1], flags))
+        fake(src, dst, *flags)
+
+    monkeypatch.setattr(stream, "curl", curl)
+    W1, W2 = M.Weights(snap, layers=3), M.Weights(snap, layers=3)
+    fn = min(W1.left)
+    names = [n for n in W1.where if W1.where[n][0] == fn and not n.startswith("model.layers.3.")]
+    a = W1.read(names)
+    assert (shared / fn).is_file()
+    b = W2.read(names)
+    assert not (shared / fn).exists()
+    assert all(torch.equal(a[n], b[n]) for n in names)
+    want = M.Weights(glm_snap).read(names)
+    assert all(torch.equal(a[n], want[n]) for n in names)
+    pieces = [f[1] for name, f in calls if name == fn and f and f[1] != "0-7" and not f[1].startswith("8-")]
+    assert len(pieces) == 3 and pieces[0].startswith("0-")
+    W1.close()
+    W2.close()
+
+
 def test_a_shard_off_its_pin_is_refused(hub, glm_snap):
     pin, snap, _ = hub
     stream.ensure(pin, snap)
