@@ -1616,9 +1616,9 @@ def _repo(tmp_path):
     (repo := tmp_path / "repo").mkdir()
     (repo / "uv.lock").write_text("lock\n")
     (repo / "pyproject.toml").write_text("")
-    env = {**os.environ, "GIT_AUTHOR_DATE": f"@{COMMITTED} +0000", "GIT_COMMITTER_DATE": f"@{COMMITTED} +0000"}
-    subprocess.run("git init -q && git add . && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false "
-                   "commit -qm points", shell=True, cwd=repo, env=env, check=True)
+    dates = f"GIT_AUTHOR_DATE='@{COMMITTED} +0000' GIT_COMMITTER_DATE='@{COMMITTED} +0000'"
+    subprocess.run(f"git init -q && git add . && {dates} git -c user.name=t -c user.email=t@example.com "
+                   "-c commit.gpgsign=false commit -qm points", shell=True, cwd=repo, check=True)
     return repo, subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
 
 
@@ -1678,7 +1678,7 @@ def _stores(tmp_path, remote_attempts):
 
 
 def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tmp_path):
-    """BENCH-10: the lookup read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
+    """The lookup once read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
     have launched them again). It pulls the remote's attempts since the commit, once, and nothing older."""
 
     from research.store.local import LocalStore
