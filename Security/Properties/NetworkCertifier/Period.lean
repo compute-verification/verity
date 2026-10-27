@@ -147,4 +147,17 @@ def PeriodAcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     protocol.check p c e = .accept pub prof → PeriodWindowsAccepted p c e
 
+/-- Audit registration `reg` was proved: its answer `a` is one-stage's for the registration's digest and accepted, with
+a public output holding a `bound` and a profile of one level drawn `subset:k`. -/
+def PeriodAuditProved (reg : Registration) (a : Core.Answer) : Prop :=
+  a.protocol = oneStage ∧ (a.digest == some reg.digest) = true ∧ a.verdict = .accept ∧
+    ∃ pub prof i l k b, a.published = some pub ∧ a.profile = some prof ∧ Core.Integrity.ofJson prof = .ok i ∧
+      i.levels = #[l] ∧ l.draw = some (.subset k) ∧ Flock.J.nat pub "bound" "public" = .ok b
+
+/-- The commitment registers and the evidence answers exactly the parameters' audits, and every one was proved. -/
+def PeriodAuditsProved (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+  c.audits.size = p.audits.size ∧ e.audits.size = p.audits.size ∧
+    ∀ (i : Nat) (reg : Registration) (a : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some a →
+      PeriodAuditProved reg a
+
 end Properties.NetworkCertifier

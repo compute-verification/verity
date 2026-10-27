@@ -6,6 +6,10 @@ import Properties.NetworkCertifier.Period
 `NetworkCheck.Period.check` accepts only when no finding is left (`firstFinding … = none`), so each link-window's
 check of the parameters' form returned `ok`: `windowCheck` in the clock form, `rowsWindowCheck` in the rows form. Each
 returns `ok` only past every refusal, which is `PeriodWindowAccepted` or `PeriodRowsWindowAccepted`.
+
+The converse (`periodAccepts_of`), which the honest instance of the network's component bound reads: a period whose
+link-windows are all accepted in the parameters' form and whose audits were all proved (`PeriodAuditsProved`) is
+accepted, each check passing every refusal in turn.
 -/
 
 open NetworkCheck.Period
@@ -268,5 +272,158 @@ theorem periodAcceptMeans : PeriodAcceptMeans := by
     obtain ⟨_, ha⟩ := Period.findingOf_none h0
     obtain ⟨f, hu⟩ := Period.map_ok ha
     exact Period.rowsWindowCheck_ok hu
+
+namespace Period
+
+theorem answered_of {what : String} {reg : Registration} {a : Core.Answer} {pub prof : Lean.Json}
+    {i : Core.Integrity} (h1 : a.protocol = oneStage) (h2 : (a.digest == some reg.digest) = true)
+    (h3 : a.verdict = .accept) (h4 : a.published = some pub) (h5 : a.profile = some prof)
+    (h6 : Core.Integrity.ofJson prof = .ok i) : answered what reg a = .ok (i, pub) := by
+  simp only [answered, refuse, h1, bne, h2, Bool.not_true, Bool.false_eq_true, ↓reduceIte, h3, h4,
+    h5, h6]
+  rfl
+
+theorem factsOf_of {stratified : Bool} {prof : Core.Integrity} {pub : Lean.Json} {l : Core.Level} {b : Nat}
+    (hl : prof.levels = #[l])
+    (hd : (∃ k, l.draw = some (.subset k)) ∨ stratified = true ∧ ∃ ss, l.draw = some (.stratified ss))
+    (hb : Flock.J.nat pub "bound" "public" = .ok b) : ∃ f, ∀ what, factsOf what stratified prof pub = .ok f := by
+  have e : ∀ what, factsOf what stratified prof pub = (do
+      let drawn ← match l.draw with
+        | some (.subset k) => pure k
+        | some (.stratified ss) =>
+          if stratified then pure (ss.foldl (fun n st => n + st.k) 0) else refuse s!"{what}: profile: not a subset draw"
+        | _ => refuse s!"{what}: profile: not a subset draw"
+      match Flock.J.nat pub "bound" "public" with
+      | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
+      | .error e => refuse s!"{what}: {e}" : Found Facts) := fun what => by
+    unfold factsOf
+    rw [hl]
+    rfl
+  rcases hd with ⟨k, hk⟩ | ⟨hs, ss, hss⟩
+  · exact ⟨{ units := l.size, drawn := k, delta := prof.delta, wrong := b }, fun what => by
+      rw [e]
+      simp only [hk, hb]
+      rfl⟩
+  · exact ⟨{ units := l.size, drawn := ss.foldl (fun n st => n + st.k) 0, delta := prof.delta, wrong := b },
+      fun what => by
+        rw [e]
+        simp only [hss, hb, hs, ↓reduceIte]
+        rfl⟩
+
+theorem auditCheck_of {n : Nat} {reg : Registration} {a : Core.Answer} (h : PeriodAuditProved reg a) :
+    ∃ f, auditCheck n reg a = .ok f := by
+  obtain ⟨h1, h2, h3, pub, prof, i, l, k, b, h4, h5, h6, hl, hk, hb⟩ := h
+  obtain ⟨f, hf⟩ := factsOf_of (stratified := false) hl (Or.inl ⟨k, hk⟩) hb
+  refine ⟨f, ?_⟩
+  simp only [auditCheck, answered_of h1 h2 h3 h4 h5 h6, bind, Except.bind]
+  exact hf _
+
+theorem windowCheck_of {p : Params} {ss : NetworkCertifier.SyncSet} {earlier : Array ByteArray} {w : Nat}
+    {reg : Registration} {x : Window} (h : PeriodWindowAccepted p ss earlier w reg x) :
+    windowCheck p (clearClocks ss) earlier w reg x = .ok () := by
+  obtain ⟨⟨r1, r2⟩, ⟨eg, ig, hcs, heg, hig⟩, ⟨clock, hx, hcl, hclear, hearlier⟩, a1, a2, a3, pub, prof, i, a4, a5,
+    a6, q1, q2⟩ := h
+  have c1 : (reg.record.getObjValD "program" == Lean.Json.str p.program &&
+      canonText (reg.record.getObjValD "window") == canonText (served w)) = true :=
+    (Bool.and_eq_true _ _).mpr ⟨r1, by simp [r2]⟩
+  have c2 : (x.certificates.size == 2 && (x.certificates.zip #[NetworkCheck.Direction.egress, .ingress]).all
+      fun a => certifies p a.snd w a.fst) = true := by
+    rw [hcs]
+    simp [heg, hig]
+  simp only [windowCheck, refuse, bind, Except.bind, pure, Except.pure]
+  split
+  case h_2 => rename_i hn; exact (hn clock hx).elim
+  rename_i clock' hx'
+  rw [hx] at hx'
+  cases hx'
+  simp only [c1, c2, hcl, hclear, hearlier, answered_of a1 a2 a3 a4 a5 a6, q1, q2, ↓reduceIte, Bool.false_eq_true,
+    Bool.and_self]
+
+theorem rowsCheck_of {p : Params} {s : Schedule} {sd : ByteArray} {w : Nat} {d : NetworkCheck.Direction} {r : Rows}
+    (h : PeriodRowsChecked p s sd w d r) : rowsCheck p s sd w d r = .ok () := by
+  obtain ⟨c1, c2, c3, dom, head, hdom, c4, hhead, c5, c6⟩ := h
+  simp only [rowsCheck, pure, Except.pure, c1, c2, c3, hdom, c4, hhead, c5, c6,
+    ↓reduceIte]
+
+theorem rowsWindowCheck_of {p : Params} {s : Schedule} {sd : ByteArray} {w : Nat} {reg : Registration} {x : Window}
+    (h : PeriodRowsWindowAccepted p s sd w reg x) : ∃ f, rowsWindowCheck p s sd w reg x = .ok f := by
+  obtain ⟨c1, ⟨rq, rp, fl, hcs, hrq, hrp, hfl⟩, ⟨ri, re, hx, hi, he, hhi, hhe⟩, a1, a2, a3, pub, prof, i, l, b, a4,
+    a5, a6, hl, hd, hb⟩ := h
+  obtain ⟨f, hf⟩ := factsOf_of (stratified := true) hl (hd.imp id fun h => ⟨rfl, h⟩) hb
+  have c2 : (x.certificates.size == 3 &&
+      (x.certificates.zip (records p.link)).all fun a => certifiesOn p a.2.fst a.2.snd w a.fst) = true := by
+    rw [hcs]
+    simp [records, hrq, hrp, hfl]
+  refine ⟨f, ?_⟩
+  simp only [rowsWindowCheck, refuse, bind, Except.bind, pure, Except.pure]
+  split
+  case h_2 => rename_i hn; exact (hn _ hx).elim
+  rename_i rs hx'
+  rw [hx] at hx'
+  cases hx'
+  have c1' : (reg.record.getObjValD "program" == Lean.Json.str p.program) = true := c1
+  have c3 : (#[ri, re].size == 2) = true := rfl
+  have c4 : #[ri, re].all (holds reg) = true := by simp [hhi, hhe]
+  simp only [c1', c2, c3, c4, ↓reduceIte, List.zip_toArray, List.forIn_toArray, List.zip_cons_cons, List.zip_nil_left,
+    List.forIn_cons, List.forIn_nil, rowsCheck_of hi, rowsCheck_of he, bind, Except.bind, pure, Except.pure,
+    answered_of a1 a2 a3 a4 a5 a6]
+  exact hf _
+
+theorem firstFinding_of {fs : List (Option (Core.Verdict × String))} (h : ∀ f ∈ fs, f = none) :
+    firstFinding fs = none := by
+  unfold firstFinding
+  split
+  · rename_i r hr
+    obtain ⟨f, hf, hfr⟩ := List.exists_of_findSome?_eq_some hr
+    rw [h f hf] at hfr
+    cases hfr
+  · exact List.findSome?_eq_none_iff.mpr h
+
+end Period
+
+/-- **The converse of ONE-13**: a period whose every link-window is accepted in the parameters' form and whose every
+audit was proved, at the sizes the parameters name, is accepted. -/
+theorem periodAccepts_of {p : Params} {c : Commitment} {e : Evidence} (hw : PeriodWindowsAccepted p c e)
+    (ha : PeriodAuditsProved p c e) : ∃ pub prof, protocol.check p c e = .accept pub prof := by
+  show ∃ pub prof, check p c e = .accept pub prof
+  obtain ⟨hcw, hew, hall⟩ := hw
+  obtain ⟨hca, hea, haud⟩ := ha
+  have n1 : ¬ c.windows.size ≠ p.windows := fun h => h hcw
+  have n2 : ¬ c.audits.size ≠ p.audits.size := fun h => h hca
+  have n3 : ¬ e.windows.size ≠ c.windows.size := fun h => h (hew.trans hcw.symm)
+  have n4 : ¬ e.audits.size ≠ c.audits.size := fun h => h (hea.trans hca.symm)
+  unfold check
+  rw [ite_eq_right n1, ite_eq_right n2, ite_eq_right n3, ite_eq_right n4]
+  dsimp only
+  rw [Period.firstFinding_of]
+  · exact ⟨_, _, rfl⟩
+  intro f hf
+  rcases List.mem_append.1 hf with hf | hf
+  · obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hf
+    rcases hform : p.form with ss | ⟨s, sd, scan⟩
+    · simp only [hform] at hy
+      obtain ⟨⟨⟨reg, x⟩, i⟩, hmem, rfl⟩ := Array.mem_map.1 (Array.mem_toList_iff.1 hy)
+      rw [Array.mem_zipIdx_iff_getElem?, Array.getElem?_zip_eq_some] at hmem
+      have hacc := hall i reg x hmem.1 hmem.2
+      rw [hform] at hacc
+      dsimp only
+      rw [Period.windowCheck_of hacc]
+      rfl
+    · simp only [hform] at hy
+      obtain ⟨⟨⟨reg, x⟩, i⟩, hmem, rfl⟩ := Array.mem_map.1 (Array.mem_toList_iff.1 hy)
+      rw [Array.mem_zipIdx_iff_getElem?, Array.getElem?_zip_eq_some] at hmem
+      have hacc := hall i reg x hmem.1 hmem.2
+      rw [hform] at hacc
+      obtain ⟨g, hg⟩ := Period.rowsWindowCheck_of hacc
+      dsimp only
+      rw [hg]
+      rfl
+  · obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hf
+    obtain ⟨⟨⟨reg, a⟩, i⟩, hmem, rfl⟩ := Array.mem_map.1 (Array.mem_toList_iff.1 hy)
+    rw [Array.mem_zipIdx_iff_getElem?, Array.getElem?_zip_eq_some] at hmem
+    obtain ⟨g, hg⟩ := Period.auditCheck_of (n := i) (haud i reg a hmem.1 hmem.2)
+    dsimp only
+    rw [hg]
+    rfl
 
 end Properties.NetworkCertifier
