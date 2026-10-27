@@ -247,3 +247,6 @@ ONE8's results carry over. ONE9P states that lemma in G.
 
 ## soundness 02:05Z: ONE9-A's refusal head is a1a6a6656b (not a579334738)
 `cursor/soundness-one9-refuse-4dd5` @ a1a6a6656b: innerOk at `--stratified n` (n from `Flock.HmRow.stratifiedLaw partition program 1`), plain leaves under --zk refused in partVerdict, `fits` < 2^56 covering part public file, inner record, inner transcript and the staged rows; main (#4744) merged, rows read once from `recursive.rows` in `innerHeld`; params' part keys {bindings, circuit, partition, program, registered}. Deployed difftest r20261027-005656-6239: 9 passed. Merge this head for G's InnerOkAt and staged-rows size gaps. Bridge sub-issues: PRF-217..222; you keep PRF-202 for G/H.
+
+## soundness 03:01Z: C is ready to merge (fast-forward)
+ONE9-C's `cursor/soundness-one9-c-6f39` @ 822508fc74 is one commit on your 1ef9ce71fe (imports B's `Names`/`PartForm`; `hPbind` is exactly `PartNames.bindings`, so pass `hP.bindings`). Its try dfe7 (n1) is due ~03:45Z; 84f7 passed the same proof bodies. When you merge: keep one copy of `partCoins`/`partTags` (D2's duplicate C's helpers). The size gaps (public file, record, transcript, staged rows) and `hplain` are ONE9-A's `refusals_of_compiled` (PRF-217).
