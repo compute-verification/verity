@@ -324,20 +324,20 @@ group `p` of S has a piece at the copy `keyAt p` whose group is the verifier's p
 elements are `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at the group's `V` (`hvv`),
 every part's residuals vanish at rep `r`'s values. -/
 theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (rpieces : List ResPiece)
-    (elemAt : Claims.Msg → List Claims.Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (elemAt : Claims.Msg → List Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : ℕ → ℕ × ℕ × ℕ × ℕ)
     (hcover : ∀ p (_hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt p ∧
       ∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv))
     (hE : ∀ p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-      elemAt x ms (keyAt p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
+      elemAt x ms cs (keyAt p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
     (hvv : ∀ v info kappa, verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras
         (D.rep cls acc i r).comb = .ok (v, info, kappa) →
       ∀ p (hp : p < gs.size) k (hk : k < gs[p].2.2.size), vvAt x cs (keyAt p) k = el v gs[p].2.2[k]) :
     D.PartsZero cls acc i r gs := by
   intro p hp
   obtain ⟨q, hq, hkey, ns, nv, hpart⟩ := hcover p hp
-  refine ⟨q.S, ns, nv, hpart, elemAt x ms (keyAt p), vvAt x cs (keyAt p), fun k hk => hE p hp k hk,
+  refine ⟨q.S, ns, nv, hpart, elemAt x ms cs (keyAt p), vvAt x cs (keyAt p), fun k hk => hE p hp k hk,
     fun v info kappa h k hk => hvv v info kappa h p hp k hk, ?_⟩
   rw [← hkey]
   exact hres q hq
@@ -372,7 +372,7 @@ theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : 
       ∃ q ∈ pieces, q.table = i ∧ q.rep = r.val ∧ q.level = ℓ ∧ q.query = j)
     (hsz : ∀ r : Fin 2, (D.rep cls acc i r).rounds.toList.map Array.size = roundSizes (D.sh cls i))
     (hacc : ∀ r : Fin 2, (acc (2 * i + r)).size = 4)
-    (rpieces : List ResPiece) (elemAt : Claims.Msg → List Claims.Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (rpieces : List ResPiece) (elemAt : Claims.Msg → List Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hcoverR : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
@@ -382,7 +382,7 @@ theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : 
     (hE : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
       structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
       ∀ (r : Fin 2) p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-        elemAt x ms (keyAt r p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
+        elemAt x ms cs (keyAt r p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
     (hvv : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
       structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
       ∀ (r : Fin 2) v info kappa, verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras

@@ -18,6 +18,7 @@ Definition where it exists, else the lane's reference), until the replay lane ad
   equal); ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``: that, then ``Bf16Add_v2`` with the residual stream's word;
 * ``QkSoftmaxRowPad_v1{T, D}``: ``GemmCoordinate_v2{K = D}`` a key and `softmax_row` over the slot's n = position + 1 keys,
   +0 past them; ``PvRow_v1{T, K, D, DOT}``: ``GemmCoordinatePad_v1{T, K}`` a dimension, absent keys' V rows all-zero;
+  ``QkSoftmaxPvPad_v1{T, K, D, DOT}`` (``fused`` ``pv``): the first's row, then the second's of it;
 * ``Bf16AddRow_v2{N}``: ``Bf16Add_v2`` a word; ``Argmax_v2{V}``: `argmax_row`;
 * ``AllGather_v1{WORLD, N}``: the copy of its parts' rows. Its parts and its output are the same table bytes here, so its
   replay only restates them; the commit holds both, and a drawn gather opens its own rows against the step's root.
@@ -283,8 +284,8 @@ class Replayer:
                  "RmsNormOutSums_v1": self._norm, "RowAbsMax_v1": self._amax, "QuantChunkS8_v1": self._quant,
                  "RmsNormAbsMax_v1": self._normed, "RmsNormQuantCodes_v1": self._normed, "QuantScaleS8_v1": self._scale,
                  "ScaledMmS8CoordinateRows_v1": self._linear, "ScaledMmS8ResidualCoordinateRows_v1": self._linear,
-                 "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv, "Bf16AddRow_v2": self._add,
-                 "Argmax_v2": self._argmax}
+                 "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv, "QkSoftmaxPvPad_v1": self._head,
+                 "Bf16AddRow_v2": self._add, "Argmax_v2": self._argmax}
         return [Family(u.name, u.key, u.status, u.count, build[u.template](step, u))
                 for g in self.map.groups() for _, us in g for u in us]
 
@@ -430,6 +431,19 @@ class Replayer:
             padded = np.zeros((PV_K, values.shape[1]), np.uint16)
             padded[:len(values)] = values
             return [p, padded], self.out(step, u, b, head).view(np.uint16), pv_row(p, padded)
+        return replay
+
+    def _head(self, step: int, u: Units) -> Replay:
+        """The ``pv`` fusion's head: `qk_softmax_pad` of q and the slot's keys, then `pv_row` of that row and its values."""
+        layer, d = int(u.table[1:].split(".")[0]), self.shape.head_dim
+
+        def replay(b: int, head: int):
+            q = self.u16(step, f"l{layer}.wq", b)[head * d:(head + 1) * d]
+            keys, values = self.kv(step, layer, b)
+            k, v = np.zeros((PV_K, d), np.uint16), np.zeros((PV_K, d), np.uint16)
+            k[:len(keys)], v[:len(values)] = keys, values
+            want = pv_row(qk_softmax_pad(q, keys), v)
+            return [q, k, v, np.array([len(keys)], np.uint16)], self.out(step, u, b, head).view(np.uint16), want
         return replay
 
     def _add(self, step: int, u: Units) -> Replay:
