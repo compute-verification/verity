@@ -49,9 +49,11 @@ an answer that names no server isn't carried. An accepted answer whose outputs a
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
 ``accept`` only when every subprotocol accepted here.
 The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
-a subprotocol: its verdict and, unless it accepted here, why; PoUW's development piece reads ``development run, credits
-nothing`` with core's refusal of the window's credit. Prints one ``RECORD`` line, naming each subprotocol's verdict (the
-development piece's `DEV_VERDICT`), each missing one and why, each rejecting one, and each one elsewhere.
+a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
+(`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
+record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
+with core's refusal of the window's credit. Prints one ``RECORD`` line, naming each subprotocol's verdict (the
+development piece's `DEV_VERDICT`), each missing one and why, each rejecting one, each one elsewhere, and the reason.
 """
 from __future__ import annotations
 
@@ -410,8 +412,40 @@ def piece_server(key: str, pieces_dir: Path) -> tuple[str | None, str]:
     return served.get("server") or ran.get("server"), served.get("source") or "real"
 
 
-def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | None, str]], node: str) -> str:
-    """The composed verdict's reason: one clause a subprotocol, its verdict and, unless it accepted about ``node``, why."""
+def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
+    """``e`` exactly, as ``d + 2^-n`` where it is one of ``deltas`` plus a power of two."""
+    for d in deltas:
+        r = e - d
+        if r > 0 and r.numerator == 1 and r.denominator & (r.denominator - 1) == 0:
+            return f"{d} + 2^-{r.denominator.bit_length() - 1}"
+    return str(e)
+
+
+def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
+    """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
+    of the checkpoint they are, those; and each δ of the block record's at which its leg's quantity is not established."""
+    profile = (r.get("answer") or {}).get("profile")
+    w = profile.get("weights") if isinstance(profile, Mapping) else None
+    out = []
+    if isinstance(w, Mapping) and w.get("held"):
+        out.append(f"its weights {w['held']}, not concurrently with the block")
+    if isinstance(w, Mapping) and w.get("share"):
+        outside = (profile.get("outside") or {}).get("bytes") or {}
+        out.append(f"they are {float(Fraction(w['share'])):.1%} of the checkpoint ({w.get('covers', 'its weights')})"
+                   + (f"; {', '.join(sorted(outside))} are outside its claim" if outside else ""))
+    if leg:
+        no = [d for d, x in leg["at"].items() if not x["holds"]]
+        if no:
+            from verity_e2e_demo import block_record as BR
+            out.append(f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with "
+                       f"{_ratio(Fraction(leg['error']), BR.DELTAS)}")
+    return out
+
+
+def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | None, str]], node: str,
+         legs: Mapping[str, Mapping[str, Any]] | None = None) -> str:
+    """The composed verdict's reason: one clause a subprotocol, its verdict and, unless it accepted about ``node``, why; an
+    accept about ``node`` with its `terms` (``legs``: each accepted one's block record leg, by runner name)."""
     out = []
     for k, r in rows.items():
         v, server = r.get("verdict"), at[k][0]
@@ -420,7 +454,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         elif server not in (None, node):
             s = f"{v} about {server}, another server: carried, not composed"
         elif v == "accept":
-            s = "accept" if server is not None else "accept, naming no server: not carried"
+            t = terms(r, (legs or {}).get(k))
+            s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
         else:
             s = f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")
@@ -438,10 +473,11 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
     at = {k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
     rows = {k: dict(r) for k, r in rows.items()}
+    built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
             try:
-                BR.leg(legs[k], r, server=at[k][0], runs=[], source=at[k][1])
+                built[k] = BR.leg(legs[k], r, server=at[k][0], runs=[], source=at[k][1])
             except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as e:
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
@@ -461,8 +497,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     if bad:
         composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows
                                    if NAMES[k] in bad) else "pending"
-        report["composed"] = {"protocol": REPORT_FORMAT, "verdict": composed, "reason": said(rows, at, node)}
-        line = {"composed": composed, "by": bad, **named, "block_record": None,
+        report["composed"] = {"protocol": REPORT_FORMAT, "verdict": composed, "reason": said(rows, at, node, built)}
+        line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
         return report, None, line
     extra = {legs[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
@@ -470,8 +506,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra)
     report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
-                                                      "reason": said(rows, at, node)}
-    line = {"composed": rec["composed"]["verdict"], **named, "record_missing": rec["composed"]["missing"],
+                                                      "reason": said(rows, at, node, built)}
+    line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
+            "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
     return report, rec, line
