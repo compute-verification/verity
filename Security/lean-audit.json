@@ -1856,6 +1856,14 @@
    "owner": "@network-accounting",
    "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
   },
+  "Verity.Circuit.BitFaninPos": {
+   "owner": "@lean",
+   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e"
+  },
+  "Verity.Circuit.Boolean": {
+   "owner": "@lean",
+   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede"
+  },
   "Verity.Circuit.InputsAgree": {
    "owner": "@proofs",
    "digest": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492"
@@ -1907,14 +1915,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Verity.Circuit.BitFaninPos": {
-   "owner": "@lean",
-   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e"
-  },
-  "Verity.Circuit.Boolean": {
-   "owner": "@lean",
-   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede"
   }
  },
  "meaning": [
@@ -10502,6 +10502,12 @@
    "assumptions": [],
    "type_hash": "cf6ae741ac5e875201f2ca2733ffda1969bd047946b299c8af7546edd595eaf8"
   },
+  "Verity.SecurityProofs.AndSizeLe": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.AndSizeLe : Verity.Guarantees.AndSizeLe"],
+   "assumptions": [],
+   "type_hash": "451cf0df5a50915807bf735c807b8f3f291648f28f037d2d9b2d62949ffb5538"
+  },
   "Verity.SecurityProofs.BlockDescription": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.BlockDescription : Verity.Guarantees.BlockDescription"],
@@ -10549,6 +10555,12 @@
    "signature": ["Verity.SecurityProofs.CountingSum : Verity.Guarantees.CountingSum"],
    "assumptions": [],
    "type_hash": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef"
+  },
+  "Verity.SecurityProofs.ExpandAndSize": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandAndSize : Verity.Guarantees.ExpandAndSize"],
+   "assumptions": [],
+   "type_hash": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60"
   },
   "Verity.SecurityProofs.ExpandBits": {
    "owner": "@lean",
@@ -10712,14 +10724,11 @@
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
   },
-  "Verity.SecurityProofs.AndSizeLe": {
-   "owner": "@lean"
-  },
-  "Verity.SecurityProofs.ExpandAndSize": {
-   "owner": "@lean"
-  },
   "Verity.SecurityProofs.ToCircuitAnd": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
+   "assumptions": [],
+   "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
   }
  },
  "shape": {
@@ -17622,7 +17631,7 @@
    ]
   },
   "Definitions.Core.Boolean": {
-   "digest": "4b01a0843861753a74bcf1db3dfb5025e7f65b441f11871f1d50ad569f05adbe",
+   "digest": "bdca6f202be5ce821c537817148d69f8f173b88caf12b8a5fcade6c8ea044d2f",
    "definitions": {
     "FlockSoundness.Audit.Circuit": "eae3834eb80d05abdb52d58e58d3c548f90ac029f7714633011254b9b86ce639",
     "FlockSoundness.Audit.Circuit.N": "2b5691665b0fbb60db49cdf4b0747640b7040dfa5bf45633080d74aba0ad1b78",
@@ -17630,6 +17639,7 @@
     "FlockSoundness.Audit.Circuit.op": "97912b36c50d00a1dbe0dfc71e4078501f7f6ac4ff029f43397ff23629d59ecc",
     "FlockSoundness.Audit.Circuit.outputs": "97687faac62607feefae89c9d9802053cfade7d48f155c95c6e3c7abe73a0412",
     "FlockSoundness.Audit.Circuit.run": "7344d2539a14645ea847e2a24c10d5564626bb33c215b1677fbefd5757aaea11",
+    "FlockSoundness.Audit.Circuit.toCircuit": "264018d87c2fa38dd29c5b4d302428631280bad2c4ec0485897fbbeea116233b",
     "FlockSoundness.Audit.Op": "75bebd7c162b9b7f27418d44dc50b25f09902fd3c7d8b106af390c8d6bb286c7",
     "FlockSoundness.Audit.Op.and": "2826c574c26cf547071a45321935d27f979852961bdd8e252b4ef119a8de4ebf",
     "FlockSoundness.Audit.Op.apply": "b1a23bed7333e4c0e0f9a7249959457f155f4ad3098ed5ea931016eef927160d",
@@ -17684,7 +17694,8 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "Verity.SecurityProofs.ToCircuitAnd"
    ]
   },
   "Definitions.Core.Circuit": {
@@ -17829,6 +17840,7 @@
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.Compose",
@@ -17837,6 +17849,7 @@
     "Verity.SecurityProofs.CorrectOfOpening",
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CountingSum",
+    "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandEval",
@@ -17847,7 +17860,8 @@
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
     "Verity.SecurityProofs.RegisteredMeets",
-    "Verity.SecurityProofs.ServingBlockSum"
+    "Verity.SecurityProofs.ServingBlockSum",
+    "Verity.SecurityProofs.ToCircuitAnd"
    ]
   },
   "Definitions.Core.Declaration": {
@@ -17938,6 +17952,7 @@
     "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.ContainsImplements",
     "Verity.SecurityProofs.Counting",
+    "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandSize",
     "Verity.SecurityProofs.Padding"
    ]
@@ -17957,6 +17972,7 @@
    },
    "guarantees": [
     "Nci.SecurityProofs.ExpandComplies",
+    "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandEval",
@@ -17964,9 +17980,13 @@
    ]
   },
   "Definitions.Core.Formalism": {
-   "digest": "7be255cb6895cffb942b1335ebbefe3d2d17901eb5c2473d46dfdce91538c337",
+   "digest": "7583727c1a1020e3c26bc4b9a016ae5a15274f412d97392941b7df56d001e2e5",
    "definitions": {
+    "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
     "Verity.Circuit.Boolean": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
+    "Verity.Circuit.IsAnd": "cde2e6a8622514f4f062846ba8ed7eb96f4d3ce2ad0c1c095dbe1f376dd4d10a",
+    "Verity.Circuit.andSize": "3b849ed3179d9c2b65811c48d03e2adcf55b4ef7d51aebf4132aa3f03824141a",
+    "Verity.Circuit.bitZ": "6e6df84b2a57ea4f505984ed58d1b5ddda2506cde0e6494be29dc3db1b6189da",
     "Verity.Circuit.bits": "45f1ab981d34eac7925bd50b8583e9dce1c4439155dc5fec59e9c7a78117de94",
     "Verity.Declaration.unregistered": "9c3fc707649a9ace5a6f7e78392f398cd871d51d874b3c00d0190866d6268025",
     "Verity.Decoder": "32b50b1c92e0a6bf91d2718836a6105fd2aa6491e10b4fc78e36cef49ed2a634",
@@ -17989,13 +18009,16 @@
    "guarantees": [
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.PartitionCovers",
+    "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.Counting",
+    "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandSize",
-    "Verity.SecurityProofs.Padding"
+    "Verity.SecurityProofs.Padding",
+    "Verity.SecurityProofs.ToCircuitAnd"
    ]
   },
   "Definitions.Core.Fp32": {
@@ -18086,14 +18109,16 @@
    ]
   },
   "Definitions.Core.Guarantees.Expand": {
-   "digest": "2ae5515f3cdc0f1bb84ebe8b0235c8b1b61686966ec1ce5beb32ed4b9c3bbb03",
+   "digest": "bf6d099bf9ede3e9b27438dc0406a13876ad08ac950060285193b7c88ffd22a0",
    "definitions": {
+    "Verity.Guarantees.ExpandAndSize": "708e3bd0ec5ee7f0de098d065b01eb4faa50e60052ed9c4ad612026e3b48c7fc",
     "Verity.Guarantees.ExpandBits": "9b57f3f5f8d8b48771fe9f914348f5ed9a8ab82e9d0cb11a2c99393d141b2ae1",
     "Verity.Guarantees.ExpandBoolean": "5adfa5fa82059f088eb8f99a702832076a44a2b079f07334e2d5c72fe8ee7a70",
     "Verity.Guarantees.ExpandEval": "445ffa8931afc75d428b23eae41bf34e5055781ea6274464e00da3437ed805b2",
     "Verity.Guarantees.ExpandSize": "4e3c58889c72a5578c7d0cb01c9ab11c289c3120e7f2923798d752c4e7fad3db"
    },
    "guarantees": [
+    "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandEval",
@@ -18101,24 +18126,28 @@
    ]
   },
   "Definitions.Core.Guarantees.Formalism": {
-   "digest": "34c6ef1b676be29dd2fdf5d1ab9781305d0af392dad24aa60fa453ee86d22ba8",
+   "digest": "c4dcf2821d5d2f33f0dc5fb358ea7b985ad23db1803bc358f837fb61eee23dae",
    "definitions": {
+    "Verity.Guarantees.AndSizeLe": "9350d1ae3f31c74ddd50f1897253f464f1fa16189f0058edb6be6125a78b1aca",
     "Verity.Guarantees.BlockDescription": "f949fc60d3af21c28b2093681ba1b3a2b62924451a7ebcda748aa35db70a8c22",
     "Verity.Guarantees.CKSize": "e5ae2c049103314a92e25cf1222e01ac19facf5f244deab0b45fbbbbd2db4db0",
     "Verity.Guarantees.Counting": "c00a9fa2cdff42ac249540011e33c688fbeeac8c0a799d92139829829671facd",
     "Verity.Guarantees.CountingSum": "0a0b8bba8cac0cd66ec998958d7b16614b762c7e3b58e09e82bc841a787c8c76",
     "Verity.Guarantees.InferenceCap": "8cb66991f9d6bf7a627c1a31de466e777ecae9a79ecc3c0385110eafda097454",
     "Verity.Guarantees.Padding": "d499c0da2851fb11e5c6c20d8bfdfb61367bd79eeb17b9b1a045fab01d07269a",
-    "Verity.Guarantees.ServingBlockSum": "74e9c171e6e3ec1a92eaaab163f8d684ca12f3c9a88ef5a5302969a1686a28cc"
+    "Verity.Guarantees.ServingBlockSum": "74e9c171e6e3ec1a92eaaab163f8d684ca12f3c9a88ef5a5302969a1686a28cc",
+    "Verity.Guarantees.ToCircuitAnd": "4a7cfceeb494bbf0a19ddc5b5cf0ad9d0a5279068b58b11249a05bb5e97a3d73"
    },
    "guarantees": [
+    "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CountingSum",
     "Verity.SecurityProofs.InferenceCap",
     "Verity.SecurityProofs.Padding",
-    "Verity.SecurityProofs.ServingBlockSum"
+    "Verity.SecurityProofs.ServingBlockSum",
+    "Verity.SecurityProofs.ToCircuitAnd"
    ]
   },
   "Definitions.Core.Guarantees.Game": {
@@ -18274,6 +18303,7 @@
     "Verity.SecurityProofs.CorrectOfOpening",
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CountingSum",
+    "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandSize",
     "Verity.SecurityProofs.InferenceCap",
     "Verity.SecurityProofs.Padding",
