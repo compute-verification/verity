@@ -240,9 +240,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
   the audit fails on any difference, so a statement, or a definition it depends on, cannot change without a visible diff
   of this file. A record holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof
-  with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
-  readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
-  is refused.
+  with allowed axioms replaces it.
 - `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
@@ -418,9 +416,8 @@ conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python t
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
 the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
-restatement both apply.
+(a module added to `meaning`) is kept. A guarantee's `owner` merges apart from the rest of its entry, so one side's new
+owner and the other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
 `reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
