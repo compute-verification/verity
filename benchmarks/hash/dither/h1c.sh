@@ -3,7 +3,7 @@
 # leased GPU for at most 25 minutes: the served window's tables on a full step against commit.py, then their timing.  Extra
 # arguments go to the gate.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/h1c.sh
+#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/dither/h1c.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 mkdir -p /workspace/pouw

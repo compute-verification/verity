@@ -1,5 +1,5 @@
 """The bandwidth leg's store, the period's records (`period.records`, PoUS's own): every copy of the auditor's ledger in
-them cut to the entries their window cites (MEM-103). PoUW's reader of the ledger (`challenger.audited_session`) checks
+them cut to the entries their window cites. PoUW's reader of the ledger (`challenger.audited_session`) checks
 every entry, chained from seq 0, so it takes the window's whole ledger, which stays on disk, and refuses the cut copy
 rather than credit from it; a copy that doesn't open the cited session is refused when the records are written; and the
 bandwidth session accepts the cut store as it accepts the whole."""

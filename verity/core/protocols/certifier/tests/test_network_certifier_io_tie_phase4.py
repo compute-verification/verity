@@ -1,5 +1,5 @@
-"""Red-team cases against the I/O tie (`io_tie`) from the advice red team, kept as regressions of the fix that closed
-them, beside the author's `test_network_certifier_io_tie{,_adversarial}.py`.
+"""Adversarial cases against the I/O tie (`io_tie`), kept as regressions of the fix that closed them, beside
+`test_network_certifier_io_tie{,_adversarial}.py`.
 
 v3 tied the cells to a table the prover supplied, and every author tamper was single-sided: the cells changed against
 the honest table, or the table against the honest cells. A prover who forged the cells and a matching table passed, so
