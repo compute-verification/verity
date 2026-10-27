@@ -1,7 +1,10 @@
+import CoreComposition.Product
 import CoreProtocol.Live
+import Properties.Pous.MemoryChallenger
 import SampledProofs.ChallengerDraw
 import SampledProofs.ChallengerRounds
 import SampledProofs.OneStage
+import SampledProofs.OneStageZk
 
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
@@ -23,6 +26,9 @@ what that record shows, for every input: the coins the challenger device drew, o
   released after exactly the uses' roots, coin for coin (one release a use: a second query is refused, not charged);
   and its log releases each pair of `order` in order (the draw before every session's families, a session's link
   points before its rounds). Or the fixed finder outputs a break from one use's record.
+* `keyOfParams`: the challenger key v2's compiled check reads from the registered components' parameters, and
+  `lmsKey` it as LMS's parameters and public key. Every LMS check the reader makes is `Challenger.verifies` under that
+  key, which accepts exactly what `LmsVerifies` does there (`verifies_iff`, `verifies_registered`, security_proofs).
 
 **The device** (`Device`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs sessions
 (`Session`): it draws each coin and its salt by position, commits to the frame-v3 root over their live leaves
@@ -143,16 +149,11 @@ def OpensOn (dev : Device) (pk : ByteArray) (w id : String) : Prop :=
 
 /-! ## What the reader checks and hashes -/
 
-/-- Whether the LMS verifier accepts `sig`, once decoded, under the key over the message `m`. -/
-def lmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
-  match Lms.Signature.decode key.params sig with
-  | .ok σ => match Lms.verify key.params key.pub m σ with
-    | .ok b => b
-    | .error _ => false
-  | .error _ => false
-
-/-- The LMS verifier accepts `sig`, once decoded, under the key over the message `m`. -/
-def LmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Prop := lmsVerifies key m sig = true
+/-- The LMS verifier accepts `sig`, once decoded, under the key over the message `m`: the one definition
+(`MemoryChallenger.Properties.LmsVerifies`) at the key's parameters and public key. The reader's own check,
+`Challenger.verifies`, accepts exactly these (`verifies_iff`, security_proofs). -/
+def LmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Prop :=
+  MemoryChallenger.Properties.LmsVerifies key.params key.pub m sig
 
 /-- The signatures `drawCoins` checks under `key`, each with the message it signs: the session's record and close, and
 each line of the ledger. -/
@@ -346,7 +347,7 @@ def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
 under `key` in `coins` that verifies over a message the device didn't sign, else the first collision among the strings
 the reader hashes in `coins` and the device hashes under `key`. -/
 def findBreak (dev : Device) (key : ChallengerKey) (label : String) (coins : Json) : Option Witness :=
-  match (signatures key coins).find? fun x => lmsVerifies key x.1 x.2 && !((signedBy dev key.pub).contains x.1) with
+  match (signatures key coins).find? fun x => verifies key x.1 x.2 && !((signedBy dev key.pub).contains x.1) with
   | some (m, sig) => some (.forgery m sig)
   | none => (collisionIn (readHashed key label coins ++ deviceHashed dev key.pub)).map fun (x, y) => .collision x y
 
@@ -490,5 +491,23 @@ def oneStageReads : ReadsChallenger SampledProofs.OneStage.protocol SampledProof
   record := SampledProofs.OneStage.Evidence.coins
   decode := fun b => (some b : Option ByteArray)
   reads := oneStage_reads
+
+/-! ## The device's registered key -/
+
+/-- **The challenger key v2's compiled check reads from the registered components' parameters `ps`** (as
+`Core.Composition.decodeRegisteredParams` decodes them): the entry named v2's id, its parameters read as v2 reads its own
+(`OneStageZk.paramsOfJson` on their canonical JSON), and the key of the challenger they name, which `roundsWhy` and
+`OneStage.coinsOf` hand `roundCoins` and `drawCoins`. None when no entry is v2's, its parameters don't read, or they
+name no challenger, where v2 refuses every window (`ROUNDS_NEED_CHALLENGER`). The entry is the first with v2's id, the
+one the composition pairs with v2 when the components' ids are distinct. -/
+def keyOfParams (ps : List Core.Composition.Named) : Option ChallengerKey :=
+  (ps.find? (·.id == OneStageZk.PROTOCOL)).bind fun n =>
+    (Core.canonicalJson n.params.toUTF8 >>= OneStageZk.paramsOfJson).toOption.bind fun p =>
+      p.base.challenger.map (·.1)
+
+/-- A key as LMS's parameters and public key; LMS's deployed parameters and the empty key where there is none. -/
+def lmsKey : Option ChallengerKey → Lms.Params × ByteArray
+  | some k => (k.params, k.pub)
+  | none => (Lms.deployed, ByteArray.empty)
 
 end Properties.Challenger

@@ -532,9 +532,9 @@
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Challenger": {
-   "imports": ["CoreProtocol", "SampledProofs", "Flock", "Lms", "Lean"],
+   "imports": ["CoreComposition", "CoreProtocol", "SampledProofs", "Flock", "Lms", "Lean", "Properties.Pous.MemoryChallenger"],
    "except": [],
-   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
+   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages, and the registered components' parameters v2 reads its key from, `CoreComposition`) and a model of the device's log on Lean core, with the one LMS acceptance (`Properties.Pous.MemoryChallenger`'s `LmsVerifies`): nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],

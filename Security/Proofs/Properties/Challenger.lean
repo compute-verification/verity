@@ -9,6 +9,8 @@ the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the r
 `roundsByDevice_nontrivial` likewise `RoundsByDevice`'s.
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts.
+`verifies_iff`: the reader's LMS check is `LmsVerifies`; `keyOfParams_eq_some`: the key v2's compiled check reads from
+the registered parameters; `verifies_registered`: under that key, the check is `LmsVerifies` at `lmsKey`.
 -/
 
 namespace Properties.Challenger
@@ -99,5 +101,49 @@ theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : Sample
     cases hw : ξ.bind (SampledProofs.OneStage.coinsWhy p c e) with
     | some why => rw [hw] at h; simp at h
     | none => rw [hw] at h; exact h
+
+/-- **The reader's LMS check is the one definition's**: `Challenger.verifies`, the check of the record, the close and
+each ledger line, accepts exactly the signatures `LmsVerifies` accepts. -/
+theorem verifies_iff (key : SampledProofs.Challenger.ChallengerKey) (m sig : ByteArray) :
+    SampledProofs.Challenger.verifies key m sig = true ↔ LmsVerifies key m sig := by
+  unfold SampledProofs.Challenger.verifies LmsVerifies MemoryChallenger.Properties.LmsVerifies
+  cases hd : Lms.Signature.decode key.params sig with
+  | error e => simp
+  | ok σ =>
+    simp only [Except.ok.injEq, exists_eq_left']
+    cases hv : Lms.verify key.params key.pub m σ with
+    | error e => simp [Except.toOption]
+    | ok b => cases b <;> simp [Except.toOption]
+
+/-- **The key v2's compiled check reads**: `keyOfParams ps` is `k` exactly when the entry of `ps` named v2's id has
+parameters v2 reads (`OneStageZk.paramsOfJson` on their canonical JSON) whose challenger is `k`, the key `roundsWhy`
+hands `roundCoins` and `OneStage.coinsOf` hands `drawCoins`. -/
+theorem keyOfParams_eq_some {ps : List Core.Composition.Named} {k : SampledProofs.Challenger.ChallengerKey} :
+    keyOfParams ps = some k ↔ ∃ n p label, ps.find? (·.id == SampledProofs.OneStageZk.PROTOCOL) = some n ∧
+      (Core.canonicalJson n.params.toUTF8 >>= SampledProofs.OneStageZk.paramsOfJson) = .ok p ∧
+        p.base.challenger = some (k, label) := by
+  unfold keyOfParams
+  cases hn : ps.find? (·.id == SampledProofs.OneStageZk.PROTOCOL) with
+  | none => simp
+  | some n =>
+    simp only [Option.bind, Option.some.injEq, exists_eq_left']
+    cases hp : (Core.canonicalJson n.params.toUTF8 >>= SampledProofs.OneStageZk.paramsOfJson) with
+    | error e => simp [Except.toOption]
+    | ok p =>
+      simp only [Except.toOption, Except.ok.injEq, exists_eq_left']
+      cases hc : p.base.challenger with
+      | none => simp
+      | some kl => obtain ⟨k', l⟩ := kl; simp
+
+/-- **The compiled check's LMS verify is `LmsVerifies` at the registered key**: where v2's compiled check reads the
+key `k` from the registered components' parameters `ps` (`keyOfParams`, `keyOfParams_eq_some`), every LMS check its
+challenger reader makes (`Challenger.verifies`) accepts exactly the signatures that
+`MemoryChallenger.Properties.LmsVerifies` accepts at `lmsKey (keyOfParams ps)`. -/
+theorem verifies_registered {ps : List Core.Composition.Named} {k : SampledProofs.Challenger.ChallengerKey}
+    (h : keyOfParams ps = some k) (m sig : ByteArray) :
+    SampledProofs.Challenger.verifies k m sig = true ↔
+      MemoryChallenger.Properties.LmsVerifies (lmsKey (keyOfParams ps)).1 (lmsKey (keyOfParams ps)).2 m sig := by
+  rw [h]
+  exact verifies_iff k m sig
 
 end Properties.Challenger
