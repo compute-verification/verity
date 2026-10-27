@@ -315,6 +315,10 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof service, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
+  Device-attest retires it (Daniel, 26 Oct): `period_root.PeriodIssuer`, in `Issuer`'s place, makes every digest the
+  certifier certifies a record of its certification period under one root its party key signs (`verity.core.attest`),
+  and publishes one liveness record a link-window, the one output in the clear; `period_root.refusal` is the period's
+  check in the clear. No served path runs it yet, and no proof reads a record.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
