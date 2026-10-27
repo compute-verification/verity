@@ -2,7 +2,7 @@
 
 The Lean statement and proof of what an accepted run of Verity guarantees: for each subprotocol, and then for the composed
 protocol, a bound on the probability that the verifier accepts while a claim about the run fails. The terms are the
-[Glossary](../ARCHITECTURE.md#glossary)'s (Vocabulary, below).
+[Glossary](../GLOSSARY.md)'s (Vocabulary, below).
 
 ## Three trees
 
@@ -66,7 +66,7 @@ jq -r '.assumptions | keys[]' $L                                         # every
 | Subprotocol | Lean | The guarantee to read first, and its status |
 |---|---|---|
 | Sampled proofs | `Core` (`Verity.Sound`, `Definitions/Core/Game.lean`), `Flock`, `Claims.Sampling`, `Properties.SampledProofs` | `Flock.Guarantees.SampledKSLiveV3`: proved under `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZ` and `LinkCRZC` |
-| PoUW | `Pouw`, `Properties.Pouw` | `Properties.Pouw.Period.H1CheckedCreditPeriod`: proved under `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` |
+| PoUW | `Pouw`, `Properties.Pouw` | `Properties.Pouw.Period.H1CheckedCreditPeriod`: proved under `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`; no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) yet |
 | PoUS | `Pous`, `Properties.Pous` | `Pous.Period.PeriodHeld`: proved under `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | PoUB | `Accounting.Remote`, `Properties.RemoteAudit` (code `RemoteAudit`), being renamed | `Properties.RemoteAudit.Line.LineHeld`: proved under `Accounting.Remote.Held.Assumptions` and `Accounting.Remote.Draw.Assumptions`; outside protocol soundness for now |
 | The bandwidth audit over PoUS's store | `Bandwidth.Guarantees` (`Definitions/Accounting/Guarantees/Bandwidth.lean`) | `Bandwidth.Guarantees.AuditRO`: proved, in the random-oracle model |
@@ -86,13 +86,18 @@ outside protocol soundness.
 Remote (`Core.Remote.protocol`, [`verity/core/protocols/remote/`](../verity/core/protocols/remote/), whose README states
 its guarantee and assumptions) is the composite for an auditor with no devices at the site. It composes two
 subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both accept and the
-commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification.
+commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory
+wipes are a subprotocol of neither yet.
 
-- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement for the remote
-  deployment is not on `main` yet.
+- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. On `main`, remote's sampled proofs are
+  one-stage v1, which takes the sessions' verdicts as evidence; the verifier's run of `flock-verify --zk` produces them,
+  and the link from remote's acceptance to that run's comes with v2. The composed statement for the remote deployment
+  is not on `main` yet.
 - **Assumptions:** those rows' named assumptions. Trust model: nothing the prover runs or hosts is trusted, and every
-  coin is live, drawn by the auditor's challenger after the commitment it challenges, with no Fiat–Shamir and no
-  retries. Auditor-trusted devices (network certifiers, memory challengers) are onsite's; remote has none at the site.
+  coin is live, with no Fiat–Shamir and no retries. The one auditor-trusted device remote relies on is the auditor's
+  challenger, off the site, which draws each coin after the commitment it challenges: `trusted-host`, with the premises
+  `CoinsConfidential` and `OneClock` (stated in `verity/core/protocols/sampled_proofs/README.md`, not in Lean). Network
+  certifiers and memory challengers are onsite's.
 - **Not PoUB.** PoUB proves the bits a node read from its registered store
   (`verity/core/protocols/remote_bandwidth`); its Lean's "remote" names it, not the remote composite.
 
