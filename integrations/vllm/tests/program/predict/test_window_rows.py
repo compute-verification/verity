@@ -286,7 +286,7 @@ def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(w
     op is the prefill's at its site, its op path less the fx node, by its ordinal among the step's ops there. One missing
     there is refused."""
     low, _f, _t, weights, slots = window
-    s0, K = slots[0], 32
+    s0 = slots[0]
     rows, store = _served(low, s0, T=1)
     by: dict[tuple, list[int]] = {}
     for d in rows:
