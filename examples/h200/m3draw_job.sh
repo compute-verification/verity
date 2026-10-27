@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# m3draw.py on the H200: PHASE=commit writes the salt secret (~/.local/state/m3draw-1de3, 0600, never under
+# m3draw.py on the H200 (PRF-172): PHASE=commit writes the salt secret (~/.local/state/m3draw-1de3, 0600, never under
 # $OUT) and the roots; PHASE=open re-runs, checks the roots against inputs/roots.json, opens inputs/draw.json's units (their
 # values and salts, drawn.bin, beside the secret, never under $OUT) and checks them on CPU (m3check.py against
 # inputs/registration.json, the coin's session in inputs/coin.tgz, inputs/challenger-key.json and inputs/main.txt).

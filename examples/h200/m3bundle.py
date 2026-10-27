@@ -1,5 +1,5 @@
-"""M3 proper's drawn blocks: after the live coin, each drawn proof block of the registered H200 step as the
-tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member window of the block, registered
+"""M3 proper's drawn blocks (PRF-172, CMP-161): after the live coin, each drawn proof block of the registered H200 step as the
+tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member window of the block, registered
 ``subset:1``) and ``blocks/<g>/bundle.{json,bin}`` (`replay_bundle` v2, one unit, its draw the step's live one).
 
     python examples/h200/m3bundle.py weights --state DIR --registration REG.json --draw DRAW.json --out OPEN.json
@@ -14,9 +14,9 @@ tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member win
   written to ``summary.json``, and never redrawn. A norm's gain (one registered word a row) is a port of
   `RegisteredRead`\\ s, the embedding's token past the prompt the argmax its sequence committed a step before, and a PV
   block's V row past n a row of no reads (all zero).
-* **weights** (where the weights registration's witness is): every registered row a drawn block reads
-  (`window.Window.locate`'s `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes,
-  salt, string and path, each checked against the registered root (``REG.verify_read``).
+* **weights** (where CMP-160's witness is): every registered row a drawn block reads (`window.Window.locate`'s
+  `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes, salt, string and path,
+  each checked against the registered root (``REG.verify_read``).
 * **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the drawn
   blocks' slots, every step root and slot root held to the registered ``roots.json`` (exit 5 otherwise), and the drawn
   slots' committed rows at every step written to ``--private`` (0600, the prover's).

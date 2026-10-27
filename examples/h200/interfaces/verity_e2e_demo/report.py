@@ -11,7 +11,7 @@ inputs, which leave Markdown out, cover it), filled from one of three places, ea
 * `DERIVED`: a formula over the other two, filled once all its inputs are.
 
 A name with no value renders as ``⟨NAME⟩`` only in a draft (``render(..., draft=True)``, never ``main``), the closing
-table saying what fills it; a report is refused while any number is unfilled, naming each. A value may carry a ``label`` (``PyTorch dry run``, ``H200 bench``), printed beside it wherever it appears,
+table saying what fills it; a report is refused while any number is unfilled, naming each. A value may carry a ``label`` (``PyTorch dry run``, ``HASH-20 bench``), printed beside it wherever it appears,
 for a number that is not the demo block's own; ``--record-label`` labels every number read from the block records,
 once at the top and in the sources table.
 
@@ -774,9 +774,8 @@ def _line(lines: Sequence[str], head: str) -> list[tuple[str, dict[str, Any]]]:
 
 
 def proved_section(proved: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
-    """The drawn units' prove run as a section, one row per drawn proof block and one for the bundle's verdict, and
-    whether every drawn proof block was proved and accepted (module docstring); refuses a
-    VERDICT for a block the coin didn't draw."""
+    """DRAWPROVE's run as a section, one row per drawn proof block and one for the bundle's verdict, and whether every
+    drawn proof block was proved and accepted (module docstring); refuses a VERDICT for a block the coin didn't draw."""
     run, drawn, lines = proved.get("run"), proved.get("drawn"), proved.get("lines")
     if not RUN_ID.search(str(run or "")) or not isinstance(lines, list) or not isinstance(drawn, list) or not drawn:
         raise ValueError("measurements: proved needs its run id, the coin's drawn indices and the run's output lines")

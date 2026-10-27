@@ -5,7 +5,7 @@
 # Placed where M3 proper's runs ran: the step committed and replayed on vy-dc-h200-2, the coin from vy-challenger-1, and the
 # drawn blocks proved and the Lean verifier run together on vy-nebius-cpu-4. Level 2 needs the Lean verifier off the
 # machines the prover runs.
-# Demo B's memory terms (PoUS and the bandwidth audit on the H200, M4) aren't run here: once their run of record
+# Demo B's memory terms (PoUS and the bandwidth audit on the H200, M4) are memory-accounting's: once their run of record
 # exists, its id joins `runs` and `protocol` becomes a list with "pous" and "bandwidth". Nothing here claims them yet.
 protocol = "sampled_proofs"
 workload = "none"              # the frozen MQA shape on seeded INT8 weights, not yet an integration
@@ -17,10 +17,10 @@ verifier = "cpu-node"          # vy-nebius-cpu-4, the Lean verifier beside the p
 challenger = "auditor-host"    # vy-challenger-1, one live coin through the gate
 
 [evidence]
-# M3 proper: 8 live-drawn proof blocks, each proved by C-Flock --zk behind the firewall and accepted by Lean, one
+# DRAWPROVE (M3 proper): 8 live-drawn proof blocks, each proved by C-Flock --zk behind the firewall and accepted by Lean, one
 # flipped bit refused (at an 8-block draw, at most 43.77% of the step's proof blocks wrong at δ = 1%); Demo A's M3 report
-# v3.1; the drawn blocks' tree it proved, whose manifest names every phase's run; the step registration, recorded
-# before the coin; then the phases' runs: commit, the weights registration, coin, weights open, replay, build
+# v3.1 (#4964); the drawn blocks' tree it proved, whose manifest names every phase's run; the step registration, recorded
+# before the coin; then the phases' runs: commit, CMP-160's weights registration, coin, weights open, replay, build
 runs = ["r20261027-013625-8e25",
         "art:0e5de97332019dbd62a74222189ec65787fa52890f2acb8a083dda3244f4ed86",
         "art:c6dffca9da195a1fd516219c2008a350c48e861edcb9d0053436902f7d9585d6",

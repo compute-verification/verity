@@ -230,8 +230,8 @@ REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machin
 
 
 def tonight(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
-    """The fixtures from three runs' outputs: one all-protocols run's period 0 (``r2``: its ``reports.jsonl``),
-    another's window 10 (``r1``) and a wipe run (``wipe``: its ``results.json``, with
+    """The fixtures from the runs' outputs: r20261025-210358-993e's period 0 (``r2``: its ``reports.jsonl``),
+    r20261025-203534-186b's window 10 (``r1``) and the wipe run r20261025-224222-91e2 (``wipe``: its ``results.json``, with
     ``leg/wipe.json`` beside it). Each loop served 2 requests for 2 steps: ``[0, 2)``. The wipe's server is its session
     report's host, the hostname the runner names its node by (its ``placement`` names the node's alias)."""
     p0 = next(json.loads(x) for x in r2.read_text().splitlines() if json.loads(x)["period"] == 0)
