@@ -1,4 +1,4 @@
-"""γ for p512 at k = 2 under Daniel's 16:13Z rulings (decode-free, HBM capacity, node-level), from measured inputs.
+"""γ for p512 at k = 2 under the decode-free, HBM-capacity and node-level accounting rules, from measured inputs.
 
 γ = μ_chip + μ_sample + μ_rebuild + μ_host, with μ_rebuild = d/(k·x₁,adv) (memory-accounting's mainline model) and
 μ_host = d·B_spare/ΣB_HBM: the words a host process can sketch (or DMA into a GPU) from host DRAM in one step, as a

@@ -1,4 +1,4 @@
-"""The residual add, `ops.rows.Bf16AddRow_v1{N}` (CIR-104): units_add, elementwise, and its twin.
+"""The residual add, `ops.rows.Bf16AddRow_v1{N}`: units_add, elementwise, and its twin.
 
 OPS: y = bf16(RN(widen(a) + widen(b))): the words widened to f32 (exact), one add.rn.f32 with subnormals kept, then
 cvt.rn.bf16.f32 (RNE, every NaN 0x7FFF): `fp32.Bf16AddF2fp_v1` per element.  The sweep (op 8) holds it to the twin on

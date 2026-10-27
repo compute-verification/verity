@@ -216,9 +216,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   one's are the guarantee's named assumptions. One that asserts anything else (an unlisted `Prop`, `False`, a bound
   predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
-  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`, the one
-  its `reads` record holds, so
-  a changed assumption fails under its own name; an entry no guarantee reads fails. A list of modules is the old form:
+  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`: its `reads`
+  record's, else, wherever its module lies, that of it and every definition it reads in `meaning` and this repository's
+  modules (`Facts.lean`'s `assumption_reads`). So a change to an assumption or to what it reads fails under its own name,
+  and Daniel's DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
@@ -322,7 +323,7 @@ are is decided by code, not by text: every failure carries one (`check.py`'s `Fa
 `orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
 (`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
 `RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
-When the change lands on `main` (`research merge --push`, `research queue land`), Daniel gets a DM with each new, removed
+When the change lands on `main` (`research merge --push`, or drive's landing), Daniel gets a DM with each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one

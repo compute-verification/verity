@@ -1,4 +1,4 @@
-description = "co32c-u16-cohalf (H1, decision 82) with the LUT softmax with the sink its own block: key 0 out of the max and K's key 0 on its own scale, the head's from keys 1..s-1 of the window, L over a table 2^7 finer (P = e on [0, 127] as before) (PPL-LUT)"
+description = "co32c-u16-cohalf (H1) with the LUT softmax with the sink its own block: key 0 out of the max and K's key 0 on its own scale, the head's from keys 1..s-1 of the window, L over a table 2^7 finer (P = e on [0, 127] as before)"
 
 [[linear]]
 step = "smooth"

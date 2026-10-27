@@ -1,5 +1,5 @@
 """`AttentionSoftcap_v1{T, NH, KVH, D, BN, CAP}` — FA2 attention WITH logit soft-capping (`flash_fwd_splitkv_kernel<..., Is_softcap=true>`,
-vLLM + Gemma-2 `attn_logit_softcapping = 50`), STRUCTURE ONLY (lane gemma, window 2026-09-17): the body of `Attention_v3` ->
+vLLM + Gemma-2 `attn_logit_softcapping = 50`), STRUCTURE ONLY: the body of `Attention_v3` ->
 `AttentionHead_v3` -> `AttnBlock_v3` with the one stage FA2 adds, in the place FA2 adds it.
 
 FA2 (`flash_api.cpp::set_params_fprop`, `flash_fwd_kernel.h::compute_attn_1rowblock`, `softmax.h::apply_softcap`):

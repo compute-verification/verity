@@ -13,11 +13,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
-from verity.ml.definitions.registry import spec  # noqa: E402
-from verity.ml.definitions.registry.b1 import Serve  # noqa: E402
-from tests.program.crosscheck import _standalone  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.evaluation import evaluate_call
+from verity.ml.definitions.registry import spec
+from verity.ml.definitions.registry.b1 import Serve
+from tests.program.crosscheck import _standalone
 
 U32 = 0xFFFFFFFF
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
@@ -99,7 +99,7 @@ def test_verify_branch_tiny_evaluates_and_accepts_own_argmax():
 
 
 def _eval_program(prog: Program, inputs: list[list[int]]) -> list[int]:
-    from verity.ml.circuits.evaluate import evaluate_region
+    from verity.ml.circuits.evaluation import evaluate_region
     from verity.ml.circuits.layout import resolve
     C = prog.circuit
     t = {}
