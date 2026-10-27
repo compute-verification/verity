@@ -364,7 +364,7 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
     fields += linear("q_b_w", NH * (DN + DR), QL)
     fields += [("kv_a_ln", Array(L, BF16))]
     fields += linear("kv_b_w", NH * (DN + DV), L)
-    if G:   # vLLM's MLAAttention dequantises kv_b into its own bf16 storage at load: W_UK_T [NH][DN][L], W_UV [NH][L][DV] (VLLM-14)
+    if G:   # vLLM's MLAAttention dequantises kv_b into its own bf16 storage at load: W_UK_T [NH][DN][L], W_UV [NH][L][DV]
         fields += [("w_uk_t", Array(NH, mat(DN, L))), ("w_uv", Array(NH, mat(L, DV)))]
     fields += linear("o_w", H, NH * DV)
     fields += [("ln2", Array(H, BF16))]
@@ -463,7 +463,7 @@ def weights_type(C: dict[str, Any]) -> Record:
         i = next(k for k, (n, _) in enumerate(fields) if n == "lm_head")
         fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"], Value(8)))), ("lm_head_ws", Array(C["V"], Array(1, F32)))]
     if C.get("embed_normalizer") is not None:
-        # [ADAPTER lane cov-dense, 2026-09-17] Gemma-2 scales the embedding by `model.normalizer`, a 0-d bf16 *buffer* vLLM's
+        # Gemma-2 scales the embedding by `model.normalizer`, a 0-d bf16 *buffer* vLLM's
         # `Gemma2Model.__init__` registers as `torch.tensor(hidden_size ** 0.5)` at the model dtype — a root with no checkpoint
         # tensor.  It is an analytic table of one word (`normalizer_word(H)`, validated by `check_normalizer`, root class
         # `analytic-table` like `cos_sin`); declared as the LAST field so every existing leaf interval is unchanged.
