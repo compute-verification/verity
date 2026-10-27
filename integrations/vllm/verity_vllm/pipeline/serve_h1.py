@@ -11,7 +11,9 @@ own Commit.
   remaining steps empty (`pouw_h1.H1Run.close`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
   (`pouw_h1_served.declared`), and the weights' ``b/<K>`` registered under it (`pouw_h1_served.register_weights`), with a
-  key of this process's: no auditor's registration (``model-key``) is read yet.
+  key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds a node for each tile
+  unit (`units`), S × slot(T)/32 × Σn/32, and declaring it and its digest take time linear in them before the server
+  listens: about 7 minutes for Llama-3.2-1B at T 512 and S 16, about 3 minutes a step at T 2048. The server logs both.
 * **Coins.** The epoch's in-process coins, one epoch a window (`pouw_h1_settings.from_engine`): such a window credits
   nothing (`pouw_h1.IN_PROCESS`). The auditor host's challenger needs one gate session a window, which isn't wired here
   (``challenger`` is refused).
@@ -26,6 +28,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -82,6 +85,17 @@ def refusal(opts: Any) -> str | None:
     return None
 
 
+def units(shapes: Any, rows: int, steps: int) -> int:
+    """The tile units of the window Program `served.declared` builds over ``shapes`` (each ``(n, K)``) at T ``rows`` and S
+    ``steps``: one node of its body each, so declaring it and its digest cost time linear in them."""
+    from verity.core.protocols.pouw.circuit import h1window as HW
+
+    from verity_vllm.protocols.pouw import h1 as PH
+
+    r, c = PH.TILE
+    return int(steps) * (HW.slot(int(rows), PH.TILE) // r) * sum(int(n) // c for n, _k in shapes)
+
+
 class H1Windows:
     """The arm over ``model`` (the served `verity_vllm.LLM`'s) and the server's committer ``com``: T ``rows`` and S
     ``steps`` a window, ``config`` the pouw settings of ``--protocols-config``, ``engine`` the built ``vllm.LLM`` the
@@ -104,8 +118,14 @@ class H1Windows:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
         modules = {w: f"linear {w}" for w in range(len(self.layers))} | pouw._named(model, self.layers)
+        print(f"[serve-h1] declaring the window Program: {self.steps} steps of {len(shapes)} linears at T {self.rows}, "
+              f"{units(shapes, self.rows, self.steps)} tile units", flush=True)
+        t0 = time.perf_counter()
         self.program = SV.declared(shapes, modules, self.rows, self.steps, unit=unit)
+        t1 = time.perf_counter()
         self.digest = P.program_digest(self.program)
+        print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} in {time.perf_counter() - t1:.1f} s",
+              flush=True)
         self.weights = SV.register_weights(self.digest, shapes, SV.weights_of(self.layers), key or os.urandom(32))
         self.tap: Any = None
         self.comp: Any = None
@@ -176,4 +196,4 @@ class H1Windows:
                                         if o["gate"]["gate_passed"] is not None)}
 
 
-__all__ = ["ENTRY", "H1Windows", "OWN", "SCHEME", "SESSIONED", "config_of", "refusal"]
+__all__ = ["ENTRY", "H1Windows", "OWN", "SCHEME", "SESSIONED", "config_of", "refusal", "units"]

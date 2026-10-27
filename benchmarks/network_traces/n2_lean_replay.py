@@ -7,7 +7,11 @@ window, with negative controls: the replay the 8 Oct switch asks for before `ser
 A RUN_DIR is an `n2_zk.sh` run's record tree on its node: `out/n2zk/summary.json`, each member's
 `out/n2zk/<member>/verifier/` (what the verifier received, `n2_zk.RECEIVED`) and certifier-serve's runs under
 `out/runs/{honest,extra,late}`. Each member's link is rebuilt from its run as `n2_zk.link` builds it (honest's and
-tampered's from honest's). Per window, the verifier's inputs are read back from its files: the registration and the
+tampered's from honest's). Or a warden run's, `chain_record.sh`'s on the warden path (``n2_zk prove --warden-run``):
+its N2 tree under `out/n2/`, whose summary names the warden run (``warden_run``), and every member's link the warden
+link `warden_chain.link` rebuilds from that run's public ``deployment.json`` (`warden_dir`: where the summary's ``run``
+was, else the one under the run's `out/gates/` that names its run id). Per window, the verifier's inputs are read back
+from its files: the registration and the
 draw, the certificates' public fields, the declared syncs, the statement's public file, the ``pub`` and ``o0`` rows'
 salts and the output word, and the session files' SHA-512s. The findings of the verifier's own run of C-Flock's Lean
 verifier (`proofs.verify`, already Lean) are the run's: the summary row's `proof` (refused, or each session accepted
@@ -23,7 +27,10 @@ recorded (`outcome.json`'s ``network-audit`` verdict), whose digest binds the re
 negative controls mutate one input of every window and run both again: the output word's verdict bit, a bit of the
 ``pub`` salt, a bit of the egress certificate's signature, the certificates swapped, the window's sync outside Σ_sync,
 the findings refused, of another Program or of another unit, and a bit of the public file's ``o0`` commitment. A
-control passes when both verdicts agree in every field and reject. Writes `replay.json` (every window and control) and
+control passes when both verdicts agree in every field and reject. On a warden link, which reads no sync, the sync
+control is ``unread`` instead (the window's sync declared outside Σ_sync), which passes when both verdicts agree and are
+the window's own, and ``digest`` is added: the link under a warden's parameters digest one bit off, which both must
+reject (`WARDEN_CONTROLS`). Writes `replay.json` (every window and control) and
 prints one line a member and a total; exit 1 unless every window agrees with itself and its record and every control
 passes.
 """
@@ -42,6 +49,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import n2_zk as n2  # noqa: E402
+import warden_chain as WC  # noqa: E402
 from verity.core.protocols.certifier import advised as AD, head_check as HC, served as SV, service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate, Direction  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -53,6 +61,9 @@ from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding  # noq
 RUN_OF = {"honest": "honest", "tampered": "honest", "extra": "extra", "late": "late"}
 FIELDS = ("accepted", "public", "digest")
 CONTROLS = ("word", "salt", "signature", "swapped", "sync", "refused", "program", "units", "commitment")
+#: a warden link's: ``unread`` (the sync off Σ_sync, which neither verdict reads) in place of ``sync``, and ``digest``
+WARDEN_CONTROLS = ("word", "salt", "signature", "swapped", "unread", "digest", "refused", "program", "units",
+                   "commitment")
 
 
 def _certificate(doc: dict) -> Certificate:
@@ -113,7 +124,9 @@ class Window:
                 edit.get("delivered", self.delivered()), edit.get("findings", self.findings), self.sessions)
         return lw.python_verdict(*args), lw.lean_verdict(*args)
 
-    def controls(self, lw: SVC.LinkWindows, scratch: Path) -> dict[str, dict]:
+    def controls(self, lw: SVC.LinkWindows, scratch: Path, other: SVC.LinkWindows | None = None) -> dict[str, dict]:
+        """Each control's two accept bits and whether it passed; on a warden link `other` is the link under another
+        warden's digest (`_other_digest`)."""
         w, c = self.window, self.certificates
         outside = ClockSync(max(lw.sync_set.deltas) + 1, lw.sync_set.rhos[0])
         cut = scratch / f"{self.public.name}.flipped"
@@ -124,16 +137,20 @@ class Window:
             "signature": {"certificates": [dataclasses.replace(c[0], signature=_flip(c[0].signature)), c[1]]},
             "swapped": {"certificates": [c[1], c[0]]},
             "sync": {"syncs": [outside if k == w else s for k, s in enumerate(self.syncs)]},
+            "unread": {"syncs": [outside] * (w + 1)},
+            "digest": {"lw": other},
             "refused": {"findings": None},
             "program": {"findings": [dataclasses.replace(f, program="0" * 128) for f in self.findings or []]},
             "units": {"findings": [dataclasses.replace(f, units=(1,)) for f in self.findings or []]},
             "commitment": {"delivered": self.delivered(public=cut)},
         }
+        own, _ = self.verdicts(lw)
         out = {}
-        for name in CONTROLS:
-            py, ln = self.verdicts(lw, **edits[name])
+        for name in (CONTROLS if lw.warden is None else WARDEN_CONTROLS):
+            edit = dict(edits[name])
+            py, ln = self.verdicts(edit.pop("lw", lw), **edit)
             out[name] = {"python": py["accepted"], "lean": None if ln is None else ln["accepted"],
-                         "passed": _same(py, ln) and not py["accepted"]}
+                         "passed": _same(py, ln) and (_same(py, own) if name == "unread" else not py["accepted"])}
         return out
 
 
@@ -166,9 +183,37 @@ def _unpin(added: list[str]) -> None:
     AD.gate.cache_clear()
 
 
+def n2_dir(run: Path) -> Path:
+    """The run's N2 tree: `n2_zk.sh`'s `out/n2zk/`, or `chain_record.sh`'s `out/n2/`."""
+    for d in (run / "out" / "n2zk", run / "out" / "n2"):
+        if (d / "summary.json").is_file():
+            return d
+    raise FileNotFoundError(f"{run}: no out/n2zk/summary.json or out/n2/summary.json")
+
+
+def warden_dir(run: Path, summary: dict) -> Path:
+    """The warden run a warden N2 run proved (its summary's ``warden_run``): where its summary's ``run`` was, while that
+    is still there, else the directory under the run's `out/gates/` whose ``deployment.json`` (in it or its `out/`,
+    `warden_chain.found`) names that run id, as `chain_record.sh` keeps the gate's public files."""
+    want = summary["warden_run"]
+    gates = run / "out" / "gates"
+    kept = sorted({p.parent.parent if p.parent.name in ("out", "witness") else p.parent
+                   for p in gates.rglob("deployment.json")}) if gates.is_dir() else []
+    for d in [Path(summary["run"]), *kept]:
+        dep = WC.found(d, "deployment.json", required=False)
+        if dep is not None and json.loads(dep.read_text()).get("run_id") == want:
+            return d
+    raise FileNotFoundError(f"{run}: no deployment.json of warden run {want} at {summary['run']} or under out/gates")
+
+
+def _other_digest(lw: SVC.LinkWindows) -> SVC.LinkWindows:
+    """The warden link under a parameters digest one bit off its warden's: the ``digest`` control's link."""
+    return dataclasses.replace(lw, warden=SVC.WardenProfile(lw.warden.windows, _flip(lw.warden.digest)))
+
+
 def replay_run(run: Path, scratch: Path) -> dict:
     """Every member and window of one recorded run, with its controls, under the run's pins (`run_pins`)."""
-    base = run / "out" / "n2zk"
+    base = n2_dir(run)
     summary = json.loads((base / "summary.json").read_text())
     link = summary["link"]
     added = run_pins(link["gates"])
@@ -181,8 +226,15 @@ def replay_run(run: Path, scratch: Path) -> dict:
 def _replay(run: Path, base: Path, summary: dict, link: dict, added: list[str], scratch: Path) -> dict:
     out = {"run": run.name, "link": {k: link.get(k) for k in ("name", "unit", "program", "partition", "gates")},
            "pins_from_run": added, "members": {}}
+    warden = None
+    if summary.get("warden_run"):
+        wdir = warden_dir(run, summary)
+        warden, _, _ = WC.link(wdir)
+        out["warden"] = {"run": summary["warden_run"], "dir": str(wdir.relative_to(run) if wdir.is_relative_to(run)
+                                                                   else wdir)}
+    other = None if warden is None else _other_digest(warden)
     for name in sorted(p.parent.name for p in base.glob("*/verifier")):
-        lw, _ = n2.link(run / "out" / "runs" / RUN_OF[name])
+        lw = warden if warden is not None else n2.link(run / "out" / "runs" / RUN_OF[name])[0]
         structure = {"program": lw.partition["program"] == link["program"],
                      "partition": P.digest(lw.partition) == link["partition"],
                      "gates": [g.id for g in lw.gates()] == link["gates"], "kind": lw.kind, "by": SVC.OF_RECORD[lw.kind]}
@@ -198,7 +250,7 @@ def _replay(run: Path, base: Path, summary: dict, link: dict, added: list[str], 
                 "recorded": {k: rec.get(k) for k in FIELDS + ("sessions",)},
                 "registration": x.outcome.get("registration") == x.draw.registration.digest,
                 "agree": _same(py, ln), "as_recorded": _same(py, rec) and rec.get("sessions") == x.sessions,
-                "controls": x.controls(lw, scratch), "read": x.read})
+                "controls": x.controls(lw, scratch, other), "read": x.read})
         ok = all(w["agree"] and w["as_recorded"] and w["registration"]
                  and all(c["passed"] for c in w["controls"].values()) for w in windows)
         out["members"][name] = {"structure": structure, "windows": windows, "ok": ok and bool(windows),
@@ -210,7 +262,7 @@ def _task(run: str) -> dict:
     with tempfile.TemporaryDirectory() as d:
         try:
             return replay_run(Path(run), Path(d))
-        except Exception as e:  # a run missing or unreadable is reported, not skipped
+        except (Exception, SystemExit) as e:  # a run missing or unreadable (or warden_chain's refusal) is reported
             return {"run": Path(run).name, "error": f"{type(e).__name__}: {e}", "members": {}}
 
 

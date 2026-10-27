@@ -26,8 +26,8 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
   the staged ones (`Stage.pub`, `Stage.rows`), which piece C and `RowsShow` relate to the run.
 
 `readX_of_names`: where the component's inner session is held (`innerHeld`), V*'s list at its shape has one statement
-per part, Flock's own checks pass on the inner statement (`InnerOkAt`, which the compiled `innerHeld` does not run,
-the gap filed on PRF-201) and each part's session sets up (`PartsSetUp`, at `xrOf`, which reads no `readX`), the
+per part, Flock's own checks pass on the inner statement (`InnerOkAt`, which the compiled `innerHeld` runs as
+`innerOk`) and each part's session sets up (`PartsSetUp`, at `xrOf`, which reads no `readX`), the
 model reads `x` (`readXPre`, `readX`) at the component's inner shape, and `x` is dense (`DenseAt`).
 -/
 
@@ -38,6 +38,13 @@ open Flock
 open RecDeploy
 open FlockDeploy (jsonOf)
 open Lean (Json)
+
+/-- The coins the compiled part's session is set up on: the `--zk` keyed coin tree of one table. -/
+def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
+
+/-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
+def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=
+  Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1
 
 /-- **The inner statement `ri` is the inner session the component holds**, and `w`'s inner shape and registration
 are the component's. -/
@@ -55,7 +62,7 @@ structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs
   draw : ri.draw = (bs.get o.draw "the inner statement's draw").toOption
   work : ri.work = none
   workTable : ri.workTable = none
-  stratified : ri.stratified = none
+  stratified : ri.stratified = (Flock.HmRow.stratifiedLaw o.partition o.program 1).toOption.map (·.2)
   closure : ri.closure = none
   registered : ri.registered = none
   publicInputs : ri.publicInputs = none
@@ -97,8 +104,9 @@ def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core
       PartNames po pp bs j q
 
 /-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the draw, partition
-and program, its scope check, a draw, the header's draw at one table). The compiled `innerHeld` runs none of them;
-until it does (PRF-201), this is the hypothesis piece B reads. -/
+and program, its scope check, a draw, the header's draw at one table), which piece B reads. The compiled `innerHeld`
+runs them as `VStar.Recursive.innerOk`, at `--stratified` the population the verifier's partition and program give
+(`InnerNames.stratified`). -/
 def InnerOkAt (x : Msg) : Prop := ∀ w, decodeX x = some w → innerOk w.inner = .ok ()
 
 /-- **The model's reading of `x`** at the component's inner session: the verifier's own partition, its inner shape as

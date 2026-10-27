@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Properties.Verity.Recursive.Names
 import VStarRecursive
 
 /-!
@@ -32,13 +33,6 @@ namespace Verity.Recursive
 open Flock
 open RecDeploy
 open FlockDeploy (noIdentifier)
-
-/-- The coins the compiled part's session is set up on: the `--zk` keyed coin tree of one table. -/
-def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
-
-/-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
-def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=
-  Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1
 
 /-- **The staged statement's inputs are the compiled part's** (piece C's conclusion, at the fields the recursive setup
 and the scope check read): the model's reading `i` of part `j`'s staged statement holds, field by field, the values the
@@ -217,7 +211,7 @@ each part's circuit is V\*'s statement's of its index (`partsVStar`). -/
 theorem readX_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
     (hr : readXPre x = some r) (hparts : ∀ s p, r.w.parts[s]? = some p → PartSetup r st x ms s p) :
     readX x = some r ∧
-      ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.bindings r.w.parts vs = true := by
+      ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.parts vs = true := by
   have hrx : readX x = some r := readX_of_sessions hr fun s p hp => by
     obtain ⟨i, h, j, tags0, tags, circuitB, pubB, partition, program, registered, bindings, rows, draw, spec, sts,
       hi, hm, hsp, hhm, hset, hregs, hfull, hc, hscope⟩ := hparts s p hp
@@ -238,6 +232,16 @@ private theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b :
   | error e => simp [Functor.map, Except.map] at h
   | ok a => exact ⟨a, rfl, Except.ok.inj h⟩
 
+private theorem need_ok {b : Bool} {why : String} (h : VStar.Recursive.need b why = .ok ()) : b = true := by
+  unfold VStar.Recursive.need at h
+  split at h
+  · assumption
+  · first | (simp [throw, throwThe, MonadExceptOf.throw] at h; done) | cases h
+
+private theorem fits_ok {b : ByteArray} {what : String} (h : VStar.Recursive.fits b what = .ok ()) :
+    b.size < VStar.Recursive.FIELD_MAX :=
+  of_decide_eq_true (need_ok h)
+
 /-- The verifier's registered reads as the compiled part reads them off its `registered` object: none, not complete,
 no known rows and no parameters without one; else `registeredOf`'s, with its ports the verifier's own. -/
 def PartRegistered (pr : Option Lean.Json) (registered : Option (Array Registered.Port)) (complete : Bool)
@@ -247,8 +251,9 @@ def PartRegistered (pr : Option Lean.Json) (registered : Option (Array Registere
   | some r => ∃ own, VStar.Recursive.registeredOf r = .ok (own, complete, known, regParams) ∧ registered = some own
 
 /-- **What an accepted compiled part shows of its setup.** Where part `j`'s verdict (`VStar.Recursive.partVerdict`)
-is `.ok ()`, its readers read (the statement's tags, the part's circuit and staged public file, its registered reads,
-rows and bindings, its record and the record's draw, under hm96-sha512 rows), Flock's session and the verifier's
+is `.ok ()`, its readers read (the statement's tags, without plain leaves, the part's circuit and staged public file,
+under `FIELD_MAX` bytes, its registered reads and bindings, its record and the record's draw, under hm96-sha512 rows;
+its rows are the inner session's, `h.rows`), Flock's session and the verifier's
 own checks on it pass (piece D1's inputs: `checkProgram`, `buildSessionOf`, `checkComplete`, `checkCover`,
 `KnownRead.check`), the checks block passes (`RecChecks`), and so does the scope check. -/
 theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.Recursive.PartOwn}
@@ -256,14 +261,12 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     (hv : VStar.Recursive.partVerdict h j p s bs = .ok v) (hok : v = .ok ()) :
     ∃ (tags0 : Tags) (circuitB pubB : ByteArray) (registered : Option (Array Registered.Port)) (complete : Bool)
       (known : Array (String × Array (Array ℕ × ByteArray))) (regParams : Array String)
-      (rows : Option (Array Registered.Port)) (bindings : VStar.Bindings) (recordB : ByteArray) (record : String)
+      (bindings : VStar.Bindings) (recordB : ByteArray) (record : String)
       (draw : Lean.Json) (spec : SessionSpec) (sts : Array Stmt),
-      Tags.find? VStar.Recursive.STATEMENT = some tags0 ∧
+      Tags.find? VStar.Recursive.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
       bs.get p.circuit s!"part {j}'s circuit" = .ok circuitB ∧
-      bs.get s.pub s!"part {j}'s public file" = .ok pubB ∧
+      bs.get s.pub s!"part {j}'s public file" = .ok pubB ∧ pubB.size < VStar.Recursive.FIELD_MAX ∧
       PartRegistered p.registered registered complete known regParams ∧
-      p.rows.mapM (fun r => (do pure (← VStar.Recursive.registeredOf r).1).mapError (s!"rec rows: " ++ ·)) =
-        .ok rows ∧
       RecVStar.ownBindingsOfJson p.bindings = .ok bindings ∧
       bs.get s.record s!"part {j}'s record" = .ok recordB ∧ String.fromUTF8? recordB = some record ∧
       (partTags tags0 circuitB).hm96Rows = true ∧ Witness.recordDraw record = some draw ∧
@@ -275,7 +278,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
       sts.forM (fun st => Registered.checkCover st.c (some p.program) (some p.partition) registered regParams) =
         .ok () ∧
       sts.forM (fun st => KnownRead.check st.c known) = .ok () ∧
-      RecChecks h j tags0 (partTags tags0 circuitB) circuitB p.partition p.program registered bindings rows
+      RecChecks h j tags0 (partTags tags0 circuitB) circuitB p.partition p.program registered bindings (some h.rows)
         (some draw) sts ∧
       ProvedScope.checkOf (ProvedScope.circuitOf (partTags tags0 circuitB) circuitB []) (partTags tags0 circuitB) true
         pubB 1 false registered.isSome = .ok () := by
@@ -285,8 +288,12 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
   · rw [ht] at hv
     first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
   simp only [ht] at hv
+  obtain ⟨⟨⟩, hpl, hv⟩ := bind_ok hv
+  have hpl : tags0.plainLeaves = false := by simpa using need_ok hpl
   obtain ⟨circuitB, hcB, hv⟩ := bind_ok hv
   obtain ⟨pubB, hpB, hv⟩ := bind_ok hv
+  obtain ⟨⟨⟩, hfp, hv⟩ := bind_ok hv
+  have hfp := fits_ok hfp
   rcases hpr : p.registered with _ | rj <;> simp only [hpr] at hv <;>
     obtain ⟨⟨registered, complete, known, regParams⟩, hreg, hv⟩ := bind_ok hv
   on_goal 1 =>
@@ -307,7 +314,6 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     clear hreg
   all_goals
     try dsimp only at hv
-    obtain ⟨rows, hrows, hv⟩ := bind_ok hv
     obtain ⟨bindings, hbind, hv⟩ := bind_ok hv
     obtain ⟨recordB, hrecB, hv⟩ := bind_ok hv
     rcases hrec : String.fromUTF8? recordB with _ | record
@@ -336,14 +342,15 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     obtain ⟨hhm, hrd⟩ := hdraw
     try dsimp only at hst
     split at hst
-    · rename_i spec sts hb
+    · rename_i spec sts hb0
       have hlaw : ProvedScope.drawLaw true T false (some d) = .ok () := by
         cases hl : ProvedScope.drawLaw true T false (some d) with
         | error e => simp [hl, Except.map] at hst
         | ok u => rfl
-      obtain ⟨⟨⟩, hprog, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hinn, hb⟩ := bind_ok hb
-      obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hprog, hb1⟩ := bind_ok hb0
+      obtain ⟨⟨⟩, hinn, hb2⟩ := bind_ok hb1
+      obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb2
+      clear hb0 hb1 hb2 hst hv
       subst hT
       cases complete <;> simp only [Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at hb
       on_goal 2 => obtain ⟨⟨⟩, hcomp, hb⟩ := bind_ok hb
@@ -359,8 +366,8 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
         obtain ⟨⟨⟩, htop, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hlink, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hlab, hb⟩ := bind_ok hb
-        refine ⟨tags0, circuitB, pubB, registered, _, known, regParams, rows, bindings, recordB, record, d, spec0,
-          sts0, rfl, hcB, hpB, hPR, hrows, hbind, hrecB, hrec, hhm, hrd, hprog, hbuild, ?_, hcov, hkn,
+        refine ⟨tags0, circuitB, pubB, registered, _, known, regParams, bindings, recordB, record, d, spec0,
+          sts0, rfl, hpl, hcB, hpB, hfp, hPR, hbind, hrecB, hrec, hhm, hrd, hprog, hbuild, ?_, hcov, hkn,
           ⟨hinn, hchk, hone, hshape, hcoins, hpub, hlr, htop, hlink, hlab, fun _ => hlaw⟩, hscope⟩
       · intro hc
         cases hc

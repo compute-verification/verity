@@ -1,5 +1,5 @@
-# The stacked-share tool and its tests. Not a package: units.py runs on a Build's Program where vLLM's registry is importable
-# (job.sh, on a GPU node), atoms.py where the registry imports (frontier_job.sh, on a CPU node), share.py and frontier.py
+# The stacked-share tool and its tests. Not a package: units.py runs on a Build's Program where vLLM is importable
+# (job.sh, on a GPU node), atoms.py where `verity.ml.definitions.registry` imports (frontier_job.sh, on a CPU node), share.py and frontier.py
 # anywhere; their toys run here as a suite (`uv run tools/verity/check/suites.py benchmarks/stacked_share`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
