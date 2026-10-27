@@ -31,6 +31,12 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   accounted share (the declared MACs alone: tensor-only accounting credits none of the protocol's work), the plain
   GEMM's floor, the protocol's share and the host's gaps, with the certified MACs (the declared plus the peels) apart and
   each period's clock and power.
+- `energy.py`: the unaccounted share from energy under a power premise (CMP-231's measure, not yet ruled): the hidden
+  useful MACs a period's measured energy could still pay for, after the floors of the declared MACs, the peels, the
+  hashing, forming and idle, at the cheapest useful MAC's energy and capped by the tensor time the certified MACs leave,
+  over θ x wall. Each share is stated against 3%, beside the certified and declared MACs over θ x wall. The energy is
+  nvidia-smi's power.draw (the GPU's own sensor, a stand-in and not a premise) until an auditor-side meter's trace takes
+  its place; the floors (`FLOORS`) are the H200's measured ones by operand class.
 - The prover is `benchmarks/pouw/accel_v31`, with its sm_90a port and no-fold fast path: `period.py` imports its `v31`
   and `v31lib`, and `run.sh` builds its `v31.cu` (`-DV31_LIB`) and records their hashes. It builds for both cards:
   sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4` and `V31_SAHEAD 1` are
