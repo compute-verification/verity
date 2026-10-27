@@ -21,9 +21,11 @@ binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and t
 once every check has passed, with `refused: <why>: …`, so a session that fails a check keeps that check's reason.
 `flock_verify_sound` is the one theorem over everything it accepts (`Security/Proofs/Flock/`).
 
-A recursive statement is one `verify --zk` per V* part, and no part sees another. `flock-verify rec-compose --rec-inner F
---rec-rows F LOG...` (`Flock.RecCompose.check`) accepts the statement only when there is one log per V* statement and
-every part is accepted at the one shared rows file the prover staged.
+A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
+(`rec_part`) and the SHA-512 of the shared rows file it checked (`rec_rows_sha512`). `flock-verify rec-compose
+--rec-inner F --rec-rows F LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there
+is one log per V* statement and every part is accepted at the one rows file the prover staged (`acc0`, the tops, the
+`rec-c<k>` rows). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part that one file.
 
 **Archived formats.** The statement names pinned at older commits (`verity/flock-circuit@<commit>`, back to
 `verity/flock-netlist/v1`) are still parsed, so recorded sessions keep their names, and every one before `hm96-sha512`
