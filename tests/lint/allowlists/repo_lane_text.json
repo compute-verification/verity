@@ -84,7 +84,7 @@
     {"file": "Security/Definitions/Pous/Model/SecureErasure.lean", "count": 2},
     {"file": "Security/Definitions/Pous/Model/StreamedWipeServer.lean", "count": 1},
     {"file": "Security/Definitions/Pouw.lean", "count": 1},
-    {"file": "Security/Definitions/Pouw/Assumptions/Dimension/Embed.lean", "count": 3},
+    {"file": "Security/Definitions/Pouw/Assumptions/Dimension/Embed.lean", "count": 4},
     {"file": "Security/Definitions/Pouw/Assumptions/Dimension/H100Measured.lean", "count": 1},
     {"file": "Security/Definitions/Pouw/Assumptions/Dimension/OpenPipe.lean", "count": 1},
     {"file": "Security/Definitions/Pouw/Assumptions/Dither.lean", "count": 17},
