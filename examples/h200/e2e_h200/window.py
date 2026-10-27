@@ -1,5 +1,5 @@
-"""The H200 window writer (CIR-115): where each proof block's input ports read their bytes in the step commitments, the
-counterpart of the toy's ``torch_loop_window`` (`verity_e2e_demo.replay_bundle`) for circuits' FAMILIES map (`plan.Map`).
+"""The H200 window writer (CIR-115): where each proof block's input ports read their bytes in the step commitments, for
+circuits' FAMILIES map (`plan.Map`).
 
 **The layout.** `shared_layout` is FAMILIES' shared-row commit layout, one commit unit a row of at most
 ``row`` bytes (1 KiB), built from the map's groups (the embedding, each layer, the head):
