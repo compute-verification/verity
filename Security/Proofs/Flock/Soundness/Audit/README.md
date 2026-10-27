@@ -173,7 +173,7 @@ $\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le (
 $B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a faulty proof block's harm; `audit_work_closure_of_record`:
 $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 
-**Theorems, windows of calls** (`Audit/Window.lean`; X-SPC-105, X-SPC-106): a window is one stratified sampling design
+**Theorems, windows of calls** (`Audit/Window.lean`): a window is one stratified sampling design
 over its (call, template) strata, the calls drawn independently. `Covers σ k w K`: every stratum draws at least its
 share $K w_s n_s / W$, or all its units. `stratified_escape_le_of_covers`: then
 $\mathrm{escape}(B) \le ((W - W_B)/W)^K$, for any such sampling design. `covers_work`: the work sampling design covers

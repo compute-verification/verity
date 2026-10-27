@@ -180,7 +180,7 @@ window. A source is a finite probability space `Ω` (`prCoin` weighs its outcome
 `sec ω`. The source is uniform when every event about the secret has the probability it has for `S` uniform bytes.
 
 What A5 assumes of the verifier is that its window secret is such a source: `secrets.token_bytes(32)` from the operating
-system's CSPRNG, drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`). A
+system's CSPRNG, drawn once the window's receipt is complete and used for that window alone (`Ledger.open`). A
 secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.
 
 The verifier's platform is Linux, with CPython 3.12 or later. There `secrets.token_bytes` reads `os.urandom`, which is

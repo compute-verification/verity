@@ -37,7 +37,7 @@ read:
   round at an inner-ready statement in scope where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.halted_live`);
 * `ZKStop_meets_ready`: where that leaves the stop live. The inner statement `RecDeploy.PlainLeavesAdmitted` names
-  (#2468's) is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
+  is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
   round before the staging round where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.ready_of_admitted`); so it does wherever the inner statement's size, its regions and its honest record
   fit, which in scope are the inner readiness the stop reads (`RecDeploy.ready_inScope_iff`);

@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.ExecSetup
 /-!
 # A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (1e for templates, T2)
 
-`HmRow.parse … (tmpl := some t)` is the path `parseTyped` takes for a typed template (#277, #307):
+`HmRow.parse … (tmpl := some t)` is the path `parseTyped` takes for a typed template:
 - `parse_facts_tmpl`: its nets are the template's root and placed layouts' circuits, then the file's own text nets and
   lookup slots; its unit is the root (`unitNet = 0`), one per template instance; its block is `blockOf t` over those nets; its wires are
   the rows' own chains (`rowWires`), with no leaf map or cut; and `HmRow.check` passed. A typed statement's rows are

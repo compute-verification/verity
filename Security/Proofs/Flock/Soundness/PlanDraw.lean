@@ -10,7 +10,7 @@ the window's one key, and the window around it:
   without a call index.
 * `drawn key call strata L`: the units `plan.draw` draws for one call, before sorting: each stratum's
   `Key.subset(k, len(units), context)`, mapped through its units, each swap's stream read to `L` bytes.
-* `window key calls L`: every call admitted, no call index framed twice (X-SPC-107's admission inside the draw), then each
+* `window key calls L`: every call admitted, no call index framed twice (the admission inside the draw), then each
   call's `drawn` under the one key, its units in the window's numbering.
 -/
 
