@@ -1,5 +1,6 @@
 import Mathlib.Data.Nat.Size
 import Definitions.Core.Partition
+import Definitions.Core.Digest
 
 /-!
 # The advice root, with every string it hashes
@@ -10,9 +11,10 @@ A private partition is registered as advice under a hidden root (`verity.ml.comm
 a statement can name the strings a broken binding collides: `hashInputs`, every string hashed from the rows up to the
 root.
 
-`H` is the hash on byte strings, with 64-byte digests: SHA-512 in the deployment (the one-hash rule). Nothing here
-assumes anything of `H`. A statement over this model holds for every `H`, and where it needs two hashed strings to differ
-in digest, it concludes instead that two distinct strings of the registrations' `hashInputs` share one.
+`H` is the hash on byte strings, with core's 64-byte digests (`Verity.Digest`): SHA-512 in the deployment (the one-hash
+rule). Nothing here assumes anything of `H`. A statement over this model holds for every `H`, and where it needs two
+hashed strings to differ in digest, it concludes instead that two distinct strings of the registrations' `hashInputs`
+share one.
 
 Row `i` (bytes `row`) under salt `y` hashes, as `advice.py`'s `leaf` does:
 * `x = H(rowPrefix ‖ row)`, the row's `sha512/row/v2` digest (`rowInput`);
@@ -32,9 +34,6 @@ pad. Which rows a partition has is partition v2's `rows`, padded with zero rows 
 -/
 
 namespace Verity.Advice
-
-/-- A digest: 64 bytes, SHA-512's whole output. -/
-abbrev Digest := Vector UInt8 64
 
 /-- The framing of the advice's hashes: every byte of their inputs besides the rows, the salts and the digests they
 chain. Each is a constant of the public statement (its domain, the hm96 key, the row width). -/
@@ -77,7 +76,7 @@ def saltInput (y : List UInt8) : List UInt8 := F.saltPrefix ++ y
 /-- The input of hm96's tree leaf `t`: the leaf prefix, then the commit string `b ‖ c`, `b = x ⊕ M·y`. -/
 def hmInput (row y : List UInt8) : List UInt8 :=
   F.leafPrefix ++
-    ((Vector.zipWith (· ^^^ ·) (H (rowInput F row)) (F.mask y)).toList ++ (H (saltInput F y)).toList)
+    (Digest.bytes (fun i => H (rowInput F row) i ^^^ F.mask y i) ++ (H (saltInput F y)).bytes)
 
 /-- The input of the frame-v3 leaf of row `row` at rank `i` under salt `y`. -/
 def leafInput (i : ℕ) (row y : List UInt8) : List UInt8 := F.leaf i (H (hmInput H F row y))

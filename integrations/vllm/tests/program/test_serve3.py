@@ -22,11 +22,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.codec import program_digest  # noqa: E402
-from verity.ml.definitions.registry import b1, serve3  # noqa: E402
-from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
-from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.codec import program_digest
+from verity.ml.definitions.registry import b1, serve3
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.b1 import weights_type
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,

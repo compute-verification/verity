@@ -25,8 +25,12 @@ SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 window's evidence in the close's order, `Credit.PERIOD_KEYS` (its identity, session, salt, manifest, served rows, Commit
 record, round log, draw, descriptor, registered entries, each drawn unit's proof outcome and its live evidence).
 
-**The check** is `Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal,
-`code: why`. It never leaves a period undecided.
+**The check** first refuses, by name (`form: why`, `form`), every window in a form the period's proved guarantee
+(`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
+window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
+J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
+`Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`. It
+never leaves a period undecided.
 
 **Public**, on acceptance: `Credit.PeriodCredit.toJson`, each window's credited calls, its credited served work, the K
 the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it.
@@ -83,10 +87,84 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   unless keys j == some evidenceKeys do throw s!"keys are not {", ".intercalate evidenceKeys}"
   pure { pins := get j "pins", windows := get j "windows" }
 
+/-- The guarantee a credited period is proved under. -/
+def GUARANTEE : String := "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod"
+/-- A Pearl-C pass's evidence (`credit.PEARL_C_KEYS`). -/
+def PASS_KEYS : List String := ["context", "descriptor", "manifest", "session"]
+def TILE_ID : String := "PouwH1Tile_v"
+/-- The one tile the guarantee covers: a drawn per-call unit over it is proved as its 32 lanes and their combine
+(`h1zy.PouwH1LaneZy_v2`, `PouwH1Combine_v2`). -/
+def COVERED_TILE : String := "PouwH1Tile_v5{"
+
+def count (s pat : String) : Nat := (s.splitOn pat).length - 1
+
+def passForm (nm : String) (i : Nat) : String :=
+  s!"window {i} of period {nm} is a Pearl-C pass (\{context, descriptor, manifest, session}), which this protocol " ++
+  s!"never credits: a Pearl-C pass earns only in a Pearl-C period, and {GUARANTEE} covers H1 windows at J10-R alone"
+
+def notH1 (nm : String) (i : Nat) (fn : String) : String :=
+  let name := (fn.splitOn "{").headD ""
+  s!"window {i} of period {nm} proves {name}, not an H1 window ({Credit.WINDOW_FN}): a " ++
+  "per-tile protocol's tile (PouwH1Tile_v1 at K = 64, 4 × 8, or a Pearl-C leaf) or any other circuit is outside " ++
+  s!"{GUARANTEE}, which covers H1 windows at J10-R alone"
+
+def perUnit (nm : String) (i k : Nat) : String :=
+  s!"window {i} of period {nm} is an H1 window whose template at K = {k} takes per-unit noise (its parameters end " ++
+  "in roots, not J10-R's call and blocks: PouwH1Tile_v1, v3 or v4), which " ++
+  s!"{GUARANTEE} doesn't cover: serve it over J10-R's PouwH1Tile_v5"
+
+def notV5 (nm : String) (i k : Nat) : String :=
+  s!"window {i} of period {nm} is a J10-R window whose unit at K = {k} is not over PouwH1Tile_v5 alone (v6's " ++
+  s!"one-stream z, or no named tile): {GUARANTEE} covers the per-call unit over PouwH1Tile_v5, proved as its 32 " ++
+  "lanes and their combine"
+
+def manyStrata (nm : String) (i : Nat) (ks : List Nat) : String :=
+  s!"window {i} of period {nm} has units at {ks.length} K's ({Credit.listStr ks}), so its draw is over that many " ++
+  s!"strata, and {GUARANTEE} draws from one tile stratum (TileDrawIsCoin): serve a window's linears at one K"
+
+/-- Why window `i` of period `nm` is a form `GUARANTEE` doesn't cover, read from its evidence alone: a Pearl-C pass,
+a circuit that is not an H1 window, a template over per-unit noise, a J10-R unit over a tile other than
+`COVERED_TILE`, or units at more than one K. `none` for a covered window, and for evidence too malformed to read,
+which `Credit.periodCredit` refuses. -/
+def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
+  if keys w == some PASS_KEYS then return some (passForm nm i)
+  let some d := (match get w "descriptor" with
+      | .str s => if Credit.isHexBytes s then hex? (.str s) else none
+      | _ => none) | return none
+  let some j := (String.fromUTF8? d).bind Credit.loads? | return none
+  let .str fn := get j "program_fn" | return none
+  let defs := get j "definitions"
+  unless fn.startsWith (Credit.WINDOW_FN ++ "{") do return some (notH1 nm i fn)
+  let some tiles := ((Flock.Program.recordPairs fn).find? (·.1 == "TILES")).bind (Credit.loads? ·.2) | return none
+  let .arr ts := tiles | return none
+  let mut ks : List Nat := []
+  for t in ts do
+    let .arr p := t | return none
+    let [kj, f] := p.toList | return none
+    let (some k, some tid) := (nat? kj, str? (get f "fn")) | return none
+    let dj := get defs tid
+    let some (_, _, j10r) := Credit.tileOf dj tid k | return none
+    unless j10r do return some (perUnit nm i k)
+    let u := (SampledProofs.PyJson.canonical (get (get dj "bindings") "UNIT")).toOption.getD ""
+    unless 0 < count u TILE_ID && count u TILE_ID == count u COVERED_TILE do return some (notV5 nm i k)
+    ks := ks ++ [k]
+  if 1 < ks.length then return some (manyStrata nm i ks)
+  return none
+
+/-- The first window of `windows` in a form `GUARANTEE` doesn't cover (`windowForm`), else `none`. -/
+def form (nm : String) (windows : Json) : Option String := Id.run do
+  let .arr ws := windows | return none
+  for (w, i) in ws.toList.zipIdx do
+    if let some why := windowForm nm i w then return some why
+  return none
+
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Credit.PeriodCredit Profile :=
-  match Credit.periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
-  | .ok pc => .accept pc { period := p.name, windows := pc.windows.length }
-  | .error (code, why) => .reject s!"{code}: {why}"
+  match form p.name e.windows with
+  | some why => .reject s!"form: {why}"
+  | none =>
+    match Credit.periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
+    | .ok pc => .accept pc { period := p.name, windows := pc.windows.length }
+    | .error (code, why) => .reject s!"{code}: {why}"
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("period", .str pr.period), ("windows", toJson pr.windows)]

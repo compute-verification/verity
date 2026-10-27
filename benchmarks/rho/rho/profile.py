@@ -32,13 +32,14 @@ class Profile:
     # Activations and values
     #: `b_a`: bits per novel activation read (`WeightsIncompressible`'s activation side, `ThreadedThrottled`)
     b_a: float | None = None
-    #: `f`: bits per value read (`ValueReadHardness`, `ActivationReads`)
+    #: `f`: bits per value read (`ValueReadHardness`)
     f: float | None = None
-    #: `a`: an accumulation entry's width (`ActivationReads`, `psRate`)
-    width: float | None = None
     #: `β_x`: fresh bits a block pays per counted activation it uses, at a rate that survives replay (the draft's
     #: Proposition 3; measured on exact blocks)
     beta_x: float | None = None
+    #: `d`: values in a token's activation where it enters a layer (the residual stream), so a token's entry into a
+    #: block is `β_x d` bits (`HeldRate`'s `βe`)
+    residual_width: float | None = None
 
     # The keyed token structure (`Keyed`)
     #: `d`: legs of a token's accumulation chain
@@ -77,8 +78,6 @@ class Profile:
     layer_bits: float | None = None
     #: the block size up to which the `Threading` certificate is checked (`ReferenceThreaded`: `S ≤ 2·10⁷`)
     thread_k: float | None = None
-    #: `n`: an accumulation entry's width (`Cube.Wide`; kv_b's 512 in Kimi K2)
-    entry_width: float | None = None
 
     # Prices (`ParameterHardPricedAt`)
     #: `Σ_b p_b / |𝓜*|`: the chained blocks' mean weight price, bits
@@ -107,6 +106,8 @@ class Profile:
     beta_x_marginal: float | None = None
     #: bits per partial sum a tile hands on
     psum_bits: float | None = None
+    #: `β_g`: bits per value of the exit gradient a block doing Dgrad receives (an achievable code)
+    beta_g: float | None = None
     #: bits of state one token's computation carries between blocks (`U_token`, `benchmarks/nci`): its updated weights
     #: and, inside an optimizer step, the gradient accumulators a block hands on
     token_state_bits: float | None = None

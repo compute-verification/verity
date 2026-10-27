@@ -5,12 +5,11 @@ with their decisions, and `reference_charge`'s results on each: window by window
 book's priors. `check` runs the Lean half in its Lean audit (`runs` in `lean/lean-audit.json`):
 `lean/NetworkCertifier/ChargeDifftestMain.lean` evaluates every instance with the program's `AdviceV1.window` and
 `AdviceV1.charges` and fails on any difference, and `security_proofs` proves `charges` equal to `NetTiming.AdviceV1`'s
-(`CodeChargesV1`), which `BitsCount` for advice v1 is proved of. circuit-check holds `ChargeCount_v1{N}`'s circuit to
-`reference_charge`, so this is what holds the circuit's charge to the one the Lean proofs count. The audit checks that
-data against the record's SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what
-says the data is still what this package computes: a change to `reference_charge` changes the data, fails this test, and
-`check.py --update` records the new data, which makes `check` run the Lean half on it. The other test checks that the
-generator reaches what its docstring says.
+(`CodeChargesV1`). circuit-check holds `ChargeCount_v1{N}`'s circuit to `reference_charge`, so this is what holds the
+circuit's charge to the Lean definition's. The audit checks that data against the record's SHA-256, and its pass is
+cached on the Lean package's files alone, so the test here is what says the data is still what this package computes:
+a change to `reference_charge` changes the data, fails this test, and `check.py --update` records the new data, which
+makes `check` run the Lean half on it. The other test checks that the generator reaches what its docstring says.
 """
 
 from __future__ import annotations

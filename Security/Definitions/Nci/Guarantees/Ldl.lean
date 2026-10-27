@@ -11,9 +11,12 @@ The working draft's Lemma 1, Theorem 3 and Corollary 4b, on core's circuit and `
   `|C| ≥ (c / q) Σ_v ω_v`.
 * `FanOutBound` (Corollary 4b): with activation fan-out at most `e` and `ActivationRate`,
   `ρ ≥ c β_x M / (T₀ e h_x)`, `h_x = k' + λ_x`.
+* `PairBound`: with each (weight, entry) pair counted once and `HeldRate`, `ρ ≥ 4 c β_w β_e M / (T₀ h²)`,
+  `h = k' + ℓ`.
 
-`ρ = |C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` the size of the
-reference circuit. The statements are about an arbitrary circuit, not the NCI check's code.
+The overhead `|C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` a
+reference construction's size, which bounds the threshold. The statements are about an arbitrary circuit, not the NCI
+check's code.
 -/
 
 namespace Nci.Ldl.Guarantees
@@ -35,7 +38,7 @@ def BlockDescription : Prop :=
 
 /-- **Theorem 3 (counting)**: let `P` have exactly `c` operation gates per block, and give each gate `v` of a set `V`
 of operation gates a counting weight `ω v`. If `q > 0` and every block's counted weight `Σ_{v ∈ V ∩ I} ω v` is at most
-`q`, then `|C| ≥ (c / q) Σ_{v ∈ V} ω v`, and for a reference size `T₀ > 0`, `ρ = |C| / T₀ ≥ (c / (T₀ q)) Σ_{v ∈ V} ω v`.
+`q`, then `|C| ≥ (c / q) Σ_{v ∈ V} ω v`, and for a reference size `T₀ > 0`, the overhead `|C| / T₀ ≥ (c / (T₀ q)) Σ_{v ∈ V} ω v`.
 
 Each gate of `V` lies in one block, so `Σ_{v ∈ V} ω v ≤ q B`, and `|C| = c B`. The weights need not be nonnegative. -/
 def Counting : Prop :=
@@ -48,7 +51,7 @@ def Counting : Prop :=
 read by at most `e` of them. Let the run `X = eval inp` take the registered values. If the decoder evaluates blocks for
 the activation tuples `a` within `t` at overhead `aBlk` (`EvaluatesBlocks`, Lemma 1's allowance) and they meet
 `ActivationRate β Λ t`, `LDL_{t,R}(a_I) ≥ β |V_I| − Λ` with `β > 0`, then for `h = k + ⌈log₂ B⌉ + aBlk + Λ` and a
-reference size `T₀ > 0`, `ρ = |C| / T₀ ≥ c β M / (T₀ e h)`.
+reference size `T₀ > 0`, the overhead `|C| / T₀ ≥ c β M / (T₀ e h)`.
 
 Lemma 1 gives `β |V_I| − Λ ≤ k'`, so `|V_I| ≤ h / β`; fan-out gives `|𝓙_I| ≤ e |V_I| ≤ e h / β`; Theorem 3 with unit
 weights on the representatives gives the bound. No weight-price premise is used, nor that a product's multiplication
@@ -61,5 +64,26 @@ def FanOutBound : Prop :=
     CKPartition d R.P c k → R.Consistent (d.D.eval inp) → M.FanOut e → 0 < β → 0 < T₀ →
     Assumptions.EvaluatesBlocks D t R a aBlk → Assumptions.ActivationRate β Λ t D R M a (d.D.eval inp) →
       c * β * M.J.card / (T₀ * e * (k + Nat.clog 2 n + aBlk + Λ)) ≤ d.D.size d.D.computed / T₀
+
+/-- **The pair bound**: let `R` be a `(c,k)`-partition of `d`, with `B = n` blocks, and `M` counted product occurrences
+`J`, each assigned to the block of its representative gate, each naming the weight `wt p` it reads and the entry
+`src p` it descends from, no two naming the same pair (each (weight, entry) pair counted once). Let the run
+`X = eval inp` take the registered values. If the decoder evaluates blocks for the tuples `a` within `t` at overhead
+`aBlk` (`EvaluatesBlocks`) and they meet `HeldRate βw βe ℓ t`, `LDL_{t,R}(a_I) ≥ βw |W_I| + βe |S_I| − ℓ` with
+`βw, βe > 0`, then for `h = k + ⌈log₂ B⌉ + aBlk + ℓ` and a reference size `T₀ > 0`,
+`ρ = |C| / T₀ ≥ 4 c βw βe M / (T₀ h²)`.
+
+Lemma 1 gives `βw |W_I| + βe |S_I| ≤ h`; distinct pairs give `|𝓙_I| ≤ |W_I| |S_I|`, at most `h² / (4 βw βe)` (AM–GM);
+Theorem 3 with unit weights on the representatives gives the bound. It survives a block that recomputes activations from
+the layers it holds (`ActivationRate`'s docstring), since those are free under `HeldRate`, and replay, since a replayed
+product names a pair already counted. When `h = 0` the bound is `0`. -/
+def PairBound : Prop :=
+  ∀ (d : Declaration) (n c k : ℕ) (R : Registration d n) {ι A W S : Type} [DecidableEq W] [DecidableEq S]
+    (M : Products d.D ι A) (wt : ι → W) (src : ι → S) (D : Decoder) (t aBlk : ℕ)
+    (a : Fin n → d.D.Transcript → List Bool) (βw βe ℓ T₀ : ℝ) (inp : d.D.Transcript),
+    CKPartition d R.P c k → R.Consistent (d.D.eval inp) → Set.InjOn (fun p => (wt p, src p)) M.J →
+    0 < βw → 0 < βe → 0 < T₀ → Assumptions.EvaluatesBlocks D t R a aBlk →
+    Assumptions.HeldRate βw βe ℓ t D R M wt src a (d.D.eval inp) →
+      4 * c * βw * βe * M.J.card / (T₀ * (k + Nat.clog 2 n + aBlk + ℓ) ^ 2) ≤ d.D.size d.D.computed / T₀
 
 end Nci.Ldl.Guarantees

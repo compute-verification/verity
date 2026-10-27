@@ -8,20 +8,26 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from rho import attacks
+from rho import attacks, classes
 from rho.attacks import ATTACKS, Measured, Point
 from rho.classes import FlopBudget, Outside
+from rho.params import Registry
 from rho.profile import Profile
+from rho.scenario import build
 
 KIMI = Profile(
     name="full", kappa=0.602, state_bits=1.04e12 * 16, kappa_forward=0.294, token_state_bits=8e10,
     flops_per_token=2.07e11, cut_bits=2 * 28672, token_bits=20, decode_flops=0, state_splits=True,
     shared_state_bits=math.inf, tile_weight_bits=8, beta_x_marginal=2.6, psum_bits=16, tile_inputs=7168,
-    tile_outputs=4096)
+    tile_outputs=4096, layer_bits=1.04e12 * 2.5 / 61, layers=61, beta_x=0.87, beta_g=8, residual_width=7168,
+    per_param=2, step_tokens=9.44e7)
 DECLARED = FlopBudget(6.4e16, 2e7)
+WINDOW = FlopBudget(5.5e20, 7.3e11)
+#: a Kimi K2 layer's forward products a token
+LAYER_PRODUCTS = 0.294 * 2.07e11 / (2 * 61)
 
 
-def _nci_slowdown():
+def _nci_search():
     path = Path(__file__).resolve().parents[2] / "nci" / "slowdown.py"
     spec = importlib.util.spec_from_file_location("nci_slowdown", path)
     module = importlib.util.module_from_spec(spec)
@@ -42,7 +48,7 @@ CASES = [
 
 @pytest.mark.parametrize("case", CASES)
 def test_the_shard_search_is_nci_search(case):
-    nci = _nci_slowdown()
+    nci = _nci_search()
     gamma = case[-1]
     work = attacks.search(*case)
     try:
@@ -57,7 +63,7 @@ def test_the_shard_allowance_is_the_counted_share_of_its_reference_work():
     case = (8e10, True, 2.07e11, 2 * 28672, 20, 0, 2e7, 6.4e16)
     a = ATTACKS["shard"].allowance(KIMI)(DECLARED)
     assert math.isclose(a, 0.602 / 2 * attacks.search(*case))
-    assert math.isclose(0.602 * 6.4e16 / (2 * a), _nci_slowdown().search(*case)["rho"], rel_tol=1e-12)
+    assert math.isclose(0.602 * 6.4e16 / (2 * a), _nci_search().search(*case)["rho"], rel_tol=1e-12)
 
 
 def test_a_shared_state_cap_only_removes_slices():
@@ -99,6 +105,42 @@ def test_the_tile_allowance_converts_its_forward_products():
     assert math.isclose(a, attacks.tile(2e7, 8, 2.6, 16, 7168, 4096) * 0.602 / 0.294)
     with pytest.raises(Outside, match="psum_bits"):
         ATTACKS["tile"].allowance(replace(KIMI, psum_bits=None))
+
+
+def test_held_layers_takes_the_best_whole_number_of_layers():
+    assert attacks.held_layers(10, 3, 1, 1, 1, 1, math.inf, 5) == 4
+    assert attacks.held_layers(10, 3, 1, 1, 1, 1, 1, 5) == 2
+    assert attacks.held_layers(10, 3, 1, 1, 1, 1, math.inf, 1) == 3.5
+    assert attacks.held_layers(2, 3, 1, 1, 1, 1, math.inf, 5) == 0
+
+
+def test_the_held_layers_allowance_is_its_own_products():
+    a = ATTACKS["held-layers"].allowance(KIMI)(WINDOW)
+    assert a == attacks.held_layers(7.3e11, KIMI.layer_bits, LAYER_PRODUCTS, 0.87 * 7168, 8 * 7168, 2, 9.44e7, 61)
+    assert ATTACKS["held-layers"].allowance(KIMI)(DECLARED) == 0
+    with pytest.raises(Outside, match="beta_g"):
+        ATTACKS["held-layers"].allowance(replace(KIMI, beta_g=None))
+
+
+def test_the_pair_bound_answers_the_held_layers_attack():
+    """Forward only, the attack's products are (weight, entry) pairs of the layers it holds, each layer's update at
+    `b` bits a weight, so `PairBound` caps them at every `k`."""
+    layer_weights = 1.04e12 / 61
+    for k in (1e9, 5e10, 3.2e11, 7.3e11, 4e12, 1e14):
+        got = attacks.held_layers(k, 2.5 * layer_weights, LAYER_PRODUCTS, 0.87 * 7168, 0, 1, math.inf, 61)
+        assert got <= classes.pair(k, 2.5, 0.87, 7168)
+
+
+def test_held_layers_breaks_the_activation_rate_at_the_serving_block():
+    """At the reference serving block (`k_S` = 3.2e11 bits) a block holding two whole layers finishes 1.93 times the
+    forward products E1's Proposition 3 allows it on its activation rate."""
+    s = build(Registry.load(), "reference-onsite-h200")
+    k = s.regime.budget(s.context).inputs
+    p = s.families[0].profile(s.model, s.run)
+    products = p.kappa_forward * p.flops_per_token / (2 * p.layers)
+    forward = attacks.held_layers(k, p.layer_bits, products, p.beta_x * p.residual_width, 0, 1, p.step_tokens,
+                                  p.layers)
+    assert forward / classes.fanout_priced(k, p.fanout, p.beta_x) == pytest.approx(1.93, rel=0.01)
 
 
 def test_a_measured_execution_extends_monotonically_and_never_beyond_what_it_ran():

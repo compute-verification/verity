@@ -196,13 +196,43 @@ def _acc_rows(dst: Path, level: Path) -> Path:
 
 
 def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path):
-    """Its VERDICT names its part (`rec_part`) and the SHA-512 of the shared rows file it read (`rec_rows_sha512`), which
-    `rec-compose` holds every part to."""
+    """Its VERDICT names its part (`rec_part`), the SHA-512 of the shared rows file it read (`rec_rows_sha512`) and of
+    the verifier's inner shape file (`rec_inner_sha512`), which `rec-compose` holds every part to."""
     rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
     assert v["rec_rows_sha512"] == hashlib.sha512(rows.read_bytes()).hexdigest(), v
+    assert v["rec_inner_sha512"] == hashlib.sha512(shape.read_bytes()).hexdigest(), v
     assert str(v["rec_part"]) == _own(forged, shape)[1], v
+
+
+def test_rec_compose_refuses_a_part_under_another_inner_shape(shape, tmp_path):
+    """`flock-verify rec-compose` at the verifier's inner shape: one accepted log per V* statement, each naming the one
+    rows file and the inner shape file, composes; one part whose VERDICT names another inner shape file's SHA-512 is
+    refused, as `Flock/Test/RecCompose.lean` and `test_pod_lean_verdicts.py`'s stand-in refuse it."""
+    rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
+    hr, hi = (hashlib.sha512(f.read_bytes()).hexdigest() for f in (rows, shape))
+    n = len(_statements(str(shape)))
+
+    def compose(inner: dict[int, str]) -> dict:
+        logs = []
+        for j in range(n):
+            v = {"session": f"s{j}", "accepted": True, "why": "", "rec_part": j, "rec_rows_sha512": hr,
+                 "rec_inner_sha512": inner.get(j, hi)}
+            (log := tmp_path / f"part-{j}.log").write_text(f"VERDICT {json.dumps(v)}\n")
+            logs.append(str(log))
+        p = subprocess.run([str(BIN), "rec-compose", "--rec-inner", str(shape), "--rec-rows", str(rows), *logs],
+                           capture_output=True, text=True)
+        (line,) = [json.loads(ln[12:]) for ln in p.stdout.splitlines() if ln.startswith("REC-COMPOSE ")]
+        assert p.returncode == (0 if line["accepted"] else 1), p
+        return line
+
+    assert compose({}) == {"accepted": True, "why": "", "statements": n, "parts": n, "rec_rows_sha512": hr,
+                           "rec_inner_sha512": hi}
+    other = "cd" * 64
+    line = compose({n - 1: other})
+    assert (line["accepted"], line["why"]) == (
+        False, f"{tmp_path / f'part-{n - 1}.log'}: read the inner shape file {other}, not the composition's {hi}"), line
 
 
 def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path):

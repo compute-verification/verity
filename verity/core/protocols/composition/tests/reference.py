@@ -100,6 +100,15 @@ def verdict(verdicts: list[str]) -> str:
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
 
 
+def fitted_verdicts(answers: Callable[[], Any]) -> list[str]:
+    """The components' verdicts in ``answers()``, else none when the case doesn't fit the composition."""
+    try:
+        out = answers()
+    except (Reject, KeyError, TypeError):
+        return []
+    return [] if isinstance(out, str) else [a["verdict"] for _, a in out]
+
+
 @dataclass(frozen=True)
 class Ported:
     """A component whose port has replaced its stub: its id and its Python's answer to a `serve` case. One that reads
@@ -336,12 +345,10 @@ class Product:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case that fits the composition, else none."""
-        try:
-            case, blobs = self.split(case)
-            answers = self.run(self.params(case["params"]), self.evidence(P.unhex(case["evidence"])), blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def answers():
+            c, blobs = self.split(case)
+            return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
+        return fitted_verdicts(answers)
 
 
 @dataclass(frozen=True)
@@ -411,14 +418,12 @@ class Registered:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case whose components fit the composition, else none."""
-        try:
-            case, blobs = Product.split(case)
-            _, ps = self.params(case["params"])
-            _, ev = self.evidence(P.unhex(case["evidence"]))
-            answers = self.product.run(ps, ev, blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def answers():
+            c, blobs = Product.split(case)
+            _, ps = self.params(c["params"])
+            _, ev = self.evidence(P.unhex(c["evidence"]))
+            return self.product.run(ps, ev, blobs)
+        return fitted_verdicts(answers)
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its

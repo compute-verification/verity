@@ -13,8 +13,10 @@ import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.ScopeGate
 import Proofs.Flock.Bridge.ScopeGateSanity
 import Proofs.Flock.Bridge.KSLive
+import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.PublicDeployed
+import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.PublicWitnesses
 import Proofs.Flock.Bridge.PublicToyDesc
 import Proofs.Flock.Bridge.RefusedWitnesses
@@ -32,11 +34,13 @@ preconditions refused by `verify --zk` (`ScopeGate`). `Lowers`: the claims progr
 `Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
 `Flock.Bridge.deltaPub`, a function of the public parameters. `PublicDeployed`:
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
-parameters. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and its nontrivial lemma
-(false at the verifier that accepts everything). `PublicToyDesc`: a hand-built circuit file meeting the nontrivial
-lemma's structural premises (no port, a computed returned gate, `ioSum ≤ 2^40`). `RefusedWitnesses`:
-`SampledKSLiveV2`'s and `SampledKSLiveV3`'s nontrivial lemmas, at `SampledKSLivePub`'s failing instance through
-`SampledKSLiveV2`'s error at most `deltaPub`.
+parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
+hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
+(`Bridge.Assumptions.ServedFilesParse`). `PublicWitnesses`: `SampledKSLivePub`'s honest lemma (the parameter
+hypotheses hold as deployed) and its nontrivial lemma (false at the verifier that accepts everything). `PublicToyDesc`: a hand-built
+circuit file meeting the nontrivial lemma's structural premises (no port, a computed returned gate, `ioSum ≤ 2^40`).
+`RefusedWitnesses`: `SampledKSLiveV2`'s and `SampledKSLiveV3`'s nontrivial lemmas, at `SampledKSLivePub`'s failing
+instance through `SampledKSLiveV2`'s error at most `deltaPub`.
 `ScopeGateSanity`: `SampledKSLiveV4`'s nontrivial lemma, at the same instance through `SampledKSLiveV3`'s. -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/

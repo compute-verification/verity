@@ -1,4 +1,4 @@
-"""`GemmCoordinate_v2{K, DOT}` through the IR oracle on 30 authenticated RTX 4090 GEMM coordinates.
+"""`GemmCoordinate_v2{K, DOT}` through the oracle on 30 authenticated RTX 4090 GEMM coordinates.
 
 Ported from veritor ``verity.ir/tests/test_composition.py`` §3 (`test_gemm_on_ampere_captured_coordinates`), with the
 numpy fixture loading replaced by `array('H')`.  The recorded cross-architecture numbers (Hopper step on the same operands:
@@ -17,7 +17,7 @@ import pytest
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
@@ -41,7 +41,7 @@ def _standalone(spec):
 
 
 def _ev(spec, *arrays) -> tuple[int, ...]:
-    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the IR oracle."""
+    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the oracle."""
     prog, call = _standalone(spec)
     return evaluate_call(prog.circuit, call, [int(v) for a in arrays for v in a])
 
@@ -94,8 +94,8 @@ def test_gemm_on_ampere_captured_coordinates() -> None:
 
 
 def test_ir_evaluation_is_the_direct_chain() -> None:
-    """The oracle's answer for `GemmCoordinate_v2` is literally K/16 `tc_dot_total` steps then `cvt.rn.bf16.f32`: the IR
-    adds structure, not semantics.  Also fixes the verification-unit shape the proof work targets."""
+    """The oracle's answer for `GemmCoordinate_v2` is literally K/16 `tc_dot_total` steps then `cvt.rn.bf16.f32`: the Program
+    adds structure, not semantics.  Also fixes the proof-block shape the proofs target."""
     for f, x, w, out in list(_gemm_fixtures())[:4]:
         K = f["K"]
         acc = 0
@@ -263,7 +263,10 @@ def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated
         assert [p for p, _ in rows.signature()[0]] == [*(f"x{r}" for r in range(R)), "sx", *(f"wrow{r}" for r in range(R)), "sw"]
         got = E.evaluate_batch(rows, *np.split(x, R, axis=1), sx, *np.split(w, R, axis=1), sw, kernel="reference")
         assert np.array_equal(got, want), R
-    bits = lambda fn: [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
+
+    def bits(fn):
+        return [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
+
     assert bits(bind(G.ScaledMmS8CoordinateRows, K=65536, R=2, **G.GEMM_SM90_S8)) == [UNIT_CLASS_MAX] * 2 + [32] + [UNIT_CLASS_MAX] * 2 + [32]
     assert bits(bind(G.ScaledMmS8Coordinate, K=65536, **G.GEMM_SM90_S8)) == [2 * UNIT_CLASS_MAX, 32, 2 * UNIT_CLASS_MAX, 32]
 
@@ -281,7 +284,9 @@ def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_ever
     coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
     xs, ws = KT.sample_tc(np.random.default_rng(34), 3000, E.batch.signature_of(coord)[0])
     for T in (1, 5, 16, 17, 31, 32):
-        pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+        def pad(a):
+            return np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+
         want = E.evaluate_batch(coord, pad(xs), pad(ws))
         for k in (32, 48, 64):
             pad_k = bind(G.GemmCoordinatePad, T=T, K=k, **G.GEMM_HOPPER)
