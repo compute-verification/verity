@@ -3,11 +3,14 @@ doesn't control (the challenger host, `trusted-host`) while the prover stays on 
 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
 store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
-its own coins and answers with the registration and the session's coin commitment. It then sends each pass's challenge
-(`{"run": {"challenge", "i", "previous", "t"}}`, answered `{"root"}`) and each window's draws (`{"open": {"draws",
-"t"}}`, answered `{"openings": hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and
-`{"end": true}` last. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one
-`period.run` makes in one process.
+its own coins and answers with the registration (`{"hold": {"registration"}}`). It then sends each pass's challenge,
+its value and the root it was opened after (`{"run": {"challenge", "i", "previous", "t"}}`, the challenge a
+`coins.Released`, answered `{"root"}`), and each window's draws (`{"open": {"draws", "t"}}`, answered `{"openings":
+hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and `{"end": {"commitment",
+"openings"}}` last, once the session has its outcome: the coin commitment and every released coin's opening, which
+the prover checks each challenge it was sent against (`audit.Prover.end`), or `{"end": {}}` for a session left
+undecided. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one `period.run`
+makes in one process.
 
 `python -m verity.core.protocols.remote_bandwidth.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
 it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
@@ -57,7 +60,7 @@ class Remote:
     """The prover across the connection `f`, as the verifier's side sees it (`period.Prover`)."""
 
     def __init__(self, f: BinaryIO) -> None:
-        self.f = f
+        self.f, self.ended = f, False
 
     def register(self) -> tuple[int, bytes]:
         m = _recv(self.f).get("register")
@@ -65,10 +68,10 @@ class Remote:
             raise ValueError("the prover opens with {\"register\": {\"blocks\", \"payload_root\"}}")
         return m["blocks"], bytes.fromhex(m["payload_root"])
 
-    def hold(self, registration: audit.Registration, commitment: C.LiveCommitment) -> None:
-        _send(self.f, {"hold": {"commitment": commitment.to_json(), "registration": P.registration_json(registration)}})
+    def hold(self, registration: audit.Registration) -> None:
+        _send(self.f, {"hold": {"registration": P.registration_json(registration)}})
 
-    def run(self, challenge: C.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+    def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
         _send(self.f, {"run": {"challenge": challenge.to_json(), "i": i, "previous": previous.hex(), "t": t}})
         root = _recv(self.f).get("root")
         if not isinstance(root, str):
@@ -81,27 +84,35 @@ class Remote:
         got = wire.decode_openings(bytes.fromhex(body)) if isinstance(body, str) else None
         return [] if got is None else got
 
-    def end(self) -> None:
-        _send(self.f, {"end": True})
+    def end(self, commitment: C.LiveCommitment | None = None, openings: Sequence[C.LiveOpening] = ()) -> None:
+        """The session's last message, with its coins disclosed (`audit.Session.disclose`), or without for a session
+        left undecided; sent once."""
+        if not self.ended:
+            _send(self.f, {"end": {} if commitment is None else {"commitment": commitment.to_json(),
+                                                                  "openings": [o.to_json() for o in openings]}})
+            self.ended = True
 
 
 def prove(f: BinaryIO, prover: P.Local) -> int:
     """The prover's side over the connection `f`, `prover` holding the store: each message answered until the verifier
-    ends the session; the passes run."""
+    ends the session, whose coins it checks then if the end discloses them; the passes run."""
     blocks, root = prover.register()
     _send(f, {"register": {"blocks": blocks, "payload_root": root.hex()}})
     passes = 0
     while True:
         (kind, m), = _recv(f).items()
         if kind == "hold":
-            prover.hold(P.registration_of(m["registration"]), C.LiveCommitment.from_json(m["commitment"]))
+            prover.hold(P.registration_of(m["registration"]))
         elif kind == "run":
-            root = prover.run(C.LiveOpening.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
+            root = prover.run(C.Released.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
             _send(f, {"root": root.hex()})
             passes += 1
         elif kind == "open":
             _send(f, {"openings": wire.encode_openings(prover.open(m["t"], [tuple(d) for d in m["draws"]])).hex()})
         elif kind == "end":
+            if m:
+                prover.end(C.LiveCommitment.from_json(m["commitment"]),
+                           [C.LiveOpening.from_json(o) for o in m["openings"]])
             return passes
         else:
             raise ValueError(f"no message {kind!r}")
@@ -109,7 +120,8 @@ def prove(f: BinaryIO, prover: P.Local) -> int:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Callable[[], int] = time.monotonic_ns,
           sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Period:
-    """The verifier's side of one session over the connection `f` (`period.session` against `Remote`)."""
+    """The verifier's side of one session over the connection `f` (`period.session` against `Remote`), ended with its
+    coins disclosed once it has its outcome."""
     remote = Remote(f)
     out = P.session(request["node"], remote, coins, windows=request["windows"], passes=request["passes"],
                     samples=request["samples"], window_ns=request["window_ns"], deadline_ns=request["deadline_ns"],
