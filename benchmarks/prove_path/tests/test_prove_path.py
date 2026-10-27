@@ -1040,8 +1040,9 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
     φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
     file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
-    against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
-    advice --weights-of-record` records and ``window-circuit --pins`` takes, and what the verifier holds to its own weights
+    against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's (the embedding
+    read's table, ``weights/model.embed_tokens.weight@64/table``, among them: the window circuit opens it at each token), what
+    `verity-vllm advice --weights-of-record` records and ``window-circuit --pins`` takes, and what the verifier holds to its own weights
     record's shapes (`registration_pins`) without computing a root. Another key gives other roots for every weight; a key
     file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
     one the manifest pins, is refused by name, nothing registered."""
@@ -1072,7 +1073,8 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert len(key.read_bytes()) == 32 and key.stat().st_mode & 0o777 == 0o600
     assert key.read_bytes().hex() not in out.read_text()
     pins = ADV.registered_weights(reg, serve)
-    assert said["roots"] == len(pins) == 15 and PP.pins_of((), [str(out)]) == pins
+    assert said["roots"] == len(pins) == 16 and PP.pins_of((), [str(out)]) == pins
+    assert "weights/model.embed_tokens.weight@64/table" in pins
     assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
@@ -1104,7 +1106,8 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
     ``weights-registration`` roots its weight parameters as the window circuit reads them: the s8 weights and their scales of
     q|k|v and gate|up fused as vLLM serves them, o and down, the norms, and the tied embedding at the embedding's and the LM
-    head's row widths, each the checkpoint's words; only the rotary table is unrooted. The verifier holds it to its own weights
+    head's row widths and as the embedding read's table (``row-seg`` rows the circuit opens at each token), each the
+    checkpoint's words; only the rotary table is unrooted. The verifier holds it to its own weights
     record's shapes (`registration_pins`)."""
     import functools
 
@@ -1127,7 +1130,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
                     "--hf-config", str(hf), "--key", str(tmp_path / "private" / "weights.key"), "--out", str(out)]) == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     pins = ADV.registered_weights(reg, serve)
-    assert said["roots"] == len(pins) == 23 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
+    assert said["roots"] == len(pins) == 24 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
     words = {p.removeprefix("weights/"): e["words"] * e["leaves"] for p, e in reg["values"].items()}
     H, I, QKV = TINY["hidden_size"], TINY["intermediate_size"], 8 * 16
     for i in range(TINY["num_hidden_layers"]):
@@ -1138,6 +1141,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
             p + "mlp.gate_up_proj.weight@512": 2 * I * H // 2, p + "mlp.gate_up_proj.weight_scale@32": 2 * 2 * I,
             p + "mlp.down_proj.weight@512": H * I // 2, p + "mlp.down_proj.weight_scale@16": 2 * H}
     assert words["model.embed_tokens.weight@64"] == words["model.embed_tokens.weight@512"] == TINY["vocab_size"] * H
+    assert words["model.embed_tokens.weight@64/table"] == TINY["vocab_size"] * H and reg["values"]["weights/model.embed_tokens.weight@64/table"]["leaves"] == TINY["vocab_size"]
     assert not any("lm_head" in p for p in words)
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
