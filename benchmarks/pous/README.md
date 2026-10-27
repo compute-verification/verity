@@ -157,7 +157,7 @@ on one node: the labels one GPU derives (`labels.cu`, gated against `streamed_wi
 memory, the NIC's line rate and RDMA loopback, and 74,000-challenge round trips at batch sizes from 1 to 74,000, plus one
 whole reference session, judged by the Lean verdict (`--verdict lean|both|python`, `wipe_verdict.py`'s `VERDICT` by
 default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, takes one GPU through
-`gpu-lease` and writes `timing.json`:
+`gpu-lease` and writes `timing.json` (the wipe end to end, its challenger on a host of its own, is `examples/wipe/`):
 
 ~~~bash
 research run --on <RTX PRO 6000 node> --project verity --source . --cwd source --campaign streamed-wipe \

@@ -1,0 +1,43 @@
+# memory-accounting's examples out of `benchmarks/pous/`: what `tools/move/layout.py --map tools/move/reorg_mem_map.toml`
+# moves and rewrites (Daniel, 26 Oct 5:26 PM PDT: reorganize the examples and benchmarks; note:memory-accounting/
+# 20261027T0040Z-draft-reorg-examples-benchmarks, phase 1: `examples/<name>/` is one end-to-end example each, a protocol or
+# composite, a workload and a placement with its commands, and `benchmarks/` is measurement only).
+#
+# - The streamed wipe end to end (MEM-67 3a.2): one GPU's memory wiped by the memory challenger on the challenger's host,
+#   the prover's fill kept on the GPU, the Lean and the Python judging the signed session. Its two commands, each with its
+#   placement (the `research run` line it is run with), join `examples/wipe/`: `demo.sh`, the challenger here or on a host
+#   of its own, and `peer.sh`, the challenger on a cluster peer. `bench.py`, `run.sh` and `labels.cu`, the GPU timing
+#   measurement, stay in `benchmarks/pous/streamed_wipe/`. Both scripts climb to the tree root from their own directory
+#   (`$(dirname "$0")/../../..`), which the move recounts to `../..` (layout.py's shell anchors).
+# - PoUS's P2 block store served under the remote bandwidth audit (`benchmarks/pous/p2_v1/{serve,store}.py`, `store-toy/`,
+#   `parts/`) is not in this map: `serve.py` imports `store.py`, and `store.py` imports `p2_v1.reference`, which stays,
+#   both as the package `p2_v1` on `benchmarks/pous`'s path; `p2_v1/bandwidth.py`, `torch_gpu/p2_stage/bw_check.py` and
+#   three of `benchmarks/pous`'s tests import them as `p2_v1.serve` and `p2_v1.store`. No directory of `examples/` can
+#   carry that package by a move alone, so it moves with code (phase 2).
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"benchmarks/pous/streamed_wipe/demo.sh" = "examples/wipe/demo.sh"
+"benchmarks/pous/streamed_wipe/peer.sh" = "examples/wipe/peer.sh"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`): none, since neither script is a module
