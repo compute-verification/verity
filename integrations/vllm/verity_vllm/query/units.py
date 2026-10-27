@@ -25,6 +25,11 @@ a streamed instance sequence, or a synthetic graph without converting it: a Prog
 (id, definition id, output ports, the Values each read), the Values its prescribed inputs produce, and its outputs.
 Prescribed inputs are modelled as *Values of a producer that is not a Call* (``ValueRef.call`` is the input's id, which
 the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates their own canonical references.
+
+The canonical partition (``verity.ml.circuits.partition_object``: ``Partition``, ``CallPartition``) cuts inside each Call and commits
+every Call output, read or not.  With every Call a unit (the query of record, ``required.Population``), the boundary here leaves out
+an output nothing reads; the policy requires those a module returns, and a Call it leaves out too is ``unreturned``.
+``integrations/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.
 """
 
 from __future__ import annotations
