@@ -8,6 +8,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
+                                [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -44,7 +45,10 @@ to ``SERVE_DIR/period.json``. ``period close`` closes that period and adds its a
 gives it, the auditor's ledger and pins log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
-is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`).
+is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
+declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
+the drawn calls' statements (``--statements``, H1_STATEMENTS) and the window's live evidence (``--live-evidence``,
+H1_LIVE_EVIDENCE, ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`).
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -304,13 +308,31 @@ def period_close(serve_dir: Path, gate: str) -> dict[str, Any]:
     return doc
 
 
+def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | None = None) -> dict[str, str]:
+    """What core's credit reads of the window beyond its record and session, as ``--check-challenger``'s flags: the
+    declared Program serve-openai wrote (``--descriptor``, `serve_h1.PROGRAM`), the period ``period open`` opened
+    (``--period``, `PERIOD`), the drawn calls' statements (``--statements``) and the live evidence (``--live-evidence``,
+    ``h1_prove/live.py evidence``'s), each where it exists."""
+    got: dict[str, str] = {}
+    if (p := serve_dir / "h1" / "window-program.json.gz").is_file():
+        got["--descriptor"] = str(p)
+    if (p := serve_dir / PERIOD).is_file():
+        got["--period"] = json.loads(p.read_text())["name"]
+    for flag, p in (("--statements", statements), ("--live-evidence", live)):
+        if p is not None:
+            got[flag] = str(p)
+    return got
+
+
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
-                     python: str) -> dict[str, Any]:
+                     inputs: Mapping[str, str], python: str) -> dict[str, Any]:
     """`pouw_h1_gpu.py --check-challenger` (run by `python` in integrations/vllm, so ``tests`` is that package's) of the
-    window's record `calls` against its session's tree `tree`; its ``pouw_h1_challenger.json``."""
+    window's record `calls` against its session's tree `tree`, with credit's `inputs` (`credit_inputs`); its
+    ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
-            "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out)]
+            "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out),
+            *(x for kv in inputs.items() for x in kv)]
     p = subprocess.run(argv, cwd=ROOT / "integrations" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
@@ -320,20 +342,23 @@ def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Pa
                            f"{(p.stdout + p.stderr).strip()[-400:]}") from e
 
 
-Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path], Mapping[str, Any]]
+Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str, str]], Mapping[str, Any]]
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
-         check: Check) -> dict[str, Any]:
+         check: Check, statements: Path | None = None, live: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
-    `check` is `check_challenger` with its Python bound."""
+    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
+    calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
     out.mkdir(parents=True, exist_ok=True)
+    inputs = credit_inputs(serve_dir, statements, live)
     line = next((w for w in _lines(serve_dir / "windows.jsonl") if int(w["window"]) == window), {})
     h1 = line.get("pouw_h1") or {}
     calls = serve_dir / H1_CALLS.format(k=window)
     doc: dict[str, Any] = {"window": window, "credited": False, "why": DEV_WHY, "coin_source": h1.get("coin_source"),
                            "tied": h1.get("tied"), "steps_served": h1.get("steps_served"), "session": h1.get("session"),
-                           "gate_passed": (h1.get("gate") or {}).get("gate_passed"), "check": None, "credit": None}
+                           "gate_passed": (h1.get("gate") or {}).get("gate_passed"), "check": None, "credit": None,
+                           "credit_inputs": inputs}
     reasons = []
     if not h1 or "error" in h1:
         reasons.append(f"H1's window: {h1.get('error') or 'its line has no pouw_h1 (served without --protocols)'}")
@@ -352,12 +377,12 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
                 t.extractall(tree, filter="data")
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
-            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check")
+            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check", inputs)
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:
             doc["check"] = {k: got.get(k) for k in ("ok", "reason", "manifest", "rounds", "coin_source")}
-            doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps")}
+            doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps", "calls", "credit")}
             reasons += [f"{k}: {got[r]}" for k, r in (("coins", "reason"), ("manifest", "manifest")) if got.get(r)]
     doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
     (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
@@ -483,6 +508,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--key-sha512", default=os.environ.get("H1_KEY_SHA512"))
     o.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
+    o.add_argument("--statements", type=Path, default=os.environ.get("H1_STATEMENTS") or None)
+    o.add_argument("--live-evidence", type=Path, default=os.environ.get("H1_LIVE_EVIDENCE") or None)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -533,7 +560,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pouw":
         doc = pouw(a.serve_dir, a.window, a.out, gate=a.gate, key=a.key_sha512, main=a.main,
-                   check=lambda *x: check_challenger(*x, python=a.python))
+                   check=lambda *x: check_challenger(*x, python=a.python), statements=a.statements,
+                   live=a.live_evidence)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pieces":

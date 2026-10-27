@@ -3,6 +3,7 @@ verifier's side and the prover's staging; `live.sh` proves them by C-Flock --zk 
 
     python live.py prepare --live DIR --work W
     python live.py summarize --work W --out OUT
+    python live.py evidence --work W --out LIVE.json
 
 DIR is the serving process's dump (`pouw_h1_live.dump`, `pouw_h1_gpu --live-dump`'s DIR/<window>): DIR/window.json is public (T, S, the
 prefix, the window Program's digest, the open root, the session, the live tables' roots, each round's served rows m_s and
@@ -32,6 +33,10 @@ The checks of W/plan.tsv (``C`` lines; ``S`` lines are the statements to prove):
 * ``other-round`` (S > 1): round 0's honest session against round 1's files. REJECT.
 
 ``summarize`` reads Lean's verdicts into OUT/live-summary.json, each against its expectation.
+
+``evidence`` writes the window's live evidence as core's credit reads it (`credit.LIVE_STATEMENTS`: the live descriptor
+and each round's honest statement's circuit, public file and sessions; `evidence`), which ``served_verdicts.py pouw
+--live-evidence`` hands credit, whose verifier of record verifies each session itself.
 """
 from __future__ import annotations
 
@@ -238,9 +243,45 @@ def cmd_summarize(a) -> int:
     return 0 if ok else 1
 
 
+def evidence(work: Path) -> dict:
+    """The window's live evidence as core's credit reads it (`credit.LIVE_STATEMENTS`): the live Program's descriptor (its
+    canonical JSON without annotations, whose SHA-512 is the program its sessions were proved under) in hex, and each
+    round's statement, ``{circuit, public, round, sessions}``: the live circuit file, the verifier's own public file and
+    the honest statement's sessions, which credit verifies itself. ValueError on a round with no session."""
+    record = json.loads((work / "record.json").read_text())
+    desc = json.loads((work / "verifier" / "program.json").read_bytes())
+    raw = canonical_json({k: v for k, v in desc.items() if k != "annotations"})
+    if hashlib.sha512(raw).hexdigest() != record["program_sha512"]:
+        raise ValueError(f"{work}'s live descriptor is not the program its statements were staged under")
+    out = []
+    for tag, r in sorted(record["rounds"].items(), key=lambda kv: kv[1]["round"]):
+        if not tag.startswith("honest-"):
+            continue
+        sessions = sorted(str(p) for p in (work / "st" / tag / "sessions").glob("*") if p.is_dir())
+        if not sessions:
+            raise ValueError(f"round {r['round']}'s statement {tag} has no session under {work / 'st' / tag}: prove it first")
+        out.append({"circuit": str(work / "circuit.txt"), "public": str(work / "verifier" / f"{tag}.pub.bin"),
+                    "round": r["round"], "sessions": sessions})
+    return {"descriptor": raw.hex(), "statements": out}
+
+
+def cmd_evidence(a) -> int:
+    try:
+        doc = evidence(Path(a.work))
+    except (OSError, ValueError, KeyError) as e:
+        log(f"LIVE-EVIDENCE refused: {type(e).__name__}: {e}")
+        return 1
+    Path(a.out).write_text(json.dumps(doc, indent=1))
+    log(f"LIVE-EVIDENCE {len(doc['statements'])} rounds, descriptor {hashlib.sha512(bytes.fromhex(doc['descriptor'])).hexdigest()[:16]}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("evidence")
+    p.add_argument("--work", required=True)
+    p.add_argument("--out", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--live", required=True)
     p.add_argument("--work", required=True)
@@ -248,7 +289,7 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    return cmd_prepare(a) if a.cmd == "prepare" else cmd_summarize(a)
+    return {"prepare": cmd_prepare, "summarize": cmd_summarize, "evidence": cmd_evidence}[a.cmd](a)
 
 
 if __name__ == "__main__":

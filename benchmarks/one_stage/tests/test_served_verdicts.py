@@ -157,7 +157,8 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     calls, seen = [], []
     monkeypatch.setattr(S, "_gate_out", _gate(calls))
 
-    def check(calls_file, tree, ledger, pins, main, key, out):
+    def check(calls_file, tree, ledger, pins, main, key, out, inputs):
+        assert inputs == {}, "a serve dir with no declared Program or period gives credit nothing more"
         seen.append((tree, ledger.read_text(), pins.read_text(), main, key))
         assert (tree / "out" / "record.json").is_file()
         return {"ok": True, "reason": None, "manifest": None, "rounds": 16,
@@ -181,6 +182,29 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     out = capsys.readouterr().out
     assert "POUW (development run, credits nothing) " in out and got["pouw"]["verdict"] == "accept"
     assert (got["pouw"]["session"], got["pouw"]["coins"], got["pouw"]["credited"]) == (SID, None, False)
+
+
+def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_proofs_it_has(tmp_path, monkeypatch):
+    """With the serve dir's declared Program (``h1/window-program.json.gz``) and its period (``period.json``), and the
+    drawn statements and live evidence given, the challenger check gets each as its ``--check-challenger`` flag, and the
+    piece's document carries them and credit's calls."""
+    monkeypatch.setattr(S, "_gate_out", _gate([]))
+    d = _h1_serve_dir(tmp_path)
+    (d / "h1" / "window-program.json.gz").write_bytes(b"")
+    (d / S.PERIOD).write_text(json.dumps({"name": "served-r1"}))
+    st, lv = tmp_path / "statements.json", tmp_path / "live.json"
+    got = []
+
+    def check(*a):
+        got.append(a[-1])
+        return {"ok": True, "reason": None, "manifest": None, "credit": {"window": None, "calls": [3], "credit": [3]}}
+
+    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check, statements=st,
+                 live=lv)
+    want = {"--descriptor": str(d / "h1" / "window-program.json.gz"), "--period": "served-r1", "--statements": str(st),
+            "--live-evidence": str(lv)}
+    assert got == [want] and doc["credit_inputs"] == want
+    assert (doc["credit"]["window"], doc["credit"]["calls"], doc["credit"]["credit"]) == (None, [3], [3])
 
 
 @pytest.mark.parametrize("case", ["coins", "untied", "in-process", "no gate"])
