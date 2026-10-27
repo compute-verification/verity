@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# What stock vLLM int8 runs on node 2, off the GPU: the stack's versions, vLLM's int8 linear sources (scaled_int8_quant's
-# wrapper, triton_scaled_mm, the int8 kernel classes) copied into $OUT/src, and the SASS of the per-token quantizer in
-# vLLM's _C (dynamic_scaled_int8_quant*), so its division and rounding can be read off the binary.
-#   research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source -- bash benchmarks/hash/exactlin/probe.sh
+# What stock vLLM int8 runs on an RTX PRO 6000 host, off the GPU: the stack's versions, vLLM's int8 linear sources
+# (scaled_int8_quant's wrapper, triton_scaled_mm, the int8 kernel classes) copied into $OUT/src, and the SASS of the
+# per-token quantizer in vLLM's _C (dynamic_scaled_int8_quant*), so its division and rounding can be read off the binary.
+#   RESEARCH_RUN_DIR=DIR bash benchmarks/hash/exactlin/probe.sh      (on that host, no GPU lease)
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$OUT/src"
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
