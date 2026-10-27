@@ -201,7 +201,8 @@ A spec-level reference for network accounting's timing channel:
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
   ids appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
-  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit; `IngressScanFirst`, the
+  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at a due slot
+  whose entry of the Programs' row isn't read (its read bit 0: a request no Program served); `IngressScanFirst`, the
   first bucket's, starts from the empty state, constants of its circuit. `Class.serves` names the warden parameters it
   takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one
   registration: ingress unit t's state and view outputs are committed as registered reads of the scan's state and view

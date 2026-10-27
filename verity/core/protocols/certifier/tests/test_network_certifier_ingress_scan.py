@@ -7,13 +7,15 @@ and its outputs from then until its last egress bucket, and reuses a slot only p
 warden's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged one) from a
 view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random flips (S_t
 and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
-`END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its last egress
-bucket, an ordinal or a pad byte changed, a phase of EVERY, a Programs' entry off its anchor), and computes another
-S_t than the scan's, which the state row its o1 opens refuses, from a digit changed or a Programs' entry off its
-outputs; the first bucket's circuit is the ingress circuit at the empty state, bit for bit; the egress circuit is its
-reference on the views; `scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63
-class's state is the layout NEG sized (note:network-accounting/20261025T0830Z-report-net68-scan-router) with the outputs
-N2's view reads."""
+`END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its last egress bucket,
+an ordinal or a pad byte changed, a phase of EVERY, a Programs' entry off its anchor, its read bit alone off its anchor,
+and `unread`: a due slot no Program reads, its entry absent or only its read bit cleared, the latter's S_t and view the
+honest ones, so its ok bit alone refuses it), and computes another S_t than the scan's, which the state row its o1 opens
+refuses, from a digit changed, a Programs' entry off its outputs or a Program that reads its slot and outputs nothing;
+the first bucket's circuit is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference
+on the views; `scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63 class's state is
+the layout NEG sized (note:network-accounting/20261025T0830Z-report-net68-scan-router) with the outputs N2's view
+reads."""
 from __future__ import annotations
 
 import asyncio
@@ -135,7 +137,8 @@ def test_scan_traffic_ticks_the_warden_s_rows(run):
 def test_the_state_is_the_layout_neg_sized():
     w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=10, WITHIN=12)
     assert (w63.K0, w63.K, w63.D, w63.KO, IS.state_bits(w63)) == (12, 45, 21, 64, 149_520)
-    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 21))
+    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4496, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 21))
+    assert IS.entry_layout(w63) == (("read", 1), ("n", 32), ("out", 64 * 17))
     lay = IS.layout(w63)
     at = 0
     for name, (o, w) in lay.items():
@@ -203,9 +206,13 @@ def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]]]:
     out["pad-byte"] = honest(t, row=_join(blk))
     out["phase-every"] = honest(2, sin=IS.encode(CLS, replace(states[2], phase=CLS.EVERY)))
     entries = IS.prog_decode(CLS, ch.progs[3])
-    assert entries == [(3, RESPONSES[0] + (0,) * 5), (0, (0,) * CLS.KO)]
-    out["prog-off-anchor"] = honest(3, prog=IS.prog_encode(CLS, [entries[0], (1, (7,))]))
-    other["prog-outputs"] = 3, honest(3, prog=IS.prog_encode(CLS, [(2, RESPONSES[0][:2]), IS.NONE]))
+    assert entries == [(1, 3, RESPONSES[0] + (0,) * 5), (0, 0, (0,) * CLS.KO)]
+    out["prog-off-anchor"] = honest(3, prog=IS.prog_encode(CLS, [entries[0], IS.entry(1, (7,))]))
+    out["read-off-anchor"] = honest(3, prog=IS.prog_encode(CLS, [entries[0], IS.entry(0, ())]))
+    out["unread"] = honest(3, prog=IS.prog_encode(CLS, [IS.NONE, IS.NONE]))
+    out["unread-read-bit"] = honest(3, prog=IS.prog_encode(CLS, [(0, *entries[0][1:]), IS.NONE]))
+    other["prog-outputs"] = 3, honest(3, prog=IS.prog_encode(CLS, [IS.entry(2, RESPONSES[0][:2]), IS.NONE]))
+    other["prog-no-outputs"] = 3, honest(3, prog=IS.prog_encode(CLS, [IS.entry(0, ()), IS.NONE]))
     return out, other
 
 
@@ -258,6 +265,8 @@ def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_rando
         assert o0 == ok and (not ok or (o1, o2) == (st, view))
     assert got[:T] == [(1, *ch.outputs(t)) for t in range(T)]
     assert [o0 for o0, _, _ in got[T:T + len(refused)]] == [0] * len(refused)
+    # the read bit enters ok alone: a due entry with only its read bit cleared computes the honest S_t and view
+    assert got[T + list(refused).index("unread-read-bit")] == (0, *ch.outputs(3))
     assert [(o0, o1 != ch.outputs(t)[0]) for (t, _), (o0, o1, _) in zip(other.values(), got[T + len(refused):])] \
         == [(1, True)] * len(other)
     moved = [o1 != ch.outputs(t)[0] for t, (o0, o1, _) in zip(at, got[T + len(negs):]) if o0]
