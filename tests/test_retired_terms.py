@@ -1,6 +1,6 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
-A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix (Daniel, 26 Oct
-2026, 10:07 AM PDT; `ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
+A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix
+(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
 proof block.
 
 Scanned: every tracked text file but the Lean (`.lean` files and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
@@ -9,8 +9,8 @@ line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the 
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
-The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``, Daniel,
-26 Oct: "block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
+The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
+"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """

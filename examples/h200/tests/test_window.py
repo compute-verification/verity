@@ -9,7 +9,8 @@
   whose slot roots are the run's own). They must be the inputs replay reads and the outputs it checks, and each row opens
   against its step's root.
 - All of it again on the map with the ``residual`` fusion (`plan.FUSIONS`), whose frozen layout drops the projections' rows,
-  and with ``norm`` as well, whose layout also drops each norm's rows.
+  with ``norm`` as well, whose layout also drops each norm's rows, and with ``pv`` too, whose layout drops each layer's
+  softmax rows (the round trip at MINI runs the unfused map, ``residual`` alone and all three).
 """
 from __future__ import annotations
 
@@ -49,6 +50,13 @@ BOTH_DIGEST = ("ee72e98b95ff7c65b169b045b56ae1817ee1397271f97f7094b616af648d040d
                "b937c6b3254713b9265234776f8b8949a372822f033fa7f48cf8aeb599024763")
 BOTH_WRITERS = ("76500ee2039320165ece05dc036700700e4821e8187353e1765ec6f13389d619"
                 "08f52fff0d9ac2f719bd904b091724b45ca16a3945912d937ca3da9e5934b478")
+ALL = BOTH | {"pv"}
+#: the frozen shared layout under the ``norm``, ``pv`` and ``residual`` fusions, as above
+ALL_ROWS, ALL_BYTES = 14_337, 19_717_332
+ALL_DIGEST = ("b163022316ad6bfd6c0d39f41c78a0237cd0c60ff723fb13f19f30fa2ac027c0"
+              "fff9fd1a11c2ce36eb3ecab29cb8bac198d8ba6e6503a5e4c2eda56835970505")
+ALL_WRITERS = ("bab7aa85103957db0a34dfa327f3f32adb3407d19d4543fea81209760f05ae1a"
+               "9308ab82e63092d9d7a20ef3a794d9cf1045af984cb8c7823bbcbe67345e8108")
 SLOTS, N, P, G, ADMIT = 4, 7, 2, 3, 1
 
 
@@ -69,6 +77,11 @@ def frozen_fused() -> W.Window:
 @pytest.fixture(scope="module")
 def frozen_both() -> W.Window:
     return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=BOTH)
+
+
+@pytest.fixture(scope="module")
+def frozen_all() -> W.Window:
+    return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=ALL)
 
 
 def test_the_shared_layout_and_its_writers_are_circuits_at_the_frozen_shape(frozen) -> None:
@@ -146,6 +159,34 @@ def test_the_norm_fusion_drops_each_norms_table_and_its_quantizer_reads_the_stre
     assert out("l50.attn_quant.scale", 1) == (W.Segment(7, 1, c1[0].row, 8192, 4),)
 
 
+def test_the_pv_fusion_drops_each_layers_softmax_and_its_head_reads_q_k_and_v_at_the_frozen_shape(frozen_both,
+                                                                                                   frozen_all) -> None:
+    """Each layer's softmax table goes (16 KiB, 16 rows) and with it the ``QkSoftmaxRowPad_v1`` family; the PV head reads its
+    q row, the key and value rows at their steps and n, and writes its 128 B of the pv row."""
+    lay, L = frozen_all.layout, FROZEN.layers
+    assert (lay.row_count, lay.slot_bytes, lay.digest.hex()) == (ALL_ROWS, ALL_BYTES, ALL_DIGEST)
+    assert frozen_both.layout.row_count - lay.row_count == 16 * L
+    assert frozen_both.layout.slot_bytes - lay.slot_bytes == 16_384 * L
+    ws = frozen_all.writers()
+    assert len(ws) == len(frozen_both.writers()) - L and W.writers_digest(ws) == ALL_WRITERS
+    assert ({u.template for u in frozen_both.units.values()} - {u.template for u in frozen_all.units.values()}
+            == {"QkSoftmaxRowPad_v1", "PvRow_v1"})
+    u = frozen_all.family("l3.pv")
+    assert (u.table, u.count, u.key) == ("l3.pv", FROZEN.heads, f"QkSoftmaxPvPad_v1{{T={PV_K},K={PV_K},D={FROZEN.head_dim},"
+                                                                f"DOT=HopperBF16WgmmaDot16_v2}}")
+    assert "l3.softmax" in frozen_both.tables and "l3.softmax" not in frozen_all.tables
+    assert frozen_all.ports("l3.pv") == ("q", "k") + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
+    at = lambda port: frozen_all.locate(7, 1, "l3.pv", 9, port)  # noqa: E731
+    d = FROZEN.head_dim
+    q = frozen_all.outputs(7, 1, "l3.wq", 9 * d)[0][0]
+    kv = frozen_all.outputs(0, 0, "l3.wk", 0)[0][0].row
+    assert at("q") == (W.Segment(7, 1, q.row, q.offset, 2 * d),) and at("n") == (W.Run("n"),)
+    assert at("k") == tuple(W.Segment(j, 1, kv, 0, 2 * d) for j in range(8)) + (W.Absent(2 * d),) * (PV_K - 8)
+    assert at("v7") == (W.Segment(7, 1, kv + 1, 0, 2 * d),) and at("v8") == (W.Absent(2 * d),)
+    ((out,),) = frozen_all.outputs(7, 1, "l3.pv", 9)
+    assert (out.offset, out.nbytes) == (2 * d * 9 % 1024, 2 * d)
+
+
 def _written(writers: list[dict]) -> dict[int, list[tuple[int, int]]]:
     """Each row's byte ranges its producers write (a quantizer's scale after its codes)."""
     out: dict[int, list[tuple[int, int]]] = {}
@@ -167,7 +208,7 @@ def _inside(lo: int, hi: int, ranges: list[tuple[int, int]]) -> bool:
     return lo >= hi
 
 
-@pytest.mark.parametrize("which", ["frozen", "frozen_fused", "frozen_both"])
+@pytest.mark.parametrize("which", ["frozen", "frozen_fused", "frozen_both", "frozen_all"])
 def test_every_read_at_the_frozen_shape_is_in_rows_its_producers_wrote(which, request) -> None:
     frozen = request.getfixturevalue(which)
     ws = frozen.writers()
@@ -250,10 +291,10 @@ def test_under_shared_rows_an_output_is_a_window_of_its_row(frozen) -> None:
 
 # -- the round trip at MINI
 
-@pytest.fixture(scope="module", params=[frozenset(), RESIDUAL, BOTH], ids=["unfused", "fused-residual", "fused-norm-residual"])
+@pytest.fixture(scope="module", params=[frozenset(), RESIDUAL, ALL], ids=["unfused", "fused-residual", "fused-norm-pv-residual"])
 def served(request):
     """A run served by continuous batching (slots reused, steps mixing positions) under the per-slot commit at MINI, on the
-    unfused map, on the ``residual`` fusion's and on both fusions'."""
+    unfused map, on the ``residual`` fusion's and on all three fusions'."""
     if not any(shutil.which(c) for c in ("g++", "c++", "clang++")):
         pytest.skip("the slots commit's host twin needs a C++ compiler")
     fused = request.param
@@ -268,6 +309,7 @@ def served(request):
         "a sequence's earlier keys are in other rows of their steps"
     assert ("l0.wo" in d.steps[0].tables) == ("residual" not in fused)
     assert ("l0.attn_norm" in d.steps[0].tables) == ("norm" not in fused)
+    assert ("l0.softmax" in d.steps[0].tables) == ("pv" not in fused)
     return w, c, d
 
 
@@ -284,7 +326,8 @@ def test_drawn_blocks_of_every_family_assemble_from_committed_rows_to_what_repla
     if layout == "families-v1":
         assert all(S.commit_slot(c.context, win.layout, r.salt_key, b, rows[s, b]).root == r.slot_roots[b]
                    for s, r in enumerate(d.results) for b in range(d.steps[s].batch))
-        assert len(win.locate(0, 0, "l0.softmax", 1, "q")) == 1, "a read opens the gather's row, not its parts'"
+        head = "l0.pv" if "pv" in c.fused else "l0.softmax"
+        assert len(win.locate(0, 0, head, 1, "q")) == 1, "a read opens the gather's row, not its parts'"
     tokens = [r.tokens_in for r in d.results]
     rp = Replayer(MINI, w, d.steps, tokens, fused=c.fused)
     run, weights = win.run_inputs(tokens), W.weights_of(w)
@@ -296,7 +339,7 @@ def test_drawn_blocks_of_every_family_assemble_from_committed_rows_to_what_repla
             b = st.row_of(u.slot)
             got = win.inputs(s, b, u.family, u.index, lambda *k: rows[k], weights, run)
             ports = win.ports(u.family)
-            if u.family.endswith(".pv"):
+            if u.template.startswith("PvRow_v1"):
                 assert got["n"] == (u.position + 1).to_bytes(2, "little")
                 ports = ports[:-1]
             assert b"".join(got[p] for p in ports) == b"".join(np.ascontiguousarray(a).tobytes() for a in u.inputs), \
@@ -317,7 +360,8 @@ def test_a_drawn_attention_blocks_rows_open_against_their_steps_roots(served) ->
     b = int(np.argmax(st.positions))
     assert st.positions[b] > 0, "the block reads keys of earlier steps"
     com, keys = {}, set()
-    for p in win.locate(s, b, "l0.softmax", 1, "k") + win.locate(s, b, "l0.softmax", 1, "q"):
+    head = "l0.pv" if "pv" in c.fused else "l0.softmax"
+    for p in win.locate(s, b, head, 1, "k") + win.locate(s, b, head, 1, "q"):
         if isinstance(p, W.Segment):
             keys.add((p.step, p.slot))
             if p.step not in com:

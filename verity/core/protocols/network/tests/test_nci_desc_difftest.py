@@ -134,7 +134,7 @@ def test_the_shared_members_read_both_nodes():
 
 
 def test_the_mistyped_ones_are_reinterpretations():
-    """The mistyped instances come just before the pinned ones. On each of #3896's shapes and each pair reading that
+    """The mistyped instances come just before the pinned ones. On each of the `shapes()` and each pair reading that
     isn't well-typed, the codec refuses the Program as `E_REINTERPRET` and the reference refuses it (`program`); each
     well-typed neighbour gets a verdict; and the tampered declarations hold both."""
     mv = _load("mistyped_vectors")
