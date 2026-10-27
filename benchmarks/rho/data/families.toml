@@ -27,6 +27,7 @@ b_ps = { value = 1, low = 1, high = 16, unit = "bit", source = "E1 Corollary 4a:
 step_tokens = { value = 6.7e7, unit = "token", source = "Kimi K2 report (arXiv 2507.20534): 67M tokens a batch (benchmarks/nci/kappa.py batch_tokens); a run that states its batch sets its own", status = "datasheet" }
 beta_x_marginal = { value = 2.6, low = 0.87, high = 4, unit = "bit", source = "E1's column tile at the margin (draft:E1-tile): fresh bits per extra activation occurrence; low: the exact block's beta_x; high: an FP4 activation's width", status = "assumed" }
 psum_bits = { value = 16, unit = "bit", source = "a bf16 partial sum handed to the next tile", status = "declared" }
+beta_g = { value = 8, low = 0.87, high = 16, unit = "bit", source = "the held-layers attack's exit gradient at FP8 E4M3's width, as DeepSeek-V3's Dgrad inputs (arXiv 2412.19437), an achievable code; low: the activations' replay-consistent beta_x, which nothing has measured for gradients; high: bf16", status = "assumed" }
 tile_weight_bits = { value = 8, unit = "bit", source = "an FP8 weight read at its stored width (a precision caps it at its own)", status = "datasheet" }
 token_bits = { value = 20, low = 17, high = 20, unit = "bit", source = "ruled: a session returns at most 2.5 MB, 1M tokens at 20 bits (policy.v4-pro-session.k); low: E1's 17-bit token", status = "ruled" }
 grad_bits = { value = 16, low = 8, high = 32, unit = "bit", source = "a bf16 gradient accumulator per updated weight inside an optimizer step; low: FP8; high: FP32", status = "assumed" }

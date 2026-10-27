@@ -34,10 +34,11 @@ from it, the same for every kind:
 * the shard: `token_state_bits` a token's trained weights at `b_w` and, with a backward, a `grad_bits` accumulator
   each; `shared_state_bits` the same over `instances.shared_run`; `flops_per_token = 2 counted / κ`; `cut_bits` the
   residual width at `b_a`, crossed twice with a backward; `token_bits` the premise's per data token;
-* `map_width` and `map_width_min` the residual width, and the tile's matrix from `instances.tile_shape`.
+* `map_width`, `map_width_min` and `residual_width` the residual width, and the tile's matrix from
+  `instances.tile_shape`.
 
-The premise numbers no shape gives (`c_w`, `c_a`, the prices, E1's rates, the tile's widths, `thread_k`) are the
-family's table's, mostly `family.full`'s; a run that states its batch sets `step_tokens`.
+The premise numbers no shape gives (`c_w`, `c_a`, the prices, E1's rates, the tile's widths, `thread_k`, the exit
+gradient's `beta_g`) are the family's table's, mostly `family.full`'s; a run that states its batch sets `step_tokens`.
 
 Adding a family kind is one dataclass with `profile` and an entry in `KINDS`; adding a family of an existing kind is a
 table.
@@ -154,6 +155,7 @@ class Premises:
     step_tokens: float | None = None
     beta_x_marginal: float | None = None
     psum_bits: float | None = None
+    beta_g: float | None = None
     tile_weight_bits: float | None = None
     token_bits: float | None = None
     grad_bits: float | None = None
@@ -196,7 +198,7 @@ def _shaped(model: Model, v: Mapping[str, Any], t: Trained, grad_bits: float | N
     return {
         "kappa_forward": kappa * t.forward / t.counted, "kappa_wgrad": kappa * t.forward / t.counted if t.backward else None,
         "layers": t.layers, "layer_weights": instances.layer_weights(model, t.size), "layer_bits": layer_bits,
-        "map_width": model.d_model, "map_width_min": model.d_model,
+        "map_width": model.d_model, "map_width_min": model.d_model, "residual_width": model.d_model,
         "token_state_bits": token, "shared_state_bits": shared, "flops_per_token": 2 * t.counted / kappa,
         "cut_bits": None if v["b_a"] is None else (2 if t.backward else 1) * model.d_model * v["b_a"],
         "token_bits": None if v["token_bits"] is None else v["token_bits"] * t.data, "decode_flops": t.decode,
