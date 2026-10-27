@@ -578,7 +578,11 @@
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/",
-        "examples/vllm/"
+        "examples/vllm/",
+        "benchmarks/one_stage/served_verdicts.sh",
+        "benchmarks/one_stage/served_verdicts.py",
+        "benchmarks/one_stage/tests/test_served_verdicts.py",
+        "benchmarks/one_stage/tests/served_verdicts.pyproject.toml"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
