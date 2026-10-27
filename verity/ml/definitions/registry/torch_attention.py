@@ -300,40 +300,47 @@ def _repeat_kv_sig(S):
 
 
 _POSITION = Ports(params={"n": In(kind="position")})
-_PENDING = "not-yet-established"
+#: sm_120's words (an RTX PRO 6000, torch 2.14.0+cu130) from a 2-layer smollm2-135m training step at S = 256 and from the
+#: training run's shapes; `tests/test_torch_training_sm120.py` keeps a cut of each
+SM120_STEP = "the 2-layer smollm2-135m step r20261027-031630-ce8e (difftest r20261027-035245-3d66)"
+SM120_SHAPES = "the training shapes r20261027-040221-0e4d (difftest r20261027-040917-a3ba)"
+SM120 = "sm_120 (RTX PRO 6000, torch 2.14.0+cu130), 0 mismatches; tests/test_torch_training_sm120.py"
+_HEADS = f"exact-model-tested; every q and k head (D = 64) of both layers of {SM120_STEP}: {SM120}"
+_ROWS = f"every row (N = 256) of both layers' 9 heads of {SM120_STEP} and rows of 512 and 1,024 keys of {SM120_SHAPES}"
 
 SoftmaxTorch = specialized(
     "SoftmaxTorch", 1, ("N",), lambda S: lambda C, *xs: softmax_warp_forward(C, xs), _softmax_sig,
     doc="torch's softmax_warp_forward on an f32 row of N <= 2048: per-lane max then the shfl_xor butterfly, expf(x - m), "
         "per-lane sums from +0 then the butterfly, sum == 0 ? qNaN : e / sum",
-    refuse=_refuse(N=MAX_FORWARD), conformance=_PENDING)
+    refuse=_refuse(N=MAX_FORWARD), conformance=f"exact-model-tested; as EagerSoftmax_v1's saved row, on {_ROWS}: {SM120}")
 SoftmaxTorchBackward = specialized(
     "SoftmaxTorchBackward", 1, ("N",), lambda S: lambda C, *w: softmax_warp_backward(C, w[:S.N], w[S.N:]),
     _softmax_backward_sig,
     doc="torch's _softmax_backward_data on an f32 row of N <= 1024: tmp = g * y, per-lane sums from +0 then the shfl_xor "
         "butterfly, fma(-y, sum, tmp)",
-    refuse=_refuse(N=MAX_BACKWARD), conformance=_PENDING)
+    refuse=_refuse(N=MAX_BACKWARD), conformance=f"exact-model-tested; inside EagerSoftmaxBackward_v1, on {_ROWS}: {SM120}")
 EagerSoftmax = specialized(
     "EagerSoftmax", 1, ("N", "D"), lambda S: lambda C, *w: eager_softmax(C, S.D, w[:-1], w[-1]), _eager_sig,
     doc="HF eager attention's row: bf16(s * D^-0.5), the bf16 causal mask's add (+0 below n, 0xFF7F from n), "
         "SoftmaxTorch_v1 in f32 (the saved row) and its bf16 copy",
-    refuse=_refuse(N=MAX_FORWARD, D=None), ports=_POSITION, conformance=_PENDING)
+    refuse=_refuse(N=MAX_FORWARD, D=None), ports=_POSITION, conformance=f"exact-model-tested; both outputs on {_ROWS}: {SM120}")
 EagerSoftmaxBackward = specialized(
     "EagerSoftmaxBackward", 1, ("N", "D"), lambda S: lambda C, *w: eager_softmax_backward(C, S.D, w[:S.N], w[S.N:]),
     _eager_backward_sig,
     doc="HF eager attention's row backward: SoftmaxTorchBackward_v1 of f32(dp) and the saved row, F2FP, then "
         "bf16(f32(.) * D^-0.5)",
-    refuse=_refuse(N=MAX_BACKWARD, D=None), conformance=_PENDING)
+    refuse=_refuse(N=MAX_BACKWARD, D=None), conformance=f"exact-model-tested; the score's gradient on {_ROWS}: {SM120}")
 RopeHf = specialized(
     "RopeHf", 1, ("D",), lambda S: lambda C, *w: rope_hf(C, w[:S.D], w[S.D:]), _rope_sig,
     doc="HF apply_rotary_pos_emb on one bf16 head, cs = [cos[0:R] | sin[0:R]]: bf16(bf16(x c) + bf16(rotate_half(x) s))",
-    refuse=_refuse(D=None), conformance=_PENDING)
+    refuse=_refuse(D=None), conformance=_HEADS)
 RopeHfBackward = specialized(
     "RopeHfBackward", 1, ("D",), lambda S: lambda C, *w: rope_hf_backward(C, w[:S.D], w[S.D:]), _rope_backward_sig,
     doc="HF apply_rotary_pos_emb's backward on one bf16 head: z(bf16(bf16(g c) + bf16(g s) rotated back)), -0 as +0",
-    refuse=_refuse(D=None), conformance=_PENDING)
+    refuse=_refuse(D=None), conformance=_HEADS)
 RepeatKvBackward = specialized(
     "RepeatKvBackward", 1, ("NREP", "N"), lambda S: lambda C, *w: repeat_kv_backward(C, S.NREP, S.N, w), _repeat_kv_sig,
     doc="repeat_kv's backward: sum_to over the NREP query heads, Reduce.cuh's thread fold (four f32 accumulators from +0, "
         "input i into i mod 4, combined in order), one F2FP",
-    refuse=_refuse(NREP=None, N=1 << 20), conformance=_PENDING)
+    refuse=_refuse(NREP=None, N=1 << 20),
+    conformance=f"exact-model-tested; the key and value gradients (NREP = 3, N = 64) of both layers of {SM120_STEP}: {SM120}")
