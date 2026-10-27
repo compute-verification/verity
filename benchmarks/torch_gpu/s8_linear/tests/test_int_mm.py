@@ -61,13 +61,13 @@ def test_linear_refuses_what_the_definition_does_not_bind() -> None:
 
 
 def test_the_ptx_audit_takes_only_the_definitions_instructions() -> None:
-    """`ptx_audit` passes PTX made of `FUSED_PTX` blocks, and fails one with an fma, a flushed multiply, a missing multiply
+    """`ptx_audit` passes PTX made of `FUSED_PTX` copies, and fails one with an fma, a flushed multiply, a missing multiply
     or other f32 arithmetic: what a compiler pass that touched the epilogue would leave."""
-    def block(i: int) -> str:
+    def snippet(i: int) -> str:
         return IM.FUSED_PTX.replace("$0", f"%rs{i}").replace("$1", f"%r{i}").replace("$2", f"%f{2 * i}").replace(
             "$3", f"%f{2 * i + 1}")
 
-    good = "ld.global.v4.b32 {%r1, %r2, %r3, %r4}, [%rd1];\nmov.f32 %f9, 0f00000000;\n" + "\n".join(map(block, range(4)))
+    good = "ld.global.v4.b32 {%r1, %r2, %r3, %r4}, [%rd1];\nmov.f32 %f9, 0f00000000;\n" + "\n".join(map(snippet, range(4)))
     audit = IM.ptx_audit(good)
     assert audit["ok"] and audit["cvt.rn.f32.s32"] == audit["blocks"] == 4 and audit["mul.rn.f32"] == 8
     for bad in (good.replace("mul.rn.f32 t, t, %f1;", "fma.rn.f32 t, t, %f1, %f9;"),
