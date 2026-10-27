@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# What the templated statement's read costs against the flat one's (PRF-133): per K, the H1 tile unit's statement circuit
+# What the templated statement's read costs against the flat one's: per K, the H1 tile unit's statement circuit
 # and its templated form as flock_tmpl.sh builds them, then flock-tmpl's `unrollat` (`Tmpl.unrollAt` at MODE, whole and a
 # stage at a time), `checks` (the description checks, then the unrolled input-row checks they stand for), `unroll` (the
 # logical `Tmpl.unroll`) and `flat` (`Net.parse` on the circuit's flat unit, which the flat
