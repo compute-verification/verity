@@ -4,7 +4,7 @@ import Proofs.Pouw.PeriodJ10R
 /-!
 # Proof of `ServedWork`
 
-`Properties.Pouw.ServedWork.ServedWork` from `H1J10RCheckedCreditPeriod` and `SAKServed`:
+`Properties.Pouw.Served.ServedWork` from `H1J10RCheckedCreditPeriod` and `SAKServed`:
 
 * `prob_salt_le`: a window's salt coin is uniform given anything fixed before it, so the salt falls in a degenerate set
   chosen from what is fixed before it with that set's probability (by windows: slices of the earlier windows' coins, then
@@ -15,9 +15,9 @@ import Proofs.Pouw.PeriodJ10R
   degenerate salts: `δ_s + n·(δ_bind + δ_ks)` plus `n·κ_deg(B)`.
 -/
 
-namespace Properties.Pouw.ServedWork.SecurityProofs
+namespace Properties.Pouw.Served.SecurityProofs
 
-open Properties.Pouw.ServedWork Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
+open Properties.Pouw.Served Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## A window's salt is uniform given what is fixed before it -/
@@ -39,8 +39,8 @@ theorem prob_le_of_slices_fst {α β : Type*} [Fintype α] [Fintype β] (E : α 
 theorem paths_nonempty {Ω : Type} [h : Nonempty Ω] : ∀ n, Nonempty (Paths Ω n)
   | 0 => ⟨()⟩
   | n + 1 => by
-    obtain ⟨ω⟩ := h
     obtain ⟨x⟩ := paths_nonempty (Ω := Ω) n
+    obtain ⟨ω⟩ := h
     exact ⟨(ω, x)⟩
 
 /-- **The first window's salt coin**: an event of window 0's round-0 coin has that coin's probability. -/
@@ -65,18 +65,20 @@ theorem prob_salt_le {C B X : Type} [Fintype C] [Fintype B] {m : ℕ} (hm : 0 < 
     obtain ⟨w, hw⟩ := w
     cases w with
     | zero =>
-      rcases isEmpty_or_nonempty (Paths (Paths C (m + 1) × B) (n + 1)) with he | ⟨x0⟩
+      by_cases he : IsEmpty (Paths (Paths C (m + 1) × B) (n + 1))
       · rw [@prob_of_isEmpty _ _ he]
         exact hκ
-      · have hc : ∀ x, g x = g x0 := fun x => hg x0 x
+      · obtain ⟨x0⟩ := not_isEmpty_iff.mp he
+        have hc : ∀ x, g x = g x0 := fun x => hg x0 x
         refine (prob_mono fun x hx => ?_).trans (prob_coin_le hm (n := n) (D (g x0)) hκ (hD _))
         rw [← hc x]
         exact hx
     | succ w =>
-      refine prob_le_of_slices_fst
-        (fun x : (Paths C (m + 1) × B) × Paths (Paths C (m + 1) × B) n => D (g x) (saltCoin hm x ⟨w + 1, hw⟩)) hκ
-        fun x0 => ?_
-      exact ih (fun x' => g (x0, x')) ⟨w, Nat.lt_of_succ_lt_succ hw⟩ fun x' z' => hg (x0, x') (x0, z')
+      have key : ∀ x0 : Paths C (m + 1) × B, prob (fun x' : Paths (Paths C (m + 1) × B) n =>
+          D (g (x0, x')) (saltCoin (n := n + 1) hm (x0, x') ⟨w + 1, hw⟩)) ≤ κ := fun x0 =>
+        ih (fun x' => g (x0, x')) ⟨w, Nat.lt_of_succ_lt_succ hw⟩ fun x' z' => hg (x0, x') (x0, z')
+      exact prob_le_of_slices_fst (α := Paths C (m + 1) × B) (β := Paths (Paths C (m + 1) × B) n)
+        (fun x => D (g x) (saltCoin (n := n + 1) hm x ⟨w + 1, hw⟩)) hκ key
 
 /-! ## The guarantee -/
 
@@ -145,4 +147,4 @@ theorem servedWork : ServedWork := by
     _ = δs + n * (δbind + δks) + n * κdeg B := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-end Properties.Pouw.ServedWork.SecurityProofs
+end Properties.Pouw.Served.SecurityProofs

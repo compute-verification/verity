@@ -4,7 +4,7 @@ import Proofs.Pouw.PeriodJ10R.Honest
 /-!
 # `ServedWork` is honest and nontrivial
 
-The twins of `Properties.Pouw.ServedWork.ServedWork` (LEAN-66), over `Proofs.Pouw.PeriodJ10R.Honest`'s honest J10-R
+The twins of `Properties.Pouw.Served.ServedWork` (LEAN-66), over `Proofs.Pouw.PeriodJ10R.Honest`'s honest J10-R
 period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the windows' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `fm`, `fa c`: a flat machine. A program is any function, and every run uses `c` units of one resource at rate 1 and
@@ -20,9 +20,9 @@ period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the windo
   the event has probability 1, past the bound `e^{−1}`. The free machine is what `SAKServed` rules out.
 -/
 
-namespace Properties.Pouw.ServedWork.SecurityProofs.Honest
+namespace Properties.Pouw.Served.SecurityProofs.Honest
 
-open Properties.Pouw.ServedWork Properties.Pouw.ServedWork.SecurityProofs
+open Properties.Pouw.Served Properties.Pouw.Served.SecurityProofs
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
 open Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
@@ -244,4 +244,4 @@ theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (re
 
 end Meets
 
-end Properties.Pouw.ServedWork.SecurityProofs.Honest
+end Properties.Pouw.Served.SecurityProofs.Honest

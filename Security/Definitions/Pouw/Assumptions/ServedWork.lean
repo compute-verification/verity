@@ -1,7 +1,7 @@
 import Definitions.Pouw.Dither
 
 /-!
-# SAK at the served words: the work premise of `Properties.Pouw.ServedWork` (trusted)
+# SAK at the served words: the work premise of `Properties.Pouw.Served.ServedWork` (trusted)
 
 `Pouw.SakLb.SAKResidual` (SAK-LB, #4875) states symmetric algorithmic knowledge for exact matrix products as one
 pointwise premise on the no-fold round's cells: outside a set of the round's dithers of probability at most `κdeg B`, a

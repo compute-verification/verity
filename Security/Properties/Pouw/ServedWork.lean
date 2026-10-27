@@ -47,7 +47,7 @@ makes `SAKMatmul` and `SAKResidual` false (free register reductions, the four Ru
 The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its honest and nontrivial lemmas.
 -/
 
-namespace Properties.Pouw.ServedWork
+namespace Properties.Pouw.Served
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Properties.Pouw.PeriodJ10R
@@ -129,4 +129,4 @@ def ServedWork : Prop :=
           ∑ w, lam (inst x w)) ≤
       δs + n * (δbind + δks) + n * κdeg B
 
-end Properties.Pouw.ServedWork
+end Properties.Pouw.Served
