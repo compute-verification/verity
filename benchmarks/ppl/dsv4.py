@@ -16,6 +16,8 @@ channels and taken off the output at the query's position. Its keys are the 128-
 compressor's entries: HCA pools every 128 tokens into one, CSA every 4 (overlapping windows of 8) and lets the
 indexer pick at most `index_topk` of them per query. At T <= 4 index_topk every query's top-k is every entry it may
 see, so the indexer is skipped and the mask is causal over the entries (`compress`; exact, HF's block bias is the same).
+At 8K the reference attention and the indexer's scores run on chunks of query rows (`EAGER_WHOLE`), and the HF check,
+whose whole-window eager attention would not fit a GPU, compares one window's first 4224 tokens (`check_prefix`).
 
 An arm's linear steps reach q_a, q_b, kv, each of o_a's 16 groups (`self_attn.o_a_proj.G`, rows G of wo_a, as HF's
 grouped bmm reads them), o_b, the compressors' and indexer's kv and gate, the indexer's q_b, the shared expert's gate,
@@ -29,6 +31,7 @@ input, the MoE input (the shared expert's gate and up, every routed gate_up), an
 kv_shared form: K and V are one tensor under MQA, so no row of a V projection takes 1 / m."""
 from __future__ import annotations
 
+import math
 import types
 
 import torch
@@ -43,6 +46,10 @@ FP4 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, -0.0, -0.5, -1.0, -1.5, -2.0, -3.
 FP32_STRICT = ("attn_hc", "ffn_hc", "hc_head", "sinks", "position_bias", "e_score_correction_bias", "q_a_norm",
                "kv_norm", "input_layernorm", "post_attention_layernorm", "norm")
 RATIO_TYPES = {0: "sliding_attention", 4: "compressed_sparse_attention", 128: "heavily_compressed_attention"}
+#: the bf16 reference's attention runs whole while its FP32 logits ([B, 128, T, keys]) are within EAGER_WHOLE bytes (four
+#: windows at 2K; one window's HF-check prefix at 8K), else on query-row chunks of EAGER_BYTES; the indexer's scores
+#: ([B, T, 64, entries]) on chunks of INDEX_BYTES
+EAGER_WHOLE, EAGER_BYTES, INDEX_BYTES = 16 << 30, 4 << 30, 4 << 30
 KEYS = ("q_lora_rank", "o_groups", "o_lora_rank", "sliding_window", "index_n_heads", "index_head_dim", "index_topk",
         "n_routed_experts", "num_experts_per_tok", "moe_intermediate_size", "n_shared_experts", "scoring_func",
         "norm_topk_prob", "routed_scaling_factor", "swiglu_limit", "hc_mult", "hc_sinkhorn_iters", "hc_eps",
@@ -409,8 +416,20 @@ class Dsv4Layer:
 
     def eager(self, q: torch.Tensor, kv: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """HF's `eager_attention_forward` with the sinks: bf16 scores plus the mask, the sink logit appended in FP32,
-        the max taken off, the FP32 softmax, the sink dropped, bf16 P V."""
-        k = repeat_kv(kv, q.shape[1])
+        the max taken off, the FP32 softmax, the sink dropped, bf16 P V. Whole while its FP32 logits fit EAGER_WHOLE,
+        else on chunks of query rows (each row's softmax is its own)."""
+        B, H, S, _ = q.shape
+        k = repeat_kv(kv, H)
+        per_row = B * H * k.shape[2] * 4
+        if per_row * S <= EAGER_WHOLE:
+            return self.eager_rows(q, k, mask)
+        rows = max(1, EAGER_BYTES // per_row)
+        o = q.new_empty(B, S, H, k.shape[-1])
+        for r in range(0, S, rows):
+            o[:, r:r + rows] = self.eager_rows(q[:, :, r:r + rows], k, mask[:, :, r:r + rows])
+        return o
+
+    def eager_rows(self, q: torch.Tensor, k: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         w = torch.matmul(q, k.transpose(2, 3)) * self.scaling
         w = w + mask
         sinks = self.t["attn.attn_sink"].reshape(1, -1, 1, 1).expand(q.shape[0], -1, q.shape[-2], -1)
@@ -536,10 +555,15 @@ class Dsv4Layer:
         cos, sin = pe["compress"]
         q = self.linear(p + "q_b_proj", q_res, run, collect).view(B, S, -1, di).transpose(1, 2)
         q = rope(q, cos, sin).transpose(1, 2)
-        scores = F.relu(torch.matmul(q.float(), ckv.transpose(-1, -2).float().unsqueeze(1))) * di ** -0.5
+        k = ckv.transpose(-1, -2).float().unsqueeze(1)
         w = F.linear(x, self.weight(p + "scorer.weights_proj")).float() * nh ** -0.5
-        s = (scores * w.unsqueeze(-1)).sum(dim=2)
-        n = s.shape[-1]
+        n = k.shape[-1]
+        rows = S if B * S * nh * n * 4 <= INDEX_BYTES else max(1, INDEX_BYTES // (B * nh * n * 4))
+        s = torch.empty(B, S, n, device=x.device)
+        for r in range(0, S, rows):
+            scores = F.relu(torch.matmul(q[:, r:r + rows].float(), k)) * di ** -0.5
+            s[:, r:r + rows] = (scores * w[:, r:r + rows].unsqueeze(-1)).sum(dim=2)
+            del scores
         s = s.masked_fill(torch.arange(n, device=x.device).view(1, 1, -1) >= thr.unsqueeze(-1), float("-inf"))
         idx = s.topk(min(g["index_topk"], n), dim=-1).indices
         return torch.where(idx >= thr.unsqueeze(-1), torch.full_like(idx, -1), idx)
@@ -609,10 +633,22 @@ def hf_state(layer: Dsv4Layer) -> dict:
     return sd
 
 
+def check_prefix(layer: Dsv4Layer, B: int, T: int) -> int | None:
+    """None while the engine's reference attention on B windows of T runs whole (and HF's fits beside it); else the
+    length of the one window's prefix the check compares instead: the least multiple of the compress rates whose CSA
+    entries outnumber index_topk, so the indexer's selection is in it (4224 for V4-Pro)."""
+    if B * layer.cfg.heads * T * (T + (T // layer.ratio if layer.ratio else 0)) * 4 <= EAGER_WHOLE:
+        return None
+    rates = layer.g["compress_rates"]
+    m = math.lcm(*rates.values())
+    return min(T, (layer.g["index_topk"] * rates.get("compressed_sparse_attention", m) // m + 1) * m)
+
+
 def check_reference(gates, cfg, snapshot, layer: Dsv4Layer, h: torch.Tensor, cos, sin, out: torch.Tensor,
                     ids: torch.Tensor | None = None) -> None:
     """The engine's bf16 layer output equals HF's `DeepseekV4DecoderLayer` on the same input, ids and weights, bit for
-    bit, with HF's RoPE tables and its sliding-window causal mask (and those equal the engine's)."""
+    bit, with HF's RoPE tables and its sliding-window causal mask (and those equal the engine's). Past `check_prefix`
+    (8K) both run on the first window's prefix: causal, so the same function of the same tokens."""
     try:
         import transformers
         from transformers.masking_utils import create_sliding_window_causal_mask
@@ -645,6 +681,14 @@ def check_reference(gates, cfg, snapshot, layer: Dsv4Layer, h: torch.Tensor, cos
             mod.rotary_emb = hf.DeepseekV4RotaryEmbedding(hc).to(dev)
     hl.eval()
     B, T = h.shape[:2]
+    where = f"layer {layer.li}"
+    P = check_prefix(layer, B, T)
+    if P is not None:
+        h, ids = h[:1, :P].contiguous(), ids[:1, :P]
+        cos = {k: (c[:, :P], s[:, :P]) for k, (c, s) in cos.items()}
+        with torch.no_grad():
+            out = layer.forward(h, cos, sin, ids=ids)
+        B, T, where = 1, P, f"{where}, the first {P} tokens of one window"
     pos = torch.arange(T, device=dev)[None]
     emb = h[:, :, 0]
     rot = hf.DeepseekV4RotaryEmbedding(hc).to(dev)
@@ -658,6 +702,6 @@ def check_reference(gates, cfg, snapshot, layer: Dsv4Layer, h: torch.Tensor, cos
                                                                          torch.finfo(h.dtype).min)
     tables = all(torch.equal(pe[k][i], cos[k][i]) for k in pe for i in (0, 1))
     ok = bool(tables and torch.equal(mask.expand(B, -1, -1, -1), mine.expand(B, -1, -1, -1)) and torch.equal(want, out))
-    gates.record("hf_reference", ok, f"layer {layer.li}",
+    gates.record("hf_reference", ok, where,
                  None if ok else {"tables": tables, "max": float((want.float() - out.float()).abs().max())})
     del hl

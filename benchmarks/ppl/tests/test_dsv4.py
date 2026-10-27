@@ -5,6 +5,7 @@ selection and with it skipped, the config derivations HF's, the dequantization H
 reach every linear, and the refusals."""
 import json
 import shutil
+import types
 from pathlib import Path
 
 import dsv4
@@ -196,6 +197,51 @@ def test_hf_parity(which, request, ids):
     r = evaluate(snap, ids[:2], [], hf_check=True)
     g = r["gates"]["hf_reference"]
     assert g["checked"] == len(KINDS) and g["failed"] == 0, g
+
+
+def test_the_check_prefix_at_v4_pros_sizes():
+    """V4-Pro (128 heads, CSA 4, HCA 128, top-1024): the reference attention runs whole on four windows at 2K and in
+    chunks at 8K, where the HF check compares one window's first 4224 tokens (1056 CSA entries: the indexer selects),
+    which run whole."""
+    g = {"compress_rates": {"compressed_sparse_attention": 4, "heavily_compressed_attention": 128}, "index_topk": 1024}
+    for ratio in (4, 128):
+        layer = types.SimpleNamespace(cfg=types.SimpleNamespace(heads=128), ratio=ratio, g=g)
+        assert dsv4.check_prefix(layer, 4, 2048) is None
+        assert dsv4.check_prefix(layer, 4, 8192) == 4224
+        assert dsv4.check_prefix(layer, 1, 4224) is None
+
+
+@pytest.mark.parametrize("arms", [[], ["adopted-bd-lm-pv"]])
+def test_the_chunked_path_is_the_whole_one(v4, ids, calib, monkeypatch, arms):
+    """With thresholds that put the tiny model where V4-Pro is at 8K, the reference attention runs on chunks of query
+    rows and the indexer on chunks too (the arm's included), and every NLL is the whole path's, bit for bit; the HF
+    check compares a 32-token prefix (8 CSA entries, the indexer picking 4) on every layer, and passes."""
+    whole = evaluate(v4, ids[:2], arms, calib=calib)
+    prefixes, rows = [], set()
+    real_prefix, real_rows = dsv4.check_prefix, dsv4.Dsv4Layer.eager_rows
+
+    def prefix(layer, B, T):
+        prefixes.append(real_prefix(layer, B, T))
+        return prefixes[-1]
+
+    def eager_rows(self, q, k, mask):
+        rows.add(q.shape[2])
+        return real_rows(self, q, k, mask)
+
+    monkeypatch.setattr(dsv4, "EAGER_WHOLE", 50_000)
+    monkeypatch.setattr(dsv4, "EAGER_BYTES", 2 * HEADS * 80 * 4 * 7)
+    monkeypatch.setattr(dsv4, "INDEX_BYTES", 2 * IH * 16 * 4 * 5)
+    monkeypatch.setattr(dsv4, "check_prefix", prefix)
+    monkeypatch.setattr(dsv4.Dsv4Layer, "eager_rows", eager_rows)
+    chunked = evaluate(v4, ids[:2], arms, calib=calib, hf_check=True)
+    assert passed(chunked), chunked["gates"]
+    g = chunked["gates"]["hf_reference"]
+    assert g["checked"] == len(KINDS) and g["failed"] == 0, g
+    assert prefixes == [32] * len(KINDS)
+    assert {7, 8, 32} <= rows and max(rows) == 32, rows
+    assert whole["nll"].keys() == chunked["nll"].keys()
+    for k in whole["nll"]:
+        assert np.array_equal(whole["nll"][k], chunked["nll"][k]), k
 
 
 def hf_model(snap: Path):

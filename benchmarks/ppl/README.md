@@ -278,6 +278,17 @@ kv_a_proj_with_mqa, the shared experts' gate and up with every routed expert's g
 calibration token chose is not smoothed. It is the V4 proxy's model: `scale_error` scales the error of the chain after
 it by a factor per matmul, so its matmuls carry the per-matmul error another model's shapes would.
 
+DeepSeek-V4-Pro (`dsv4.py`) is HF's `DeepseekV4DecoderLayer` op for op, from DeepSeek's checkpoint (FP8 linears and
+FP4 routed experts with UE8M0 scales, dequantized exactly), streamed like GLM-5.3 (`pins/deepseek-v4-pro.json`) on 4
+GPUs, and checked by `hf_reference`. It has mHC's four residual streams, and multi-query attention (128 heads on one
+512-wide KV head, with sinks). Its keys are the 128-key sliding window plus the compressors' entries: HCA pools every
+128 tokens, and CSA every 4 with the indexer keeping the top 1,024. Each layer has 384 routed experts (hash-routed on
+layers 0–2) and one shared. Arms reach every linear but the routers, the indexer's weights_proj and mHC, each routed
+expert's on its rows. Their attention runs over the window's keys then the entries, with the query's visible ones as
+the mask, so `pv1024`'s blocks are of that layout, not of the gathered keys. The LUT softmax is refused. At 8K the
+reference attention and the indexer's scores run on chunks of query rows, and `hf_reference` compares the first 4,224
+tokens of one window, past the indexer's top-k (`dsv4.check_prefix`).
+
 `error_probe.py measure` gives those factors' inputs: an arm's relative error per linear class on synthetic operands of
 each model's (k, n), and per attention shape (whole, Q K^T alone, P V alone) over a grid of logit spreads and sink
 logits. `error_probe.py factors PROBE.json --fit RESULTS.json --spec specs/NAME.toml [--upper]` fits the attention

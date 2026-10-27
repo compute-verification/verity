@@ -6,8 +6,8 @@ A model with a `pin` (`pins/<name>.json`: its repo, revision and every file's sh
 files in the snapshot from the hub, each checked against the pin, and the engine pulls each safetensors shard the layer
 it reads needs, checks its sha256 and deletes it once read (`stream.Hub`). So GLM-5.3's 705 GB of block-FP8 weights need
 no copy on the node. `max_ctx`: the longest context a model runs at (GLM-5.3's DSA attention is dense, and the engine's
-layer HF's, only up to its index_topk, 2048; DeepSeek-V4-Pro's bf16 reference attention at 8K, four windows at once,
-needs more than a GPU)."""
+layer HF's, only up to its index_topk, 2048; DeepSeek-V4-Pro runs at 8K, its reference attention in chunks of query
+rows and its HF check on a window's prefix: `dsv4.check_prefix`)."""
 from __future__ import annotations
 
 import json
@@ -26,7 +26,7 @@ MODELS = {
     "deepseek-v2-lite": {"repo": "deepseek-ai/DeepSeek-V2-Lite", "revision": "604d5664dddd88a0433dbae533b7fe9472482de0",
                          "tokenizer": "deepseek-v2", "gpus": 1},
     "deepseek-v4-pro": {"repo": "deepseek-ai/DeepSeek-V4-Pro", "revision": "b5968e9190ef611bbf34a7229255be88a0e937c1",
-                        "tokenizer": "deepseek-v4", "gpus": 4, "pin": "deepseek-v4-pro.json", "max_ctx": 2048},
+                        "tokenizer": "deepseek-v4", "gpus": 4, "pin": "deepseek-v4-pro.json", "max_ctx": 8192},
 }
 
 
