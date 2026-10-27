@@ -458,7 +458,7 @@ theorem innerPorts_named {x : Msg} {s j : ℕ} {nm : String} {pt : _root_.VStar.
     unfold partVStar at hall
     split at hall
     · simp only [Bool.and_eq_true] at hall
-      exact checkParsed_unit hall.1.2
+      exact checkParsed_unit hall.1.1.1.2
     · cases hall
   have hsz : ∀ q ∈ pt.S.ports, 1 ≤ q.2 := innerUnit_sizes (show _root_.VStar.innerUnit pt.S nm = .ok u from hu)
   obtain ⟨sp, ps, hsp, hps, hpt⟩ := inner_mem hvs hst
