@@ -34,16 +34,6 @@ def const_value(spec: str) -> tuple[int, int] | None:
     return (int(m.group(1)), int(m.group(2), 16)) if m else None
 
 
-def _registry():
-    """The registry every module loaded (`verity.ml.definitions.registry.load`); a module that fails to import is named on stderr (its
-    Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    from verity.ml.definitions.registry.catalog import load
-    reg, errors = load()
-    for e in errors:
-        print(f"[compare] registry module unavailable ({e}): Programs naming its Definitions will not decode", file=sys.stderr)
-    return reg
-
-
 class Prog(PeerReads, PX.PrefixInput):
     """A decoded root body as an instance sequence."""
 
@@ -53,16 +43,20 @@ class Prog(PeerReads, PX.PrefixInput):
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False):
         from verity.ml.circuits.codec import program_digest
+        from verity.ml.definitions.registry.catalog import load
         self.label = label
         self.compact = bool(compact)
         self.digest = desc.get("digest") or program_digest(desc)
+        registry, errors = load()
+        for e in errors:
+            print(f"[compare] registry module unavailable ({e}): Programs naming its Definitions will not decode", file=sys.stderr)
         self.inputs: dict[int, tuple[str, int]] = {}
         self.inst: list[dict] = []  # k, spec, form, args=[runs | progressions], out
         if self.compact:
             # the root body read straight from the descriptor JSON into run progressions: no Node / Coll / Refs objects for
             # the root, no per-row expansion of a Strided (compact.lean_root; the non-root Definitions are decoded as decode_program does)
             from verity_vllm.program.compact import lean_root
-            lr = lean_root(desc, _registry())
+            lr = lean_root(desc, registry)
             for k, fid, form, args6, out, n in lr["nodes"]:
                 if form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n)
@@ -75,7 +69,7 @@ class Prog(PeerReads, PX.PrefixInput):
         else:
             from verity.ml.circuits.codec import decode_program
             _spec_id, runs = self._node_functions()
-            dec = decode_program(desc, _registry())
+            dec = decode_program(desc, registry)
             root = dec.root
             body = root.body if hasattr(root, "body") else root.defn.body
             for k, n in enumerate(body.nodes):

@@ -5,6 +5,7 @@ The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definiti
 registers) is not in it."""
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,6 +36,24 @@ def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
     assert not errors, errors
     assert len(registry.defs) == COUNT, f"catalog.load() registers {len(registry.defs)} Definitions, not {COUNT}"
+
+
+def test_the_ops_scope_imports_every_module_of_ops():
+    """`load(("ops", "registry"))` imports every module of `verity.ml.circuits.ops` and of its subpackages besides the registry's,
+    and registers Definitions the registry alone does not: in a process of its own, so the count above stays the registry's."""
+    code = ("import pkgutil, sys\n"
+            "from verity.ml.circuits import ops\n"
+            "from verity.ml.definitions.registry import catalog\n"
+            "alone = len(catalog.load()[0].defs)\n"
+            "registry, errors = catalog.load(('ops', 'registry'))\n"
+            "assert not errors, errors\n"
+            "missing = [m.name for m in pkgutil.walk_packages(ops.__path__, 'verity.ml.circuits.ops.') if m.name not in sys.modules]\n"
+            "assert not missing, missing\n"
+            "print(alone, len(registry.defs))\n")
+    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-2000:]
+    alone, both = map(int, p.stdout.split())
+    assert alone == COUNT and both > alone, (alone, both)
 
 
 def test_the_catalog_reads_no_protocol():
