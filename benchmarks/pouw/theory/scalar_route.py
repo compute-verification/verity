@@ -1,11 +1,11 @@
 """SCALAR-ROUTE's class P: can a program outside class P make a fresh Dither word in fewer than 2.03 issue slots without
 tables?
 
-Class P (radix-packed programs) provably costs >= 1 + 28/27 ~ 2.04 issue slots
-a word (Theorem C), and four shapes escape the proof: count-coefficient fields, joint (non-radix) encodings,
-vertical bit-sliced words, and first-mixed hashing. The joint-encoding count permits as little as 1.875 < 2.03, so the
-proof alone does not exclude a sub-2.03 word. SCALAR-ROUTE (a named assumption) is that no such word
-exists without tables; QSTAR checks the per-opcode premise ISA-CAP.
+Class P (radix-packed programs) provably costs >= 1 + 28/27 ~ 2.04 issue slots a word (Theorem C), and four shapes
+escape the proof: count-coefficient fields, joint (non-radix) encodings, vertical bit-sliced words, and first-mixed
+hashing. The joint-encoding count permits as little as 1.875 < 2.03, so the proof alone does not exclude a sub-2.03
+word. SCALAR-ROUTE (a named assumption) is that no such word exists without tables; `isa_cap_check.py` checks the
+per-opcode premise ISA-CAP.
 
 This script is the complementary half: a constructive search over the escape shapes, asking whether any *realizable* sm_120
 program in them makes a fresh committed Dither word below 2.03 issue slots without tables. The committed Dither word is a

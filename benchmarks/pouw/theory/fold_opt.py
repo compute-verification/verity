@@ -8,10 +8,10 @@ The duo step (benchmarks/pouw/receipts/receipt_folds.py, `duo_word`) absorbs one
     y' = u * a + z            # one IMAD (integer multiply-add)
     z' = rotl(u, r) + y'      # one LEA.HI (funnel-shift-add)
 
-Three instructions a word, and DATASHEET's SASS reads exactly that (8 IMMA + 32 LOP3 + 32 IMAD + 32 LEA.HI a loop).
-FOLD-OPT (FOLD §4) is the claim that a cheater who must reproduce the receipt the verifier recomputes cannot do this
-absorb in fewer than three instructions a word. This script turns the claim into a superoptimisation search + a
-structural lower bound, exact over Z/2^32, so it becomes a mechanical fact rather than a named assumption.
+Three instructions a word, and the data sheet's SASS reads exactly that (8 IMMA + 32 LOP3 + 32 IMAD + 32 LEA.HI a loop).
+FOLD-OPT is the claim that a cheater who must reproduce the receipt the verifier recomputes cannot do this absorb in
+fewer than three instructions a word. This script turns the claim into a superoptimisation search + a structural lower
+bound, exact over Z/2^32, so it becomes a mechanical fact rather than a named assumption.
 
 The result (checks below):
 - **y' is not a single sm_120 integer instruction** of the inputs {y, z, d} and any public constants: XOR-then-multiply

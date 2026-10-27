@@ -10,9 +10,9 @@ for the committed words themselves.
 An assumption is replaced by a measured cap or a mechanical check wherever the hardware allows. This script does both.
 For every non-issue unit it records (1) the arithmetic it can do, (2) whether that arithmetic can yield an exact fresh
 committed s32 sum-of-products (precision, range, rounding, freshness), and (3) its measured rate beside a saturated
-honest kernel (DATASHEET; machine_model rows.csv). The checkable physics is verified here; the measured caps are cited;
-and the machine model's floors (floors.csv: every root-write ≥ 32 MACs a word, every copy/load ≥ 16) are cross-checked
-to confirm no side unit is priced below honest's per-word cost.
+honest kernel (the data sheet, machine_model's rows.csv). The checkable physics is verified here; the measured caps are
+cited; and the machine model's floors (floors.csv: every root-write ≥ 32 MACs a word, every copy/load ≥ 16) are
+cross-checked to confirm no side unit is priced below honest's per-word cost.
 
 The units split four ways, and NOSUM holds for each by a different mechanism:
 - **Interpolators / intersection / transform units** (texture filtering, RT cores, ROP blend, video NVENC/NVDEC/OFA/JPEG):
