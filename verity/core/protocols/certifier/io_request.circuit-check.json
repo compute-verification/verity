@@ -1,24 +1,28 @@
 {
  "definitions": {
   "IoTieRequestEnd_v1": {
-   "and": 65
+   "and": 65,
+   "type": "c101086eabbbb9baf9f1d86af0dcdcd5b723f127bca38f6299664f380fea5cc054249eab75d56199c0144bfa6fd955e4c8a9f7fa4e8d386b59f1eadf58ed72a9"
   },
   "IoTieRequestFrame_v1{B=4096}": {
    "and": 166615,
    "type": "dadd0d916ddc6be4385ab72e20fe8615f7730ecbc40c1507b4199421965875f6f1d43948dee581cf20856de084e9fb968e1defd73e069c7299604faaf725854e"
   },
   "IoTieRequestFrame_v1{B=512}": {
-   "and": 20876
+   "and": 20876,
+   "type": "f2d2bcccb65db718115ad8b9c493f2618b85cdced92041e02830a4ab63289bd1be5a74ced5e2520eb819521ae8add1a36bf2653965b0ca4ec6132c2b8d310706"
   },
   "IoTieRequestStep_v1": {
-   "and": 135
+   "and": 135,
+   "type": "0ff4ccc19983ec00e37276cc3e1eae158af1a84d3e585d6bc7f4b1921658ce707a19fc6bbe6e12c8edd47220239d041a90901373b1f48f70dc071c23ec290db4"
   },
   "IoTieRequest_v1{B=4096,L=1,R=1}": {
    "and": 166811,
    "type": "b709bec777e0e888ad1de914ca890416e3d578acf4cdc5d41c12e7e888e20bf5348f6937565ab0d796439e769cff50258e87e0c1b5a0fd9546285c31c5041824"
   },
   "IoTieRequest_v1{B=512,L=1,R=2}": {
-   "and": 42082
+   "and": 42082,
+   "type": "00de7df1a4119e341f28a534147b4ef08475dc77561017728d29d7f0de5c2e353d0d7bc27664d7f06bc81a6875e7438b806e7aabb2cc8d61148b6ce40d5f6eb7"
   },
   "IoTieRequest_v1{B=512,L=4,R=4}": {
    "and": 336419,
