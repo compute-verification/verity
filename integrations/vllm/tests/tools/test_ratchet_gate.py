@@ -824,6 +824,14 @@ def env_linted(repo) -> Repo:
     return repo
 
 
+def _repo_env_fix() -> str:
+    """the fix the repository's environment-read lint names, which the gate quotes from the base's copy"""
+    spec = importlib.util.spec_from_file_location("repo_env_reads", SCRIPT.parents[3] / REPO_ENV_LINT)
+    lint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lint)
+    return lint.FIX
+
+
 def _env_lint(repo: Repo) -> str | None:
     """the repository's environment-read lint, as the root suite runs it after landing, on ``repo``'s checkout"""
     r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_env_reads as T; "
@@ -839,9 +847,8 @@ def test_a_new_direct_environment_read_is_refused_naming_it_and_the_settings_reg
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["touched"], c["counted"].get("repo_env_reads")) == ("failed", [], ["tools/a.py", "tools/c.py"]), c["why"]
     assert c["why"].startswith(f"adds 2 direct environment read(s) to the Python it changes, as the base's {REPO_ENV_LINT} "
-                               "counts them (tools/a.py 1 -> 2; tools/c.py 0 -> 1): Read the variable through your area's "
-                               "settings registry, which declares each one once (the template: "
-                               "integrations/vllm/verity_vllm/settings.py"), c["why"]
+                               f"counts them (tools/a.py 1 -> 2; tools/c.py 0 -> 1): {_repo_env_fix()}"), c["why"]
+    assert "settings registry" in _repo_env_fix()
     assert c["fix"] == ["tools/a.py:3 B (os.environ[...])", "tools/c.py:2 C (in os.environ)"]
     assert "tools/c.py: 1 found, 0 allowed" in (_env_lint(env_linted) or "")
     env_linted.commit("reads them through the area's registry", {
