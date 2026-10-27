@@ -1,6 +1,6 @@
-"""verity_vllm.program.quarantine — provisional numerical definitions, one sub-package per
-model family (`quarantine/<lane>/`), pending admission.  Existing registered bodies (`b1.py`, `prims.py`, ...) are immutable; a
-family that needs different exact semantics — a GELU, a different reduction order, a quantized GEMM, another attention kernel's
+"""verity_vllm.program.quarantine — provisional numerical definitions, one sub-package per kind of op (`act/`, `collective/`,
+`dense/`, `ov_moe/`), pending admission.  Existing registered bodies (`b1.py`, `prims.py`, ...) are immutable; code that
+needs different exact semantics — a GELU, a different reduction order, a quantized GEMM, another attention kernel's
 arithmetic — adds a NEW versioned definition here and never edits an old one.
 
 Admission (gate G4 + `verity_vllm.properties.quarantine_lint` + `verity_vllm.properties.admission`), all mechanical:
