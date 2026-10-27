@@ -12,14 +12,14 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
     python benchmarks/network_traces/scan_zk.py schedule [--class w63|test]    # its schedule as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
-  (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 8, WITHIN 12: 4 Program slots a timestep, 16 a link-window) with the
-  warden's delay D 21 and KO 64 outputs a request,
+  (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a timestep, 8 a link-window) with the
+  warden's delay D 27 (WITHIN + EVERY − 1) and KO 64 outputs a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
   link-windows; and ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
   KO 8) and 16-bucket link-windows, whose units a CPU proves in minutes.
 * **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
-  in the queue until request 1's egress ends at bucket 21 and takes its slot at 22), test's three (the third in the
+  in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), test's three (the third in the
   first's slot past its egress). Each link-window of each link is committed by the warden and its head signed by a
   test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
@@ -151,9 +151,9 @@ class Setup(NamedTuple):
 
 
 W63 = Setup(
-    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=8, WITHIN=12, D=21, KO=64),
-    W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=21, lanes=4, queue=4, window=32, ingress_cells=47,
-                   ingress_buckets=12, egress_cells=65, every=8),
+    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64),
+    W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
+                   ingress_buckets=12, egress_cells=65, every=16),
     (tuple((7 * k + 11) % 128_256 for k in range(1500)), tuple(100_000 + k for k in range(600)),
      tuple(131_071 - 3 * k for k in range(40)), tuple((k * k) % 128_256 for k in range(300)),
      tuple(5_000 + k for k in range(100))),

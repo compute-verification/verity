@@ -20,6 +20,8 @@
 #      SC_GATE_KEY, the lane's gate key)
 #      SC_RSS=1 (each flock-circuit process's own peak RSS, its command and wall, a line each in $OUT/rss.jsonl: a8's
 #      max_child_rss_gb is the largest of every session's so far)
+#      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
+#      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
 # rehearsal's public files go in $OUT/warden, its records and salts (the prover's) nowhere.
@@ -80,8 +82,9 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first
     CH+=(--peer "$SC_PEER" --challenger-key "$SC_CHALLENGER_KEY" ${SC_GATE_KEY:+--gate-key "$SC_GATE_KEY"});;
   esac
 fi
-log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}"
-"$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" ${SC_DRY:+--dry} \
+SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
+log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
+"$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000
