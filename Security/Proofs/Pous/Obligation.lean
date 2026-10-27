@@ -216,7 +216,7 @@ exceeds its bound `δ + ε_max`. -/
 theorem obligationHeld_nontrivial :
     ¬ Pouw.pr (fun _ : Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × HmCoins × Streams => True) ≤
       (Params.δ : ℝ) + Params.εMax.toReal := by
-  haveI : Nonempty (Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
+  have : Nonempty (Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
     inferInstanceAs (Nonempty (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
   rw [Pouw.pr_eq_one fun _ => trivial]
   exact not_le.2 bound_toReal_lt_one
