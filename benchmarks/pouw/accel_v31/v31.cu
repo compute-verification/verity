@@ -2135,8 +2135,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves; V31_FULL 0, rows of
 // a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks; V31_LPIECES, the
 // pieces a row's chunks are cut into (Pieces; 0, the default: 8 when the groups outnumber the CTAs the caps allow, else 1);
-// V31_SMINB 4 or 5 (the default), salt_persist's MINB; V31_LFOLD 0, a group's levels (1 .. 7) folded by a level_kernel
-// launch a level after the leaf phase rather than by the group's CTA, whose other warps wait while a few fold.
+// V31_SMINB 4 or 5 (the default), salt_persist's MINB; V31_LFOLD 1, a group's levels (1 .. 7) folded by the group's CTA,
+// whose other warps wait while a few fold, rather than (0, the default) by a level_kernel launch a level after the leaf phase.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
@@ -2144,7 +2144,7 @@ struct Knobs {
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
       ltw = env_int("V31_LTW", 0),   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
       full = env_int("V31_FULL", 1), lpieces = env_int("V31_LPIECES", 0), sminb = env_int("V31_SMINB", SMALL_MINB),
-      lfold = env_int("V31_LFOLD", 1);
+      lfold = env_int("V31_LFOLD", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -2177,7 +2177,7 @@ template <class R> static u32 host_chunks(const R& r) { return r.full ? r.row / 
 static u32 host_chunks(const FusedRow&) { return 1; }
 struct Lanes {
   u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1, lminb = SMALL_MINB, lpieces = 0, sminb = SMALL_MINB, lfold = 1;
+  int nsm = 1, lminb = SMALL_MINB, lpieces = 0, sminb = SMALL_MINB, lfold = 0;
   u64* xs = nullptr;     // Pieces: a chaining value for each of up to cap_n leaves, a flag a group
   u32* flag = nullptr;
   u64 cap_n = 0;

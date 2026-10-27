@@ -924,7 +924,7 @@ def fill_variant(r: dict) -> str:
             + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
             + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
             + (f" m{r['lminb']}" if r.get("lminb", 5) != 5 else "") + (" sa" if r.get("sahead") else "")
-            + (f" sm{r['sminb']}" if r.get("sminb", 5) != 5 else "") + (" lk" if r.get("lfold") == 0 else "")
+            + (f" sm{r['sminb']}" if r.get("sminb", 5) != 5 else "") + (" cf" if r.get("lfold") == 1 else "")
             + (" nofull" if r.get("full") == 0 else "") + (f" np{r['lpieces']}" if r.get("lpieces", 1) > 1 else ""))
 
 

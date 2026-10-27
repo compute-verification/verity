@@ -433,15 +433,16 @@ def test_fill_table(tmp_path, capsys):
 def test_fill_table_sets_the_commits_parts_against_the_ruler_and_the_bar(tmp_path, capsys):
     """A line that carries the commit's parts gets a second table: each part's compressions a SM-cycle, over the build's
     ruler (of_sha) and, given --bar, over the card's bar; its variant names the leaf path (nofull: rows hashed through the
-    padding checks; npN: rows cut into N pieces; smN: the salt kernel at MINB N; lk: the groups' levels on level kernels)."""
+    padding checks; npN: rows cut into N pieces; smN: the salt kernel at MINB N; cf: each group's levels folded by its own
+    CTA rather than by level kernels)."""
     arms = {a: {"ms": ms, "mhz": 2000} for a, ms in (("lt", 2.0), ("ovl", 2.1), ("commit", 1.2), ("leaf", 1.0),
                                                       ("leaf_nomem", 0.9), ("salt", 0.2), ("sha", 0.5))}
     line = {"fill": True, "shape": "8b-up", "m": 16384, "n": 28672, "k": 4096, "L": 4096, "S": 1, "row": 16384, "o": True,
             "cprio": "hi", "ccta": 4, "sched": 1, "arms": arms, "gamma_ovl": 1.05, "gamma_ovl_w": 1.06, "gamma_call": 1.7,
-            "gamma_gemm": 1.025, "full": 1, "lpieces": 8, "comp": {"sha": 1e8, "leaf": 3e8, "salt": 6e7},
+            "gamma_gemm": 1.025, "full": 1, "lpieces": 8, "lfold": 0, "comp": {"sha": 1e8, "leaf": 3e8, "salt": 6e7},
             "per_sm_cycle": {"sha": 0.018, "leaf": 0.0171, "leaf_nomem": 0.0175, "salt": 0.0144, "commit": None},
             "of_sha": {"leaf": 0.95, "leaf_nomem": 0.9722, "salt": 0.8, "commit": None}}
-    before = dict(line, full=0, lpieces=1, sminb=4, lfold=0)
+    before = dict(line, full=0, lpieces=1, sminb=4, lfold=1)
     (tmp_path / "b.jsonl").write_text("\n".join(json.dumps(x) for x in (line, before)) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl"), "--bar", "0.018"]) == 0
     out = capsys.readouterr().out.splitlines()
@@ -452,7 +453,7 @@ def test_fill_table_sets_the_commits_parts_against_the_ruler_and_the_bar(tmp_pat
     assert nomem.endswith("| leaf_nomem | 0.900 | 2000 | 300000000 | 0.01750 | 0.972 | 0.972 |")
     assert salt.endswith("| salt | 0.200 | 2000 | 60000000 | 0.01440 | 0.800 | 0.800 |")
     assert commit.endswith("| commit | 1.200 | 2000 | 360000000 | - | - | - |")
-    assert "| served r16384 hi k4 s1 sm4 lk nofull | 0.01800 | leaf |" in parts[6]
+    assert "| served r16384 hi k4 s1 sm4 cf nofull | 0.01800 | leaf |" in parts[6]
     v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")])
     assert capsys.readouterr().out.splitlines()[-8].endswith("| 0.01710 | 0.950 | - |")
 
