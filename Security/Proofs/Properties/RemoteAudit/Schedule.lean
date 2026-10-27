@@ -656,10 +656,8 @@ theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi 
 theorem planBlocks_meets : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) := by
   have h : (Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424).map (fun pl => (pl.blocks, pl.runs, pl.ends)) =
       some (130023424, #[(0, 130023424)], #[130023424]) := by
-    first
-      | decide +kernel
-      | (simp only [Plan.make?, size_qsort]; decide +kernel)
-      | simp [Plan.make?, storeBlocks, size_qsort, RemoteAudit.endsOf]
+    simp only [Plan.make?, size_qsort]
+    decide +kernel
   cases e : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 with
   | none => rw [e] at h; cases h
   | some pl =>
@@ -759,49 +757,63 @@ theorem size_node (d : FrameV3.Domain) (l i : ℕ) (a b : ByteArray) : (d.node l
 theorem size_leaf (d : FrameV3.Domain) (r q : ℕ) (s : String) (v : ByteArray) : (d.leaf r q s v).size = 64 :=
   size_frameHash _ _
 
-theorem zeros_size (n : ℕ) : (zeros n).size = n := by
-  first
-    | exact Array.size_replicate
-    | simp [zeros, ByteArray.size]
+theorem zeros_size (n : ℕ) : (zeros n).size = n :=
+  Array.size_replicate
 
 theorem receipt_size (r : Receipter) (j : ℕ) (b : ByteArray) : (r.receipt j b).size = 64 := by
   unfold Receipter.receipt
   split <;> exact size_sha512 _
 
-/-- A `for` loop over a list in `Id` whose every step from a state `P` holds of continues with a state `P` holds of
-ends in one. -/
-theorem forIn'_inv {α σ : Type} (P : σ → Prop) (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ))
-    (hf : ∀ a h b, P b → ∃ b', f a h b = pure (.yield b') ∧ P b') (init : σ) (h0 : P init) :
-    P (forIn' l init f).run := by
-  induction l generalizing init with
-  | nil => first | exact h0 | simpa using h0
-  | cons a as ih =>
-    obtain ⟨b', hb, h1⟩ := hf a List.mem_cons_self init h0
-    rw [List.forIn'_cons, hb]
-    first
-      | exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m b hb => hf a' _ b hb) b' h1
-      | (simp only [Id.run, pure_bind]
-         exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m b hb => hf a' _ b hb) b' h1)
+/-- A `for` loop over a list in `Id` whose every step keeps `P` ends in a state `P` holds of. -/
+theorem forIn'_inv {α σ : Type} (P : σ → Prop) :
+    ∀ (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ)),
+      (∀ a h b, P b → P (f a h b).value) → ∀ init, P init → P (forIn' l init f)
+  | [], _, _, _, h => h
+  | x :: l, f, hf, init, h => by
+    rw [List.forIn'_cons]
+    have hx := hf x List.mem_cons_self init h
+    revert hx
+    cases f x List.mem_cons_self init with
+    | done b => intro hx; exact hx
+    | yield b =>
+      intro hx
+      exact forIn'_inv P l (fun a m s => f a (List.mem_cons_of_mem x m) s)
+        (fun a m s hs => hf a (List.mem_cons_of_mem x m) s hs) b hx
 
-theorem forIn'_inv_eq {α σ : Type} (P : σ → Prop) {l : List α} {f : (a : α) → a ∈ l → σ → Id (ForInStep σ)}
-    {init : σ} {L : Id σ} (hL : forIn' l init f = L) (hf : ∀ a h b, P b → ∃ b', f a h b = pure (.yield b') ∧ P b')
-    (h0 : P init) : P L.run :=
-  hL ▸ forIn'_inv P l f hf init h0
+/-- The same over a range. -/
+theorem forIn'_range_inv {σ : Type} (P : σ → Prop) (r : Std.Legacy.Range) (init : σ)
+    (f : (a : ℕ) → a ∈ r → σ → Id (ForInStep σ)) (hf : ∀ a h b, P b → P (f a h b).value) (h0 : P init) :
+    P (forIn' r init f) := by
+  rw [Std.Legacy.Range.forIn'_eq_forIn'_range']
+  exact forIn'_inv P _ (fun a h => f a (Std.Legacy.Range.mem_of_mem_range' h)) (fun a h b hb => hf a _ b hb) init h0
+
+theorem id_bind_eq {α β : Type} (x : Id α) (k : α → Id β) : (x >>= k) = k x := rfl
+
+/-- A loop over a range whose state's first part stays 64 bytes, read back by that part: 64 bytes. -/
+theorem bind_forIn'_size {r : Std.Legacy.Range} {init : MProd ByteArray ℕ}
+    {f : (a : ℕ) → a ∈ r → MProd ByteArray ℕ → Id (ForInStep (MProd ByteArray ℕ))}
+    {k : MProd ByteArray ℕ → Id ByteArray} (hk : ∀ s, k s = s.fst)
+    (hf : ∀ a h b, b.fst.size = 64 → ((f a h b).value).fst.size = 64) (h0 : init.fst.size = 64) :
+    (forIn' r init f >>= k).size = 64 := by
+  rw [id_bind_eq, hk]
+  exact forIn'_range_inv (fun s : MProd ByteArray ℕ => s.fst.size = 64) r init f hf h0
 
 /-- A root climbed to is a node or the leaf: 64 bytes. -/
 theorem climb_size (d : FrameV3.Domain) (pos : ℕ) (schema : String) (value : ByteArray) (path : Array ByteArray) :
     (FrameV3.climb d pos schema value path).size = 64 := by
   unfold FrameV3.climb
   simp only [Id.run]
-  rw [Std.Legacy.Range.forIn'_eq_forIn'_range']
-  generalize hL : (forIn' (m := Id) (List.range' _ _ _) (_ : MProd ByteArray ℕ) _ : Id (MProd ByteArray ℕ)) = L
-  obtain ⟨dg, cur⟩ := L
-  refine forIn'_inv_eq (fun r : MProd ByteArray ℕ => r.fst.size = 64) hL ?_ (size_leaf _ _ _ _ _)
-  intro a h b _
-  refine ⟨_, rfl, ?_⟩
-  first
-    | (dsimp only; split <;> exact size_node _ _ _ _ _)
-    | simp [apply_ite ByteArray.size, size_node]
+  apply bind_forIn'_size
+  · intro s
+    cases s
+    rfl
+  · intro a h b _
+    obtain ⟨dg, cur⟩ := b
+    first
+      | (dsimp only; split <;> exact size_node _ _ _ _ _)
+      | (split <;> exact size_node _ _ _ _ _)
+      | (by_cases hc : cur % 2 = 0 <;> simp [hc, size_node])
+  · exact size_leaf _ _ _ _ _
 
 /-- A path of `depth count` siblings, each 64 zero bytes. -/
 def zeroPath (d : FrameV3.Domain) : Array ByteArray := Array.replicate (FrameV3.depth d.count) (zeros 64)
@@ -813,8 +825,14 @@ def zeroRoot (d : FrameV3.Domain) (position : ℕ) (value : ByteArray) : ByteArr
 theorem verifyOpening_zeroRoot (d : FrameV3.Domain) (pos : ℕ) (v : ByteArray) (hc : 0 < d.count)
     (hs : d.start ≤ pos) (hp : pos < d.start + d.count) :
     FrameV3.verifyOpening d (zeroRoot d pos v) pos v SCHEMA (zeroPath d) = true := by
-  unfold FrameV3.verifyOpening zeroRoot zeroPath
-  simp [climb_size, zeros_size, Array.all_replicate, hc, hs, hp]
+  have hall : (zeroPath d).all (·.size == 64) = true := by
+    rw [Array.all_eq_true]
+    intro i _
+    simp [zeroPath, zeros_size]
+  have hlen : (zeroPath d).size = FrameV3.depth d.count := Array.size_replicate
+  unfold FrameV3.verifyOpening
+  rw [hall]
+  simp [zeroRoot, climb_size, hlen, hc, hs, hp]
 
 theorem leafReceipt_first {R : ByteArray} (hR : R.size = 64) : leafReceipt (R ++ zeros 960) 0 130023424 = some R := by
   have hs : (R ++ zeros 960).size = 1024 := by rw [ByteArray.size_append, hR, zeros_size]
@@ -824,12 +842,8 @@ theorem leafReceipt_first {R : ByteArray} (hR : R.size = 64) : leafReceipt (R ++
   · rename_i h
     rw [hs] at h
     exact absurd h (by decide)
-  · first
-      | (show some ((R ++ zeros 960).extract 0 64) = some R
-         rw [ByteArray.extract_append_eq_left hR.symm])
-      | (simp only [DIGEST_BYTES, PER_LEAF]
-         norm_num
-         rw [ByteArray.extract_append_eq_left hR.symm])
+  · show some ((R ++ zeros 960).extract 0 64) = some R
+    rw [ByteArray.extract_append_eq_left hR.symm]
 
 theorem bytes_toList_loop (b : ByteArray) (i : ℕ) (r : List UInt8) :
     ByteArray.toList.loop b i r = r.reverse ++ b.data.toList.drop i := by
@@ -880,7 +894,7 @@ theorem decode_zeros (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 < k.co
   unfold Codec.decode
   dsimp only
   rw [hany]
-  simp [hj.ne', Nat.not_le.mpr hj, zeros_size]
+  simp [Nat.not_le.mpr hj, zeros_size]
   try exact ⟨_, rfl⟩
 
 /-- The zero block's decoding under `k`. -/
@@ -919,6 +933,7 @@ theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Arr
   simp only [Id.run, hpr, hjb]
   rw [hany]
   simp [hpass, hpos, hblock, htile, hls, hps, hj, hdig, hy, hleaf, hdec, hver, hrec]
+  rfl
 
 /-- The deployed codec: p1024, three rounds, masked. -/
 def honestCodec : Codec.Codec := ⟨Codec.P1024, 3, true⟩
@@ -982,7 +997,9 @@ theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB 
     decide
   have hfp : 0 < reg.key.codec.field.p := by
     rw [hk]
-    decide
+    show 0 < 2 ^ 1024 - 105
+    exact Nat.sub_pos_of_lt (Nat.lt_of_lt_of_le (by norm_num : (105 : ℕ) < 2 ^ 7)
+      (Nat.pow_le_pow_right (by norm_num) (by norm_num)))
   refine checkOpening_of (pr := honestPass reg (seed challenge 0 previous)) (j := 0)
     (y := (receipter reg.receipt (seed challenge 0 previous) reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES))
     (payload := zeroPayload reg.key) rfl rfl rfl (zeros_size _) rfl (zeros_size _) (zeros_size _) ?_ hb0
@@ -1065,9 +1082,7 @@ theorem runBlocks_coinRun : ∀ y : Fin 3, (runBlocks (coinRun () y)).length = 1
 
 theorem tileAt_coinRun : ∀ (y : Fin 3) (i : Fin 1),
     tileAt 3 #[] (coinRun () y) i = some (((threeLayout y i).1 : ℕ), ((threeLayout y i).2 : ℕ)) := by
-  first
-    | decide
-    | decide +kernel
+  decide
 
 theorem sessionLayout_coinRun (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) (y : Fin 3) :
     sessionLayout 3 dflt noAppends coinRun () y = threeLayout y :=
