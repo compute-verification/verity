@@ -175,14 +175,22 @@ open Classical in
 /-- **`pooledShort_log` is nontrivial** (`Pous.Period.PooledShortLog_nontrivial`): at `10,080` empty periods every
 window is accepted short by `acceptAll` on every capacity coin, so the event has probability `1 > 2^-64`. -/
 theorem pooledShort_log_nontrivial : PooledShortLog_nontrivial := by
+  have hs : ∀ (x : Fin 10080 → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (u : Fin 10080),
+      acceptAll ((), (), x u) ∧ (emptyRun.held ((), (), x u) : ℝ) < HONEST_S * (emptyRun.win .capacity).len := by
+    intro x u
+    refine ⟨trivial, ?_⟩
+    have he : emptyRun.held ((), (), x u) = K * 0 := held_periodRun 0 _ _
+    rw [he]
+    show ((K * 0 : ℕ) : ℝ) < (HONEST_S : ℝ) * ((K : ℕ) : ℝ)
+    norm_num [HONEST_S, K]
+  have h1 : Pouw.pr (fun x : Fin 10080 → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+      210 ≤ (Finset.univ.filter fun u => acceptAll ((), (), x u) ∧
+        (emptyRun.held ((), (), x u) : ℝ) < HONEST_S * (emptyRun.win .capacity).len).card) = 1 :=
+    Pouw.pr_eq_one fun x => by
+      rw [Finset.filter_true_of_mem fun u _ => hs x u]
+      simp
   intro h
-  rw [Pouw.pr_eq_one fun x => ?_] at h
-  · norm_num at h
-  · rw [Finset.filter_true_of_mem fun u _ => ⟨trivial, ?_⟩]
-    · simp
-    · have he : emptyRun.held ((), (), x u) = K * 0 := held_periodRun 0 _ _
-      rw [he]
-      show ((K * 0 : ℕ) : ℝ) < (HONEST_S : ℝ) * ((K : ℕ) : ℝ)
-      norm_num [HONEST_S, K]
+  rw [h1] at h
+  norm_num at h
 
 end Pous.Period.SecurityProofs
