@@ -41,7 +41,7 @@ CERT_KEY = lms.public_key(lms.keygen(LMS, CERT_SEED)).hex()
 AUDITOR = {CERT: CERT_KEY, CHAL: ""}
 """The auditor's own devices, each with its key: the verifier refuses a registered certifier or challenger that isn't
 one of them (`owner`)."""
-CHAL_LINK = Link("chal0-node0", (CHAL, "node0"), 100_000, 1_000_000)
+CHAL_LINK = Link("chal0-link", (CHAL, "node0"), 100_000, 1_000_000)
 """The memory challenger's link to the node: 1 ms each way."""
 LAYOUT = replace(NODE, locs=(*NODE.locs, Loc(CERT, "certifier", "site0", "auditor", key=CERT_KEY),
                              Loc(CHAL, "challenger", "site0", "auditor")),
