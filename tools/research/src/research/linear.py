@@ -1,4 +1,4 @@
-"""Asks as Linear issues (the trial from 8 Oct): `research msg ask` (and `send --to` one handle) files the ask in its owner's
+"""Asks as Linear issues: `research msg ask` (and `send --to` one handle) files the ask in its owner's
 team, the registry's `linear` key, and rings on Slack with the issue's link; `close` and `close --declined` move the issue to done or
 canceled.
 
