@@ -11,7 +11,7 @@ some older names until they are renamed: `Dampener*` means overhead, `*Horizon` 
 
 **Not to be confused with.** Five things in the tree are called "remote":
 
-- the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
+- the remote protocol, this one: `Core.Onsite.remote` (`../onsite/CoreOnsite.lean`, id `verity/remote/v0`);
 - PoUB, the remote bandwidth audit (`verity/core/protocols/remote_bandwidth/`, its Lean `RemoteAudit`), an onsite
   subprotocol. Its Lean vocabulary is `Accounting.Remote` (`Security/Definitions/Accounting/Remote.lean`) and
   `Accounting.Guarantees.Remote*`: PoUB's, despite the name;
@@ -42,13 +42,13 @@ some older names until they are renamed: `Dampener*` means overhead, `*Horizon` 
 **Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
 subprotocol. Under it, the declared circuit divides into inference blocks of bounded size, each reading a bounded amount
 of fresh input (input that isn't registered information). Its check reads only the declared circuit and the registered
-information, so it needs no hardware at the site. On `main`, `Core.Remote.components` holds only the two rows above.
+information, so it needs no hardware at the site. On `main`, remote holds only the two rows above.
 
-The code is `CoreRemote.lean`, `protocol = product "verity/remote/v0" [PouwCheck.protocol,
-SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
-(`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
-(`lean-audit.json`). The product's rule and its difftest are the composition's ([README](../composition/README.md),
-`verity/core/protocols/composition/tests/test_composition_difftest.py`).
+Remote is onsite restricted to these two subprotocols: `Core.Onsite.remote = restrict "verity/remote/v0" remoteIds`, by
+the one constructor that also builds onsite (`../onsite/CoreOnsite.lean`). Its executable is `remote id | check PARAMS
+COMMITMENT EVIDENCE | serve` (`../onsite/RemoteMain.lean`), in the Lake package `core_onsite`, which is code: it has no
+Mathlib and nothing of `Security/` (`../onsite/lean-audit.json`). The composite's rule and its difftest are the
+composition's ([README](../composition/README.md), `verity/core/protocols/composition/tests/test_composition_difftest.py`).
 
 ## Lifecycle
 

@@ -8,8 +8,8 @@ or `run.sh`.
 
 ## The remote protocol
 
-Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
-establishes with no hardware of its own at the prover's site. It composes two protocols (`Core.Remote.components`):
+Remote Verity (`verity/remote/v0`, `Core.Onsite.remote` in `verity/core/protocols/onsite/CoreOnsite.lean`) is what the
+verifier establishes with no hardware of its own at the prover's site. It is onsite restricted to two subprotocols:
 
 - integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger draws proof blocks, the prover proves each drawn
@@ -18,8 +18,8 @@ establishes with no hardware of its own at the prover's site. It composes two pr
   coins open.
 
 Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
-other answers. It rests on live coins (drawn after the commitment, never redrawn) and on what each component's own
-guarantee assumes; each component states its guarantee in `Security/`, and the composite states none of its own in Lean
+other answers. It rests on live coins (drawn after the commitment, never redrawn) and on what each subprotocol's own
+guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
 yet, so no example's `proof` is past `none`. Its demo is `verity example vllm`, which runs the sampled-proofs half;
 PoUW's half has no runner in an example yet. Not to be confused with PoUB (`Accounting.Remote`), `RemoteChallenger`,
 `RemoteCertifier` or `DampenerRemote`, which are other things.
