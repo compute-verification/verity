@@ -48,11 +48,11 @@ noncomputable def Finder.mix {ι : Type} [Fintype ι] [Nonempty ι] (fam : ι �
 /-- **The mixture succeeds with the members' average success.** -/
 theorem Finder.mix_Pr {ι : Type} [Fintype ι] [Nonempty ι] (H : Msg → Msg) (fam : ι → Finder) :
     (Finder.mix fam).Pr H = Ex fun i => (fam i).Pr H := by
-  haveI := Classical.decEq ι
   classical
   unfold Finder.Pr
-  show Pr (fun x : ι × ((i : ι) → (fam i).S) => ∃ u v, (fam x.1).out (x.2 x.1) = some (u, v) ∧ Collision H u v) =
-    Ex fun i => Pr fun s : (fam i).S => ∃ u v, (fam i).out s = some (u, v) ∧ Collision H u v
+  show Claims.Pr (fun x : ι × ((i : ι) → (fam i).S) =>
+      ∃ u v, (fam x.1).out (x.2 x.1) = some (u, v) ∧ Collision H u v) =
+    Ex fun i => Claims.Pr fun s : (fam i).S => ∃ u v, (fam i).out s = some (u, v) ∧ Collision H u v
   rw [← Ex_ind, Ex_prod]
   congr 1
   funext i
@@ -148,7 +148,7 @@ theorem Ex_run (f : α → ℝ) (g : Game α) :
           congr 1
           funext c
           exact (Claims.Ex_pi_eval (T := fun c => Tape (k c) (s c)) c (fun x => f (run (k c) (s c) x))).trans
-            (ih c (s c))
+            ((Claims.Ex_inst _ _ _).trans (ih c (s c)))
       _ = expect f (Game.coin C k) s := rfl
 
 /-- **A game finder as a `Claims.Finder`**: `s`'s run on a tape, with output `out` and cost `cost` there. -/
