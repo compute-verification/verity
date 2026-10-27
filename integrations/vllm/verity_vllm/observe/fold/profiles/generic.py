@@ -24,7 +24,7 @@ all-gathered vocabulary; the header check re-shards the recorded FULL config) --
 TP2 half of `gen_ov_moe_qwen3` after the claim in their docstrings ("the rank profile is the base module's build_profile over the world-divided
 configuration") was checked object by object (`tests/engine/test_profiles_generic.py`).
 
-Module names (the `--profile NAME` every consumer imports as `verity_vllm.engine.profiles.NAME`, materialised by the finder in `profiles/__init__.py`):
+Module names (the `--profile NAME` every consumer imports as `verity_vllm.observe.fold.profiles.NAME`, materialised by the finder in `profiles/__init__.py`):
   `derived_<ROLE>`          -- the TP1 profile of a checkpoint role (any architecture),
   `derived_<ROLE>_tp<W>`    -- ONE rank of a W-way tensor-parallel engine,
   `derived_<ROLE>[..]_ovs`  -- the experimental sampled-row variant (`TokenSampleGumbel` first; lanes cov-difr / ov-sampling),
@@ -49,17 +49,17 @@ from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
 from verity_vllm.engine.profiles import dense_generic as _dg
 from verity_vllm.engine.profiles import family_facts as FF
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
-from verity_vllm.engine.profiles import gen_mhc_moe as MHC
-from verity_vllm.engine.profiles.gen_dense2_patterns import with_dense2_patterns
-from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import with_gemma2_patterns
-from verity_vllm.engine.profiles.gen_dense_softcap_patterns import with_softcap_patterns
-from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
-from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern, with_ln_patterns
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as base
+from verity_vllm.observe.fold.profiles import gen_mhc_moe as MHC
+from verity_vllm.observe.fold.profiles.gen_dense2_patterns import with_dense2_patterns
+from verity_vllm.observe.fold.profiles.gen_dense_gemma2_patterns import with_gemma2_patterns
+from verity_vllm.observe.fold.profiles.gen_dense_softcap_patterns import with_softcap_patterns
+from verity_vllm.observe.fold.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern, with_ln_patterns
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
                                   MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
-from verity_vllm.engine.profiles.gen_marlin_moe_patterns import SCHEDULE, MoEMarlinSharedExperts
-from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
+from verity_vllm.observe.fold.profiles.gen_marlin_moe_patterns import SCHEDULE, MoEMarlinSharedExperts
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 MODULE_PREFIX = "derived_"
@@ -706,7 +706,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                                            "collective_received), linked to the other rank's committed partial by the cross-rank leg (tp2_rank_match)"}
     pid = prof.id
     if ov_sampling:
-        from verity_vllm.engine.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
+        from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
         patterns = ov_sampling_patterns(C) + patterns
         pid = prof.id + "+ov-sampling"
         notes["ov_sampling"] = {"pattern": "gen_ov_sampling_patterns.TokenSampleGumbel (_gumbel_sample_kernel; seeded rows at T=1 and T not in {0,1}, no top-k/top-p)",
@@ -727,7 +727,7 @@ def with_moe_construction(profile: Profile, moe_construction: str | None) -> Pro
 # ------------------------------------------------------------------------------------------------------------------------------- module
 
 def make_module(fullname: str) -> types.ModuleType:
-    """The module object behind `verity_vllm.engine.profiles.derived_<ROLE>[_tp<W>]` (and the X-07 `dense_<ROLE>`): PROFILE / C / PROVENANCE /
+    """The module object behind `verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` (and the X-07 `dense_<ROLE>`): PROFILE / C / PROVENANCE /
     HF_CONFIG / weight_field / root_class / check_header / build_profile / with_moe_construction."""
     parsed = parse_module(fullname)
     if parsed is None:
@@ -759,7 +759,7 @@ def make_module(fullname: str) -> types.ModuleType:
     mod.derive_config = lambda hf_config, world=1, **kw: derive_config(hf_config, repo=kw.get("repo"), revision=kw.get("revision"), world=world)
     mod.with_moe_construction = with_moe_construction if FF.facts_for(cfg)["arch"] == "moe" else None
     if FF.facts_for(cfg)["arch"] == "dense":
-        from verity_vllm.engine.profiles.gen_ov_easy_family import serve_family                    # the untied / tied serving-family reference `compare` may consult
+        from verity_vllm.observe.fold.profiles.gen_ov_easy_family import serve_family                    # the untied / tied serving-family reference `compare` may consult
         mod.SERVE_FAMILY = serve_family
     mod.__file__ = __file__
     return mod

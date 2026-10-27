@@ -24,6 +24,12 @@ an audit of several drawn members or of plain sessions has none (``case-check.js
 rejects integrity there. The v1 case (``out/sampled-proofs.v1.case.json``) stays beside it, with whether `OneStage.check`'s
 Python on it (``case-python.json``) gives the leg's verdict (``out/case-check.json``). Each window's audit listens on a
 block of ports no other audit of this process holds (`ports`), so windows audit at once.
+
+A period whose ``period.json`` names ``challenger`` (``{"mode": "local" | "loopback:HOST:PORT" | "gate:USER@HOST",
+"main": FILE, ...}``) is drawn on that challenger's coins (``records_audit --challenger``, `a5_coins`), not the verifier's
+own: ``local`` is a development session the audit opens itself under an LMS key made for it, ``loopback:HOST:PORT`` that
+session in the challenger party's own process (`challenger_party.py`), and ``gate:USER@HOST`` vy-challenger-1's (with
+``peer``, ``challenger_key`` and ``gate_key``). Without it the draw is on the verifier's in-process coins.
 """
 from __future__ import annotations
 
@@ -197,8 +203,23 @@ def case_check(work: Path, ans: Mapping[str, Any], out: Path) -> dict[str, Any] 
     return got
 
 
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """The window's integrity audit (module docstring) into ``out``; its answer."""
+def challenger_argv(ch: Mapping[str, Any] | None) -> list[str]:
+    """``records_audit``'s flags for the period's ``challenger`` (module docstring); none for the verifier's own coins."""
+    if not ch:
+        return []
+    mode = ch["mode"]
+    if mode != "local" and not mode.startswith(("gate:", "loopback:")):
+        raise ValueError(f"the period's challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {mode!r}")
+    argv = ["--challenger", mode, "--main", str(ch["main"])]
+    if mode.startswith("gate:"):
+        argv += ["--peer", ch["peer"], "--challenger-key", str(ch["challenger_key"]),
+                 *(["--gate-key", str(ch["gate_key"])] if ch.get("gate_key") else [])]
+    return argv
+
+
+def leg(period_dir: Path, node: str, out: Path, challenger: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The window's integrity audit (module docstring) into ``out``; its answer. ``challenger`` (the verifier's, as
+    ``period.json``'s ``challenger``) takes the place of the period's."""
     p = json.loads((period_dir / "period.json").read_text())
     t, work = p["tools"], period_dir.parent / f"{period_dir.name}-sampled-proofs"
     delta = Fraction(p.get("delta") or DELTA)
@@ -208,7 +229,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                 "--circuit", p["circuit"], "--run", p["run_root"], "--delta", repr(float(delta)), "--port", str(base),
                 "--ports", str(SPAN), "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
                 "--firewall", t["flock-firewall"], "--out", str(work),
-                *(["--registered", p["registered"]] if p.get("registered") else [])]
+                *(["--registered", p["registered"]] if p.get("registered") else []),
+                *challenger_argv(challenger or p.get("challenger"))]
         with open(out / "audit.log", "w") as log, open(out / "audit.err", "w") as err:
             subprocess.run(argv, cwd=ROOT, env=env, stdout=log, stderr=err, check=False)
     keep(work, out / "audit")
@@ -221,4 +243,4 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return ans
 
 
-__all__ = ["DELTA", "PROTOCOL", "answer", "case_check", "keep", "leg", "ports"]
+__all__ = ["DELTA", "PROTOCOL", "answer", "case_check", "challenger_argv", "keep", "leg", "ports"]
