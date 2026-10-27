@@ -5,7 +5,9 @@ hardware computes, and the auditor checks it from outside with live coins and a 
 subprotocols into one verdict over one commitment: sampled proofs (the committed values satisfy the declared circuit,
 except on few proof blocks) and PoUW (the hardware's time went to the declared work).
 
-This file is an outline with signposts. The Lean is the definition. The vocabulary is `GLOSSARY.md`'s.
+This file is an outline with signposts. The Lean is the definition. The vocabulary is `GLOSSARY.md`'s. Lean names keep
+some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a monitoring period's pooled bound,
+`Session*` a run of a subprotocol, and `window` a period.
 
 **Not to be confused with.** Five things in the tree are called "remote":
 
@@ -91,7 +93,7 @@ each piece is proved.
 |---|---|---|---|
 | The verdict rule | `Properties.Composition.AcceptMeans`, `AnswerAccepts` (`Security/Properties/Composition.lean`; proofs `acceptMeans`, `answerAccepts`) | **proved** | — |
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (`Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (`Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The verifier of record's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, `Properties.Pouw.Period.CheckedCreditPeriod` (`Security/Properties/Pouw/`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod`) | **proved** | — |
@@ -136,7 +138,7 @@ PoUW:
 The overhead (`Security/Definitions/Nci/Assumptions/Remote.lean`):
 
 - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p.
-- `Nci.Assumptions.SampledDetection`: sampled proofs catch each faulty block with probability at least q, whatever
+- `Nci.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q, whatever
   came before.
 - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
 - `Nci.Assumptions.BaselineRegistered`: the data the registration names was public, not computed off the books before.
