@@ -117,7 +117,7 @@ import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.windows.rows import BC_BYTES, SALT_BYTES, read_private
+from verity.ml.windows.rows import BC_BYTES, SALT_BYTES
 
 PROTOCOL = "verity/certifier/v0"
 ONE_STAGE = R.PROTOCOL
@@ -200,15 +200,14 @@ def _env_int(name: str, default: int) -> int:
 
 # --- the period's records ----------------------------------------------------------------------------------------------
 
-def member_rows(period_dir: Path, win: Mapping[str, Any], k: int) -> np.ndarray:
-    """Every unit's rows of member ``k`` of window ``win`` (its ``window.json``), ports in order, u16 words (units x words),
-    off its prover body as the window's files make it (`rows.read_private`): every instance's rows then the salts, or for a
+def member_rows(period_dir: Path, m: Mapping[str, Any]) -> np.ndarray:
+    """Every unit's rows of member ``m`` (its ``window.json`` entry), ports in order, u16 words (units x words), off its
+    value files (`rows.Committed`'s bodies): ``m<k>-private.bin`` is every instance's rows then the salts, or for a
     shared-row member (``shared_rows``, each port's table size: a registered read's table holds the registered rows its
     units read) each port's table then the salts, each unit's rows its refs into the tables, the u32 per instance and
     port that end ``m<k>-public.bin``."""
-    m = win["members"][k]
     widths, n = [w for _, w in m["ports"]], m["n"]
-    priv = read_private(period_dir, win, k)
+    priv = (period_dir / f"m{m['k']}-private.bin").read_bytes()
     if "shared_rows" not in m:
         if len(priv) != n * (2 * sum(widths) + SALT_BYTES * len(widths)):
             raise ValueError(f"m{m['k']}-private.bin: {len(priv)} bytes, not {n} instances' rows {widths} and salts")
@@ -247,9 +246,9 @@ def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]
             raise ValueError(f"index.json: the record labelled {key} spans units {sorted(us)}, not one a request of {n}")
         first[key] = min(us)
     out: dict[int, tuple[dict, dict[str, np.ndarray]]] = {}
-    for k, m in enumerate(win["members"]):
+    for m in win["members"]:
         names, widths = [p for p, _ in m["ports"]], [w for _, w in m["ports"]]
-        rows = member_rows(period_dir, win, k)
+        rows = member_rows(period_dir, m)
         at = dict(zip(names, np.cumsum([0, *widths[:-1]]).tolist()))
         units = json.loads((period_dir / m["units"]).read_text())["indices"]
         label = {}
