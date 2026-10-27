@@ -1,7 +1,7 @@
-// The warp collectives' rates on sm_120, for the coverage table's REDUX and VOTE rows (machine_model/data/cover/
-// rows.toml, CMP-166). Joint points: rows.jsonl only, no census line. Each warp runs 8 independent chains, every
-// collective's input the last one's output mixed with the lane id: a REDUX's chain is a MOV out of its uniform register
-// and an IADD3, a ballot's a LOP3 (so its mixes hold Q + 8).
+// The warp collectives' rates on sm_120 and sm_90, for the coverage table's REDUX and VOTE rows (machine_model/data/
+// cover/rows.toml, CMP-166). Joint points: rows.jsonl only, no census line. Each warp runs 8 independent chains, every
+// collective's input the last one's output mixed with the lane id: a REDUX's chain is a move out of its uniform register
+// and an add (CHAIN_*), a ballot's a LOP3 (so its mixes hold Q + 8).
 //   redux_add, redux_min, redux_xor   REDUX.SUM, .MIN, .XOR of 32 words into a uniform register
 //   vote_ballot, vote_all             VOTE.ANY (the ballot word) and VOTE.ALL (a predicate)
 //   mix_redux_lop3_Q, mix_vote_lop3_Q every warp 8 of the collective and Q LOP3 on chains of their own
@@ -39,8 +39,8 @@ __device__ __forceinline__ void reduxes(const OpArgs& a) {
     for (int u = 0; u < 8; u++) {
       v[u] = redux<OP>(v[u]) + lane;
 #pragma unroll
-      for (int q = u * Q / 8; q < (u + 1) * Q / 8; q++)
-        asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(w[q & 7]) : "r"(k1), "r"(k2));
+      for (int j = 0; j < Q / 8; j++)
+        asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(w[(u * Q / 8 + j) & 7]) : "r"(k1), "r"(k2));
     }
   }
   OP_END
@@ -67,8 +67,8 @@ __device__ __forceinline__ void ballots(const OpArgs& a) {
     for (int u = 0; u < 8; u++) {
       v[u] = __ballot_sync(~0u, (v[u] >> lane) & 1u);
 #pragma unroll
-      for (int q = u * Q / 8; q < (u + 1) * Q / 8; q++)
-        asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(w[q & 7]) : "r"(k1), "r"(k2));
+      for (int j = 0; j < Q / 8; j++)
+        asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(w[(u * Q / 8 + j) & 7]) : "r"(k1), "r"(k2));
     }
   }
   OP_END
@@ -124,18 +124,34 @@ OP_KERNEL(mix_redux_match, TPB) { redux_match(a); }
 #define MIXR(Q) OP_KERNEL(mix_redux_lop3_##Q, TPB) { reduxes<0, Q>(a); }
 #define MIXV(Q) OP_KERNEL(mix_vote_lop3_##Q, TPB) { ballots<Q>(a); }
 MIXR(16) MIXR(32) MIXR(64) MIXV(16) MIXV(32) MIXV(64)
+// A REDUX chain's add and move a step: sm_120's ptxas emits IADD3 and MOV (and an IADD3 for the loop's counter); sm_90's
+// splits them between IADD3 and MOV on alu and IMAD.IADD and IMAD.U32 on fma, putting more on IMAD the more LOP3 are
+// beside them, and counts the loop in a UIADD3.
+#if PROBE_ARCH == 90
+#define CHAIN_0 "IMAD.IADD=5,IADD3=3,IMAD.U32=5,MOV=3"
+#define CHAIN_MATCH CHAIN_0
+#define CHAIN_16 "IMAD.IADD=7,IADD3=1,IMAD.U32=7,MOV=1"
+#define CHAIN_32 "IMAD.IADD=8,IMAD.U32=8"
+#define CHAIN_64 CHAIN_32
+#else
+#define CHAIN_0 "IADD3=9,MOV=8"
+#define CHAIN_MATCH "IADD3=8,MOV=8"
+#define CHAIN_16 CHAIN_0
+#define CHAIN_32 CHAIN_0
+#define CHAIN_64 CHAIN_0
+#endif
 #define P_MIXR(Q)                                                                       \
   {.name = "mix_redux_lop3_" #Q, .kernel = (const void*)mix_redux_lop3_##Q, .tpb = TPB, \
-   .expect = "REDUX.SUM=8,IADD3=9,MOV=8,LOP3.LUT=" #Q}
+   .expect = "REDUX.SUM=8," CHAIN_##Q ",LOP3.LUT=" #Q}
 
 static const OpProbe PROBES[] = {
-    {.name = "redux_add", .kernel = (const void*)redux_add, .tpb = TPB, .expect = "REDUX.SUM=8,IADD3=9,MOV=8"},
-    {.name = "redux_min", .kernel = (const void*)redux_min, .tpb = TPB, .expect = "REDUX.MIN=8,IADD3=9,MOV=8"},
-    {.name = "redux_xor", .kernel = (const void*)redux_xor, .tpb = TPB, .expect = "REDUX.XOR=8,IADD3=9,MOV=8"},
+    {.name = "redux_add", .kernel = (const void*)redux_add, .tpb = TPB, .expect = "REDUX.SUM=8," CHAIN_0},
+    {.name = "redux_min", .kernel = (const void*)redux_min, .tpb = TPB, .expect = "REDUX.MIN=8," CHAIN_0},
+    {.name = "redux_xor", .kernel = (const void*)redux_xor, .tpb = TPB, .expect = "REDUX.XOR=8," CHAIN_0},
     {.name = "vote_ballot", .kernel = (const void*)vote_ballot, .tpb = TPB, .expect = "VOTE.ANY=8"},
     {.name = "vote_all", .kernel = (const void*)vote_all, .tpb = TPB, .expect = "VOTE.ALL=8"},
     {.name = "mix_redux_match", .kernel = (const void*)mix_redux_match, .tpb = TPB,
-     .expect = "REDUX.SUM=8,MATCH.ANY=8,IADD3=8,MOV=8"},
+     .expect = "REDUX.SUM=8,MATCH.ANY=8," CHAIN_MATCH},
     P_MIXR(16), P_MIXR(32), P_MIXR(64),
     {.name = "mix_vote_lop3_16", .kernel = (const void*)mix_vote_lop3_16, .tpb = TPB, .expect = "VOTE.ANY=8,LOP3.LUT=24"},
     {.name = "mix_vote_lop3_32", .kernel = (const void*)mix_vote_lop3_32, .tpb = TPB, .expect = "VOTE.ANY=8,LOP3.LUT=40"},

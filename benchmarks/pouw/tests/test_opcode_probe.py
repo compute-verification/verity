@@ -429,6 +429,51 @@ def test_pipes_verdict_holds_each_pipe_to_its_rho(tmp_path, capsys):
     assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_bar_or_lop3; ")
 
 
+collective_verdict = _load("opcode_probe_collective_verdict", POUW / "opcode_probe" / "collective_verdict.py")
+
+
+def _collective_rows(**over: dict[str, float]) -> dict[str, dict]:
+    match = {"match_any_u32": {"MATCH.ANY": 0.5}, "match_any_u64": {"MATCH.ANY.U64": 0.25},
+             "mix_u32_lop3_32_ffma_32": {"MATCH.ANY": 0.379, "LOP3.LUT": 1.516, "FFMA": 1.516},
+             "mix_u64_lop3_16": {"MATCH.ANY.U64": 0.2499, "LOP3.LUT": 0.4999}}
+    coll = {"redux_add": {"REDUX.SUM": 0.499, "IADD3": 0.56, "MOV": 0.499}, "vote_ballot": {"VOTE.ANY": 1.39},
+            "mix_redux_match": {"REDUX.SUM": 0.25, "MATCH.ANY": 0.25},
+            "mix_redux_lop3_16": {"REDUX.SUM": 0.4984, "LOP3.LUT": 0.9969},
+            "mix_vote_lop3_16": {"VOTE.ANY": 0.55, "LOP3.LUT": 1.65},
+            "mix_vote_lop3_32": {"VOTE.ANY": 0.36, "LOP3.LUT": 1.78},
+            "mix_vote_lop3_64": {"VOTE.ANY": 0.21, "LOP3.LUT": 1.89}}
+    out = {n: {"probe": n, "binary": b, "rates": {f"0:{k}": v for k, v in r.items()}}
+           for b, rs in (("match", match), ("collective", coll)) for n, r in rs.items()}
+    for n, r in over.items():
+        out[n]["rates"] = {f"0:{k}": v for k, v in r.items()}
+    return out
+
+
+def test_collective_verdict_holds_match_and_redux_to_one_unit_and_vote_to_16_alu_lanes(tmp_path, capsys):
+    """`collective_verdict.py`: MATCH.ANY and REDUX beside each other within their faster one's rate alone, .U64 as 2
+    units, MATCH beside LOP3 and FFMA within it, LOP3 + VOTE/2 within 2; REDUX and MATCH on two units fail it, and so
+    does a VOTE that spends a whole LOP3 of alu."""
+    held, lines = collective_verdict.verdict(_collective_rows())
+    assert held, lines
+    assert lines[0] == "the unit 0.5000 (MATCH.ANY 0.5000, REDUX.SUM 0.4990 alone)"
+    assert "REDUX.SUM + MATCH.ANY = 0.2500 + 0.2500 = 0.5000 beside each other" in lines
+    assert "MATCH beside LOP3 and FFMA at most 0.4998 units (mix_u64_lop3_16, of 2)" in lines
+    assert ("VOTE.ANY 1.3900 alone; LOP3 + VOTE/2 = 1.6500 + 0.5500/2 = 1.9250, 1.7800 + 0.3600/2 = 1.9600, "
+            "1.8900 + 0.2100/2 = 1.9950 at Q 16, 32, 64") in lines
+    assert "REDUX.SUM beside 16 LOP3 0.4984 (LOP3 0.9969)" in lines
+    held, lines = collective_verdict.verdict(_collective_rows(mix_redux_match={"REDUX.SUM": 0.45, "MATCH.ANY": 0.45}))
+    assert not held and lines[0] == "REDUX.SUM + MATCH.ANY 0.9000 > the unit's 0.5000 beside each other: two units"
+    held, lines = collective_verdict.verdict(_collective_rows(mix_vote_lop3_64={"VOTE.ANY": 0.21, "LOP3.LUT": 1.99}))
+    assert not held and lines[0] == "LOP3 + VOTE.ANY/2 2.0950 > alu's 2 (mix_vote_lop3_64)"
+    match, coll = tmp_path / "match.jsonl", tmp_path / "collective.jsonl"
+    rows = _collective_rows()
+    match.write_text("".join(json.dumps(r) + "\n" for r in rows.values() if r["binary"] == "match"))
+    coll.write_text("".join(json.dumps(r) + "\n" for n, r in rows.items() if r["binary"] == "collective"
+                            and n != "mix_redux_match"))
+    assert collective_verdict.main([str(match), str(coll)]) == 0
+    assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_redux_match; the unit 0.5000")
+
+
 def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, capsys):
     """`eps1.py jitter`: each (trial, length) group's host-timed SM clock mean, its random spread (rel u%) and the
     systematic gap below the chip's own timer, and a per-trial u taken at the longest length (the tightest bound)."""

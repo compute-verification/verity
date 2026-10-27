@@ -1,6 +1,7 @@
-// MATCH's rates on sm_120, for the coverage table's MATCH rows (machine_model/data/cover/rows.toml, CMP-166). Joint
-// points: rows.jsonl only, no census line. Each warp runs 8 independent chains v = match(v); the mask a lane gets is the
-// same for every lane of its class and differs between classes, so the lanes' partition into classes holds every trip.
+// MATCH's rates on sm_120 and sm_90, for the coverage table's MATCH rows (machine_model/data/cover/rows.toml,
+// CMP-166). Joint points: rows.jsonl only, no census line. Each warp runs 8 independent chains v = match(v); the mask a
+// lane gets is the same for every lane of its class and differs between classes, so the lanes' partition into classes
+// holds every trip.
 //   match_any_d32, _q32, _c2, _u32   MATCH.ANY on 32-bit words, the lanes in 32 classes (all distinct), 4, 2, or 1
 //   match_any_d64, _u64              MATCH.ANY.U64, 32 classes or 1
 //   mix_u32_lop3_Q                   every warp 8 MATCH.ANY on uniform values, its fastest case, and Q LOP3 on chains of
@@ -80,10 +81,11 @@ __device__ __forceinline__ void mix(const OpArgs& a) {
         v[u] = __match_any_sync(~0u, (unsigned)v[u]);
       }
 #pragma unroll
-      for (int q = u * Q / 8; q < (u + 1) * Q / 8; q++)
-        asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(w[q & 7]) : "r"(k1), "r"(k2));
+      for (int j = 0; j < Q / 8; j++)
+        asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(w[(u * Q / 8 + j) & 7]) : "r"(k1), "r"(k2));
 #pragma unroll
-      for (int q = u * F / 8; q < (u + 1) * F / 8; q++) asm volatile("fma.rn.f32 %0, %0, %1, %2;" : "+f"(f[q & 7]) : "f"(c1), "f"(c2));
+      for (int j = 0; j < F / 8; j++)
+        asm volatile("fma.rn.f32 %0, %0, %1, %2;" : "+f"(f[(u * F / 8 + j) & 7]) : "f"(c1), "f"(c2));
     }
   }
   OP_END
