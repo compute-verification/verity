@@ -85,7 +85,7 @@ def actual(row: resolver.Row) -> dict:
             fl = ((json.load(open(gm)).get("impl") or {}).get("fold_load") or {})
             pins = next(({k: v for k, v in n.items() if k.endswith("sha256")} for n in fl.values() if isinstance(n, dict)), None)
         return dict(lift(d, pins=pins), source="candidate")
-    # the fold record of record: program.json + instances.jsonl beside each other under match/ (not frozen in fixtures.toml: multi-GB;
+    # the fold record of record: program.json + instances.jsonl beside each other under match/ (not frozen in files.toml: multi-GB;
     # tied to the record by the sha256 pins of global_match.json, compared below)
     pj = row.path("match/program.json", verify=False)
     inst = row.path("match/instances.jsonl", verify=False)

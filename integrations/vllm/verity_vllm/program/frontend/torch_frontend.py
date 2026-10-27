@@ -249,7 +249,7 @@ class Function(_Callable):
             out = self.fn(*ex, **kw)
         except FrontendError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise FrontendError(_classify(e), f"{type(e).__name__}: {str(e).splitlines()[0][:200]}", self.id) from e
         ret_type = type_of(out, self.id)
         if self.ret_schema is not None:
@@ -264,7 +264,7 @@ class Function(_Callable):
             ep = torch.export.export(_Wrap(self.fn, in_spec, kw), tuple(flat), strict=False)
         except FrontendError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise FrontendError(_classify(e), f"{type(e).__name__}: {str(e).splitlines()[0][:200]}", self.id) from e
         _guard(ep, self.id)
         return _Spec(param_types, ret_type, ep, erased)
