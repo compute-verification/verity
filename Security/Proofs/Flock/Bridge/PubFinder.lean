@@ -47,6 +47,8 @@ theorem H512_eq_iff (u v : List UInt8) :
   · intro h
     exact Subtype.ext (bs_inj h)
 
+set_option diagnostics true in
+set_option maxHeartbeats 1000000 in -- probe: the default 200000 times out at `whnf` here
 /-- A strict-time finder of C-Flock's on its tape, at the constant cost `⌈q⌉`. -/
 noncomputable def strictComp (Fd : StrictCR.Finder StrictCR.Pair) (q : ℝ) : Claims.Finder :=
   Game.tapeFinder Fd.g Fd.s id (fun _ => ⌈q⌉₊)
