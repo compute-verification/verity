@@ -4,28 +4,26 @@ import Definitions.Accounting.Assumptions.Compose
 /-!
 # PoUW's work over an accounting period of `n` windows (trusted)
 
-INT-PERIOD's statement (note:compute-accounting/20261019T0739Z-draft-int-period), RT-INT's fix (c)
-(note:compute-accounting/20261019T0528Z-draft-rt-int): `CircuitWork` restated over a period of `n` windows of one
-declared circuit, each window with its own live coins and its own draw, its words counted on its live tiles only. It
-changes what the live guarantee says, and Daniel took it (ASK-64 = A, 19 Oct: `ε` quoted per accounting period,
-credited on live tiles up to the first refused window) after the red teams' rounds; its credit in live words is
-`CircuitCreditPeriod` (RT4-INT-8, note:compute-accounting/20261019T2300Z-draft-rt4-int).
+`CircuitWork` restated over a period of `n` windows of one declared circuit, each window with its own live coins and
+its own draw, its words counted on its live tiles only. It changes what the live guarantee says, and the ruling takes
+it: `ε` quoted per accounting period, credited on live tiles up to the first refused window. Its credit in live words
+is `CircuitCreditPeriod`.
 
 RT-INT-1: both live lines are quoted at 48,000 equal live rounds, and each has its own round floor for `ε < 1%`. On
-Compose's line (`CircuitWork`, 0.744% at #2638, `a = 0.218`, `b = 0.998`) it is at least 10,552 equal live rounds a
-window, under marginal per-tile luck. On #2482's sm_120 bound (0.656% sheet, 0.591% measured) it is 9,496 rounds (sheet)
-and 9,652 (measured) (HEADLINE-FIX, note:compute-accounting/20261019T0730Z-draft-headline-fix). SERVE-H1's windows
+Compose's line (`CircuitWork`, 0.744%, `a = 0.218`, `b = 0.998`) it is at least 10,552 equal live rounds a
+window, under marginal per-tile luck. On the headlines' sm_120 bound (0.656% sheet, 0.591% measured) it is 9,496 rounds (sheet)
+and 9,652 (measured). SERVE-H1's windows
 have 18. Over a period the rounds are the period's, `n·M`, so served windows reach it by being many. Compose's line is
 a time credit, which no statement here gives over a period (RT4-LOGIC-6): the numbers below are the proved word
 credit's (`CircuitCreditPeriod` at `a = b = 1`), and Compose's time line, where quoted, is labeled unstated.
 
-RT2-INT-1 (note:compute-accounting/20261019T1100Z-draft-rt2-int): on SERVE-H1's masked unit (`PouwH1Tile_v2`, #2639)
+On SERVE-H1's masked unit (`PouwH1Tile_v2`)
 a dead tile, whose rows are all the canonical empty row, has the canonical empty receipt at every coin, so its whole
-skip always passes and no guess bound holds of it; 52.8% of a served window's units are dead (r20261019-012935-2c52).
+skip always passes and no guess bound holds of it; 52.8% of a served window's units are dead.
 So each window names its live tiles (`Period`), the per-tile claims are asked of live tiles only (`PerLiveTile`), and
 a dead tile's words count for nothing (`liveCone`, `periodMode`, `creditedLive`).
 
-RT3-INT-7 (note:compute-accounting/20261019T1700Z-draft-rt3-int): an honest period of 82,403 windows completes with
+An honest period of 82,403 windows completes with
 probability `(1 − f)^n`, 44% at a per-window failure rate `f = 10^-5`, and dropping failed windows instead hides about
 `0.26` of the live words per dropped share. So a period is credited up to its first window with a refused proof
 (`PeriodRun.Credited`), a stopping time, and the tail is taken at it (`PeriodTailMax`).
@@ -146,8 +144,8 @@ each round's set fixed before its coin.
 
 *The period's order and its record* (RT2-INT-4, RT3-INT-13, RT4-INT-6). `Period` makes the order the model's. The
 statement needs a period record from which the credit is read: two signed entries in the auditor's ledger, a
-`period-open` and a `period-close`, cited by their `seq` within a published ledger head (the record is proofs',
-PRF-108). A period is never a label a requester names (one Commit could then open sessions under two labels and keep
+`period-open` and a `period-close`, cited by their `seq` within a published ledger head (the record is the proof
+service's). A period is never a label a requester names (one Commit could then open sessions under two labels and keep
 the one whose coins it likes, RT4-INT-24), nor a range written afterwards, whose writer could choose its boundaries
 and leave a failed window off the edge. Its windows are exactly its lane's reserves between the two entries, in
 ledger order, at most `n`, and every one counts: no window inside the pair may be skipped. A window is its reserve
@@ -167,10 +165,10 @@ it in the period are not credited, and `period-close` is refused while a reserve
 stream's committed periods must be disjoint: each window in at most one period, and one period open at a time, the
 next committed only after the last closes. Two periods that share windows count those windows twice, and a prover
 that commits `P` overlapping periods and claims whichever is accepted pays `P·δ_s`, not `δ_s`. No check on main does
-this today. The served path has no period: `Credits` (SALT-WIRE's, #2847) registers a window once when it is received,
+this today. The served path has no period: `Credits` (SALT-WIRE's) registers a window once when it is received,
 before its draw coin is open or any proof, and nothing closes a stream at its first refused window, so `Credits`
 credits each window on its own, which is dropping failed windows (*Liveness*, below). The challenger's `order_reason`
-(`SampledProofs.Challenger.orderReason`, on main since #2573) checks one family of an epoch's coins: coin `i` opened
+(`SampledProofs.Challenger.orderReason`, on main) checks one family of an epoch's coins: coin `i` opened
 once, after the `i`-th recorded root, and every recorded root's coin opened. That is the order within a window. Run
 over one family holding every window's round coins and draw in order, with `n` and the circuit in the epoch's
 commitment, it would be the period's check.
@@ -273,8 +271,8 @@ def CircuitWorkPeriod : Prop :=
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
         δs + n * (δbind + δks)
 
-/-- **(L)'s credit in live words over an accounting period's accepted prefix, live coins** (RT4-INT-8,
-note:compute-accounting/20261019T2300Z-draft-rt4-int). Under `CircuitWorkPeriod`'s premises with `a, b > 0`, an
+/-- **(L)'s credit in live words over an accounting period's accepted prefix, live coins**.
+Under `CircuitWorkPeriod`'s premises with `a, b > 0`, an
 accepted period has at least its credit `(1 − ε(j))₊·N_live` (`creditPrefix`) of its prefix's live words fixed right
 (`n·fixed`), `N_live` the prefix's live words (`creditedLive`) and `ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized
 prefix `j = PeriodRun.prefixLen` (`epsPrefix`), except with probability `δ_s + n·(δ_bind + δ_ks)`. So a period may be

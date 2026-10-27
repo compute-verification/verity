@@ -16,7 +16,7 @@ from e2e_h200.weights import Weights
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
-from verity_torch_loop import weights as SW
+from e2e_h200 import served_weights as SW
 
 BATCH, STEPS = 2, 4
 #: an absent K or V row's words: a NaN, which reaches the step's output unless the padded units mask keys n and past

@@ -137,7 +137,7 @@ def test_the_probe_words_are_the_definitions(launches, family: str, rows: tuple)
 
 
 def test_the_failed_h200_capture_is_pinned() -> None:
-    """The small committed cut of r20261013-115825-580e pins the before counts and why no raw-word replay is possible."""
+    """The small committed cut of the failed capture pins the before counts and why no raw-word replay is possible."""
     path = Path(__file__).with_name("fixtures") / "dsv4_mhc_capture_20261013.json"
     rec = json.loads(path.read_text())
     assert rec["run"] == "r20261013-115825-580e" and rec["head"] == "c07829364"

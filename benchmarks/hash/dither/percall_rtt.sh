@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ASK-64's per-step round (percall_rtt.py) on the serving node (vy-nebius-2), against one session of the challenger on its
+# The per-step challenger round (percall_rtt.py) on the serving node, against one session of the challenger on its
 # auditor host.  Take that session from infra's gate first with the lane's own gate key, in the lane's open development
 # period (period-open --name dev-NAME --cap N --circuit SHA512), its layout a live window of ROUNDS rounds (default 32768)
 # and its minutes longer than MAX_S:
