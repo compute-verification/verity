@@ -24,8 +24,14 @@
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and CMP-153's block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
-# names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); PoUW H1's are
-# in-process until vy-challenger-1's gate takes this node's key (~/.ssh/vllm_gate_ed25519; INF-263). The COINS line says which.
+# names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
+# lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
+# PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER, T H1_T 512 and S
+# WINDOW_STEPS 16, the Program build H1 affords while CMP-162 is open), each window's coins from a session of its own on
+# vy-challenger-1, once `served_verdicts.py gate` finds no period of the lane open (a reserve would join it). PoUW's piece
+# (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session, ledger and
+# pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line from MAIN_SHA. That key is TOP-84's
+# development key, so the run is a development run and credits nothing. The COINS line says which.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 4h --env CLASSES='4,32,4 record' -- \
@@ -44,6 +50,9 @@ REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-record} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
+H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
+if [ -n "${H1_GATE:-}" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
+export H1_KEY_SHA512 WINDOW_STEPS
 ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 FW=${FLOCK_WORK:-$ROOT/flock-work}
@@ -60,9 +69,13 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
   mkdir -p "$D" "$OUT/serve"
   cd "$TREE/integrations/vllm" || return 9
+  local h1=()
+  [ -n "${H1_GATE:-}" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
+                               --challenger-peer "${H1_PEER:-vy-dc-h200}" --max-num-batched-tokens "${H1_T:-512}")
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
-    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree --window-steps 256 \
+    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \
+    --window-steps "$WINDOW_STEPS" "${h1[@]}" \
     --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 --copy-records-to "$OUT/serve" ${SERVE_ARGS:-} \
@@ -120,7 +133,18 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
 ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
 BUILD=$!
 
-H1_COINS="PoUW H1: in-process until vy-challenger-1's gate takes this node's key (INF-263; Daniel's card, due Tue 27 Oct 15:00Z)"
+H1_COINS="PoUW H1: not served (no H1_GATE)"
+if [ -n "${H1_GATE:-}" ]; then
+  if [ -n "${MAIN_SHA:-}" ]; then
+    git -C "$TREE" rev-list --first-parent "$MAIN_SHA" > "$OUT/main.txt" || { say "PREFLIGHT: MAIN_SHA $MAIN_SHA not in this tree"; exit 3; }
+    export MAIN_FILE=$OUT/main.txt
+  fi
+  "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
+    | tee -a "$OUT/verdicts.txt"
+  [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
+  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer ${H1_PEER:-vy-dc-h200}, T ${H1_T:-512}, S $WINDOW_STEPS), a development run under TOP-84's development key: it credits nothing"
+  export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3"}
+fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
 else
@@ -167,6 +191,7 @@ sys.exit(0 if ok else 1)
 EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
 for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
+[ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
 PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")

@@ -45,12 +45,12 @@ def committer_engine(llm: Any) -> SimpleNamespace:
     The committer reads four things of it: the ``vllm.LLM``, its in-process model runner, the served model, and the
     checkpoint's repo and revision (into its geometry digest), which are the pin's, or for a local checkpoint vLLM's model
     path with no revision."""
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
 
     pin = getattr(llm, "pin", None)
     mc = llm.vllm.llm_engine.vllm_config.model_config
     cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
-    return SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model, cp=cp)
+    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model, cp=cp)
 
 
 class ServedCommitArm:
