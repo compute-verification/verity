@@ -47,9 +47,11 @@ ROLES = (("leaf_", "leaf hashing (SHA-512 of the hm96 rows)"), ("salt_", "salts 
          ("level_kernel", "tree levels (SHA-512)"), ("top_", "tree levels (SHA-512)"),
          ("bits_kernel", "coins: the dither bits d_A, d_B"), ("perm_kernel", "coins: the permutation pi"),
          ("noise_kernel", "noise: U, V"), ("fill_", "form: X and W' (A + d_A + V, B + d_B + U[pi])"),
-         ("form_", "form"), ("wrap", "form"), ("open_kernel", "openings"), ("pack_kernel", "openings"),
+         ("form_", "form"), ("wrap", "form"), ("serve_rows_kernel", "form: a served call's A + d_A and B + d_B (O's operands)"),
+         ("open_kernel", "openings"), ("pack_kernel", "openings"),
          ("forge_kernel", "a cheat (the negative period's)"))
-#: the GEMMs: v31's own, and every kernel that isn't the protocol's (cuBLASLt's sm90_xmma, torch._int_mm's Kernel2)
+#: the GEMMs: v31's own, and every kernel that isn't the protocol's (cuBLASLt's sm90_xmma, torch._int_mm's Kernel2); V31_WG's
+#: gemm_r4 and gemm_r5 hash a served call's finished rows on warps of their own, so that hashing counts in the GEMM's time
 GEMM_OWN = "gemm_kernel"
 BASE_KERNELS = {"lt": ("sm90_xmma", "sm100_xmma", "sm120_xmma", "cutlass"), "int_mm": ("Kernel2",)}
 PIPES = ("issue", "alu", "imad", "shfl", "f64")
@@ -216,9 +218,10 @@ def work(prep: dict) -> dict:
         calls.append({"call": name, "m": P.M, "n": n, "k": k, "lp": f.lp, "L": f.L, "S": f.S, "row_bytes": f.row,
                       "macs": P.M * n * k, "leaves": f.leaves, "leaf_bytes": f.leaves * f.row, "salts": f.leaves,
                       "tree_nodes": (1 << depth) - 1, "committed_words": P.M * n * f.W,
+                      "committed_o": P.M * n if f.o else 0,
                       "dither_bits": (P.M + n) * k, "formed_bytes": (P.M + n) * k})
     total = {key: sum(c[key] for c in calls) for key in ("macs", "leaves", "leaf_bytes", "salts", "tree_nodes",
-                                                         "committed_words", "dither_bits", "formed_bytes")}
+                                                         "committed_words", "committed_o", "dither_bits", "formed_bytes")}
     return {"calls": calls, "step": total}
 
 

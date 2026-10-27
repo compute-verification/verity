@@ -29,7 +29,8 @@
 # TEXT: wikitext-2-raw-v1's test split for capture.py (default the datasets cache's arrow file, else its parquet at the same
 # revision, fetched from the hub into the run's scratch). The H200 (vy-dc-h200-2): GENCODE=arch=compute_90a,code=sm_90a
 # NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with #5202's V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
-# (benchmarks/hash/dither/pin.sh).
+# (benchmarks/hash/dither/pin.sh). SERVED=1: prep --served, every call in its served form (T_1 .. T_{S-1} and O committed; with
+# V31_GEMM=1 V31_RP=5 the GEMM hashes O's rows on warps of its own, #5465).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -60,8 +61,10 @@ echo "build rc $?" >> "$O/rc.txt"
 A=benchmarks/pouw/accel_v31
 sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/breakdown.py $D/timeline.py $D/pipes.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
+SERVEDA=()
+[ "${SERVED:-0}" = 1 ] && SERVEDA=(--served)
 uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --lp-max "$LP_MAX" --L "$L" \
-  > "$O/prep.log" 2>&1
+  "${SERVEDA[@]}" > "$O/prep.log" 2>&1
 r=$?
 echo "prep rc $r" >> "$O/rc.txt"
 [ $r = 0 ] || { cat "$O/rc.txt"; tail -30 "$O/prep.log"; exit 1; }
@@ -125,7 +128,7 @@ $LEASE bash -c '
     for arm in plain proto; do
       ncu --clock-control none --csv --page raw --print-units base --log-file "$O/ncu-$arm.csv" -c 600 \
         --metrics gpu__time_duration.sum,sm__ops_path_tensor_op_imma_src_int8.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__cycles_elapsed.avg.per_second \
-        --kernel-name "regex:^(Kernel2|sm[0-9]+_xmma|gemm_kernel|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
+        --kernel-name "regex:^(Kernel2|sm[0-9]+_xmma|gemm|serve_rows_kernel|form_|wrap|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
         $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks 1 --steps 2 --q 16 --periods 1 \
         --negative "" --arms $arm >> "$O/ncu.log" 2>&1
       echo "ncu $arm rc $?" >> "$O/rc.txt"

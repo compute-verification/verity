@@ -19,7 +19,8 @@ the root of one challenger session with families ``seeds`` and ``check``, a coin
 in one sequence. Block b's operand-root receipt is H(registration, b, block b-1's value-root receipt), and its seeds coin
 opens after it. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
 seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
-call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding) under a frame-v3-sha512 root,
+call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding; `prep --served`: the served
+form, T_1 .. T_{S-1} and O = (A + d_A)(B + d_B)^T mod 2^32, its seeds still the filler's streams) under a frame-v3-sha512 root,
 its leaf pos salted prf_salt(Ks, off + pos) under the Prover's own Ks, off = c leaves for its c-th call (dither.salts);
 block b's value-root receipt is H(registration, b, its
 roots). Its check coin opens after that receipt, with block b+1's seeds coin in the same round trip. The coin draws
@@ -36,7 +37,7 @@ the coins are 64-byte session coins expanded here, not the challenger's streamed
 (the challenger's release log records what each coin opened after); and the checks run in the clear, the stand-in for
 the Definition and C-Flock --zk.
 
-    period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--lp-max 1024] [--L 16384] [--nb 32]   the weights and shapes
+    period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--lp-max 1024] [--L 16384] [--nb 32] [--served]   the weights and shapes
     capture.py CFG --checkpoint DIR                                           the activations (on the GPU)
     period.py diag CFG LIB OUT                                                one step's GPU openings against the answers'
     period.py run CFG LIB|ref OUT [--coins local|gate:USER@HOST ...] [--blocks --steps --q --periods --negative]
@@ -91,6 +92,9 @@ LP, L = 512, 16384   # the noise period L' (a call's least; `lp_of`) and the wor
 #: K-slices (`calls`)
 T_MAX = 8
 LP_MAX = 1024
+#: each call in its served form (`prep --served`, v31.py's Fill(o=True)): T_1 .. T_{S-1} and O = (A + d_A)(B + d_B)^T mod
+#: 2^32 committed, no pad; else the filler's T_1 .. T_S
+SERVED = False
 TILE = v31.TILE
 SCHEME = "verity/highutil/period/v1"
 OPERANDS_TAG = "verity/highutil/operands/v1"
@@ -149,7 +153,7 @@ def shape(n: int, k: int, row: int, m: int | None = None) -> v31.Fill:
     if lp is None:
         raise SystemExit(f"K {k}: no L' from {LP} to {LP_MAX} divides it and L {L} with its segment at most {T_MAX} L' "
                          "(split it: `calls`)")
-    return v31.Fill(M if m is None else m, n, k, lp, L, row)
+    return v31.Fill(M if m is None else m, n, k, lp, L, row, SERVED)
 
 
 def lp_of(k: int) -> int | None:
@@ -257,7 +261,7 @@ def _tree(job: tuple) -> OperandTree:
 
 def operand_trees(cfg: Path, secret: bytes, pool) -> dict[tuple[str, int, int], OperandTree]:
     """Every operand's tree, keyed (kind, layer, block), each under its own salt key."""
-    workload = {"layers": [list(x) for x in LAYERS], "m": M, "nb": NB}
+    workload = {"layers": [list(x) for x in LAYERS], "m": M, "nb": NB, "served": SERVED}
     jobs = [(str(cfg), kind, li, t, H("verity/highutil/operand-salts/v1", secret, kind.encode(), u64(li), u64(t)), workload)
             for kind in ("A", "B") for li in range(len(LAYERS)) for t in range(NB)]
     return {(j[1], j[2], j[3]): tr for j, tr in zip(jobs, pool.map(_tree, jobs))}
@@ -265,9 +269,10 @@ def operand_trees(cfg: Path, secret: bytes, pool) -> dict[tuple[str, int, int], 
 
 def configure(prep: dict) -> None:
     """The workload a config was prepared for (its layers, M, NB, L' and L; the 8B shapes unless a test made it smaller)."""
-    global LAYERS, M, NB, LP, L, LP_MAX
+    global LAYERS, M, NB, LP, L, LP_MAX, SERVED
     LAYERS, M, NB = tuple(tuple(x) for x in prep["layers"]), prep["m"], prep["nb"]
     LP, L, LP_MAX = prep.get("lp", LP), prep.get("L", L), prep.get("lp_max", 1024)
+    SERVED = prep.get("served", False)
 
 
 def checkpoint_weights(d: Path, name: str, modules: tuple[str, ...], t: int) -> np.ndarray:
@@ -289,12 +294,14 @@ def cmd_prep(a: argparse.Namespace) -> int:
     d.mkdir(parents=True, exist_ok=True)
     if a.small:
         configure({"layers": [["a", 256, 1024], ["b", 128, 2048]], "m": 256, "nb": 2, "lp": 128, "L": a.L or 512,
-                   "lp_max": a.lp_max})
+                   "lp_max": a.lp_max, "served": a.served})
     else:
-        configure({"layers": [list(x) for x in LINEARS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L or L, "lp_max": a.lp_max})
+        configure({"layers": [list(x) for x in LINEARS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L or L, "lp_max": a.lp_max,
+                   "served": a.served})
     linears = [x[0] for x in LAYERS]
     parts = calls(LAYERS)
-    configure({"layers": [[c, n, k] for c, n, k, _, _ in parts], "m": M, "nb": NB, "lp": LP, "L": L, "lp_max": LP_MAX})
+    configure({"layers": [[c, n, k] for c, n, k, _, _ in parts], "m": M, "nb": NB, "lp": LP, "L": L, "lp_max": LP_MAX,
+               "served": SERVED})
     if a.checkpoint:
         ck = Path(a.checkpoint)
         if ck.name != CHECKPOINT["revision"]:
@@ -330,7 +337,7 @@ def cmd_prep(a: argparse.Namespace) -> int:
     (d / "shapes.txt").write_text("\n".join(lines) + "\n")
     source["calls"] = {"t_max": T_MAX, "slices": [[c, linear, k0, lp_of(k)] for c, _, k, linear, k0 in parts]}
     (d / "prep.json").write_text(json.dumps({"row": a.row, "layers": LAYERS, "m": M, "nb": NB, "lp": LP, "lp_max": LP_MAX, "L": L,
-                                                    "source": source}))
+                                             **({"served": True} if SERVED else {}), "source": source}))
     return 0
 
 
@@ -388,15 +395,19 @@ def salt(key: tuple[bytes, int], pos: int) -> bytes:
 
 def leaf_row(f: v31.Fill, afile: str, bfile: str, t: int, seeds: dict[str, bytes], pos: int, skip: int | None = None) -> bytes:
     """Leaf `pos`'s row as the prover committed it, recomputed from block t's operands and the call's coins: T_s of its
-    ROW / 2 cells (a run of a tile's rows, every column), mod 2^16, little-endian, in the tile's row-major order."""
+    ROW / 2 cells (a run of a tile's rows, every column), mod 2^16, or a served call's O of its ROW / 4 cells, mod 2^32,
+    little-endian, in the tile's row-major order."""
     tile, r = divmod(pos, f.lpt)
-    s, piece = r // f.row_w + 1, r % f.row_w
-    nr = f.row // 2 // TILE
+    o = r >= f.W * f.row_w
+    s, piece = (None, r - f.W * f.row_w) if o else (r // f.row_w + 1, r % f.row_w)
+    nr = f.row // (4 if o else 2) // TILE
     tm, tn = divmod(tile, f.n // TILE)
     i0, j0 = tm * TILE + piece * nr, tn * TILE
     A = np.fromfile(afile, dtype=np.int8, count=nr * f.k, offset=(t * f.m + i0) * f.k).reshape(nr, f.k)
     B = np.fromfile(bfile, dtype=np.int8, count=TILE * f.k, offset=(t * f.n + j0) * f.k).reshape(TILE, f.k)
     fm = v31.form(f, A, B, v31.Coins.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
+    if o:
+        return (v31.imatmul(fm.Ad, fm.Bd) & 0xFFFFFFFF).astype("<u4").tobytes()
     X = fm.X
     if skip is not None:
         X = X.copy()
@@ -478,7 +489,7 @@ class GpuDriver:
         self.ps, self.A, self.B, self.out, self.geom = [], [], [], [], []
         for name, n, k in LAYERS:
             f = shape(n, k, row)
-            p = v31lib.Prover(M, n, k, f.lp, L, row, lib=self.lib, params_dir=str(self.params))
+            p = v31lib.Prover(M, n, k, f.lp, L, row, served=SERVED, lib=self.lib, params_dir=str(self.params))
             self.ps.append(p)
             depth = p.info()["depth"]
             self.geom.append((1 << depth, depth, (2 * (1 << depth) - 1) * 64))
@@ -574,7 +585,7 @@ class GpuDriver:
             cur = []
             for li, p in enumerate(self.ps):
                 self.lib.check(self.point_b(p.h, self.B[li][t].data_ptr()))
-                sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
+                sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)], SERVED)
                 cur.append((s, li, p.prove(sd, self.A[li][t].data_ptr(), bad[li])))
             for x in prev:
                 collect(*x)
@@ -647,11 +658,11 @@ class RefDriver:
                 t = self.block_of(g0 + s)
                 sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
                 skip = _cheated(kind) if kind != "none" and at in (None, li) else None
-                T = v31.fill_words(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
-                                   v31.Coins.expand(f, sd), skip)
+                T, O = v31.fill_values(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
+                                       v31.Coins.expand(f, sd), skip)
                 key = (self.ks[li], self.calls[li] * f.leaves)
                 self.calls[li] += 1
-                cm = v31.fill_commit(f, v31.fill_buffer(f, T), *key)
+                cm = v31.fill_commit(f, v31.fill_buffer(f, T, O), *key)
                 self.levels[(s, li)], self.keys[(s, li)] = cm.levels, key
                 out.append(cm.root)
         roots.write_bytes(b"".join(out))
@@ -734,6 +745,7 @@ class Period:
     def registration(self, pid: str, plan: Plan) -> tuple[bytes, dict]:
         reg = {"period": pid, "receipt": "dither no-fold (v31.py Fill)", "m": M, "nb": NB, "layers": [list(x) for x in LAYERS],
                "lp": {name: lp_of(k) for name, _, k in LAYERS}, "L": L, "row": self.row,
+               **({"served": True} if SERVED else {}),
                "blocks": plan.blocks, "steps_per_block": plan.steps, "q": plan.q, "first_step": self.g,
                "W_reg": plan.blocks * plan.steps * step_macs(), "source": self.source,
                "operand_roots": {kind: [[self.trees[(kind, li, t)].root.hex() for t in range(NB)] for li in range(len(LAYERS))]
@@ -1004,7 +1016,7 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
     mhz = [b["sm_mhz"] for r in honest for b in r["blocks"] if b["sm_mhz"]]
     out = {
         "workload": {"m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(),
-                     "lp": {name: lp_of(k) for name, _, k in LAYERS}, "L": L,
+                     "lp": {name: lp_of(k) for name, _, k in LAYERS}, "L": L, "served": SERVED,
                      "source": source},
         "plan": plan.__dict__, "periods": len(honest),
         "accepted": sum(r["accepted"] for r in honest),
@@ -1087,6 +1099,8 @@ def main(argv: list[str]) -> int:
                                         "capture.py writes A)")
     g.add_argument("--seeded", action="store_true", help="seeded A and B")
     g.add_argument("--small", action="store_true", help="two small layers at M 256, two blocks, seeded (tests)")
+    p.add_argument("--served", action="store_true", help="each call in its served form: T_1 .. T_{S-1} and O committed "
+                                                         "(v31.py's Fill(o=True)); else the filler's T_1 .. T_S")
     p.add_argument("--nb", type=int, default=32, help="transformer blocks")
     p.add_argument("--seed", type=int, default=1)
     p.set_defaults(fn=cmd_prep)

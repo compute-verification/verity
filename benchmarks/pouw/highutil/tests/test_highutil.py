@@ -326,6 +326,31 @@ def test_one_segment_a_call_when_L_exceeds_K(small, tmp_path, lp_max, layers, lp
         P.configure(json.loads((small.cfg / "prep.json").read_text()))
 
 
+@pytest.mark.parametrize("L,S", [(512, [2, 4]), (2048, [1, 1])])
+def test_a_served_period_commits_o_and_is_accepted_and_a_skipping_prover_refused(small, tmp_path, L, S):
+    """`prep --served`: each call's T_1 .. T_{S-1} and O (at S = 1, O alone), the picks at s = S checked against
+    (A + d_A)(B + d_B)^T mod 2^32 on the opened O rows. A skipping prover changes T_1, so it is refused only where S > 1."""
+    cfg = tmp_path / "cfg"
+    assert P.main(["prep", str(cfg), "--small", "--L", str(L), "--served"]) == 0
+    prep = json.loads((cfg / "prep.json").read_text())
+    try:
+        P.configure(prep)
+        assert P.SERVED and prep["served"]
+        fs = [P.shape(n, k, prep["row"]) for _, n, k in P.LAYERS]
+        assert [f.S for f in fs] == S and all(f.o and f.W == f.S - 1 and f.row_o for f in fs)
+        secret = b"\x07" * 64
+        per = P.Period(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
+                       prep["row"], prep["source"], secret, tmp_path, _Serial())
+        r = per.proto("t-served", P.Plan(2, 2, 24))
+        assert r["accepted"], r["verdict"]
+        assert r["registration"]["served"] is True
+        r = per.proto("t-served-skip", P.Plan(2, 2, 64), "skip:1")
+        assert r["accepted"] is (max(S) == 1), r["verdict"]
+    finally:
+        P.configure(json.loads((small.cfg / "prep.json").read_text()))
+    assert not P.SERVED
+
+
 def test_a_tampered_root_is_refused(small, monkeypatch):
     """A root the GPU didn't commit (here the first call's, altered after the block) fails every pick of that call."""
     real = small.drv.block
