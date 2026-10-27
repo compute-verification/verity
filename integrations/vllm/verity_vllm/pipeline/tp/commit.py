@@ -503,7 +503,7 @@ def main(args: Options) -> int:
                     coin = CC.tp_draw(coins, root)
                     src_pos, src_id = CC.tp_keys(coin)
                     positions = {str(int(f["rank"])): [list(p) for p in challenge_positions(root, f["leaves_per_step"], args.openings, salt=f"{pair}/rank{int(f['rank'])}".encode(),
-                                                                                            legacy=False, source=src_pos)] for f in fin}
+                                                                                            source=src_pos)] for f in fin}
                     op = llm.collective_rpc("tp2_commit_open", timeout=args.rpc_timeout, kwargs={"positions_by_rank": positions, "claimed_roots": claimed})
                     for f in sorted(fin, key=lambda f: f["rank"]):
                         rk = int(f["rank"])
