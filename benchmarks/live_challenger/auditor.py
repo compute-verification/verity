@@ -61,25 +61,20 @@ first coin.
   release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
   many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
-- **The coins' path** (PRF-207; Daniel, 26 Oct: the device that runs a server's network certifier produces its live
-  coins). `serve.py` listens on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is
-  one of the peer's certifier coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, infra's,
-  within 7811..7899), which carries it to the same port of the peer's loopback, where the prover's client connects; a
-  reserve for a peer with no such line is refused. The certifier on this host owns that link and counts it
-  (`coin_link.py`, `verity.core.protocols.certifier.coin_link`; NET-84): `run` starts it once serve.py listens and
-  stops it once serve.py exits (`coin_link_argv`, `stop_link`), and a link that refuses to start or ends first (its
-  tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback,
-  opens `ssh -N -R` from the peer's port to it, straight to the peer's own sshd, relays each connection to serve.py
-  re-cut into cells and re-clocked on its grids, exempts only the coin openings that open against the session's
-  committed coin root, counts everything else, and writes `coin-link.json`, which the `end` entry's `files` seals. The
-  hop from the certifier to the server crosses the prover's NIC, so it is the certifier's counted ingress, not a path
-  this side trusts. The challenger side rests on two premises, which no `Security/`
-  guarantee reads yet:
-  - `CoinsConfidential`: every coin travels from the challenger to the certifier only inside auditor-trusted hosts
-    (`trusted-nebius-host`), here one device, vy-challenger-1, which runs both; no prover-controlled host reads a coin
-    before the certifier admits it at the boundary.
-  - `OneClock`: the challenger's release times and the certifier's ingress ticks are read on one clock, this host's.
-    Were they two devices, the offset between their clocks would have to stay within 1.03 s (RT-POOL G).
+- **The coins' path**: the device that runs a server's network certifier produces its live coins. `serve.py` listens
+  on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's certifier
+  coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, infra's, within 7811..7899), which
+  carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
+  such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
+  `verity.core.protocols.certifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
+  (`coin_link_argv`, `stop_link`), and a link that refuses to start or ends first (its tunnel did) ends the session
+  (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
+  straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
+  exempts only the coin openings that open against the session's committed coin root, counts everything else, and
+  writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
+  prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
+  premises `CoinsConfidential` (the stream reaches the certifier only on auditor hosts, here this one) and `OneClock`
+  (one clock for both, this host's), stated in `verity/core/protocols/sampled_proofs/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
   (`run.sh`), and it refuses a window's session (`--root`).
@@ -783,7 +778,7 @@ def peers(host: Host) -> list[str]:
 def coin_ports(host: Host, peer: str) -> range:
     """The ports of `peer`'s certifier coin link: its line `PEER LO-HI` (or `PEER PORT`) of /etc/vy/coin-ports
     (`Host.coin_ports`), ports within `PORTS` of this host's loopback that the link carries to the same ports of the
-    peer's loopback; or Refused, since a window's coins reach its peer through that link alone (PRF-207)."""
+    peer's loopback; or Refused, since a window's coins reach its peer through that link alone (`CoinsConfidential`)."""
     try:
         lines = host.coin_ports.read_text().splitlines()
     except FileNotFoundError:
@@ -795,8 +790,8 @@ def coin_ports(host: Host, peer: str) -> range:
             if PORTS.start <= lo <= hi < PORTS.stop:
                 return range(lo, hi + 1)
     raise Refused(f"--peer {peer!r} has no certifier coin link: a window's coins reach its peer only through the link of "
-                  f"the certifier on this host, never ssh -R (PRF-207); infra lists its ports as `{peer} LO-HI`, within "
-                  f"{PORTS.start}..{PORTS.stop - 1}, in {host.coin_ports}")
+                  f"the certifier on this host, never ssh -R (CoinsConfidential); infra lists its ports as "
+                  f"`{peer} LO-HI`, within {PORTS.start}..{PORTS.stop - 1}, in {host.coin_ports}")
 
 
 def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:

@@ -14,7 +14,7 @@ P2's form, each a named `Prop`:
   roots, each priced `c_root`.
 * `SquaringCeilingP2 T s B`: the held line's `SquaringCeiling` at `E = 4 · 32,890` squarings a unit.
 
-**Drafted, not decided**: claims are Daniel's (the remote audit's lane, 26 Oct). No guarantee takes either yet, and
+**Drafted, not decided**: these claims await a ruling. No guarantee takes either yet, and
 `audit.ledger` refuses a P2 record (`audit.Rebuild` refuses a P2 codec) until one does. The squaring rate `s` is not
 measured: the H200's at 16,448 bits is the measurement the stated instance waits on.
 -/
@@ -39,7 +39,7 @@ model's recomputing responder spends `2 · 16,447 = 32,894` multiplication round
 above it.
 
 **Where it stands.** Not red-teamed at P2's width. The nearest evidence is the masked word codec's: no 4-dimensional
-completion of a masked word at any width tried (ra-codec-mix, verity#1894, none of 200), where the unmasked `k = 2`
+completion of a masked word at any width tried (none of 200), where the unmasked `k = 2`
 codec completes up to `x ≈ b/10` (r20261012-163319-2804). P2 differs in its width (one 16,448-bit word a block, where a
 lattice's dimension and reduction cost grow) and in its offset `t_j`. PoUS's guarantee prices its responder in
 sequential depth (`P2RingAuditSecure`), not in total work, so it does not give this form. -/

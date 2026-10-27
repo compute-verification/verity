@@ -3,13 +3,13 @@ profile that the fused b1 kernels do NOT cover: the operations a model runs UNFU
 (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as an ATen chain on an f32 copy), its activation is GeGLU (`_C.gelu_tanh_and_mul`),
 its attention has a logit soft cap (FA2 `Is_softcap`), or its logits are soft-capped (`LogitsProcessor(soft_cap)`).
 
-[R15 dense, F-dense-05] PROMOTED from `verity_vllm.program.quarantine.dense` (lane dense, 2026-09-17; the X-08 pattern): every
+PROMOTED from `verity_vllm.program.quarantine.dense`: every
 Definition below is the quarantine module's body VERBATIM — same name, same version, same statics, same gates — so the
 specialization ids are those the accepted `GEMMA2_2B-cov_gemma2_2b_b1_c256.r8h` record and the eager Gemma-2 (`profiles.generic`, formerly `gen_dense2_gemma2_2b`)
 Match profile resolve to. The quarantine modules re-export these objects (their difftest adapters, `ALL_DEFINITIONS` and
 `SEMANTIC_ID`s are unchanged). Each section keeps the quarantine module's docstring: the ATen / Triton / CUDA source the body
 follows, the wave-1 exhaustive GPU tables and the pod difftests that are its correspondence evidence (see the `conformance=`
-strings; the pod job ids are in `out/gen/lanes/dense2/` and `out/gen/lanes/gemma/`).
+strings).
 
 Bound as kinds of the pinned `b1-eager-v3` vocabulary (`frontend/rules/vocab.py::_dense_kinds`) and asked for by the op-shaped
 rules of `frontend/rules/vllm_bindings.py` (`WidenBf16ToF32`, `Square`, `MeanDimBI`, `Rsqrt`, `AddScalar`, `AddWidened`, `MulF32`,
@@ -100,7 +100,7 @@ def SquareF32(B, S, x):
 #: f32 load whose row pointer is provably 16-byte aligned (the same as the b1 `RMSNormTriton_v1` body's).  Evidence that it is
 #: the production order: the difftest adapter (`mean_triton_difftest.py`) is bit-exact against `mean_batch_invariant` on the
 #: pod at N = 2304 (Gemma-2's H: two full blocks + a masked 256-tail), 1024, 1280, 2048 and 256 with random f32 rows — a
-#: different register order or per-thread width changes the rounding of most random rows.  [cov-dense 2026-09-17] The 32-case
+#: different register order or per-thread width changes the rounding of most random rows.  The 32-case
 #: seed-7 difftest found the layout is *specialisation-dependent*: for `N % 16 != 0` Triton cannot prove the alignment and
 #: the layout is `sizePerThread=1` (`size_per_thread`, below); the body follows the same rule.
 
@@ -113,7 +113,7 @@ REPS = BLOCK_SIZE // TILE                # 2 repetitions of the tile inside one 
 
 
 def size_per_thread(N: int) -> int:
-    """[cov-dense 2026-09-17, difftest case 27 (N=4, `max`)] The blocked layout is a property of the *kernel specialisation*,
+    """The blocked layout is a property of the *kernel specialisation*,
     not of the source: `mean_dim` passes `input_stride0 = N` (a `[1, N]` row) as a plain integer argument, and Triton
     specialises integer arguments on divisibility by 16 (`tt.divisibility=16`) only.  With `N % 16 == 0` the row pointer
     `input_ptr + m_idx * input_stride0 + n_offsets` is provably 16-byte aligned, so the coalescing pass gives every thread
@@ -464,7 +464,7 @@ def GeluTanhMul(B, S, gu):
 # softcap  (SEMANTIC_ID dense/AttentionSoftcap@v1)
 # ========================================================================================================================
 #: `AttentionSoftcap_v1{T, NH, KVH, D, BN, CAP}` — FA2 attention WITH logit soft-capping (`flash_fwd_splitkv_kernel<..., Is_softcap=true>`,
-#: vLLM + Gemma-2 `attn_logit_softcapping = 50`), STRUCTURE ONLY (lane gemma, window 2026-09-17): the body of `Attention_v3` ->
+#: vLLM + Gemma-2 `attn_logit_softcapping = 50`), STRUCTURE ONLY: the body of `Attention_v3` ->
 #: `AttentionHead_v3` -> `AttnBlock_v3` with the one stage FA2 adds, in the place FA2 adds it.
 #: 
 #: FA2 (`flash_api.cpp::set_params_fprop`, `flash_fwd_kernel.h::compute_attn_1rowblock`, `softmax.h::apply_softcap`):

@@ -20,8 +20,8 @@ outside every block, and `two_sites` joins two leaf-spines by a WAN between thei
   checks the certifiers' audit, N2's served verdict and the answers.
 - `run.py`: the whole night on the lab host, `verity bench network_sim --out DIR` (below), checked against its expected
   verdicts.
-- `tests/`: the exports' tests, the declarations' values pinned against memory accounting's constants
-  (`verity.core.protocols.remote_bandwidth.timing`) and the census, the records adapter's tests on an injected clock, and
+- `tests/`: the exports' tests, the declared tensor-core rates pinned to the census, the records adapter's tests on an
+  injected clock, and
   `run.py`'s summary and expected verdicts (`uv run tools/verity/check/suites.py verity-network-sim`). The mock
   datacenter is a script, not a test: it runs in real time.
 

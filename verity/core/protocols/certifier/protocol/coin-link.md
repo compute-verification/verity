@@ -76,11 +76,9 @@ that ends while `serve.py` still serves, because its tunnel ended, ends the sess
 
 ### What it rests on
 
-Neither premise is read by a `Security/` guarantee yet.
-
-- `CoinsConfidential`: every coin travels from the challenger to the certifier only inside the trusted host, over its
-  loopback. No prover-controlled host reads a coin before the link releases it.
-- `OneClock`: the challenger's release times and the link's ticks are read on one clock, the host's (RP8).
+The challenger's premises `CoinsConfidential` and `OneClock`, stated in `verity/core/protocols/sampled_proofs/README.md`.
+Here the challenger and the link are one device, the trusted host: the coins cross only its loopback until the link
+releases them, and the link's ticks read the host's monotonic clock, which the challenger's release log reads too (RP8).
 
 ### Parameters and record
 

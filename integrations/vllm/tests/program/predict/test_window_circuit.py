@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.window_circuit (V3b at ASK-122's fixed slots): a served window is its class's one Circuit of the
+"""verity_vllm.program.predict.window_circuit (at its fixed slots): a served window is its class's one Circuit of the
 catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row, a registered read
 of the weights or a slot's ingress row, and nothing free. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5
 positions a Program), at a grain small enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks
@@ -93,7 +93,7 @@ def _source(circuit, tid: str, port: str, unit: int, row: int = 0) -> tuple[str,
 
 
 def test_windows_of_a_class_are_one_circuit_whatever_their_request_count(window):
-    """The privacy property (ASK-122: only the slot count is public): WINDOW and OTHER differ in their requests' arrival
+    """The privacy property (only the slot count is public): WINDOW and OTHER differ in their requests' arrival
     steps, prompt lengths (4 and 3 against 3 and 2) and output lengths, and a window of one request in its request count too,
     and their circuits' descriptions (units, wires, cuts, registered reads, ingress), blocks, templates and external ports are
     byte for byte the class's circuit: the blocks' slots are the class's 2 whatever the window's requests."""
@@ -123,7 +123,7 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
 
 
 def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):
-    """The class of record (`CLASS_OF_RECORD`, network-accounting's pick for ASK-122: EVERY 16, 4 slots a boundary, 8 a
+    """The class of record (`CLASS_OF_RECORD`: EVERY 16, 4 slots a boundary, 8 a
     32-bucket window) is 8 slots of 1,024 prompt ids and 64 outputs, slot 4b + j boundary b's lane j at bucket 16b. A
     3-request and an 8-request window are each taken to the one class circuit, every slot's Program, with the same
     arguments (its lowering is `test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_nodes`')."""
