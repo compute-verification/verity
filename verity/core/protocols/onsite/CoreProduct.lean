@@ -1,8 +1,8 @@
 /-
-The verifier party of a deployment (`verity deploy`): `Core.Composition.product` over exactly the components its
-deployment file lists, by their ids. Onsite is its five-component case, so listing every one of onsite's components is
-onsite's own protocol (`verity/onsite/v0`); any other list is `product "verity/product/v0"` over the listed components,
-in the order of their ids. A list naming a component onsite doesn't have, naming one twice, or naming none is refused by
+The verifier's product for a configuration (`verity run CONFIG`): `Core.Composition.product` over exactly the components
+the configuration's `protocols` lists, by their ids. Onsite is its five-component case, so listing every one of
+onsite's components is onsite's own protocol (`verity/onsite/v0`); any other list is `product "verity/product/v0"` over
+the listed components, in the order of their ids. A list naming a component onsite doesn't have, naming one twice, or naming none is refused by
 name, so a product never runs over a component it can't check, and an unlisted component is never read as accepted.
 
     product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the listed ids, comma-separated
@@ -18,16 +18,16 @@ open Composition
 /-- A proper subset's product id: the parameters and the binding name its components. -/
 def id : String := "verity/product/v0"
 
-/-- Every component a deployment may list: onsite's, in the order of their ids. -/
+/-- Every component a configuration may list: onsite's, in the order of their ids. -/
 def registry : List Protocol := Core.Onsite.components
 
 /-- The product over exactly the components `ids` names, or why the list is refused. -/
 def protocolOf (ids : List String) : Except String Protocol :=
   let known := registry.map (·.id)
   match ids.find? (fun i => !known.contains i) with
-  | some i => .error s!"{i} is not a component a deployment may list (onsite's are {", ".intercalate known})"
+  | some i => .error s!"{i} is not a component a configuration may list (onsite's are {", ".intercalate known})"
   | none =>
-    if ids.isEmpty then .error "the deployment lists no component"
+    if ids.isEmpty then .error "the configuration lists no component"
     else match ids.find? (fun i => ids.count i > 1) with
       | some i => .error s!"{i} is listed twice"
       | none =>

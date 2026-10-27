@@ -53,7 +53,7 @@ name = "CoreOnsite"
 name = "onsite"
 root = "OnsiteMain"
 
-# A deployment's verifier party: `Core.Composition.product` over exactly the components its file lists (onsite for all
+# A configuration's product: `Core.Composition.product` over exactly the components its `protocols` lists (onsite for all
 # five), `product IDS id | check | serve` (CoreProduct.lean).
 [[lean_lib]]
 name = "CoreProduct"
