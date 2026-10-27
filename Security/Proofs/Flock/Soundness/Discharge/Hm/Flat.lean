@@ -196,7 +196,7 @@ theorem not_unitIn_of_rowNet {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.
 past its inputs. -/
 theorem not_unitIn_zero (s₀ : ℕ) : ¬ UnitIn st.c (st.c.unitRange.slot s₀ + st.c.unit.useful) := by
   rintro ⟨s, off, ⟨-, hoff, hx⟩, hlt⟩
-  have hb := built_spec L.unit_built
+  have hb := built_spec (FlockSoundness.unit_built F.parse F.check)
   have hz : st.c.unit.useful < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact F.check.unit_zero
   have := (slot_add_inj (r := st.c.unitRange) hz hoff hx).2
   have h1 := hb.2.1
