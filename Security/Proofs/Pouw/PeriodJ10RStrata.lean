@@ -6,8 +6,8 @@ import Proofs.Pouw.PeriodJ10R
 
 At each stratum `s ∈ S`, what `Proofs.Pouw.PeriodJ10R` applies to its one stratum:
 `Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
-(`pathsAt`). Its joint soundness comes from `StrataDrawIsCoin`'s half that puts stratum `s`'s drawn units among the
-units `Credit.window`'s draw demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
+(`pathsAt`). Its joint soundness comes from `StrataDrawIsCoin`'s half that puts stratum `s`'s drawn proof blocks among the
+proof blocks `Credit.window`'s draw demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
 salt being its live coin, read on the view (`saltAt`). Its accepted prefix and live words are the period's
 (`prefixLen_eq`, `creditedLive_eq`, `stratumLive_symm`), and the view is a relabelling of the period's coins, so the
 bound holds on the period's coins (`stratum_bound`). An accepted period whose fixed words, summed over `S`, fall short of
@@ -56,8 +56,8 @@ theorem saltAt {C : Type} {r nB mB n : ℕ} (h : r = 1) (hr : 0 < r) (σ : Fin n
   rw [hs, coinAt_view h σ s y w, coinAt_atStratum_fst h σ s _ hr Nat.one_pos]
 
 /-- **Joint soundness at stratum `s`'s run**: a window whose drawn tile of stratum `s` has an opening failing its
-relation is one `Credit.window` credits with that tile's window unit among the units its draw demanded, since
-`StrataDrawIsCoin` puts every stratum's drawn units there, which stratum `s`'s `TileServiceSound` bounds. -/
+relation is one `Credit.window` credits with that tile's window proof block among the proof blocks its draw demanded, since
+`StrataDrawIsCoin` puts every stratum's drawn proof blocks there, which stratum `s`'s `TileServiceSound` bounds. -/
 theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ}
     (hM : Cd.rounds = m) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (ws : CreditWindows (StrataCoin C m σ) n)

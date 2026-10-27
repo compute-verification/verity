@@ -15,11 +15,11 @@ draw (`evOf`). Given three facts of those inputs, the witness meets every premis
 
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`);
-* the units `Credit.descriptorDrawn` draws are the union over `S` of the strata's coordinates of the block's draw
+* the proof blocks `Credit.descriptorDrawn` draws are the union over `S` of the strata's coordinates of the block's draw
   (`hdraw`), `StrataDrawIsCoin`'s body on every window.
 
 At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's draw as `Ξ`:
-`N_s` one-word units, one live round, `ρ = 1`, the twin's lucks, `δ_bind = δ_ks = 0`, `N_s` words fixed and folded a
+`N_s` one-word proof blocks, one live round, `ρ = 1`, the twin's lucks, `δ_bind = δ_ks = 0`, `N_s` words fixed and folded a
 window. The accepted prefix is all `n` windows and stratum `s`'s live words are `N_s·n` (`stratumLive_all`), so
 `strata_credit` is the statement's bound at `∑_{s ∈ S} N_s·n` live words.
 
