@@ -20,13 +20,14 @@ drawn network certifier session, its clock certificate signing a sync of Σ_sync
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified, and the scan's
-registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw at the
+registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of an output port's
+entry in an audit's registration (`_prog_tied`), answered by one-stage with a stratified or subset draw at the
 period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths in the Boolean
 profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in the checker form is a bad
 scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks (`scan_negatives`). Beside them,
-the compute audits, each registered over its Program, a population of one or two stand-in templates whose units commit
-from 8 to 320 bits (`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on
-wrong units.
+the compute audits (in the rows form at least one, whose registrations' `roots` hold the scans' `prog`), each
+registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
+(`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units.
 `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and
 `cases(seed, form)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
@@ -129,8 +130,8 @@ class Params:
 
 @dataclasses.dataclass(frozen=True)
 class Scan:
-    """`Scan`: the scan's monitoring period (T), its free inputs (T ingress instances' `prog`), and the bits one ingress
-    and one egress instance commit."""
+    """`Scan`: the scan's monitoring period (T), its free inputs (none: its `prog` is a compute audit's output,
+    `_prog_tied`), and the bits one ingress and one egress instance commit."""
     steps: int
     free: int
     ingress: int
@@ -433,7 +434,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
-    return Scan(T, T * bits_of(bf["params"][1][1]), bits_of(bf["ret_type"]), bits_of(be["ret_type"]))
+    return Scan(T, 0, bits_of(bf["ret_type"]), bits_of(be["ret_type"]))
 
 
 def params(j) -> Params:
@@ -634,12 +635,39 @@ def _holds(reg: Registration, doc: dict) -> bool:
                for e in entries)
 
 
+#: the scan's Programs' row in its registration: its `roots` entry's port, or its `registered` entry's value
+PROG = "scan/prog"
+
+
+def output_port(port) -> bool:
+    """`outputPort`: a unit's committed output port, ``<unit>/o<j>`` with j ≥ 1 (ASCII digits, no leading zero)."""
+    if not isinstance(port, str) or len(parts := port.split("/")) < 2:
+        return False
+    j = parts[-1][1:]
+    return parts[-1][:1] == "o" and j != "" and all("0" <= c <= "9" for c in j) and j[0] != "0"
+
+
+def _prog_tied(audits: list[Registration], reg: Registration) -> bool:
+    """`progTied`: the scan's registration has a `scan/prog` entry (`PROG`) whose root and domain are an output port's
+    entry's (`output_port`) in the `roots` of an audit's registration."""
+    def entries(j: dict, k: str) -> list[dict]:
+        v = j.get(k)
+        return [e for e in v if isinstance(e, dict)] if isinstance(v, list) else []
+
+    prog = [e for e in entries(reg.record, "roots") if e.get("port") == PROG] + \
+        [e for e in entries(reg.record, "registered") if e.get("value") == PROG]
+    return any(isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)
+               and any(output_port(o.get("port")) and o.get("root") == e["root"] and o.get("domain") == e["domain"]
+                       for a in audits for o in entries(a.record, "roots"))
+               for e in prog)
+
+
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
     """The rows form's certified records of a link-window (`warden_serve.CERTIFIED`): requests, responses, fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
-def _rows_window_check(p: Params, w: int, reg: Registration, x: Window) -> Facts:
+def _rows_window_check(p: Params, audits: list[Registration], w: int, reg: Registration, x: Window) -> Facts:
     what = f"window {w}"
     if x.registrations is None:
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
@@ -654,6 +682,8 @@ def _rows_window_check(p: Params, w: int, reg: Registration, x: Window) -> Facts
         _rows_check(p, w, d, doc)
     if not all(_holds(reg, doc) for doc in x.registrations):
         raise Finding(REJECT, f"{what}: another window's answer")
+    if not _prog_tied(audits, reg):
+        raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
     f = _facts(what, prof, pub)
     if f.units != 2 * p.schedule.window:
@@ -748,7 +778,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
                 _window_check(p, clear, [y.clock.digest for y in windows[:i] if y.clock is not None], p.first + i,
                               reg, x)
             else:
-                scans.append(_rows_window_check(p, p.first + i, reg, x))
+                scans.append(_rows_window_check(p, c.audits, p.first + i, reg, x))
         except Finding as f:
             findings.append(f)
     if any(f.delta != scans[0].delta for f in scans):
@@ -811,7 +841,7 @@ EXPECT = {
     "rows-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
-    "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
+    "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
@@ -1000,10 +1030,56 @@ def audit_descriptor(units: tuple[tuple[int, int], ...]) -> str:
     return D.canonical(codec.encode_program(program))
 
 
+#: How `rows-prog-untied` breaks its link-window's tie of the scan's `prog` to an audit's output: the scan's entry at
+#: another root or domain, the audit's entry at a port that is no unit's output, no `scan/prog` entry or one under
+#: another name, the output's entry in the scan's own registration and in no audit's, or neither entry's root a string
+UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
+
+
+def _present(e: dict) -> dict:
+    return {k: v for k, v in e.items() if v is not None}
+
+
+def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None) -> list[dict]:
+    """The scan's registration's entries for its `prog` (`PROG`, named by port in `roots` and by value in
+    `registered`) at its tie's root and domain, broken as `untie` says."""
+    key = "port" if where == "roots" else "value"
+    e = {"domain": tie["domain"], key: PROG, "root": tie["root"]}
+    if untie == "missing":
+        return []
+    if untie in ("root", "domain"):
+        e[untie] = rp.randbytes(64).hex()
+    elif untie == "renamed":
+        other = "value" if key == "port" else "port"
+        e = rp.choice([{other if k == key else k: v for k, v in e.items()},
+                       e | {key: rp.choice(["scan/prog2", "scan/state", "Scan/prog", "prog", "scan/prog/"])}])
+    scan = [{"domain": tie["domain"], key: tie["port"], "root": tie["root"]}] if untie == "scan" else []
+    return [_present(x) for x in [e, *scan]]
+
+
+def _output_entries(rp: random.Random, i: int, ties: dict, T: int, aimed: int, untie: str | None) -> list[dict]:
+    """Audit `i`'s registration's `roots`: for each link-window's `prog` tied to it, the output port its tie names at
+    the tie's root and domain (`T` leaves, a bucket's row each), and an input port's entry at another root; at
+    link-window `aimed`, broken as `untie` says."""
+    out = []
+    for w, x in ties.items():
+        if x["audit"] != i or (w == aimed and untie == "scan"):
+            continue
+        port = rp.choice([f"block-{w}/o0", f"block-{w}/prog", f"block-{w}/o01", "o1", f"block-{w}/O1", f"block-{w}/o",
+                          f"block-{w}/o1x", f"block-{w}/o\u0663", f"block-{w}/o\u00b9", 1]) \
+            if w == aimed and untie == "port" else x["port"]
+        out.append(_present({"domain": x["domain"], "leaves": T, "port": port, "root": x["root"]}))
+    out.append({"domain": rp.randbytes(64).hex(), "leaves": T, "port": f"block-{rp.randrange(4)}/prog",
+                "root": rp.randbytes(64).hex()})
+    rp.shuffle(out)
+    return out
+
+
 def build(m: str, seed: int, small: bool = False) -> dict:
     """A period's case with the change `m`, in the form `m` names (`form_of`), every choice drawn from `seed`; `small`:
     the toy key, as few link-windows and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
+    rp = random.Random(f"network-period prog {m} {seed}")
     rows = form_of(m) == "rows"
     m = m.removeprefix("rows-")
     ki = 0 if small else r.randrange(len(KEYS))
@@ -1016,6 +1092,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
+    n_audits = max(n_audits, 1) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
         sched = bound = _small_schedule(r, small)
@@ -1028,6 +1105,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
     t = r.randrange(1, n_windows) if m == "clock-reused" else r.randrange(n_windows)
     a = r.randrange(max(n_audits, 1))
+    ties = {w: {"audit": rp.randrange(n_audits), "port": f"block-{w}/o{rp.choice([1, 1, 2, 10])}",
+                "root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()}
+            for w in range(first, first + n_windows)} if rows else {}
+    untie = rp.choice(UNTIES) if m == "prog-untied" else None
+    if untie == "untyped":
+        ties[first + t]["root"] = rp.choice([None, 7, False])
     signed = iter(range(1 << 30))
 
     def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key, s: bytes = session) -> Certificate:
@@ -1129,9 +1212,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         k = sum(s["k"] for s in strata) if strata else r.randint(1, units)
         law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
             {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
-        rec = {"format": r.choice(FORMATS), "law": law,
-               "partition": f"{link}/scan/{w}", "population": units, "program": program, "protocol": ONE_STAGE,
-               r.choice(["roots", "registered"]): entries, "window": {"kind": "stand-in", "window": w}}
+        fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
+        entries += _prog_entries(rp, ties[w], where, untie if aimed else None)
+        rp.shuffle(entries)
+        rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
+               "protocol": ONE_STAGE, where: entries, "window": {"kind": "stand-in", "window": w}}
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         digest = registration_digest(rec)
@@ -1244,6 +1329,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             k = sum(s["k"] for s in strata)
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
+        if rows:
+            rec["roots"] = _output_entries(rp, i, ties, sched.window, first + t, untie)
         if i == a and m == "audit-program":
             if r.random() < 0.5:
                 rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])

@@ -105,13 +105,15 @@ ROWS_REFUSALS = {
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-delta": ("is not the period's", "is not the period's"),
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
+    "rows-prog-untied": ("is no compute audit's output",) * 2,
 }
 
 
 def test_the_rows_form_refuses_what_it_must(server):
     """A link-window missing one of its records' certificates, a registration not under the deployment key, the scan's
-    answer for another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, and a
-    scan answered over other than its 2T units: Lean and the mirror each refuse every one at that check."""
+    answer for another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan
+    answered over other than its 2T units, and a scan whose `prog` is no compute audit's output: Lean and the mirror
+    each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -120,19 +122,51 @@ def test_the_rows_form_refuses_what_it_must(server):
             assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
 
 
+def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
+    """The scan reads its Programs' row (`prog`) from a compute audit's output, so the rows form refuses, in Lean and in
+    the mirror and by name, each way a link-window's tie can fail (`PC.UNTIES`): its `scan/prog` entry at another root
+    or domain than the audit's output port's, the audit's entry at a port that is no unit's output (`o0`, an input,
+    `o01`, a non-ASCII digit, no unit), no `scan/prog` entry or one under another name, the output's entry in the scan's
+    own registration and in no audit's, and neither root a string; and a mirror that skips the tie accepts what Lean
+    refuses."""
+    untie = PC.UNTIES
+    for u in untie:
+        monkeypatch.setattr(PC, "UNTIES", (u,))
+        for n in range(3):
+            case = build("rows-prog-untied", n, small=n % 2 == 0)
+            assert "is no compute audit's output" in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and "is no compute audit's output" in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNTIES", untie)
+    monkeypatch.setattr(PC, "_prog_tied", lambda audits, reg: True)
+    for n in range(2):
+        with pytest.raises(D.Mismatch) as x:
+            D.replay(PORT, build("rows-prog-untied", n, small=True), server)
+        assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+
+
+def test_an_output_port_is_a_units_past_o0():
+    """`output_port` is Lean's `outputPort` on its `#guard`s: a unit's port `o<j>`, j ≥ 1 in ASCII digits without a
+    leading zero."""
+    assert all(map(PC.output_port, ["block-3/o1", "a/b/o10", "/o2"]))
+    assert not any(map(PC.output_port, ["o1", "u/o0", "u/o01", "u/o", "u/O1", "u/o1x", "u/o\u0663", "u/o\u00b9",
+                                        "u/prog", "", 1, None]))
+
+
 def test_the_scan_is_read_off_its_program(server):
-    """The rows form's scan terms are its registered Program's, in the generator form: T, T ingress instances' `prog`
-    bits free, and an ingress and an egress instance's committed bits (their returns: a u16 with the state and view, or
-    with the row); and Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one
+    """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
+    compute audit's output), and an ingress and an egress instance's committed bits (their returns: a u16 with the
+    state and view, or with the row); and Lean and the mirror refuse, as parameters, a scan that isn't a descriptor,
+    another Program's, one
     in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
     and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
     check of what `NetTiming.Layout.Fits` asks."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
-        state, prog, view, _words = PC._scan_widths(desc)
+        state, _prog, view, _words = PC._scan_widths(desc)
         T, row = p.schedule.window, WR.row_bytes(p.schedule)
-        assert p.scan == PC.Scan(T, T * prog, 16 + state + view, 16 + 8 * row), (n, p.scan)
+        assert p.scan == PC.Scan(T, 0, 16 + state + view, 16 + 8 * row), (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
             assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))

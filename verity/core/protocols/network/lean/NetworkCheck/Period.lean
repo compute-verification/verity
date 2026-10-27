@@ -116,8 +116,11 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
   session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
-  for another window's rows is refused); and the answer is one-stage's for that registration's digest, accepted with
-  one level of the scan's 2T units drawn `subset:k` or stratified, and its `bound`;
+  for another window's rows is refused); its Programs' row is a compute audit's output (`progTied`): its `scan/prog`
+  entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) in the `roots` of an audit's
+  registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's for that
+  registration's digest, accepted with one level of the scan's 2T units drawn `subset:k` or stratified, and its
+  `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
@@ -151,8 +154,8 @@ the network certifier's rows; the compute audits read none, so they are in no te
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
   failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
-* each scan's terms, from the scan's Program: `free` T times the ingress templates' `prog` bits (the scan registers
-  the rows, and bucket 0 starts from the empty state, constants of `IngressScanFirst`), `steps` T, `faulty_bits`
+* each scan's terms, from the scan's Program: `free` 0 (the scan registers the rows, its `prog` is a compute audit's
+  output, and bucket 0 starts from the empty state, constants of `IngressScanFirst`), `steps` T, `faulty_bits`
   `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
   egress instance's (its u16 and row): each instance's committed values (`faultyBits`), the outputs it computes and
   other units or the client read. `b` is its answer's `bound` (over its draw's strata, `countBound`), 0 when every
@@ -223,9 +226,9 @@ structure Schedule where
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
 
-/-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its free inputs (`T`
-ingress instances' `prog`), and the bits one ingress and one egress instance commit (its return: the outputs other
-units read or the client receives, and its verdict). -/
+/-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its free inputs (none:
+it registers the rows, and its `prog` is a compute audit's output, `progTied`), and the bits one ingress and one egress
+instance commit (its return: the outputs other units read or the client receives, and its verdict). -/
 structure Scan where
   steps : Nat
   free : Nat
@@ -519,7 +522,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
-  pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
+  pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
 def paramsOf (j : Json) : V Params := do
   match j with
@@ -729,6 +732,30 @@ def holds (reg : Registration) (r : Rows) : Bool :=
   (entries "roots" ++ entries "registered").any fun e =>
     e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
 
+/-- The scan's Programs' row in its registration: the entry of its `roots` whose port, or of its `registered` whose
+value, is `scan/prog`. -/
+def progName : String := "scan/prog"
+
+/-- A unit's committed output port, `<unit>/o<j>` with j ≥ 1: an output a unit computes past its public word `o0`. -/
+def outputPort (port : String) : Bool :=
+  match (port.splitOn "/").reverse with
+  | s :: _ :: _ => let j := s.drop 1; s.front == 'o' && !j.isEmpty && j.all Char.isDigit && j.front != '0'
+  | _ => false
+
+/-- The scan's Programs' row is a compute audit's output: the scan's registration has a `scan/prog` entry (`progName`),
+and its root and domain are those of an output port's entry (`outputPort`) in the `roots` of an audit's registration,
+so the rows its ingress units read as `prog` are the ones that audit's units computed. -/
+def progTied (audits : Array Registration) (reg : Registration) : Bool :=
+  let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
+  let named := fun (k n : String) (e : Json) => e.getObjValD k == .str n
+  let prog := (entries reg.record "roots").filter (named "port" progName) ++
+    (entries reg.record "registered").filter (named "value" progName)
+  prog.any fun e => match e.getObjValD "root", e.getObjValD "domain" with
+    | .str root, .str dom => audits.any fun a => (entries a.record "roots").any fun o =>
+        (match o.getObjValD "port" with | .str q => outputPort q | _ => false) && named "root" root o &&
+          named "domain" dom o
+    | _, _ => false
+
 /-- The certified records of the rows form's link-window: the requests' (ingress), responses' (egress) and fails'. -/
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
@@ -747,8 +774,8 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
 facts. -/
-def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg : Registration) (x : Window) :
-    Found Facts := do
+def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Registration) (w : Nat)
+    (reg : Registration) (x : Window) : Found Facts := do
   let what := s!"window {w}"
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
   unless reg.record.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
@@ -758,6 +785,9 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg 
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
   unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"
+  unless progTied audits reg do
+    refuse s!"{what}: the scan's prog is no compute audit's output: its {progName} entry's root and domain are no \
+      output port's of an audit's registration"
   let (prof, pub) ← answered what reg x.answer
   let f ← factsOf what prof pub
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
@@ -878,7 +908,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         let clear := clearClocks ss
         pairs.map fun ((reg, x), i) => (fun () => none) <$>
           windowCheck p clear ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (p.first + i) reg x
-      | .rows s sd _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd (p.first + i) reg x
+      | .rows s sd _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
     let scans := ws.filterMap (·.toOption.join)
     let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun f0 =>
       (scans.find? (·.delta != f0.delta)).map fun f =>
@@ -957,5 +987,9 @@ def protocol : Core.Protocol where
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
 #guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0⟩ #[⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩] #[] 1 2
   ).eps.toString == "2/15"
+-- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
+#guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
+#guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
+  outputPort "u/o1x" || outputPort "u/o٣" || outputPort "u/prog" || outputPort "")
 
 end NetworkCheck.Period
