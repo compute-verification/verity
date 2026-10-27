@@ -23,7 +23,8 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   `hu_levels_async` copies each call's tree to page-locked memory behind its commit (no `v31_root` and `v31_levels`
   wait), for the roots and the openings after the check coin.
 - `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
-  with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps).
+  with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps), with `NCU=1` each kernel's
+  tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `terms.py`: where θ x wall goes.
 - `v31.cu`, `v31.py` and `v31lib.py` are vendored unmodified from kernels' sm_90a port of compute-research's V31-GPU
   (branch `cursor/kernels-accel-sm90-7f94` at c8be088fde, its accel_v31 directory, which holds V31-GPU's adbe21c921: leaf
   pos of a Prover's c-th call salted prf_salt(Ks, c leaves + pos)), sha256 430700478f77..., c5d1cbc35502... and

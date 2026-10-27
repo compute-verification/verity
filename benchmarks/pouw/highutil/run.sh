@@ -17,7 +17,8 @@
 # where the rest of θ x wall goes); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
 # and L (default 512, 1024 and 16384: S = 1 at every layer; LP_MAX=512 runs down as four K-slices, 1024 as two): prep's; NSYS=1: after the periods, Nsight Systems over one plain and one protocol period (their
-# kernels' share of the GPU's time); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
+# kernels' share of the GPU's time); NCU=1: Nsight Compute over two steps of each arm (pipes.py: each kernel's tensor-pipe
+# active share and INT8 MACs, kernels serialized; pipes-{plain,proto}.json); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
 # --with numpy python) for the prep, TORCH_PY for the rest. v31's V31_* knobs come from the environment when the Provers are
 # made; V31_LTW defaults to 1 (a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM, the same leaf bytes).
 # TEXT: wikitext-2-raw-v1's test split for capture.py (default the datasets cache's arrow file, else its parquet at the same
@@ -51,7 +52,7 @@ nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA
   -Xcompiler -fPIC -shared -o "$LIB" $D/hu_lib.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
-sha256sum $D/v31.cu $D/v31.py $D/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/terms.py > "$O/sources.sha256"
+sha256sum $D/v31.cu $D/v31.py $D/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/terms.py $D/pipes.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
 uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --lp-max "$LP_MAX" --L "$L" \
   > "$O/prep.log" 2>&1
@@ -76,7 +77,7 @@ if [ "$COINS" != local ]; then
   GATE=(--peer "${PEER:?}" --challenger-key "${CHALLENGER_KEY:?}" --gate-key "${GATE_KEY:?}")
 fi
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
-export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0}
+export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0} NCU=${NCU:-0}
 export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARDA[*]}"
 [ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
@@ -115,6 +116,20 @@ $LEASE bash -c '
       $PY $D/terms.py "$O/summary.json" "$O/timeline-proto.json" > "$O/terms.json" 2>> "$O/nsys.log"
       echo "terms rc $?" >> "$O/rc.txt"
     fi
+  fi
+  if [ "$NCU" = 1 ]; then
+    # the GEMM MACs over the profiled steps: 2 in the plain warm-up block, 2 in the period
+    macs=$($PY -c "import json, sys; p = json.load(open(sys.argv[1])); print(4 * sum(p[\"m\"] * n * k for _, n, k in p[\"layers\"]))" "$W/cfg/prep.json")
+    for arm in plain proto; do
+      ncu --clock-control none --csv --page raw --print-units base --log-file "$O/ncu-$arm.csv" -c 600 \
+        --metrics gpu__time_duration.sum,sm__ops_path_tensor_op_imma_src_int8.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__cycles_elapsed.avg.per_second \
+        --kernel-name "regex:^(Kernel2|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
+        $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins local --main "$MAIN" --blocks 1 --steps 2 --q 16 --periods 1 \
+        --negative "" --arms $arm >> "$O/ncu.log" 2>&1
+      echo "ncu $arm rc $?" >> "$O/rc.txt"
+      $PY $D/pipes.py "$O/ncu-$arm.csv" --macs "$macs" $CARD_ARGS > "$O/pipes-$arm.json" 2>> "$O/ncu.log"
+      echo "pipes $arm rc $?" >> "$O/rc.txt"
+    done
   fi
   kill $smi 2>/dev/null
   exit $r
