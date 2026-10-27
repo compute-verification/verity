@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import pytest
 
-torch = pytest.importorskip("torch")
+from tests.check.opened import committer
+from verity_vllm.commit import scheme, step_rows
+from verity_vllm.commit.committer import weights_rows as WR
+from verity_vllm.pipeline import cpu_replay as CPU
 
-from tests.check.opened import committer  # noqa: E402
-from verity_vllm.commit import scheme, step_rows  # noqa: E402
-from verity_vllm.commit.committer import weights_rows as WR  # noqa: E402
-from verity_vllm.pipeline import cpu_replay as CPU  # noqa: E402
+torch = pytest.importorskip("torch")
 
 
 class _Model(torch.nn.Module):
