@@ -551,7 +551,7 @@ def test_a_class_cell_credits_each_listed_key_count_at_its_own_throughput(store:
 
 
 def test_key_counts_proved_on_synthetic_inputs_count_with_a_provenance_footnote(store: LocalStore) -> None:
-    """red-team-flock-3's CP6 (coordinator ruling 2026-09-26, open to Daniel): a class cell on the spine generator's synthetic
+    """red-team-flock-3's CP6: a class cell on the spine generator's synthetic
     set covers its T like a captured one, and the covered entry says which T are synthetic."""
     syn = l40s_cell(store, ATT, klass=(1, 128), key_counts={1: 64, 2: 64, 3: 64}, source="synthetic",
                     per_key_count={1: (64, 0.5), 2: (64, 0.5), 3: (64, 0.6)})
@@ -574,7 +574,7 @@ def test_a_broken_class_cell_is_rejected_not_guessed(store: LocalStore) -> None:
 
 
 def test_the_strict_verifier_preview_leaves_every_verifier_evaluated_template_uncovered(store: LocalStore) -> None:
-    """Daniel's standing rule (2026-09-26), as a preview: the verifier evaluates no part of the computation, so attention (the
+    """The standing rule, as a preview: the verifier evaluates no part of the computation, so attention (the
     softmax), the RMSNorms (the row tail) and sampling are not covered; RoPE, which leaves nothing to the verifier, still is."""
     from verity.ml.circuits.targets.target import FIRST
 
@@ -588,7 +588,7 @@ def test_the_strict_verifier_preview_leaves_every_verifier_evaluated_template_un
         rec = next(r for r in H.headline(V.build(store, rules)) if r["workload"] == ROW101["id"])
         return next(x for x in rec["backends"] if x["backend"] == "C-interactive")
 
-    loose = {x["subcircuit"] for x in row(SPEC)["covered"]}            # the RMSNorm row tail is never counted (census, 2026-09-26)
+    loose = {x["subcircuit"] for x in row(SPEC)["covered"]}            # the RMSNorm row tail is never counted (census)
     assert {ATT, "rope-head/d64/neox-bf16"} <= loose and rms not in loose
     assert V.SPEC.headline_strict_verifier                                # the published rules are the strict reading
     strict = row(dataclasses.replace(SPEC, headline_strict_verifier=True, headline_count_omitted=True))

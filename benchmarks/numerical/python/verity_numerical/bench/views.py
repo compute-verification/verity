@@ -1,4 +1,4 @@
-"""The tables of the approved spec (``kb/TABLES.md``, approved 2026-09-25): a labelled PREVIEW beside the frozen canonical tables.
+"""The tables of the approved spec (``kb/TABLES.md``): a labelled PREVIEW beside the frozen canonical tables.
 
     python -m verity_numerical.bench.views --root <store root> [--format md|json|entities] [--rules spec|unfiltered|legacy]
                                            [--security-bits N] [--include-archived]
@@ -135,7 +135,7 @@ class Family:
     development: str = "active"
 
 
-#: Backend families kept in the repo and the tables but frozen (Daniel, 2026-09-26): tests keep passing and cells stay; no new
+#: Backend families kept in the repo and the tables but frozen: tests keep passing and cells stay; no new
 #: features, no cells for new subcircuits, re-run only when a shared change would break their tests.  B-Ligero stays the ZK comparison.
 FROZEN = ("A-GKR", "B-Ligero", "SP1")
 NOT_ACTIVE = "not actively developed"
@@ -148,7 +148,7 @@ FAMILY_NOTES = {
     "Flock": "pure Flock only: the relation and its row hashes in one binary-field circuit; route (a) is in the A-GKR column",
 }
 
-#: Flock is its own backend family (Daniel, 2026-09-25); the frozen tables have no Flock column, so its family is declared here.  The
+#: Flock is its own backend family; the frozen tables have no Flock column, so its family is declared here.  The
 #: v1 adapter recognises it by ``software.backend.name`` starting ``flock``.  Declared class NON_ZK_PROOF: Flock is not zero-knowledge
 #: yet (the Flock lane may change it).
 FLOCK = T.Candidate(
@@ -425,14 +425,14 @@ FLOCK_CIRCUIT_CONFIG = dataclasses.replace(
     interaction="live verifier: coins for every squeeze of both reps; prover end-to-end time (witness, proof, live rounds, upload), "
                 "verification separate")
 CIRCUIT_FLAT, CIRCUIT_TYPED = "verity/flock-circuit", "verity/flock-circuit/types"
-#: red-team-flock-3's C2 for the typed statement (Q4): #277 and #268 on main, and the typed path calling #268's checks.  Until it
-#: holds, no typed cell or row says the circuit computes its type.
+#: red-team-flock-3's C2 for the typed statement (Q4): the typed circuit's checks on main, and the typed path calling them.
+#: Until it holds, no typed cell or row says the circuit computes its type.
 TYPED_C2 = False
 #: Why a typed cell is not a Table 2 cell (nor in the workload headline): until C2 holds and Table 2 gives the typed statement
 #: lines of its own, a typed cell would compete with a flat one for the same line.
 TYPED_NOT_IN_TABLE2 = (f"{CIRCUIT_TYPED}: not a Table 2 cell until C2 holds (#277 and #268 on main, the typed path calling #268's "
                        "checks) and Table 2 shows typed and flat statements on separate lines")
-#: M0's typed statement (``verity/flock-circuit/types``, PR #281): the same circuit route with typed ports.  Its own row and
+#: M0's typed statement (``verity/flock-circuit/types``): the same circuit route with typed ports.  Its own row and
 #: backend, so a typed cell is never merged with a flat one (red-team-flock-3's Q4).
 FLOCK_CIRCUIT_TYPED_CONFIG = dataclasses.replace(
     FLOCK_CIRCUIT_CONFIG, id="C-Flock, typed circuit (verity/flock-circuit/types), SHA-512 in-circuit commitments",
@@ -440,9 +440,10 @@ FLOCK_CIRCUIT_TYPED_CONFIG = dataclasses.replace(
        + ("; the circuit computes its type (#268's checks)" if TYPED_C2 else ""),
     pin=f"{CIRCUIT_TYPED} pinned circuit file (circuit_format flock-circuit/types, PR #281); compared with the flat statement per "
         "instance only")
-#: M0's hidden-output statements (the Lean verifier's PROTOCOL.md §16.13, PR #757): the same names, every output port an hm96 row
-#: hashed in the circuit, the identity's ``outputs`` saying so.  Before #757 the names meant the public-output forms (``@e51e2b86``,
-#: ``types@210d32e1``), so a result is read by its identity, never by its name, and hidden and public results never share a cell.
+#: M0's hidden-output statements (the Lean verifier's PROTOCOL.md §16.13): the same names, every output port an hm96 row
+#: hashed in the circuit, the identity's ``outputs`` saying so.  Before hidden outputs the names meant the public-output forms
+#: (``@e51e2b86``, ``types@210d32e1``), so a result is read by its identity, never by its name, and hidden and public results never
+#: share a cell.
 _HIDDEN_PORTS = ("per instance: one query row (attention: one query over T keys) or one output coordinate (GEMM); x, W and y "
                  "committed, y as hm96-sha512 rows hashed in the circuit (the public file holds no output word); y equal to the IR "
                  "reference on every proved instance")
@@ -499,7 +500,8 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
 
 def circuit_facts(meta: Mapping[str, Any]) -> dict[str, Any] | None:
     """A circuit-statement result's AND count, its convention and the verifier that accepted it (red-team-flock-3's Q4); ``None``
-    for any other result.  A flat result recorded before #281 has no ``ands_counted``: its count is the tensor-core units' only."""
+    for any other result.  A flat result recorded before the tail was counted has no ``ands_counted``: its count is the
+    tensor-core units' only."""
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
     if fp.get("statement") not in (CIRCUIT_FLAT, CIRCUIT_TYPED):
         return None
@@ -550,7 +552,7 @@ class Rules:
     legacy: bool = False
     include_archived: bool = False
     interaction_validated: bool = True
-    #: previews of two pending acceptance decisions (Daniel), never published: the interaction check one-sided (pass when the
+    #: previews of two pending acceptance decisions, never published: the interaction check one-sided (pass when the
     #: measured wall is at most 1.1 x the model), and non-GEMM N on activations only (per-row weights and tables cached)
     interaction_one_sided: bool = False
     native_cached: bool = False
@@ -558,7 +560,7 @@ class Rules:
     headline_any_hardware: bool = False
     #: a fourth preview: the headline counts a cell whose ``omitted`` label names verifier-evaluated parts (top-p sampling)
     headline_count_omitted: bool = False
-    #: Daniel's standing rule (2026-09-26), published: a cell whose verifier evaluates any part (attention's softmax, the RMSNorms'
+    #: a standing rule, published: a cell whose verifier evaluates any part (attention's softmax, the RMSNorms'
     #: row tail, sampling's keep word and noise: the census's ``verifier_evaluated``) does not cover its subcircuit; overrides
     #: ``headline_count_omitted``
     headline_strict_verifier: bool = False
@@ -587,7 +589,7 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
     return None
 
 
-# --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
+# --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard) ------------------------------------------
 
 #: The reference network the Table 2 cell is evaluated at (``census.REFERENCE_NETWORK``, ``benchmarks/census/networks.json``: same datacenter); the
 #: interaction drill-down adds ``census.SENSITIVITY_NETWORKS``.
@@ -619,8 +621,7 @@ def interaction(meta: Mapping[str, Any], interactive: bool = False) -> dict[str,
     rounds (``rounds_source``): a Fiat–Shamir proof has none (0); an ``interactive`` protocol's file-replayed transcript (every
     B-interactive cell today) pays the protocol's sequential depth, ``"derived: file-verified"``: the per-proof depth
     (``rounds.sequential_depth``, else ``rounds.protocol``) x the proofs that run one after another -- ``N_subbatches``
-    sub-batch proofs, ``software.backend.pipeline`` of them in flight at once, so ceil(N_subbatches / pipeline) waves (root's
-    ruling 2026-09-26)."""
+    sub-batch proofs, ``software.backend.pipeline`` of them in flight at once, so ceil(N_subbatches / pipeline) waves."""
 
     m = T._measurements(meta)
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
@@ -684,7 +685,7 @@ def interaction_problem(ix: Mapping[str, Any], one_sided: bool = False) -> str |
     and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
     and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula evaluated at
     the run's own measured RTT (``net.rtt_ms``) and bandwidth (``net.bandwidth_bps``, else the reference's): the check validates
-    the model against the run itself; the published figure is the formula at the reference profile (root's ruling 2026-09-25)."""
+    the model against the run itself; the published figure is the formula at the reference profile."""
     if not ix["live"]:
         return None
     if ix["rounds"] is None:
@@ -950,8 +951,8 @@ def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
 
     K is the fingerprint's.  The semantics are the ``bench.cell`` stamp's subcircuit, else the result's ``relation``
     (:data:`RELATION_SEMANTICS`), else the target's instruction.  Semantics the census records as one (``stood_for_by``) are
-    one statement: at the target's K the target's own subcircuit, at another K the one that is stood for (root's ruling
-    2026-09-26 02:44Z: real-K H100 BF16 cells use the wgmma subcircuit's id)."""
+    one statement: at the target's K the target's own subcircuit, at another K the one that is stood for (real-K
+    H100 BF16 cells use the wgmma subcircuit's id)."""
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
     extra = target.name not in TARGETS
     home = census.subcircuit_with("gemm-coordinate", K=T.K, semantics=target.instruction) if extra else census.subcircuit_of(target.name)
@@ -1847,7 +1848,7 @@ _MARK_TEXT = {"provisional": "(prov.)", "algebraic": "(alg.)", "under-reverifica
 
 
 #: A live run whose own round trips (rounds x its measured RTT) exceed this share of its measured wall is footnoted: its wall is
-#: the network's, not the prover's (red-team-flock 2026-09-26: the RTX 5090 cells' 3.2 ms separate-verifier RTT).
+#: the network's, not the prover's (as the RTX 5090 cells' 3.2 ms separate-verifier RTT was).
 RTT_DOMINATES = 0.5
 
 
@@ -2222,7 +2223,7 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     return claims
 
 
-#: The families' Glossary names (Daniel, 2026-09-25): a letter, then the family.  Column ids (``FAMILIES``) stay the cell keys
+#: The families' Glossary names: a letter, then the family.  Column ids (``FAMILIES``) stay the cell keys
 #: the parity gate compares with the frozen tables; the markdown prints the names (:func:`column_header`).
 FAMILY_NAMES = {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "Flock": "C-Flock", "SP1": "D-SP1"}
 
@@ -2734,7 +2735,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     from verity_numerical.bench import headline as H  # noqa: PLC0415  (headline reads these views)
 
     workload_headline = None if V.rules.legacy else H.to_json(H.headline(V), {r["artifact"]: r["id"] for r in results})
-    for b in backend_list:                    # Table 1: the operand domains its results cover (Daniel 2026-09-26: total by default)
+    for b in backend_list:                    # Table 1: the operand domains its results cover (total by default)
         b["domains"] = sorted({r["domain"] for r in results if r.get("backend") == b["id"] and r.get("domain")})
     return {
         "schema": ENTITIES_SCHEMA,
@@ -2789,7 +2790,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--preview-any-hardware-headline", action="store_true",
                     help="PREVIEW (pending decision, never published): the workload headline counts cleared cells on any GPU")
     ap.add_argument("--preview-strict-verifier", action="store_true",
-                    help="PREVIEW (Daniel's standing rule, not yet published): a cell whose verifier evaluates any part covers nothing")
+                    help="PREVIEW (a standing rule, not yet published): a cell whose verifier evaluates any part covers nothing")
     ap.add_argument("--preview-count-omitted", action="store_true",
                     help="PREVIEW (pending decision, never published): the headline counts cells whose omitted label names verifier-evaluated parts")
     ap.add_argument("--preview-cached-weights", action="store_true",

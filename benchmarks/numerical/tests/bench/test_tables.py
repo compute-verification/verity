@@ -437,8 +437,8 @@ def hashed(leaf: str | None = "poseidon2", sharing: str | None = "none", authent
 
 
 def test_in_proof_hash_column_is_poseidon2_per_row_without_sharing(store: LocalStore) -> None:
-    """Column ``B-Ligero + in-proof hash`` is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen, 2026-09-24): an
-    Ajtai or BLAKE3 leaf, or a shared tile, is rejected with the reason saying which (05:00Z render: an Ajtai leaf filled the 4090
+    """Column ``B-Ligero + in-proof hash`` is Poseidon2-BabyBear per row, no sharing (decision keep_frozen): an
+    Ajtai or BLAKE3 leaf, or a shared tile, is rejected with the reason saying which (as when an Ajtai leaf once filled the 4090
     cell).  Both fingerprint forms of a Poseidon2 row hash -- ``hash`` only (pre-D0) and ``hash`` + ``leaf`` (D0) -- are accepted."""
 
     old = put(store, hashed(leaf=None, t_total=0.70))
@@ -495,7 +495,7 @@ def test_reject_codes_letter_every_reason(store: LocalStore) -> None:
     assert set(T.REASON_LETTERS) == set("UIPSZKBX")
 
 
-# --- re-packed instances: instance-equiv/v1 (user decision 2026-09-24; campaign morning-tables BRIEF §5) ----------------------------
+# --- re-packed instances: instance-equiv/v1 (campaign morning-tables BRIEF §5) ------------------------------------------------------
 
 
 def repacked(n: int = 0) -> dict[str, Any]:
@@ -840,7 +840,7 @@ def test_footnote_names_the_verifier_and_flags_interactive_transcripts(store: Lo
 
 
 def test_a_rememoried_board_of_the_same_name_is_not_a_cell(store: LocalStore) -> None:
-    """2026-09-22: a RunPod "RTX 4090" reported 48 GiB; the datasheet part has 24 GiB.  Same name, so ``same_sku`` passes; the
+    """A RunPod "RTX 4090" once reported 48 GiB; the datasheet part has 24 GiB.  Same name, so ``same_sku`` passes; the
     memory check rejects it, names both figures, and the reference part (within tolerance) still populates."""
     hw = lambda mem: {"gpu": {"name": A100, "driver": "d", "cuda": "c", "memory_total_bytes": mem}, "cpu": {"model": "AMD EPYC 7763 64-Core Processor", "count": 256}}  # noqa: E731
     bad = put(store, result(t_total=3.0, hardware=hw(2 * 80 * 2**30)))

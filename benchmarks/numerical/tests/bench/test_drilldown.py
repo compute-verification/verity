@@ -1,4 +1,4 @@
-"""Drill-downs D1-D3 (non-canonical; layout fixed 2026-09-24, campaign morning-tables BRIEF §1): the VARIANTS registry recognises
+"""Drill-downs D1-D3 (non-canonical; layout fixed, campaign morning-tables BRIEF §1): the VARIANTS registry recognises
 the real backend names and never two variants at once, D2 takes its ✓ / letter from tables.py's predicate, D3 reads only the cell's
 result envelope -- over an isolated store root."""
 

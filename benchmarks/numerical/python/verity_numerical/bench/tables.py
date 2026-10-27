@@ -136,7 +136,7 @@ SOUNDNESS_LOG2 = -128
 AUTHENTICATION = "excluded"
 #: Table 2 prints one column per candidate per authentication mode that has a valid cell: ``excluded`` (the bare relation) and
 #: ``included-hash`` (the operand rows hashed INSIDE the proof with Poseidon2-BabyBear, the digests bound to the Merkle roots;
-#: lane hash-relation, user decision 2026-09-23 05:39Z: "ZK-friendly hashes as part of the proof").
+#: ZK-friendly hashes as part of the proof).
 AUTH_MODES: tuple[str, ...] = (AUTHENTICATION, "included-hash")
 AUTH_COLUMN_SUFFIX = {AUTHENTICATION: "", "included-hash": " + in-proof hash"}
 CAPTION: dict[str, Any] = {
@@ -521,10 +521,10 @@ REASON_LETTERS: dict[str, str] = {"U": "not independently verified", "I": "diffe
                                   "S": "shared hashing", "Z": "class/ZK not the column's", "K": "prover not on the row's SKU",
                                   "B": "batch != 4096", "X": "other"}
 #: ``contract.validate_measurements`` 's wording of a phase-accounting failure: the buckets and joints exceed ``t.total`` beyond
-#: ``contract.TOLERANCE``, or one bucket is counted in two places (user decision 2026-09-24: such a result is out of Tables 2/3).
+#: ``contract.TOLERANCE``, or one bucket is counted in two places (such a result is out of Tables 2/3).
 PHASE_SUM_PROBLEM = re.compile(r"^(buckets and joints sum to .* more than t\.total|bucket '[a-z_]+' is counted twice)")
-#: Column ``<candidate> + in-proof hash`` (``included-hash``) is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen,
-#: 2026-09-24): the fingerprint's ``hash`` names it and, where the emitter records the leaf interface (lane leaf-iface D0), so do
+#: Column ``<candidate> + in-proof hash`` (``included-hash``) is Poseidon2-BabyBear per row, no sharing (decision
+#: keep_frozen): the fingerprint's ``hash`` names it and, where the emitter records the leaf interface (lane leaf-iface D0), so do
 #: ``leaf.scheme`` / ``leaf.schema``; ``sharing`` is ``none``.  Another leaf (Ajtai, BLAKE3, SHA-256) or a shared tile is a drill-down.
 IN_PROOF_HASH, IN_PROOF_LEAF, IN_PROOF_SHARING = "poseidon2-babybear-w24", "poseidon2", "none"
 SHARED_AUTHENTICATION = "included-hash-shared"
@@ -658,7 +658,7 @@ def _canon(v: Any) -> Any:
     return list(v) if isinstance(v, (list, tuple)) else v
 
 
-# --- re-packed instances: instance-equiv/v1 (user decision 2026-09-24) -------------------------------------------------------------
+# --- re-packed instances: instance-equiv/v1 ----------------------------------------------------------------------------------------
 
 #: A result whose ``instances`` differ from the frozen ref counts as the frozen set only through an artifact of this schema
 #: (campaign morning-tables BRIEF §5, fixed; lane fused-phases' ``bench.instance_equiv`` writes it) that shows the decoded x, W, y

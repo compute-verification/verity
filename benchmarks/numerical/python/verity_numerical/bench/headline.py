@@ -316,10 +316,10 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
             covered, uncovered = [], []
             for g in subs:
                 mine = [(c, sub) for c, b, sub in cells if b == bid and g["subcircuit"] is not None and sub == g["subcircuit"]]
-                anywhere = getattr(V.rules, "headline_any_hardware", False)      # a PREVIEW (Daniel decides): N stays the served line's
+                anywhere = getattr(V.rules, "headline_any_hardware", False)      # a PREVIEW (undecided): N stays the served line's
                 ve = verifier_evaluated(g["template"])
                 count_ve = getattr(V.rules, "headline_count_omitted", False)     # the one switch for verifier-evaluated parts
-                strict = getattr(V.rules, "headline_strict_verifier", False)      # Daniel 2026-09-26: the verifier evaluates nothing
+                strict = getattr(V.rules, "headline_strict_verifier", False)      # the standing rule: the verifier evaluates nothing
                 parts = ve.parts if ve is not None else None
 
                 def counted(c: Any, ve: Any = ve, count_ve: bool = count_ve) -> bool:

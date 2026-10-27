@@ -42,9 +42,9 @@ __all__ = ["CANDIDATES", "KEY_ALIASES", "REDTEAM", "ROW_STRUCTURAL", "VALUE_ALIA
 LEDGER_ROW_KIND = "ledger-row/v1"
 #: Ledger keys that are the row's identity or provenance, not claims: they become the target / ``by`` / ``ts`` / ``ref``.
 ROW_STRUCTURAL = frozenset({"schema", "ts", "lane", "run_id"})
-#: ledger field -> label key.  ``notes`` (a handful of red-team rows) is the same claim as ``note`` (store vocabulary, 2026-09-23 hygiene).
+#: ledger field -> label key.  ``notes`` (a handful of red-team rows) is the same claim as ``note`` (store vocabulary).
 RENAMED = {"security_target": "soundness", "notes": "note"}
-#: Old label spellings that mean the same claim, so that a re-import after the 2026-09-23 hygiene stays idempotent: an existing
+#: Old label spellings that mean the same claim, so that a re-import after the vocabulary's cleanup stays idempotent: an existing
 #: ``candidate=A`` IS the ``A-GKR`` claim, an existing ``notes`` IS the ``note`` claim.  Mirrors ``research.store.vocab`` (which this
 #: package does not import) and is cross-checked by the tests.
 KEY_ALIASES = {"notes": "note", "verify_note": "note", "batch": "B", "checker": "verifier"}

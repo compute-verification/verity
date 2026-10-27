@@ -255,7 +255,7 @@ def test_a_red_team_clearance_of_the_statement_lifts_the_marker(store: LocalStor
 
 
 def test_a_diagnostic_verdict_on_one_run_does_not_cap_the_other_runs_of_its_statement(store: LocalStore) -> None:
-    """flock-l40s-101, 2026-09-26: red-team-flock held one co-resident run of a statement at a diagnostic class; the other runs,
+    """flock-l40s-101: red-team-flock held one co-resident run of a statement at a diagnostic class; the other runs,
     each with its own grant or none, keep the class the statement's grant gives them."""
 
     granted = committed(store, t_total=0.5, labels=[("proof_class", "COMPLETE_ZK_BACKEND", REDTEAM, "2026-09-25T01:00:00Z")])
@@ -282,7 +282,7 @@ def test_table2_has_one_line_per_subcircuit_hardware_and_admissible_scheme(store
 
 
 def test_algebraic_hashes_are_admitted_flagged_and_optionally_filtered(store: LocalStore) -> None:
-    """Daniel, 2026-09-25: results of algebraic-hash backends and schemes count like any other; Table 1 flags them and their
+    """Results of algebraic-hash backends and schemes count like any other; Table 1 flags them and their
     Table 2 cells carry ``(alg.)``.  The standard-hashes filter is optional, off in the published view."""
 
     pos = committed(store, "poseidon2", t_total=0.1)
@@ -729,7 +729,7 @@ def test_a_file_verified_interactive_result_pays_its_protocols_sequential_depth_
     """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = the
     protocol's sequential depth (3 per proof x the sub-batch proofs run one after another: ceil(N_subbatches / pipeline) waves),
     bytes = proof + statement bytes, network time = rounds x 1 ms + bytes / 100 Gb/s -- and Table 3 keeps it as the interaction
-    stage, footnoted (root's ruling 2026-09-26)."""
+    stage, footnoted."""
     art = committed(store, t_total=0.4, commit=0.6, interaction={"rounds.sequential_depth": 3, "rounds.protocol": 3,
                                                                  "proof_bytes": 1.25e9, "relation.statement_bytes_total": 5e6})
     fp = store.get_manifest(art).meta["workload_fingerprint"]
@@ -1299,7 +1299,7 @@ def test_statement_resolution_from_the_stamp_the_relation_and_the_census_equival
     assert rs(meta(FIRST, 1536), FIRST) is None and rs(meta(FIRST, 1536, "bf16-ampere+blake3"), FIRST) is None
     assert rs(meta(FIRST, 2048, "bf16-ampere"), FIRST) == "gemm-coordinate/k2048/sm80-mma-bf16"
     assert rs(meta(FIRST, 8192, stamp="gemm-coordinate/k8192/sm80-mma-bf16"), FIRST) == "gemm-coordinate/k8192/sm80-mma-bf16"
-    # H100 BF16: wgmma is stood for by mma at K = 1536 (the existing row); at a real K the statement is wgmma's (root's ruling)
+    # H100 BF16: wgmma is stood for by mma at K = 1536 (the existing row); at a real K the statement is wgmma's
     assert rs(meta(BF16_HOPPER, 1536, "bf16-hopper-wgmma"), BF16_HOPPER) is None
     assert rs(meta(BF16_HOPPER, 2048, "bf16-hopper-wgmma"), BF16_HOPPER) == "gemm-coordinate/k2048/sm90-wgmma-bf16"
     assert rs(meta(BF16_HOPPER, 8192, "bf16-hopper-x4-k8192+blake3-xob"), BF16_HOPPER) == "gemm-coordinate/k8192/sm90-wgmma-bf16"
@@ -1446,7 +1446,7 @@ def test_the_two_preview_switches_are_off_in_the_published_rules_and_change_only
 
 
 def test_the_renderers_validation_path_imports_no_numpy() -> None:
-    # the steward renders with a bare python3.12 (no numpy); PR #54 once pulled bench.templates (numpy) into contract.validate
+    # the steward renders with a bare python3.12 (no numpy); a change once pulled bench.templates (numpy) into contract.validate
     import subprocess
     import sys
 
@@ -1497,7 +1497,7 @@ def test_a_row_whose_work_model_needs_a_per_input_variable_rejects_its_cells_ins
 
 
 def test_each_result_and_table1_backend_shows_its_operand_domain(store: LocalStore) -> None:
-    """Daniel, 2026-09-26: circuits are total by default; a finite-only statement is an explicit, named choice, shown per result
+    """Circuits are total by default; a finite-only statement is an explicit, named choice, shown per result
     (the ``domain`` label, else the fingerprint's ``domain``) and per Table 1 backend."""
     a = committed(store, t_total=0.4)
     fp_domain = V.build(store).domain_of[a]
@@ -1512,7 +1512,7 @@ def test_each_result_and_table1_backend_shows_its_operand_domain(store: LocalSto
 
 
 def test_a_total_statements_cell_shows_total_without_a_label(store: LocalStore) -> None:
-    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): the fingerprint's ``domain`` is the statement's, so a cell of a
+    """red-team-flock-3's M0: the fingerprint's ``domain`` is the statement's, so a cell of a
     total statement shows ``total`` with no label.  A cell registered before the fix wrote the hardcoded ``finite`` and still
     shows ``finite-only`` unless a ``domain`` label corrects it; a value outside the vocab shows nothing."""
     total = committed(store, t_total=0.4, domain="total")
@@ -1526,7 +1526,7 @@ def test_a_total_statements_cell_shows_total_without_a_label(store: LocalStore) 
 
 
 def test_a_cell_lists_every_interaction_attempt_and_a_linked_attempt_is_never_the_cell(store: LocalStore) -> None:
-    """red-team-flock-3's IX1 (2026-09-27, policy): a refused interaction attempt stays in the store, labelled
+    """red-team-flock-3's IX1 (policy): a refused interaction attempt stays in the store, labelled
     ``interaction_attempt_of`` its cell, and the cell lists every attempt with its deviation.  A linked attempt is never a cell, even
     when it passes the check and is faster (no first-pass-wins)."""
     cell = committed(store, t_total=0.4, commit=0.6, interaction=LIVE)
@@ -1545,7 +1545,7 @@ def test_a_cell_lists_every_interaction_attempt_and_a_linked_attempt_is_never_th
 
 
 def test_table1_flags_the_frozen_backend_families_not_actively_developed(store: LocalStore) -> None:
-    """Daniel, 2026-09-26: A-GKR, B-Ligero and SP1 stay in the tables, flagged not actively developed; Flock is the active family."""
+    """A-GKR, B-Ligero and SP1 stay in the tables, flagged not actively developed; Flock is the active family."""
     committed(store, t_total=0.4)
     site = V.render_entities(V.build(store), rendered_at="2026-09-26T19:30:00Z", commit="abc")
     fam = {f["id"]: f["development"] for f in site["backend_families"]}
@@ -1566,7 +1566,7 @@ def test_m0_generic_circuit_cells_take_their_own_c_flock_row() -> None:
 
 
 def test_a_typed_circuit_cell_takes_its_own_row_and_backend() -> None:
-    """red-team-flock-3's Q4 (#281): the typed id has its own row naming the id and its pin, and names its verifier; it is the
+    """red-team-flock-3's Q4: the typed id has its own row naming the id and its pin, and names its verifier; it is the
     same C-Flock interactive backend proving another statement."""
     typed, flat = V.FLOCK_CIRCUIT_TYPED_CONFIG, V.FLOCK_CIRCUIT_CONFIG
     fp = {"statement": V.CIRCUIT_TYPED, "software": {"backend": {"name": "flock-circuit", "circuit_format": "flock-circuit/types"}}}
@@ -1579,7 +1579,7 @@ def test_a_typed_circuit_cell_takes_its_own_row_and_backend() -> None:
 
 
 def test_no_typed_cell_says_it_computes_its_type_before_c2() -> None:
-    """C2 (#277 and #268 on main, the typed path calling #268's checks) is not met: nothing rendered claims it."""
+    """C2 (the typed circuit's checks on main, the typed path calling them) is not met: nothing rendered claims it."""
     assert V.TYPED_C2 is False
     rendered = V.render_markdown(V.Views(rules=V.SPEC)) + repr(V.FLOCK_CIRCUIT_TYPED_CONFIG)
     assert "computes its type" not in rendered
@@ -1589,8 +1589,8 @@ def test_no_typed_cell_says_it_computes_its_type_before_c2() -> None:
 
 
 def test_circuit_ands_are_labelled_by_their_convention() -> None:
-    """ANDs per instance are the tensor-core units + tail on both statements since #281 (GEMM k64: 33,117); a flat result recorded
-    before it counted the units only (33,040) and says so; the rows' SHA-512 and hm96 are proved but not counted."""
+    """ANDs per instance are the tensor-core units + tail on both statements (GEMM k64: 33,117); a flat result recorded
+    without ``ands_counted`` counted the units only (33,040) and says so; the rows' SHA-512 and hm96 are proved but not counted."""
     new = {"statement": V.CIRCUIT_TYPED, "ands_per_instance": 33117, "rows_per_instance": 52, "ands_counted": "tensor-core units + tail: ...",
            "verifier": {"accepted_by": "flock-circuit serve: the Rust live verifier (flock-live R1-R8); no Lean replay in this run"}}
     f = V.circuit_facts({"workload_fingerprint": new})
@@ -1626,7 +1626,7 @@ def test_a_typed_circuit_cell_is_never_a_table2_cell(store: LocalStore, monkeypa
 
 
 def test_a_hidden_output_circuit_result_never_shares_a_cell_with_a_public_output_one(store: LocalStore) -> None:
-    """#757 moved `verity/flock-circuit` and `/types` to hidden outputs (at k64 about 28% slower), and the names alone no longer
+    """`verity/flock-circuit` and `/types` moved to hidden outputs (at k64 about 28% slower), and the names alone no longer
     tell the two apart: the identity's `outputs` does. A hidden-output result has a configuration of its own, which claims no
     privacy (M0's transcript is not hiding), and is no Table 2 cell until Table 2 gives it lines of its own."""
     flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (verity/ml/flock)",

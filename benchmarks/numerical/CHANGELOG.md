@@ -2,18 +2,18 @@
 
 ## 2026-09-28: Table 1 recognises M0's typed circuit statement (`verity/flock-circuit/types`)
 
-This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
+This follows red-team-flock-3's Q4, for the typed statement's `circuit_bench` results.
 - **Its own row:** `views.FLOCK_CIRCUIT_TYPED_CONFIG` has a Table 1 row naming the id and its pin, and `configuration_of`
   recognises it. The row names the verifier that accepted the sessions: today the Rust live verifier, with no Lean replay.
-- **"Computes its type" is gated:** nothing says it while `views.TYPED_C2` is false. C2 is met when #277 and #268 are on main
-  and the typed path calls #268's checks.
+- **"Computes its type" is gated:** nothing says it while `views.TYPED_C2` is false. C2 is met when the typed circuit's checks are on
+  main and the typed path calls them.
 - **Never merged with flat:** different statement ids are never merged.
   - A typed result has its own result key.
   - The workload headline and Table 2 leave typed cells out. A typed result is listed as rejected with the reason
     `views.TYPED_NOT_IN_TABLE2`, and it stays out even with `TYPED_C2` set.
   - Once C2 holds, a follow-up gives typed statements Table 2 lines of their own.
 - **ANDs, results and verifier:** `views.circuit_facts` (a result's `circuit` field) gives, for both circuit statements:
-  - ANDs per instance, labelled "tensor-core units + tail", or "units only" for a flat result recorded before #281 without
+  - ANDs per instance, labelled "tensor-core units + tail", or "units only" for a flat result recorded without
     `ands_counted`;
   - rows per instance, with the rows' SHA-512 and hm96 noted as "proved but not counted";
   - the accepting verifier;
@@ -123,7 +123,7 @@ This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
 - **Verifier-evaluated parts:** templates record them in the census (`verifier_evaluated`: parts, share, counted, ruling).
   - Attention's softmax (4–11% of a head's scalar ops, all of its exp2 and reciprocal work) is counted with a † footnote,
     per red-team-flock-3's grant.
-  - Sampling is not counted, pending Daniel.
+  - Sampling is not counted, pending a decision.
   - The existing switch (`--preview-count-omitted`, `Rules.headline_count_omitted`) flips every not-counted template and
     every `omitted` label at once.
 - **Unchanged:** tables, raw JSON and parity are byte-identical; only the headline section changes.
@@ -218,7 +218,7 @@ This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
 - `views --preview-cached-weights`: non-GEMM native N counts activations only, with per-row weights and tables cached. It
   uses the census's new `work_model.bytes_per_input_cached`: RoPE 4D, fused RMSNorm 8N, Triton RMSNorm 4N, SiLU·mul 6I
   unchanged.
-- Both are `Rules` fields, off in `SPEC`. The published render and parity are unchanged. Daniel decides both; the previews
+- Both are `Rules` fields, off in `SPEC`. The published render and parity are unchanged. Both are undecided; the previews
   render beside the published JSON in the notes' `renders/previews/`.
 
 ## 2026-09-26: the per-workload headline
@@ -337,11 +337,11 @@ This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
 
 ## 2026-09-26: the markdown tables are retired; backend profiles match main
 
-- The docs site replaces the markdown Tables 1–3 and the table digests for reading (Daniel, 2026-09-26). The steward's
+- The docs site replaces the markdown Tables 1–3 and the table digests for reading. The steward's
   `[[render]]` entry is now `published = "entities"`: it renders only the entities JSON as `<stamp>-tables.json`, and runs
   `views --parity` as an internal gate that publishes nothing (a difference is a `RENDER-FAILED` line). The markdown
   renderers stay as developer tools.
-- Entities backend profiles, following the docs site's gaps note of 20260926T0210Z:
+- Entities backend profiles, following the docs site's gaps note:
   - the SHA-256 binding the live transcript (and route (a)'s `root_F`) maps to `cr/sha-256`;
   - Flock's Ligerito Merkle trees are a proof-internal hash: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA
     (`cr/blake3`, `cr/sha-256`);
@@ -375,7 +375,7 @@ This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
 - Every VU family in the mix maps to a census subcircuit template. `subcircuits.json` adds 15 templates beside
   `gemm-coordinate`, each with typed parameters, a one-line definition and its IR Definitions:
   - `attention-head` (FA2 and FA3), `rope-head`, `rmsnorm-fused-cuda`, `rmsnorm-triton`, `silu-mul` and
-    `gumbel-top-p-token-select`, the ids bench-spine's generator keys on (PR #47);
+    `gumbel-top-p-token-select`, the ids bench-spine's generator keys on;
   - `token-select-greedy`, `moe-router-topk`, `moe-expert-coordinate`, `moe-expert-coordinate-weighted`, `moe-sum`,
     `scaled-mm-fp8-block-coordinate`, `bias-add`, `bf16-mul-scalar` and `embedding-row`.
 
@@ -397,7 +397,7 @@ This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
 - Bug: `views.interaction` gave every file-verified result `rounds = 0`, so all 14 B-interactive cells (B-Ligero, a 3-round
   interactive protocol, verified from its replayed transcript) were modelled as non-interactive. The reference network
   undercharged them and RTT sweeps left them flat.
-- Root's ruling (2026-09-26): a file-verified result of an interactive protocol (its configuration is not transferable) uses the
+- A file-verified result of an interactive protocol (its configuration is not transferable) uses the
   protocol's sequential depth as its rounds: the per-proof depth (`rounds.sequential_depth`, else `rounds.protocol`) times the
   sub-batch proofs that run one after another. With `software.backend.pipeline` proofs in flight, that is
   ceil(`N_subbatches` / pipeline) waves; without a pipeline, all `N_subbatches`. The measured RTT stays null. Fiat–Shamir
@@ -431,9 +431,9 @@ This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
   `gemm-coordinate` (`GemmCoordinate_v2{K, DOT}`, any K, Ampere mma and Hopper wgmma BF16; the census's other semantics
   bind but cannot be generated), `attention-head` (FA2 `AttentionHead_v3`, T per instance), `rope-head`,
   `rmsnorm-fused-cuda`, `rmsnorm-triton`, `silu-mul` and `gumbel-top-p-token-select` (the vLLM registry's Definitions,
-  imported lazily). A subcircuit carries the relation, set name and ports the vLLM VU exporter (PR #42) writes, and
+  imported lazily). A subcircuit carries the relation, set name and ports the vLLM VU exporter writes, and
   `identify(relation)` maps any set back to its subcircuit.
-- `bench.input_sets`: one layout for captured and synthetic sets (PR #42's `vllm-vu-set/v1`; synthetic sets are
+- `bench.input_sets`: one layout for captured and synthetic sets (the exporter's `vllm-vu-set/v1`; synthetic sets are
   `input-set/v1` with the same fields), `verify` re-evaluates every instance through `verity.evaluation`. All 11,040
   instances of the eight captured #101 sets (`art:b5bb0ca9`) re-evaluate bit-exactly.
 - `bench.generate`: seeded synthetic sets. Draw `j` reads each port from `verity.randomness` counter streams at
@@ -545,7 +545,7 @@ This follows red-team-flock-3's Q4, for #281's `circuit_bench` results.
 
 ## 2026-09-25: the switch to the approved tables spec (a change of method)
 
-From the 6:00 PM PT digest on 2026-09-25, the published tables are the approved spec's views (`kb/TABLES.md`),
+From this switch on, the published tables are the approved spec's views (`kb/TABLES.md`),
 rendered by `python -m verity_numerical.bench.views --published`. The frozen 2026-09-22 tables
 (`verity_numerical.bench.tables`) are still rendered, byte for byte as before, as a drill-down beside them.
 
@@ -563,7 +563,7 @@ rendered by `python -m verity_numerical.bench.views --published`. The frozen 202
 - **Parity.** Under today's parameters (`--rules legacy`), the new views select exactly the frozen cells, with the
   same artifacts and ratios. `views --parity --take-snapshot --record` checks this against a fresh
   `tables --snapshot` and records the check as a `tables-parity/v1` artifact.
-- **Flock column.** Flock is its own backend family and gets its own column in Tables 1–3 (Daniel, 2026-09-25).
+- **Flock column.** Flock is its own backend family and gets its own column in Tables 1–3.
   That column holds pure-Flock configurations only: the relation and its row hashes in one binary-field circuit.
   Route (a) (the A-GKR prime side, Flock's row hashes and the sigma link) is an A-GKR configuration and stays in
   the A-GKR column. Until a Flock result qualifies, the column renders `—` with its reason.

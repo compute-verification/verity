@@ -1,4 +1,4 @@
-"""Drill-downs D1-D3 behind the canonical tables: non-canonical; layout fixed 2026-09-24 (campaign morning-tables BRIEF §1).
+"""Drill-downs D1-D3 behind the canonical tables: non-canonical; layout fixed (campaign morning-tables BRIEF §1).
 
     python -m verity_numerical.bench.drilldown --root <store root> [--format md|json]
 

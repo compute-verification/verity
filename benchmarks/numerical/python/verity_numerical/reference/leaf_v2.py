@@ -1,4 +1,4 @@
-"""Reference implementation of the proposed ``verity-vllm/leaf/v2`` algebraic leaf (auth-integration lane, 2026-09-22).
+"""Reference implementation of the proposed ``verity-vllm/leaf/v2`` algebraic leaf.
 
 **Status: proposal.**  The live protocol is ``verity.ml.commitments.leaves`` (``leaf/v1``: SHA-256 over the whole tensor's
 bytes) and is not touched.  The specification this module implements is
@@ -47,7 +47,7 @@ polynomial summing to zero on the subgroup): the sent polynomials are uniform su
 payload (AHIV22 Lemma 4.15).  **The lemma needs the opened positions to be disjoint from the message positions**:
 the first version of this reference evaluated on the order-``n`` subgroup itself (systematic: codeword symbol
 ``(n/k) j`` *was* message symbol ``j``) and the red team read payload words straight off the openings
-(``redteam_vu.md`` F3, ``redteam.leaf_v2_exhaustion``).  Since 2026-09-22 the codeword lives on the coset
+(``redteam_vu.md`` F3, ``redteam.leaf_v2_exhaustion``).  The codeword now lives on the coset
 ``31 * H_n``, which contains no point of ``H_k``; ``test_leaf_v2.py::test_no_opened_column_is_a_payload_word``
 opens every column of every chunk and checks that.  The toy draws its challenge coefficients from BabyBear itself
 (soundness ~ 2^-31 per term); the campaign's protocols draw them from ``F_{p^6}``.

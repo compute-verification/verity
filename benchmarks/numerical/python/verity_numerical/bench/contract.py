@@ -165,7 +165,7 @@ PROFILE = FIRST.name
 DOMAIN = "finite-only"
 #: The vocab's ``domain`` values (``research.store.vocab.DOMAINS``); a fingerprint records the one its statement covers.
 DOMAINS = ("total", "finite-only")
-#: What results registered before 2026-09-27 wrote: every writer hardcoded ``finite``, whatever its statement's domain.
+#: What results registered before a fingerprint recorded its statement's domain wrote: every writer hardcoded ``finite``, whatever its statement's domain.
 LEGACY_DOMAINS = {"finite": "finite-only"}
 #: Every profile a result may name: the targets of ``verity.ml.circuits.targets.target.TARGETS`` (FIRST and the FP8 drafts).
 #: ``profile`` is an identity field, so a result of one profile is never compared with a result of another.
@@ -212,8 +212,8 @@ FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manif
 #: VUs ``archive/direct/ligero/relchain.py`` draws for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``; lane
 #: b-hopper) -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
 #: (``benchmarks/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
-#: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-23, lane b-merge-h100, after
-#: the rows with preserved proof dumps) so the canonical tables recognise the sets without importing the prover; a change to a
+#: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen after the rows with preserved proof
+#: dumps) so the canonical tables recognise the sets without importing the prover; a change to a
 #: recipe is a new tier.
 _BF16_HOPPER = census.INPUT_SETS["bench-instances-bf16-hopper-v1"]
 BF16_HOPPER_INSTANCES_DATASET, BF16_HOPPER_INSTANCES_TIER = _BF16_HOPPER.dataset, _BF16_HOPPER.tier

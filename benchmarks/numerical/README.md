@@ -88,11 +88,11 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
 #   --replay-special verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz
 ~~~
 
-Recorded runs (`research inspect <id>`): `r20260921-230852-4f1e` (wp1.exhaustive, SUCCESS, result valid: every counter zero over
+Recorded runs, by stage: wp1.exhaustive (SUCCESS, result valid: every counter zero over
 1,076,644 transition-unit cases, 65,536 encodings, 131,072 products, 28 boundary groups, 3,170,304 + 88,602 D3 triples,
-18,337,790 adapter pairs, the compiled simulator on all 1,076,644 lines); `r20260921-231618-ea24` (wp1.probe.4090, SUCCESS,
+18,337,790 adapter pairs, the compiled simulator on all 1,076,644 lines); wp1.probe.4090 (SUCCESS,
 result valid: 360/360 golden records, 25,698,304 sweep elements of which 12,065,535 with a nonzero accumulator, 0 mismatches
-against `silicon.tc_dot`); `r20260921-232750-56c5` (wp1.probe.a100, NVIDIA A100 80GB PCIe sm_80, SUCCESS, result valid: the
+against `silicon.tc_dot`); wp1.probe.a100 (NVIDIA A100 80GB PCIe sm_80, SUCCESS, result valid: the
 7,713 all-finite A100 special records (4,565 with a nonzero accumulator) replayed with 0 mismatches, the same sweep -- same seed,
 same 10 families -- 25,698,304 elements, 12,065,535 with a nonzero accumulator, 0 mismatches against `silicon.tc_dot`; D9's family
 `zero_acc_tiny_cancellation`: 163,533 elements would differ under a zero at -126 and 87,058 under -127, the hardware matched
@@ -124,7 +124,7 @@ sign and keeps it through the remaining group, and every measured case agrees wi
 cases and 114 golden records saturate; 18 of them cancel to zero in group 2 under the simulator's arithmetic and one golden
 record returns to a finite value). Log entry D8.
 
-## WP2 checker: the FP8 generalisation (silicon Phase 0, lane `silicon-p0`, 2026-09-22)
+## WP2 checker: the FP8 generalisation (silicon Phase 0)
 
 `verity_numerical.checker` was BF16-only by construction: `Params` asserted an adder at least as wide as the accumulator's
 significand (`width >= acc_sig`, 25 >= 24), and one exponent width served operands and accumulator alike. Hopper/Ada E4M3
