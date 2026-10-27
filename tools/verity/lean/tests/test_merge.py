@@ -224,8 +224,8 @@ FIXTURES = HERE / "fixtures" / "merge"
 def test_4406_onto_next_takes_the_side_that_changed_the_definitions(tmp_path, capsys):
     """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
     moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
-    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones), as locks listed
-    them then. Read without them, `next`'s group is the base's, so the merge is #4406's group, cleanly."""
+    The fixture is that group on each side with the records of its readers (a sample of the branch's new ones), as locks
+    listed them then. Read without them, `next`'s group is the base's, so the merge is the branch's group, cleanly."""
     sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))

@@ -50,19 +50,19 @@ def test_one_mathlib():
 
 
 #: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
-#: had no `honest` and `nontrivial` witnesses when LEAN-66's rule came (`check.py`'s `witness_failures`), with those the
-#: PRs on `next` then brought
+#: had no `honest` and `nontrivial` witnesses when the rule came (`check.py`'s `witness_failures`), with those the PRs on
+#: `next` then brought
 UNWITNESSED = {"Security": 354, "Security/Properties": 175, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
-    """LEAN-66: a lock's `unwitnessed` never grows. A new guarantee of what an acceptance means, and one whose statement
+    """A lock's `unwitnessed` never grows. A new guarantee of what an acceptance means, and one whose statement
     changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here may
     come down with it."""
     got = {str(p.relative_to(ROOT)): len(json.loads((p / "lean-audit.json").read_text()).get("unwitnessed", {}))
            for p in lake_packages()}
     grown = {p: f"{n} > {UNWITNESSED.get(p, 0)}" for p, n in got.items() if n > UNWITNESSED.get(p, 0)}
-    assert not grown, (f"`unwitnessed` grew in {grown}: it only shrinks (LEAN-66); give the guarantee you added its "
+    assert not grown, (f"`unwitnessed` grew in {grown}: it only shrinks; give the guarantee you added its "
                        f"`honest` and `nontrivial` witnesses under `witnesses` (check.py's failure names both) instead")
 
 

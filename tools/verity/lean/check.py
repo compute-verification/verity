@@ -64,11 +64,11 @@ environment extension loaded, so none of the package's code runs), and replays t
                  the bound fails; or a
                  witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
                  that is no named assumption the lock lists, or is an honest one at an accept-all verifier
-                 (`witness_failures`, LEAN-66), unless `unwitnessed`, which only shrinks, lists the guarantee with its
+                 (`witness_failures`), unless `unwitnessed`, which only shrinks, lists the guarantee with its
                  statement's hash
     unread       in a package whose lock has `unread`, a definition of the spec that no listed statement reads,
                  neither its own nor one of a package requiring it by path (`unread_spec`), is not among those `unread`
-                 lists, the ones that predate the rule; the list only shrinks (`unread_failures`, LEAN-67)
+                 lists, the ones that predate the rule; the list only shrinks (`unread_failures`)
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
@@ -1671,7 +1671,6 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 #: `Flock.Zk.verify`), the
 #: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
 #: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), the `exclusion` kind
-#: (top, LEAN-66 21:52Z)
 SCOPE_COMPONENT = "Claims"
 SCOPE_MODULES = ("Properties.Verity",)
 VERIFIER_PREFIXES = ("accept", "verify")
@@ -1812,7 +1811,7 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
         return (f"prove `{name}_honest : {honest}` (its hypotheses hold at the deployed partition and parameters d) and "
                 f"`{name}_nontrivial : (each other premise at c₀) ∧ ¬ ({premises}) c₀ … ∧ ¬ {shown} c₀ …` (an explicit "
                 f"circuit c₀ beats the bound once one named premise is dropped).{construct} List both under "
-                f"`guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses` (LEAN-66)")
+                f"`guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses`")
     nontrivial = f"{'∀ X…, ' if exists else ''}¬ {shown} at acceptAll …"
     why = (", the break included, so a break that always holds can't make the bound say nothing" if head == "Or" else "") + (
         f", each of the {exists} `∃` of its conclusion a `∀` before the `¬`, since a value the prover picks fits anything "
@@ -1821,12 +1820,12 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
             f"verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module) and "
             f"`{name}_nontrivial : {nontrivial}` (its conclusion is false for a verifier that accepts everything{why})."
             f"{construct} List both under `guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under "
-            f"`witnesses` (LEAN-66)")
+            f"`witnesses`")
 
 
 def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     """Every guarantee in scope (`witness_scope`) has two witnesses beside it (`witnesses`: {guarantee: {honest: [theorem],
-    nontrivial: theorem, kind?}}, LEAN-66), each a guarantee, as a claim has its `fails` and `meets` (`claim_failures`), so
+    nontrivial: theorem, kind?}}), each a guarantee, as a claim has its `fails` and `meets` (`claim_failures`), so
     a statement that says nothing fails. Each witness constructs its instance: it takes no `∀` binder before its
     conclusion (`instance_binders`; a `nontrivial` one, a `∀` for each `∃` of the conclusion) and no hypothesis beyond the
     named assumptions the lock lists (`assumes`). Read as `statement_read` reads them:
@@ -1925,8 +1924,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             if hp.get("accept_all"):
                 fails.append(Failure("witnesses.honest-accept-all", n, f"witnesses: {n}, {g}'s `honest` witness, is at a "
                                      f"verifier that accepts everything ({', '.join(hp['accept_all'])}): an honest lemma is "
-                                     f"at the deployed verifier, and the accept-all one is the `nontrivial` lemma's object "
-                                     f"(LEAN-68's HonestH200)"))
+                                     f"at the deployed verifier, and the accept-all one is the `nontrivial` lemma's object"))
         missing = [p for p in honest_premises(pin, policy, own) if p not in covered]
         fns = accepted(policy, g)
         if checked and (missing or (fns and not any(reaches(f, reached) for f in fns))):
@@ -1967,7 +1965,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
 
 
 def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: list[str]) -> list[Failure]:
-    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form ruled for it (lean, 27 Oct):
+    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form ruled for it:
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
     conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
@@ -2007,7 +2005,7 @@ def instance_failure(n: str, g: str, role: str, binders: int, allowed: int) -> F
                    f"binder(s) before its conclusion{f' (at most {allowed}, one for each `∃` of the conclusion)' if allowed else ''}: "
                    f"it ranges over its instance (`∀ inst, …`) instead of constructing it. Build the instance at the model "
                    f"level (a small hand-built descriptor rather than a parsed file), and isolate any one field that can't "
-                   f"be built as a named assumption the lock lists (LEAN-66)")
+                   f"be built as a named assumption the lock lists")
 
 
 def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
@@ -2034,8 +2032,8 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
 
 def unwitnessed_entry(v) -> tuple[str, str | None] | None:
     """An `unwitnessed` entry as (its type hash, the half it exempts): a hash exempts both witnesses, and
-    {type_hash, missing: honest or nontrivial, why} only that half of a guarantee whose `witnesses` entry lists the other
-    (LEAN-66, lean 27 Oct 00:59Z); None for any other form."""
+    {type_hash, missing: honest or nontrivial, why} only that half of a guarantee whose `witnesses` entry lists the other;
+    None for any other form."""
     if isinstance(v, str):
         return v, None
     if isinstance(v, dict) and isinstance(v.get("type_hash"), str) and v.get("missing") in ("honest", "nontrivial") \
@@ -2698,8 +2696,8 @@ def unread_listed(policy: dict) -> tuple[set[str] | None, list[str]]:
 
 def unread_failures(policy: dict, unread: dict[str, list[str]]) -> list[str]:
     """A definition of the spec that no listed statement reads (``unread``, `unread_spec`) fails unless `unread` lists it.
-    `unread` ({module: [definitions]}) lists those the rule found (Daniel, 26 Oct: Definitions/ holds only what a
-    statement reads), and only shrinks: `--update` keeps an entry while its definition stays unread and adds none
+    `unread` ({module: [definitions]}) lists those the rule found (`Definitions/` holds only what a statement reads),
+    and only shrinks: `--update` keeps an entry while its definition stays unread and adds none
     (`unread_kept`). A package without `unread` is not held to it."""
     listed, bad = unread_listed(policy)
     if listed is None:
