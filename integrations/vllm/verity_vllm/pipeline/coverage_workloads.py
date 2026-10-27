@@ -46,7 +46,7 @@ BATCHED_TOKENS = {"C256": 2048 + 64, "C1024": 8192 + 64}
 
 
 class Tok:
-    """`tokenizers` tokenizer (tokenizer.json) with the decode side; `add_special_tokens=False` like the batch lane's workloads."""
+    """`tokenizers` tokenizer (tokenizer.json) with the decode side; `add_special_tokens=False` like the batch workloads."""
 
     def __init__(self, path: str | Path) -> None:
         from tokenizers import Tokenizer

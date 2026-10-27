@@ -75,7 +75,7 @@ RELEASE_JSON = Path(settings.HOT_RELEASE_JSON)
 
 
 def release_json_sig() -> str | None:
-    """(tag, commit) of the tree on the pod, or None when there is no RELEASE.json (a lane tree run by hand)."""
+    """(tag, commit) of the tree on the pod, or None when there is no RELEASE.json (a tree run by hand)."""
     try:
         d = json.loads(RELEASE_JSON.read_text())
         return f"{d.get('tag')}@{str(d.get('commit'))[:9]}"
