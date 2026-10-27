@@ -1,4 +1,4 @@
-description = "co32c-u16-cohalf (H1, decision 82) with K one scale per (layer, KV head) from keys 1..s-1 of the window and key 0 on its own scale, float softmax: the float control of the LUT softmax with the sink its own block (PPL-LUT)"
+description = "co32c-u16-cohalf (H1) with K one scale per (layer, KV head) from keys 1..s-1 of the window and key 0 on its own scale, float softmax: the float control of the LUT softmax with the sink its own block"
 
 [[linear]]
 step = "smooth"

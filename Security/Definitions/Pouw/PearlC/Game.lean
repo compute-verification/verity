@@ -239,7 +239,7 @@ noise law, the seeds and the chain live in the protocol's reference functions.
   model's BF16 side GEMM with PoUW on and off, so they are the model's work (glue), outside the unit and outside `W_ref`.
 - **The unit's k channels** are the kept channels, padded with zero channels to a whole number of promotion groups.
 - **How `S_ℓ` is chosen.** Once per model, before any salt or request, by one pinned implementation of the greedy rule:
-  `split_channels` in `benchmarks/pouw/pearlc_headline.py` (PR #451 at `f6f05bd8`), with its batch of 4 channels per
+  `split_channels` in `benchmarks/pouw/pearlc_headline.py` (at `f6f05bd8`), with its batch of 4 channels per
   step, its tie-break (equal offence counts go to the lower channel index) and its budget of `⌊k/100⌋` channels, which S
   never exceeds. It moves the input channels that offend the most failing rows until every row of the calibration
   activations and of the weights passes Π's rules, or the budget is spent. The input is the committed calibration data: a
