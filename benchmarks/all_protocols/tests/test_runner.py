@@ -173,7 +173,7 @@ def test_onsite_reads_the_blobs_a_case_names(tmp_path):
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
     every = {e.name: fake("accept", case) for e in T.TABLE}
     every["integrity"] = fake("accept", case | {"blobs": [str(tmp_path / "circuit.txt"), str(tmp_path / "pub.bin")]})
-    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
+    r = decide(tmp_path, **every, onsite=C.onsite_components(), exe=str(exe))
     assert r["composed"]["verdict"] == "accept"
     got = json.loads((tmp_path / "seen.json").read_text())
     assert got["blobs"] == [b"circuit".hex(), b"public".hex()]
@@ -220,7 +220,7 @@ def test_onsite_accepting_while_an_outside_audit_is_undecided_is_undecided(tmp_p
 def test_the_table_names_every_onsite_component_once():
     onsite = C.onsite_components()
     assert onsite == ["NetworkCheck.Period.protocol", "PousCheck.RunProtocol.protocol", "PouwCheck.protocol",
-                      "RemoteAudit.Protocol.protocol", "SampledProofs.OneStageZk.protocol",
+                      "RemoteAudit.Protocol.protocol", "VStar.Recursive.Sampled.protocol",
                       "MemoryChallenger.WipeProtocol.protocol"], "onsite's components changed"
     named = sorted(e.component for e in T.TABLE if e.onsite)
     assert named == sorted(C.component_of(x)[0] for x in onsite)

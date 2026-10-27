@@ -1,8 +1,9 @@
 /-
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
-accounts for space, bandwidth and communication. Its components are integrity by sampled proofs' one-stage audit on the
-proofs themselves (`SampledProofs.OneStageZk.protocol`, `verity/sampled-proofs/one-stage/v2`: flock-verify `--zk` run on
-each session's files, which the caller hands in as blobs), work by proof of useful work (`PouwCheck.protocol`), space by
+accounts for space, bandwidth and communication. Its components are sampled proofs on the proofs themselves
+(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: the form the params name, one-stage v2's
+audit, flock-verify `--zk` run on each session's files, or the recursive audit, V*'s compiled check run on the recursive
+session's parts, each on the files the caller hands in as blobs), work by proof of useful work (`PouwCheck.protocol`), space by
 PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth by the remote bandwidth audit's session
 (`RemoteAudit.Protocol.protocol`), communication by the network certifier over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound `K`
@@ -11,7 +12,7 @@ on what left the site), and the wipe by the memory challenger's streamed-label w
 or onsite doesn't, and any component's rejection rejects onsite whatever the others answer. Before composing, in its
 commit phase, onsite checks the registration by NCI's check of record (`NciCheck.Protocol.protocol`, `verity/nci/v1`, a
 registration check and not a component): a registration it refuses refuses onsite, and so does one other than the
-registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`).
+registration sampled proofs commits to (`Core.Composition.registeredB`; in either form, v1's registration record).
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
@@ -22,6 +23,7 @@ import PousCheck.RunProtocol
 import PouwCheck.Protocol
 import RemoteAudit.Protocol
 import SampledProofs.OneStageZk
+import VStarRecursive.Sampled
 
 namespace Core.Onsite
 
@@ -30,10 +32,10 @@ open Composition
 /-- Onsite's components, in the order of their ids. -/
 def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, PousCheck.RunProtocol.protocol, PouwCheck.protocol, RemoteAudit.Protocol.protocol,
-    SampledProofs.OneStageZk.protocol, MemoryChallenger.WipeProtocol.protocol]
+    VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 def protocol : BlobProtocol :=
-  registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components
+  registeredB "verity/onsite/v0" NciCheck.Protocol.protocol VStar.Recursive.Sampled.protocol.id components
 
 /-- A case its component's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=
@@ -47,7 +49,7 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard orderedB components
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/v1",
-  "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"]
+  "verity/remote-bandwidth/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 
 -- every component refuses its case: onsite rejects on each, with or without blobs, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)
@@ -58,14 +60,17 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
 -- a refused wipe refuses onsite
 #guard (allRefused.reason.map (contains · "verity/wipe/v0 reject: params: ")).getD false
--- remote's components alone are not onsite's, onsite has no wipe-less form, and v1's audit is not onsite's integrity
--- component
-#guard (answer [refused PouwCheck.protocol, refused SampledProofs.OneStageZk.protocol]).reason ==
+-- remote's components alone are not onsite's, onsite has no wipe-less form, and neither v1's nor v2's audit alone is
+-- onsite's sampled proofs component
+#guard (answer [refused PouwCheck.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.take 5).map refused)).reason == some "params: verity/wipe/v0 is missing"
 #guard (answer ((components.take 4).map refused ++
     [refused SampledProofs.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
+#guard (answer ((components.take 4).map refused ++
+    [refused SampledProofs.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+  some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 
 -- a registration NCI refuses refuses onsite before any component is run, and onsite's params carry the registration
 private def unregistered (blobs : Array ByteArray := #[]) : Answer :=

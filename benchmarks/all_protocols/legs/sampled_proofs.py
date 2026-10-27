@@ -16,9 +16,10 @@ draw (the records, a check on the registration, the draw) rejects with its codes
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
 its port). An audit that ended with no summary is the leg's error, not a verdict.
 
-The audit also writes sampled proofs' case for onsite (`a5.write_case`), whose integrity component is the audit on the
-proofs themselves (``verity/sampled-proofs/one-stage/v2``, `SampledProofs.OneStageZk`): ``{"blobs", "commitment",
-"evidence", "params"}``, the evidence naming the session's files by SHA-512 in place of verdicts and ``blobs`` the paths
+The audit also writes sampled proofs' case for onsite (`a5.write_case`), whose sampled proofs component is
+``verity/sampled-proofs/v1`` (`VStar.Recursive.Sampled`), here in its one-stage form, the audit on the proofs
+themselves (``verity/sampled-proofs/one-stage/v2``, `SampledProofs.OneStageZk`): ``{"blobs", "commitment", "evidence",
+"params"}``, the params and the evidence each naming ``"form": "one-stage"``, the evidence naming the session's files by SHA-512 in place of verdicts and ``blobs`` the paths
 of those files, which the leg hands on as ``out/sampled-proofs.case.json``. v2 verifies one table's ``--zk`` sessions, so
 an audit of several drawn members or of plain sessions has none (``case-check.json``'s ``v2_error``), and onsite
 rejects integrity there. The v1 case (``out/sampled-proofs.v1.case.json``) stays beside it, with whether `OneStage.check`'s

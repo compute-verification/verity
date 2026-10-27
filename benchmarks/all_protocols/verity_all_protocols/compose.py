@@ -102,6 +102,7 @@ def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapp
 
 #: The ports `Core.Onsite.components` may name, by their Lean names: the leg each answers for and its protocol id.
 PORTS = {
+    "VStar.Recursive.Sampled.protocol": ("sampled-proofs", "verity/sampled-proofs/v1"),
     "SampledProofs.OneStageZk.protocol": ("sampled-proofs", "verity/sampled-proofs/one-stage/v2"),
     "PouwCheck.protocol": ("pouw", "verity/pouw/v1"),
     "NetworkCheck.Check.protocol": ("certifier", "verity/network-certificate/v4"),

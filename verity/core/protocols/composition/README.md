@@ -49,7 +49,7 @@ component accepts its own case, and the commitment is `bind` of the components' 
 | --- | --- | --- | --- | --- |
 | communication (the network certifier over the period: its link-windows certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
-| integrity (sampled proofs' one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
+| sampled proofs (the audit on the proofs themselves, which it reads as blobs: one-stage v2 or the recursive audit, as the params' `form` names it) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
 | space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
@@ -73,8 +73,8 @@ carries them as hex under `blobs`.
 `registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
 same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/nci/v1`):
 `registeredB "verity/onsite/v0" NciCheck.Protocol.protocol
-SampledProofs.OneStageZk.protocol.id components`, whose registration is the one sampled proofs' one-stage audit commits
-to, one registration digest in both. NCI is a registration check, not a component (Daniel's ruling: onsite has six
+VStar.Recursive.Sampled.protocol.id components`, whose registration is the one sampled proofs commits to (in either form,
+v1's registration record), one registration digest in both. NCI is a registration check, not a component (Daniel's ruling: onsite has six
 subprotocols, and NCI is none of them). Its formats are the product's with the registration's beside the components':
 
 | input | format |
@@ -96,8 +96,9 @@ adds nothing to what is public or kept.
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
-each component's own Python (PoUW's `core_check.case`; for integrity, v2's framing over sampled proofs' one-stage
-difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a session's proof; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
+each component's own Python (PoUW's `core_check.case`; for sampled proofs, its form's split (`sampled_proofs`) over v2's framing
+over sampled proofs' one-stage difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a
+session's proof, the recursive form refused where the case names none of its files; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
 certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
 `wipe_protocol_case.answer`, on signed wipes from its `case`), which that component's own difftest holds its Lean to;
 for space and bandwidth, their Python verifiers' answers on small periods of their hooks

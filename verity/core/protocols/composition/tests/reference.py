@@ -200,10 +200,57 @@ def one_stage_zk(case: Any) -> dict:
                     digest=lambda c: c[1], check=_v2_check(case.get("blobs", []) if isinstance(case, dict) else []))
 
 
+SAMPLED_PROOFS_V1 = "verity/sampled-proofs/v1"
+
+
+def _form(j: Any, what: str) -> tuple[str, dict]:
+    """`VStar.Recursive.Sampled`'s split: the object's ``form`` and the rest."""
+    if not isinstance(j, dict):
+        raise Reject(f"the {what} is not an object")
+    if not isinstance(j.get("form"), str):
+        raise Reject(f"the {what} names no form")
+    return j["form"], {k: v for k, v in j.items() if k != "form"}
+
+
+def _recursive(rest: dict, what: str):
+    """The recursive form on a case that names no ``recursive`` (`VStar.Recursive.paramsOfJson`, `evidenceOf`), which
+    it refuses; any other is outside the mirror."""
+    if "recursive" in rest:
+        raise ValueError(f"outside the mirror: the recursive audit's {what}")
+    raise Reject(f"the {what} name no recursive")
+
+
+def _form_params(j: Any) -> dict:
+    form, rest = _form(j, "parameters")
+    if form == "one-stage":
+        return _v2_params(rest)
+    if form == "recursive":
+        _recursive(rest, "parameters")
+    raise Reject(f"the parameters' form {form} is not one-stage or recursive")
+
+
+def _form_evidence(b: bytes) -> dict:
+    form, rest = _form(P.canonical_json(b), "evidence")
+    if form == "one-stage":
+        return _v2_evidence(canonical(rest).encode())
+    if form == "recursive":
+        _recursive(rest, "evidence")
+    raise Reject(f"the evidence's form {form} is not one-stage or recursive")
+
+
+def sampled_proofs(case: Any) -> dict:
+    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`one_stage_zk`) when its params
+    and evidence name the form ``one-stage``, a refusal of any other form on the cases the mirror decides."""
+    return P.answer(SAMPLED_PROOFS_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
+                    evidence=_form_evidence, digest=lambda c: c[1],
+                    check=_v2_check(case.get("blobs", []) if isinstance(case, dict) else []))
+
+
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
-#: Integrity: one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`).
-SAMPLED_PROOFS = Ported(V2, one_stage_zk, blobs=True)
+#: Sampled proofs (`VStar.Recursive.Sampled`): one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`),
+#: or the recursive audit, as the params' form names it.
+SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
@@ -409,7 +456,7 @@ class Registered:
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its
-#: registration check, NCI's, on the registration integrity (v2) commits to.
+#: registration check, NCI's, on the registration sampled proofs commits to.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
 ONSITE = Registered("verity/onsite/v0", NCI_CHECK, SAMPLED_PROOFS.id,
                     Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS, WIPE)))
