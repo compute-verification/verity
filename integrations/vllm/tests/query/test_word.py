@@ -32,15 +32,11 @@ def test_query_id_and_parse():
     assert W.parse("16") == (16, 32, 0) and W.parse("16/32+2") == (16, 32, 2) and W.parse("8/8") == (8, 8, 0)
 
 
-def test_max_scaled_is_not_in_the_fa_stream():
-    # ROW word 2 is the kernel's visit index (vt_step): max * scale needs the MS plane
-    for scope in ("AttnBlock_v3{D=64,NVIS=64,FIRST=False,BN=128}", "AttnBlockSoftcap_v1{D=256,NVIS=64,FIRST=False,BN=64,CAP=50.0}"):
-        assert W.committed_today(scope, "F32MulFtz_v1") is None
-        assert W.tap_kernel(scope, "F32MulFtz_v1") == "FA2 / FA3 tap build (MS plane, `max_scaled`)"
-        assert W.committed_today(scope, "F32Max_v1") == "ROW row_max"
-        assert W.committed_today(scope, "GuardNegInfZero_v1") is None                           # opt-in taps stay new taps (norm scales, router)
-        assert W.tap_kernel(scope, "GuardNegInfZero_v1") == "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"
-    assert W.tap_kernel("RMSNormTriton_v1{N=64,EPS=1e-05}", "F32MulFtz_v1") == "vLLM batch-invariant Triton _rms_norm_kernel"
+def test_a_tap_goes_in_its_definitions_kernel():
+    assert W.tap_kernel("AttnBlock_v3{D=64,NVIS=64,FIRST=False,BN=128}") == "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)"
+    assert W.tap_kernel("AttnBlockSoftcap_v1{D=256,NVIS=64,FIRST=False,BN=64,CAP=50.0}") == "FA2 tap build (softcap instantiation)"
+    assert W.tap_kernel("RMSNormTriton_v1{N=64,EPS=1e-05}") == "vLLM batch-invariant Triton _rms_norm_kernel"
+    assert W.tap_kernel("Gemm_v1{K=64,N=8}") == "the Gemm kernel"
 
 
 @pytest.mark.parametrize("fam,statics", [("RMSNormTriton_v1", {"N": 2048, "EPS": 1e-05}), ("Gemm_v1", {"K": 64, "N": 8}),

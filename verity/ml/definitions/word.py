@@ -523,17 +523,7 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
             "max_out_bits": max((c["out_bits"] for c in classes), default=0), "classes": classes, "violations": viol}
 
 
-#: where serving commits each committed interior value today, by (activation family, primitive of the value): the FA2 / FA3 hidden
-#: stream's fields (`commit/hidden_stream.py` StreamLayout; S after the softcap), else None -- a new tap
-_ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
-_STREAM = {"AmpereBF16TcDot16_v2": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
-           "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
-           "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums", "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
-#: attention values the stream carries only under an opt-in tap, or not yet, by primitive: the tap each needs (ROW word 2 is the
-#: kernel's visit index, not max * scale)
-_STREAM_NEW = {"F32MulFtz_v1": "FA2 / FA3 tap build (MS plane, `max_scaled`)",
-               "GuardNegInfZero_v1": "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"}
-#: the kernel a new tap goes in, by the Definition family holding the value
+#: the kernel a tap goes in, by the Definition family holding the value
 _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)", "AttnBlockSoftcap": "FA2 tap build (softcap instantiation)",
                "AttentionHead": "FA2 / FA3 tap build (epilogue)", "AttentionHeadSoftcap": "FA2 tap build (softcap epilogue)",
                "RMSNormTriton": "vLLM batch-invariant Triton _rms_norm_kernel", "RMSNormFusedCuda": "vLLM CUDA fused_add_rms_norm_kernel<bf16, 0, true>",
@@ -542,19 +532,9 @@ _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper main
                "EmbeddingShard": "vLLM's vocabulary-parallel embedding (the rank's vocabulary-range mask)"}
 
 
-def committed_today(scope: str | None, head: str | None) -> str | None:
-    """Where serving commits a committed interior value today (a hidden-stream field), or None: the value needs a new tap."""
+def tap_kernel(scope: str | None) -> str:
+    """The kernel a tap for a committed interior value goes in, by the Definition family holding it (`scope`)."""
     fam = (scope or "").split("{")[0].rsplit("_v", 1)[0]
-    if fam in _ATTENTION:
-        return _STREAM.get(head or "")
-    return None
-
-
-def tap_kernel(scope: str | None, head: str | None = None) -> str:
-    """The kernel a new tap for a committed interior value goes in (`head`: the value's primitive)."""
-    fam = (scope or "").split("{")[0].rsplit("_v", 1)[0]
-    if fam in _ATTENTION and head in _STREAM_NEW:
-        return _STREAM_NEW[head]
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 
@@ -795,6 +775,6 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
     return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired, max_gates=max_gates)
 
 
-__all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",
+__all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "tap_kernel", "QueryRuleViolation",
            "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "use_rule_cache", "unit_rule",
            "RULE_PEAK_PER_GATE", "RULE_PEAK_BASE", "prefetch", "check_calls", "call_groups", "check_query"]

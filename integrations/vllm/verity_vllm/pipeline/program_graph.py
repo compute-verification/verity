@@ -524,8 +524,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
     """`g` with each group's `Q_word_v1` rule (`word_query.unit_rule` of its specialization: units, gates, free gates and committed
     interior words per Call, the unit classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
     primitives of one unit -- and the violations) and the row's totals, with `taps`: every committed interior value class of the row by
-    (activation family, primitive), its words and bytes, where serving commits it today (`word_query.committed_today`) or the kernel a
-    new tap goes in.  A varying group (attention's T) is partitioned at every recorded value, or at its key-block boundaries with the
+    (activation family, primitive), its words and bytes, and the kernel a tap for it goes in.  A varying group (attention's T) is partitioned at every recorded value, or at its key-block boundaries with the
     rest interpolated (`interpolated`); its classes are its largest value's.  `substitute`: {Definition family: registered Definition}
     to partition in a group's place (the same function, e.g. the MoE router stated round by round); off the record path.  `max_gates`:
     the run's gate limits (`word_query.gate_limits`)."""
@@ -590,9 +589,8 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             log(f"  {x['id']} {x['definition']}: {entry['units']} units, {entry['committed_interior_words']} committed interior words")
     tap_rows = []
     for (fam, head), (w, bits) in sorted(taps.items(), key=lambda kv: -kv[1][0]):
-        today = word_query.committed_today(fam, head)
-        tap_rows.append({"activation": fam, "value": head, "words": int(round(w)), "bytes": int(round(bits / 8)), "committed_today": today,
-                         "new_tap_in": None if today else word_query.tap_kernel(fam, head)})
+        tap_rows.append({"activation": fam, "value": head, "words": int(round(w)), "bytes": int(round(bits / 8)),
+                         "new_tap_in": word_query.tap_kernel(fam)})
     g["q_word_v1"] = {"query": word_query.query_id(X, W, extras), **dict(tot), "units_per_gate": round(tot["units"] / tot["gates"], 4) if tot["gates"] else None,
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
@@ -604,7 +602,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
         "bits or one value of <= W bits; per group: per_call and row totals (units, gates, free gates, redundant gates: a value computed "
         "twice inside its own unit, committed interior words), classes (kind, head primitive @ activation, "
         "gates per unit, out bits, count per Call, the primitives of one unit), committed interior values; per row: taps, every committed "
-        "interior value class with where serving commits it today or the kernel a new tap goes in")
+        "interior value class with the kernel a tap for it goes in")
     return g
 
 
