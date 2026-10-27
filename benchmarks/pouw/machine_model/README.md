@@ -508,71 +508,43 @@ census has no IDP4A or LDS kind).
 
 MODEL-MIN (CMP-165) states the accelerator as a small envelope ISA and one premise: every instruction a card executes is
 dominated by an envelope op at no fewer units of the same resource. `data/cover/` is that premise's evidence on the H200
-(sm_90) and the RTX PRO 6000 (sm_120), CMP-166. It is evidence, not trusted base: no verifier and no Lean reads it.
+(sm_90) and the RTX PRO 6000 (sm_120), CMP-166: evidence, not trusted base (no verifier and no Lean reads it).
 `machine-model cover` prints it as Markdown, a table a card, with the counts by mark and every hole.
 
-- **The envelope** is MODEL-MIN's `Accel.Op` (`Security/Definitions/Core/Accel/` on its branch, at the commit
-  `envelope.toml`'s `source` names), with its pipes, formats and each card's numbers (ρ a SM-clock, format weights):
-  `mma` and `mmaSp` (a tile at its format's weight, 2:4 in kept products), `lane` (one of the card's lane opcodes on a
-  pipe: at most the pipe's `n_in` words in and 2 out), `move`, `atom` and `red` (words of a store at its port), `branch`
-  and none. The entries the table needs that `Accel` lacks are marked `proposed`, each with the CMP-165 item asking for
-  it: the `collective` op and resource (MATCH.ANY and REDUX share a unit at 0.5 warp instructions a SM-clock on sm_120,
-  and VOTE spends 16 alu lanes), the `tex` op and resource (4 filtered fetches a SM-clock), and the formats FP6
-  (`e3m2`, `e2m3`) and block-scaled `mxf8` and `mxf6`.
-- **The pipes**: an opcode goes on the pipe a run or the CPG places it on. One that neither places goes on `fma`, which
-  charges only the issue slot every instruction takes, marked coarse: a lane on it dominates any opcode of at most 4
-  words in and 2 out, but RT's RM7 calls that a coarsening for an opcode placed elsewhere.
-- **What must be covered** is every opcode of NVIDIA's family tables, Hopper's for sm_90 and Blackwell's for sm_120
-  (CUDA Binary Utilities 12.9 §4.3 and §4.4 in `../sass_census/data/bu_12_9.json`, and CUDA 13's in
-  `sass_isa_tables.json` beside it), every opcode of the SASS corpus of the CUDA 13 libraries (`corpus.json`, each
-  dotted form with its instruction count), every census kind of the machine model, and every unit θ lists
+- **The envelope** (`envelope.toml`) is MODEL-MIN's `Accel.Op` at the commit its `source` names, with its pipes, formats
+  and each card's numbers (ρ a SM-clock, format weights): `mma`, `mmaSp`, `lane` (a lane opcode on a pipe: at most the
+  pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. What the table needs that `Accel` lacks is
+  marked `proposed` with the CMP-165 item asking for it: the `collective` op and resource, `tex`, and the formats
+  `e3m2`, `e2m3`, `mxf8` and `mxf6`.
+- **The pipes**: an opcode goes on the pipe a run or the CPG places it on, else on `fma`, which charges only the issue
+  slot every instruction takes (coarse, and sound on any pipe).
+- **What must be covered**: every opcode of NVIDIA's family tables (CUDA Binary Utilities 12.9 §4.3 and §4.4 in
+  `../sass_census/data/bu_12_9.json`, CUDA 13's in `sass_isa_tables.json` beside it), every dotted form of the CUDA 13
+  libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit θ lists
   (`theta.UNITS`).
-- **A row** names its opcodes and devices, the census kinds it claims, its mark, its envelope op with its pipe (a lane or
-  a collective), its stores (a move, atom or red) or its formats (an MMA), its units a warp instruction, its register
-  words, its rate (θ keys, or `rate_value` with its unit), its argument and its source. A row with `forms` (regexes over
-  the dotted form)
-  covers those forms of its opcodes; every opcode has a plain row too, which covers every other form. A unit outside
-  the SM pipes (TMA, the copy engines, L2's reductions, NVLink SHARP, texture, RT, video) is a `[[unit]]` with the same
-  marks.
-- **The marks**: `covered` (the argument dominates it at the rate), `coarse` (dominated, at a rate bounded from a coarser
-  figure, such as a pipe's share or the data sheet's peak for the format), `hole` (with its severity: `low`, bounded at
-  a few percent of a resource; `medium`, measured past a resource's ρ; `open`, no rate known; or `outside the card`), and `absent` (the card doesn't execute it: the family table lists it for another card, or ptxas
-  refuses the PTX). An opcode's mark is its worst row's. A row whose op, pipe or format is proposed rests on it, and
-  `machine-model cover` counts the table twice: with the proposed entries, and on `Accel.Op` alone, with those rows as
-  holes.
-- **The rule**: each rate of a covered or coarse row, read in its op's units a SM-clock, is at most its resource's ρ:
-  tensor units (MACs times the largest weight of the row's formats, halved for `mmaSp`) against ρ_tensor, a pipe's
-  lanes (`fma`'s are the issue slot's 128) against the pipe's, fetches against `tex`'s, and words against a store's
-  (device memory's from its words a second). A lane's or collective's words are at most its op's.
+- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, envelope op with its pipe, stores or formats,
+  units a warp instruction, register words, rate (θ keys, or `rate_value` with its unit), argument and source. A row
+  with `forms` (regexes over the dotted form) covers those forms; the opcode's plain row covers the rest. A unit outside
+  the SM pipes is a `[[unit]]` with the same marks.
+- **The marks**: `covered` (dominated at the rate), `coarse` (dominated at a coarser bound: a pipe's share, the issue
+  slot, the data sheet's peak), `hole` (`low`, bounded at a few percent of a resource; `medium`, measured past a ρ;
+  `open`, no rate known; or `outside the card`) and `absent`. An opcode's mark is its worst row's. A row resting on a
+  proposed entry is counted twice: with it, and as a hole on `Accel.Op` alone.
+- **The rule**: each rate of a covered or coarse row, in its op's units a SM-clock (tensor MACs at the format's weight,
+  halved for `mmaSp`; a pipe's lanes, `fma`'s the issue slot's 128; fetches; a store's words), is at most its resource's
+  ρ, and a lane's or collective's words at most its op's.
 
-`tests/test_cover.py` fails when an opcode, a corpus form, a census kind or a unit has no row, when a corpus form matches
-two rows, when a row names an op, pipe, format or θ key that doesn't exist, when a dominated row's rate exceeds its
-resource's ρ or its words exceed its op's, and when a hole has no severity. A new opcode, a new census kind or a new
-entry in `theta.UNITS` therefore needs its row before the tests pass.
+`tests/test_cover.py` fails when an opcode, corpus form, census kind or unit has no row, a form matches two rows, a row
+names an op, pipe, format or θ key that doesn't exist, a dominated row's rate or words exceed its op's, or a hole has no
+severity.
 
-The lowering probe, `../sass_census/lowering.sh` over `lowering.cu`, compiles each case for sm_90a and sm_120a with the
-node's nvcc and checks the SASS it lowers to, or that ptxas refuses it. Its verdict line is `verdict: N/N cases lower as
-expected`, and it runs on any node with `research run --on auto --cwd source -- bash
-benchmarks/pouw/sass_census/lowering.sh`. It is what shows that f16 accumulators, FP6 and QMMA.SF are native on
-sm_120, that OMMA.SF.SP is the native sparse FP4 form, that BMMA's XOR has no native SASS on sm_90a, and that
-tcgen05 and wgmma are absent on sm_120a.
+The evidence a row's source cites, each a `research run` with its verdict line:
 
-GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does, each launched with `research run --on
-vy-nebius-1 --cwd source` and its run id in the row's source once it lands. `match.cu` and `collective.cu` build for
-sm_90a too (`probe.py build --arch sm_90a`, or `../dc/emp.sh build` and `emp.sh time` for the H200), and
-`../opcode_probe/collective_verdict.py` reads either card's rows:
-
-- `../opcode_probe/probes/match.cu` (through `../opcode_probe/run.sh`) times MATCH.ANY with the lanes in 32, 4, 2 and 1
-  classes, and .U64, alone and beside LOP3 and FFMA. Its hypothesis was that a 119-unit simulation in 6-word lanes (238
-  for .U64) dominates it, (119 r_MATCH + 32 (r_LOP3 + r_FFMA)) / 128 ≤ 1 at every point. It failed at one point (1.11):
-  no fold of lanes dominates MATCH.ANY, so it is on the proposed `collective`.
-- `../opcode_probe/probes/collective.cu` times REDUX and VOTE alone, beside LOP3, and REDUX beside MATCH.ANY. Its
-  hypothesis is the REDUX and VOTE rows': each spends at least a fold's 16 alu lanes, so LOP3's rate plus half the
-  collective's stays at most LOP3's cap of 2 a SM-clock. It showed REDUX on MATCH.ANY's unit and VOTE at 16 alu lanes.
-- `../opcode_probe/probes/pipes.cu` times each lane opcode the table had placed on a pipe without a run, alone and
-  beside that pipe's own partner (LOP3, MUFU.EX2 or DFMA); `../opcode_probe/pipes_verdict.py` holds each to the pipe's
-  ρ. It put PLOP3, SGXT and BMSK on alu, the 32-bit conversions on the XU, the 64-bit ones on f64 (beside 24 MUFU.EX2
-  they pass sfu's 0.5), and showed I2I and I2IP off the XU, so the forms it didn't measure are on fma.
-- `../sass_census/multimem.sh` reads the card's multicast attribute and what `cuMulticastCreate` answers, and runs
-  `multimem.ld_reduce` (LDGMC) and `multimem.red` on ordinary memory. Its hypothesis is the sm_120 LDGMC row's: no
-  multicast object exists, and on a unicast address LDGMC faults or loads the one copy.
+- `../sass_census/lowering.sh` (any node, `--on auto`) compiles each case of `lowering.cu` for sm_90a and sm_120a and
+  checks the SASS it lowers to or that ptxas refuses it (`verdict: N/N cases lower as expected`).
+- On one leased RTX PRO 6000 (`--on vy-nebius-1`, through `../opcode_probe/run.sh`): `../opcode_probe/probes/match.cu`
+  (MATCH.ANY by class count and .U64, beside LOP3 and FFMA) and `collective.cu` (REDUX and VOTE beside LOP3, REDUX beside
+  MATCH.ANY), whose verdict is `../opcode_probe/collective_verdict.py`; both build for sm_90a too
+  (`../dc/emp.sh build`, then `emp.sh time` on the H200). `pipes.cu` times each lane opcode beside its pipe's partner
+  (LOP3, MUFU.EX2 or DFMA), and `pipes_verdict.py` holds each to the pipe's ρ.
+- `../sass_census/multimem.sh` reads sm_120's multicast support and runs LDGMC and `multimem.red` on unicast memory.
