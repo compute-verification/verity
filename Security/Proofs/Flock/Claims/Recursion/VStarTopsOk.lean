@@ -169,7 +169,7 @@ theorem srcOf_read {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
   | some r =>
     cases hrs : repSched r.shape with
     | none => simp [srcOf, hr, hrs] at hs
-    | some rs => exact ⟨r, rs, hr, hrs⟩
+    | some rs => exact ⟨r, rs, by first | rfl | exact hr, by first | rfl | exact hrs⟩
 
 /-- **A cap's `capIn` reads its level's tops.** -/
 theorem topsAt_of_capIn {src : _root_.VStar.In.Src} {l N : ℕ} {pin : _root_.VStar.In.PartIn}
