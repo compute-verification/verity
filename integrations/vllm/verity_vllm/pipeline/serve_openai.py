@@ -55,15 +55,13 @@ streamed ids, the seed it carried, and where its finish says the stream ends. ``
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
-whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
-(one line a request: the HTTP id, the engine id, the body's ``user``, its release and its place among the engine's adds,
-the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check),
-``request_users.jsonl`` (requests.jsonl's engine id and ``user`` alone, a line each, `serve_commit.REQUEST_USERS`: the map from
-the engine's ids to the client's users, which holds no request value) and `serve_commit.advice_trace`'s file. The Commit is
-rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), as the bench row's declared
-Commit commits, with its committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under
-``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the recorded vllm-v1 run ``--of-record``
-names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
+whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
+body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
+ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
+`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
+64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
+and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
+recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
