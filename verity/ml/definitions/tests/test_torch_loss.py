@@ -167,7 +167,9 @@ def test_a_rows_backward_is_its_slots_then_its_warps() -> None:
 @pytest.mark.parametrize("M,MEAN", [(16, 1), (40, 0)])
 def test_the_cross_entropy_blocks_are_the_rows_and_the_loss(M, MEAN) -> None:
     """M rows of normal logits and the special ones, every seventh label ignored: the loss, the total weight and each row's max
-    and logsum, then the logits' gradient from go = 1. About a minute each."""
+    and logsum, then the logits' gradient from go = 1. It catches what the row tests can't: the blocks' wiring of each row's
+    target log-probability into NllLossTorch_v1 (at M = 40 its 32 threads' first 8 take two rows; the sum and the mean) and
+    of the loss's gradient into every row's backward. About 1.5 minutes each."""
     rng = np.random.default_rng(9 + M)
     x = np.concatenate([TK.bf16(_f32(rng.normal(0, 3, (M - 6, V)))), logits(rng, 2)])
     t = _labels(rng, M)

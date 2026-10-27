@@ -87,7 +87,8 @@ def test_the_cross_entropy_is_the_gpus(step) -> None:
 @pytest.mark.slow
 def test_the_cross_entropy_row_definitions_are_the_gpus(step) -> None:
     """`LogSoftmaxRow_v1{V=49152}` and `LogSoftmaxNllBackwardRow_v1{V=49152}` on the kept row: its target log-probability and
-    every word of its logit gradient. Traces 48 expf's a lane, a minute or two."""
+    every word of its logit gradient. It catches what the model's GPU test and the V = 12,288 tests can't: the Definitions
+    themselves at the GPU's own V against the GPU's words. Traces 48 expf's a lane, about 2 minutes."""
     x, t, r = step["loss_x"][None], step["loss_t"], int(step["loss_row"])
     _, mx, ls, _, _ = TK.log_softmax_forward(x)
     _same(evaluate_words(bind(TL.LogSoftmaxRow, V=V), x, t[r:r + 1]), [[mx[0], ls[0], step["loss_lp"][r]]])
