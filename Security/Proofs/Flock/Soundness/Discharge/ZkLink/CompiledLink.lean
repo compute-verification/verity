@@ -381,9 +381,7 @@ theorem errZC_of (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
       errAt (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
         (rdTZC A Hs P planZ tab vb R τ c) x := by
   unfold errZC
-  split_ifs with h
-  · rfl
-  · exact absurd hne h
+  rw [dite_cond_eq_true (eq_true hne)]
 
 open Classical in
 /-- **The link event's trace at commit string `c` against the value `x`**: the extraction from the reruns `bs` reads a
@@ -465,9 +463,8 @@ theorem errZC_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : v
   · rw [errZC_of]
     exact trial_err_leZC A Hs P planZ tab vb R τ k Rw M hM ht c (hCR hne)
   · unfold errZC
-    split_ifs with h
-    · exact absurd h hne
-    · positivity
+    rw [dite_cond_eq_false (eq_false hne)]
+    positivity
 
 /-- **The ideal link mass at `c` against the value `x`**: the audit extractor's reading of `c` other than `x`,
 jointly with acceptance and averaged over the draw, is at most `π c` times the binding error there plus `k/(eRw)` for
