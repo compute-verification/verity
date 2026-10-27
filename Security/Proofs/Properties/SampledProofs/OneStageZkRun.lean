@@ -14,7 +14,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.Recursion.NextShaDec
 
-/-! # One-stage v2's acceptance is the sampled model's (ONE-3t, PRF-209)
+/-! # One-stage v2's acceptance is the sampled model's
 
 Sampled proofs' one-stage audit on the proofs (`verity/sampled-proofs/one-stage/v2`, `checkBlobs`) runs
 `flock-verify verify --zk` on each of the evidence's sessions, from the blobs. `acc_of_accepts` says what that
@@ -34,8 +34,8 @@ acceptance means for the run `Claims.Sampling`'s bounds count: the run of the de
   record was written for. It opens with its link message, and wherever the deployed verifier decides on its messages
   and coins, the record's live session is that link, its coin and the round messages with theirs
   (`FlockDeploy.custody`). The model verifier checks this itself; the compiled component, which holds no live coin,
-  can't. It is admissible until ONE-4 (PRF-200) lands, after which the component reads the coins through ONE-4's
-  signed device log and this premise goes.
+  can't. It is admissible until the component reads the coins through a signed device log, and then this premise
+  goes.
 * `SessionRuns sha512 (deploy rel cd)`: the code fact that a checked unit's session is a Flock run deciding the
   sampled run, which `sampling_deployed` takes too. `SamplingDeploy.Code.V` is a field, so nothing else ties the
   sampled verifier's runs to Flock's.
