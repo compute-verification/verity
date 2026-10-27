@@ -4,8 +4,8 @@
         -> (ok, taken, used[, looked], rows, state')
 
 The precommitted compiler (committed Programs = compile(advice) under the advice's hiding root, total, refusing every
-ill-formed advice up to the cap ℓ) need not read the schedule from the advice: ENC-REPLAY replays vLLM's
-scheduler step for step from the certified I/O and a residual of a few bits per certifier window
+ill-formed advice up to the cap ℓ) need not read the schedule from the advice: vLLM's scheduler is
+replayed step for step from the certified I/O and a residual of a few bits per certifier window
 (`benchmarks/network_e2e/encodings/replay.py`). This Definition is one step of that replay, `reference` its
 specification in Python, and the replay's own steps are its difftest (`benchmarks/network_e2e/encodings/replay_vectors.py`).
 
