@@ -1,8 +1,9 @@
 {
- "roots": ["CoreOnsite", "CoreProduct"],
+ "roots": ["CoreOnsite"],
  "exempt": {
   "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
-  "ProductMain": "the product executable's entry point, one line; its command is Core.Product.main, audited under CoreProduct"
+  "ProductMain": "the product executable's entry point, one line; its command is Core.Onsite.productMain, audited under CoreOnsite",
+  "RemoteMain": "the remote executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "layers": {
   "CoreOnsite": {
@@ -15,12 +16,7 @@
     "SampledProofs.OneStage"
    ],
    "except": [],
-   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
-  },
-  "CoreProduct": {
-   "imports": ["CoreOnsite"],
-   "except": [],
-   "why": "the verifier party's product over a deployment's listed components: code over onsite's components, no Mathlib and nothing of Security"
+   "why": "the program is code: the core interface, C-Flock's Lean and its subprotocols' ports, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

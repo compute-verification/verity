@@ -1,6 +1,6 @@
 /-
 The `#guard`s that pin the composition's verdict rule on a product of two stubs, `a` and `b` (`Core.Example.protocol`,
-k = 2): every pair of the components' verdicts, reject dominating; a commitment that doesn't bind their digests; and
+k = 2): every pair of the subprotocols' verdicts, reject dominating; a commitment that doesn't bind their digests; and
 every way the cases can fail to fit the composition.
 -/
 import CoreComposition.Cases
@@ -21,7 +21,7 @@ private def verdict (xs : List Stubbed) (ps : List Stubbed := xs) (c : ByteArray
 #guard ordered [Stub.stub "a", Stub.stub "b"]
 #guard !ordered [Stub.stub "b", Stub.stub "a"] && !ordered [Stub.stub "a", Stub.stub "a"]
 
--- every pair of verdicts: accept only when both accept, and a rejection dominates an undecided component
+-- every pair of verdicts: accept only when both accept, and a rejection dominates an undecided subprotocol
 #guard verdict [accepts "a", accepts "b"] == .accept
 #guard verdict [accepts "a", rejects "b"] == .reject
 #guard verdict [rejects "a", accepts "b"] == .reject
@@ -35,12 +35,12 @@ private def verdict (xs : List Stubbed) (ps : List Stubbed := xs) (c : ByteArray
 #guard (answer [undecided "a", undecided "b"]).reason ==
   some "a undecided: 1 of the 2 units drawn; b undecided: 1 of the 2 units drawn"
 
--- a component whose own commitment doesn't decode rejects, and so the whole, beside an undecided one
+-- a subprotocol whose own commitment doesn't decode rejects, and so the whole, beside an undecided one
 #guard verdict [undecided "a", { accepts "b" with root := ByteArray.empty }] == .reject
 #guard (answer [undecided "a", { accepts "b" with root := ByteArray.empty }]).reason ==
   some "b reject: commitment: a root is 32 bytes, not 0"
 
--- the commitment must bind the components' digests: a wrong one rejects, beside an undecided component too
+-- the commitment must bind the subprotocols' digests: a wrong one rejects, beside an undecided subprotocol too
 #guard verdict [accepts "a", accepts "b"] (c := commitmentOf toy [accepts "a", { accepts "b" with root := ⟨#[1]⟩ }])
   == .reject
 #guard verdict [accepts "a", undecided "b"] (c := bind "verity/other/v0" [("a", (accepts "a").root), ("b", (accepts "b").root)])
@@ -50,7 +50,7 @@ private def verdict (xs : List Stubbed) (ps : List Stubbed := xs) (c : ByteArray
 #guard (answer [accepts "a", accepts "b"] (c := ByteArray.empty)).reason ==
   some "commitment: the binding of the components' digests is 64 bytes, not 0"
 
--- on acceptance the components' public outputs and profiles, keyed by id; otherwise nothing
+-- on acceptance the subprotocols' public outputs and profiles, keyed by id; otherwise nothing
 #guard (answer [accepts "a", accepts "b"]).published.map (·.compress) == some "{\"a\":{\"passed\":2},\"b\":{\"passed\":2}}"
 #guard (answer [accepts "a", accepts "b"]).profile.map (fun j => (j.getObjValD "a" == j.getObjValD "b", j.getObjValD "c"))
   == some (true, .null)
@@ -66,7 +66,7 @@ private def readsBack (a : Answer) : Bool :=
 #guard [answer [accepts "a", accepts "b"], answer [accepts "a", undecided "b"], answer [undecided "a", rejects "b"],
   answer [accepts "a"] [accepts "a"], answer [accepts "a", accepts "b"] (c := ByteArray.empty)].all readsBack
 
--- the cases must fit the composition: each component named once, in order, under the composition's params
+-- the cases must fit the composition: each subprotocol named once, in order, under the composition's params
 #guard (answer [accepts "a"] [accepts "a"]).reason == some "params: b is missing"
 #guard (answer [accepts "a"] [accepts "a", accepts "b"]).reason == some "evidence: b is missing"
 #guard (answer [accepts "a", accepts "b", accepts "c"] [accepts "a", accepts "b"]).reason ==

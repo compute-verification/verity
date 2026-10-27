@@ -1,3 +1,3 @@
-import CoreProduct
+import CoreOnsite
 
-def main (args : List String) : IO UInt32 := Core.Product.main args
+def main (args : List String) : IO UInt32 := Core.Onsite.productMain args

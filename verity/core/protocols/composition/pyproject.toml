@@ -1,7 +1,7 @@
 [project]
 name = "verity-core-composition"
 version = "0.0.0"
-description = "The difftest of onsite's and remote's Lean (core_composition, core_onsite, core_remote) against the trial's composition rule with reject dominance."
+description = "The difftest of onsite's and remote's Lean (core_composition, core_onsite) against the trial's composition rule with reject dominance."
 requires-python = ">=3.12"
 dependencies = ["verity-difftest"]
 
@@ -14,7 +14,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: `lake` builds the onsite and remote packages beside this one (each product's executable, whose `serve` the
+# Test-only: `lake` builds the onsite package beside this one (its `onsite` and `remote` executables, whose `serve` the
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
 # Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the
@@ -25,10 +25,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its generator, each from its own
 # suite's tests; and space's and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
-# them what they import of `verity.ml` and `verity.errors`.
+# them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.core.deploy.config`)
+# and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
-          "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
-          "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
+          "verity/core/difftest", "verity/core/deploy", "verity/core/wire", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/profile.py",
+          "verity/core/protocols/onsite", "verity/core/protocols/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/network", "verity/core/protocols/certifier",
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",

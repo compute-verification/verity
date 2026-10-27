@@ -28,13 +28,14 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
-every component accepts its own case, and the commitment binds all of theirs.
+every subprotocol accepts its own case, and the commitment binds all of theirs. Both composites are built by one
+constructor in `verity/core/protocols/onsite`, and a verifier runs no other:
 
-- **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, the remote bandwidth audit and the network certifier.
-- **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs and PoUW.
+- **Onsite**, for an auditor with devices at the datacenter: sampled proofs, PoUW, PoUS, the remote bandwidth audit and
+  the network certifier.
+- **Remote**, for an auditor with no devices there: onsite restricted to sampled proofs and PoUW.
 
-The wipe, the bandwidth audit over PoUS's store and NCI are not components of either yet.
+The wipe, the bandwidth audit over PoUS's store and NCI are not subprotocols of either yet.
 
 ## The vLLM integration
 

@@ -663,8 +663,7 @@
       "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
       "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
       "owns": [
-        "verity/core/protocols/onsite/",
-        "verity/core/protocols/remote/"
+        "verity/core/protocols/onsite/"
       ],
       "branch_suffixes": [
         "9c4d"

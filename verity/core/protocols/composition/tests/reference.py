@@ -1,5 +1,5 @@
-"""The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
-of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
+"""The Python the composition's Lean (`CoreComposition`, `CoreOnsite`) is held to: the composition rule of onsite and
+remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
 `Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
 mirror over the certifier's certificates and one-stage's answers,
@@ -224,6 +224,13 @@ class Product:
         return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
-REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))
+def restrict(id: str, ids: tuple[str, ...]) -> Product:
+    """`Core.Onsite.restrict`: the composite `id` over those of onsite's subprotocols whose ids `ids` lists."""
+    return Product(id, tuple(C for C in SUBPROTOCOLS if C.id in ids))
+
+
+#: `Core.Onsite.subprotocols`, in the order of their ids.
+SUBPROTOCOLS = (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS)
+#: `Core.Onsite.protocol` and `Core.Onsite.remote`: remote is onsite restricted to PoUW and sampled proofs.
+ONSITE = restrict("verity/onsite/v0", tuple(C.id for C in SUBPROTOCOLS))
+REMOTE = restrict("verity/remote/v0", (POUW.id, SAMPLED_PROOFS.id))
