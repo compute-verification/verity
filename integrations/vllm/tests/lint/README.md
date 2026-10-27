@@ -3,7 +3,7 @@
 The vLLM integration's quality bar is enforced in code by shrink-only ratchets, which every check runs. Each test's
 failure message carries its fix.
 
-- **The rules** (`test_p01_core_abstractions.py` to `test_p14_one_way.py`, machinery in `_ratchet.py`). Each scans
+- **The rules** (`test_p01_core_abstractions.py` to `test_p16_cli_callers.py`, machinery in `_ratchet.py`). Each scans
  `verity_vllm/` with `ast` and regexes, importing nothing, so the lints need neither torch nor vllm and run in seconds.
  A violation is keyed by file, kind, enclosing symbol and detail, and is compared with `allowlists/pNN_*.json`, the
  violations that existed when the rule came in. The rules cover:
@@ -20,7 +20,9 @@ failure message carries its fix.
  - P11: names;
  - P12: shared keys;
  - P13: duplicate bodies;
- - P14: one way.
+ - P14: one way;
+ - P15: no versioned twins;
+ - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
  counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
  through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name.
@@ -45,8 +47,8 @@ at least as much, so a move from one package to another passes, but the kind's t
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml` and the root `dev` group's
 ruff pin, so the gate reruns it with the base's config at the base's pin. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
-PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. Once drive.toml's `landing_gates` names it, the merge
-queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
+PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
+it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 

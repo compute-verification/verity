@@ -12,8 +12,9 @@ DMs Daniel what changed in a guarantee (`research merge`'s `spec_alert`).
 
 RUN is the failed check of BRANCH's tip on the remote, or every shard of one.  Each must be a `check` attempt of exactly that
 clean commit, ended; every step that failed must be `lean-audit` (one it stopped proved nothing, and runs again), and every package that failed there must have a regenerated
-record.  A both-sides change to one record entry never gets here: the train's merge driver (`tools/verity/lean/merge.py`) refuses
-it when the train is built, and it goes back to its owner.  Anything else refuses, naming why, and commits nothing (exit 1).
+record.  A record both sides changed gets here as the train's merge driver's candidate (`tools/verity/lean/merge.py`), regenerated
+like any other; what only a person writes (an owner, a dependency) the driver refuses when the train is built, and it goes back
+to its owner.  Anything else refuses, naming why, and commits nothing (exit 1).
 
 The commit (subject naming the runs, a `Regenerated:` trailer naming the files, which `research merge`'s `reverted` reads as
 rewrites the train means) is pushed to BRANCH as a fast-forward, never forced; `--dry-run` prints what it would write and pushes

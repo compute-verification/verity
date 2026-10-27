@@ -132,7 +132,7 @@ def make_bmap(vals: dict, *, steps=(0,)) -> tuple[dict, dict]:
 
 def _bnd(n_req: int) -> dict:
     """A binding record that passes binding_check on its own (context ok, coverage ok, population openings skipped): B = n_req."""
-    return {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
 def reader(committed: dict):

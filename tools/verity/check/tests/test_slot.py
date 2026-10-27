@@ -150,6 +150,7 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
 
     monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
     monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", tmp_path / "no-dropins")
     (tmp_path / "slots").write_text("b 0 scope=1\n")
     with pytest.raises(Exec):
         SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
@@ -160,6 +161,21 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
     with pytest.raises(Exec):
         SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
     assert ran["argv"] == ["uv", "run", "check.py"] and ran["unit"] is None, "no scope=1: CMD as it is, and no stale unit name"
+
+
+def test_a_scoped_check_on_a_node_that_caps_login_sessions_gets_the_same_memory_cap(tmp_path, monkeypatch):
+    """26 Oct: the research suite's local `research run` tests exited 75 inside a scoped check on vy-nebius-cpu-5, since
+    `research run` refuses an uncapped cgroup on a node whose login sessions have a MemoryMax."""
+    dropins = tmp_path / "session-.scope.d"
+    dropins.mkdir()
+    (dropins / "50-vy-job-memory.conf").write_text("[Scope]\nMemoryMax=600G\n")
+    (dropins / "60-other.conf").write_text("[Scope]\nTasksMax=infinity\n")
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", dropins)
+    argv, unit = SLOT.scoped(["uv", "run", "check.py"], "b", "r1")
+    assert argv == ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit=check-b-r1", "--property=MemoryMax=600G",
+                    "--", "uv", "run", "check.py"]
+    (dropins / "70-off.conf").write_text("[Scope]\nMemoryMax=infinity\n")
+    assert "--property=MemoryMax=600G" not in SLOT.scoped(["true"], "b", "r1")[0], "the last drop-in that sets it wins"
 
 
 def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):

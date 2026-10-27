@@ -83,6 +83,7 @@
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
@@ -93,6 +94,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
+from verity.core.protocols.pouw.circuit import h1device as HD
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json, encode_program
@@ -148,14 +150,28 @@ def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
     return [s * len(of_k[shapes[w][1]]) + of_k[shapes[w][1]].index(per[w]) for s, w in calls]
 
 
+def card_arch(device: Any = None) -> str:
+    """The architecture of the CUDA card ``device`` (the current one when None) as H1's device records name it
+    (`h1device.DEVICES`): an H100 or H200's, compute capability 9.0, or the RTX PRO 6000's, 12.0. ValueError on a card
+    with no record."""
+    import torch
+
+    major, minor = torch.cuda.get_device_capability(device)
+    return HD.device(f"sm_{major}{minor}").arch
+
+
 def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
              tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None, prefix: str = PREFIX,
-             unit: Callable[[int], Any] | None = None) -> Program:
+             unit: Callable[[int], Any] | None = None, arch: str | None = None) -> Program:
     """The window Program a static window declares before it serves: ``steps`` steps, each calling every linear (``shapes``,
     each ``(n, K)``, named by ``modules``) in order, laid out by `layout`, its A slot for ``rows`` token rows, its
     parameters under ``prefix`` (`PREFIX`, which names no window): one Program for every window of the declaration, the
-    period's ``--circuit`` (its `program_digest`) and each window's `Served.program`."""
+    period's ``--circuit`` (its `program_digest`) and each window's `Served.program`. Without ``unit``, each K's tile
+    unit is `h1window.tile_unit`'s on ``arch`` (`card_arch`; sm_120 when None), which refuses a K outside that card's
+    record's domain (ValueError); sm_90's Program is sm_120's byte for byte."""
     lay = declared_layout(shapes, modules, rows, steps, tile, blocks)
+    if unit is None and arch is not None:
+        unit = functools.partial(HW.tile_unit, tile=tuple(tile), arch=arch)
     return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
 
 
@@ -273,9 +289,9 @@ def model_key(answer: Mapping[str, Any]) -> ModelKey:
 @dataclass
 class Served:
     """How an `H1Run` commits its calls' tables and its weights as the window Program's registered values. ``tile``: the
-    Program's R × C (`pouw_h1.TILE`). ``unit(k)``: the tile unit at contraction k (default `h1window.tile_unit`; a stand-in
-    of its parameter shape in tests). ``blocks``: each linear's input block within a step (default each its own;
-    ``(0, 0, 0, 1)`` for q, k, v and o). ``window``: the window's key, else the window-open root its commitment names.
+    Program's R × C (`pouw_h1.TILE`). ``unit(k)``: the tile unit at contraction k (default `h1window.tile_unit` on
+    ``arch``, the serving card's architecture, `card_arch`; a stand-in of its parameter shape in tests). ``blocks``: each
+    linear's input block within a step (default each its own; ``(0, 0, 0, 1)`` for q, k, v and o). ``window``: the window's key, else the window-open root its commitment names.
     ``weights``: the period's registered `Weights`, or ``registry`` the auditor's registration of the served model
     (`ModelKey`, the gate's ``model-key``), whose key registers them from the served model at install (`weights_root`,
     from `pouw._install_h1`) and whose root they must fold to; without either the window registers its own ``b/<K>``.
@@ -309,6 +325,8 @@ class Served:
     #: where they are on a CUDA device, before they're read to the host (it copies them and keeps no reference to ``a``,
     #: which the engine reuses; a ValueError refuses the window)
     receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
+    #: the serving card's architecture (`card_arch`), whose H1 record bounds each K's tile unit; sm_120 when None
+    arch: str | None = None
     #: with ``receipts``, each open step A table's calls, their served codes and s_a, until their step's last call of K
     _held: dict[str, list[tuple[Any, np.ndarray, np.ndarray]]] = field(default_factory=dict)
     #: the window's ok rows ``<prefix>ok`` (`h1window.OK_PORT`'s, o1), from `close`: in no entry, as credit registers them
@@ -342,7 +360,7 @@ class Served:
             raise ValueError(f"K {sorted({k for _n, k in shapes})}: a row's codes are whole u16 words")
         if self.program is None:
             self.program, self.program_digest = declared(shapes, modules, rows, steps, self.tile, self.blocks,
-                                                         self.prefix, self.unit), None
+                                                         self.prefix, self.unit, self.arch), None
         if self.program_digest is None:
             self.program_digest = P.program_digest(self.program)
         S = self.program.fn.S()
@@ -475,7 +493,7 @@ class Served:
         of its step), and the Commit's value of it (`pouw_h1_commit.CommitTap.input_ids`)."""
         if self.tap is None or self.refused or self.program is None:
             return
-        ids = self.tap.ids_at(r, next((c.pad for c in run.calls if c.step == r and c.layer == 0), 0))
+        ids = self.tap.ids_at(r)
         if r:
             try:
                 self._register_ids(run, r, ids)

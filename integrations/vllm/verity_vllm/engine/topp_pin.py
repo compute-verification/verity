@@ -10,7 +10,7 @@ to the registered S (`check.match.sampler_geometry`).
 
 The pin is always on.  Importing this module `arm`\\ s it, as `engine.sparse_mla` arms its switch: it is installed when vLLM's module
 is imported, and nothing is imported for it.  The driver (`engine.build.build_engine`) and each tensor-parallel rank
-(`engine.rank_worker`) import it before vLLM builds the model.
+(`pipeline.tp.rank_worker`) import it before vLLM builds the model.
 """
 from __future__ import annotations
 

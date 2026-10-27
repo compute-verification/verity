@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.check import kernel_identity as KI
+from verity_vllm.engine import kernel_identity as KI
 
 _WRAPPER = '''# AOT ID: ['0_inference']
 from torch._inductor.async_compile import AsyncCompile

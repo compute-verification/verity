@@ -48,8 +48,8 @@ certifies beside what it did.
   reasons every `<ms>` through the lease into `smi.csv`, on the wall time `joint.py`'s anchor puts its passes on.
   A tuned arm in `ARMS` needs `TUNED=<build dir|art:id>`,
   the harness's library as its `native/build.sh` makes it (`pouw-harness-build/v1`).
-- `window.sh`: the timed window's legs (A to F, `run.sh` each) under one `gpu-lease 8 --wait --timed --max-min 60`:
-  every leg prepared first over one scratch, the lease taken at the booking's start (`AT`), the legs run in order on GPU 4
+- `window.sh`: the timed window's steps (A to F, `run.sh` each) under one `gpu-lease 8 --wait --timed --max-min 60`:
+  every step prepared first over one scratch, the lease taken at the booking's start (`AT`), the steps run in order on GPU 4
   with host threads under `taskset -c 128-159`, each only with its minutes left, the booking's windows-file line deleted
   once the lease ends (`RELEASE`), then the retained passes verified. The rehearsal is the same run on one GPU.
 - `render.py`: the table, from a run's `art:` id (or a local `chain.json`), on demand, with the PoUS section when the run

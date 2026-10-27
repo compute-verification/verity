@@ -458,7 +458,7 @@ only for `gate-recomputed` (two members of one Call each computing `x0 + x1`), w
 
 `Q_call` v1 (`partition_object.QUERIES`, `call_query`; the algorithm in `verity.ml.circuits.cut`'s docstring, `cut.evaluate_call`) is a
 query of its own, `{"name": "Q_call", "version": 1, "params": {"X": X}}`, with one parameter: X, an integer in 1..2^16 (32 is the
-agreed value). It reads a Program through §1–§7. A *proof unit* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
+agreed value). It reads a Program through §1–§7. A *proof block* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
 defines them, counted in bits at any gate width. The one rule is w_out(S) ≤ X; inputs are unbounded. This section is a delta
 on §8 and §10.
 

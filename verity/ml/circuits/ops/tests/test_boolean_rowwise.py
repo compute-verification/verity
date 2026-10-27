@@ -2,8 +2,9 @@
 composed in order (`F32Add_v2`, `F32Mul_v2`, `F32Div_v2`, `MufuEx2Ftz_v1`, `F2fpBf16_v1`), on rows of scores, uniform words,
 special words and ties; the three softmax pieces, each reading the one before's 16-bit outputs, compose to a softmax within
 bf16's rounding of the exact one; the embedding's coordinate is `Bf16AddF2fp_v1` of the column's word at the token (0x7FFF
-past the vocabulary) and the position's, at every 16-bit token for V = 256 and on ragged vocabularies; each is Boolean with
-16 output bits; and a row of no words, a third half or a vocabulary outside [1, 2^16] is refused."""
+past the vocabulary) and the position's, at every 16-bit token for V = 256 and on ragged vocabularies; each RMSNorm half is its
+`ops.boolean.rmsnorm` part's 16 bits, and Phase 1's RMSNorm from halves is `RmsNormRow_v1`; each is Boolean with 16 output
+bits; and a row of no words, a third half, a vocabulary outside [1, 2^16] or a part's bad statics is refused."""
 from __future__ import annotations
 
 import numpy as np
@@ -16,6 +17,7 @@ from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import mufu as M
 from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops.boolean import rmsnorm as R
 from verity.ml.circuits.ops.boolean import rowwise as BR
 
 #: signed zeros, the smallest and largest subnormals, the smallest normal, 1.0 and its neighbours, 2, the largest finite,
@@ -156,9 +158,60 @@ def test_the_embedding_coordinate_adds_the_tokens_word_to_the_positions(V: int, 
     assert np.array_equal(_words(bind(BR.EmbeddingCoordinate, V=V), tok, col, pos), _embedding(tok, col, pos))
 
 
+def _activations(rng, n: int, N: int) -> np.ndarray:
+    """bf16 words of either sign whose squares are normal (exponent fields in [112, 136)), overflow, or are subnormal or 0."""
+    e = np.choose(rng.integers(0, 3, (n, N)), [rng.integers(112, 136, (n, N)), rng.integers(191, 255, (n, N)),
+                                                rng.integers(0, 64, (n, N))])
+    return (rng.integers(0, 2, (n, N)) << 15 | e << 7 | rng.integers(0, 128, (n, N))).astype(np.uint16)
+
+
+def _f32_words(rng, n: int, G: int) -> np.ndarray:
+    """Chunk sums of activations' squares, uniform words and special words."""
+    sums = _words(bind(R.RmsSumSqPart, C=3), _activations(rng, n * G, 3)).reshape(n, G)
+    uniform = rng.integers(0, 1 << 32, (n, G), dtype=np.uint64).astype(np.uint32)
+    return np.choose(rng.integers(0, 4, (n, G)), [sums, sums, uniform, rng.choice(F32_SPECIALS, (n, G))]).astype(np.uint32)
+
+
+def _join(lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    return lo | hi << np.uint32(16)
+
+
+def test_each_half_is_its_parts_16_bits() -> None:
+    """`RmsSumSqPartHalf` on rows of activations, scores, uniform and special words; `F32SumPartHalf` and `RmsNormRecipHalf`
+    on chunk sums, uniform and special f32 words, at Phase 1's and Phase 2's N and G."""
+    rng = np.random.default_rng(700)
+    cases = []
+    for C in (1, 4):
+        x = np.concatenate([_activations(rng, 2000, C), _rows(rng, 2000, C)])
+        cases.append((bind(BR.RmsSumSqPartHalf, C=C), bind(R.RmsSumSqPart, C=C), x))
+    for G in (1, 3):
+        cases.append((bind(BR.F32SumPartHalf, G=G), bind(R.F32SumPart, G=G), _f32_words(rng, 3000, G)))
+    for N, G, eps in ((128, 1, 1e-5), (16384, 2, 1e-5), (4, 2, 1e-6)):
+        cases.append((bind(BR.RmsNormRecipHalf, N=N, G=G, EPS=eps), bind(R.RmsNormRecip, N=N, G=G, EPS=eps),
+                      _f32_words(rng, 3000, G)))
+    for half, part, s in cases:
+        want = _words(part, s)
+        for h in (0, 1):
+            assert np.array_equal(_words(bind(half, HALF=h), s), (want >> np.uint32(16 * h)) & np.uint32(0xFFFF)), (half.id, h)
+
+
+@pytest.mark.parametrize("N", [1, 8])
+def test_phase_1s_rmsnorm_from_halves_is_the_row(N: int) -> None:
+    """One chunk and G = 1, each unit reading the 16-bit words the one before output: the chunk sum's two halves, rs's two
+    halves from it, and `RmsNormOut_v1{C=1}` at each coordinate, against `RmsNormRow_v1{N}`."""
+    rng = np.random.default_rng(800 + N)
+    x, w = np.concatenate([_activations(rng, 1500, N), _rows(rng, 500, N)]), _activations(rng, 2000, N)
+    acc = _join(*(_words(bind(BR.RmsSumSqPartHalf, C=N, HALF=h), x) for h in (0, 1))).reshape(-1, 1)
+    rs = _join(*(_words(bind(BR.RmsNormRecipHalf, N=N, G=1, EPS=1e-5, HALF=h), acc) for h in (0, 1)))
+    out = np.stack([_words(bind(R.RmsNormOut, C=1), x[:, j:j + 1], rs, w[:, j:j + 1]) for j in range(N)], axis=1)
+    want = np.asarray(BS.evaluate_words(bind(R.RmsNormRow, N=N, EPS=1e-5), x, w)).astype(np.uint32).reshape(-1, N)
+    assert np.array_equal(out, want)
+
+
 @pytest.mark.parametrize("target", [bind(BR.SoftmaxMax, N=3), bind(BR.SoftmaxRecip, N=3, HALF=0),
                                     bind(BR.SoftmaxRecip, N=3, HALF=1), bind(BR.SoftmaxOut),
-                                    bind(BR.EmbeddingCoordinate, V=256)],
+                                    bind(BR.EmbeddingCoordinate, V=256), bind(BR.RmsSumSqPartHalf, C=2, HALF=0),
+                                    bind(BR.F32SumPartHalf, G=2, HALF=1), bind(BR.RmsNormRecipHalf, N=8, G=1, EPS=1e-5, HALF=1)],
                          ids=lambda t: t.id)
 def test_each_is_boolean_with_16_output_bits(target) -> None:
     assert BL.is_boolean(target)
@@ -173,3 +226,16 @@ def test_a_row_of_no_words_a_third_half_or_a_vocabulary_outside_16_bits_is_refus
     for V in (0, (1 << 16) + 1, "256"):
         with pytest.raises(ValueError, match="V is the vocabulary"):
             bind(BR.EmbeddingCoordinate, V=V).signature()
+
+
+def test_a_half_refuses_a_third_half_and_its_parts_bad_statics() -> None:
+    for d, ok in ((BR.RmsSumSqPartHalf, {"C": 2}), (BR.F32SumPartHalf, {"G": 2}),
+                  (BR.RmsNormRecipHalf, {"N": 8, "G": 1, "EPS": 1e-5})):
+        with pytest.raises(ValueError, match="HALF is 0"):
+            bind(d, **ok, HALF=2).signature()
+    bad = ((BR.RmsSumSqPartHalf, {"C": 0}), (BR.RmsSumSqPartHalf, {"C": "2"}), (BR.F32SumPartHalf, {"G": 0}),
+           (BR.RmsNormRecipHalf, {"N": 0, "G": 1, "EPS": 1e-5}), (BR.RmsNormRecipHalf, {"N": 8, "G": 0, "EPS": 1e-5}),
+           (BR.RmsNormRecipHalf, {"N": 8, "G": 1, "EPS": 0.0}), (BR.RmsNormRecipHalf, {"N": 8, "G": 1, "EPS": "1e-5"}))
+    for d, s in bad:
+        with pytest.raises(ValueError):
+            bind(d, **s, HALF=0).signature()
