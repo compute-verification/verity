@@ -51,7 +51,8 @@ open Classical in
 theorem accepted_wrong_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.src) (τ : Strategy w.game)
     (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ w.K₀ ≤ (w.wrongSet τ).card) w.game τ ≤ w.miss + w.ks + w.link := by
-  have h := Flock.SecurityProofs.EndToEndHidden w.n w.Reg w.I w.ht w.D w.hD w.hU w.pub w.hpub w.hpt w.hscope w.kd
+  have h := Flock.SecurityProofs.EndToEndHidden w.n w.Reg w.I w.ht w.D w.hU w.pub (Flock.Sha512.hash w.I.circuitFile)
+    (Flock.Sha512.hash w.I.publicFile) (And.intro w.hD (And.intro w.hpub (And.intro rfl rfl))) w.hpt w.hscope w.kd
     w.hkd w.hdiv w.dj w.S₀ w.d₀ w.y₀ w.wr w.dg w.N w.Ω w.Lb w.src hA3 w.hTags w.hCust w.k w.Rw w.M w.hk w.hRw w.hM
     w.ρ w.hρ w.hr w.K₀ w.hK₀ τ
   refine le_trans h (add_le_add (add_le_add le_rfl ?_) ?_)

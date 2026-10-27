@@ -101,9 +101,9 @@ theorem endToEndHiddenC_of (hOC : OpeningsCanonTarget) : EndToEndHiddenC := by
 /-- **`EndToEndHiddenC` gives `EndToEndHidden`**: a unit wrong on the registration is wrong on it with canonical
 openings (`wrongRegZ_subset_wrongRegZc`), so `EndToEndHidden`'s event implies `EndToEndHiddenC`'s. -/
 theorem endToEndHidden_of_c (h : EndToEndHiddenC) : Flock.Guarantees.EndToEndHidden := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
+  intro n Reg I ht D hU pub _ _ hFiles hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
     hRw hM ρ hρ hr K₀ hK₀ τ L P vb σ
-  have h' := h n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M
+  have h' := h n Reg I ht D hFiles.1 hU pub hFiles.2.1 hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M
     hk hRw hM ρ hρ hr K₀ hK₀ τ
   refine le_trans (prob_mono ?_ _ _) h'
   intro o ho

@@ -17,6 +17,9 @@ import Proofs.Flock.Bridge.PublicWitnesses
 import Proofs.Flock.Bridge.PublicToyDesc
 import Proofs.Flock.Bridge.HiddenReturns
 import Proofs.Flock.Bridge.HiddenLayer
+import Proofs.Flock.Bridge.HiddenModel
+import Proofs.Flock.Bridge.Assumptions.ToySetup
+import Proofs.Flock.Bridge.HiddenModelWitness
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -35,7 +38,9 @@ parameters for `p ≤ 2^-200`. `PublicWitnesses`: its honest lemma (the paramete
 lemma's structural premises (no port, a computed returned gate, `ioSum ≤ 2^40`). `HiddenReturns`: under the
 parse those premises are never met, since a returned gate is an output row's bit (`Flock.Bridge.outputs_noPort`), so
 no file parses to the toy (`Flock.Bridge.toyDesc_unparsed`). `HiddenLayer`: the hidden-output count curve
-(`zk_flock_countPr_reg` at `planZHJ`) is nontrivial at a perfectly binding toy binding (`Flock.Bridge.countPrReg_nontrivial`). -/
+(`zk_flock_countPr_reg` at `planZHJ`) is nontrivial at a perfectly binding toy binding (`Flock.Bridge.countPrReg_nontrivial`). `HiddenModel`: `EndToEndHiddenModel` at
+the verifier that accepts everything, and its toy, whose every table is refused. `HiddenModelWitness`: under
+`toy-setup` (`Assumptions.ToySetup`), that statement is false (`Flock.Bridge.endToEndHiddenModel_nontrivial`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl

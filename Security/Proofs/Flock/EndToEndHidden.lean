@@ -3,9 +3,12 @@ import Proofs.Flock.EndToEndHidden.Statement
 /-!
 # Proof of C-Flock's end-to-end guarantee under hidden outputs
 
-`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
-miss term in closed form (`Audit.Law.subset_miss`), and its knowledge and link terms the finders' collision
-probabilities (`ksAvgPrZ`, `linkPrZC`).
+`Flock.SecurityProofs.EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel` is `ZkLink.zk_flock_countPr_reg` at
+the hidden-output tables, its knowledge term at the finders' collision probabilities (`ksAvgZC_le_pr`).
+`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is its corollary (`EndToEndHidden_of_model`):
+the model at the key program's partition and the public file's rows, through the live session
+(`zk_headline_exec_tables`), with its miss term in closed form (`Audit.Law.subset_miss`), and its knowledge and link
+terms the finders' collision probabilities (`ksAvgPrZ`, `linkPrZC`).
 `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` is
 `zk_session_soundHJ_custody_drawn_reg`. Each reads the circuit the descriptor unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
 `EndToEndHiddenDrawnFlat` are the two at the flat descriptor `Desc.single c` (`Flock.Desc.parse_single`).
@@ -18,14 +21,37 @@ namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- **C-Flock's one-stage audit, end to end, under hidden outputs.** -/
-theorem EndToEndHidden : Flock.Guarantees.EndToEndHidden := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
-    hRw hM ρ hρ hr K₀ hK₀ τ L P vb σ
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hkd
-    hdiv dj y₀ wr dg N Lb src hA3 hTags hCust hk hRw hM hρ hr K₀ τ
+open FlockSoundness.Discharge FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkHidden in
+/-- **C-Flock's one-stage audit under hidden outputs, at the model level.** -/
+theorem EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel := by
+  intro n Reg I mPts dj S₀ d₀ y₀ C P decode Dh Hc vb hlow hown L k Rw M hk hRw hM ρ hρ hr K₀ σ
+  exact (zk_flock_countPr_reg execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb hlow hown hRw hM hρ hr
+    (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) K₀ σ).trans
+    (add_le_add (add_le_add le_rfl (ksAvgZC_le_pr execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ))) le_rfl)
+
+open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden in
+/-- **`EndToEndHiddenModel` gives `EndToEndHidden`**: the live audit is the audit game at the simulated prover
+(`zk_headline_exec_tables`), where the model applies at the key program's partition, the binding of the public file's
+rows and the lowering the placement gives, and the live subset draw misses at most as often as the uniform one. -/
+theorem EndToEndHidden_of_model (hm : Flock.Guarantees.EndToEndHiddenModel) : Flock.Guarantees.EndToEndHidden := by
+  intro n Reg I ht D hU pub pinC pinP hFiles hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k
+    Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ L P vb σ
+  have hc := Flock.Desc.parse_flat hFiles.1
+  have h := zk_headline_exec_tables execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
+    (decAtZJ (planZHJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+    (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+      (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+        fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ _ _
+    ((hm n Reg I _ dj S₀ d₀ y₀ _ P _ _ _ vb
+      (ZkSession.loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
+      (Layout.keyProg_readsOwn D.unroll hU n _) L k Rw M hk hRw hM ρ hρ hr K₀ σ).trans
+      (add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀) le_rfl) le_rfl))
   rw [Law.subset_miss hkd hK₀] at h
   exact h
+
+/-- **C-Flock's one-stage audit, end to end, under hidden outputs.** -/
+theorem EndToEndHidden : Flock.Guarantees.EndToEndHidden := EndToEndHidden_of_model EndToEndHiddenModel
 
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs, at the drawn units.** -/
 theorem EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn := by
@@ -36,8 +62,9 @@ theorem EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn := by
 
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs, at a flat circuit file.** -/
 theorem EndToEndHiddenFlat : Flock.Guarantees.EndToEndHiddenFlat := by
-  intro n Reg I ht c hc
-  exact EndToEndHidden n Reg I ht (.single c) (Flock.Desc.parse_single hc)
+  intro n Reg I ht c hc hU pub hpub
+  exact EndToEndHidden n Reg I ht (.single c) hU pub (Flock.Sha512.hash I.circuitFile) (Flock.Sha512.hash I.publicFile)
+    (And.intro (Flock.Desc.parse_single hc) (And.intro hpub (And.intro rfl rfl)))
 
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs, at the drawn units, at a flat circuit file.** -/
 theorem EndToEndHiddenDrawnFlat : Flock.Guarantees.EndToEndHiddenDrawnFlat := by
