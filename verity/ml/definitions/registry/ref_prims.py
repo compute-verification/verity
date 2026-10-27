@@ -62,6 +62,7 @@ from verity.ml.circuits.codec import register_lazy_family
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.ml.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16, BIT, F32, I32, F32_NAN, bits_of, f32_is_nan, f32_of
@@ -677,7 +678,7 @@ def RoPEInterleavedRef(B, S, x, cos, sin):
 
 _GPTJ_CONF = ("superseded by RoPEHeadGptJ_v2 / RoPEGptJ_v2: a pairing permutation of RoPEHead_v1, the same RopeOut_v1/"
               "RopeOutAdd_v1 gates with (2i, 2i+1) in place of (i, i+D/2); vLLM d9105ea80's `rotary_embedding(is_neox=False)` "
-              "(bf16, run r20261004-060203-ba52) differs in 513 words of 17 of 60 difftest cases, every one an odd output "
+              f"(bf16, run {EVIDENCE['cc12_difftest']['run']}) differs in 513 words of 17 of 60 difftest cases, every one an odd output "
               "whose products overflow f32: the kernel rounds y*cos and fuses x*sin, where NeoX's instantiation rounds x*sin")
 
 

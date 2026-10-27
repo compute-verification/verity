@@ -48,6 +48,7 @@ import math
 from verity.ml.circuits.defs import composite, primitive
 from verity.ml.circuits.types import Array
 
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.gelu_erf_table import TABLE_WORDS
 
@@ -62,7 +63,7 @@ ZERO_BITS = 0x00000000
 LN_F32_OVERFLOW = math.log((2.0 - 2.0 ** -24) * 2.0 ** 127)
 
 CONFORMANCE = ("exact-model-tested: SiluMulBf16_v1 on finite ordinary words; the edge words (NaN, gate -inf, gates past expf "
-               "overflow, gate -0, up -0) as the red-team measured them (r20260930-092038-7dbc, silu-edge-cases)")
+               f"overflow, gate -0, up -0) as the red-team measured them ({EVIDENCE['silu_edge_cases']['run']}, silu-edge-cases)")
 
 
 def silu_f32_bits(g: int) -> int:
