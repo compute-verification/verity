@@ -16,7 +16,7 @@ import torch
 import methodology
 from gates import Gates
 from matmul import MM, Run, run_chain
-from model import Config, Weights, check_reference, head, make_layer, rotary
+from model import Config, Weights, check_reference, embed, final_norm, head, make_layer, rotary, top_names
 from spec import HEAD
 from steps import FIRST, GROUP
 
@@ -39,16 +39,21 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
     use_calib = calib_ids is not None and any(a.needs_calib for a in arms)
     gptq_arms = [a for a in arms if any(s.defn.name in ("int8", "native") and s.kw.get("gptq") for s in a.linear)]
     W = Weights(snapshot, cfg.layers)
-    top = W.read(["model.embed_tokens.weight", "model.norm.weight"])
-    emb = top["model.embed_tokens.weight"].to(device=device, dtype=torch.bfloat16)
+    top = W.read(top_names(cfg))
+    emb = top.pop("model.embed_tokens.weight").to(device=device, dtype=torch.bfloat16)
     N, T = ids.shape
     ids_t = torch.from_numpy(ids).to(device)
     cos, sin = rotary(cfg, T, device)
-    ref = emb[ids_t].clone()
-    streams = {stream_key(a, s): emb[ids_t].clone() for a, s in runs}
-    cal = emb[torch.from_numpy(calib_ids).to(device)].clone() if use_calib else None
+    ref = embed(cfg, emb, ids_t)
+    streams = {stream_key(a, s): embed(cfg, emb, ids_t) for a, s in runs}
+    cal_ids = torch.from_numpy(calib_ids).to(device) if use_calib else None
+    cal = embed(cfg, emb, cal_ids) if use_calib else None
     cos_c, sin_c = rotary(cfg, cal.shape[1], device) if use_calib else (None, None)
     del emb
+
+    def tok(layer, t: torch.Tensor, a: int, b: int) -> dict:
+        """The layer's token-id argument for rows a..b of t, for a layer that reads them (DeepSeek-V4's hash routing)."""
+        return {"ids": t[a:b]} if getattr(layer, "needs_ids", False) else {}
     B = methodology.REF_BATCH
     rotations: dict = {}
     diverge: dict = {k: [] for k in streams}
@@ -81,7 +86,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
 
                 cal_in = cal.clone() if gptq_arms else None
                 for i in range(0, len(cal), B):
-                    cal[i:i + B] = layer.forward(cal[i:i + B], cos_c, sin_c, collect=collect)
+                    cal[i:i + B] = layer.forward(cal[i:i + B], cos_c, sin_c, collect=collect, **tok(layer, cal_ids, i, i + B))
                 calib = {"amax": amax, "keys": torch.cat(keys)}
                 del keys
                 if gptq_arms:
@@ -100,21 +105,22 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                             if steps:
                                 run_chain(steps, MM("linear", name, run, x, layer.weight(name), maps=(lambda t: t.float(),)))
                         for i in range(0, len(cal_in), B):
-                            layer.forward(cal_in[i:i + B], cos_c, sin_c, collect=collect_h)
+                            layer.forward(cal_in[i:i + B], cos_c, sin_c, collect=collect_h, **tok(layer, cal_ids, i, i + B))
                     del cal_in
                     ntok = cal.shape[0] * cal.shape[1]
                     calib["H"] = {k: v * (2 / ntok) for k, v in H.items()}
             new_ref = torch.empty_like(ref)
             for i in range(0, N, B):
-                new_ref[i:i + B] = layer.forward(ref[i:i + B], cos, sin)
+                new_ref[i:i + B] = layer.forward(ref[i:i + B], cos, sin, **tok(layer, ids_t, i, i + B))
                 if checking and hf_check and window_ids[i] == methodology.CHECK_WINDOW:
-                    check_reference(gates, cfg, snapshot, layer, ref[i:i + B], cos, sin, new_ref[i:i + B])
+                    check_reference(gates, cfg, snapshot, layer, ref[i:i + B], cos, sin, new_ref[i:i + B],
+                                    **tok(layer, ids_t, i, i + B))
             for (arm, seed) in runs:
                 k = stream_key(arm, seed)
                 h = streams[k]
                 for j in range(N):
                     run = Run(arm, seed, window_ids[j], layer, gates, cache, rotations, calib)
-                    h[j:j + 1] = layer.forward(h[j:j + 1], cos, sin, run)
+                    h[j:j + 1] = layer.forward(h[j:j + 1], cos, sin, run, **tok(layer, ids_t, j, j + 1))
                     attn_err[k][0] += run.attn_err[0]
                     attn_err[k][1] += run.attn_err[1]
                 d = (h.float() - new_ref.float()).norm()
@@ -123,9 +129,10 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
             del layer, cache, calib
             if str(device).startswith("cuda"):
                 torch.cuda.empty_cache()
+            failed = {n: g["failed"] for n, g in gates.log.items() if g["failed"]}
             log(json.dumps({"layer": li, "seconds": round(time.time() - t0, 1),
-                            "div": {k: round(v[-1], 5) for k, v in diverge.items()}}))
-        norm_w = top["model.norm.weight"].to(device=device, dtype=torch.bfloat16)
+                            "div": {k: round(v[-1], 5) for k, v in diverge.items()}, **({"failed": failed} if failed else {})}))
+        norm = final_norm(cfg, top, device)
         name = "lm_head.weight" if "lm_head.weight" in W.where else "model.embed_tokens.weight"
         head_w = W.read([name])[name].to(device=device, dtype=torch.bfloat16)
         W.close()
@@ -144,7 +151,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
 
         nll = {}
         for k, h in [("bf16/s0", ref)] + list(streams.items()):
-            nll[k] = torch.stack([head(cfg, norm_w, head_w, h[w], ids_t[w], proj(k, w)) for w in range(N)]).cpu().numpy()
+            nll[k] = torch.stack([head(cfg, norm, head_w, h[w], ids_t[w], proj(k, w)) for w in range(N)]).cpu().numpy()
     gates.record("tokens", all(v.shape == (N, T - 1) for v in nll.values()), "nll", {k: list(v.shape) for k, v in nll.items()})
     return {"nll": nll, "gates": gates.log, "divergence": diverge,
             "attn_rel_err": {k: math.sqrt(e[0] / e[1]) if e[1] else None for k, e in attn_err.items()},

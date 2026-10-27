@@ -9,12 +9,17 @@ export O=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$O"
 export PY=/workspace/jobs/venv312/bin/python HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PPL_DATA=$RESEARCH_RUN_DIR/inputs
 export PPL_ARGS=${PPL_ARGS:?}
-# a streamed model's pull window (stream.Hub, under TMPDIR) goes with the run, a cancelled one too: research cancel
-# SIGTERMs the whole scope, so Python's own cleanup never runs
-S=$(mktemp -d "${TMPDIR:-/tmp}/ppl-$(basename "$RESEARCH_RUN_DIR").XXXX") || exit 1
+# a streamed model's pull window (stream.Hub, under TMPDIR; PPL_SCRATCH puts it on a bigger disk) goes with the run, a
+# cancelled one too: research cancel SIGTERMs the whole scope, so Python's own cleanup never runs
+S=$(mktemp -d "${PPL_SCRATCH:-${TMPDIR:-/tmp}}/ppl-$(basename "$RESEARCH_RUN_DIR").XXXX") || exit 1
 export TMPDIR=$S
 trap 'rm -rf "$S"' EXIT
 trap 'exit 143' TERM INT
+# PPL_TRANSFORMERS: that transformers release (with no dependencies: the venv's serve it) ahead of the venv's own
+if [ -n "${PPL_TRANSFORMERS:-}" ]; then
+  uv pip install -q --python "$PY" --no-deps --target "$S/tf" "transformers==$PPL_TRANSFORMERS" > "$O/transformers.txt" 2>&1 || exit 1
+  export PYTHONPATH=$S/tf${PYTHONPATH:+:$PYTHONPATH}
+fi
 # shellcheck disable=SC2016
 gpu-lease "${PPL_GPUS:-1}" --wait --max-min "${PPL_MAX_MIN:-120}" -- bash -c '
   q=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit

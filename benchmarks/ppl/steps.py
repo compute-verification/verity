@@ -311,7 +311,7 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
         q, s = quant_rows(w, weight_top)
         return q.to(torch.int8), s
 
-    wq, sw = mm.cached("int8", weights)
+    wq, sw = mm.cached("int8", weights, coinless=True)
     levels = 2 ** dither_bits
     bits = mm.coins(mm.x.shape, levels) if act == "dither" else None
     k = mm.x.shape[1]
@@ -400,8 +400,12 @@ def rotate_attention(mm, nxt):
 @attention_step("center_keys", phase="real", on=("qk",), source="D4-ATTN")
 def center_keys(mm, nxt):
     """K - mu, mu its per-channel mean over the window: q mu is the same for every key of q's row, so softmax(S) is
-    unchanged, and a part of K constant over tokens (Qwen2.5's k bias) no longer sets K's scale."""
-    return nxt(mm.replace(w=lambda k: k - k.mean(dim=0, keepdim=True)))
+    unchanged, and a part of K constant over tokens (Qwen2.5's k bias) no longer sets K's scale. Under a sink logit
+    (`extra["sinks"]`, DeepSeek-V4's) the softmax is not shift-invariant, so q mu is added back to S in FP32."""
+    if not mm.extra.get("sinks"):
+        return nxt(mm.replace(w=lambda k: k - k.mean(dim=0, keepdim=True)))
+    mu = mm.weight().mean(dim=0, keepdim=True)
+    return nxt(mm.replace(w=lambda k: k - mu)) + mm.x @ mu.T
 
 
 K_SCALES = ("token", "head", "calib")
@@ -686,6 +690,14 @@ def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
         causal = mm.extra["causal"][:, a:b].float()
         keys = torch.arange(a, b, device=mm.device)
         served = mm.x - offset * causal + U[r0:r1][:, keys % PEEL_L] * causal
+        if mm.extra.get("general_mask"):
+            # any visibility mask (a sliding window beside compressed entries): E V and the offset's sum of V
+            # directly, rows x keys, in float64 (exact)
+            vb = mm.weight().double()
+            e = (U[r0:r1][:, keys % PEEL_L] * causal).double()
+            got = mm.int_product(served, mm.weight()) - e @ vb + offset * (causal.double() @ vb)
+            mm.gate("peel", bool(torch.equal(got, acc)))
+            return acc
         vi = mm.extra["v_full"]
         mask = torch.zeros(s, 1, device=mm.device)
         mask[a:b] = 1

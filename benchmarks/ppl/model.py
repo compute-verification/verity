@@ -2,8 +2,8 @@
 `LlamaDecoderLayer` / `Qwen2DecoderLayer` compute them with SDPA attention (the engine's check window compares them bit
 for bit on every layer when transformers is importable). The layer's linears and attention dispatch to an arm's chains;
 with no arm they are the bf16 reference: `F.linear`, and `F.scaled_dot_product_attention(is_causal=True,
-enable_gqa=True)`, PyTorch's SDPA, as HF's `sdpa_attention_forward` calls it. GLM-5.3's layers are `glm.py`'s and
-DeepSeek-V2's `dsv2.py`'s (`make_layer`)."""
+enable_gqa=True)`, PyTorch's SDPA, as HF's `sdpa_attention_forward` calls it. GLM-5.3's layers are `glm.py`'s,
+DeepSeek-V2's `dsv2.py`'s and DeepSeek-V4's `dsv4.py`'s (`make_layer`)."""
 from __future__ import annotations
 
 import json
@@ -20,11 +20,12 @@ import torch.nn.functional as F
 import models
 from matmul import MM, Run, Softmaxed, run_chain
 
-#: F8_E4M3 is read as its bytes: a block-FP8 layer decodes them with their scales (`glm.dequant`)
+#: F8_E4M3 and F8_E8M0 are read as their bytes: a block-FP8 layer decodes them with their scales (`glm.dequant`,
+#: `dsv4.dequant`)
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32, "I64": torch.int64, "I32": torch.int32,
-          "I8": torch.int8, "U8": torch.uint8, "F8_E4M3": torch.uint8}
+          "I8": torch.int8, "U8": torch.uint8, "F8_E4M3": torch.uint8, "F8_E8M0": torch.uint8}
 ARCHS = {"LlamaForCausalLM": "llama", "Qwen2ForCausalLM": "qwen2", "GlmMoeDsaForCausalLM": "glm_moe_dsa",
-         "DeepseekV2ForCausalLM": "deepseek_v2"}
+         "DeepseekV2ForCausalLM": "deepseek_v2", "DeepseekV4ForCausalLM": "deepseek_v4"}
 #: GLM-5.3's config fields its layers read (`glm.GlmLayer`)
 GLM_KEYS = ("q_lora_rank", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim", "n_routed_experts",
             "num_experts_per_tok", "moe_intermediate_size", "n_group", "topk_group", "norm_topk_prob",
@@ -59,6 +60,8 @@ class Config:
     glm: dict = field(default_factory=dict)
     #: DeepSeek-V2's own fields (`DSV2_KEYS`); its head_dim too is qk_rope_head_dim
     dsv2: dict = field(default_factory=dict)
+    #: DeepSeek-V4's own fields and HF's derivations of them (`dsv4.fields`)
+    dsv4: dict = field(default_factory=dict)
 
     @property
     def rep(self) -> int:
@@ -78,14 +81,53 @@ class Config:
         heads = c["num_attention_heads"]
         glm = {k: c[k] for k in GLM_KEYS} if arch == "glm_moe_dsa" else {}
         dsv2 = {k: c.get(k) for k in DSV2_KEYS} if arch == "deepseek_v2" else {}
+        if arch == "deepseek_v4":
+            import dsv4
+            v4 = dsv4.fields(c)
+        else:
+            v4 = {}
         mla = glm or dsv2
         head_dim = mla["qk_rope_head_dim"] if mla else c.get("head_dim") or c["hidden_size"] // heads
         return Config(arch, c["hidden_size"], c["num_hidden_layers"], heads, c.get("num_key_value_heads", heads),
-                      head_dim, c["intermediate_size"], c["rms_norm_eps"], c["vocab_size"],
-                      bool(c.get("tie_word_embeddings", False)), arch == "qwen2", rope, glm, dsv2)
+                      head_dim, c.get("intermediate_size", c.get("moe_intermediate_size")), c["rms_norm_eps"],
+                      c["vocab_size"], bool(c.get("tie_word_embeddings", False)), arch == "qwen2", rope, glm, dsv2, v4)
 
 
 # ---------------------------------------------------------------- weights
+
+def renamer(snap: Path) -> Callable[[str], str | None]:
+    """A checkpoint tensor's name -> the engine's (`model.layers.N.…`, `model.embed_tokens.weight`, `lm_head.weight`), or
+    None for a tensor the bench never reads: DeepSeek-V4's checkpoint keeps DeepSeek's own names (`dsv4.checkpoint_name`)."""
+    c = json.loads((Path(snap) / "config.json").read_text())
+    if ARCHS.get((c.get("architectures") or [""])[0]) == "deepseek_v4":
+        import dsv4
+        return dsv4.checkpoint_name
+    return lambda n: n
+
+
+def top_names(cfg: Config) -> list[str]:
+    """The tensors outside the decoder layers that the embedding and the final norm read."""
+    names = ["model.embed_tokens.weight", "model.norm.weight"]
+    return names + [f"model.hc_head.{p}" for p in ("fn", "base", "scale")] if cfg.arch == "deepseek_v4" else names
+
+
+def embed(cfg: Config, emb: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
+    """The residual stream entering layer 0 (DeepSeek-V4's: its hc_mult streams, `dsv4.embed`)."""
+    if cfg.arch == "deepseek_v4":
+        import dsv4
+        return dsv4.embed(cfg, emb, ids)
+    return emb[ids].clone()
+
+
+def final_norm(cfg: Config, top: dict, device) -> Callable[[torch.Tensor], torch.Tensor]:
+    """The map from the last layer's stream of one window to the head's input: the final RMSNorm (DeepSeek-V4's hc head
+    first, `dsv4.final_norm`)."""
+    if cfg.arch == "deepseek_v4":
+        import dsv4
+        return dsv4.final_norm(cfg, top, device)
+    w = top["model.norm.weight"].to(device=device, dtype=torch.bfloat16)
+    return lambda h: rms_norm(h, w, cfg.eps)
+
 
 class Weights:
     """Tensors by name from a snapshot's safetensors (read directly: an 8-byte header length, a JSON header, the bytes),
@@ -98,6 +140,7 @@ class Weights:
         self.snap = Path(snapshot)
         idx = self.snap / "model.safetensors.index.json"
         files = sorted(set(json.loads(idx.read_text())["weight_map"].values())) if idx.exists() else ["model.safetensors"]
+        rename = renamer(self.snap)
         pin = models.pin_of(self.snap)
         self.hub = None
         self.headers: dict = {}
@@ -115,9 +158,10 @@ class Weights:
             else:
                 raise FileNotFoundError(self.snap / fn)
             for name, meta in header.items():
-                if name != "__metadata__":
-                    self.where[name] = (fn, 8 + n + meta["data_offsets"][0], meta["data_offsets"][1] - meta["data_offsets"][0],
-                                        DTYPES[meta["dtype"]], tuple(meta["shape"]))
+                if name == "__metadata__" or (name := rename(name)) is None:
+                    continue
+                self.where[name] = (fn, 8 + n + meta["data_offsets"][0], meta["data_offsets"][1] - meta["data_offsets"][0],
+                                    DTYPES[meta["dtype"]], tuple(meta["shape"]))
         self.left: dict = {fn: set() for fn in self.headers}
         for n, w in self.where.items():
             if w[0] in self.left and self._read_by(n, layers):
@@ -209,6 +253,9 @@ def rotary(cfg: Config, T: int, device, dtype=torch.bfloat16) -> tuple[torch.Ten
     if cfg.arch == "deepseek_v2":
         import dsv2
         return dsv2.rotary(cfg, T, device)
+    if cfg.arch == "deepseek_v4":
+        import dsv4
+        return dsv4.rotary(cfg, T, device)
     inv = inv_freq(cfg).to(device)
     pos = torch.arange(T, device=device)[None]
     inv_e = inv[None, :, None].expand(1, -1, 1).to(dtype=torch.float, device=device)
@@ -325,16 +372,17 @@ class Layer:
         return out
 
 
-def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tensor, ids: torch.Tensor,
+def head(cfg: Config, norm: Callable, head_w: torch.Tensor, h: torch.Tensor, ids: torch.Tensor,
          proj: Callable | None = None) -> torch.Tensor:
-    """The NLL of every next token of one window (T - 1 of them): the final norm, the head (`proj(rows, chunk)` in
-    place of rows @ head_w^T when given), the cross entropy, in chunks of LOSS_ROWS tokens past 8K."""
+    """The NLL of every next token of one window (T - 1 of them): the final norm (`final_norm`), the head
+    (`proj(rows, chunk)` in place of rows @ head_w^T when given), the cross entropy, in chunks of LOSS_ROWS tokens past
+    8K."""
     T = h.shape[0]
     proj = proj or (lambda x, _c: x @ head_w.T)
     if T <= LOSS_WHOLE:
-        logits = proj(rms_norm(h, norm_w, cfg.eps), 0).float()
+        logits = proj(norm(h), 0).float()
         return F.cross_entropy(logits[:-1], ids[1:], reduction="none")
-    n = rms_norm(h, norm_w, cfg.eps)
+    n = norm(h)
     return torch.cat([F.cross_entropy(proj(n[i:min(i + LOSS_ROWS, T - 1)], c).float(), ids[i + 1:i + 1 + LOSS_ROWS],
                                       reduction="none") for c, i in enumerate(range(0, T - 1, LOSS_ROWS))])
 
@@ -371,11 +419,19 @@ def make_layer(cfg: Config, li: int, tensors: dict, device):
     if cfg.arch == "deepseek_v2":
         import dsv2
         return dsv2.Dsv2Layer(cfg, li, tensors, device)
+    if cfg.arch == "deepseek_v4":
+        import dsv4
+        return dsv4.Dsv4Layer(cfg, li, tensors, device)
     return Layer(cfg, li, tensors, device)
 
 
-def check_reference(gates, cfg: Config, snapshot: Path, layer: Layer, h: torch.Tensor, cos, sin, out: torch.Tensor) -> None:
-    """The engine's bf16 layer output equals HF's layer on the same input, bit for bit (and its RoPE tables HF's)."""
+def check_reference(gates, cfg: Config, snapshot: Path, layer: Layer, h: torch.Tensor, cos, sin, out: torch.Tensor,
+                    ids: torch.Tensor | None = None) -> None:
+    """The engine's bf16 layer output equals HF's layer on the same input, bit for bit (and its RoPE tables HF's);
+    DeepSeek-V4's layer reads the token ids too (`ids`)."""
+    if cfg.arch == "deepseek_v4":
+        import dsv4
+        return dsv4.check_reference(gates, cfg, snapshot, layer, h, cos, sin, out, ids)
     if cfg.arch == "glm_moe_dsa":
         import glm
         return glm.check_reference(gates, cfg, snapshot, layer, h, cos, sin, out)
