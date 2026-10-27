@@ -5,9 +5,10 @@ After the run, a FIXTURE coin draws slots of the batch (`draw_slots`; PRF-170's 
 is replayed alone (`replay_slot`): one row through positions 0 .. the drawn step, on the run's resident weights, each step
 under that step's salt key with the slot's own nonce, so its subtree is rebuilt and compared with the slot root the step
 committed. A mismatch means the committed outputs are not the ones the slot's request computes. The replayed tables then give
-the drawn units (`units.Replayer`), and `Openings.open` opens each unit's outputs against the step's root: the commit units
-holding them (`slots.open_unit`'s construction from the replayed slot's rows) are checked by `slots.verify_unit` with their
-rows and salts, and the reference's slot root (`slots.commit_slot`, in Python) must equal the replay's.
+the drawn units (`units.Replayer`), and `Openings.open` opens each unit's outputs against the step's root: the one commit unit
+holding them (`commit.Committer.unit_of`, `slots.open_unit`'s construction from the replayed slot's rows) is checked by
+`slots.verify_unit` with its rows and salts, its rows must be the unit's committed outputs, and the reference's slot root
+(`slots.commit_slot`, in Python) must equal the replay's.
 """
 from __future__ import annotations
 
@@ -89,22 +90,20 @@ class Openings:
         return self.slot(opened, step)[0].root == opened.driver.results[step].slot_roots[0]
 
     def open(self, opened: Opened, step: int, unit: Unit) -> dict | None:
-        """``unit``'s outputs opened against step ``step``'s root, or None for a unit outside the step's tables."""
-        if unit.family not in self.c.spans:
+        """``unit``'s outputs opened against step ``step``'s root: its one commit unit verifies, and its rows are the unit's
+        committed outputs. None for a unit outside the step's layout (a subcircuit's)."""
+        if unit.family not in self.c.bases:
             return None
         S, c, r = self.S, self.c, self.results[step]
         b = _row(r, opened.slot)
         sc, rows = self.slot(opened, step)
         if step not in self._trees:
             self._trees[step] = S.step_tree(c.context, c.layout, step, r.slot_roots)
-        table = next(t for g in c.groups for t in g if t.op == unit.family)
-        lo, hi, scale = unit.span or (0, table.nbytes, table.quant)
-        cu = c.units_of(unit.family, lo, hi, scale)
-        ok = True
-        for u in cu:
-            base, n = c.layout.row_base[u], len(c.layout.units[u])
-            opening = S.UnitOpening(b, u, sc.strings[base:base + n], sc.tree.open([u]), self._trees[step].open([b]))
-            salts = S.row_salts(r.salt_key, b, base, n)
-            rws = {i: (rows[base + i], salts[S.SALT_BYTES * i:S.SALT_BYTES * (i + 1)]) for i in range(n)}
-            ok = ok and S.verify_unit(r.root, c.context, c.layout, step, len(r.slots), opening, rws)
-        return {"commit_units": cu, "verified": bool(ok)}
+        u = c.unit_of(unit.family, unit.index)
+        base, n = c.layout.row_base[u], len(c.layout.units[u])
+        opening = S.UnitOpening(b, u, sc.strings[base:base + n], sc.tree.open([u]), self._trees[step].open([b]))
+        salts = S.row_salts(r.salt_key, b, base, n)
+        rws = {i: (rows[base + i], salts[S.SALT_BYTES * i:S.SALT_BYTES * (i + 1)]) for i in range(n)}
+        ok = S.verify_unit(r.root, c.context, c.layout, step, len(r.slots), opening, rws)
+        mine = b"".join(rows[base:base + n]) == np.ascontiguousarray(unit.got).tobytes()
+        return {"commit_unit": u, "rows": n, "verified": bool(ok and mine)}

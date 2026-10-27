@@ -116,22 +116,26 @@ class Host:
             self.at(codes + 32 * t, 32)[:] = [C.P.f32_to_fp8(C.P.bf16_to_f32(C.P.bf16_mul(C.P.f32_to_bf16(float(x)), scale))) for x in xs]
 
 
-def build(directory: Path) -> ctypes.CDLL:
-    """hash_decode_host.cpp built into `directory` for the served variants, with its `pd_run`."""
+def build(directory: Path, *defines: str) -> ctypes.CDLL:
+    """hash_decode_host.cpp built into `directory` for the served variants, with its `pd_run`, `defines` defined."""
     gxx = shutil.which("g++")
     if not gxx:
         pytest.skip("no g++ for the host build of hash_decode.cuh")
     lib = directory / "hash_decode_host.so"
     subprocess.run([gxx, "-O2", "-std=c++20", "-pthread", "-shared", "-fPIC", "-Wno-unknown-pragmas",
-                    f"-DPD_VARIANT_LIST(X)={SERVED_LIST}", "-o", str(lib), str(KERNEL / "hash_decode_host.cpp")], check=True)
+                    f"-DPD_VARIANT_LIST(X)={SERVED_LIST}", *(f"-D{d}" for d in defines), "-o", str(lib),
+                    str(KERNEL / "hash_decode_host.cpp")], check=True)
     cdll = ctypes.CDLL(str(lib))
     cdll.pd_run.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
     return cdll
 
 
-@pytest.fixture(scope="module")
-def host(tmp_path_factory) -> Host:
-    return Host(build(tmp_path_factory.mktemp("hash-decode-host")))
+@pytest.fixture(scope="module", params=["sm120", "sm90"])
+def host(request, tmp_path_factory) -> Host:
+    """The sm_120 build, and the build with pearl_c_sm90.cu's PD_SM90 (hash_decode.cuh's PD_SM90_FORMS), the same bytes."""
+    h = Host(build(tmp_path_factory.mktemp(f"hash-decode-host-{request.param}"), *(["PD_SM90"] * (request.param == "sm90"))))
+    h.sm90 = request.param == "sm90"
+    return h
 
 
 def test_run_py_launches_the_cubins_variants_with_hash_decode_cuhs_constants():
@@ -331,3 +335,47 @@ def test_pd_commits_zero_form_writes_its_bytes_without_reading_the_zero_rows(hos
         assert commit(f"pd_commit_zero_{v}", zero, mr) == want, v
         assert commit(f"pd_commit_zero_{v}", zero, m)["rowdig_a"] != want["rowdig_a"]
         host.array(rows)[4 * k * mr:4 * k * m] = 0
+
+
+def test_pd_commit_reads_a_calls_bf16_rows_in_place_of_their_fp32_words(host):
+    """PD_SM90_FORMS's pd_commit in mode 1 (``rows_a``) given a call's BF16 rows at p15, i5 of them (its rows past zero),
+    writes every byte it writes from their FP32 widening at p0, with p0 then holding other words, which it doesn't read; the
+    sm_120 build reads p0 whatever p15 holds.  The BF16 buffer holds the i5 rows alone."""
+    m, mr, n, k, idx = 64, 48, 384, 1024, 5
+    rng = np.random.default_rng(7)
+    halves = rng.integers(0, 2**16, (mr, k), dtype=np.uint16)
+    words = np.zeros((m, k), np.uint32)
+    words[:mr] = halves.astype(np.uint32) << 16
+    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    dom_a = rows_domain(activation_binding(salt, idx), idx, m, audit.HM96)
+    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+            "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32)}
+    bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, m).items()}
+    bufs["pd_count"] = host.alloc(16)
+    rows, other = host.put(words.astype("<u4").tobytes()), host.put(bytes([0x5A]) * (4 * k * m))
+    b16 = host.put(halves.astype("<u2").tobytes())
+    pipe = R.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, rows, 0, bufs=bufs, m_real=m,
+                      split_a=True)
+    by = {name: step for name, _, step in pipe.steps()}
+    out = [x for x in R.PD_OUTPUTS if x != "leaves"]
+
+    def commit(*bf16):
+        for x in out:
+            host.array(bufs[x])[:] = R.POISON
+        if bf16:
+            name = next(x[0] for x in reversed(host.log) if x[0].startswith("pd_commit_"))
+            grid, block, smem, p, i = host.args[name]
+            assert len(p) == 14 and len(i) == 4 and i[2] == 1
+            host.launch(name, grid, block, smem, p=(other, *p[1:], 0, bf16[0]), i=(*i, 0, bf16[1]))
+        else:
+            by["rows_a"]()
+        assert host.read(bufs["pd_count"], 16) == bytes(16)
+        return {x: host.read(bufs[x], pipe.size[x]) for x in out}
+
+    for v in SERVED:
+        pipe.pd = v
+        want = commit()
+        assert want["rowdig_a"][:64 * mr] == b"".join(C.row_digest(r.tobytes()) for r in words[:mr].astype("<u4"))
+        assert want["rowdig_a"][64 * mr:] == C.row_digest(bytes(4 * k)) * (m - mr)
+        got = commit(b16, mr)
+        assert (got == want) == host.sm90, v

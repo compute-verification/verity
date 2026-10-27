@@ -66,11 +66,8 @@ import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
 import Proofs.Flock.Claims.KS.PlainDrawSim
 import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Claims.KS.PlainDrawJ
-import Proofs.Flock.Claims.KS.PlainDrawJMove
-import Proofs.Flock.Claims.KS.PlainDrawJRun
-import Proofs.Flock.Claims.KS.PlainDrawJCols
 import Proofs.Flock.Claims.KS.PlainDrawRCols
+import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Claims.KS.PlainDrawAccK
 import Proofs.Flock.Claims.KS.PlainDrawDecK
@@ -78,6 +75,10 @@ import Proofs.Flock.Claims.KS.PlainLeafDecK
 import Proofs.Flock.Claims.KS.PlainClashLaterK
 import Proofs.Flock.Claims.KS.PlainClash0K
 import Proofs.Flock.Claims.KS.PlainLeafClashK
+import Proofs.Flock.Claims.KS.PlainDrawJ
+import Proofs.Flock.Claims.KS.PlainDrawJMove
+import Proofs.Flock.Claims.KS.PlainDrawJRun
+import Proofs.Flock.Claims.KS.PlainDrawJCols
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
@@ -169,6 +170,7 @@ import Proofs.Flock.Claims.KS.Extend
 import Proofs.Flock.Claims.KS.ZkExtend
 import Proofs.Flock.Claims.KS.PlainUntrim
 import Proofs.Flock.Claims.KS.ZkOuter
+import Proofs.Flock.Claims.KS.PlainAccPrR
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a

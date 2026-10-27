@@ -1431,6 +1431,57 @@
         "integrations/vllm/tests/predict/": "integrations/vllm/tests/program/predict/",
         "integrations/vllm/tests/collectives/": "integrations/vllm/tests/engine/collectives/"
       }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/program/registry/": "verity/ml/definitions/registry/",
+        "integrations/vllm/verity_vllm/program/kernels/": "verity/ml/definitions/numerics/",
+        "integrations/vllm/verity_vllm/program/boolean.py": "verity/ml/definitions/boolean.py",
+        "integrations/vllm/verity_vllm/program/replay.py": "verity/ml/definitions/replay.py",
+        "integrations/vllm/verity_vllm/program/dtypes.py": "verity/ml/definitions/dtypes.py",
+        "integrations/vllm/verity_vllm/program/encoding.py": "verity/ml/definitions/encoding.py",
+        "integrations/vllm/verity_vllm/query/word.py": "verity/ml/definitions/word.py",
+        "integrations/vllm/verity_vllm/query/call_scope.py": "verity/ml/definitions/call_scope.py",
+        "integrations/vllm/verity_vllm/query/cross_call.py": "verity/ml/definitions/cross_call.py",
+        "integrations/vllm/verity_vllm/program/registry/quarantine/": "integrations/vllm/verity_vllm/program/quarantine/",
+        "integrations/vllm/verity_vllm/program/registry/mla_capture.py": "integrations/vllm/verity_vllm/program/mla_capture.py",
+        "integrations/vllm/verity_vllm/program/registry/moe_difftest.py": "integrations/vllm/verity_vllm/program/moe_difftest.py",
+        "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py": "integrations/vllm/verity_vllm/program/layer_norm_difftest.py",
+        "integrations/vllm/verity_vllm/program/kernels/relations.py": "integrations/vllm/verity_vllm/program/relations.py",
+        "integrations/vllm/verity_vllm/program/kernels/sampling_rng.py": "integrations/vllm/verity_vllm/program/sampling_rng.py",
+        "integrations/vllm/verity_vllm/program/kernels/libdevice_sampling.py": "integrations/vllm/verity_vllm/program/libdevice_sampling.py",
+        "integrations/vllm/verity_vllm/program/kernels/rmsnorm_fused_sweep.py": "integrations/vllm/verity_vllm/program/rmsnorm_fused_sweep.py",
+        "integrations/vllm/verity_vllm/program/kernels/gemm_target_correspondence.py": "integrations/vllm/verity_vllm/program/gemm_target_correspondence.py",
+        "integrations/vllm/verity_vllm/program/kernels/compiled_relations.py": "integrations/vllm/verity_vllm/program/compiled_relations.py",
+        "integrations/vllm/verity_vllm/program/kernels/compiled_norm_literal.py": "integrations/vllm/verity_vllm/program/compiled_norm_literal.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/capture.py": "integrations/vllm/verity_vllm/observe/capture.py",
+        "integrations/vllm/verity_vllm/engine/pinned.py": "integrations/vllm/verity_vllm/observe/pinned.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/observe/chunks.py": "integrations/vllm/verity_vllm/engine/chunks.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/rank_worker.py": "integrations/vllm/verity_vllm/pipeline/tp/rank_worker.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/check/kernel_identity.py": "integrations/vllm/verity_vllm/engine/kernel_identity.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
+        "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
+      }
     }
   ]
 }

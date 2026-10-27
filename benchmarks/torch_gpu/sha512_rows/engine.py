@@ -9,13 +9,18 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
     x = E.row_digests(rows, slots)                       # (G, S, 8): SHA-512(P(8 nbytes) || row g of slot s)
     lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)   # each row's frame leaf and its salt's index
     leaves = E.leaves(lt, x, SaltKey(key))               # (G, S, 8): the hm96 leaves' frame leaves; or salts=(G, S, 192)
-    up = E.level(children, dids, level)                  # (T, w, 8) nodes over (T, 2w, 8) children
+    ft = E.frame_table([slot_did], u0, units)            # each unit's slot-tree leaf (rank u0 + j)
+    rest = E.leaves(lt, x, SaltKey(key), out, frames=ft, dest=dest, run=run)   # one-row units' slot-tree leaves into run
+    up = E.level(children, dids, level, first)           # (T, w, 8) nodes first .. first + w - 1 over (T, 2w, 8) children
     roots = E.root(leaves_of_trees, dids)                # (T, 8): pads to a power of two, then every level
 
 ``tensors`` are (slots, ...) arrays whose slot rows are contiguous bytes (any dtype); a part reads ``nbytes`` at a byte offset
 of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` draws row ``salt_row``'s y in slot s as ChaCha20
 blocks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
+
+The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 blocks), so the
+tests hold each call to its compressions a digest.
 
 Builds are cached by a hash of the sources, flags and compiler version under ``~/.cache/verity/sha512_rows``
 (``$SHA512_ROWS_BUILD``); nvcc and g++ are the ones on the path. ``SHA512_ROWS_V`` (a variant name, e.g. ``2211``) picks the
@@ -54,6 +59,7 @@ DEFAULT_VARIANT = os.environ.get("SHA512_ROWS_V", "0000")
 INST = hm96.SHA512
 KEY = INST.default_key
 ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
+ROOT_SCHEMA = "frame-v3-sha512/root/v1"
 MAX_SCHEMA = 64
 
 ROW_SPEC = np.dtype([("a", "<u8"), ("a_stride", "<u8"), ("b", "<u8"), ("b_stride", "<u8"), ("a_len", "<u4"), ("b_len", "<u4"),
@@ -67,7 +73,11 @@ u32, u64, vp = ctypes.c_uint32, ctypes.c_uint64, ctypes.c_void_p
 
 class LeafArgs(ctypes.Structure):
     _fields_ = [("rows", vp), ("x", vp), ("out", vp), ("T", vp), ("salts", vp), ("key", u32 * 8), ("nonce0", u64),
-                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32), ("minb", u32), ("pad_", u32)]
+                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32), ("minb", u32), ("sms", u32),
+                ("frames", vp), ("dest", vp), ("units_out", vp), ("units", u32), ("pad2_", u32)]
+
+
+assert ctypes.sizeof(LeafArgs) == 256
 
 
 def variant_flags(name: str) -> tuple[str, ...]:
@@ -107,12 +117,19 @@ def _abi(dll: ctypes.CDLL, path: Path) -> ctypes.CDLL:
     dll.sxr_leaf_setup.argtypes = [vp, vp, u32, vp, vp, u32]
     dll.sxr_leaves.argtypes = [vp, ctypes.POINTER(LeafArgs)]
     dll.sxr_frame_leaves.argtypes = [vp, vp, u32, vp, u32, u32, u64, vp, u32, vp]
+    dll.sxr_frame_setup.argtypes = [vp, vp, u32, u64, vp, vp, u32]
+    dll.sxr_frame_units.argtypes = [vp, vp, vp, vp, u32, u32, u32, vp]
     dll.sxr_node_mids.argtypes = [vp, vp, u32, u32, vp]
-    dll.sxr_level.argtypes = [vp, vp, u32, vp, u32, u32, vp]
+    dll.sxr_level.argtypes = [vp, vp, u32, vp, u64, vp, u64, u32, u32, u64, vp]
     dll.sxr_pads.argtypes = [vp, vp, u32, u32, u64, u32, vp]
-    for f in ("sxr_row_setup", "sxr_rows", "sxr_leaf_setup", "sxr_leaves", "sxr_frame_leaves", "sxr_node_mids", "sxr_level",
-              "sxr_pads"):
+    for f in ("sxr_row_setup", "sxr_rows", "sxr_leaf_setup", "sxr_leaves", "sxr_frame_leaves", "sxr_frame_setup",
+              "sxr_frame_units", "sxr_node_mids", "sxr_level", "sxr_pads"):
         getattr(dll, f).restype = ctypes.c_int
+    if hasattr(dll, "sxr_counts"):
+        dll.sxr_counts.argtypes, dll.sxr_counts.restype = [vp, ctypes.c_int], None
+    if hasattr(dll, "sxr_graph_rekey"):
+        dll.sxr_graph_leaf_nodes.argtypes, dll.sxr_graph_leaf_nodes.restype = [vp, vp, u32], ctypes.c_int
+        dll.sxr_graph_rekey.argtypes, dll.sxr_graph_rekey.restype = [vp, vp, u32, vp], ctypes.c_int
     dll.path = path  # type: ignore[attr-defined]
     return dll
 
@@ -214,6 +231,7 @@ class Engine:
     """The engine's calls on ``device``: a CUDA device (torch tensors), or ``"host"`` for the host twin (numpy arrays)."""
 
     def __init__(self, device: Any = "cuda", arch: str | None = None, key: bytes = KEY, default: str = DEFAULT_VARIANT) -> None:
+        self._schemas: dict[str, tuple[Any, int]] = {}
         self.host = device == "host"
         if self.host:
             self.torch, self.device, self.lib = None, "host", host_lib()
@@ -271,6 +289,15 @@ class Engine:
     def _ok(self, rc: int, what: str) -> None:
         if rc:
             raise RuntimeError(f"{what}: CUDA error {rc}")
+
+    def counts(self, reset: bool = False) -> dict[str, int]:
+        """The host twin's hashing since its last reset: compressions, those over a constant schedule (``kw``) and ChaCha20
+        blocks."""
+        if not self.host:
+            raise ValueError("only the host twin counts")
+        out = np.zeros(3, dtype=np.uint64)
+        self.lib.sxr_counts(out.ctypes.data, int(reset))
+        return {"compressions": int(out[0]), "kw": int(out[1]), "chacha": int(out[2])}
 
     def midstate(self, block: bytes) -> np.ndarray:
         """The chaining value after one 128-byte block from the IV."""
@@ -345,9 +372,7 @@ class Engine:
         """Row g's frame leaf is domain ``dids[did_of_row[g]]``'s leaf at (rank, position) under ``schema``; its salt is the
         salt stream's row ``salt_row[g]`` (default g). Position defaults to the rank."""
         G = len(rank)
-        s = schema.encode()
-        if len(s) > MAX_SCHEMA:
-            raise ValueError(f"a schema is at most {MAX_SCHEMA} bytes")
+        d_schema, n_schema = self._schema(schema)
         dw = _did_words(dids)
         rows = np.zeros(G, dtype=LEAF_ROW)
         rows["did"] = np.asarray(did_of_row, dtype=np.uint32)
@@ -356,20 +381,65 @@ class Engine:
         rows["salt_row"] = np.arange(G, dtype=np.uint32) if salt_row is None else np.asarray(salt_row, dtype=np.uint32)
         if len(did_of_row) != G or int(rows["did"].max(initial=0)) >= len(dw):
             raise ValueError("each row names one of the domains")
-        d_rows, d_dids, d_schema = self._up(rows), self._up(dw), self._up(np.frombuffer(s.ljust(1, b"\0"), dtype=np.uint8))
-        rc = self.lib.sxr_leaf_setup(self._stream(), self._ptr(d_rows), G, self._ptr(d_dids), self._ptr(d_schema), len(s))
+        d_rows, d_dids = self._up(rows), self._up(dw)
+        rc = self.lib.sxr_leaf_setup(self._stream(), self._ptr(d_rows), G, self._ptr(d_dids), self._ptr(d_schema), n_schema)
         self._ok(rc, "leaf setup")
         return LeafTable(d_rows, (d_dids, d_schema), G)
 
-    def leaves(self, lt: LeafTable, x: Any, salts: SaltKey | Any, out: Any = None, minb: int = 0) -> Any:
+    def _schema(self, schema: str) -> tuple[Any, int]:
+        """The schema's bytes on the device, uploaded once."""
+        if schema not in self._schemas:
+            s = schema.encode()
+            if len(s) > MAX_SCHEMA:
+                raise ValueError(f"a schema is at most {MAX_SCHEMA} bytes")
+            self._schemas[schema] = self._up(np.frombuffer(s.ljust(1, b"\0"), dtype=np.uint8)), len(s)
+        return self._schemas[schema]
+
+    def frame_table(self, dids: Any, rank0: int, n: int, schema: str = ROOT_SCHEMA) -> LeafTable:
+        """n units' frame leaves in one domain (``dids``, one): unit j's is leaf (rank0 + j, rank0 + j, schema) over its root,
+        set up on the device (no upload a unit). What ``leaves(frames=)`` and ``frame_units`` take."""
+        dw = self._wordsof(dids)
+        if int(dw.shape[0]) != 1 or not 0 <= rank0 or rank0 + n > 1 << 64 or not 0 <= n < 1 << 32:
+            raise ValueError("one domain, u64 ranks and a u32 count")
+        d_schema, n_schema = self._schema(schema)
+        if self.host:
+            rows = np.zeros(n, dtype=LEAF_ROW)
+        else:
+            rows = self.torch.empty(n * LEAF_ROW.itemsize, dtype=self.torch.uint8, device=self.device)
+        rc = self.lib.sxr_frame_setup(self._stream(), self._ptr(rows), n, rank0, self._ptr(dw), self._ptr(d_schema), n_schema)
+        self._ok(rc, "frame setup")
+        return LeafTable(rows, (dw, d_schema), n)
+
+    def frame_units(self, frames: LeafTable, units: Any, values: Any, run: Any) -> Any:
+        """run[s][units[i]] = the frame leaf of values[i][s] under ``frames``' unit units[i] (``units`` int64 on the device,
+        ``values`` (n, S, 8), ``run`` (S, frames.G, 8)); returns run."""
+        n, S = int(values.shape[0]), int(values.shape[1])
+        if len(units) != n or tuple(run.shape) != (S, frames.G, 8):
+            raise ValueError(f"values are (units, S, 8) and run (S, {frames.G}, 8)")
+        v = self._wordsof(values)
+        rc = self.lib.sxr_frame_units(self._stream(), self._ptr(frames.rows), self._ptr(units), self._ptr(v), n, S, frames.G,
+                                      self._ptr(run))
+        self._ok(rc, "frame units")
+        return run
+
+    def leaves(self, lt: LeafTable, x: Any, salts: SaltKey | Any, out: Any = None, minb: int = 0, frames: LeafTable | None = None,
+               dest: Any = None, run: Any = None, sms: int = 0) -> Any:
         """(G, S, 8): each row's frame leaf over hm96's tree leaf of x (``row_digests``) under salt y. ``minb`` is the leaf
-        kernel's blocks an SM (1 or 2; 0, the build's default, 2)."""
+        kernel's CTAs an SM (1 or 2; 0, the build's default, 1), and ``sms`` the SMs its persistent grid fills (0, the
+        device's; a green context of fewer runs a grid of the device's in waves): the same bytes either way.
+
+        With ``frames`` (``frame_table``, a unit each), ``dest`` (G,) uint32 on the device and ``run`` (S, units, 8): a row
+        whose ``dest`` d is below the units is unit d alone, so its leaf is the unit's root, and the unit's frame leaf over it
+        goes to run[s][d], in the same thread; any other row's leaf goes to out[d - units][s] (``out`` given, (rest, S, 8)).
+        Returns ``out``."""
         G, S = int(x.shape[0]), int(x.shape[1])
         if G != lt.G:
             raise ValueError(f"x has {G} rows, the leaf table {lt.G}")
         if minb not in (0, 1, 2):
             raise ValueError("a leaf kernel runs 1 or 2 blocks an SM")
-        out = self._words(G, S) if out is None else out
+        if frames is not None and (dest is None or run is None or len(dest) != G or tuple(run.shape) != (S, frames.G, 8)):
+            raise ValueError(f"frames take a dest a row and run (S, {frames.G}, 8)")
+        out = self._words(G, S) if out is None and frames is None else out
         a = LeafArgs()
         a.rows, a.x, a.out, a.T = self._ptr(lt.rows), self._ptr(x), self._ptr(out), self._ptr(self.table)
         if isinstance(salts, SaltKey):
@@ -380,9 +450,37 @@ class Engine:
                 raise ValueError(f"salts are (G, S, 192) bytes, not {tuple(salts.shape)}")
             a.salts = self._ptr(salts)
         a.ms_salt[:], a.ms_leaf[:] = [int(v) for v in self.ms_salt], [int(v) for v in self.ms_leaf]
-        a.G, a.S, a.minb = G, S, minb
+        if sms < 0:
+            raise ValueError("a leaf grid fills a positive number of SMs, or 0 for the device's")
+        a.G, a.S, a.minb, a.sms = G, S, minb, sms
+        if frames is not None:
+            a.frames, a.dest, a.units_out, a.units = self._ptr(frames.rows), self._ptr(dest), self._ptr(run), frames.G
         self._ok(self.lib.sxr_leaves(self._stream(), ctypes.byref(a)), "leaves")
         return out
+
+    def graph_leaf_nodes(self, graph: int, n: int) -> Any:
+        """The ``n`` leaf launches (``leaves``) of a CUDA graph captured from this engine's calls (a ``cudaGraph_t``), for
+        ``rekey``; refused if the graph holds another number of them."""
+        nodes = (ctypes.c_void_p * max(1, n))()
+        got = self.lib.sxr_graph_leaf_nodes(ctypes.c_void_p(graph), nodes, n)
+        if got < 0:
+            raise RuntimeError(f"graph leaf nodes: CUDA error {-got}")
+        if got != n:
+            raise RuntimeError(f"the graph holds {got} leaf launches, not {n}")
+        return nodes
+
+    def rekey(self, graph_exec: int, nodes: Any, n: int, key: bytes) -> None:
+        """The graph's instantiation (a ``cudaGraphExec_t``) to salt its ``n`` leaf launches ``nodes`` under ``key`` (32
+        bytes) from its next launch on, each launch's first nonce as captured."""
+        if len(key) != 32:
+            raise ValueError("a salt key is 32 bytes")
+        k = (ctypes.c_uint32 * 8)(*np.frombuffer(key, dtype="<u4").tolist())
+        self._ok(self.lib.sxr_graph_rekey(ctypes.c_void_p(graph_exec), nodes, n, k), "graph rekey")
+
+    def u32s(self, a: Any) -> Any:
+        """A uint32 array on the engine's device (int32 there): ``leaves``' ``dest``."""
+        a = np.ascontiguousarray(a, dtype=np.uint32)
+        return a.copy() if self.host else self._up(a).view(self.torch.int32)
 
     def commit_rows(self, table: RowTable, lt: LeafTable, salts: SaltKey | Any, variant: str | None = None) -> Any:
         """Rows in, leaf digests out: ``leaves(lt, row_digests(table), salts)``."""
@@ -390,39 +488,67 @@ class Engine:
 
     # --- trees -----------------------------------------------------------------------------------------------------------
 
-    def frame_leaves(self, values: Any, dids: Any, rank0: int = 0, schema: str = "frame-v3-sha512/root/v1") -> Any:
+    def frame_leaves(self, values: Any, dids: Any, rank0: int = 0, schema: str = ROOT_SCHEMA) -> Any:
         """(T, n, 8): leaf (rank0 + j, rank0 + j, schema, values[t][j]) of tree t's domain (one domain, or one a tree)."""
         T, n = int(values.shape[0]), int(values.shape[1])
         dw = self._wordsof(dids)
         D = int(dw.shape[0])
         if D not in (1, T):
             raise ValueError("one domain, or one a tree")
-        s = schema.encode()
-        if len(s) > MAX_SCHEMA:
-            raise ValueError(f"a schema is at most {MAX_SCHEMA} bytes")
-        d_schema = self._up(np.frombuffer(s.ljust(1, b"\0"), dtype=np.uint8))
+        d_schema, n_schema = self._schema(schema)
         out = self._words(T, n)
         v = self._wordsof(values)
-        rc = self.lib.sxr_frame_leaves(self._stream(), self._ptr(dw), D, self._ptr(v), T, n, rank0, self._ptr(d_schema), len(s),
+        rc = self.lib.sxr_frame_leaves(self._stream(), self._ptr(dw), D, self._ptr(v), T, n, rank0, self._ptr(d_schema), n_schema,
                                        self._ptr(out))
         self._ok(rc, "frame leaves")
         return out
 
-    def level(self, children: Any, dids: Any, level: int) -> Any:
-        """(T, w, 8): node (level, i) over children [2i] and [2i + 1] of (T, 2w, 8), in tree t's domain."""
-        T, n = int(children.shape[0]), int(children.shape[1])
-        if n % 2 or not 0 <= level < 256:
-            raise ValueError("a level has an even width and is below 256")
+    def node_mids(self, dids: Any, level: int) -> Any:
+        """(D, 8): each domain's node midstate at ``level``, what ``level(..., mids=)`` takes."""
+        if not 0 <= level < 256:
+            raise ValueError("a level is below 256")
         dw = self._wordsof(dids)
-        D = int(dw.shape[0])
+        mids = self._words(int(dw.shape[0]))
+        self._ok(self.lib.sxr_node_mids(self._stream(), self._ptr(dw), int(dw.shape[0]), level, self._ptr(mids)), "node midstates")
+        return mids
+
+    def level(self, children: Any, dids: Any, level: int, first: int = 0, mids: Any = None, pre: Any = None) -> Any:
+        """(T, w, 8): node (level, first + i) over children [2i] and [2i + 1] of (T, 2w, 8) in tree t's domain (``mids``:
+        ``node_mids(dids, level)``, if already computed). With ``pre`` (T, 8), tree t's children are pre[t] and then
+        children[t] ((T, 2w - 1, 8)). Each tree's digests are read in place: any stride between trees (a slice of a wider
+        array) and none copied."""
+        (kids, k_stride), T, n = self._trees(children), int(children.shape[0]), int(children.shape[1])
+        if pre is not None:
+            if tuple(pre.shape) != (T, 8):
+                raise ValueError("pre is a digest a tree")
+            (pre, p_stride), n = self._trees(pre[:, None, :]), n + 1
+        if n % 2 or not 0 <= level < 256 or not 0 <= first < 1 << 64:
+            raise ValueError("a level has an even width and is below 256, and its first index is a u64")
+        mids = self.node_mids(dids, level) if mids is None else mids
+        D = int(mids.shape[0])
         if D not in (1, T):
             raise ValueError("one domain, or one a tree")
-        mids = self._words(D)
-        self._ok(self.lib.sxr_node_mids(self._stream(), self._ptr(dw), D, level, self._ptr(mids)), "node midstates")
         out = self._words(T, n // 2)
-        rc = self.lib.sxr_level(self._stream(), self._ptr(mids), D, self._ptr(self._wordsof(children)), T, n // 2, self._ptr(out))
+        rc = self.lib.sxr_level(self._stream(), self._ptr(mids), D, self._ptr(pre), p_stride if pre is not None else 0,
+                                self._ptr(kids), k_stride, T, n // 2, first, self._ptr(out))
         self._ok(rc, "level")
         return out
+
+    def _trees(self, a: Any) -> tuple[Any, int]:
+        """(T, n, 8) digest words with each tree's n digests contiguous, as given when they are (else a copy), and the words
+        from one tree to the next."""
+        if self.host and isinstance(a, np.ndarray):
+            a = a.view(np.uint64)
+            if a.strides[2] != 8 or (a.shape[1] > 1 and a.strides[1] != 64) or a.strides[0] % 8:
+                a = np.ascontiguousarray(a)
+            return a, a.strides[0] // 8
+        if not self.host and hasattr(a, "data_ptr"):
+            a = a if a.dtype == self.torch.int64 else a.view(self.torch.int64)
+            if a.stride(2) != 1 or (a.shape[1] > 1 and a.stride(1) != 8):
+                a = a.contiguous()
+            return a, a.stride(0)
+        shape = tuple(int(d) for d in a.shape)
+        return self._wordsof(a).reshape(shape), 8 * shape[1]
 
     def pads(self, dids: Any, trees: int, first: int, n: int) -> Any:
         """(trees, n, 8): pad(first + j) of tree t's domain."""

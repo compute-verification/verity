@@ -18,7 +18,7 @@
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
-    redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
+    redundant gates  a value computed twice inside one unit: the IR gates `verity.ml.definitions.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
     dead gates       gates no output depends on (`verity.ml.circuits.liveness.dead_gates`, transitive), by primitive @ activation
@@ -779,7 +779,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
     units is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else the unit rule's count;
     None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     P = F if applies else Findings()
     v2 = applies and q_word == 2
@@ -1093,9 +1093,9 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     from types import SimpleNamespace
 
     from verity_vllm.correspondence.reader_for_query import Correspondence
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
     from verity_vllm.query.module_body import literal_calls
-    from verity_vllm.query.program_view import from_instances
+    from verity_vllm.query.program_view import from_instances, iter_instance_rows
     from verity_vllm.query.required import population
 
     memo = {} if memo is None else memo
@@ -1114,11 +1114,11 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     out: dict[str, Any] = {"row": str(p), "query": r["query"], "calls": r["calls"], "units": r["units"], "gates": r["gates"],
                            "committed_interior_words": r["committed_interior_words"], "definitions": []}
     try:
-        from verity_vllm.query import cross_call
+        from verity.ml.definitions import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity_vllm.query.cross_call is not on this tree (PR #98)"}
+        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree (PR #98)"}
     else:
-        x = cross_call.check_program(str(inst), strict=False)
+        x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
         for a in x["recomputes"]:
             F.fail("partition", "cross-call-recompute", a["definition"], f"({a['level']}: {a['calls']} Call(s) compute {a['gates']} "

@@ -1,4 +1,4 @@
-"""Verity-semantics replay producer: the registry Definition `AttentionHead_v3{T, D, BN}` (`verity_vllm/program/registry/b1.py`)
+"""Verity-semantics replay producer: the registry Definition `AttentionHead_v3{T, D, BN}` (`verity/ml/definitions/registry/b1.py`)
 evaluated gate by gate by the IR oracle (`verity.ml.circuits.evaluate.evaluate_call`), with the committed stream of
 `encoding.py` read out of the execution transcript by walking the call tree.
 
@@ -29,12 +29,12 @@ import numpy as np
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluate import evaluate_call
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from .encoding import NLANES, RowLayout
 
 # The MUFU.EX2 / MUFU.RCP tables (2 x 2^23 u32 = 64 MB) are the pinned semantics of `MufuEx2Ftz` / `Fa2InvSum`.
-# `verity_vllm.program.kernels.fa2_model.MufuTables.load` reconstructs them through int64 temporaries (peak ~210 MB traced,
+# `verity.ml.definitions.numerics.fa2_model.MufuTables.load` reconstructs them through int64 temporaries (peak ~210 MB traced,
 # ~250 MB resident afterwards on macOS because the freed pages stay mapped).  The laptop's `~/.veritor/mem_guardian.py`
 # kills any lane python above 256 MiB while the data volume is below its 6-GB disk floor (it was at 1.7 GB free on
 # 2026-09-18), so this module fills the numerics lane's table cache with the SAME arrays reconstructed chunkwise
@@ -47,8 +47,8 @@ MUFU_TABLE_SHA256 = {
 
 
 def preload_mufu_tables_low_peak() -> None:
-    from verity_vllm.program.kernels import fa2_model as FA
-    from verity_vllm.program.kernels import fa2_relation
+    from verity.ml.definitions.numerics import fa2_model as FA
+    from verity.ml.definitions.numerics import fa2_relation
 
     d = fa2_relation.tables_dir()
     if d in fa2_relation._TABLES:
@@ -80,7 +80,7 @@ preload_mufu_tables_low_peak()
 
 _STANDALONE = CompositeDefinition("Standalone", 1, ("FN",), lambda S: S.FN.signature(),
                                   lambda B, S, *args: B.call(S.FN, *args),
-                                  doc="root wrapper: one call of F over Input gates (as `verity_vllm.program.registry.crosscheck`)",
+                                  doc="root wrapper: one call of F over Input gates (as `verity.ml.definitions.registry.crosscheck`)",
                                   register=False)
 
 
