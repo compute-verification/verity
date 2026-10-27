@@ -22,6 +22,8 @@ accounting envelopes is to be stated on these objects.
 * The **AND count** `C.andSize S` (`andSize`) is the number of AND gates (`IsAnd`: an operation gate whose function is
   not affine over GF(2)) among `S`, and `C.andSize C.computed` is the circuit's multiplicative complexity, the gates
   C-Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
+* **Credit** (`creditSize lower d`) is the AND count of the registered declared circuit under one public lowering,
+  pinned at registration.
 * The **registration** `R = (θ, C, 𝓘)` (`Registration`) is a declaration `(C, θ)`, the fixed values of `θ`'s gates and
   a partition `𝓘` of the operation gates into `B` proof blocks. A proof block is a unit of a `Partition`; NCI's instance
   calls them inference blocks, and training's serving blocks. No ordering of the proof blocks is required: Lemma 1 and
@@ -78,12 +80,19 @@ def IsAnd (C : Circuit) (g : Fin C.N) : Prop := C.isInput g = false ∧ ¬ C.Aff
 
 open Classical in
 /-- **The AND count** of the gates `S`, the number of AND gates among them: on `C.computed`, the circuit's
-multiplicative complexity, the gates C-Flock pays for. Credit and every reported count are stated in `andSize`. An
-exclusion result, stated in `size` (Theorem 3, `CountingSum`, the `(c, k)`-partition), converts to ANDs only through the
-counted circuit's own ratio `andSize / size`, never through a free constant. -/
+multiplicative complexity, the gates C-Flock pays for. Credit (`creditSize`) and every reported count are stated in
+`andSize`. Exclusion results are not converted to ANDs: they are reported as `N` counted operations (FP8 MACs, say),
+each labelled with that operation's canonical AND count, since converting them to ANDs of hidden work would need a
+ceiling on ANDs per resource unit over all programs, which is vacuous. All-gate counts (the `(c, k)`-partition, the
+draft's `Φ`, `c_S`, `size`) stay in `size`, linked to `andSize` by `andSize_le_size`. -/
 noncomputable def andSize (C : Circuit) (S : Finset (Fin C.N)) : ℕ := (S.filter fun g => C.IsAnd g).card
 
 end Circuit
+
+/-- **Credit**: the AND count of the registered declared circuit `d` under the one public lowering `lower`, pinned at
+registration, never the prover's own lowering. Each credit record carries `lower`'s digest. -/
+noncomputable def creditSize (lower : Declaration → Circuit) (d : Declaration) : ℕ :=
+  (lower d).andSize Finset.univ
 
 /-- `in(S) \ θ`: the gates outside `S` with a wire into `S` that are not registered. Every operation gate outside `S`
 that `S` reads is among them. -/

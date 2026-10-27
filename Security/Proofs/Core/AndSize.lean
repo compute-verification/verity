@@ -8,7 +8,8 @@ import Mathlib.Tactic.Ring
 /-!
 # Proofs about the AND count
 
-* `Circuit.andSize_le_size`: AND gates are operation gates, so `andSize S ≤ size S`;
+* `Circuit.andSize_le_size`: AND gates are operation gates, so `andSize S ≤ size S`, and credit is at most the lowered
+  circuit's size (`CreditSizeLe`);
 * `Circuit.not_affine_of_and`: a gate that computes `p ∧ q` on the inputs that are `p` at `x`, `q` at `y` and `0`
   elsewhere is not affine: an affine function's values on those four inputs sum to `0`, AND's to `1`;
 * `ToCircuitAnd`: C-Flock's XOR, NOT and input gates are affine, and its `and a b` (`a ≠ b`) and its rows whose XORs
@@ -77,6 +78,9 @@ theorem Circuit.not_affine_of_and (C : Circuit) (g : Fin C.N) {x y : Fin C.N} (h
 namespace SecurityProofs
 
 theorem AndSizeLe : Guarantees.AndSizeLe := fun C S => ⟨C.andSize_le_computed S, C.andSize_le_size S⟩
+
+theorem CreditSizeLe : Guarantees.CreditSizeLe := fun lower d =>
+  ((lower d).andSize_le_computed univ).trans (by rw [univ_inter])
 
 theorem ExpandAndSize : Guarantees.ExpandAndSize := by
   intro d B P

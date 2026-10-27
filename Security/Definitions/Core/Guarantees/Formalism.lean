@@ -9,7 +9,7 @@ into NCI's coverings is `Nci.Guarantees.PartitionCovers`, and NCI's policy as a 
 `Nci.Guarantees.CompliesCK`. The serving blocks are a `Padding` at `c_S` of the proof blocks reading at most `k_S`,
 summed by `ServingBlockSum`, with each serving block's inference cap from `InferenceCap`. The AND count `andSize`, in
 which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on C-Flock's circuits counts its AND gates
-and rows (`ToCircuitAnd`).
+and rows (`ToCircuitAnd`). Credit under the pinned lowering is at most the lowered circuit's size (`CreditSizeLe`).
 -/
 
 namespace Verity.Guarantees
@@ -24,6 +24,11 @@ def CKSize : Prop :=
 `size S`. -/
 def AndSizeLe : Prop :=
   ∀ (C : Circuit) (S : Finset (Fin C.N)), C.andSize S ≤ C.size (S ∩ C.computed) ∧ C.andSize S ≤ C.size S
+
+/-- **Credit is at most the lowered circuit's size**: under any pinned lowering, a declaration's credit is at most the
+number of operation gates of its lowered circuit. -/
+def CreditSizeLe : Prop :=
+  ∀ (lower : Declaration → Circuit) (d : Declaration), creditSize lower d ≤ (lower d).size (lower d).computed
 
 /-- **C-Flock's AND gates are `IsAnd`.** On a C-Flock circuit, an AND gate of `toCircuit` is an `and` or a row (its XOR,
 NOT and input gates are not AND gates); `and a b` with `a ≠ b` is one; and so is a row `(⊕ a) ∧ (⊕ b)` with a gate `x`
