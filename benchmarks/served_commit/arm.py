@@ -8,9 +8,11 @@ captured into the graph and drained at the logits), and the native collector (`N
 staging) hashes them into one root per step. Its control is ``stock`` token for token: committing must not change what
 is served.
 
-These arms commit ``vllm-v1`` by name (``commit_scheme``), as does every `prof_arm` arm that doesn't name ``rows-sha512``: they
-measure the record as it was before the Commit's default became ``rows-sha512``. The default Commit is what `prof_arm`'s rows arms
-and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`) measure.
+An arm commits under its ``commit_scheme``, and ``install`` refuses ``vllm-v1`` by name. These two arms, and
+every `prof_arm` arm that doesn't name ``rows-sha512``, are ``vllm-v1`` (SHA-256), the record as it was before the Commit's default
+became ``rows-sha512``: their runs of record stay readable (`benchmarks/g2/curve.py` reads an arm's scheme from its name), and they
+run no new one. The Commit is what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`)
+measure.
 
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
 ``end_run`` finalizes the run's commitment (inside the timed window, so a run's time includes the hashing backlog), and
@@ -37,6 +39,7 @@ from types import SimpleNamespace
 from typing import Any
 
 WARMUPS = ("gate", "warmup")
+V1 = "vllm-v1"
 
 
 def committer_engine(llm: Any) -> SimpleNamespace:
@@ -58,7 +61,7 @@ class ServedCommitArm:
     precision = "bfloat16"
     control = "stock"
     resident = True
-    commit_scheme = "vllm-v1"
+    commit_scheme = V1
     batch_copies = True
 
     def __init__(self, id: str, retain: str) -> None:
@@ -71,6 +74,9 @@ class ServedCommitArm:
         self.runs: list[dict[str, Any]] = []
 
     def install(self, target: Any) -> ServedCommitArm:
+        if self.commit_scheme == V1:
+            raise RuntimeError(f"{self.id} arm commits {V1!r} (SHA-256), not 'rows-sha512': vllm-v1 is kept only to read recorded "
+                               "runs, so measure the Commit with prof_arm's served-commit-rows* arms")
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
 
         self.source = ServedCompiledSource(into=target.hooks, batch_copies=self.batch_copies)
