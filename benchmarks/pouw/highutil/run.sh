@@ -25,7 +25,7 @@
 # made; V31_LTW defaults to 1 (a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM, the same leaf bytes).
 # TEXT: wikitext-2-raw-v1's test split for capture.py (default the datasets cache's arrow file, else its parquet at the same
 # revision, fetched from the hub into the run's scratch). The H200 (vy-dc-h200-2): GENCODE=arch=compute_90a,code=sm_90a
-# NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90, CARD its card file, and the checkpoint built into the node's HF cache first
+# NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with #5202's V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
 # (benchmarks/hash/dither/pin.sh).
 set -uo pipefail
 export O=${OUT:?}
@@ -54,7 +54,7 @@ nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA
   -Xcompiler -fPIC -shared -o "$LIB" $D/hu_lib.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
-sha256sum $D/v31.cu $D/v31.py $D/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/terms.py $D/pipes.py > "$O/sources.sha256"
+sha256sum $D/v31.cu $D/wg_proto.cuh $D/v31.py $D/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/terms.py $D/pipes.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
 uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --lp-max "$LP_MAX" --L "$L" \
   > "$O/prep.log" 2>&1
@@ -86,7 +86,7 @@ $LEASE bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
   nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-before.txt" 2>&1
-  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 500 \
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,clocks.mem,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 500 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
   smi=$!
   if [ "$CKPT" != seeded ]; then
@@ -105,10 +105,12 @@ $LEASE bash -c '
   r=$?
   echo "period rc $r" >> "$O/rc.txt"
   nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-after.txt" 2>&1
+  command -v nsys > /dev/null || { [ "$NSYS" = 1 ] && echo "nsys absent rc 0" >> "$O/rc.txt"; NSYS=0; }
+  command -v ncu > /dev/null || { [ "$NCU" = 1 ] && echo "ncu absent rc 0" >> "$O/rc.txt"; NCU=0; }
   if [ "$NSYS" = 1 ]; then
     for arm in plain proto; do
       HU_CLOCK=0 nsys profile -o "$O/nsys-$arm" --force-overwrite true --trace cuda $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/nsys-$arm" \
-        --coins local --main "$MAIN" --blocks 1 --steps 64 --q 64 --periods 1 --negative "" --arms $arm >> "$O/nsys.log" 2>&1
+        --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks 1 --steps 64 --q 64 --periods 1 --negative "" --arms $arm >> "$O/nsys.log" 2>&1
       echo "nsys $arm rc $?" >> "$O/rc.txt"
       nsys stats --report cuda_gpu_kern_sum --format csv -o "$O/nsys-$arm" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
       nsys export --type sqlite --force-overwrite true -o "$O/nsys-$arm.sqlite" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
@@ -124,7 +126,7 @@ $LEASE bash -c '
       ncu --clock-control none --csv --page raw --print-units base --log-file "$O/ncu-$arm.csv" -c 600 \
         --metrics gpu__time_duration.sum,sm__ops_path_tensor_op_imma_src_int8.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__cycles_elapsed.avg.per_second \
         --kernel-name "regex:^(Kernel2|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
-        $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins local --main "$MAIN" --blocks 1 --steps 2 --q 16 --periods 1 \
+        $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks 1 --steps 2 --q 16 --periods 1 \
         --negative "" --arms $arm >> "$O/ncu.log" 2>&1
       echo "ncu $arm rc $?" >> "$O/rc.txt"
       $PY $D/pipes.py "$O/ncu-$arm.csv" $CARD_ARGS > "$O/pipes-$arm.json" 2>> "$O/ncu.log"

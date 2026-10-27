@@ -101,6 +101,13 @@ DELTA = 0.01
 ANDS_PER_MAC = (2079, 16)
 
 
+def lowering(card: dict | None) -> str:
+    """The s8 lowering credited_ands counts, on the card's own step (sm_120's when no card is given)."""
+    sm90 = bool(card) and str(card.get("arch", "")).startswith("sm_90")
+    return (f"GemmAccumulatorS8_v2{{K, **{'GEMM_SM90_S8' if sm90 else 'GEMM_SM120_S8'}}} "
+            "(verity.ml.circuits.ops.boolean.gemm)")
+
+
 def load_card(spec: str) -> dict:
     """The card's numbers (verity/hardware's card file, one TOML a SKU): a path to the file, or a SKU that
     `verity.hardware.load` reads."""
@@ -948,8 +955,8 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
         "accepted": sum(r["accepted"] for r in honest),
         "credited_macs": credited, "wall_s": wall,
         "credited_ands": {"value": credited * ANDS_PER_MAC[0] // ANDS_PER_MAC[1],
-                          "lowering": "GemmAccumulatorS8_v2{K, DOT=BlackwellS8ImmaDot32_v2} (verity.ml.circuits.ops.boolean.gemm)",
-                          "per_mac": ANDS_PER_MAC[0] / ANDS_PER_MAC[1]},
+                          "lowering": lowering(card), "per_mac": ANDS_PER_MAC[0] / ANDS_PER_MAC[1],
+                          "creditsize_pinned": False},
         "card": None, "peak_macs_s": {}, "certified_share": {}, "plain_share_of_peak": {},
         "proto_s_per_step": med([per_step(r) for r in honest]), "plain_s_per_step": med([per_step(r) for r in plain]),
         "gamma_wall": None, "gamma_gpu": None,
