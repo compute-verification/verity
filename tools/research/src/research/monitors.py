@@ -618,16 +618,21 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
     which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
     read that fails, or every node unreachable, is the monitor's error."""
-    from .pods.nebius.preflight_probe import findings
-
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
     none_read = all("error" in r for r in reps.values())
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
-    for line in findings(reps):
-        n, kind, path = line.split(" ", 2)
-        groups.setdefault((n, kind), []).append(path)
+    for n, rep in sorted(reps.items()):
+        if "error" in rep:
+            continue
+        for e in rep["entries"]:
+            if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
+                groups.setdefault((n, e["state"]), []).append(e["path"])
+            if e.get("restart"):
+                groups.setdefault((n, "restart"), []).append(e["path"])
+        for p in rep["strays"]:
+            groups.setdefault((n, "stray"), []).append(p)
     return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                     + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
 
