@@ -9,6 +9,7 @@
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
     "MemoryChallenger.WipeProtocol",
+    "NciCheck.Protocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Protocol",

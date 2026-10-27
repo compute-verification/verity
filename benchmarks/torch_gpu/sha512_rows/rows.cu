@@ -1,5 +1,5 @@
 // The engine's kernels (rows.cuh), launched on the caller's stream; built by engine.device_lib with nvcc. Every launch
-// function returns 0, or the CUDA error of its launch.
+// function returns 0, or the CUDA error of its launch. sxr_graph_* rekey the leaf launches of a graph captured from them.
 //
 // The row kernel comes in every compression variant the bench sweeps (VARIANTS: sha512x.cuh's V and ROLL, and "pouw",
 // commit_gpu's sha::compress, the one commit_slots runs); the other kernels use SX_V and SX_ROLL.
@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
+#include <vector>
 
 #include "rows.cuh"
 #include "../../pouw/commit_gpu/sha512.cuh"
@@ -90,11 +92,12 @@ constexpr int LEAF_SMEM = T_BYTES + 4 * SALT_U32 * SXR_THREADS;
 
 template <int MINB>
 int launch_leaves(cudaStream_t stream, const LeafArgs& a, u64 n) {
-  static int resident[64] = {};   // a device's resident leaf blocks, once its shared-memory limit is raised
+  static int per_sm_[64] = {}, sms_[64] = {};   // a device's resident leaf CTAs an SM and its SMs, once its
+                                                // shared-memory limit is raised
   int dev = 0, rc;
   if ((rc = cudaGetDevice(&dev))) return rc;
   if (dev < 0 || dev >= 64) return (int)cudaErrorInvalidDevice;
-  if (!resident[dev]) {
+  if (!per_sm_[dev]) {
     int sms = 0, per_sm = 0;
     if ((rc = cudaFuncSetAttribute(k_leaves<MINB>, cudaFuncAttributeMaxDynamicSharedMemorySize, LEAF_SMEM)) ||
         (rc = cudaFuncSetAttribute(k_leaves<MINB>, cudaFuncAttributePreferredSharedMemoryCarveout,
@@ -102,9 +105,11 @@ int launch_leaves(cudaStream_t stream, const LeafArgs& a, u64 n) {
         (rc = cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) ||
         (rc = cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, k_leaves<MINB>, SXR_THREADS, LEAF_SMEM)))
       return rc;
-    resident[dev] = per_sm * sms > 0 ? per_sm * sms : 1;
+    sms_[dev] = sms > 0 ? sms : 1;
+    per_sm_[dev] = per_sm > 0 ? per_sm : 1;
   }
-  const unsigned grid = (unsigned)std::min<u64>((n + SXR_THREADS - 1) / SXR_THREADS, (u64)resident[dev]);
+  const u64 sms = a.sms ? std::min<u64>(a.sms, (u64)sms_[dev]) : (u64)sms_[dev];
+  const unsigned grid = (unsigned)std::min<u64>((n + SXR_THREADS - 1) / SXR_THREADS, (u64)per_sm_[dev] * sms);
   k_leaves<MINB><<<grid, SXR_THREADS, LEAF_SMEM, stream>>>(a);
   return (int)cudaGetLastError();
 }
@@ -275,6 +280,56 @@ int sxr_pads(void* stream, const uint64_t* dids, uint32_t D_, uint32_t T, uint64
   const u64 m = (u64)T * n;
   if (m) k_pads<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(dids, D_, T, first, n, out);
   return launched();
+}
+
+// The leaf kernel's nodes in a captured graph (a cudaGraph_t): up to max of them to out. Returns how many there are, or a
+// CUDA error negated. A node another runtime launched (torch's) may not give its parameters here; it is not a leaf node.
+int sxr_graph_leaf_nodes(void* graph, void** out, uint32_t max) {
+  size_t n = 0;
+  int rc = cudaGraphGetNodes((cudaGraph_t)graph, nullptr, &n);
+  if (rc) return -rc;
+  std::vector<cudaGraphNode_t> nodes(n);
+  if (n && (rc = cudaGraphGetNodes((cudaGraph_t)graph, nodes.data(), &n))) return -rc;
+  int k = 0;
+  for (cudaGraphNode_t node : nodes) {
+    cudaGraphNodeType type;
+    if ((rc = cudaGraphNodeGetType(node, &type))) return -rc;
+    if (type != cudaGraphNodeTypeKernel) continue;
+    cudaKernelNodeParams p;
+    if (cudaGraphKernelNodeGetParams(node, &p)) {
+      cudaGetLastError();
+      continue;
+    }
+    const bool leaf = p.func == (void*)k_leaves<1> || p.func == (void*)k_leaves<2> ||
+                      (p.sharedMemBytes == (unsigned)LEAF_SMEM && p.blockDim.x == SXR_THREADS);
+    if (!leaf) continue;
+    if ((uint32_t)k < max) out[k] = node;
+    ++k;
+  }
+  return k;
+}
+
+// Each of n leaf nodes (sxr_graph_leaf_nodes) in the graph's instantiation (a cudaGraphExec_t) to salt under key (eight
+// words) from its next launch on; every other argument stays as captured. The current context is the one the graph was
+// captured in. A refusal is returned, and not left for the next launch's cudaGetLastError.
+int sxr_graph_rekey(void* exec, void* const* nodes, uint32_t n, const uint32_t* key) {
+  for (uint32_t i = 0; i < n; ++i) {
+    cudaKernelNodeParams p;
+    int rc = cudaGraphKernelNodeGetParams((cudaGraphNode_t)nodes[i], &p);
+    if (!rc) {
+      LeafArgs a = *static_cast<const LeafArgs*>(p.kernelParams[0]);
+      std::memcpy(a.key, key, sizeof a.key);
+      void* args[] = {&a};
+      p.kernelParams = args;
+      p.extra = nullptr;
+      rc = cudaGraphExecKernelNodeSetParams((cudaGraphExec_t)exec, (cudaGraphNode_t)nodes[i], &p);
+    }
+    if (rc) {
+      cudaGetLastError();
+      return rc;
+    }
+  }
+  return 0;
 }
 
 }

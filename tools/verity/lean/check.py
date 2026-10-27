@@ -1644,14 +1644,16 @@ class Codes(frozenset):
 
 #: the failures `--update` settles from the build alone, by code: a guarantee, a `reads` group or an assumption whose record
 #: differs from the build (two records, each right on its own side of a merge), an owned guarantee or assumption with no
-#: record yet, and a premise the lock doesn't list (the premise rule adds it with its guarantees' owner).  A missing name, an
-#: owner, and every other failure take a person
+#: record yet, a premise the lock doesn't list (the premise rule adds it with its guarantees' owner), and an assumption no
+#: guarantee reads (an update drops it; `merge.py` keeps one entry a side removed while the other changed it).  A missing
+#: name, an owner, and every other failure take a person
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
     "guarantees.reads-new", "guarantees.reads-gone", "guarantees.reads-changed",    # a `reads` group differs
     "guarantees.readers", "guarantees.reads-digest",
     "guarantees.unrecorded",                                                        # owned, with no record yet
     "assumptions.digest", "assumptions.unrecorded", "assumptions.unlisted-premise",
+    "assumptions.unread",
 })
 
 
@@ -2625,6 +2627,16 @@ def store_replay(replay_cache: Path, key: str, module: str) -> None:
     os.replace(tmp, replay_cache / f"{key}.json")
 
 
+def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> None:
+    """Mark the entries of ``modules`` used now, so the cache's eviction (`lean_audit.prune_replays`, by mtime) keeps what
+    every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored."""
+    for m in modules:
+        try:
+            os.utime(replay_cache / f"{keys[m]}.json")
+        except OSError:                                # evicted since it was read: this replay already reused it
+            pass
+
+
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
                 closure: bool = False) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
@@ -2643,6 +2655,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
+        if keys:
+            fresh = {*facts["modules"], *deps_checked}
+            touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
         rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),

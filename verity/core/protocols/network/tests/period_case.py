@@ -19,9 +19,9 @@ the salt in no case), and answered by one-stage with its one unit proved. In the
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified, and the scan's
 registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw. Beside them,
-the compute audits, each answered with a subset draw and its bound on wrong units. `case(kind, seed, form)` is a small
-period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and `cases(seed, form)` one of each with its
-answer, as a composition's difftest takes a real component's cases.
+the compute audits, each answered with a subset or stratified draw (a work law's) and its bound on wrong units.
+`case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and
+`cases(seed, form)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -45,6 +45,7 @@ from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 
@@ -395,21 +396,21 @@ def _rows_window_check(p: Params, w: int, reg: Registration, x: Window) -> Facts
     if not all(_holds(reg, doc) for doc in x.registrations):
         raise Finding(REJECT, f"{what}: another window's answer")
     prof, pub = _answered(what, reg, x.answer)
-    return _facts(what, True, prof, pub)
+    return _facts(what, prof, pub)
 
 
-def _facts(what: str, stratified: bool, prof: dict, pub) -> Facts:
-    """`factsOf`: one level drawn `subset:k` (or, where `stratified`, stratified), and the public's bound."""
+def _facts(what: str, prof: dict, pub) -> Facts:
+    """`factsOf`: one level drawn `subset:k` or stratified, and the public's bound."""
     if len(prof["levels"]) != 1:
         raise Finding(REJECT, f"{what}: profile: not one level")
     (lv,) = prof["levels"]
     draw = lv["draw"]
     if isinstance(draw, dict) and "subset" in draw:
         drawn = draw["subset"]
-    elif stratified and isinstance(draw, dict) and draw.get("law") == "stratified":
+    elif isinstance(draw, dict) and draw.get("law") == "stratified":
         drawn = sum(s["k"] for s in draw["strata"])
     else:
-        raise Finding(REJECT, f"{what}: profile: not a subset draw")
+        raise Finding(REJECT, f"{what}: profile: not a subset or stratified draw")
     bound = pub.get("bound") if isinstance(pub, dict) else None
     if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
         raise Finding(REJECT, f"{what}: no bound")
@@ -419,7 +420,7 @@ def _facts(what: str, stratified: bool, prof: dict, pub) -> Facts:
 def _audit_check(i: int, reg: Registration, a: dict) -> Facts:
     what = f"audit {i}"
     prof, pub = _answered(what, reg, a)
-    return _facts(what, False, prof, pub)
+    return _facts(what, prof, pub)
 
 
 def clog2(x: int) -> int:
@@ -815,13 +816,22 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     audit_params, audit_regs, audits = [], [], []
     for i in range(n_audits):
         units = r.randint(1, 40)
-        k = r.randint(1, units)
-        rec = {"format": r.choice(FORMATS), "law": {"k": k, "law": "subset"}, "partition": f"loop/{i}",
-               "population": units, "program": hashlib.sha512(b"loop %d" % i).hexdigest(), "protocol": ONE_STAGE,
+        k, strata = r.randint(1, units), None
+        law = {"k": k, "law": "subset"}
+        if r.random() < 0.5:
+            cuts = [0, *([r.randint(1, units - 1)] if units > 1 and r.random() < 0.5 else []), units]
+            law = {"k": k, "law": "stratified", "strata": [
+                {"k": stratum_k(k, hi - lo, units), "template": f"s{j}", "units": [[lo, hi]]}
+                for j, (lo, hi) in enumerate(zip(cuts, cuts[1:]))]}
+            strata = [{"k": s["k"], "name": s["template"], "size": s["units"][0][1] - s["units"][0][0]}
+                      for s in law["strata"]]
+            k = sum(s["k"] for s in strata)
+        rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
+               "program": hashlib.sha512(b"loop %d" % i).hexdigest(), "protocol": ONE_STAGE,
                "window": {"kind": "served", "window": i}}
         digest = registration_digest(rec)
         answer = _accepted(digest, rec["program"], rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
-                           r.randint(0, units))
+                           r.randint(0, units), strata)
         if i == a:
             if m == "audit-other":
                 answer["commitment"] = r.randbytes(64).hex()
@@ -833,7 +843,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 lv = answer["profile"]["levels"][0]
                 answer["profile"]["levels"] = r.choice([
                     [lv, lv | {"name": "token", "size": 3}], [lv | {"draw": {"bernoulli": "1/2"}}], [lv | {"draw": None}],
-                    [lv | {"draw": {"law": "stratified", "strata": [{"k": k, "name": "s", "size": units}]}}], []])
+                    []])
             elif m == "audit-bound":
                 answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
                                              answer["public"] | {"bound": "3"}, []])

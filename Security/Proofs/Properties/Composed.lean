@@ -1,4 +1,5 @@
 import Properties.Composed
+import CoreComposition.Blobs
 import Proofs.Properties.Composition
 import Proofs.Properties.SampledProofs.OneStageZk
 
@@ -8,7 +9,9 @@ import Proofs.Properties.SampledProofs.OneStageZk
 A `productB` on the caller's blobs is `product` of its components on them (`productB_on`), so `Properties.Composition`'s
 `answerAccepts` and `acceptMeans` reduce its acceptance to each component's own, one-stage v2's among them, which
 `Properties.SampledProofs.OneStageZk.acceptMeans` reads (`accepted`). The cases line up with the components by their
-ids (`zip_ids`). `registered` reads the registration check off `Accepted`.
+ids (`zip_ids`). A `registeredB` accepts only what `product` of its components accepts (`checkRegistered_check`), so
+`registeredAccepted` reduces to the same step (`caseAccepted`). `caseRegistered` reads the registration check off
+`Accepted`.
 -/
 
 open SampledProofs.OneStageZk
@@ -30,14 +33,13 @@ theorem zip_ids {α : Type _} {β : Type _} {γ : Type _} (f : α → String) (g
     · exact ⟨h2.1, h3.1⟩
     · exact zip_ids f g k l1 l2 l3 h2.2 h3.2 x hx
 
-/-- **A composition with v2 among its components accepts only v2's case `Accepted`.** -/
-theorem accepted (id : String) (cs0 : List BlobProtocol) (hv2 : SampledProofs.OneStageZk.protocol ∈ cs0)
-    (a b e : ByteArray) (blobs : Array ByteArray) (h : ((productB id cs0).answer a b e blobs).verdict = .accept) :
-    SampledProofsAccepted a e blobs := by
+/-- **A composition's check with v2 among its components on blobs accepts only v2's case `Accepted`.** -/
+theorem caseAccepted (id : String) (cs0 : List BlobProtocol) (hv2 : SampledProofs.OneStageZk.protocol ∈ cs0)
+    (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed)
+    (hacc : Core.Composition.check id (cs0.map (·.onBlobs (Core.Blobs.ofArray blobs))) ps c ev = .accept pub prof) :
+    CaseAccepted ps ev blobs := by
   let bs := Core.Blobs.ofArray blobs
   let cs := cs0.map (·.onBlobs bs)
-  have h' : ((product id cs).answer a b e).verdict = .accept := h
-  obtain ⟨ps, c, ev, hp, -, he, pub, prof, hacc⟩ := Properties.Composition.answerAccepts _ a b e h'
   obtain ⟨⟨hpid, heid, hfst, hparams⟩, hdec, -⟩ := Properties.Composition.acceptMeans id cs ps c ev pub prof hacc
   have hv2' : SampledProofs.OneStageZk.protocol.onBlobs bs ∈ cs := List.mem_map_of_mem hv2
   rw [← hfst, List.mem_map] at hv2'
@@ -48,14 +50,70 @@ theorem accepted (id : String) (cs0 : List BlobProtocol) (hv2 : SampledProofs.On
   rw [hx1] at hd
   obtain ⟨p, c', e', hp', hc', he', pub', prof', hchk⟩ := hd
   rw [hx1] at hids
-  exact ⟨ps, ev, x.2.1, x.2.2, hp, he, (List.of_mem_zip hx).2, hids.1, hids.2, hparams x hx, p, c', e', pub', prof',
-    hp', hc', he', Properties.SampledProofs.OneStageZk.acceptMeans p c' e' blobs pub' prof' hchk⟩
+  exact ⟨x.2.1, x.2.2, (List.of_mem_zip hx).2, hids.1, hids.2, hparams x hx, p, c', e', pub', prof', hp', hc', he',
+    Properties.SampledProofs.OneStageZk.acceptMeans p c' e' blobs pub' prof' hchk⟩
+
+/-- **A composition with v2 among its components accepts only v2's case `Accepted`.** -/
+theorem accepted (id : String) (cs0 : List BlobProtocol) (hv2 : SampledProofs.OneStageZk.protocol ∈ cs0)
+    (a b e : ByteArray) (blobs : Array ByteArray) (h : ((productB id cs0).answer a b e blobs).verdict = .accept) :
+    SampledProofsAccepted a e blobs := by
+  let cs := cs0.map (·.onBlobs (Core.Blobs.ofArray blobs))
+  have h' : ((product id cs).answer a b e).verdict = .accept := h
+  obtain ⟨ps, c, ev, hp, -, he, pub, prof, hacc⟩ := Properties.Composition.answerAccepts _ a b e h'
+  exact ⟨ps, ev, hp, he, caseAccepted id cs0 hv2 blobs ps c ev pub prof hacc⟩
+
+/-- **A registered composition accepts only what `product` of its components accepts**, on the components' parameters
+and cases, under the binding of their digests. -/
+theorem checkRegistered_check {id : String} {R : Protocol} {s : String} {cs : List Protocol} {n : Named}
+    {ps : List Named} {b d : ByteArray} {k : Case} {ev : List Case} {pub prof : Keyed}
+    (h : checkRegistered id R s cs (n, ps) (b, d) (k, ev) = .accept pub prof) :
+    Core.Composition.check id cs ps b ev = .accept pub prof := by
+  first | unfold checkRegistered at h | simp only [checkRegistered] at h
+  unfold Core.Composition.check
+  split at h
+  · first | cases h | (dsimp only at h; cases h) | simp at h
+  split at h
+  · first | cases h | (dsimp only at h; cases h) | simp at h
+  split at h
+  · first | cases h | (dsimp only at h; cases h) | simp at h
+  split at h
+  · first | cases h | (dsimp only at h; cases h) | simp at h
+  split at h
+  · first | cases h | (dsimp only at h; cases h) | simp at h
+  split at h
+  · cases h
+  · rename_i answers hrun
+    rw [hrun]
+    split at h
+    · cases h
+    · exact h
+
+/-- **A registered composition with v2 among its components accepts only v2's case `Accepted`.** -/
+theorem registeredAccepted (id : String) (R : Protocol) (s : String) (cs0 : List BlobProtocol)
+    (hv2 : SampledProofs.OneStageZk.protocol ∈ cs0) (a b e : ByteArray) (blobs : Array ByteArray)
+    (h : ((registeredB id R s cs0).answer a b e blobs).verdict = .accept) :
+    RegisteredSampledProofsAccepted a e blobs := by
+  let cs := cs0.map (·.onBlobs (Core.Blobs.ofArray blobs))
+  have h' : ((registered id R s cs).answer a b e).verdict = .accept := h
+  obtain ⟨⟨r, ps⟩, ⟨c, d⟩, ⟨k, ev⟩, hp, -, he, pub, prof, hacc⟩ := Properties.Composition.answerAccepts _ a b e h'
+  exact ⟨r, ps, k, ev, hp, he,
+    caseAccepted id cs0 hv2 blobs ps c ev pub prof (checkRegistered_check (id := id) (R := R) (s := s) (cs := cs) hacc)⟩
 
 /-- **v2's case `Accepted` checks the registration**: its circuit file is one of the blobs, named by the parameters'
 digest. -/
+theorem caseRegistered {ps : List Named} {ev : List Case} {blobs : Array ByteArray} (h : CaseAccepted ps ev blobs) :
+    CaseRegistered ps blobs := by
+  obtain ⟨n, x, hx, hn, _, _, p, _, _, _, _, hp', _, _, ⟨_, circuitB, _, _, _, _, hcirc, _⟩⟩ := h
+  exact ⟨n, p, circuitB, (List.of_mem_zip hx).1, hn, hp', hcirc⟩
+
 theorem registered {a e : ByteArray} {blobs : Array ByteArray} (h : SampledProofsAccepted a e blobs) :
     SampledProofsRegistered a blobs := by
-  obtain ⟨ps, ev, n, x, hp, _, hx, hn, _, _, p, _, _, _, _, hp', _, _, ⟨_, circuitB, _, _, _, _, hcirc, _⟩⟩ := h
-  exact ⟨ps, n, p, circuitB, hp, (List.of_mem_zip hx).1, hn, hp', hcirc⟩
+  obtain ⟨ps, _, hp, _, hc⟩ := h
+  exact ⟨ps, hp, caseRegistered hc⟩
+
+theorem registeredRegistered {a e : ByteArray} {blobs : Array ByteArray} (h : RegisteredSampledProofsAccepted a e blobs) :
+    RegisteredSampledProofsRegistered a blobs := by
+  obtain ⟨r, ps, _, _, hp, _, hc⟩ := h
+  exact ⟨r, ps, hp, caseRegistered hc⟩
 
 end Properties.Composed
