@@ -59,7 +59,8 @@
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.Verity.Extract"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -562,6 +563,7 @@
     "CoreOnsite",
     "Properties.Composition",
     "Properties.Flock.Circuit.CircuitOf",
+    "Properties.Flock.Circuit.Transcript",
     "Properties.Pous.MemoryChallenger",
     "Properties.Verity.Game",
     "Definitions.Accounting.JointLive",
@@ -570,7 +572,7 @@
     "Flock.Hash"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, and the LMS verification a forgery of the device's signed log is defined by (MemoryChallenger.Properties.LmsVerifies, the compiled `Lms.verify`), never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile) and the transcript of the values a witness opens at their parse (Flock.Bridge.transcriptOf, the deployment's extractor), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, and the LMS verification a forgery of the device's signed log is defined by (MemoryChallenger.Properties.LmsVerifies, the compiled `Lms.verify`), never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
