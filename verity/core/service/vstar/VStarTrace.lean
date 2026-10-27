@@ -275,7 +275,7 @@ def sat (args : List String) : IO UInt32 := do
     | none => Json.null
   IO.println (Json.compress (Json.mkObj ([("ok", Json.bool (bad.rows + bad.pin + bad.region == 0 && shapeOk))] ++ head ++
     [("blocks", ((2 ^ (st.m - kl) : Nat) : Json)), ("rows_bad", (bad.rows : Json)), ("pin_bad", (bad.pin : Json)),
-     ("region_bad", (bad.region : Json)), ("first", first), ("ms", ((← IO.monoMsNow) - t0 : Json))])))
+     ("region_bad", (bad.region : Json)), ("first", first), ("ms", (((← IO.monoMsNow) - t0 : Nat) : Json))])))
   return 0
 
 end VStar.TraceCli
