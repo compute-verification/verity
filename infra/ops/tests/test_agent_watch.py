@@ -1661,6 +1661,25 @@ def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(
     assert W.epoch(got[0]["since"]) >= stopped - 5 * 60
 
 
+def test_a_coordinators_lane_note_is_its_activity(tmp_path):
+    """top, 27 Oct: four silent rings on coordinators in 70 min were false; each was syncing notes signed with its lane, not its
+    id. A note under `lanes/<handle>/` counts for that handle's coordinator."""
+    run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
+    notes = tmp_path / "notes"
+    sh = FakeSh({"main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
+                                 {"run-r": run}, notes=notes, git_remote=REMOTE, sh=sh)
+    (notes / "lanes").mkdir(parents=True)
+    w.sweep(lambda r: None)
+    for _ in range(12):
+        sweeps(w, clock, 20)
+        p = note(notes, "circuits", f"c{clock.t:.0f}.md", "circuits coordinator", age_s=0)
+        W.os.utime(p, (clock.t, clock.t))
+    assert [r for r in silent(tmp_path) if r["agent"] == CO] == [], "its lane's notes every 20 min are activity"
+    sweeps(w, clock, 65)
+    assert [r["agent"] for r in silent(tmp_path)] == [CO], "with no note for an hour it is silent again"
+
+
 def test_a_push_to_an_agents_branch_is_activity(tmp_path):
     """A coordinator's branches: its runs' `git.branches` and every head ending in its id's last four (`cursor/...-cccc`)."""
     run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0),

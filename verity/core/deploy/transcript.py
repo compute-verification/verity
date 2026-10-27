@@ -1,9 +1,10 @@
 """A party's transcript, and the record (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §2).
 
 A transcript is one party's view of one run, append-only: its start (its name and parameters), every frame it received
-(`in`) and sent (`out`) in the order it saw them, with its channel and kind, what the runtime told it (`event`: a channel
-closed), what it recorded (`record`) and how it finished (`finish`); the handshakes' frames are `handshake-in` and
-`handshake-out`, of kind `structure`. Each entry is itself a wire frame, its head `{"type": "Entry", "v": 1, "n", "dir",
+(`in`) and sent (`out`) in the order it saw them, with its channel and kind, when a peer's frame arrived on the party's
+clock (`arrived`, private, just before its `in`), what the runtime told it (`event`: a channel closed), what it recorded
+(`record`) and how it finished (`finish`); the handshakes' frames are `handshake-in` and `handshake-out`, of kind
+`structure`. Each entry is itself a wire frame, its head `{"type": "Entry", "v": 1, "n", "dir",
 "channel", "kind", "elided"}` and its body the frame or the canonical JSON it holds, so a transcript's bytes are
 canonical and its digest names it. A frame past the transcript's bound (`keep`, 64 KiB unless given) is kept as its
 SHA-512, `elided`: a fill of gigabytes is a digest a frame, which a replay compares and can't feed. The record is its
@@ -22,7 +23,7 @@ from typing import BinaryIO
 
 from verity.core.wire import KINDS, NAME, PUBLIC, Body, Bool, Int, Message, Refused, Registry, Schema, Str, frames
 
-DIRS = ("start", "in", "out", "event", "record", "finish", "handshake-in", "handshake-out", "party")
+DIRS = ("start", "in", "out", "arrived", "event", "record", "finish", "handshake-in", "handshake-out", "party")
 ENTRY = Schema("Entry", 1, "structure", {"n": Int(), "dir": Str(16, "|".join(DIRS)), "channel": Str(64),
                                          "kind": Str(16, "|".join(KINDS)), "elided": Bool()}, Body(max=(1 << 32) - 1))
 REGISTRY = Registry([ENTRY])
