@@ -21,20 +21,27 @@ def Tape : (g : Game α) → Strategy g → Type
   | .send _ k, s => Tape (k s.1) s.2
   | @Game.coin _ C _ _ k, s => C × ((c : C) → Tape (k c) (s c))
 
-/-- The tapes are finite and inhabited. -/
-noncomputable def Tape.inst : (g : Game α) → (s : Strategy g) → Fintype (Tape g s) × Nonempty (Tape g s)
-  | .ret _, _ => ((inferInstance : Fintype Unit), ⟨()⟩)
-  | .send _ k, s => Tape.inst (k s.1) s.2
-  | @Game.coin _ C _ iN k, s =>
-    letI := fun c => (Tape.inst (k c) (s c)).1
-    haveI := fun c => (Tape.inst (k c) (s c)).2
+/-- The tapes are finite. -/
+noncomputable def Tape.fintype : (g : Game α) → (s : Strategy g) → Fintype (Tape g s)
+  | .ret _, _ => (inferInstance : Fintype Unit)
+  | .send _ k, s => Tape.fintype (k s.1) s.2
+  | @Game.coin _ C _ _ k, s =>
+    letI := fun c => Tape.fintype (k c) (s c)
     haveI := Classical.decEq C
-    ((inferInstance : Fintype (C × ((c : C) → Tape (k c) (s c)))),
-      (inferInstance : Nonempty (C × ((c : C) → Tape (k c) (s c)))))
+    (inferInstance : Fintype (C × ((c : C) → Tape (k c) (s c))))
 
-noncomputable instance (g : Game α) (s : Strategy g) : Fintype (Tape g s) := (Tape.inst g s).1
+/-- The tapes are inhabited. -/
+theorem Tape.nonempty : (g : Game α) → (s : Strategy g) → Nonempty (Tape g s)
+  | .ret _, _ => ⟨()⟩
+  | .send _ k, s => Tape.nonempty (k s.1) s.2
+  | @Game.coin _ C _ iN k, s => by
+    obtain ⟨c⟩ := iN
+    show Nonempty (C × ((c : C) → Tape (k c) (s c)))
+    exact ⟨(c, fun c => Classical.choice (Tape.nonempty (k c) (s c)))⟩
 
-instance (g : Game α) (s : Strategy g) : Nonempty (Tape g s) := (Tape.inst g s).2
+noncomputable instance (g : Game α) (s : Strategy g) : Fintype (Tape g s) := Tape.fintype g s
+
+instance (g : Game α) (s : Strategy g) : Nonempty (Tape g s) := Tape.nonempty g s
 
 /-- **The play of `s` on the tape `t`**: each coin read off the tape, then the branch's own tape. -/
 def Tape.run : (g : Game α) → (s : Strategy g) → Tape g s → α
@@ -82,8 +89,8 @@ theorem prob_eq_prCoin_tape (p : α → Prop) :
   | .send _ k, s => prob_eq_prCoin_tape p (k s.1) s.2
   | @Game.coin _ C iF iN k, s => by
       classical
-      letI := fun c => (Tape.inst (k c) (s c)).1
-      haveI := fun c => (Tape.inst (k c) (s c)).2
+      let := fun c => Tape.fintype (k c) (s c)
+      have := fun c => Tape.nonempty (k c) (s c)
       show prob p (.coin C k) s =
         prCoin fun t : C × ((c : C) → Tape (k c) (s c)) => p (Tape.run (k t.1) (s t.1) (t.2 t.1))
       rw [prob_coin, ← avg_ite_eq_prCoin, avg_prod]
