@@ -4,28 +4,35 @@
 # LEASE_MIN minutes, gates before timing:
 #   lowreg   `lowreg check 2` and lowreg_check.py (every kernel's digests against hashlib), then, if it passed, ROUNDS rounds
 #            of `lowreg rates LAUNCHES TILES` (SHA-512's rate against the register cap, 1, 2 and 4 warpgroups an SM)
+#   beside   `beside gate SHAPE` and beside_check.py (y against the Definition, the handoff's row digests and the hash arm's
+#            against hashlib), then, if it passed, ROUNDS rounds of `beside time SHAPE LAUNCHES` (every kernel's arms), then
+#            Nsight Compute (duty.metrics and the chip's tensor pipes, --clock-control none) on NCU_RUNS (KERNEL:ARM ...)
 # nvidia-smi samples every 200 ms beside them. BUILD_ONLY=1 stops after the builds (a CPU node with CUDA 13).
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/beside.sh
-# STEPS ("lowreg"), ROUNDS (3), LAUNCHES (10), TILES (128), LEASE_MIN (20), CUDA (the toolkit: default the first of
-# /usr/local/cuda-13.0 and /usr/local/cuda).
+# STEPS ("lowreg beside"), ROUNDS (3), LAUNCHES (10), TILES (128), SHAPE ("16384 4096 4096": M N K), NCU_RUNS, LEASE_MIN
+# (20), CUDA (the toolkit: default the first of /usr/local/cuda-13.0 and /usr/local/cuda).
 set -uo pipefail
 export O=${OUT:?}
 for c in "${CUDA:-}" /usr/local/cuda-13.0 /usr/local/cuda; do [ -n "$c" ] && [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
-export PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-}
+export CUDA PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-}
 export X=benchmarks/torch_gpu/sha512_rows PY=python3 PYTHONPATH=.
 W=$(mktemp -d /dev/shm/beside41.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$O/commit.txt"
 nvcc --version > "$O/nvcc.txt" 2>&1
-export STEPS=${STEPS:-lowreg} ROUNDS=${ROUNDS:-3} LAUNCHES=${LAUNCHES:-10} TILES=${TILES:-128}
+export STEPS=${STEPS:-lowreg beside} ROUNDS=${ROUNDS:-3} LAUNCHES=${LAUNCHES:-10} TILES=${TILES:-128}
+export SHAPE=${SHAPE:-16384 4096 4096}
+export NCU_RUNS=${NCU_RUNS:-wgl_n256_s4:mma wgl_n128_s3:mma h72_r:mma h72_r:hash h72_r:free h72_r:handoff h64_rs:free h128_r:free}
 SM=90a
 for s in $STEPS; do
   case $s in
     lowreg) nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -o "$W/lowreg" $X/lowreg.cu -lnvidia-ml \
       > "$O/build-lowreg.log" 2>&1 ;;
+    beside) nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -fmad=false -Xptxas -v -o "$W/beside" $X/beside.cu \
+      -lnvidia-ml > "$O/build-beside.log" 2>&1 ;;
   esac
   echo "build $s rc $?" >> "$O/rc.txt"
   [ -x "$W/$s" ] && cuobjdump -sass "$W/$s" | gzip -c > "$O/sass-$s.txt.gz"
@@ -76,6 +83,42 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
           "$W/lowreg" rates "$LAUNCHES" "$TILES" >> "$O/lowreg-rates.jsonl" 2>> "$O/lowreg-rates.err"
           echo "lowreg rates round $r rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
         done ;;
+      beside)
+        [ -x "$W/beside" ] || continue
+        mkdir -p "$W/gate"
+        # shellcheck disable=SC2086
+        "$W/beside" gate $SHAPE "$W/gate" > "$O/beside-gate.jsonl" 2> "$O/beside-gate.err"
+        echo "beside gate rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
+        $PY $X/beside_check.py "$O/beside-gate.jsonl" "$W/gate" > "$O/beside-verdict.txt" 2>&1
+        c=$?
+        echo "beside verdict rc $c" >> "$O/rc.txt"
+        rm -rf "$W/gate"
+        [ $c = 0 ] || continue
+        for r in $(seq "$ROUNDS"); do
+          # shellcheck disable=SC2086
+          "$W/beside" time $SHAPE "$LAUNCHES" >> "$O/beside-time.jsonl" 2>> "$O/beside-time.err"
+          echo "beside time round $r rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
+        done
+        NCU=$(command -v ncu || ls "$CUDA"/bin/ncu /usr/local/cuda/bin/ncu /usr/local/cuda-*/bin/ncu \
+          /opt/nvidia/nsight-compute/*/ncu 2>/dev/null | head -1)
+        [ -n "$NCU" ] || { echo "beside ncu rc no-ncu" >> "$O/rc.txt"; continue; }
+        "$NCU" --query-metrics --chip "${NCU_CHIP:-gh100}" > "$O/ncu-metrics.txt" 2>&1
+        tens=$(awk "{print \$1}" "$O/ncu-metrics.txt" |
+          grep -E "^sm__(pipe_tensor[a-z0-9_]*_cycles_active|inst_executed_pipe_tensor[a-z0-9_]*)$" |
+          sed "s/$/.avg.pct_of_peak_sustained_elapsed/" | paste -sd, -)
+        base=$(tr -d " \n" < benchmarks/pouw/accel_v31/duty.metrics)
+        for kr in $NCU_RUNS; do
+          f="$O/ncu-${kr%%:*}-${kr##*:}"
+          for extra in "${tens:+,$tens}" ""; do
+            # shellcheck disable=SC2086
+            "$NCU" --clock-control none --launch-skip 1 --launch-count 1 --metrics "$base$extra" -f -o "$f" \
+              "$W/beside" one $SHAPE "${kr%%:*}" "${kr##*:}" 1 > "$f.log" 2>&1
+            rc=$?
+            [ $rc = 0 ] && break
+          done
+          echo "beside ncu $kr rc $rc ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
+          "$NCU" -i "$f.ncu-rep" --csv --page raw --print-units base > "$f.csv" 2>> "$f.log"
+        done ;;
     esac
   done
   nvidia-smi -i "$U" -q -d CLOCK > "$O/clock-after.txt" 2>&1
@@ -83,4 +126,5 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
 echo "lease rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"
 tail -1 "$O/lowreg-verdict.txt" 2>/dev/null
-[ -s "$O/lowreg-rates.jsonl" ] && $PY $X/beside_summary.py "$O" | tee "$O/verdict.txt"
+tail -1 "$O/beside-verdict.txt" 2>/dev/null
+$PY $X/beside_summary.py "$O" | tee "$O/verdict.txt"
