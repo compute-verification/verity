@@ -36,8 +36,17 @@ setup of its inner statement (`xIOf x`) passes `PlainIn`'s checks.
 Assumption record. No claim: three evaluations of deterministic deployed code on public bytes, which say nothing about
 the prover or the world. It is witnessed outside Lean by a run that stages V\* over an honest inner statement with the
 deployed recursive driver, feeds the compiled statement's bytes to the compiled verifier's reader and Flock's setup, and
-records the three readings; no such run exists yet, and this docstring is to name its art id and run id when it
-does. -/
+records the three readings.
+
+The run is r20261027-030140-0e78 (cpu-3), evidence art:476851730535363877c1ec51d6a6558a939de0842b245a6a4ec8ef2dcde6f71a
+(its `summary.json`), over the bytes HonestFixture's run r20261026-223243-c2a7 staged (outer tree
+art:d872affc203376ec503fbbc949b6f2ab3d191b866e6a8cbd7c13656a836734c8). `flock-verify` built at 53a30ae7bc
+read: `rec-inner` wrote neither a `holo` nor a `sparse` key (dense); `rec-statements` listed 10 V\* statements; and the
+plain inner statement's setup gave 1 table, 2 points, `mPts = 27`, `(m, k_log, regions) = (25, 22, 3)`, inside
+`setupView`, and was accepted. The setup numbers come from a `dbgTrace` added to a scratch copy of `verifyCmd`'s setup
+(the art's `probe.diff`). The run is weaker than the Prop in two ways: no Lean term `x` is formed, so the readings are
+the compiled verifier's on the run's files rather than `parse`, `nS` and `xIOf` evaluated at an `x`; and the staging is
+c2a7's, at main 4331ec922a. -/
 def DeployedParses (x : Msg) : Prop :=
   (parse x).map (fun s => (s.form.holo, s.form.sparse)) = some (false, none) ∧
   0 < nS x ∧
@@ -48,7 +57,13 @@ def DeployedParses (x : Msg) : Prop :=
 
 Assumption record. No claim: `RecDeploy.lamLin2_deployed_ge_dep`'s scope premises (`hO`, `hn`, `hS`), which every
 statement `λ₂`'s numbers are stated at takes; the parts are V\*'s at the deployed shape, fixed by the deployment, not by
-the fixture's inner statement. Witnessed outside Lean by the fixture's run, which records each part's setup. -/
+the fixture's inner statement. Witnessed outside Lean by the fixture's run, which records each part's setup.
+
+The run is `DeployedParses`'s, r20261027-030140-0e78 (art:476851730535363877c1ec51d6a6558a939de0842b245a6a4ec8ef2dcde6f71a),
+at c2a7's coin-server record (the inner session and its `public.json` transcript). Each of the 10 parts' `--zk` setup
+gave 1 table, 2 points, `mPts` from 27 to 33 and `(m, k_log, regions)` within `m` 26–32, `k_log` 22–26 and at most 48
+regions, inside `PartIn`, and each was accepted. 10 ≤ `2^16`, and the whole tree is 1.8 GB, under `2^56` inputs. It is
+weaker than the Prop in that the parts are those c2a7's driver staged, not `pick`'s choice, which is `Classical.choose`. -/
 def PartsInScope (x : Msg) (tr : Msg → List (Msg × Out) → ByteArray) : Prop :=
   (∀ j < nS x, ∃ i spec' sts', PartIn (staged (Stage.ofMsg tr) x (pick (Stage.ofMsg tr) x j) j) i spec' sts') ∧
     nS x ≤ 2 ^ 16 ∧ (innerSetupIns (xIOf x)).length ≤ 2 ^ 56
