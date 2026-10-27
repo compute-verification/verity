@@ -15,8 +15,8 @@
 # main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
 # card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
 # where the rest of θ x wall goes); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
-# (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP and L
-# (default 512 and 16384: S = 1 at every layer): prep's; NSYS=1: after the periods, Nsight Systems over one plain and one protocol period (their
+# (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
+# and L (default 512, 1024 and 16384: S = 1 at every layer; LP_MAX=512 runs down as four K-slices, 1024 as two): prep's; NSYS=1: after the periods, Nsight Systems over one plain and one protocol period (their
 # kernels' share of the GPU's time); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
 # --with numpy python) for the prep, TORCH_PY for the rest. v31's V31_* knobs come from the environment when the Provers are
 # made; V31_LTW defaults to 1 (a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM, the same leaf bytes).
@@ -33,7 +33,7 @@ export PYTHONPATH=.
 GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a} NVFLAGS=${NVFLAGS:-} THETA_DEVICE=${THETA_DEVICE:-sm_120}
 TORCH_PY=${TORCH_PY:-uv run -q --no-project --with torch --with numpy --with safetensors --with tokenizers --with pyarrow python}
 CKPT=${CKPT:-/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7}
-ROW=${ROW:-8192} LP=${LP:-512} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
+ROW=${ROW:-8192} LP=${LP:-512} LP_MAX=${LP_MAX:-1024} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
 COINS=${COINS:-local} MAIN=${MAIN:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt}
 CARD=${CARD:-${RESEARCH_RUN_DIR:-.}/inputs/card.toml}
 CARDA=()
@@ -53,7 +53,7 @@ echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
 sha256sum $D/v31.cu $D/v31.py $D/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/terms.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
-uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --L "$L" \
+uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --lp-max "$LP_MAX" --L "$L" \
   > "$O/prep.log" 2>&1
 r=$?
 echo "prep rc $r" >> "$O/rc.txt"
