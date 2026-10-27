@@ -5,7 +5,7 @@
 # `ssh -R PORT` to PEER (a name in /etc/vy/peers), as benchmarks/remote_session/run.sh's verifier does, so the prover's
 # client (`remote.RemoteChallenger.connect("127.0.0.1:PORT")`) connects to PEER's own 127.0.0.1:PORT. The auditor host,
 # vy-challenger-1, takes no research run: there a session is `vy-challenger-gate reserve ...` then `open --session S --root R` (auditor.py), as the auditor user
-# from infra's pinned tree, recorded in its ledger. This script is a research run's session elsewhere, for development.
+# from the pinned tree, recorded in its ledger. This script is a research run's session elsewhere, for development.
 #
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --timeout 2h --declared-output 'out/*' \
 #     --env PEER=vy-nebius-2 --env PORT=7811 --env SCHEME=vllm/commit --env SESSION=s-20261020-1 \
@@ -22,7 +22,7 @@
 # standard library and this tree). Its coins are the Lean verifier of record's (`one_stage.verifier.coins`), built with
 # this machine's lake (~/.elan/bin) on first use. The verifier reads out/record.json, out/releases.jsonl and
 # out/challenger.json (the release log's signed close) from this run (`research fetch RUN`, then `remote.trusted_session`
-# with the auditor's signed ledger, infra's windows.jsonl), never from the prover's.
+# with the auditor's signed ledger, its windows.jsonl), never from the prover's.
 #   research fetch RUN --all   # the run's out/ lands in ~/.research/runs/RUN/out
 set -euo pipefail
 O=${RESEARCH_RUN_DIR:?}/out
