@@ -12,6 +12,12 @@ written raw, every write and read `O_DIRECT`, the tier declaring the whole disks
 one fill over several stores in order, so that one session covers every tier: a tier wiped in a session of its own
 leaves every other tier in that session's `R` (`Pous.Guarantees.StreamedWipeMeetsDisk`).
 
+`Cuda.info()`'s `total_bytes`, the device's size the wipe declares, is the larger of CUDA's total (`cuDeviceTotalMem`,
+`cuda_total_bytes`) and NVML's for the GPU at the PCI bus id CUDA reports (`nvml_total`, `nvml_total_bytes`), and
+`total_source` says which. NVML's counts the memory the driver reserves, which CUDA's leaves out (615 MiB on an H200):
+the driver is the prover's, so that memory is too. Without NVML it is CUDA's, `nvml_error` says why, and the wipe's
+record names the reserve uncounted (`wipe_period.uncertified`).
+
 `StoreProver(params, memory)` allocates the fill, `gate()`s the store before the fill (a distinct block written at each of
 `gate_indices`, the first, middle and last labels and both sides of every power-of-two byte boundary from 32 MiB up, then
 each read back; a mismatch raises, so a wrapped or truncated address shows before the fill, not as a rejected session),
@@ -145,23 +151,68 @@ _SIGNATURES = {
 }
 COMPUTE_CAPABILITY = (75, 76)
 """`CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR` and `_MINOR`."""
+NVML = "libnvidia-ml.so.1"
+load: Callable[[str], Any] = ctypes.CDLL
+"""Opens a driver library by name, raising `OSError` when the host hasn't it."""
+
+
+class NvmlMemory(ctypes.Structure):
+    """`nvmlMemory_t`, in bytes."""
+
+    _fields_ = [("total", ctypes.c_ulonglong), ("free", ctypes.c_ulonglong), ("used", ctypes.c_ulonglong)]
+
+
+_NVML_SIGNATURES = {
+    "nvmlInit_v2": ((), _I),
+    "nvmlShutdown": ((), _I),
+    "nvmlErrorString": ((_I,), ctypes.c_char_p),
+    "nvmlDeviceGetHandleByPciBusId_v2": ((ctypes.c_char_p, ctypes.POINTER(_P)), _I),
+    "nvmlDeviceGetMemoryInfo": ((_P, ctypes.POINTER(NvmlMemory)), _I),
+}
+
+
+def nvml_total(pci_bus_id: str, library: str = NVML) -> int:
+    """NVML's total memory of the GPU at `pci_bus_id` (`nvmlDeviceGetMemoryInfo`), the driver's reserve included. A
+    host without NVML, or an NVML without that GPU, raises `RuntimeError`."""
+    try:
+        lib = load(library)
+        for name, (args, res) in _NVML_SIGNATURES.items():
+            fn = getattr(lib, name)
+            fn.argtypes, fn.restype = args, res
+    except (OSError, AttributeError) as e:
+        raise RuntimeError(f"no NVML on this host ({library}): {e}") from e
+
+    def call(name: str, *args: Any) -> None:
+        if r := getattr(lib, name)(*args):
+            raise RuntimeError(f"{name} failed for the GPU at {pci_bus_id}: "
+                               f"{(lib.nvmlErrorString(r) or b'NVML_ERROR').decode()} ({r})")
+
+    call("nvmlInit_v2")
+    try:
+        handle, mem = _P(), NvmlMemory()
+        call("nvmlDeviceGetHandleByPciBusId_v2", pci_bus_id.encode(), ctypes.byref(handle))
+        call("nvmlDeviceGetMemoryInfo", handle, ctypes.byref(mem))
+    finally:
+        lib.nvmlShutdown()
+    return mem.total
 
 
 class Cuda:
     """GPU `ordinal` (of those `CUDA_VISIBLE_DEVICES` shows) through the CUDA driver API, its primary context current
-    on the calling thread. Every copy is synchronous: a pinned buffer's copy returns once the bytes have landed."""
+    on the calling thread, sized with `nvml` as well (module docstring). Every copy is synchronous: a pinned buffer's
+    copy returns once the bytes have landed."""
 
     tier = "gpu-hbm"
 
-    def __init__(self, ordinal: int = 0, library: str = "libcuda.so.1") -> None:
+    def __init__(self, ordinal: int = 0, library: str = "libcuda.so.1", nvml: str = NVML) -> None:
         try:
-            self.lib = ctypes.CDLL(library)
+            self.lib = load(library)
         except OSError as e:
             raise RuntimeError(f"no CUDA driver on this host ({library}): {e}") from e
         for name, args in _SIGNATURES.items():
             fn = getattr(self.lib, name)
             fn.argtypes, fn.restype = args, _I
-        self.ordinal = ordinal
+        self.ordinal, self.nvml = ordinal, nvml
         self._call("cuInit", 0)
         dev = _I()
         self._call("cuDeviceGet", ctypes.byref(dev), ordinal)
@@ -190,11 +241,18 @@ class Cuda:
         total, driver = _S(), _I()
         self._call("cuDeviceTotalMem_v2", ctypes.byref(total), self.dev)
         self._call("cuDriverGetVersion", ctypes.byref(driver))
-        u = uuid.raw.hex()
-        return {"backend": "cuda", "compute_capability": f"{cc[0]}.{cc[1]}", "device": name.value.decode(),
-                "driver": driver.value, "host": socket.gethostname(), "ordinal": self.ordinal,
-                "pci_bus_id": pci.value.decode(), "tier": self.tier, "total_bytes": total.value,
-                "uuid": f"GPU-{u[:8]}-{u[8:12]}-{u[12:16]}-{u[16:20]}-{u[20:]}"}
+        u, bus = uuid.raw.hex(), pci.value.decode()
+        try:
+            nvml, why = nvml_total(bus, self.nvml), None
+        except RuntimeError as e:
+            nvml, why = None, str(e)
+        out = {"backend": "cuda", "compute_capability": f"{cc[0]}.{cc[1]}", "cuda_total_bytes": total.value,
+               "device": name.value.decode(), "driver": driver.value, "host": socket.gethostname(),
+               "nvml_total_bytes": nvml, "ordinal": self.ordinal, "pci_bus_id": bus, "tier": self.tier,
+               "total_bytes": max(total.value, nvml or 0),
+               "total_source": "nvml" if nvml is not None and nvml >= total.value else "cuda",
+               "uuid": f"GPU-{u[:8]}-{u[8:12]}-{u[12:16]}-{u[16:20]}-{u[20:]}"}
+        return out if why is None else out | {"nvml_error": why}
 
     def mem_info(self) -> tuple[int, int]:
         """`(free, total)` bytes of the device."""
@@ -721,4 +779,5 @@ class StoreProver:
 
 
 __all__ = ["BLOCK", "COMPUTE_CAPABILITY", "Cuda", "DEPTH", "DISK_RESERVE", "Disk", "HostMemory", "Joint", "Memory",
-           "STAGING", "StoreProver", "VIRTUAL_DRIVERS", "driver", "gate_indices", "gbps", "percentiles", "whole_disks"]
+           "NVML", "NvmlMemory", "STAGING", "StoreProver", "VIRTUAL_DRIVERS", "driver", "gate_indices", "gbps", "load",
+           "nvml_total", "percentiles", "whole_disks"]

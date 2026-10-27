@@ -142,8 +142,10 @@ past the published figure, which must reject), its `reads` the reads the leg exp
 one on its own host. The leg's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's leg
-declares whole, the host's DRAM, its disks) and an egress signed `UNCOUNTED`. It also carries the session's window, `t0` (the prover connected) and `t1` (the
-session signed) on the challenger's clock, which a network certifier counts the egress over.
+declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the leg declares the larger
+of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
+also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
+which a network certifier counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
 `wipe_store.Joint`; `demo.sh --disk PATH`): a fill file of the session's own in each target directory, or a raw block
 device, written with `O_DIRECT` and synced before the prover acknowledges the fill. The whole disks under the targets
