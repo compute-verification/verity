@@ -370,17 +370,41 @@ class RoundPipe:
             self.coins.close()
 
 
+#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
+#: has signed its commitment, before its `ssh -R` tunnel listens on the peer's 127.0.0.1:PORT (live_challenger/serve.py);
+#: benchmarks/one_stage/a5_coins.py's, which loads this file, so it can't be imported from there
+TUNNEL_WAIT_S = 120
+
+
+def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] = R.RemoteChallenger.connect,
+                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
+                           sleep: Callable[[float], None] = time.sleep) -> Any:
+    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
+    coin, so it is tried again every half second for up to `wait_s`; any other failure raises at once."""
+    deadline = clock() + wait_s
+    while True:
+        try:
+            return connect(address, secret)
+        except ConnectionRefusedError:
+            if clock() >= deadline:
+                raise
+            sleep(0.5)
+
+
 def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[int], bytes] | None = None,
-               connect: Callable[..., Any] = R.RemoteChallenger.connect) -> Coins:
+               connect: Callable[..., Any] = R.RemoteChallenger.connect, wait_s: float = TUNNEL_WAIT_S,
+               clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> Coins:
     """The window's coins: the challenger of session `at`, its hello carrying the session's secret when it has one, its
     commitment held to `layout` and to the root the gate's open answered when `at` holds one, or with no session the
-    in-process challenger over `entropy` (the Lean verifier of record's coins by default)."""
+    in-process challenger over `entropy` (the Lean verifier of record's coins by default).  The client connects once
+    the session's tunnel listens (`connect_when_listening`, for up to `wait_s`: a caller that knows the window's coin
+    deadline passes the time left to it)."""
     if at is None:
         if entropy is None:
             from verity.core.protocols.pouw import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process")
-    client = connect(at.address, at.secret)
+    client = connect_when_listening(at.address, at.secret, connect, wait_s, clock, sleep)
     why = layout_reason(client.commitment, epoch, rounds)
     if why is None and at.commitment is not None and client.commitment.root.hex() != at.commitment:
         why = (f"session {at.id}'s challenger answered the hello with commitment {client.commitment.root.hex()[:16]}…, "
