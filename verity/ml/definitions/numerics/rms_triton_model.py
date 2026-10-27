@@ -1,4 +1,4 @@
-"""Independent CPU models of vLLM's two residual-free RMSNorm kernels (W11): the batch-invariant Triton
+"""Independent CPU models of vLLM's two residual-free RMSNorm kernels: the batch-invariant Triton
 ``_rms_norm_kernel`` (``kernel="triton"``) and the CUDA ``vllm::rms_norm_kernel<bf16, 8>`` behind
 ``torch.ops._C.rms_norm`` (``kernel="cuda"``).
 
@@ -13,7 +13,7 @@ Kernel identities: ``vllm/model_executor/determinism/batch_invariant.py::
 _rms_norm_kernel`` specialised ``BLOCK_SIZE=1024, HAS_WEIGHT=True``, ``num_warps=4``, Triton 3.7.1 for sm_89,
 launched by ``rms_norm_batch_invariant`` for every RMSNorm call without a residual (``layers.0.input_layernorm``
 in the pinned Qwen2.5-1.5B profile); ``csrc/libtorch_stable/layernorm_kernels.cu::vllm::rms_norm_kernel<c10::BFloat16,
-8, 2, true>`` (not launched by the pinned engine; W4b's third rms_norm variant).
+8, 2, true>`` (not launched by the pinned engine; the third rms_norm variant).
 """
 
 from __future__ import annotations

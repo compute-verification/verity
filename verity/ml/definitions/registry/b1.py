@@ -361,14 +361,14 @@ def SiluMul(B, S, gu):
 # Attention — FlashAttention-2 forward, one (query position, head) row (attention-model.md §3)
 # ---------------------------------------------------------------------------------------------------------
 
-BN = 64  # kBlockN of the FA2 kernel at HEAD DIM 128 (W11's measured trait, Qwen2.5-1.5B) -- the hd-128 v2 record `ATTENTION_FA2`
+BN = 64  # kBlockN of the FA2 kernel at HEAD DIM 128 (measured on Qwen2.5-1.5B) -- the hd-128 v2 record `ATTENTION_FA2`
 
 
 def fa2_kblock_n(D: int) -> int:
     """kBlockN of the FA2 kernel vLLM launches at head dim ``D``: vllm-flash-attn `506341a`
     `csrc/flash_attn/src/flash_fwd_launch_template.h:172-192` -- paged varlen KV forces `num_splits == 1` (`flash_api.cpp:763`),
     so `run_mha_fwd_splitkv_dispatch` takes `run_mha_fwd_splitkv_align`: `kBlockM = 64; kBlockN = Headdim <= 64 ? 128 : 64`
-    (prefill causal and the `seqlen_q == 1` decode launch alike). 64 was measured bit-exact at D = 128 (W11); at D = 64
+    (prefill causal and the `seqlen_q == 1` decode launch alike). 64 was measured bit-exact at D = 128; at D = 64
     (SmolLM2-135M/360M, Qwen2.5-0.5B) the 128×64 record disagreed from the first two-block row (position 64) under BN = 64.
     A DERIVED static of the attention bodies, never a constant: the same kernel geometry for every head dim it dispatches."""
     return 128 if int(D) <= 64 else 64
@@ -730,14 +730,14 @@ def Serve(B, S, prompt, weights):
 # the kernel-geometry-derived attention chain and the Serve that reaches it
 # ---------------------------------------------------------------------------------------------------------
 #
-# Finding (D54): the 128×64 SmolLM2-135M record (head dim 64) disagrees with `Serve_v1` from the first query position
+# Finding: the 128×64 SmolLM2-135M record (head dim 64) disagrees with `Serve_v1` from the first query position
 # whose keys span two 64-key blocks (t = 64, layer 0, `attn` port 0); positions 0..63 agree at every layer.  Cause: the
-# v1 bodies read the module constant `BN = 64`, which is the kernel's kBlockN at HEAD DIM 128 (W11 measured it on
+# v1 bodies read the module constant `BN = 64`, which is the kernel's kBlockN at HEAD DIM 128 (measured on
 # Qwen2.5-1.5B); at head dim <= 64 vllm-flash-attn `506341a` launches `run_mha_fwd_splitkv_align` with kBlockN = 128
 # (`flash_fwd_launch_template.h:172-192`; paged varlen KV forces `num_splits == 1`, `flash_api.cpp:763`; prefill and the
 # `seqlen_q == 1` decode launch alike).  `fa2_kblock_n(D)` is that dispatch rule.
 #
-# Why NEW versions and not a body edit: every pinned record (n4/sc1/s4/q3, E8's 32×16, ...) was produced under `Serve_v1`
+# Why NEW versions and not a body edit: every pinned record (n4/sc1/s4/q3, the 32×16 one, ...) was produced under `Serve_v1`
 # and is re-verified against ITS pinned program (the user: "retain their original pinned programs"); the verifier builds
 # the program from `program.identity`, so `Serve_v1` must keep building the v1 body word for word.  The corrected program
 # is `Serve_v4{C, LP, STEPS}`: `Serve_v1`'s body over its layer functions, with the attention chain `Attention_v3` ->
@@ -754,11 +754,11 @@ def Serve(B, S, prompt, weights):
            conformance="exact-model-tested")
 def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
     """`AttnBlock_v1`'s body with the key-block size as the DECLARED static ``BN`` (the kernel's kBlockN, carried by the
-    program identity -- D57): one BN-key block of the FA2 online softmax for one query row.  `NVIS` = visible (unmasked)
+    program identity): one BN-key block of the FA2 online softmax for one query row.  `NVIS` = visible (unmasked)
     columns (BN except the last-visited block); masked columns contribute P = 0 exactly (skipped).  Returns (m_new, lane
     sums l[4], o[D]); with `FIRST` the state arguments are ignored (kernel `Is_first`).  `BN = 64` is `AttnBlock_v1` gate for
     gate.  Conformance: `test_derived_rows` gate-by-gate at D = 64 / BN = 128; the 128×64 SmolLM2-135M record's two-block rows
-    (D54 acceptance, pending).  `scale_log2`: the scale input (`value_inputs.AttnBlockV10`), or None for the constant."""
+    (acceptance pending).  `scale_log2`: the scale input (`value_inputs.AttnBlockV10`), or None for the constant."""
     D, NVIS, FIRST, BN = S.D, S.NVIS, S.FIRST, S.BN
     if BN % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"AttnBlock_v3: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
@@ -812,7 +812,7 @@ def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
 def AttentionHeadV3(B, S, q, k, v, *extra, block=AttnBlockV3):
     """`AttentionHead_v1`'s body over `AttnBlock_v3{..., BN}`: causal attention of one query at position T-1 over keys 0..T-1,
     ceil(T / BN) blocks visited last -> first; epilogue `sum = (l0 + l2) + (l1 + l3)`, `inv = (sum == 0 || NaN) ? 1 : rcp(sum)`,
-    `out = bf16(o * inv)`.  ``BN`` = the kernel's kBlockN, a declared static (D57).  `extra` / `block`: `AttentionHead_v10`'s."""
+    `out = bf16(o * inv)`.  ``BN`` = the kernel's kBlockN, a declared static.  `extra` / `block`: `AttentionHead_v10`'s."""
     T, D, BN = S.T, S.D, S.BN
     nb = (T + BN - 1) // BN
     m = l = o = None
@@ -897,8 +897,8 @@ def ServeV4(B, S, prompt, weights):
     greedy serving of one request, prefill of LP prompt tokens then STEPS decode steps, STEPS+1 sampled tokens.  With
     `BN = 64` it is `Serve_v1` gate for gate (the legacy geometry); with `BN = 128` (the FA2 split-KV kernel at head dim
     <= 64) it differs from `Serve_v1` exactly at query positions t >= 64 (one 128-key block where v1 had two 64-key blocks).
-    The instance pins BN in `program.identity.attention.kBlockN` (D57); E6 fills it from the profile via
-    `fa2_kernel_geometry`; the verifier binds what the identity says."""
+    The instance pins BN in `program.identity.attention.kBlockN`; the frontend fills it from the profile via
+    `serve_families.fa2_kernel_geometry`; the verifier binds what the identity says."""
     C, LP, STEPS, BN = S.C, S.LP, S.STEPS, S.BN
     caches, finals = _forward_positions_v4(B, C, BN, prompt, weights, 0, LP, None)
     head = lm_head_of(C, weights)      # [PROPOSED GEN dense2] the embedding when tied (unchanged), `lm_head` when untied
@@ -1176,7 +1176,7 @@ def ServeV2(B, S, prompt, weights):
 
 #: The Ampere (sm_80/sm_89 eager profile) implementation records.
 GEMM_AMPERE: dict = {"DOT": P.AmpereBF16TcDot16}
-ATTENTION_FA2: dict = {"BN": BN, "DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}  # the HEAD DIM 128 record (W11); see attention_fa2
+ATTENTION_FA2: dict = {"BN": BN, "DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}  # the HEAD DIM 128 record; see attention_fa2
 
 
 def attention_fa2(D: int) -> dict:
@@ -1187,7 +1187,7 @@ def attention_fa2(D: int) -> dict:
 
 def serve_v2(C: dict, LP: int, STEPS: int, gemm: dict = GEMM_AMPERE, attention: dict = ATTENTION_FA2, norm: dict | None = None):
     """`Serve_v2` bound for one profile; by default the Ampere eager profile (the hand-typed B1 program as a binding record: corresponds to
-    `Serve_v1`).  With `attention=attention_fa2(C["D"])` it is the D54-corrected program's binding record (corresponds to `Serve_v4`)."""
+    `Serve_v1`).  With `attention=attention_fa2(C["D"])` it is the corrected program's binding record (corresponds to `Serve_v4`)."""
     return bind(ServeV2, C=C, LP=LP, STEPS=STEPS, GEMM=gemm, ATTENTION=attention, NORM=norm if norm is not None else norm_bundle(C))
 
 

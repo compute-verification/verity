@@ -1,6 +1,6 @@
-"""Independent CPU model of vLLM's FlashAttention-2 forward (Ada/Ampere, BF16, head dim 128), W11.
+"""Independent CPU model of vLLM's FlashAttention-2 forward (Ada/Ampere, BF16, head dim 128).
 
-The arithmetic is in ``cpp/fa2_model.cpp`` (which reuses W4b's ``tc_model.cpp`` tensor-core model);
+The arithmetic is in ``cpp/fa2_model.cpp`` (which reuses the ``tc_model.cpp`` tensor-core model);
 this module builds/loads it, reconstructs the two MUFU tables from the shipped delta files and exposes
 
 * :func:`attention_rows` -- the model for a batch of (query row, head) pairs against canonical KV rows;
