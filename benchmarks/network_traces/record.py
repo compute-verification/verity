@@ -265,12 +265,12 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
 
 def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequence[tuple[str, list[dict], float]]):
     """vLLM's engine in this process as the Commit stage builds it (`verity_vllm.engine.build`: batch-invariant, eager,
-    no prefix cache), and with `commit` the served committer (`native_collect`), which hashes every Call output of
-    every step into the step's Merkle root on the GPU (CMT-2's chunk tree), keeping the tree levels but not the values.
-    At about 1.4 MB of Call outputs per token, hashing on host threads (`native_host`) can't keep up with the mixes, and
-    its unsized step blocks deadlock on a prefill that overflows them. The device staging is sized from the mix's
-    envelope as the Commit stage arms it (`size_arena`: two decode-sized blocks and one prefill-sized one, each step
-    taking the one its shape needs), and refused here, before any request, when it doesn't fit beside the engine."""
+    no prefix cache), and with `commit` the served committer (`native_collect_v2b` under rows-sha512, the Commit's scheme),
+    which commits every Call output of every step as hm96-sha512 rows in the step's frame-v3-sha512 tree on the GPU,
+    keeping neither the values nor the tree levels, with a 64-byte root per window. At about 1.4 MB of Call outputs per
+    token, hashing on host threads (`native_host`) can't keep up with the mixes. The staging is sized from the mix's
+    envelope as the Commit stage arms it (`size_arena`) over the windowed worker's device ring (`enable_windows`), and
+    refused here, before any request, when it doesn't fit beside the engine."""
     from verity_vllm.engine import vllm_adapter as va
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
@@ -283,7 +283,8 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
         return eng, None
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-    com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None, commit_scheme="vllm-v1")
+    com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None, wrap=True, gather=True,
+                                 native_hooks=True, auto_blocks=True, native_worker=True)
     com._gpu_ext_load()  # the GPU tree's extension is built on first use: on a cold node, 86 s that would spill past t0
     t = clock()
     com.register_weights()
@@ -291,10 +292,11 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
     arena = com.size_arena({"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt"]) for r in rows),
                             "max_new": max(r["max_tokens"] for r in rows),
                             "max_num_batched_tokens": args.max_num_batched_tokens, "max_model_len": args.max_model_len})
-    meta["committer"] = {"name": com.name, "retain_values": False,
+    windows = com.enable_windows(arena)
+    meta["committer"] = {"name": com.name, "commit_scheme": com.commit_scheme, "retain_values": False,
                          "run_s": WINDOW_BUCKETS * BUCKET_MS / 1000, "register_weights_s": round(clock() - t, 1),
                          "arena": {k: arena.get(k) for k in ("decode_block_bytes", "prefill_block_bytes", "blocks_preallocated",
-                                                             "step_bound_bytes", "per_token_bytes")}}
+                                                             "step_bound_bytes", "per_token_bytes")}, "windows": windows}
     return eng, com
 
 

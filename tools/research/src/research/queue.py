@@ -4,7 +4,9 @@ longest prefix of `next` whose every member has a reviewer's land verdict at its
 eyeball review, and the full check runs after landing); `land` below, and drive's `land = "check"`, take the newest commit on
 `next` that `research merge`'s gate accepts: a passing `check` attempt of that exact commit.
 
-    research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused
+    research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
+                                                   `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
+                                                   (`research.stale`), which drive closes at `stale_close_days`
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT [--by HANDLE]
@@ -136,8 +138,11 @@ runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `ne
 syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next tick, and a hand `sync` on the control pod
 (`Queue.hand_sync`) waits as drive's tick does for a running Lean check whose prefix holds an ejected member (`lean_waits`) and
 keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
-PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
-change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  What a sync merges on top goes non-Lean first
+PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
+`Queue.entries`; never by PR number, and never for commits the two merely share), goes
+in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
+mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked PR waits for, once per pair of heads
+(`Driver.tell_unmarked`).  What a sync merges on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
@@ -165,7 +170,7 @@ there reached its owner only when the VM that ran the sync pushed its notes, ins
 held notes carried conflict handoffs for ci's and circuits' PRs).
 
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
-with no effect on them.
+with no effect on them; its `sync`, `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
 local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
@@ -336,6 +341,16 @@ class GitHub:
             return None
         return r.stdout.strip() or None if r.returncode == 0 else None
 
+    def close(self, number: int, comment: str) -> None:
+        """Close PR ``number`` with ``comment`` (drive's stale rule, `research.stale`), as `gh` is authenticated here: drive's App."""
+        try:
+            r = subprocess.run(["gh", "pr", "close", str(number), "--repo", self.repo, "--comment", comment], capture_output=True,
+                               text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"gh pr close {number}: no answer in {GH_TIMEOUT_S} s") from None
+        if r.returncode:
+            raise QueueError(f"gh pr close {number}: {(r.stderr or r.stdout).strip()[-300:]}")
+
 
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
 
@@ -389,6 +404,12 @@ class DriveFlags:
     #: what a sync merges onto `next` anyway goes non-Lean changes first (`Queue._nonlean_order`), so they don't wait above a
     #: Lean change for its Lean check (Daniel, 26 Oct 06:04Z: "CI runs at breakneck speed")
     nonlean_first: bool = True
+    #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
+    #: owner once a day), and before drive closes it; 0 is off
+    stale_days: int = 0
+    stale_close_days: int = 0
+    #: PRs the stale rule never judges: their owners keep them open with a reason (top, 26 Oct 02:38Z)
+    stale_keep: tuple[int, ...] = ()
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -456,6 +477,17 @@ class DriveFlags:
                 raise bad("landing_gates", "a list of Python scripts by their path from the repository's root, as "
                                            "[\"integrations/x/tools/gate.py\"]")
             got["landing_gates"] = tuple(v)
+        for k in ("stale_days", "stale_close_days"):
+            if k in doc:
+                if type(doc[k]) is not int or doc[k] < 0:
+                    raise bad(k, "a whole number of days, 0 for off")
+                got[k] = doc[k]
+        if "stale_keep" in doc:
+            if not (isinstance(doc["stale_keep"], list) and all(type(n) is int and n > 0 for n in doc["stale_keep"])):
+                raise bad("stale_keep", "a list of PR numbers, as [2692, 2693]")
+            got["stale_keep"] = tuple(doc["stale_keep"])
+        if got.get("stale_close_days") and not 0 < got.get("stale_days", 0) <= got["stale_close_days"]:
+            raise bad("stale_close_days", "0, or at least stale_days, which must be on: drive closes only a stale PR")
         return cls(**got)
 
     def override(self, a: argparse.Namespace) -> "DriveFlags":
@@ -762,14 +794,21 @@ class Entry:
     pr: PR
     state: str = "ready"                  # ready | queued | waiting | refused
     why: str = ""
-    after: tuple[int, ...] = ()           # open PRs whose heads its head contains
+    after: tuple[int, ...] = ()           # open PRs whose current or an older head its head contains (`Queue.entries`)
+    older: tuple[int, ...] = ()           # those of `after` whose current head it doesn't contain
     position: int | None = None           # 1-based, on `next`
     commit: str | None = None
+    idle_since: float | None = None       # stale (`research.stale`): idle since then
+
+    def contains(self, n: int) -> str:
+        """How a reason names ``n``, one of `after`."""
+        return f"#{n}'s commits (at an older head)" if n in self.older else f"#{n}"
 
 
 def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[int]:
     """The PRs of ``heads`` ({head: PR number}) whose head ``head`` contains: one of its commits not on ``base``, ``head``
-    itself included (the caller leaves its own PR out).  A PR goes on `next` after those it contains (`Entry.after`)."""
+    itself included (the caller leaves its own PR out).  A PR goes on `next` after those it contains, and after those whose
+    commits it holds at an older head (`Entry.after`, `Queue.entries`)."""
     return sorted({heads[h] for h in _out(repo, "rev-list", f"{base}..{head}").split() if h in heads})
 
 
@@ -856,6 +895,11 @@ class Queue:
         self._registry = None
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
         self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
+        # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
+        # drivers (27 Oct: an agent VM's clone, checked out at 21 Oct, refused #4835 over a lean-audit.json conflict main's
+        # merge.py resolves).  Drive's checkout, `next`'s tip, contains `main` and stays
+        if _git(self.workdir, "merge-base", "--is-ancestor", "refs/remotes/origin/main", "HEAD", check=False).returncode:
+            _git(self.workdir, "checkout", "-q", "--detach", "--force", "refs/remotes/origin/main")
         # exit 2: no such branch; any other failure is the remote's, never an empty queue
         if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{self.branch}", ok=(0, 2)).returncode == 0:
             self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
@@ -914,9 +958,24 @@ class Queue:
         return when is not None and when > at
 
     def entries(self, prs: list[PR], state: dict, base: str = "origin/main") -> dict[int, Entry]:
+        """Each open PR's standing.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
+        head P's head contains, or an older head of Q's, by ancestry alone (never by PR number).  P holds an older head of Q
+        when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains) is
+
+        - a head the queue saw Q at, and the first open PR it saw there (`seen`), that Q's head still contains, as when P
+          branched from Q and Q moved on unmarked (25 Oct, CI-178: #4412 from #4382's eadb6663, which would have landed
+          #4382's unmarked commits under #4412's mark); or
+        - one of Q's own commits on Q's first-parent line that P has only through a merge, as when P merged Q's branch and Q
+          moved on (27 Oct: #4772 merged #4855's branch; it waits for #4855, and #4855 for nothing).
+
+        Commits two PRs merely share wait for nothing: a third branch both merged (on neither first-parent line), or a fork
+        point the queue never saw either PR at (on both).  One `rev-list` and one `rev-list --first-parent` a PR, not a merge
+        base for each pair."""
         rules = self.rules()
         heads = {p.head: p.number for p in prs}
         out: dict[int, Entry] = {}
+        below: dict[int, set[str]] = {}
+        line: dict[int, set[str]] = {}
         if self.prefetch is not None:
             self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         for p in prs:
@@ -936,19 +995,46 @@ class Queue:
                                              f"before `marked_after`): re-mark it or close it")
             else:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
-            e.after = tuple(n for n in contained(self.workdir, base, p.head, heads) if n != p.number)
+            below[p.number] = set(_out(self.workdir, "rev-list", f"{base}..{p.head}").split())
+            line[p.number] = set(_out(self.workdir, "rev-list", "--first-parent", f"{base}..{p.head}").split())
+            e.after = tuple(sorted(heads[h] for h in below[p.number] if h in heads and heads[h] != p.number))
+        own = {n: below[n].difference(*(below[a] for a in e.after)) for n, e in out.items()}
+        branch: dict[str, list[int]] = {}                   # commit: the PRs it is an own commit on the first-parent line of
+        for n, cs in own.items():
+            for c in cs & line[n]:
+                branch.setdefault(c, []).append(n)
+        seen = state.get("seen") or {}
+        for n, e in out.items():
+            held = {q for c in own[n] for q in seen.get(c, ()) if q in out and c in below[q]}
+            held |= {q for c in own[n] - line[n] for q in branch.get(c, ())}
+            e.older = tuple(sorted(held - {n}))
+            e.after = tuple(sorted(e.after + e.older))
         for e in out.values():
             e.after = tuple(a for a in e.after if not self._carried(e.pr, out[a], state))
+            e.older = tuple(a for a in e.older if a in e.after)
         changed = True
         while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
             changed = False
             for e in out.values():
                 if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
-                    e.state, e.why, changed = "waiting", f"contains #{blocking[0]}, which isn't admitted", True
+                    e.state, e.why, changed = "waiting", f"contains {e.contains(blocking[0])}, which isn't admitted", True
         return out
 
+    @staticmethod
+    def _seen(state: dict, prs: list[PR], open_numbers: set[int]) -> None:
+        """Record in ``state``'s `seen` ({head: PRs}) each head of ``prs`` no open PR was seen at before, for the PRs at it now,
+        so a PR holding it later holds an older head of theirs (`entries`); a closed PR's records go."""
+        seen = state["seen"] = {h: kept for h, ns in (state.get("seen") or {}).items()
+                                if (kept := [n for n in ns if n in open_numbers])}
+        new: dict[str, list[int]] = {}
+        for p in prs:
+            if p.head not in seen:
+                new.setdefault(p.head, []).append(p.number)
+        seen.update(new)
+
     def _carried(self, p: PR, a: Entry, state: dict) -> bool:
-        """Whether ``p`` carries the change of ``a``, a PR whose head it contains and that isn't marked ready: the same owner
+        """Whether ``p`` carries the change of ``a``, a PR whose head or own commits it contains (`entries`) and that isn't
+        marked ready: the same owner
         rebuilt it as ``p``, or ``a``'s owner withdrew its mark (`eject`, or a `ready = false` label).  Then ``p`` doesn't wait
         for ``a`` and goes on without it below (24 Oct: lanes rebuilt #3401, #3570 and #3554 by hand to drop a superseded PR
         that no one's tooling may close)."""
@@ -976,10 +1062,12 @@ class Queue:
                 break
             held.append(m.pr)
         out: list[int] = []
+        placing: set[int] = set()
 
         def place(n: int) -> None:
-            if n in out:
+            if n in out or n in placing:
                 return
+            placing.add(n)
             for a in entries[n].after:
                 place(a)
             out.append(n)
@@ -1162,10 +1250,13 @@ class Queue:
         self._drive_only(self.branch, "queue sync", dry_run)
         self._clone()
         state = self.load_state()
-        prs = [p for p in self.github.open_prs() if p.base == "main"]
-        prs, waiting = self.fetch_prs(prs)
+        open_prs = self.github.open_prs()
+        prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
+        self._seen(state, prs, {p.number for p in open_prs})
         if why := self.holding(state):
             self.log(f"research queue: {why}")
+            if not dry_run:
+                self.save_state(state)
             return built_on(self.workdir, f"refs/remotes/origin/{self.branch}")[1], {}
         chain = self.chain()
         entries = self.entries(prs, state)
@@ -1205,7 +1296,7 @@ class Queue:
         for n in order[k:]:
             e = entries[n]
             if blocked := [a for a in e.after if a in dropped]:
-                e.state, e.why = "waiting", f"contains #{blocked[0]}, which didn't merge"
+                e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which didn't merge"
                 dropped.add(n)
                 waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
                 if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
@@ -1241,10 +1332,12 @@ class Queue:
     def _drive_only(self, ref: str, verb: str, dry_run: bool) -> None:
         """Refuse a push of `main` or `next` (`merge.DRIVE_ONLY`) here unless this is drive (`merge.on_drive`), whatever the caller:
         GitHub's rulesets don't stop verity-agents[bot] (26 Oct 19:42Z: a VM's `research queue eject 4573` force-pushed a rebuild
-        of `next` that dropped two running Lean checks, as on 23 Oct 07:07Z)."""
+        of `next` that dropped two running Lean checks, as on 23 Oct 07:07Z).  `--shadow` gets no pass: its push of
+        `queue-shadow` passes here, but `research queue sync`, `land` and `drive` refuse off drive with it as without, though
+        it never pushes `main` or `next`."""
         from .merge import DRIVE_ONLY, off_drive, on_drive
 
-        if not dry_run and not self.shadow and ref in DRIVE_ONLY and not on_drive():
+        if not dry_run and ref in DRIVE_ONLY and not on_drive():
             raise QueueError(off_drive(ref, verb))
 
     def hand_sync(self, dry_run: bool = False) -> str | None:
@@ -1365,7 +1458,9 @@ class Queue:
 
     # -- status
 
-    def status(self) -> dict[int, Entry]:
+    def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None, close_days: int = 0) -> dict[int, Entry]:
+        """Each open PR's entry; with ``stale`` (`research.stale.stale_prs` over the open PRs), each stale one says so, an unmarked
+        PR based on another branch among them, and ``close_days`` (drive's `stale_close_days`) when drive closes it."""
         self._clone()
         state = self.load_state()
         open_prs = self.github.open_prs()
@@ -1373,6 +1468,15 @@ class Queue:
         entries = self.entries(prs, state)
         entries.update(waiting)
         entries.update(self.off_main(open_prs))
+        by_number = {p.number: p for p in open_prs}
+        for n, since in (stale(open_prs) if stale else {}).items():
+            p = by_number[n]
+            e = entries.setdefault(n, Entry(p, state="waiting", why=f"based on {based_on(p, open_prs)}, and not marked ready at "
+                                                                    f"{p.head[:8]}"))
+            e.idle_since = since
+            e.why = (f"stale, idle since {time.strftime('%Y-%m-%d', time.gmtime(since))}"
+                     + (f" (drive closes it {close_days} days idle; push, mark it ready or close it)" if close_days else "")
+                     + f": {e.why}")
         for i, m in enumerate(self.chain(), 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
@@ -1381,7 +1485,7 @@ class Queue:
         for n in contained_first(entries):
             e = entries[n]
             if e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
-                e.state, e.why = "waiting", f"contains #{out[0]}, which is {entries[out[0]].state}: {entries[out[0]].why}"
+                e.state, e.why = "waiting", f"contains {e.contains(out[0])}, which is {entries[out[0]].state}: {entries[out[0]].why}"
             elif e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready" and (w := waits.get(str(n))) and w["head"] == e.pr.head:
@@ -3704,10 +3808,21 @@ def main(argv: list[str]) -> int:
                 q.fetch()
             labels.since = q.rules().marked_after
         if a.command == "status":
-            entries = q.status()
+            from .stale import stale_prs
+
+            q._clone()
+            q.fetch()
+            r = _git(q.workdir, "show", f"refs/remotes/origin/main:{DRIVE_FLAGS}", check=False)
+            got = DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at main") if r.returncode == 0 else DriveFlags()
+            entries = q.status(lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
+                                                     lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep),
+                               got.stale_close_days)
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
-                                   "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after)}
+                                   "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),
+                                   "stale": e.idle_since is not None,
+                                   "idle_since": None if e.idle_since is None else
+                                   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(e.idle_since))}
                                   for e in sorted(entries.values(), key=lambda e: e.pr.number)], indent=1))
             else:
                 print(_render(entries))
@@ -3753,7 +3868,8 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
                    after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
-                   ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks).tick(dry_run=a.dry_run)
+                   ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks, stale_days=flags.stale_days,
+                   stale_close_days=flags.stale_close_days, stale_keep=flags.stale_keep).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

@@ -25,7 +25,7 @@ shape's sizes from `Top.hsz` (`RoundSizes`):
 `TargetB` (`DecAt.framed_dense`), `TargetL` (`Top.targetL_holds`) and `TargetPublics` (`DecAt.publics_empty`) are
 proved. `targets_of_open`: every target from row E, `TargetRDep`, `TargetDMerkle` and `TargetDecode`;
 `targets_of_rows`: the same at row E's accumulators `accR`, with row E from its pieces' running sums (`targetE_rowD`);
-`targets_of_rowsJ`: with `TargetDecode` from `DecodeAt.decode_at`, under the locked `Claims.JsonSpec`.
+`targets_of_rowsJ`: with `TargetDecode` from `DecodeAt.decode_at`, with no JSON premise.
 -/
 
 namespace RecDeploy
@@ -55,7 +55,7 @@ def TargetRDep : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
       (∀ r : Fin 2, (acc x ms cs (2 * i + r)).size = 4) ∧
-      ∃ (rpieces : List ResPiece) (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+      ∃ (rpieces : List ResPiece) (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
         (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ),
         (∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) ∧
         (∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
@@ -65,7 +65,7 @@ def TargetRDep : Prop :=
         (∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
           structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
           ∀ (r : Fin 2) p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-            elemAt x ms (keyAt r p) k =
+            elemAt x ms cs (keyAt r p) k =
               el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]) ∧
         ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
           structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
@@ -166,9 +166,8 @@ theorem targets_of_rows (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → 
     Targets rd rows holds (accR rd chainAt) :=
   targets_of_open rd rows holds _ hR hD (targetE_rowD rd _ chainAt key hholds) hDec
 
-/-- **Every target from rows R, D and E, under the JSON library's specification** (`S`, the locked completeness
-assumption): `targets_of_rows` with `TargetDecode` from `DecodeAt.decode_at`. -/
-theorem targets_of_rowsJ (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP) {Q : Type}
+/-- **Every target from rows R, D and E**: `targets_of_rows` with `TargetDecode` from `DecodeAt.decode_at`. -/
+theorem targets_of_rowsJ (rd : Msg → Option FinalP) {Q : Type}
     (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop)
     (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hR : TargetRDep rd (RowsHold rows holds) (accR rd chainAt))
@@ -176,7 +175,7 @@ theorem targets_of_rowsJ (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) 
     (hholds : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), RowsHold rows holds x ms cs →
       ∀ q ∈ Rows.rowDPieces key x, Rows.accHolds (Rows.sideAt rd) Rows.coefRead chainAt q x ms cs) :
     Targets rd rows holds (accR rd chainAt) :=
-  targets_of_rows rd rows holds chainAt key hR hD hholds (DecodeAt.decode_at S rd (RowsHold rows holds))
+  targets_of_rows rd rows holds chainAt key hR hD hholds (DecodeAt.decode_at rd (RowsHold rows holds))
 
 end Top
 

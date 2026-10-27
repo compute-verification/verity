@@ -252,4 +252,8 @@ def test_a_wired_tied_window_opens_every_down_proj_row_and_a_changed_byte_does_n
         outputs = leg.registered_outputs(units)
         assert [outputs[f"r{j}", s] for j in range(2) for s in range(2)] == [
             r[s * 2 * H:(s + 1) * 2 * H] for r in responses([3, 7], 2) for s in range(2)]
-        assert leg.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"]
+        w = json.loads((d / "registration.json").read_text())["window"]
+        pins, untied = RA.window_pins(w, circuit)
+        pins |= RA.pinned(json.loads(Path(p["registered"]).read_text()))
+        count = IF.input_count(circuit, pins=RA.pin_roots(pins), roots=RA.window_roots(w))
+        assert not untied and leg.free_inputs(circuit)["bits"] == count["free"]
