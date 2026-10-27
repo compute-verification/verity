@@ -247,7 +247,8 @@ struct Cfg {
   {NAME, NM, FORM, FL, Y, HR, NWG, smem_bytes<NM, FORM, FL>(), Shape<NM, FORM>::MACS, cta<NM, FORM, FL, Y, HR, NWG>}
 // The consumers' register budget Y and, for each, the tiles and CTA sizes it fits, the hash warps at the registers left:
 // res, the operands resident (the ceiling), and le, TMA loads and the epilogue (the served call's parts). gemm_r5 is
-// y160_m2_alt_w4 (HR 96, 7 hash warps beside the producer).
+// y160_m2_alt_w4 (HR 96, 7 hash warps beside the producer). n256 is resident only: with the epilogue ptxas places its
+// m64n256k32 at the launch's 128 registers, not the consumers' Y.
 #define BOTH(NAME, NM, FORM, Y, HR, NWG) CFG(NAME "_res", NM, FORM, 0, Y, HR, NWG), CFG(NAME "_le", NM, FORM, LOAD | EPI, Y, HR, NWG)
 static const Cfg CFGS[] = {
     BOTH("y232_m1_alt_w4", 1, ALT, 232, 88, 4),  BOTH("y232_m1_alt_w5", 1, ALT, 232, 64, 5),
@@ -255,8 +256,8 @@ static const Cfg CFGS[] = {
     BOTH("y176_m1_alt_w5", 1, ALT, 176, 80, 5),  BOTH("y160_m2_alt_w4", 2, ALT, 160, 96, 4),
     BOTH("y160_m2_alt_w5", 2, ALT, 160, 64, 5),  BOTH("y128_m2_n128_w4", 2, N128, 128, 128, 4),
     BOTH("y128_m2_n128_w5", 2, N128, 128, 80, 5), BOTH("y128_m2_n128_w6", 2, N128, 128, 64, 6),
-    BOTH("y104_m2_n128_w6", 2, N128, 104, 72, 6), BOTH("y160_m2_n256_w4", 2, N256, 160, 96, 4),
-    BOTH("y232_m1_n256_w4", 1, N256, 232, 88, 4),
+    BOTH("y104_m2_n128_w6", 2, N128, 104, 72, 6), CFG("y160_m2_n256_w4_res", 2, N256, 0, 160, 96, 4),
+    CFG("y232_m1_n256_w4_res", 1, N256, 0, 232, 88, 4),
 };
 
 static CUtensorMap tmap(const void* ptr, int depth, int rows, int box_rows) {
