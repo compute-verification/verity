@@ -52,11 +52,11 @@ theorem partRaw_recRows_eq {x : Claims.Msg} {r : XR} (h : readX x = some r) {s s
 
 /-! ## The deployed parts pass, rows that differ are refused -/
 
-/-- A part's Flock statement, its fields empty: `rowsShared` reads only the rows. -/
+/-- A part's Flock statement, its fields and bindings empty: `rowsShared` reads only the rows. -/
 private def partAt (name : String) (rows : Option ByteArray) : PartX :=
   ⟨{ statement := name, circuit := .empty, publicFile := .empty, tables := [], zk := true, osCoins := false,
       count := 0, draw := none, partition := none, program := none, work := none, workTable := none,
-      stratified := none, closure := none, registered := none, publicInputs := none }, rows⟩
+      stratified := none, closure := none, registered := none, publicInputs := none }, rows, .empty⟩
 
 /-- The shared rows file as the honest stager writes it for every part (`rows-<part>.json`). -/
 private def sharedRows : ByteArray :=
