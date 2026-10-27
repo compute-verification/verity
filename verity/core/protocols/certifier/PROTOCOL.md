@@ -1016,7 +1016,7 @@ registration (vllm's Commit), the target's map registration and its range read, 
 advice's hiding root, and the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads.
 
 **Open for proofs.**
-- Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position
+- Hidden-position reads (frame and port) under protocol soundness. In v4 every read is at a public position
   (every bucket row, every port row at its public step), and what is hidden is the routing: a Beneš network whose
   switches are witness, which only finds entries, since the match checks each routed entry's index. At the target the
   port's reads are at hidden positions, the steps the private map gives, and the map's rows stay at public ones.
