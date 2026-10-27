@@ -99,7 +99,7 @@ def test_mma_arrangement_is_the_product(bits):
 
 
 def test_tags_leaves_root():
-    from benchmarks.bandwidth import tags as TG
+    from verity.core.protocols.bandwidth import tags as TG
     from verity.ml.crypto import blake3
 
     f = W.FIELDS[512]

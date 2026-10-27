@@ -394,8 +394,7 @@ def test_a_joint_runs_store_is_set_up_under_the_bandwidth_salt_of_its_device(tmp
     """`--bandwidth-salt GPU` sets `C` up under `bandwidth.audit.draw_salt` for the GPU's id as the challenger reads it, and
     P2's audit runs over that `C`, so the bandwidth verifier accepts the store P2 audits; a plain run's salt is PoUS's own
     (the test above), and the switch refuses the frozen spec's framing."""
-    monkeypatch.syspath_prepend(str(ROOT))
-    from benchmarks.bandwidth import audit
+    from verity.core.protocols.bandwidth import audit
     from verity.core.protocols.pous import protocol, schemes
     from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
 

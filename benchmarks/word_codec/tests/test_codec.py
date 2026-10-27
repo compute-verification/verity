@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE.parent), str(HERE.parents[2])]
+sys.path.insert(0, str(HERE.parent))
 
 import codec as C  # noqa: E402
 import twin as T  # noqa: E402
@@ -173,7 +173,7 @@ def test_blocks_are_a_lane_of_a_task(bits):
 @pytest.mark.parametrize("bits", C.PACKINGS)
 def test_twin_lane_tag_is_ro_blake3(bits):
     """The kernel's message (u64be j, then the words as u32 pairs), lengths and flags give ro-blake3/v1's tag."""
-    from benchmarks.bandwidth import tags
+    from verity.core.protocols.bandwidth import tags
     from verity.ml.crypto import blake3
 
     scheme = tags.get("ro-blake3/v1")

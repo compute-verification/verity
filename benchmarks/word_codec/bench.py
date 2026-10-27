@@ -409,7 +409,7 @@ def rfc6962_root(nodes: list[bytes]) -> bytes:
 def tag_gate(lib: Lib, torch, store, cm: list[Commit], log, name: str, k: int, samples: int = 48) -> dict:
     """The fused kernel's tags (cm[0], one call) against ro-blake3/v1 on sampled blocks, the committer warps' leaves
     (cm[0]'s, from the next call) and tagger.cu's root over them against hashlib, the standalone leaves the same."""
-    from benchmarks.bandwidth import tags as T
+    from verity.core.protocols.bandwidth import tags as T
 
     scheme = T.get("ro-blake3/v1")
     keyed = scheme.keyed(TAG_SEED)

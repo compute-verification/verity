@@ -518,7 +518,7 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             entry["prefetch_equal"][k] = bool(torch.equal(pf, pp))
             if gi == 0:
                 if keyed is None:
-                    from benchmarks.bandwidth import tags as T
+                    from verity.core.protocols.bandwidth import tags as T
                     keyed = T.get("ro-blake3/v1").keyed(TAG_SEED)
                 rng = random.Random(k)
                 sample = sorted({0, blocks - 1, *rng.sample(range(blocks), 30)})

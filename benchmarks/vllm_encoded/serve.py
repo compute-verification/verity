@@ -36,7 +36,7 @@ The plain and encoded arms install at the end of the model runner's `load_model`
 graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
 gives the same partial sums bit for bit (encoded against plain at every capture size), the plain sums agree with a float
 product, the encoded store decodes to the payloads on the device and in `codec.py` (`wide.py`, `codec_tensor/wide.py`),
-sampled tags equal the bandwidth audit's reference (`benchmarks.bandwidth.tags`), a committed arm's step at
+sampled tags equal the bandwidth audit's reference (`verity.core.protocols.bandwidth.tags`), a committed arm's step at
 each capture size gives the reference's leaves and root over its tags, and (encoded arms) no FP8 or
 plain fragment tensor of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
 (`gate`), which `compare.py` requires to be bit-identical between plain and encoded arms (token ids and log-probs).
@@ -380,7 +380,7 @@ def check_words(lin: K.Linear, name: str, idx: int, n: int) -> None:
 def check_tags(lin: K.WideLinear | K.TensorLinear, name: str, n: int) -> int:
     """The last GEMM's tags of ``n`` sampled blocks and the last block equal the bandwidth audit's ro-blake3/v1 of the
     block's encoded words at its index (a wide lane's L words, or 4,088 bytes of a tensor store, the last block short)."""
-    from benchmarks.bandwidth import tags
+    from verity.core.protocols.bandwidth import tags
     tensor = isinstance(lin, K.TensorLinear)
     w = lin.tlib if tensor else lin.wlib
     torch.cuda.synchronize()
@@ -506,7 +506,7 @@ def check_wide_commit(linears: list[tuple[str, K.WideLinear]], n: int) -> dict:
     leaves and root on the device."""
     import ctypes
 
-    from benchmarks.bandwidth import tags as tg
+    from verity.core.protocols.bandwidth import tags as tg
     from verity.core.protocols.pous.verifier import MerkleTree
     ws_mod, w = K._wide_sketch(), linears[0][1].wlib
     st, scheme = w.step, ws_mod.tag_scheme()

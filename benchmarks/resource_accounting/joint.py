@@ -50,10 +50,10 @@ from pathlib import Path
 from typing import Any, Protocol
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE), str(HERE.parents[1])]
+sys.path.insert(0, str(HERE))
 import certified as C
 
-from benchmarks.bandwidth import audit, tags
+from verity.core.protocols.bandwidth import audit, tags
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
 
 BANDWIDTH = HERE.parent / "bandwidth"

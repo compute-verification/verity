@@ -10,7 +10,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, PoUS, the remote bandwidth audit and the network
+    package per protocol: sampled proofs, PoUW, PoUS, the bandwidth audit, the remote bandwidth audit and the network
     certifier, each a Python verifier until its Lean verifier (its `lean/`) replaces it; NCI is Lean only. `claims`
     holds the security claims' ids, `service/flock/` C-Flock's Lean verifier and the ZK server
     (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the Python held to each Lean.

@@ -1,4 +1,4 @@
-"""`tagging`'s ro-blake3/v1 over the store's 4,088-byte blocks, against `benchmarks/bandwidth/tags.py`, and a
+"""`tagging`'s ro-blake3/v1 over the store's 4,088-byte blocks, against `verity/core/protocols/bandwidth/tags.py`, and a
 Python transcript of `wt.cu`'s `tag_quad` (a lane a chunk, two parent steps over shuffles) against the same."""
 from __future__ import annotations
 

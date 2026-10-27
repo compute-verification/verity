@@ -98,7 +98,7 @@ def sketch(vs: np.ndarray, s: np.ndarray) -> np.ndarray:
 
 
 def tag_scheme():
-    from benchmarks.bandwidth import tags
+    from verity.core.protocols.bandwidth import tags
 
     return tags.Blake3Tag(name=NAME)
 
@@ -112,7 +112,7 @@ def tags_of(seed: bytes, sk: np.ndarray, jbase: int = 0, which=None) -> list[byt
 
 
 def leaves(seed: bytes, ys: list[bytes]) -> list[bytes]:
-    from benchmarks.bandwidth import tags
+    from verity.core.protocols.bandwidth import tags
 
     return tags.leaves(tag_scheme(), seed, ys)
 

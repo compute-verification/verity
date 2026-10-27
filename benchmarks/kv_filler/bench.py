@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT / "benchmarks/word_codec"))
 
 import kv as K  # noqa: E402
 
-VECTORS = ROOT / "benchmarks/bandwidth/tests/vectors.json"
+VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"
 GATE_SEED = bytes(range(32))
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
 BLOCK = 2056

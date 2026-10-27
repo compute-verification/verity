@@ -10,16 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[3]
-if str(REPO) not in sys.path:
-    sys.path.insert(0, str(REPO))
-
-from benchmarks.bandwidth import audit, tags  # noqa: E402
-from verity.core.protocols.pous.schemes.p2 import P2Params  # noqa: E402
-from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash  # noqa: E402
+from verity.core.protocols.bandwidth import audit, tags
+from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
 
 PATH = Path(__file__).with_name("vectors.json")
 BLOCK_DOMAIN = b"verity/bandwidth/test-block/v1\0"

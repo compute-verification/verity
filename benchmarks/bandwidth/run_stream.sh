@@ -6,7 +6,7 @@
 #     --declared-output 'out/*' -- taskset -c 48-95 bash benchmarks/bandwidth/run_stream.sh
 #
 # Outside the lease: build `bwstream` (stream.cu with tagger.cu, and stream_host.cpp by g++; refused on any register spill),
-# regenerate the pinned stream vectors and check them, and compute with the audit's reference the full store's expected roots.
+# regenerate the pinned stream vectors and check them, and compute with the core reference the full store's expected roots.
 # Under `gpu-lease 1 --wait --on $GPUS --max-min 25`: `bwstream --mode gates` (the host generators against the keystream,
 # the device absorb and the host reference against the pinned digests and group nodes, a control without the copies that
 # must not match, the tag pass's root); a failed gate times nothing (exit 3).  Then the timings, each its own JSON: link, hbm,

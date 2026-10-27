@@ -1,4 +1,4 @@
-"""The GPU tagger's expected roots, from the audit's reference (`audit.py` and `tags.py` beside it), on CPU processes.
+"""The GPU tagger's expected roots, from the core reference (`verity.core.protocols.bandwidth`), on CPU processes.
 
     python reference.py --blocks 524288 --seed HEX --out expect.json [--workers 32]
 
@@ -20,15 +20,12 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
+from verity.core.protocols.bandwidth import audit, tags
+from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
+from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
+
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from benchmarks.bandwidth import audit, tags  # noqa: E402
-from verity.core.protocols.pous.schemes.p2 import POINT, P2Params  # noqa: E402
-from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash  # noqa: E402
-
-VECTORS = ROOT / "benchmarks/bandwidth/tests/vectors.json"
+VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"
 BLOCK_DOMAIN = b"verity/bandwidth/test-block/v1\0"
 BLOCK_BYTES = 2056
 COMMITMENT = hashlib.sha512(BLOCK_DOMAIN).digest()

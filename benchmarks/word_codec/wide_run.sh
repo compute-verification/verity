@@ -23,7 +23,7 @@ ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 [ -x "$PY" ] || { echo "no torch venv at $PY"; exit 3; }
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
-export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}  # the bandwidth audit's tags and PoUS's tree, for the gates
+export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}  # verity's bandwidth tags and PoUS's tree, for the gates
 WC=benchmarks/word_codec
 LIBSET=${LIBSET:-p127s1 p255s1 p521s1}
 declare -A KMAX=([127]=${KMAX_127:-4} [255]=${KMAX_255:-2} [521]=${KMAX_521:-2} [256]=${KMAX_256:-2} [512]=${KMAX_512:-3})

@@ -1751,7 +1751,7 @@ __global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore,
   }
 }
 
-// --- ro-blake3/v1 (benchmarks/bandwidth/tags.py) ---------------------------------------------------------------------
+// --- ro-blake3/v1 (verity/core/protocols/bandwidth/tags.py) ----------------------------------------------------------
 //
 // y_j = BLAKE3-keyed(K, u64be j ‖ E_j) over E's blocks of TAG_BLOCK bytes, so a full block's message is four whole
 // chunks: a quad of lanes hashes one block, a chunk a lane, and joins the chunks' chaining values with two parent

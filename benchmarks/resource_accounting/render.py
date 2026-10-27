@@ -192,7 +192,7 @@ def chip_bytes(ident: dict) -> int | None:
 def window_q(tag: str, store: dict | None, chip: int | None) -> dict | None:
     """Q_cert of one accepted window of `tag` over the round's store (`certified.q_cert`); None for an uncertified tag or
     without S_chip."""
-    from benchmarks.bandwidth import tags
+    from verity.core.protocols.bandwidth import tags
     if not store or chip is None or not tags.get(tag).certified:
         return None
     return C.q_cert(tag, store["blocks"], store["block_bytes"], chip)

@@ -25,17 +25,11 @@ SHA-512    the half-block receipt in the remote driver's hash (`remote_bandwidth
 from __future__ import annotations
 
 import hashlib
-import sys
-from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[2]
-if str(REPO) not in sys.path:
-    sys.path.insert(0, str(REPO))
-
-from benchmarks.bandwidth import tags  # noqa: E402
-from verity.ml.randomness import derive, frame  # noqa: E402
+from verity.core.protocols.bandwidth import tags
+from verity.ml.randomness import derive, frame
 
 NAMES = {1: "ro-sketch-blake3/v0", 2: "ro-bound-sketch-blake3/v0"}
 SIGN_DOMAIN = "verity/bandwidth/sketch-signs/v0"

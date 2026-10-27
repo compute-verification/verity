@@ -43,8 +43,6 @@ from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
 CLEAR = ROOT / "benchmarks" / "pouw" / "clear"
 #: the panel line and version Pearl-C's arms run (`price_twins.statement` drops the hashing format)
@@ -91,14 +89,14 @@ def chip(device: dict) -> dict:
 
 def window_params(tag: str):
     """A bandwidth window of `tag` at the proof's samples, with the RTT at P2's cap: `T + RTT` one ns under the rebuild floor."""
-    from benchmarks.bandwidth import audit
+    from verity.core.protocols.bandwidth import audit
     from verity.core.protocols.pous.schemes.p2 import RTT_ALLOWANCE_CAP_NS
     return audit.Params(tag, audit.SAMPLES, audit.REGEN_FLOOR_NS - RTT_ALLOWANCE_CAP_NS - 1, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
 
 
 def granted_params(tag: str):
     """A window of `tag` at the granted point: `s = 1,849`, `T = 1.2 ms`, and no RTT, the verifier in the prover's process."""
-    from benchmarks.bandwidth import audit
+    from verity.core.protocols.bandwidth import audit
     return audit.Params(tag, audit.SAMPLES, GRANTED_T_NS)
 
 
@@ -106,7 +104,7 @@ def q_cert(tag: str, blocks: int, block_bytes: int, chip_bytes: int) -> dict:
     """Q_cert of one accepted window of `tag` at the granted point over a store of `blocks` blocks: `audit.bound`'s ingress
     with S_chip `chip_bytes` and the side link at the bandwidth harness's cap (`summarize.PCIE_GEN5_X16`, PCIe Gen 5 x16
     at its raw rate), and its error."""
-    from benchmarks.bandwidth import audit
+    from verity.core.protocols.bandwidth import audit
     p = granted_params(tag)
     b = audit.bound(p, blocks, block_bytes, chip_bytes=chip_bytes, side_bytes_per_s=summarize().PCIE_GEN5_X16)
     return {"q_cert": b.ingress_bytes, "error": b.error, "error_log2": math.log2(b.error), "side_bytes": b.side_bytes,

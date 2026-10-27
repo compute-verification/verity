@@ -11,12 +11,8 @@ import math
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-if str(REPO) not in sys.path:
-    sys.path.insert(0, str(REPO))
-
-from benchmarks.bandwidth import audit  # noqa: E402
-from benchmarks.bandwidth import tags as tag_set  # noqa: E402
+from verity.core.protocols.bandwidth import audit
+from verity.core.protocols.bandwidth import tags as tag_set
 
 SHORT = {"gf31": "gf31-poly/v1", "ro": "ro-sha512/v1", "b3": "ro-blake3/v1"}
 PCIE_GEN5_X16 = 32e9 * 16 / 8 * 128 / 130

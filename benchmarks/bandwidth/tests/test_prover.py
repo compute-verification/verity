@@ -11,11 +11,10 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(HERE), str(HERE.parents[1])]
+sys.path.insert(0, str(HERE))
 
 import gpu  # noqa: E402
-
-from benchmarks.bandwidth import audit, tags  # noqa: E402
+from verity.core.protocols.bandwidth import audit, tags  # noqa: E402
 
 THROWAWAY = bytes(tags.SEED_BYTES)
 SCRUB = 1000
