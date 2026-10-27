@@ -70,18 +70,6 @@ static int smem_of(const VarSpec& v, int wgs) {
   return std::max(MIN_SMEM, TILE_BYTES + wgs * 8 * (w_words(v) + s_words(v)));
 }
 
-// chunk c's 16 big-endian words of the row at p (16-byte aligned), into W[0..15]
-template <class Sched>
-__device__ __forceinline__ void chunk_words(const uint8_t* p, int c, Sched W) {
-  const uint4* q = reinterpret_cast<const uint4*>(p + 128 * c);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) {
-    const uint4 u = q[i];
-    W[2 * i] = sx::be64(u.x, u.y);
-    W[2 * i + 1] = sx::be64(u.z, u.w);
-  }
-}
-
 // one chunk (c) of each of this thread's rows into its chaining values: st (registers) or Ss[(chain 8 + i) 128] (shared)
 template <int VAR>
 __device__ __forceinline__ void hash_chunk(const uint8_t* tile, const int* rows, int c, u64 (&st)[2][8], u64* Ws, u64* Ss) {
@@ -89,7 +77,7 @@ __device__ __forceinline__ void hash_chunk(const uint8_t* tile, const int* rows,
   constexpr int C = V.chains;
   if constexpr (V.sx) {
     u64 w[16];
-    chunk_words(tile + rows[0] * TSTRIDE, c, w);
+    sx::load_chunk(tile + rows[0] * TSTRIDE + 128 * c, w);
     sx::compress<0, V.roll>(st[0], w);
   } else {
     u64 v[C][8];
@@ -101,18 +89,18 @@ __device__ __forceinline__ void hash_chunk(const uint8_t* tile, const int* rows,
     if constexpr (V.st_smem) asm volatile("" ::: "memory");
     if constexpr (V.w_smem) {
       const sx::Strided<128> W0{Ws}, W1{Ws + 16 * 128};
-      chunk_words(tile + rows[0] * TSTRIDE, c, W0);
+      sx::load_chunk(tile + rows[0] * TSTRIDE + 128 * c, W0);
       if constexpr (C == 2) {
-        chunk_words(tile + rows[1] * TSTRIDE, c, W1);
+        sx::load_chunk(tile + rows[1] * TSTRIDE + 128 * c, W1);
         sx::rounds2<0>(v[0], W0, v[1], W1);
       } else {
         sx::rounds<0, 1>(v[0], W0);
       }
     } else {
       u64 w0[16], w1[16];
-      chunk_words(tile + rows[0] * TSTRIDE, c, w0);
+      sx::load_chunk(tile + rows[0] * TSTRIDE + 128 * c, w0);
       if constexpr (C == 2) {
-        chunk_words(tile + rows[1] * TSTRIDE, c, w1);
+        sx::load_chunk(tile + rows[1] * TSTRIDE + 128 * c, w1);
         sx::rounds2<0>(v[0], w0, v[1], w1);
       } else {
         sx::rounds<0, 1>(v[0], w0);

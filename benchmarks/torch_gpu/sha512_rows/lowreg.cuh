@@ -21,6 +21,20 @@ template <int S> struct Strided {
   SX_HD u64& operator[](int j) const { return p[j * S]; }
 };
 
+#ifdef __CUDACC__
+// the 128 bytes at p (16-byte aligned, shared or global) as a chunk's 16 big-endian words, into W[0..15]
+template <class Sched>
+__device__ __forceinline__ void load_chunk(const uint8_t* p, Sched W) {
+  const uint4* q = reinterpret_cast<const uint4*>(p);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    const uint4 u = q[i];
+    W[2 * i] = be64(u.x, u.y);
+    W[2 * i + 1] = be64(u.z, u.w);
+  }
+}
+#endif
+
 #define SXL_ROUND(a, b, c, d, e, f, g, h, kw)                                                                              \
   do {                                                                                                                     \
     const u64 t1_ = (h) + S1<M1>(e) + ch(e, f, g) + (kw);                                                                  \
