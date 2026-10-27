@@ -15,10 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 LEAN = ROOT / "verity/core/primitives/identity/Identity/Domains.lean"
 PYTHON = ROOT / "verity/ml/commitments/domains.py"
 #: The protocols whose code reads every separator from the table, Python and Lean, outside their tests and scripts. It
-#: only grows: a protocol joins in the change that makes its code read the table.
-READERS: tuple[str, ...] = ()
+#: only grows: a protocol joins in the change that makes its code read the table. A Lean definition a lock reads keeps
+#: its literal until its record next changes (the record hashes the value as written), tied to its entry by an
+#: `example : … Domains.NAME … := rfl` in its file (`TIE`).
+READERS: tuple[str, ...] = ("verity/core/protocols/pouw",)
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
+TIE = re.compile(r"^example : (.*) := rfl$", re.M)
 
 
 def lean_entries() -> list[tuple[str, str]]:
@@ -107,8 +110,10 @@ def _lean_string(text: str, i: int, out: list) -> int:
 def _lean_literals(path: Path):
     text, out = path.read_text(), []
     _lean_code(text, 0, out)
+    tied = {domains.TABLE.get(n) for t in TIE.findall(text) for n in re.findall(r"\bDomains\.([A-Z][A-Z0-9_]*)", t)}
     for offset, s in out:
-        yield text.count("\n", 0, offset) + 1, s
+        if s.rstrip("\0") not in tied:
+            yield text.count("\n", 0, offset) + 1, s
 
 
 def test_readers_carry_no_literal_of_the_table():
@@ -123,7 +128,9 @@ def test_readers_carry_no_literal_of_the_table():
             found += [f"{rel}:{line}: {v!r} is `{by_value[v.rstrip(chr(0))]}`" for line, v in literals
                       if v.rstrip("\0") in by_value]
     assert not found, ("a protocol that reads the table writes a separator of it as a literal; read it from "
-                       "`verity.ml.commitments.domains` (Python) or `Domains` (Lean, `import Identity.Domains`):\n"
+                       "`verity.ml.commitments.domains` (Python) or `Domains` (Lean, `import Identity.Domains`; a "
+                       "definition a lock reads keeps its literal, tied in its file by `example : … Domains.NAME … := "
+                       "rfl`):\n"
                        + "\n".join(found))
 
 
