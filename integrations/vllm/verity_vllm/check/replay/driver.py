@@ -760,8 +760,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             # Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
             "unreplayable": [{"family": f, "n": int(not_ev_fam[f]),
                               "why": NOT_YET.get(f.split(" (")[0], "structure / interior: no identity" if "(structure" in f
-                                                 else ("interior producer: composed into its consumer's VU (MAN-07)" if "(interior" in f
-                                                       else ("MoE plane row -> plane slice mapping failed (MAN-06f v3): see population.not_evaluable" if "(plane mapping failed)" in f
+                                                 else ("interior producer: composed into its consumer's VU" if "(interior" in f
+                                                       else ("MoE plane row -> plane slice mapping failed: see population.not_evaluable" if "(plane mapping failed)" in f
                                                              else "no registered evaluator")))}
                              for f in sorted(not_ev_fam)],
             "weights": (wc if wc is not None else {"equal": None, "note": "by reference, unverified at replay (no weights check supplied)"}),
