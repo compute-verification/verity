@@ -78,7 +78,6 @@ theorem ofReal_Pr_eq_prCoin {β : Type} [Fintype β] [Nonempty β] (p : β → P
   unfold Claims.Pr
   rw [Game.prCoin_eq_card, ENNReal.ofReal_div_of_pos (by exact_mod_cast Fintype.card_pos), ENNReal.ofReal_natCast,
     ENNReal.ofReal_natCast]
-  congr 3
 
 /-- **The replay finder**: on a uniform tape of the play, it plays `σ` and outputs what `col` reads off the outcome,
 at the declared cost `k`. -/
