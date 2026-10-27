@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.VStarCapL
+import Proofs.Flock.Claims.Recursion.VStarCapLR
 import Proofs.Flock.Claims.Recursion.SlotsCalls
 import Proofs.Flock.Claims.Recursion.PartsVStar
 
@@ -26,6 +26,7 @@ namespace RecDeploy.VStarBuild
 
 open _root_.Flock
 open Claims (Msg)
+open RecDeploy.VStarCapLR
 
 /-! ## The schedule's tops -/
 
