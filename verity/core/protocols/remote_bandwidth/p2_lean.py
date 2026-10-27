@@ -58,6 +58,7 @@ class Lean:
 
     def __init__(self, path: Path) -> None:
         self.proc = subprocess.Popen([str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        self.unsent: OSError | None = None
 
     def send(self, request: dict[str, Any], body: bytes = b"") -> None:
         try:
@@ -80,10 +81,12 @@ class Lean:
         return self.read()
 
     def close(self) -> None:
+        """Ends the process. One that has exited (a request crashed it) can't take what a failed `send` left in its
+        stdin's buffer: `unsent` is the error closing it raised then, and the process is waited for all the same."""
         try:
             self.proc.stdin.close()
-        except OSError:
-            pass
+        except OSError as e:
+            self.unsent = e
         self.proc.wait()
 
     def __enter__(self) -> Lean:

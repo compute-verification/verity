@@ -418,15 +418,12 @@ def p2_events(store: p2.Store, plan: Plan, params, committed: list[bytes], not_b
     events: list[dict] = []
     passes: dict[tuple[int, int], object] = {}
 
-    class Ended(Exception):
-        pass
-
     def push(e: dict) -> dict:
-        events.append(e)
-        out = p2_apply(b, p2_event_of(e))
+        """`e` sent and the books' answer, until the session has its outcome; after it, nothing is sent."""
         if b.s.outcome is not None:
-            raise Ended
-        return out
+            return {}
+        events.append(e)
+        return p2_apply(b, p2_event_of(e))
 
     def opened(t: int, now: int) -> None:
         got = push({"kind": "close", "t": t, "now": now})
@@ -436,39 +433,48 @@ def p2_events(store: p2.Store, plan: Plan, params, committed: list[bytes], not_b
             push({"kind": "openings", "t": t, "line": line.hex()})
 
     now, previous = not_before, store.registration.digest
-    try:
-        push({"kind": "start", "now": now})
-        for t in range(params.windows):
-            if t >= len(b.s.windows):
-                break
-            w = b.s.windows[t]
-            for i in range(params.min_passes):
-                if edit == 5 and (t, i) == (at[0], params.min_passes - 1):
-                    continue
-                seed = receipts.seed(w.challenge, i, previous)
-                if edit == 3 and (t, i) == at:
-                    sk = p2.Sketcher(seed, store.registration.rows)
-                    ys = [sk(g, bytes(p2.UNIT_BYTES) if p == pick % plan.length else store.unit(g))
-                          for p, g in enumerate(plan)]
-                    ps = prover.commit(t, i, seed, plan, ys)
-                else:
-                    ps = prover.pass_under(t, i, seed, plan)
-                passes[t, i], previous = ps, ps.root
-                now += P2_STEP_NS
-                if edit == 7 and (t, i) == at:
-                    push({"kind": "boundary", "now": max(now, w.released_ns + params.window_ns)})
-                    now = (b.s.deadline(t) or now) + 1
-                root = ps.root.hex()
-                line = p2_bad_root(root, pick) if edit == 6 and (t, i) == at else p2_line("root", root)
-                push({"kind": "root", "t": t, "i": i, "now": now, "line": line.hex()})
-                if i == 0 and t > 0:
-                    opened(t - 1, now)
-            now = max(now, w.released_ns + params.window_ns)
-            push({"kind": "boundary", "now": now})
+    push({"kind": "start", "now": now})
+    for t in range(params.windows):
+        if t >= len(b.s.windows) or b.s.outcome is not None:
+            break
+        w = b.s.windows[t]
+        for i in range(params.min_passes):
+            if edit == 5 and (t, i) == (at[0], params.min_passes - 1):
+                continue
+            seed = receipts.seed(w.challenge, i, previous)
+            if edit == 3 and (t, i) == at:
+                sk = p2.Sketcher(seed, store.registration.rows)
+                ys = [sk(g, bytes(p2.UNIT_BYTES) if p == pick % plan.length else store.unit(g))
+                      for p, g in enumerate(plan)]
+                ps = prover.commit(t, i, seed, plan, ys)
+            else:
+                ps = prover.pass_under(t, i, seed, plan)
+            passes[t, i], previous = ps, ps.root
+            now += P2_STEP_NS
+            if edit == 7 and (t, i) == at:
+                push({"kind": "boundary", "now": max(now, w.released_ns + params.window_ns)})
+                now = (b.s.deadline(t) or now) + 1
+            root = ps.root.hex()
+            line = p2_bad_root(root, pick) if edit == 6 and (t, i) == at else p2_line("root", root)
+            push({"kind": "root", "t": t, "i": i, "now": now, "line": line.hex()})
+            if i == 0 and t > 0:
+                opened(t - 1, now)
+        now = max(now, w.released_ns + params.window_ns)
+        push({"kind": "boundary", "now": now})
+    if b.s.outcome is None:
         opened(params.windows - 1, b.s.deadline(params.windows - 1) + 1)
-    except Ended:
-        pass
     return events
+
+
+def p2_held(reg: p2.Registration, data: bytes, line: bytes):
+    """The plan and parameters the books hold from the registration file `data` and the request `line`, else the
+    error they refuse them with (a session with no events after the request)."""
+    try:
+        doc = json.loads(data)
+        plan = p2_party.plan_of(doc, p2_party.registration_of(doc))
+        return plan, p2_party.params_of(reg, p2_party.message(line, "request"))
+    except (ConnectionError, ValueError, KeyError, TypeError) as e:
+        return e
 
 
 @st.composite
@@ -537,12 +543,10 @@ def p2_session_inputs(draw) -> dict:
     line = p2_line("request", req) if line is None else line
     v = {"registration": data.hex(), "request": line.hex(), "coins": [c.hex() for c in committed],
          "chunk": draw(st.sampled_from([1, 2, 3, 64])), "not_before_ns": not_before, "events": []}
-    try:
-        doc = json.loads(data)
-        plan = p2_party.plan_of(doc, p2_party.registration_of(doc))
-        params = p2_party.params_of(reg, p2_party.message(line, "request"))
-    except (ConnectionError, ValueError, KeyError, TypeError):
+    held = p2_held(reg, data, line)
+    if isinstance(held, Exception):
         return v
+    plan, params = held
     ev = v["events"] = p2_events(store, plan, params, committed, not_before, edit, at, pick)
     j = pick % (len(ev) + 1)
     if edit == 8:
