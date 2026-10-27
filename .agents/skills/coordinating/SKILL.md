@@ -47,8 +47,8 @@ skill).
 
 - **One issue per deliverable**, in its owner's team, in a project and the milestone it serves. An issue in no project
   is in Backlog or Canceled.
-- **The title is the deliverable**: a noun phrase or an imperative of at most 80 characters, with no handle, sender or
-  time. "Ring a lead only when it must act: run-end and worker-idle rings", not "@infra top 02:40Z, an ask for…".
+- **The title is the deliverable**: a noun phrase or an imperative, whole, with no handle, sender or time. "Ring a lead
+  only when it must act: run-end and worker-idle rings", not "@infra top 02:40Z, an ask for…".
 - **The description is the brief**, at most 300 words:
 
 ~~~markdown
