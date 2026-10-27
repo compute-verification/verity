@@ -1763,6 +1763,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                              f"package; remove the entry"))
     for g in sorted(guarantees):
         pin = facts["pins"].get(g, {})
+        if g in wit and g in allow:
+            fails.append(Failure("witnesses.unwitnessed-both", g, f"witnesses: {g} is a witness (`witnesses` or "
+                                 f"`claims.witnesses` names it), held to a witness's form: remove its `unwitnessed` entry"))
         if g in wit or pin.get("kind") != "theorem":
             continue
         kind, why = witness_scope(g, policy, pin) or (None, None)
@@ -1786,7 +1789,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
         w = ws[g]
         if not (isinstance(w, dict) and isinstance(w.get("nontrivial"), str) and isinstance(w.get("honest"), list)
                 and w["honest"] and all(isinstance(n, str) for n in w["honest"]) and set(w) <= {"honest", "nontrivial", "kind"}
-                and w.get("kind", kind) in WITNESS_KINDS):
+                and w.get("kind", kind or "acceptance") in WITNESS_KINDS):
             fails.append(Failure("witnesses.witness-form", g, f"witnesses: witnesses[{g}] is {{honest: [theorem], "
                                  f"nontrivial: theorem, kind: {' or '.join(WITNESS_KINDS)} (optional)}}"))
             continue
@@ -1871,12 +1874,13 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
     another (moved, `--moved`, or lifted, `lifted_into`), and each of a guarantee the lock doesn't list yet, as it is (one a
     PR ahead on `next` brings). Every other entry drops, and none is added."""
     out, ws, guarantees = {}, policy.get("witnesses") or {}, policy.get("guarantees") or {}
+    wit = claim_witnesses(policy)
     for g, h in sorted((policy.get("unwitnessed") or {}).items()):
         if g not in guarantees and g not in kept:
             out[g] = h
             continue
         pin, rec, new = facts["pins"].get(g, {}), guarantees.get(g) or {}, kept.get(g) or {}
-        if g in ws or pin.get("kind") != "theorem" or not witness_scope(g, policy, pin):
+        if g in ws or g in wit or pin.get("kind") != "theorem" or not witness_scope(g, policy, pin):
             continue
         built, mv = pin.get("type_sha256"), pin.get("moved") or {}
         if h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv))):

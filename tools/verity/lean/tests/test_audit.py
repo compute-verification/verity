@@ -1772,6 +1772,7 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses` (LEAN-66)"]
     out_of_scope = witnessed(guarantee={"reads": fact()["reads"]})
     assert witness_codes({**out_of_scope[0], "witnesses": {}}, out_of_scope[1]) == []
+    assert witness_codes(*out_of_scope) == []
     assert witness_codes({**pol, "witnesses": {"P.sound": {"honest": "P.sound_honest", "nontrivial": "P.sound_nontrivial"}}},
                          f) == ["witnesses.witness-form"]
     assert witness_codes({**pol, "witnesses": []}, f) == ["witnesses.form"]
@@ -1871,6 +1872,9 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert A.unwitnessed_kept(changed, f, {}) == {}
     assert witness_codes({**pol, "unwitnessed": {"P.sound": h}}, f) == ["witnesses.unwitnessed-both"]
     assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": h}}, f, {}) == {}
+    became = {**pol, "unwitnessed": {"P.sound_honest": f["pins"]["P.sound_honest"]["type_sha256"]}}
+    assert witness_codes(became, f) == ["witnesses.unwitnessed-both"]
+    assert A.unwitnessed_kept(became, f, {}) == {}
     flight = {**bare, "unwitnessed": {"P.sound": h, "P.ahead": sha("a guarantee a PR ahead on next brings")}}
     assert witness_codes(flight, f) == []
     assert A.unwitnessed_kept(flight, f, {}) == flight["unwitnessed"]
