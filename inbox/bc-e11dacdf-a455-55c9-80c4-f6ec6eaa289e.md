@@ -281,3 +281,6 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 
 ## 2026-10-27 04:08Z (coordinator) — vy-nebius-1 pools (infra 03:10Z)
 - vy-nebius-1 now has proofs pool slots p0, p1, p2 (besides leanrec). Tries: `verity lean try FILE --on vy-nebius-1 --pool proofs`; other runs: `research run --on vy-nebius-1 --pool proofs --mem-gb N -- CMD`. The leanrec route still works too. Pick whichever line is shorter.
+
+## 2026-10-27 04:25Z (coordinator)
+- RESTREAD's landing records run r20261027-030926-ff46 (landprep d84ccfd0cf = your f1asm b5f207e97c + main) is building now on vy-nebius-1 via `--dev-cache` (own clone from the build cache, no wait for the 6 build slots), ETA ~04:00-04:30Z. It supersedes cde3 (f1asm without main): cancel cde3 if it has not started. If ff46 reports errors, RESTREAD routes them; fix those in your assembly files when asked.
