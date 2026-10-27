@@ -2106,7 +2106,10 @@
    "type_hash": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb"
   },
   "Properties.RemoteAudit.codeLayoutTiles": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.codeLayoutTiles : Properties.RemoteAudit.CodeLayoutTiles"],
+   "assumptions": [],
+   "type_hash": "2515137ac93d73406859ea8ad9ce731b4149fbcd172ee882f68ee2f394c75a61"
   },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
@@ -2139,7 +2142,10 @@
    "type_hash": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310"
   },
   "Properties.RemoteAudit.opensAtPosition": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.opensAtPosition : Properties.RemoteAudit.OpensAtPosition"],
+   "assumptions": [],
+   "type_hash": "111150eaa0d138025444b31c09ae5104f3f91a425059fdd7a751a2787faa2bbe"
   },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
@@ -2160,7 +2166,10 @@
    "type_hash": "39e482d66d951d973df481350e4501d76cf3467d68436f9b51cf66b7993e58ea"
   },
   "Properties.RemoteAudit.planBlocks": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.planBlocks : Properties.RemoteAudit.PlanBlocks"],
+   "assumptions": [],
+   "type_hash": "b52f9ab9527953b5d6389d4e21022197366698223b4ae485749e62cf43ba2f73"
   },
   "Properties.RemoteAudit.planReadsDistinct": {
    "owner": "@memory-accounting",
@@ -2214,10 +2223,7 @@
    "owner": "@memory-accounting",
    "signature": [
     "Properties.RemoteAudit.steered_of_checked {Pfx Y : Type} {N T M blocks a : Nat} {idx : Pfx → Nat}",
-    "  {pos : Pfx → Array (Prod Nat Nat) → Array (Prod Nat Nat) → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
-    "  {layout : Pfx → Y → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)",
+    "  {dflt : Pfx → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))} {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
     "  (checked :",
     "    ∀ (c : Pfx) (y : Y),",
     "      Exists fun sc =>",
@@ -2226,10 +2232,11 @@
     "            And (Eq (RemoteAudit.Schedule.check sc blocks a passes (appended c y)) (Except.ok b))",
     "              (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
     "                (Option.some (sent c y)))) :",
-    "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
+    "  Exists fun steer =>",
+    "    Accounting.Assumptions.SteeredLayout (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) steer"
    ],
    "assumptions": [],
-   "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
+   "type_hash": "2128e84650a110e23a0c5b93de13ce647bc6798406445b474795a55a3f76c04b"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
@@ -7200,6 +7207,7 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7544,6 +7552,7 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7660,6 +7669,7 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -10968,9 +10978,9 @@
    ]
   },
   "Properties.Accounting.DeclaredCircuit": {
-   "digest": "5a07e7caa5ece91d7f8a943f3fd8fd2d0490b83058311c04e31db0b99bea87b7",
+   "digest": "5e817906295d75ee69f0ecd9157a62e4d9fadbd9ad8b00d9e3021d05f2540268",
    "definitions": {
-    "Properties.DeclaredCircuit.ScheduledRequirement": "d17f830b0dbf055985c0f27e56d833b8ed4d9e2f5f7a6273c7bde51929d157d0"
+    "Properties.DeclaredCircuit.ScheduledRequirement": "f85dc949bfb7ffc8c6600e714b1afe2934cf7fae7b48ff4817ddd00d919946ee"
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
@@ -12276,6 +12286,7 @@
     "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12445,14 +12456,24 @@
    ]
   },
   "Properties.RemoteAudit.Schedule": {
-   "digest": "dd31848888e7fdbb98512bffbe87e9c4ff13aedfd6a0419ee126209372a42a95",
+   "digest": "737bccd347c065400fb41d6dec896ea63441bd434e3f621389763bc59fbe2cb2",
    "definitions": {
+    "Properties.RemoteAudit.CodeLayoutTiles": "12d06228aaab191a537794fa70fe03a6fc88ec418e409e8ecc0dcd61a7724916",
+    "Properties.RemoteAudit.OpensAtPosition": "9609d5c175a05d640bd4595bc01ceee1a1530db4e3c6579eb393981171742b12",
+    "Properties.RemoteAudit.PlanBlocks": "a6eab2f0c4c70872e2f9c4048cee9990921cd552e36be388d9225616ee9c8aed",
     "Properties.RemoteAudit.ScheduleChecked": "15ff0123b745b983557da70f848995c566240327ea805405e504e39edc83ef77",
     "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd",
-    "Properties.RemoteAudit.ScheduleLayoutGap": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+    "Properties.RemoteAudit.codeLayout": "2e5766f796ecf020ed2349c3728c585c33da43bee7c76906516362d2f6d4b62d",
+    "Properties.RemoteAudit.position": "c6d4e9fa887e96917fb1e560c653cba6810e2c8672f34216733fa3924735c12d",
+    "Properties.RemoteAudit.runBlocks": "c861e9121d65c5458cc0881e6e7177a02f546e08239d951ef67edf5351293b62",
+    "Properties.RemoteAudit.sessionLayout": "7e672a14fbaaec746a56e8d39032fe644767be17e5d0a442e6e492d5a24507e8",
+    "Properties.RemoteAudit.tileAt": "2bb40254f89138644670e928ab397b45fc2cbe726eb025846cd843c94c84c75d"
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.planBlocks",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
     "Properties.RemoteAudit.steered_of_checked"
@@ -12611,6 +12632,7 @@
     "RemoteAudit.zeros": "fd9a64c40e28d26bd8336e9fd795177ad085b47bfd67c280c321d125bb5c7565"
    },
    "guarantees": [
+    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -12629,17 +12651,21 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked"
    ]
   },
   "RemoteAudit.Codec": {
@@ -12711,6 +12737,7 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12878,12 +12905,15 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
@@ -13019,6 +13049,7 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -13350,6 +13381,7 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
