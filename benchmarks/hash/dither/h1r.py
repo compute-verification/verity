@@ -110,7 +110,7 @@ class H1R:
         Layout(m, N, K), m the calls' layout rows."""
         fn = getattr(self.lib, "h1r_launch_j10r", None)
         if fn is None:
-            raise RuntimeError("this h1r build has no h1r_launch_j10r: rebuild h1r.cu (or h1o.cu) at kernels-j10r-served")
+            raise RuntimeError("this h1r build has no h1r_launch_j10r: rebuild h1r.cu (or h1o.cu) from this tree")
         fn.argtypes = [*self.lib.h1r_launch.argtypes[:-2], C.c_int, C.c_void_p]
         rc = fn(plan.table.data_ptr(), len(plan.calls), plan.max_units, plan.ks, salt.data_ptr(),
                 None if step_base is None else step_base.data_ptr(), plan.seeds.data_ptr(), plan.out.data_ptr(),

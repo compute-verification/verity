@@ -48,7 +48,7 @@ is a **stop**: the coin server's record says so (``end``: ``stop``, not why), an
 session.
 
 **Live coins.** Each round's coins are drawn by the coin server when the round's commitments reach it, never before
-(`RecursiveSound`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
+(`RecursiveKS`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
 after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
 coin before the session (`CoinServer.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
 points as round 0 of stream ``link``, each to `coin_message` under a fresh salt of the challenger's). A proxy given those

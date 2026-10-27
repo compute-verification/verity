@@ -58,8 +58,8 @@ class Options(CR.Options):
 
 
 _RUN_MAX = 1 << 20  # elements converted at once (an embedding table's 28M words would take 7 GB of temporaries whole)
-#: a worker's measured peak over `BooleanRows.peak_bytes`' bound: 1.145 for r20261001-200753-63d1's LM head (182.1 GiB measured, 159 GiB
-#: bound), the allocator keeping what the worker's previous pick freed
+#: a worker's measured peak over `BooleanRows.peak_bytes`' bound, up to 1.145 on an LM head (182.1 GiB against a 159 GiB bound): the
+#: allocator keeps what the worker's previous pick freed
 PEAK_MARGIN = 1.25
 
 
