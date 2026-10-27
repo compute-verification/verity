@@ -7,9 +7,9 @@ import Mathlib.Data.List.GetD
 # Recursion: the universal unit's class of private circuits
 
 `UniversalUnit_v1{G, N_IN, N_OUT}` (`verity/ml/private_circuits/universal.py`) runs a private circuit given as a value,
-its description `(op, src, out)`, on the data `x`. The class (Daniel, 9 Oct, decision 3) is every description of the
-unit's width, read in gate order: each gate reads only inputs and earlier gates, so no description has a cycle. This
-file states that class and what it reveals.
+its description `(op, src, out)`, on the data `x`. The class is every description of the unit's width, read in gate
+order: each gate reads only inputs and earlier gates, so no description has a cycle. This file states that class and
+what it reveals.
 
 * `Params`: `G`, `N_IN`, `N_OUT`; `W = N_IN + G` wires, `K = max 1 (bit_length (W − 1))` bits a wire index
   (`universal.index_bits`), and the width `2G + 2G·K + N_OUT·K`. The real class is `{G = 8090, N_IN = 64, N_OUT = 32}`:
