@@ -3,10 +3,11 @@ the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is
 difftested in `verity/core/devices/memory_challenger/lean/tests/test_wipe_protocol.py`): an honest segment certified at
 `StreamedWipeMeetsReads`' threshold at the challenger's `k` (11,709,069 + E bits at `k = 2152`, `r = 24`), its bound
 vacuous when the egress is uncounted, a prover keeping one label past it and a late read rejected, a session the prover
-left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
-is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound. The leg runs
-whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
-(the links leaving the node, the undeclared tiers, an uncounted egress), the reads and the session's window."""
+left undecided; the challenger chooses `k` (`wipe_party --reads`), never 0, and refuses a request that names it. The
+certificate is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound.
+The leg runs whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound
+doesn't cover (the links leaving the node, the undeclared tiers, an uncounted egress), the reads and the session's
+window."""
 
 from __future__ import annotations
 
@@ -103,6 +104,18 @@ def test_the_certificate_at_the_challengers_reads() -> None:
     assert W.certify(past, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M,
                                   "k": W.MAX_READS + 1, "memory_bits": M, "r": 0}
     assert W.gaps(past, 0) == [f"k = {W.MAX_READS + 1}: the certificate is computed for at most {W.MAX_READS} reads"]
+
+
+def test_a_wipe_of_no_reads_bounds_nothing() -> None:
+    """`WipeParams` refuses `k = 0`, so neither a commitment nor the challenger's side (`--reads 0`) holds it; past that
+    refusal `gaps` names it and the certificate is vacuous, as `MemoryChallenger.WipeProtocol.gaps`' guard has it."""
+    with pytest.raises(ValueError, match="1 <= batch <= k"):
+        WP.params_of(WP.request_of("n0", W.params_for()), 0)
+    zero = W.params_for()
+    object.__setattr__(zero, "k", 0)
+    assert W.gaps(zero, 0) == ["k = 0: a session of no timed reads bounds nothing"]
+    assert W.certify(zero, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M, "k": 0,
+                                  "memory_bits": M, "r": 1}
 
 
 def test_the_challenger_chooses_the_reads(tmp_path) -> None:
