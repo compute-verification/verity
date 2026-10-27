@@ -155,7 +155,8 @@ theorem networkComponentBound_honest {ι : Type} {d : Accounting.Device ι} {α 
     (hew : e.windows.size = p.windows)
     (hwin : ∀ (i : Nat) (reg : NetworkCheck.Period.Registration) (x : NetworkCheck.Period.Window),
       cm.windows[i]? = some reg → e.windows[i]? = some x → RowsWindowHonest dev run k p w63 sd (p.first + i) reg x)
-    (hδ : Properties.NetworkCertifier.PeriodWindowsAt δ e) (ha : Properties.NetworkCertifier.PeriodAuditsProved p cm e) :
+    (hδ : Properties.NetworkCertifier.PeriodWindowsAt δ e)
+    (ha : Properties.NetworkCertifier.PeriodAuditsProved p cm e) :
     ComponentAccepts .network s ∧
       (V.HonestHolds .network → ∀ θ F c : ByteArray, V.Registered θ F →
         Game.prob (fun o => V.Verdict .network o ∧ ¬ V.Holds θ F c (V.honest θ F c) .network o) (V.game θ F c)
