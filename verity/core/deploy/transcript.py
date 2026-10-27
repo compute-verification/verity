@@ -64,7 +64,7 @@ class Transcript:
         self._file: BinaryIO | None = None
         if path is not None:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-            self._file = open(path, "xb")  # noqa: SIM115 - held open while the run appends
+            self._file = open(path, "xb")  # held open while the run appends
 
     def append(self, dir: str, channel: str, kind: str, data: bytes) -> Entry:
         big = len(data) > self.keep

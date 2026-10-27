@@ -295,17 +295,6 @@ class Registry:
             raise Refused(*why)
         return Message(t, {k: head[k] for k in s.fields}, bytes(body), v)
 
-    def type_of(self, data: bytes) -> tuple[str, int] | None:
-        """The type and version a frame's head names, when it is canonical JSON naming a type this registry holds."""
-        try:
-            h, _ = split(data, self.max_head, self.max_body)
-            head = parse(h)
-        except Refused:
-            return None
-        if type(head) is not dict or (head.get("type"), head.get("v")) not in self.schemas:
-            return None
-        return head["type"], head["v"]
-
 
 class FrameReader:
     """Frames out of a byte stream: `feed` the bytes as they arrive, `next` each whole frame. A header past the bounds

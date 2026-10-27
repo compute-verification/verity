@@ -262,7 +262,7 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
 
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
     """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
-    ``other_inputs`` is #(otherInputs \\ registered): #4044's ``otherInputs`` (``SampledCharge.lean``), the circuit's input
+    ``other_inputs`` is #(otherInputs \\ registered): ``otherInputs`` (``SampledCharge.lean``), the circuit's input
     gates no step lists as ingress, less the inputs the registration fixes. The circuit's input gates are each of the
     verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs

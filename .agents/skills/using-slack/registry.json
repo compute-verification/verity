@@ -477,7 +477,6 @@
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py",
         "tools/research/src/research/drive.py",
-        "tools/research/src/research/mergequeue.py",
         "tools/research/tests/test_queue_drive.py"
       ],
       "branch_suffixes": [
@@ -563,7 +562,7 @@
         "AGENTS.md",
         "README.md",
         "ARCHITECTURE.md",
-        "glossary/",
+        "GLOSSARY.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
