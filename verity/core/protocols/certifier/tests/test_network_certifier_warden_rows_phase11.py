@@ -56,7 +56,7 @@ def test_a_pad_carries_its_connections_ordinal_and_counts_toward_its_cells():
 
 
 def test_my_phase8_reads_are_refused_foreign_duplicate_cell_past_and_empty():
-    """The open phase 8 vectors, re-run on the v2 layout: a foreign connection, a cell past the connection's (which
+    """The open read vectors on the v2 layout: a foreign connection, a cell past the connection's (which
     is the only way an empty slot could be addressed), and a read twice are refused by `port`, and a wiring the head
     didn't sign is refused; so every read opens a connection's own cell and no empty, foreign or repeated row."""
     cells_ = _cells()

@@ -1,7 +1,8 @@
 """The ingress side of the step-indexed scan: one unit a certifier bucket t, `IngressScanBucket`, which reads bucket
 t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's egress
-view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state and starts from the empty one. Every switch is computed
-from the state and the rows; none is witness. Nothing here is in a Spec.
+view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state and
+starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
+in a Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells

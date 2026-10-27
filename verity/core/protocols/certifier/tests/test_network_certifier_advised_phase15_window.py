@@ -2,10 +2,10 @@
 under is refused alone, not with every window of its link, as it would be were each window's floor to read the
 declaration of every window that releases into it. Only that backward dependency is real: output λ released at b in
 window v needs its request's frames by b − δ − ⌊λ/ρ⌋, which can fall in an earlier window, so a floor read from v's
-declaration carries v's word into that window's view. The carry forward reads no sync: every floor bucket is at most its release bucket, so
-a later window's carried floor is the same under any δ ≥ 0. So every floor reads the sync the certifier ran
-(`LinkWindows.clock_source`), and a declaration is checked in its own window alone, still fail-closed: the network
-verdict is the AND over the windows, so it refuses the link with that window.
+declaration carries v's word into that window's view. The carry forward reads no sync: every floor bucket is at most
+its release bucket, so a later window's carried floor is the same under any δ ≥ 0. So every floor reads the sync
+the certifier ran (`LinkWindows.clock_source`), and a declaration is checked in its own window alone, still
+fail-closed: the network verdict is the AND over the windows, so it refuses the link with that window.
 """
 
 from fractions import Fraction

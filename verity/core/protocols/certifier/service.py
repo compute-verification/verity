@@ -109,8 +109,7 @@ public file (each row's hiding commitment), its session files, the circuit file 
 salts of the ``pub`` and ``o0`` rows and the output word. Never the opening nor the ``wit`` row's salt. The certificates
 are not a public item of the Spec: the service's public kinds (structure, outputs, coins, hiding commitments) have none
 for a trusted device's signature over a hiding commitment, so they reach the verifier from the certifier beside the
-service, in the clear. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth
-kind.
+service, in the clear. That is a provisional exception to the four public kinds, not a fifth kind.
 
 `LinkWindows.clear` is the in-the-clear check on the opening, for a debug comparison only (`verify(opening=…)`, off by
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
@@ -156,7 +155,7 @@ IoTieRequest runs in the proof service, so every advised link is refused until t
 certifier ran, which the verifier takes only from its own clock source (`LinkWindows.clock_source`: the certifier's
 salted clock certificates, each opened under the link's key and session, `advised.SignedClocks`; the openings are
 witness, the verifier's own read, never a public answer), since a δ below the traffic's
-loosens the floor (REDTEAM phase 11), and a window whose declared sync is another, or outside Σ_sync, is refused alone;
+loosens the floor, and a window whose declared sync is another, or outside Σ_sync, is refused alone;
 without a clock source, every advised link is refused too. It refuses a window without an advice or one whose view
 `advised.view` refuses, and reports the advice it read as a third public output, `advice` (`advised.digest`); the
 network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
@@ -189,7 +188,7 @@ accept bit (`reference`), never a violation's kind.
 
 **The verdict of record is the Lean's** on plain, served and warden links: `NetworkCheck.LinkWindow.verdict`
 (`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
-line `OF_RECORD` under the 8 Oct ruling. `verify` runs it and this module's `python_verdict` on every proof, records
+line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects a link-window where they differ or the
 Lean refuses the case. On a warden link the Lean reads the warden's parameters digest (`lean_case`'s ``warden``) for
 both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what `python_verdict` reads that the
