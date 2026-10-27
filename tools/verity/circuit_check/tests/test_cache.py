@@ -1212,7 +1212,8 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
     computes: an edit to it reuses every target and the task list (so adding a peak never makes
     `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
-    which decide only the summary), while an edit to the checker's code still reruns them all."""
+    which decide only the summary) or to the checker's docstrings and comments (`cache.version`), while an edit to the
+    checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
@@ -1228,7 +1229,11 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
         p.write_text(p.read_text() + "\n# another known failure\n")
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
-    (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n_ANOTHER_VERSION_OF_THE_CHECKER = 1\n")
+    checks = checker / "checks.py"
+    checks.write_text(checks.read_text().replace('"""The checks,', '"""Reworded: the checks,', 1) + "\n# a comment\n")
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    checks.write_text(checks.read_text() + "\n_ANOTHER_VERSION_OF_THE_CHECKER = 1\n")
     assert _run(root, CHECKER)["hits"] == []
 
 
