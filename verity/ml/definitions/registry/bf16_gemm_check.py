@@ -25,7 +25,7 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   `--only linear,bmm,f32out --scan-m 1:2048`, then `--only router --scan-m 17:2048`; its cases' `routes`, its `switch` facts and the
   device's are then copied into `cublas_routes.json` (no tool writes it);
 * the cc 12.0 routes beside it: `cublas_splitk_rows(partial="bf16")` (a bf16 workspace), `cublas_aligned_splitk_rows` (the
-  same over grid.z slices at an alignment), `cublas_serial_splitk_rows` (slices meeting through the bf16 output) and
+  same over grid.z slices at an alignment, each slice's k-tiles residue first), `cublas_serial_splitk_rows` (slices meeting through the bf16 output) and
   `cublas_gemv_rows` (M = 1 gemvx lanes); `cublas_route_rows` is a device pin route's twin, and `cublas_routes_at` with
   `route_probe_rows` what the probe tells apart.
 
@@ -318,16 +318,16 @@ def cublas_serial_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int) -> np.
     return out
 
 
-def cublas_aligned_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int, ALIGN: int) -> np.ndarray:
-    """`CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, HopperBF16WgmmaDot16_v2}` of every row of x (M, K) against
-    w (N, K): `cublas_bf16.aligned_bounds`' chunks, each chunk's k16 chain over its words then zeros, partials rounded to bf16 and
-    widened, a serial increasing-order f32 reduction and one bf16 rounding: bf16 words (M, N)."""
+def cublas_aligned_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int, ALIGN: int, TILE_K: int) -> np.ndarray:
+    """`CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, HopperBF16WgmmaDot16_v2}` of every row of x (M, K)
+    against w (N, K): `cublas_bf16.aligned_bounds`' chunks, each chunk's k16 chain over its k-tiles residue first
+    (`cublas_bf16.residue_first`), partials rounded to bf16 and widened, a serial increasing-order f32 reduction and one bf16
+    rounding: bf16 words (M, N)."""
     x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
     parts = []
     for lo, hi in CB.aligned_bounds(x.shape[1], SPLIT_K, ALIGN):
-        pad = (lo - hi) % 16
-        xs = np.hstack([x[:, lo:hi], np.zeros((x.shape[0], pad), np.uint16)])
-        ws = np.hstack([w[:, lo:hi], np.zeros((w.shape[0], pad), np.uint16)])
+        r, z = CB.residue_first(lo, hi, TILE_K)
+        xs, ws = (np.hstack([a[:, lo:lo + r], np.zeros((a.shape[0], z), np.uint16), a[:, lo + r:hi]]) for a in (x, w))
         parts.append(DR.bf16_to_f32_words(MK.bf16_of(MK.dot_chain(xs, ws))))
     return MK.bf16_of(_ordered_sum(parts))
 
@@ -359,7 +359,7 @@ def cublas_route_rows(route: dict[str, Any], x: np.ndarray, w: np.ndarray) -> np
     if kind == "splitk" and "align" in route:
         if route.get("partial") != "bf16":
             raise ValueError(f"unknown cuBLAS route {route}")
-        return cublas_aligned_splitk_rows(x, w, int(route["SPLIT_K"]), int(route["align"]))
+        return cublas_aligned_splitk_rows(x, w, int(route["SPLIT_K"]), int(route["align"]), int(route["tile_k"]))
     if kind == "splitk":
         return cublas_splitk_rows(x, w, int(route["SPLIT_K"]), partial=route.get("partial", "f32"), out="bf16")
     if kind == "serialk":

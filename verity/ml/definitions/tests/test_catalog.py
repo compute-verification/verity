@@ -23,11 +23,11 @@ COUNT += 10  # `torch_clip`'s, clip_grad_norm_ on bf16 grads
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
-COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7 (CIR-117)
+COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
 
-COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1 (CIR-117)
+COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
-COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1 (CIR-117)
+COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
