@@ -309,36 +309,10 @@ theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = b
   · rfl
   · exact F128.mul_zero _
 
-/-- `a + b` entry by entry. -/
-def vadd (a b : Array F128) : Array F128 := Array.zipWith (· + ·) a b
-
-theorem size_vadd (a b : Array F128) : (vadd a b).size = min a.size b.size := Array.size_zipWith
-
-theorem vadd_zeros (a : Array F128) : vadd a (Array.replicate a.size 0) = a := by
-  apply Array.ext
-  · simp [vadd]
-  · intro i h1 h2
-    simp only [vadd, Array.getElem_zipWith, Array.getElem_replicate, F128.add_zero]
-
-theorem modify_vadd (a b : Array F128) (h : a.size = b.size) (j : Nat) (e : F128) :
-    (vadd a b).modify j (· + e) = vadd a (b.modify j (· + e)) := by
-  apply Array.ext
-  · simp [vadd, h]
-  · intro i h1 h2
-    simp only [vadd, Array.getElem_modify, Array.getElem_zipWith]
-    split <;> simp [F128.add_assoc]
-
 theorem size_foldRow (m : Sparse) (i : Nat) (ei : F128) :
     ∀ fuel t acc, (m.foldRow i ei fuel t acc).size = acc.size
   | 0, _, _ => rfl
   | fuel + 1, t, acc => by rw [Sparse.foldRow, size_foldRow m i ei fuel, Array.size_modify]
-
-theorem foldRow_vadd (m : Sparse) (i : Nat) (ei : F128) :
-    ∀ fuel t (a b : Array F128), a.size = b.size → m.foldRow i ei fuel t (vadd a b) = vadd a (m.foldRow i ei fuel t b)
-  | 0, _, _, _, _ => rfl
-  | fuel + 1, t, a, b, h => by
-    rw [Sparse.foldRow, Sparse.foldRow, modify_vadd a b h]
-    exact foldRow_vadd m i ei fuel (t + 1) a _ (by rw [Array.size_modify]; exact h)
 
 theorem size_foldRows (m : Sparse) (e : Array F128) : ∀ fuel i acc, (m.foldRows e fuel i acc).size = acc.size
   | 0, _, _ => rfl
@@ -348,94 +322,147 @@ theorem size_foldRows (m : Sparse) (e : Array F128) : ∀ fuel i acc, (m.foldRow
     · rfl
     · exact size_foldRow _ _ _ _ _ _
 
-theorem foldRows_vadd (m : Sparse) (e : Array F128) :
-    ∀ fuel i (a b : Array F128), a.size = b.size → m.foldRows e fuel i (vadd a b) = vadd a (m.foldRows e fuel i b)
-  | 0, _, _, _, _ => rfl
-  | fuel + 1, i, a, b, h => by
-    rw [Sparse.foldRows, Sparse.foldRows]
-    split
-    · exact foldRows_vadd m e fuel (i + 1) a b h
-    · rw [foldRow_vadd m i _ _ 0 a b h]
-      exact foldRows_vadd m e fuel (i + 1) a _ (by rw [size_foldRow]; exact h)
+theorem modify_of_le {α} (a : Array α) {c : Nat} (f : α → α) (h : a.size ≤ c) : a.modify c f = a :=
+  Array.ext (by simp) fun i h1 _ => by
+    rw [Array.getElem_modify, ite_eq_right_iff.2 (fun hc => absurd hc (by rw [Array.size_modify] at h1; omega))]
 
-theorem foldRows_add (m : Sparse) (e : Array F128) (f₂ : Nat) :
-    ∀ f₁ i acc, m.foldRows e (f₁ + f₂) i acc = m.foldRows e f₂ (i + f₁) (m.foldRows e f₁ i acc)
-  | 0, i, acc => by simp [Sparse.foldRows]
-  | f₁ + 1, i, acc => by
-    rw [show f₁ + 1 + f₂ = (f₁ + f₂) + 1 by omega, Sparse.foldRows, Sparse.foldRows, foldRows_add m e f₂ f₁,
-      show i + 1 + f₁ = i + (f₁ + 1) by omega]
-
-/-- Rows `i, …, i + fuel − 1` folded on `acc` are `acc` plus their fold on zeros. -/
-theorem foldRows_zeros (m : Sparse) (e : Array F128) (fuel i : Nat) (acc : Array F128) :
-    m.foldRows e fuel i acc = vadd acc (m.foldRows e fuel i (Array.replicate acc.size 0)) := by
-  conv => lhs; rw [← vadd_zeros acc]
-  exact foldRows_vadd m e fuel i acc _ (by simp)
-
-theorem foldRows_blocks (m : Sparse) (e : Array F128) (b w : Nat) :
-    ∀ k, m.foldRows e (k * b) 0 (Array.replicate w 0) =
-      ((List.range k).map fun j => m.foldRows e b (j * b) (Array.replicate w 0)).foldl vadd (Array.replicate w 0)
-  | 0 => by simp [Sparse.foldRows]
-  | k + 1 => by
-    have hs : (m.foldRows e (k * b) 0 (Array.replicate w 0)).size = w := by rw [size_foldRows]; simp
-    rw [Nat.succ_mul, foldRows_add, foldRows_zeros m e b, hs, foldRows_blocks m e b w k, List.range_succ,
-      List.map_append, List.foldl_append, Nat.zero_add]
-    rfl
-
-theorem foldl_vadd_get (c : Nat) :
-    ∀ (l : List (Array F128)) (acc : Array F128), c < acc.size → (∀ p ∈ l, p.size = acc.size) →
-      (l.foldl vadd acc)[c]! = l.foldl (fun s p => s + p[c]!) acc[c]!
-  | [], _, _, _ => rfl
-  | p :: l, acc, hc, hl => by
-    have hp := hl p (List.mem_cons_self ..)
-    have hsz : (vadd acc p).size = acc.size := by rw [size_vadd, hp, Nat.min_self]
-    rw [List.foldl_cons, List.foldl_cons, foldl_vadd_get c l (vadd acc p) (by rw [hsz]; exact hc)
-      (fun q hq => by rw [hsz]; exact hl q (List.mem_cons_of_mem _ hq))]
-    congr 1
-    rw [getElem!_pos (vadd acc p) c (by rw [hsz]; exact hc), getElem!_pos acc c hc,
-      getElem!_pos p c (by rw [hp]; exact hc)]
-    simp only [vadd, Array.getElem_zipWith]
-
-/-- `Sparse.foldT` in 32 tasks of rows, each folded on zeros, their sums added column by column in tasks
-(`foldRows_zeros`). -/
-def foldTPar (m : Sparse) (e : Array F128) : Array F128 :=
-  let n := min m.rows e.size
-  let b := n / 32
-  let ts := (List.range 32).map fun j => Task.spawn fun _ => m.foldRows e b (j * b) (Array.replicate m.width 0)
-  let r := m.foldRows e (n - 32 * b) (32 * b) (Array.replicate m.width 0)
-  let ps := ts.map Task.get ++ [r]
-  parGen (fun c => ps.foldl (fun s p => s + p[c]!) 0) m.width
-
-theorem foldTPar_eq (m : Sparse) (e : Array F128) : foldTPar m e = m.foldT e := by
-  let n := min m.rows e.size
-  let b := n / 32
-  let z := Array.replicate m.width (0 : F128)
-  let ps := (List.range 32).map (fun j => m.foldRows e b (j * b) z) ++ [m.foldRows e (n - 32 * b) (32 * b) z]
-  have hps : ∀ p ∈ ps, p.size = z.size := by
-    intro p hp
-    rcases List.mem_append.1 hp with hp | hp
-    · obtain ⟨j, -, rfl⟩ := List.mem_map.1 hp
-      exact size_foldRows _ _ _ _ _
-    · rw [List.mem_singleton.1 hp]
-      exact size_foldRows _ _ _ _ _
-  have hT : m.foldT e = ps.foldl vadd z := by
-    rw [Sparse.foldT, show min m.rows e.size = 32 * b + (n - 32 * b) from (Nat.add_sub_cancel' (Nat.mul_div_le n 32)).symm,
-      foldRows_add, Nat.zero_add, foldRows_zeros m e _ (32 * b), size_foldRows, Array.size_replicate,
-      foldRows_blocks, List.foldl_append]
-    rfl
-  have hP : foldTPar m e = parGen (fun c => ps.foldl (fun s p => s + p[c]!) 0) m.width := by
-    simp only [foldTPar, List.map_map]
-    rfl
-  rw [hP, hT, parGen_eq]
-  have hsz : (ps.foldl vadd z).size = m.width := by
-    rw [← hT, Sparse.foldT, size_foldRows, Array.size_replicate]
+theorem extract_modify {α} (a : Array α) (c lo hi : Nat) (f : α → α) :
+    (a.modify c f).extract lo hi = if lo ≤ c then (a.extract lo hi).modify (c - lo) f else a.extract lo hi := by
   apply Array.ext
-  · simp [hsz]
-  · intro c h1 h2
-    have hc : c < m.width := by simpa using h1
-    rw [Array.getElem_map, Array.getElem_range, ← getElem!_pos (ps.foldl vadd z) c h2,
-      foldl_vadd_get c ps z (by simpa [z] using hc) hps, getElem!_pos z c (by simpa [z] using hc)]
-    simp [z]
+  · split <;> simp
+  · intro k h1 h2
+    by_cases hl : lo ≤ c
+    · simp only [hl, ↓reduceIte, Array.getElem_extract, Array.getElem_modify]
+      by_cases hc : c = lo + k
+      · simp only [hc, ↓reduceIte, show lo + k - lo = k by omega]
+      · simp only [hc, ↓reduceIte, show ¬c - lo = k by omega]
+    · simp only [hl, ↓reduceIte, Array.getElem_extract, Array.getElem_modify, show ¬c = lo + k by omega]
 
+theorem getElem!_extract (a : Array F128) {lo hi k : Nat} (h : lo + k < hi) : (a.extract lo hi)[k]! = a[lo + k]! := by
+  simp only [Array.getElem!_eq_getD, Array.getD_eq_getD_getElem?, Array.getElem?_extract]
+  by_cases hk : lo + k < a.size
+  · simp only [show k < min hi a.size - lo by omega, ↓reduceIte]
+  · rw [Array.getElem?_eq_none (show a.size ≤ lo + k by omega)]
+    split <;> rfl
+
+/-- `Sparse.foldRow` on the columns from `lo`: column `c ≥ lo` at `c − lo`, every other column skipped. -/
+def foldRowFrom (m : Sparse) (i : Nat) (ei : F128) (lo : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, t, acc =>
+    let c := m.col i t
+    foldRowFrom m i ei lo fuel (t + 1) (if lo ≤ c then acc.modify (c - lo) (· + ei) else acc)
+
+/-- Whether one of entries `t, …, t + fuel − 1` of row `i` is a column in `[lo, hi)`. -/
+def hits (m : Sparse) (i lo hi : Nat) : Nat → Nat → Bool
+  | 0, _ => false
+  | fuel + 1, t => (decide (lo ≤ m.col i t) && decide (m.col i t < hi)) || hits m i lo hi fuel (t + 1)
+
+/-- `Sparse.foldRows` on the columns `[lo, hi)`, reading `e[i]` only for a row with a column there. -/
+def foldRowsBand (m : Sparse) (e : Array F128) (lo hi : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, i, acc =>
+    foldRowsBand m e lo hi fuel (i + 1) (if hits m i lo hi m.len[i]! 0 then
+      let ei := e[i]!
+      if ei.isZero then acc else foldRowFrom m i ei lo m.len[i]! 0 acc
+    else acc)
+
+theorem foldRow_extract (m : Sparse) (i : Nat) (ei : F128) (lo hi : Nat) :
+    ∀ fuel t acc, (m.foldRow i ei fuel t acc).extract lo hi = foldRowFrom m i ei lo fuel t (acc.extract lo hi)
+  | 0, _, _ => rfl
+  | fuel + 1, t, acc => by
+    rw [Sparse.foldRow, foldRow_extract m i ei lo hi fuel, extract_modify, foldRowFrom]
+
+theorem foldRowFrom_miss (m : Sparse) (i : Nat) (ei : F128) (lo hi : Nat) :
+    ∀ fuel t (acc : Array F128), acc.size ≤ hi - lo → hits m i lo hi fuel t = false →
+      foldRowFrom m i ei lo fuel t acc = acc
+  | 0, _, _, _, _ => rfl
+  | fuel + 1, t, acc, hs, hh => by
+    simp only [hits, Bool.or_eq_false_iff, Bool.and_eq_false_iff, decide_eq_false_iff_not] at hh
+    rw [foldRowFrom]
+    have : (if lo ≤ m.col i t then acc.modify (m.col i t - lo) (· + ei) else acc) = acc := by
+      split
+      · exact modify_of_le acc _ (by omega)
+      · rfl
+    rw [this]
+    exact foldRowFrom_miss m i ei lo hi fuel (t + 1) acc hs hh.2
+
+theorem foldRows_extract (m : Sparse) (e : Array F128) (lo hi : Nat) :
+    ∀ fuel i acc, (m.foldRows e fuel i acc).extract lo hi = foldRowsBand m e lo hi fuel i (acc.extract lo hi)
+  | 0, _, _ => rfl
+  | fuel + 1, i, acc => by
+    rw [Sparse.foldRows, foldRows_extract m e lo hi fuel, foldRowsBand]
+    congr 1
+    rcases Bool.eq_false_or_eq_true (e[i]!.isZero) with hz | hz <;>
+      rcases Bool.eq_false_or_eq_true (hits m i lo hi m.len[i]! 0) with hh | hh <;>
+      simp only [hz, hh, ↓reduceIte, Bool.false_eq_true]
+    · exact foldRow_extract m i _ lo hi _ 0 acc
+    · rw [foldRow_extract]
+      exact foldRowFrom_miss m i _ lo hi _ 0 _ (by simp; omega) hh
+
+/-- `(m.foldT e).extract lo hi` (`foldBand_eq`): the columns `[lo, hi)` of `Xᵀ e`. -/
+def foldBand (m : Sparse) (e : Array F128) (lo hi : Nat) : Array F128 :=
+  foldRowsBand m e lo hi (min m.rows e.size) 0 (Array.replicate (min hi m.width - lo) 0)
+
+theorem foldBand_eq (m : Sparse) (e : Array F128) (lo hi : Nat) : foldBand m e lo hi = (m.foldT e).extract lo hi := by
+  rw [Sparse.foldT, foldRows_extract, Array.extract_replicate, foldBand]
+
+theorem extract_bands {α} (a : Array α) (w : Nat) :
+    ∀ k, ((List.range k).map fun j => a.extract (j * w) (j * w + w)).foldl (· ++ ·) #[] = a.extract 0 (k * w)
+  | 0 => by simp
+  | k + 1 => by
+    rw [List.range_succ, List.map_append, List.foldl_append, extract_bands a w k]
+    simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil, Array.extract_append_extract]
+    rw [Nat.max_eq_right (by omega), Nat.succ_mul, Nat.zero_min]
+
+/-- `a` as 64 tasks, each computing its columns `[lo, hi)` by `f lo hi` (`bands_eq`). -/
+@[specialize] def bands (f : Nat → Nat → Array F128) (w : Nat) : Array F128 :=
+  ((List.range 64).map fun j => Task.spawn fun _ => f (j * w) (j * w + w)).foldl (fun acc t => acc ++ t.get) #[]
+
+theorem bands_eq (a : Array F128) (f : Nat → Nat → Array F128) (w : Nat) (hf : ∀ lo hi, f lo hi = a.extract lo hi)
+    (hw : a.size ≤ 64 * w) : bands f w = a := by
+  have : bands f w = ((List.range 64).map fun j => a.extract (j * w) (j * w + w)).foldl (· ++ ·) #[] := by
+    simp only [bands, List.foldl_map, hf]
+    rfl
+  rw [this, extract_bands, Array.extract_eq_self_of_le hw]
+
+theorem size_foldT (m : Sparse) (e : Array F128) : (m.foldT e).size = m.width := by
+  rw [Sparse.foldT, size_foldRows, Array.size_replicate]
+
+/-- `Sparse.foldT` in 64 tasks of columns (`foldBand`). -/
+def foldTPar (m : Sparse) (e : Array F128) : Array F128 := bands (foldBand m e) (m.width / 64 + 1)
+
+theorem foldTPar_eq (m : Sparse) (e : Array F128) : foldTPar m e = m.foldT e :=
+  bands_eq _ _ _ (foldBand_eq m e) (by rw [size_foldT]; omega)
+
+/-- `Stmt.baseOf`: with no lookup, each of 64 tasks folds its columns of both sides (`foldBand`) and combines them, with its
+own table of `α`; with one, both sides from `foldTPar` and the combination in tasks of `2^12` entries. -/
+def baseOfPar (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) : Array F128 :=
+  match lk with
+  | none => bands (fun lo hi =>
+      let fa := foldBand a eLo lo hi
+      let fb := foldBand b eLo lo hi
+      let ta := F128.mulTableL alpha
+      (Array.range (min hi (2 ^ sl) - lo)).map fun k => F128.mulBy ta fa[k]! + fb[k]!) (2 ^ sl / 64 + 1)
+  | some t =>
+    let fa := foldTPar a eLo
+    let fb := Lookup.foldB t eLo (foldTPar b eLo)
+    parGenWith (fun _ => F128.mulTableL alpha) (fun ta i => F128.mulBy ta fa[i]! + fb[i]!) (2 ^ sl)
+
+theorem baseOfPar_eq (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) :
+    baseOfPar alpha eLo a b lk sl = Stmt.baseOf alpha eLo a b lk sl := by
+  cases lk with
+  | some t =>
+    simp only [baseOfPar, Stmt.baseOf, foldTPar_eq, parGenWith_eq, parGen_eq, F128.mulBy_mulTableL]
+  | none =>
+    simp only [baseOfPar]
+    refine bands_eq _ _ _ (fun lo hi => ?_) (by simp only [Stmt.baseOf, Array.size_map, Array.size_range]; omega)
+    apply Array.ext
+    · simp [Stmt.baseOf]
+    · intro k h1 h2
+      have hk : lo + k < hi := by simp at h1; omega
+      have hk' : lo + k < 2 ^ sl := by simp at h1; omega
+      simp only [Array.getElem_map, Array.getElem_range, Array.getElem_extract, Stmt.baseOf, foldBand_eq,
+        getElem!_extract _ hk, F128.mulBy_mulTableL]
 
 /-- `Stmt.tensor` in tasks of `2^12` entries, each reading its own copy of `lw`. -/
 def tensorPar (lw rho : Array F128) : Array F128 :=
@@ -449,20 +476,6 @@ theorem tensorPar_eq (lw rho : Array F128) : tensorPar lw rho = Stmt.tensor lw r
   · simp
   · intro i h1 h2
     simp only [Array.getElem_map, Array.getElem_range, Array.getElem_ofFn]
-
-/-- `Stmt.baseOf` with `Sparse.foldT` as `foldTPar`, and its map in tasks of `2^12` entries, each with its own table of
-`α`. -/
-def baseOfPar (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) : Array F128 :=
-  let fa := foldTPar a eLo
-  let fb := match lk with
-    | some t => Lookup.foldB t eLo (foldTPar b eLo)
-    | none => foldTPar b eLo
-  parGenWith (fun _ => F128.mulTableL alpha) (fun ta i => F128.mulBy ta fa[i]! + fb[i]!) (2 ^ sl)
-
-theorem baseOfPar_eq (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) :
-    baseOfPar alpha eLo a b lk sl = Stmt.baseOf alpha eLo a b lk sl := by
-  simp only [baseOfPar, Stmt.baseOf, foldTPar_eq, parGenWith_eq, parGen_eq, F128.mulBy_mulTableL]
-  rfl
 
 /-- `Stmt.slotBase` from `tensorPar` and `baseOfPar`. -/
 def slotBasePar (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × Nat) : V (Array F128) := do
