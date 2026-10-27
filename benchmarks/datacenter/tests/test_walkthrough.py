@@ -1,7 +1,7 @@
 """The walkthrough's code, section by section, so every snippet the guide shows runs as shown.
 
-The guide is the Notion page "Accounting for a datacenter, from a circuit up"; each function here is one of its sections,
-in order, and `python tests/test_walkthrough.py` prints what the guide prints.
+The guide is "Accounting for a datacenter, from a circuit up"; each function here is one of its sections, in order,
+and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 

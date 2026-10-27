@@ -75,26 +75,29 @@ the run dir). chain_record.sh's copy of it is in its scratch, removed on exit, a
 against the warden's witness; the endpoint's trace is then checked against the certified I/O, not the prover's record
 of it. An endpoint that holds requests.jsonl (a dry rehearsal's stand-in's) is read as it is.
 
-The runs (the lane's gate key is on `AUDITOR`; KEEP is the lane's gate directory there):
+The runs are jobs on `AUDITOR`, which holds the lane's gate key (KEEP is the lane's gate directory there); `plan`
+prints each with the request's values. The session, as a job of the session's minutes and an hour more, at a given
+UTC time AT:
 
-    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
-      -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
-    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
-      --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
-      'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
-      --eos-ids 128001 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
+    python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at AT
 
-(``--store-read`` gives the job the read-only store key its fetch of the records art needs; ``--run-max`` leaves room
-over a dry chain of 16 requests on the gate's coins, which held its slot about 9,500 s, an hour of it the challenger's
-session; ``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
+The chain, from a clone, as a job of at most 270 minutes that reads the store and is sent challenger-key.json, in one
+of the network slots:
 
-and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
+    env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE \\
+      --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py \\
+      chain --run RUN --endpoint ART --eos-ids 128001 --draw 8 --coins gate \\
+      --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
-    research run --on vy-nebius-cpu-2 --pool network --source . --project verity --as LANE --cwd source \\
-      --timeout 45m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
+(its fetch of the records art needs the store's read-only key; ``--run-max`` leaves room over a dry chain of 16 requests
+on the gate's coins, which held its slot about 9,500 s, an hour of it the challenger's session; ``--coins verifier``,
+with no key file sent and no ``--challenger-key``, is the fallback);
+
+and the dry rehearsal on `AUDITOR`, whose KEEP its dry chain reads, as a job of at most 45 minutes in the network pool:
+
+    uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
       benchmarks/network_traces/served_session.py session --gate local --vocab 256 --prompts 16 --requests 16 \\
-      --height 10 --keep DIR --out "$OUT"'
+      --height 10 --keep DIR --out "$OUT"
 """
 from __future__ import annotations
 
@@ -210,12 +213,12 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
             "endpoint": ENDPOINT.format(port=a.port) + (f" --max-model-len {ctx}" if ctx > CONTEXT else ""),
             "hand_start": HAND_START,
             "runs": {
-                "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
+                "session": f"research run --on {AUDITOR} --source . --project verity --as {LANE} "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
-                "chain": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
+                "chain": f"research run --on {AUDITOR} --source . --project verity --as {LANE} "
                          "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
-                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
+                         f"python3 tools/verity/check/slot.py --by {LANE} --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
                          "--endpoint ART --eos-ids 128001 --draw 8 --coins gate "
                          "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
