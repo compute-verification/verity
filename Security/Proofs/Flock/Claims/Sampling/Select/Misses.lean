@@ -20,6 +20,7 @@ def popRUs (pop : Array (Array Slots.RU)) : List Slots.RU := pop.toList.flatMap 
 theorem rus_toList (pop : Array (Array Slots.RU)) :
     (({ classes := #[pop] } : Slots.Layout).rus).toList = popRUs pop := by
   simp [Slots.Layout.rus, popRUs]
+  rfl
 
 /-- The population's units, slot by slot. -/
 def popUnits (S : Array (String × Array (ℕ × ℕ))) : List ℕ := S.toList.flatMap fun p => expand p.2.toList
