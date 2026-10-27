@@ -27,7 +27,6 @@ EXEMPT = {
     ("tools/verity/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
     ("tools/verity/circuit_check/src/circuit_check/known.py", "tools/verity/circuit_check/src/circuit_check/known/pieces"):
         "KNOWN_PIECES' entry files, none while no lowering piece differs from its primitive; git keeps no empty directory",
-    ("tools/research/src/research/mergequeue.py", "verity/check"): "the commit status GitHub's merge queue requires, not a path",
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
 TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")

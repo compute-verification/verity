@@ -1,8 +1,8 @@
-"""`served_verdicts.py`, the Wed 28 run's window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
+"""`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
-composes to reject with no block record. PoUW's development piece checks the window's gate session and credits nothing,
+composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
 and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
 CLASSES, and the class of record's count after them gates nothing."""
 from __future__ import annotations
@@ -17,11 +17,11 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from verity.core.protocols.pous import wipe_period as W
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import served_verdicts as S
-from verity_all_protocols import runner, table
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
@@ -88,7 +88,7 @@ def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
-    return runner.row_of(next(e for e in table.TABLE if e.name == "integrity"), a, Path("/nonexistent"))
+    return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
 
 def _rows(integrity: dict, pieces: Path) -> dict:
@@ -102,7 +102,7 @@ def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
     assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
     assert line["missing"] == {"PoUW": "VLLM-33 G1", "the bandwidth audit": "VLLM-33 G2", "PoUS": "MEM-94",
-                               "the network certifier": "NET-83", "the wipe": None}
+                               "the network certifier": "NET-83", "the wipe": "MEM-96"}
     assert report["protocols"]["work"] == {"verdict": "missing", "owner": "vllm-serve-arms", "issue": "VLLM-33 G1",
                                            "why": S.PIECES["work"][4]}
 
@@ -112,6 +112,56 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
+
+
+WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+               "public": {"certified": True, "egress_mib": 0, "eps": str(W.EPS), "foreign_bits": 4096, "k": 5500,
+                          "memory_bits": 1 << 40, "r": "1/2"},
+               "profile": {"delta": str(W.EPS)}}
+WIPE_REJECT = {"protocol": W.PROTOCOL, "verdict": "reject", "reason": "a read came back late", "commitment": "cd" * 64,
+               "public": None, "profile": None}
+
+
+@pytest.mark.parametrize("case", ["accept", "elsewhere", "unserved", "refused", "reject"])
+def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_server(tmp_path, monkeypatch, capsys, case):
+    """`record` takes the wipe out of ``record_missing`` only when its answer accepts and its served.json names the
+    record's node: served on another server it stays missing (``elsewhere``), an accepting answer with no served.json
+    names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
+    with its issue, and one whose answer rejects makes the record reject with no block record."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    wipe = tmp_path / "pieces" / "wipe"
+    wipe.mkdir(parents=True)
+    if case == "refused":
+        (wipe / "refused.txt").write_text("WIPE REFUSED: the card has a compute process\n")
+    else:
+        (wipe / "answer.json").write_text(json.dumps(WIPE_REJECT if case == "reject" else WIPE_ACCEPT))
+        if case != "unserved":
+            (wipe / "served.json").write_text(json.dumps({"server": "vy-dc-h200-2" if case == "elsewhere" else "vy-dc-h200"}))
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
+                 "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    if case == "reject":
+        assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", ["the wipe"], None)
+        assert not (tmp_path / "record" / "block-record.json").exists()
+        return
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} and line["composed"] == "pending"
+    if case == "accept":
+        assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw"]
+        assert rec["legs"]["wipe"]["server"] == "vy-dc-h200" and rec["legs"]["wipe"]["quantity"]["value"] == 4096
+        assert rec["legs"]["wipe"]["runs"] == ["r1"] and rec["composed"]["legs"]["wipe"] == "accept"
+        return
+    assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw", "wipe"]
+    if case == "elsewhere":
+        assert rec["legs"]["wipe"]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == ["wipe"]
+    elif case == "unserved":
+        assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
+    else:
+        assert rec["legs"]["wipe"] is None and line["missing"]["the wipe"] == "MEM-96"
 
 
 SID = "s20261026T221500Z-ab12"

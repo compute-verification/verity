@@ -205,6 +205,33 @@ def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served
     assert "not under --scheme rows-sha512" in refusal(parse("--required-manifest", str(man), "--of-record", old))
 
 
+def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
+    """``--retain-exclude`` (default off, and $VERITY_RETAIN_EXCLUDE's value when set) names the attention interiors only, the
+    values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
+    loads, and by the committer before it builds anything."""
+    (man := tmp_path / "manifest.json").write_text("{}")
+    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man))
+
+    def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
+        try:
+            so.preflight(cli.parse("serve-openai", [*rows, *more], environ=environ or {}), which=lambda _: "/v/bin/ninja")
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    assert cli.parse("serve-openai", list(rows), environ={}).retention.retain_exclude == ""
+    assert cli.parse("serve-openai", list(rows), environ={"VERITY_RETAIN_EXCLUDE": "hidden_m1"}).retention.retain_exclude == "hidden_m1"
+    for ok in ("hidden_m1", "hidden", "fa3_hidden_m1", "fa2_hidden_m1_stream,fa3_hidden_m1"):
+        assert refusal("--retain-exclude", ok) is None, ok
+    assert "['gemm_qkv'] aren't attention interiors" in refusal("--retain-exclude", "hidden_m1,gemm_qkv")
+    assert "aren't attention interiors" in refusal(environ={"VERITY_RETAIN_EXCLUDE": "weights"})
+    assert "needs the Commit under --scheme rows-sha512" in refusal("--retain-exclude", "hidden_m1", "--no-commit")
+    v1 = ("--scheme", "vllm-v1", "--of-record", str(tmp_path))
+    assert "needs the Commit under --scheme rows-sha512" in refusal("--retain-exclude", "hidden_m1", *v1)
+    with pytest.raises(cli.UsageError, match="aren't attention interiors"):
+        ss.committer(cli.parse("serve-openai", [*rows, "--retain-exclude", "weights"], environ={}), llm=None)
+
+
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
 
 class Runner:
