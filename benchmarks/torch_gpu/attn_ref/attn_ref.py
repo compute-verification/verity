@@ -1,5 +1,5 @@
-"""attn_ref, kept for one release (HASH-32) over attn_bf16's reference path: `qk` and `pv` are `attn.qk` and `attn.pv`
-(benchmarks/torch_gpu/attn_bf16/attn.py, which says what each word is) with ``path="ref"``, the kernels that were attn_ref's.
+"""A shim over attn_bf16's reference path: `qk` and `pv` are `attn.qk` and `attn.pv`
+(benchmarks/torch_gpu/attn_bf16/attn.py, which says what each word is) with ``path="ref"``.
 $ATTN_REF_CUBIN, when set, names the cubin (build.sh here ships attn_bf16's sm_90a cubin as attn_ref.sm_90a.cubin), else
 attn_bf16.sm_90a.cubin beside attn.py.  New code imports attn_bf16's `attn`; this directory goes once e2e_h200 and
 commit_slots do.
