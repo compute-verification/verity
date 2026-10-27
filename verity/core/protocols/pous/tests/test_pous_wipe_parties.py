@@ -64,7 +64,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, egress_bits=0,
+            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, egress_bits=0, reads=params.k,
                                 clock=itertools.count(T0, STEP).__next__)
 
     t = threading.Thread(target=side)
@@ -75,13 +75,17 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
     return got["c"]
 
 
+def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
+    return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "egress_bits": 0, "reads": params.k}
+
+
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
-         prover=WPS.Prover, state=None):
-    caps = {C: {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "egress_bits": 0}, P: {"store": store}}
+         prover=WPS.Prover, state=None, request=None):
+    caps = {C: challenger_caps(secret, params), P: {"store": store}}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.Challenger(chunk), P: prover})
     given = {} if mode == "simulated" else {
         "sources": {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}}
-    return run({"protocol": WPS.ID, "params": WP.request_of("n0", params)}, BOTH, mode, state,
+    return run({"protocol": WPS.ID, "params": request or WP.request_of("n0", params)}, BOTH, mode, state,
                protocols={WPS.ID: protocol}, keys={p: PartyKey(p) for p in BOTH}, verify=verify, capabilities=caps,
                seed=SEED if mode == "simulated" else None, clock_step_ns=STEP, **given)
 
@@ -122,6 +126,15 @@ def test_a_prover_keeping_foreign_content_is_rejected():
     assert out["ended"] == sw.WRONG and verdict(out, b"foreign")["verdict"] == "reject"
 
 
+def test_parameters_that_name_the_reads_are_refused():
+    """The challenger times the reads its machine gives it; a run whose parameters name them is refused by both
+    parties before any fill, unsigned."""
+    r = wipe(PARAMS, b"reads", request=WP.request_of("n0", PARAMS) | {"k": 9})
+    assert r.outcomes[C] == {"outcome": {"ended": None, "signed": None}, "refused": "schema"}
+    assert r.outcomes[P] == {"outcome": {"answered": 0}, "refused": "schema"}
+    assert not [e for e in r.transcripts[C] if e.dir == "out" and e.channel == P and e.kind == "private"]
+
+
 class Leaving(WPS.Prover):
     def on(self, r):
         if r.message.type == "Read" and self.answered == 3:
@@ -145,7 +158,7 @@ def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_pa
     fills = [e for e in t if e.dir == "out" and e.channel == P and e.kind == "private"]
     assert [(e.elided, len(e.data)) for e in fills] == [(True, 64), (True, 64)]
     assert all(e.kind != "private" for e in t.public())
-    caps = {C: {"signer": ts.TestSigner(b"replay", 2), "log": ts.session_log(), "egress_bits": 0}}
+    caps = {C: challenger_caps(b"replay", params)}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.Challenger(1 << 11), P: WPS.Prover})
     again = run({"protocol": WPS.ID, "params": WP.request_of("n0", params)}, [C], "replay", None,
                 protocols={WPS.ID: protocol}, capabilities=caps, replay_dir=tmp_path / "runs/1")

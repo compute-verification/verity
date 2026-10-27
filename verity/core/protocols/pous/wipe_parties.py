@@ -11,12 +11,15 @@ The challenger drives the same `streamed_wipe.Challenger` as `wipe_party.serve`,
 and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's send and receipt
 on its clock, the coin secret drawn when the first batch is revealed, the session signed once it ends with the egress
 its machine was given. On the same coins, clock readings and key it signs the same bytes as `serve`. Its machine gives
-it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its session log)
-and its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none); the prover's gives it `store`
+it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its session log),
+its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none) and the reads it times
+(`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`); the prover's gives it `store`
 (`capabilities["store"]`, the prover a `WipeParams` makes: `streamed_wipe.Prover` unless given, `wipe_store.StoreProver`
-on a node). The run's parameters are `wipe_party.request_of`'s request. The challenger finishes with `wipe_party.report`
+on a node). The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses
+them, never the prover. The challenger finishes with `wipe_party.report`
 (private: what it signs is witness), refused by name, and unsigned, when the prover leaves (`closed`), sends a frame the
-wire refuses, or answers a batch with another count of labels (`schema`). It streams the fill `WINDOW` frames at a time,
+wire refuses, or answers a batch with another count of labels (`schema`); parameters that name the reads are refused
+`schema` before any fill. It streams the fill `WINDOW` frames at a time,
 letting the prover take each window before the next, so neither side holds more of it than that.
 """
 
@@ -70,7 +73,10 @@ class Challenger:
         caps = identity.capabilities
         self.signer, self.log = caps["signer"], caps["log"]
         self.egress_bits = caps.get("egress_bits", WP.UNCOUNTED)
-        self.request, self.wp = dict(params), WP.params_of(params)
+        try:
+            self.request, self.wp = dict(params), WP.params_of(params, caps.get("reads", WP.READS))
+        except ValueError:
+            return self._finish("schema")
         self.phase = Phase("Coins")
         return [Send("coins", Message("CoinsDraw", {"n": 64}))]
 
@@ -164,8 +170,11 @@ class Prover:
     """The prover: it keeps the fill in its store (`capabilities["store"]`) and answers each batch from it."""
 
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
-        self.store = identity.capabilities.get("store", sw.Prover)(WP.params_of(params))
         self.answered = 0
+        try:
+            self.store = identity.capabilities.get("store", sw.Prover)(WP.params_of(params))
+        except ValueError:
+            return [Finish({"answered": 0}, "schema")]
         self.phase = Phase("Fill", "FillDone")
         return []
 
