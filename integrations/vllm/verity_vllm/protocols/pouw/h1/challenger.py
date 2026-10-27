@@ -20,7 +20,7 @@ verifier's check that a served window's coins are that challenger's.
   before the session's end or opens a second session for the window, is refused. The window's draw coin must have been
   opened once, after `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin: a
   draw opened early, from another family, or never (a session closed at `finish` with no draw) is refused.
-* **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
+* **Sessions** (the pouw setting ``session``): a lane reserves a session on infra's challenger gate
   (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
   root, opened from the serving process: `pouw_h1_window.Window`), and carries the gate's open answer (``commits["session"]``: its
