@@ -19,7 +19,7 @@ necessary subcomputation, over the reference's).
 |---|---|---|
 | C, \|C\|, C(x) | A circuit: gates in topological order, each holding one value. \|C\| is its size, the number of its operation (non-input) gates. C(x) is the value of its output gates on the fresh input x. | `Verity.Circuit`, `Circuit.computed`, `Circuit.size`, `Circuit.eval` |
 | in(S), out(S) | For a set S of gates: the gates outside S with a wire into S; the gates of S read outside it, and its output gates. in(C) is C's input gates and out(C) its output gates. | `Circuit.into`, `Circuit.exits`; `Circuit.isInput`, `Circuit.outputs` |
-| θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
+| θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
 | D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R is its registration, once: θ, D and 𝓘, its (c, k)-partition into inference blocks, which the verifier checks from D and θ alone (the inference-only policy). | `Verity.Declaration.D`, `Verity.Declaration`; 𝓘 is a `Verity.Partition`; the policy, `Nci.Complies` in an older form |
 | (c, k), 𝒞_{c,k} | A partition's budgets per block: gate budget c, exactly (padded), and fresh-input budget k, at most; \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
 | A, x(g), t(g) | The actual circuit: everything the hardware computed in the period, hidden work included, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
@@ -34,7 +34,7 @@ necessary subcomputation, over the reference's).
 | 𝓜, ρ | The ACCEL model: a period's devices, their resources (tensor cores, issue slots, shared-memory and register ports, device memory, links) and each resource's rate ρ, each a ceiling no program exceeds, at the firmware maximum; the card files `verity/hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Verity.Device`; `FixedMachine` and `InitialBudget` not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its fresh-input budget does not already count. | not yet in Lean |
-| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`, which the per-party `Faithful`, `Secret` and `Confined` are to replace). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
+| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a memory wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`, which the per-party `Faithful`, `Secret` and `Confined` are to replace). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
 
 **Sets, protocols and the guarantee**
 
@@ -54,7 +54,7 @@ necessary subcomputation, over the reference's).
 |---|---|---|
 | 𝒢, 𝒴 | The training task: one random input x, drawn once, and a success test on the output at positions fixed before the draw, C(x) ∈ 𝒴: a set, since many trained models pass. Tasks are static; an interactive world is a causal experiment with each candidate's own queries. | `Accounting.Overhead.Task`, `Accounting.Overhead.Succeeds` |
 | η, P_α, η_cov | A success probability; the properties P_α a bound lower-bounds pointwise, each that the run computes a necessary subcomputation (below); the exception, Pr[success ∧ ¬⋁_α P_α] ≤ η_cov, uniform over strategies. | not yet in Lean |
-| GPU-hours, cost(C) | The unit of cost, by whole servers, since the wipe and the server block are per server: cost(C) sums each server's occupied time times its GPUs, on C's worst input, never wall-clock. | `Accounting.Overhead.cost`; `Accounting.Overhead.serverTime`, without the GPUs, renamed later |
+| GPU-hours, cost(C) | The unit of cost, by whole servers, since the memory wipe and the server block are per server: cost(C) sums each server's occupied time times its GPUs, on C's worst input, never wall-clock. | `Accounting.Overhead.cost`; `Accounting.Overhead.serverTime`, without the GPUs, renamed later |
 | T_𝒢(η; S) | The training cost of a set S of computations: the least GPU-hours at which some computation in S succeeds with probability above η, inf{cost(C) : Pr[(C, x) ∈ S ∧ C(x) ∈ 𝒴] > η}. | `Accounting.Overhead.threshold`, renamed later; `Accounting.Overhead.success` |
 | overhead(𝒢, 𝒜, η) | T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), the training cost over the admissible set divided by that over the feasible set, with the same a and Λ on both sides, defined when the denominator is in (0, ∞). | `Accounting.Overhead.overhead` |
 | slowdown | Wall-clock time only, never overhead: reaching the task takes at least T_𝒢(η; 𝒜) GPU-hours spread over the fleet's GPUs. | — |
@@ -78,7 +78,7 @@ circuit's, and they meet in verified compute; gates on unregistered hardware are
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| server block S, c_S, k_S | The actual circuit's gates on one registered server between two wipes. Its gate budget c_S = ⌊Φ_s·Δ_wipe⌋ (padded) is what the server can compute in that interval; its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the sum over server blocks not yet in Lean |
+| server block S, c_S, k_S | The actual circuit's gates on one registered server between two memory wipes. Its gate budget c_S = ⌊Φ_s·Δ_wipe⌋ (padded) is what the server can compute in that interval; its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the memory wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the sum over server blocks not yet in Lean |
 | inference block I, c, k | A block of 𝓘, the developer's (c, k)-partition of D: gate budget c, fresh-input budget k ("(c, k)-block" only in technical detail). In verified compute each sits inside one server block, 𝓘 refining the server blocks. | 𝓘 is a `Verity.Partition`, nested by `Verity.Partition.Refines`; the nesting not yet in Lean |
 | N | The necessary subcomputation: what every successful training run must compute (the P_α above), N counted objects of a kind we choose: products (weight × activation multiplies), products with their partial sums, or outputs the update can be recovered from. | not yet in Lean |
 | pricing argument, bounding strategy | How much of a block's fresh-input budget one counted object needs, which gives the yields (HeldRate is one, for products); a bounding strategy is a choice of necessary subcomputation and a pricing argument for it, and the bound takes the strongest that applies. | `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.ContainedTraining`; strategies not yet in Lean |
@@ -97,8 +97,8 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
   needs no algorithmic premise: SAK (`SAKResidual`) is a premise of the overhead lower bound only. For the served PoUW,
   the one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's
-  no-fold receipt, which takes none. Remotely, with no certifier at the replica's boundary (`WorkSound`'s
-  `CoinsConfidential`), PoUW's guarantee is the size credit alone.
+  no-fold receipt, which takes none. The remote audit (`Accounting.Remote`) bounds no hidden work itself, so its PoUW
+  guarantee is the size credit alone.
 - **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the declared circuit computes anyway, through inference-block yields) as well as free
   compute: a server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free
@@ -157,6 +157,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
+| "remote bandwidth audit" | proof of useful bandwidth (PoUB) |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the firewall |
 | "verifier gateway" | the challenger |
@@ -164,13 +165,13 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "GPU workers" | workers |
 | "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` and the module docs of the `Protocol.lean` files | spec |
-| "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`HorizonSampling`, `RateHorizon`, `ComposePeriod`, `CircuitWorkPeriod`), the remote bandwidth ledger's `horizon` field, until they are renamed | monitoring period (`horizon` is its pooled reading) |
+| "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`HorizonSampling`, `RateHorizon`, `ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until they are renamed | monitoring period (`horizon` is its pooled reading) |
 | "block" for a part of the device graph; `datacenter.physical.Block`, `block_of`, `network_sim`'s `--blocks` flag | zone |
 | "block", "thread block" for CUDA's unit of a launch; CUDA's `blockIdx`, `blockDim` | CTA |
 | "block" for a kernel's tile of a tensor; the Definitions `AttnBlock_v*`, `AttnBlockSoftcap_v*`, `AttnBlockFA3_v1`, `SparseMlaBlock_v1`, `TritonBlockRMSNorm_v1`, `MoeAlignBlocks_v1`, Triton's `BLOCK_*` | tile |
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until they are renamed; BLAKE3's own terms | chunk (a compression's 1024-bit chunk) |
 | "block" for a piece of a counter-mode stream (coins, noise); `Randomness.block`, `J10R.noiseBlock`, `verity.ml.randomness`'s `blocks()`, until they are renamed | chunk (of the stream) |
-| "block" for a unit of PoUS's encoded store; `blocks_per_segment`, `block_bytes`, until a format version | label (a segment's top label) |
+| "block" for a unit of the encoded store of proof of useful space (PoUS); `blocks_per_segment`, `block_bytes`, until a format version | label (a segment's top label) |
 | "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `Tag.Block`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
 | "block", "block-scaled" for entries under one FP8 or NVFP4 scale; the checkpoint id `verity-fp8-block128/v1`, the Definitions `ScaledMmFp8Block_v1`, `ScaledMmFp8BlockSharedScale_v1`, `MoeExpertFp8BlockCoordinate_v2`, `BlockScaledAlignAdd`, `SiluMulFp8BlockQuant_v1`, vLLM's `weight_block_size` | scale group |
 | "block" for a range of a GEMM's inner dimension; the Lean's `D1.nBlocks`, `ThreeBlock` | segment |
@@ -180,7 +181,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block" for G of the certifier's served rows; the Definition `CompileSliceBlocks_v1` | row group |
 | "compile unit" | the compile slice's proof block |
 | "isolation unit" (IU), "isolation block", "certified block" | inference block |
-| "novel communication intensity" (NCI); "baseline" for θ; `Nci`, `NciCheck`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
+| "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
 | "replay unit" (RU) | replay block |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
@@ -202,17 +203,17 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class`, `benchmarks/rho`'s `envelopes.py` and `data/envelopes.toml`, until they are renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p; set; the initial state a, which Λ bounds |
 | "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until they are renamed | GPU-hours; the training cost T_𝒢(η; S) |
-| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
+| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; the network certifier's `blocks.Server`, `Blocks.window` and `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap` and `data/exclusion.toml`, until they are renamed | the overhead lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
 | "registered computation" | the declared circuit (registered programs on committed inputs) |
 | "training class" for a premise set and the yield it gives; "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `classes.py`, `CLASSES` and `Allowance`, until they are renamed | pricing argument (`benchmarks/nci`'s tiers are sets of mechanisms, and `benchmarks/rho`'s routes sources of free compute) |
 | "reference construction", "reference run", "reference circuit" | the reference training algorithm |
-| "dark" (compute, fleet, leaves), "unmonitored" (compute, s), "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark` until they are renamed; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
+| "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark` until they are renamed; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
 | "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v1`), `benchmarks/resource_accounting`'s `w_cert`, until they are renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays where a certifier certifies, as in certified ingress); utilization |
-| "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute (the unaccounted share, or monitored residual, was its registered part, ε_undecl + ε_skip); U counts the free gates. "Slack" keeps its other senses, such as a tick's slack |
-| "unregistered input", "unregistered input bits", "unregistered information", "novel information" (`Nci.novelReads`) | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
+| "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute (the unaccounted share was its registered part, ε_undecl + ε_skip); U counts the free gates. "Slack" keeps its other senses, such as a tick's slack |
+| "unregistered input", "unregistered input bits", "unregistered information", "novel information" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
 | a for the protocol index: 𝒜_a, δ_a | p: 𝒜_p, δ_p (a is the initial state) |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
 | θ for a card's numbers | the card table (θ is the registered inputs) |
@@ -298,7 +299,7 @@ Some words keep a different, narrower sense:
     level; a pipeline stage keeps its sense (above).
   - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's window and
     its salt) are one period's served steps, and keep the word until they are renamed. A span of time is a period, a
-    server's gates between two wipes are a server block, and a sliding window is a model's term (above).
+    server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
   - **Escape**: a faulty proof block's chance to be accepted is its acceptance probability (Older names); the
     integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape
     (`E_OPAQUE_HOST`) is a value read on the host, such as `.item()`, which the frontend refuses.
