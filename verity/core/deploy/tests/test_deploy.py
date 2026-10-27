@@ -14,7 +14,7 @@ import pytest
 
 import deploy_example as X
 from verity.core.deploy import manifest as M
-from verity.core.deploy.channels import Playback
+from verity.core.deploy.channels import Playback, dial
 from verity.core.deploy.runtime import RUNTIME, run
 from verity.core.deploy.transcript import Transcript
 from verity.core.wire import PUBLIC, REFUSALS, Message, Refused, handshake
@@ -129,12 +129,14 @@ def test_a_party_told_of_a_frame_the_wire_refuses_finishes_on_it():
 
 
 def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_result(tmp_path):
-    """The responder's end accepts the challenger's connection and resets it: the challenger is told `Closed` with what
-    failed on the stream, which its transcript keeps, and the run's result names it."""
+    """The responder's end accepts the challenger's connection, reads the first byte of its Hello and resets it: the
+    challenger is told `Closed` with what failed on the stream, which its transcript keeps, and the run's result names
+    it. The read makes the reset land on the stream, not on the connect."""
     server = socket.create_server(("127.0.0.1", 0))
 
     def reset() -> None:
         conn, _ = server.accept()
+        conn.recv(1)
         conn.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
         conn.close()
 
@@ -149,6 +151,35 @@ def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_res
     told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": how})]
     assert r.outcomes["challenger"]["refused"] == "closed" and r.summary()["ended"] == r.ended
+
+
+def test_a_connect_that_fails_is_recorded_not_raised(tmp_path):
+    """A dial whose connect fails (nothing listens at the address) is a channel that ended on connecting: the challenger
+    is told `Closed` with it, and the run's result names it, as for a stream that fails later."""
+    server = socket.create_server(("127.0.0.1", 0))
+    address = "%s:%d" % server.getsockname()[:2]
+    server.close()
+    r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
+            verify=X.verify, seed=SEED, dial_to={"responder": address})
+    how = r.ended["challenger"]["responder"]
+    assert how.startswith("ConnectionRefusedError on connecting: "), how
+    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    assert told == [Message("Closed", {"how": how})]
+    assert r.outcomes["challenger"]["refused"] == "closed"
+
+
+def test_a_connect_the_peer_resets_is_an_ended_pipe(monkeypatch):
+    """A peer that accepts and resets before the dialer resumes makes the blocking connect raise
+    `ConnectionResetError`; `dial` returns it as an ended pipe."""
+    def reset(*_args, **_kwargs):
+        raise ConnectionResetError(104, "Connection reset by peer")
+
+    monkeypatch.setattr(socket, "create_connection", reset)
+    pipe = dial("127.0.0.1:1")
+    assert pipe.closed and pipe.take() is None and pipe.fileno() is None
+    assert pipe.ended == "ConnectionResetError on connecting: [Errno 104] Connection reset by peer"
+    with pytest.raises(ValueError, match="HOST:PORT"):
+        dial("no-port")
 
 
 def test_a_corrupted_handshake_is_refused_by_name():

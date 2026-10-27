@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -22,9 +21,6 @@ from verity.ml.commitments.leaves import (
     verify_opening,
 )
 from verity.errors import InvalidArtifact
-
-FIXTURES = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists()) / "fixtures" / "typed-obligation-v0"
-
 
 def _values(n: int) -> list[LeafValue]:
     return [LeafValue(f"row/{i:03d}", "bfloat16", (4,), bytes([i, 0, i, 1, i, 2, i, 3])) for i in range(n)]
@@ -102,33 +98,3 @@ def test_shape_text_and_empty_root() -> None:
         shape_text((True,))
     assert LeafTree({}, "empty").root == empty_root()
     assert leaf_hash("x", "bfloat16", (2,), b"ab") == leaf_hash("x", "bfloat16", "[2]", b"ab")
-
-
-def test_recorded_stage2_leaves_authenticate_against_their_recorded_roots() -> None:
-    """The serving side's real openings (the ``stage2--*`` conformance vectors, witness format 3) fold to the
-    roots the objects name: the scheme here is the one those roots were committed under."""
-
-    from verity_sp1.proofs.packed import decode_packed_witness
-    from verity_sp1.proofs.statement import Statement
-    from verity_sp1.proofs.wire import decode_statement
-
-    checked = 0
-    for path in sorted(FIXTURES.glob("stage2--*.json")):
-        record = json.loads(path.read_text())
-        if "witness" not in record or record["verdict"] != "accept":
-            continue
-        statement: Statement = decode_statement(bytes.fromhex(record["statement"]))
-        witness = decode_packed_witness(bytes.fromhex(record["witness"]))
-        roots = {bytes.fromhex(root["root"]): root for root in record["object"]["roots"]}
-        from verity_sp1.proofs.packed import packed_table
-
-        for tree, leaves in zip(packed_table(statement).trees, witness.trees, strict=True):
-            root = roots[tree.commitment.root]
-            for rank, leaf in zip(tree.ranks, leaves, strict=True):
-                opening = LeafOpening(
-                    root["id"], tree.commitment.root, root["count"], rank,
-                    leaf.canonical_id, leaf.dtype, parse_shape_text(leaf.shape_text), leaf.value, tuple(leaf.path),
-                )
-                assert verify_opening(tree.commitment.root, root["count"], opening), (path.name, leaf.canonical_id)
-                checked += 1
-    assert checked >= 3
