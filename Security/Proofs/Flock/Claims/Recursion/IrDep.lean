@@ -52,7 +52,7 @@ structure DepTape where
   accSalts : Array ByteArray
   fresh : String → String → ℕ → ByteArray
 
-instance : Nonempty DepTape := ⟨⟨fun _ => #[], #[], fun _ _ _ => ByteArray.empty⟩⟩
+instance instNonemptyDepTape : Nonempty DepTape := ⟨⟨fun _ => #[], #[], fun _ _ _ => ByteArray.empty⟩⟩
 
 /-- Each table's level-0 cap, its first rep's proof's. -/
 def depCaps (sts : Array _root_.Flock.Stmt) (ps : Array (_root_.Flock.Proof × F128)) : Array (Array ByteArray) :=

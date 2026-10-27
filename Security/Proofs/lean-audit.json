@@ -92,6 +92,9 @@
    "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
   },
+  "Proofs.Flock.Claims.Recursion.IrDepSession": {
+   "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads."
+  },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
    "digest": "5dca0cbd5c9510d395564190eaa9597f5352180152be0e3b481a6ceb301f0435"
