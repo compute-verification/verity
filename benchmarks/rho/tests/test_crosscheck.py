@@ -30,7 +30,8 @@ computed. What is matched, and what each side does differently:
 * **The whole update.** Once a window's K holds every layer's update at 2.5 bits a parameter both drop the physical
   bound: rho when x reaches 1, at K ≥ (L − 1) layer_bits = 3.93e12, mine at K ≥ 2.5 n_total = 4e12. NVL72's window
   (8.3e12) is past both, so onsite NVL72 is the remote cut in both.
-* **I_cert.** rho's certified ingress is `intake` α Φ with α = k/Γ, the declared intake at full use; mine is the
+* **I_cert.** rho's certified ingress is each server's inference blocks' declared inputs (NET-92), 65.6 kbit/s a server
+  at W63's warden parameters; matched, it is `intake` α Φ with α = k/Γ, the declared intake at full use. Mine is the
   location's share of the committed requests' input tokens at σ = 1, Φ/φ_F. They agree at matched Γ. At rho's own policy
   α Φ is 20/17 of mine, since the session's 2e7 bits over 1M tokens are 20 bits a token. rho also adds the certifier's
   timing channel (860 bit/s a host), matched to 0, and counts side channels per host (18 on an NVL72 rack), mine per
@@ -93,7 +94,8 @@ def matched(fleet: str, onsite: bool = False, **family: float) -> Registry:
         hosts = reg[f"location.{reg[f'fleet.{fleet}.location']}.hosts"]
         values |= {f"scenario.reference-onsite-{fleet.removeprefix('world-')}.regime": "onsite-per-device",
                    "regime.onsite-per-device.residual_bits": 4e10, "regime.onsite-per-device.host_residual_bits": 0,
-                   "regime.onsite.timing": 0, "regime.onsite.side": reg["regime.onsite.side"] / hosts}
+                   "regime.onsite.declared": False, "regime.onsite.timing": 0,
+                   "regime.onsite.side": reg["regime.onsite.side"] / hosts}
     return reg.override(values)
 
 
@@ -145,9 +147,9 @@ def test_onsite_h200_threaded_is_the_remote_cut():
 
 def test_at_its_defaults_rho_differs_from_mine_by_the_named_factors():
     """rho's own onsite H200 fan-out-priced 1/g is mine (3,545) times 3 κ_forward (0.894), its serving block's gates
-    over mine (Φ's rounding), β_x/0.66 (1.32), mine's K over its own (1.75: 5 GB a server against 5 GB a GPU, the timing
-    channel, ingress at 20-bit tokens) and (1 − x)/(1 − x_mine) (1.07, x at 5 of 61 layers): nothing else, within
-    0.1%."""
+    over mine (Φ's rounding), β_x/0.66 (1.32), mine's K over its own (12.2: 5 GB a server against 5 GB a GPU, the timing
+    channel, and each server's declared ingress (NET-92) against I_cert) and (1 − x)/(1 − x_mine) (1.14, x at 1 of 61
+    layers): nothing else, within 0.1%."""
     reg = Registry.load()
     s = build(reg, "reference-onsite-h200")
     budget = s.regime.budget(s.context)
@@ -156,8 +158,8 @@ def test_at_its_defaults_rho_differs_from_mine_by_the_named_factors():
                * MINE["K h200"] / budget.inputs * (1 - cheap(budget.inputs, p.layer_bits, p.layers))
                / (1 - MINE["x h200"]))
     assert math.isclose(inverse_g(evaluate(s), "fanout-priced"), MINE["onsite fan h200"] * factors, rel_tol=1e-3)
-    assert math.isclose(MINE["K h200"] / budget.inputs, 1.75, rel_tol=5e-3)
-    assert (1 - cheap(budget.inputs, p.layer_bits, p.layers)) == 1 - 5 / 61
+    assert math.isclose(MINE["K h200"] / budget.inputs, 12.16, rel_tol=5e-3)
+    assert (1 - cheap(budget.inputs, p.layer_bits, p.layers)) == 1 - 1 / 61
 
 
 def test_the_nvl72_window_holds_the_whole_update_in_both():
@@ -174,9 +176,9 @@ def test_the_nvl72_window_holds_the_whole_update_in_both():
 
 @pytest.mark.parametrize("fleet", ["h200", "nvl72"])
 def test_ingress_is_mine_at_matched_tokens(fleet):
-    """rho's certified ingress, `intake` α Φ, is I_cert = Φ/φ_F at matched Γ; at its own policy it is 20/17 of it (the
-    session's 2e7 bits are 20 bits a token, mine 17)."""
-    quiet = {"regime.onsite.timing": 0, "regime.onsite.side": 0}
+    """rho's certified ingress without the declared bound, `intake` α Φ, is I_cert = Φ/φ_F at matched Γ; at its own
+    policy it is 20/17 of it (the session's 2e7 bits are 20 bits a token, mine 17)."""
+    quiet = {"regime.onsite.declared": False, "regime.onsite.timing": 0, "regime.onsite.side": 0}
     for reg, tokens in ((matched(f"world-{fleet}", onsite=True), 1.0), (Registry.load(), 20 / 17)):
         s = build(reg.override(quiet), f"reference-onsite-{fleet}")
         loc = s.context.location

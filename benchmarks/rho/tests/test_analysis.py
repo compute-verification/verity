@@ -188,3 +188,22 @@ def test_run_prints_the_comparator_beside_rho_and_flags_a_vacuous_lower_end(tmp_
     assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
     assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
+
+
+def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
+    """NET-92 at W63: 65.6 kbit/s a server, intake 0.0203 at the reference policy, line rate beside it."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-onsite-h200",
+                                      "--scenario", "reference-remote-h200"])
+    run.main()
+    text = capsys.readouterr().out
+    assert ("**Certified ingress:** 6.56e+04 bit/s into a location, intake 0.0203 × α Φ: 1 × each server's declared "
+            "inputs, r_in = 6.56e+04 bit/s (r_out = 1.99e+03 bit/s out)") in text
+    assert "line rate, 4.8e+12 bit/s, is its upper end until NET-92's PR 5" in text and text.count("Certified") == 1
+    record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]
+    assert record["reference-remote-h200"]["certified"] is None
+    assert record["reference-onsite-h200"]["certified"]["r_in"] == pytest.approx(65_576, abs=1)
