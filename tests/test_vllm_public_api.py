@@ -145,7 +145,6 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.device",
     "verity_vllm.protocols.pouw.h1",
     "verity_vllm.protocols.pouw.h1.challenger",
-    "verity_vllm.protocols.pouw.h1.commit",
     "verity_vllm.protocols.pouw.h1.handoff",
     "verity_vllm.protocols.pouw.h1.kept",
     "verity_vllm.protocols.pouw.h1.prover",
