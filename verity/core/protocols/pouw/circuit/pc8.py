@@ -1,5 +1,5 @@
 """Pearl-C's tile check as a Program (``pearl-c-h100-v1``, ``pearl-c-sm120-v1``, and the unpromoted sm_120 record): forming
-v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof units as `pc4` cuts Pearl-C4's, so sampled proofs can
+v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof blocks as `pc4` cuts Pearl-C4's, so sampled proofs can
 establish a drawn tile's checked words (C̃ and U) and its rows' admission without the verifier reading a row.
 
     template              one instance per        reads                                   computes and returns

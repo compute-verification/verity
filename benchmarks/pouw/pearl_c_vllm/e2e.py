@@ -233,10 +233,10 @@ def install(model, args, coins):
 def whole_step(llm, run, stack):
     """``--whole-step``: Pearl-C's decode forwards replayed as vLLM's own graphs (`pouw_pearl_c_whole.WholeStep`), on the
     engine's in-process model runner."""
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
-    return WholeStep(run, stack, get_model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
+    return WholeStep(run, stack, handle.model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
 
 
 def arm_of(mode: str, run, args):

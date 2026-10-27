@@ -27,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
+from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_path, row_target
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
@@ -166,7 +166,7 @@ class Row:
         self.py = env.py
         self.py312 = env.py312 or env.py
         self.d = f"{env.sweep_dir}/{row}"
-        self.wl = f"workloads/{row}.json"
+        self.wl = row_path(row)
         self.timeline = env.timeline or f"{self.d}/timeline.jsonl"
         self.child_env: dict[str, str] = {}
         self._running: set[int] = set()
