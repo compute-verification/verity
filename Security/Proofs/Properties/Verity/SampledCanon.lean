@@ -941,6 +941,25 @@ theorem setupOf_zk_spec {I : FlockSoundness.Discharge.Exec.Inputs} {record : Str
       exact FlockSoundness.Discharge.ZkExec.zkTags_hm96Rows I
   · exact absurd hc' (by show ¬ 1 < I.count; omega)
 
+/-- **v2's sessions set up at `TABLES` with SHA-512 digests**: at the inputs a session's statement sets up from
+(`SessionInputs`), a `--zk` setup's spec names exactly `TABLES`, and its record's digests are SHA-512. -/
+theorem sessionI_spec {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {tables : List (String × ByteArray)} {o : Own}
+    (ht : Flock.Tags.find? STATEMENT = some tags0) {record : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
+    (h : FlockSoundness.Discharge.Exec.setupOf (FlockSoundness.Discharge.ZkExec.zkInputs
+      (Properties.SampledProofs.OneStageZk.sessionI tags0 circuitB pubB tables o)) record = .ok (spec, sts)) :
+    spec.tables = TABLES ∧ spec.sha512Digests = true := by
+  have h0 : tags0 = Flock.Tags.circuit := by
+    have e : Flock.Tags.find? STATEMENT = some Flock.Tags.circuit := rfl
+    rw [e] at ht
+    exact (Option.some.inj ht).symm
+  subst h0
+  obtain ⟨h1, h2⟩ := setupOf_zk_spec (Nat.le_refl 1) h
+  have hw : (Properties.SampledProofs.OneStageZk.sessionI Flock.Tags.circuit circuitB pubB tables o).tags =
+      Flock.Tags.circuit :=
+    FlockSoundness.Discharge.ZkExec.withCoins_tree _ _
+  rw [hw] at h1 h2
+  exact ⟨h1.trans rfl, h2.trans rfl⟩
+
 end SampledProofs.OneStageZk
 
 namespace Verity.Game.LiveDrive
