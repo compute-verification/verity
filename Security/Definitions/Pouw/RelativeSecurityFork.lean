@@ -83,7 +83,7 @@ noncomputable def breakPr {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.M
     (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) : ENNReal :=
   ∑ r : Ω, (Fintype.card Ω : ENNReal)⁻¹ *
     min 1 (ENNReal.ofReal
-      (ε + R * (δb + δz) + βb * ∑ w, (fb Ω M r w).Pr sha + βz * ∑ w, (fz Ω M r w).Pr sha))
+      (ε + R * (δb + δz) + βb * (∑ w, (fb Ω M r w).Pr sha) + βz * ∑ w, (fz Ω M r w).Pr sha))
 
 /-- **The machine of functions at no cost**: an algorithm is a function, and every run costs nothing. An adversary
 there is charged nothing, so a floor at a positive charge is a bound on its acceptance alone. -/
