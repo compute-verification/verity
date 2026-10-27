@@ -618,11 +618,11 @@ source = "θ issue"
 ops = ["MATCH"]
 what = "match.any (each lane the mask of the lanes holding its value; .U64)"
 mark = "hole"
-severity = "low"
+severity = "medium"
 envelope = "L"
-units = 224
-argument = "each of 32 lanes writes a word that reads all 32 lanes' words: ≥ 7 L units a lane (≥ 14 for .U64), 224 a warp instruction, 7 issue slots' worth; dominated if MATCH.ANY issues at ≤ 128/224 = 0.57 warp instructions a SM-clock (≤ 0.29 for .U64); no document gives its rate"
-source = "opcode_probe/probes/match.cu (README 'Coverage')"
+units = 119
+argument = "L simulates it in 119 units a warp instruction (238 for .U64): the lanes in 11 groups of ≤ 3, a unit for each of the 55 pairs of groups writes the 15 equalities of its 6 words, and 2 units a lane assemble its mask. MATCH.ANY runs at 0.5/k warp instructions a SM-clock for k distinct values (0.25/k .U64) on a unit of its own, beside the issue slots, so it is dominated only while (119 r_MATCH + 32 r_other) / 128 ≤ 1. Beside LOP3 and FFMA at 1.516 each it ran at 0.379: a load of 1.11, 14 L units a SM-clock past ρ_L (11%). At full issue the excess is ≤ (119 − 32) · 0.5 = 43.5 units a SM-clock (51.5 .U64, 40% of ρ_L). A simulation that depends on the data (a round a class: each lane compares with the class's first lane, 5 units fold the 32 bits into its mask, about 38 units a class and 32 to write) gives 0.96 at the measured point and 19 units (15%) at full issue. The fix is a MATCH op in the envelope at its rate, or ρ_L raised by the excess (CMP-165). sm_90's rate isn't measured"
+source = "opcode_probe/probes/match.cu, r20261027-002237-fa90: alone MATCH.ANY 0.4999 (1 class), 0.24998 (2), 0.12500 (4), 0.01562 (32), .U64 0.24997 (1), 0.00781 (32); beside LOP3 the load is ≤ 0.935 (0.4845 with LOP3 1.938), beside LOP3 and FFMA 1.110 (0.3790 with 1.516 and 1.516, mix_u32_lop3_32_ffma_32); .U64 ≤ 0.953; LOP3 caps at 2.0 a SM-clock; r20261027-001518-aaf8 the same within 0.3%"
 
 [[row]]
 ops = ["S2R", "CS2R", "B2R", "LEPC", "GETLMEMBASE", "SETLMEMBASE", "SETCTAID", "PMTRIG", "QSPC"]

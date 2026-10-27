@@ -528,8 +528,8 @@ dominated by an envelope op at no fewer units of the same resource. `data/cover/
   the SM pipes (TMA, the copy engines, L2's reductions, NVLink SHARP, texture, RT, video) is a `[[unit]]` with the same
   marks.
 - **The marks**: `covered` (the argument dominates it at the rate), `coarse` (dominated, at a rate bounded from a coarser
-  figure, such as a pipe's share or the data sheet's peak for the format), `hole` (with its severity: `low`, `open`, or
-  `outside the card`), and `absent` (the card doesn't execute it: the family table lists it for another card, or ptxas
+  figure, such as a pipe's share or the data sheet's peak for the format), `hole` (with its severity: `low`, bounded at
+  a few percent of a resource; `medium`, measured past a resource's ρ; `open`, no rate known; or `outside the card`), and `absent` (the card doesn't execute it: the family table lists it for another card, or ptxas
   refuses the PTX). An opcode's mark is its worst row's.
 - **The tensor rule**: a dominated T or T.sp row's rate times its format's weight (halved for T.sp) is at most ρ_T, 1024
   T units a SM-clock on sm_120 and 4096 on the H200.
@@ -548,9 +548,10 @@ tcgen05 and wgmma are absent on sm_120a.
 Two GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does, each launched with `research run --on
 vy-nebius-1 --cwd source` and its verdict line quoted in the row's source once it lands:
 
-- `../opcode_probe/probes/match.cu` (through `../opcode_probe/run.sh`) times MATCH.ANY with the lanes in 32, 4 and 1
-  classes, and .U64. Its hypothesis is the MATCH row's: at most 128/224 = 0.57 warp instructions a SM-clock (0.29 for
-  .U64), the rate an L tree of 7 units a lane dominates.
+- `../opcode_probe/probes/match.cu` (through `../opcode_probe/run.sh`) times MATCH.ANY with the lanes in 32, 4, 2 and 1
+  classes, and .U64, alone and beside LOP3 and FFMA. Its hypothesis is the MATCH row's: L's 119-unit simulation (238
+  for .U64) dominates it, (119 r_MATCH + 32 (r_LOP3 + r_FFMA)) / 128 ≤ 1 at every point. It failed at one point (1.11),
+  which makes MATCH.ANY a hole.
 - `../sass_census/multimem.sh` reads the card's multicast attribute and what `cuMulticastCreate` answers, and runs
   `multimem.ld_reduce` (LDGMC) and `multimem.red` on ordinary memory. Its hypothesis is the sm_120 LDGMC row's: no
   multicast object exists, and on a unicast address LDGMC faults or loads the one copy.
