@@ -366,6 +366,10 @@
    "owner": "@compute-accounting",
    "digest": "217f8957742e46987371cc276394783ed8e4fd34ba582bc7d96b105f30dfa354"
   },
+  "Accounting.FixedMachine": {
+   "owner": "@lean",
+   "digest": "ce6072bc5284ccd7363834d3b004b01b739c7deae115fcd7139ae82eb85fab89"
+  },
   "Accounting.Gates.CodecInputs": {
    "owner": "@memory-accounting",
    "digest": "6524cf356d674b61ff89e4e77fc979bf4fdf415765b98fc7d50cdaa86792d328"
@@ -429,6 +433,10 @@
   "Accounting.IngressFixed": {
    "owner": "@memory-accounting",
    "digest": "1153ae50840b77f5f38447e649b44988cbc1046dbeeaf55165326023e71be005"
+  },
+  "Accounting.InitialBudget": {
+   "owner": "@lean",
+   "digest": "28a732123f6836db53cf66620324f97fd64e71618281c04d2abcddd2fa3dbec3"
   },
   "Accounting.Memory.Determines": {
    "owner": "@memory-accounting",
@@ -1915,14 +1923,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.FixedMachine": {
-   "owner": "@lean",
-   "digest": "ce6072bc5284ccd7363834d3b004b01b739c7deae115fcd7139ae82eb85fab89"
-  },
-  "Accounting.InitialBudget": {
-   "owner": "@lean",
-   "digest": "28a732123f6836db53cf66620324f97fd64e71618281c04d2abcddd2fa3dbec3"
   }
  },
  "meaning": [
