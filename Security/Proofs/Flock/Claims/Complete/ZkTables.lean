@@ -11,7 +11,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Complete.ZkTables.Runs
 import Proofs.Flock.Claims.Complete.ZkTables.Complete
-import Proofs.Flock.Claims.Complete.ZkTables.One
 import Proofs.Flock.Claims.Complete.ZkTables.Names
 import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
@@ -37,7 +36,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Pass
 import Proofs.Flock.Claims.Complete.ZkTables.Refuse
 import Proofs.Flock.Claims.Complete.ZkTables.Round1
 import Proofs.Flock.Claims.Complete.ZkTables.Round2
-import Proofs.Flock.Claims.Complete.ZkTables.Round3
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's

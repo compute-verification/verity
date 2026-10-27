@@ -69,14 +69,10 @@ import Proofs.Flock.VBridge.Family.Names
 import Proofs.Flock.VBridge.Family.Opened
 import Proofs.Flock.VBridge.Family.Pub
 import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.VBridge.Family.PartReads
 import Proofs.Flock.VBridge.Family.OutCols
-import Proofs.Flock.VBridge.Family.VCoins
-import Proofs.Flock.VBridge.Family.PartKeys
+import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.VBridge.Family.Ends
-import Proofs.Flock.VBridge.Family.MsgsRead
 import Proofs.Flock.VBridge.Family.AccRows
-import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.VBridge.Sparse.Defs
 import Proofs.Flock.VBridge.Sparse.Residuals
 import Proofs.Flock.VBridge.Sparse.Plays

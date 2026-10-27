@@ -32,7 +32,6 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.Zk.Extras
 import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
 import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
-import Proofs.Flock.Claims.Complete.Zk.LaneAgree
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.Complete.Zk.InnerGo

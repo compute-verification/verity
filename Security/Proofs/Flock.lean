@@ -2,8 +2,6 @@ import Proofs.Flock.Verifier
 import Proofs.Flock.Level3
 import Proofs.Flock.Soundness
 import Proofs.Flock.EndToEnd
-import Proofs.Flock.EndToEnd.Window
-import Proofs.Flock.EndToEnd.WindowShare
 import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEnd.Period
@@ -21,7 +19,6 @@ import Proofs.Flock.C3
 import Proofs.Flock.Claims.Complete
 import Proofs.Flock.Claims.Complete.ZkTables
 import Proofs.Flock.VBridge
-import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.Sampled
 import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
