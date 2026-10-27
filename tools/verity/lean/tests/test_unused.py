@@ -125,6 +125,19 @@ def test_a_conformance_check_is_kept_without_its_imports(stand_in):
     assert U.decide(pkg, policy, used, [test], [], doubts=False)["unused"] == ["Prune.A.Side", "Prune.B.Group", "Prune.B.Old"]
     names = ["Prune.X.ChainVectors", "Prune.X.PeelChecks.Gram0", "Prune.X.CheckSum", "Prune.Vectorsx"]
     assert [bool(U.CHECK_NAME.search(m)) for m in names] == [True, True, False, False]
+    (pkg / "Prune/B/Old.lean").write_text("import Prune.A.Side\n\n#guard 1 + 1 == 2\ntheorem old : True := trivial\n")
+    assert U.decide(pkg, policy, used, [test], [])["kept"]["Prune.B.Old"].startswith("checks: a conformance check")
+    for title, body, held in (("The joint guarantee's hypotheses hold", "", True),
+                              ("The influence theorems are not vacuous", "", True),
+                              ("The chain's satisfiability witness", "", True),
+                              ("PoUW's per-run guarantee needs the cost model to truncate", "", True),
+                              ("A program that beats the honest count", "", True),
+                              ("Cost models that truncate", "`fixed` is one, so the hypothesis holds of one.", True),
+                              ("`htau` from the checks", "`htau` is vacuous, and the rest needs `x`.", False)):
+        (pkg / "Prune/B/Old.lean").write_text(f"import Prune.A.Side\n\n/-!\n# {title}\n\n{body}\n-/\n"
+                                              "theorem old : True := trivial\n")
+        why = U.decide(pkg, policy, used, [test], [])["kept"].get("Prune.B.Old", "")
+        assert why.startswith("checks: a non-vacuity witness or a necessity result") == held, title
 
 
 def test_a_module_a_lean_comment_outside_cites_is_kept(stand_in):

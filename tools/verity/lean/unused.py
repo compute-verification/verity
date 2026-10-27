@@ -31,8 +31,10 @@ A module of PKG is kept, with the first reason that holds:
   it imports is kept too where `named` would keep it (an added `import`, a name a difftest or a shell script adds) or
   the PRs edit it, unless they only edit it and it declares nothing (an edit of an import-only module is its imports,
   which the diff shows);
-- `checks`: it is a conformance check, which no guarantee reaches by design: it holds an `example`, or its name (or an
-  enclosing module's) ends in `Checks` or `Vectors`. Its owner decides whether it goes;
+- `checks`: it is a conformance check, which no guarantee reaches by design: it holds an `example` or a `#guard`, or its
+  name (or an enclosing module's) ends in `Checks` or `Vectors`; or a non-vacuity witness or a necessity result, its
+  module doc saying it shows some hypotheses can be met (not vacuous, satisfiable, have teeth), or its title that one is
+  needed (needs, beats, a counterexample). Its owner decides whether it goes;
 - `cited`: a comment of a Lean file outside PKG (a Definition's docstring) cites it, by its module's name or path or a
   constant's name: what that text argues rests on it, and its owner decides whether it goes. A module that declares
   nothing, cited by its own name or path, is cited for what it gathers, so what it imports is kept too (a lock's root
@@ -97,9 +99,23 @@ NOT_READERS = ("tools/move/", "archive/", "tools/research/src/research/store/mov
 LEAN_IMPORT = re.compile(r"(?<![\w.])import[ \t]+(?:all[ \t]+)?([^\W\d][\w'.]*[\w'])")
 #: a path joined from quoted parts (`ROOT / "Security" / "Proofs" / "A.lean"`), read as the one path it is
 JOINED = re.compile(r"[\"'][ \t]*/[ \t]*[\"']")
-#: a conformance check: a module named for one, or holding an `example` (which nothing can use)
+#: a conformance check: a module named for one, or holding an `example` or a `#guard` (which nothing can use)
 CHECK_NAME = re.compile(r"(?:Checks|Vectors)(?:\.|$)")
-EXAMPLE = re.compile(r"(?m)^[ \t]*example\b")
+EXAMPLE = re.compile(r"(?m)^[ \t]*(?:example\b|#guard(?:_msgs)?\b)")
+#: a module doc saying the module shows some hypotheses can be met (a non-vacuity or satisfiability witness), or, in its
+#: title, that one is needed (a necessity result, a counterexample)
+WITNESS_DOC = re.compile(r"(?i)not vacuous|non-?vacu|satisfiab|hypothes[ei]s? holds?\b|holds of one|have teeth|can be met"
+                         r"|meets every hypothesis")
+WITNESS_TITLE = re.compile(r"(?i)vacuous|vacuity|\bneeds\b|\bbeats\b|counterexample|necessary")
+
+
+def witness(text: str) -> bool:
+    """Whether ``text``'s first module doc (`/-! … -/`) says what `WITNESS_DOC` or, in its title, `WITNESS_TITLE` does."""
+    if (i := text.find("/-!")) < 0:
+        return False
+    doc = text[i + 3:text.find("-/", i)]
+    title = next((line for line in doc.splitlines() if line.strip()), "")
+    return bool(WITNESS_DOC.search(doc) or title.lstrip().startswith("#") and WITNESS_TITLE.search(title))
 CODE = (".py", ".sh", ".toml", ".lean", ".json", ".yaml", ".yml", ".cfg", ".txt")
 BRANCH_LANE = re.compile(r"cursor/([a-z][a-z0-9]*(?:-[a-z0-9]+)*?)-[a-z0-9]+-[0-9a-f]{4}\b|cursor/([a-z][a-z0-9]*)-")
 
@@ -414,7 +430,10 @@ def decide(pkg: Path, policy: dict, used: dict, files: list[str], frozen: list[s
     if doubts:
         for m in sorted(scope):
             if CHECK_NAME.search(m) or EXAMPLE.search(stripped[m]):
-                keep(m, "checks: a conformance check (it holds an `example`, or its name says Checks or Vectors)")
+                keep(m, "checks: a conformance check (it holds an `example` or a `#guard`, or its name says Checks or Vectors)")
+            elif witness(texts[m]):
+                keep(m, "checks: a non-vacuity witness or a necessity result (its module doc says it shows some hypotheses "
+                        "can be met, or one is needed)")
         for m in sorted(k[1] for k in refs if isinstance(k, tuple) and k[0] == "cited"):
             by = sorted({f for f, _ in refs[("cited", m)]})
             keep(m, f"cited: a Lean comment of {by[0]}" + (f" and {len(by) - 1} more" if len(by) > 1 else "") + " cites it")
