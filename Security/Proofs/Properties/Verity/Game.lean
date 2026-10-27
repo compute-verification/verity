@@ -6,12 +6,13 @@ import Proofs.Properties.Verity.Soundness
 
 `Verity.Vocab.soundness` proves `Vocab.SoundnessWithWipe` from the six subprotocols' targets. The composition layer,
 `Verity.soundness_of_subprotocols`, bounds the five claims onsite composes today by their errors summed, in the same
-game and for the same strategy. An accepted wipe case whose claim fails at some server is the wipe's own event at that
-server (NCI accepted the registration, by `accepts_registered`), which `WipeSound` bounds by its error. A union bound
+game and for the same strategy. Onsite composes the wipe, so what it accepts the wipe accepts (`accepts_wipe`), and a
+server's failed wipe claim is the wipe's own event there, which `WipeSound` bounds by its error. A union bound
 adds them.
 
-The wipe's target follows from memory-accounting's `Pous.Guarantees.StreamedWipeMeetsServer5GB`, the coupling of the
-wipe model's game into the causal game, and the published wipes at the 5 GB point (`WipeVocab.wipeSound_of_streamed`).
+The wipe's target follows from memory-accounting's `Pous.Guarantees.StreamedWipeMeetsServer` at the registered wipe and
+the coupling of the wipe model's game into the causal game (`WipeVocab.wipeSound_of_streamed`); its 5 GB form is a
+corollary at the 5 GB point (`WipeVocab.wipeSound5GB_of_wipeSound`).
 
 Beside it, its two checks: `soundness_honest`, at the honest deployment every target's event and the theorem's own have
 probability `0`, and `soundness_nontrivial`, its conclusion fails for a verifier that accepts everything, wherever one
@@ -28,18 +29,45 @@ namespace WipeVocab
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {V : Vocab d α} {Srv : Type} (W : WipeVocab V Srv)
 
-/-- **The wipe's target from the streamed wipe's per-server bound** at the 5 GB point, through the coupling. -/
-theorem wipeSound_of_streamed (h5 : Pous.Guarantees.StreamedWipeMeetsServer5GB) (hc : W.Couples)
-    (hop : W.AtOperatingPoint) : W.WipeSound := by
+/-- **The wipe's target from the streamed wipe's per-server bound** at the registered wipe, through the coupling. -/
+theorem wipeSound_of_streamed (h : Pous.Guarantees.StreamedWipeMeetsServer) (hc : W.Couples) : W.WipeSound := by
   intro θ F c σ s
-  obtain ⟨hn, hr, hrk, hpt⟩ := hop θ s
   refine (hc θ F c σ s).trans ?_
   unfold WipeVocab.error
   refine add_le_add ?_ le_rfl
-  exact h5 (512 * W.n θ s + W.R θ s) (W.n θ s) (W.R θ s) rfl hn (W.r θ s) (W.k θ s) hr hrk hpt
-    (40000000000 + W.egressBound θ s) (W.egressBound θ s) (W.κ θ s) (W.prf θ s) (W.prover θ F c σ s) le_rfl
+  exact h (512 * W.n θ s + W.R θ s) (W.n θ s) (W.R θ s) rfl (W.n_pos θ s) (W.r θ s) (W.k θ s) (W.r_pos θ s)
+    (W.reads θ s) (W.keepBound θ s + W.egressBound θ s) (W.egressBound θ s) (W.κ θ s) (W.prf θ s)
+    (W.prover θ F c σ s) le_rfl
+
+/-- At the 5 GB point, the registered claim gives the 5 GB one. -/
+theorem holds5GB_of_holds (hop : W.AtOperatingPoint) {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {s : Srv}
+    {o : Outcome} (h : W.Holds θ F c σ s o) : W.Holds5GB θ F c σ s o :=
+  fun hm => (h hm).trans (Nat.add_le_add_right (hop θ s) _)
+
+/-- **The 5 GB corollary**: where every registered wipe is at the 5 GB point, the probability that the wipe accepts
+while a server keeps more than 5 GB plus its egress is at most the same error. -/
+theorem wipeSound5GB_of_wipeSound (hop : W.AtOperatingPoint) (h : W.WipeSound) (θ F c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c)) (s : Srv) :
+    Game.prob (fun o => Verdict V o ∧ ¬ W.Holds5GB θ F c σ s o) (V.game θ F c) σ ≤ W.error θ F c σ s :=
+  (Game.prob_mono (fun o ho => ⟨ho.1, fun hh => ho.2 (W.holds5GB_of_holds hop hh)⟩) _ σ).trans (h θ F c σ s)
 
 end WipeVocab
+
+/-- **What onsite accepts, each of its components accepts on its own case.** -/
+theorem accepts_case {s : Sent} (h : Accepts s) {P : BlobProtocol} (hP : P ∈ Onsite.components) : CaseAccepts P s := by
+  obtain ⟨n, ps, b, d, k, ev, hdec, pub, prof, hreg⟩ := accepts_registered h
+  obtain ⟨-, -, -, -, -, -, ⟨-, -, hfst, -⟩, hcases, -⟩ := hreg
+  have hm : P.onBlobs (Blobs.ofArray s.blobs) ∈ (Properties.Composition.triples s.components ps ev).map (·.1) := by
+    rw [hfst]
+    exact List.mem_map.2 ⟨_, hP, rfl⟩
+  obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
+  exact ⟨n, ps, b, d, k, ev, hdec, x, hx, hx1, hcases x hx⟩
+
+theorem wipe_mem : (MemoryChallenger.WipeProtocol.protocol : BlobProtocol) ∈ Onsite.components := by
+  simp [Onsite.components]
+
+/-- **What onsite accepts, the wipe accepts on its own case.** -/
+theorem accepts_wipe {s : Sent} (h : Accepts s) : WipeAccepts s := accepts_case h wipe_mem
 
 namespace Vocab
 
@@ -53,9 +81,9 @@ theorem soundness (hS : V.SampledProofsSound) (hW : V.PouwSound) (hP : V.PousSou
     (add_le_add (soundness_of_subprotocols ι α d V hS hW hP hB hN θ F c σ)
       (le_trans (prob_exists_finset_le Finset.univ _ _ σ)
         (Finset.sum_le_sum fun s _ => hWipe θ F c σ s))))
-  rintro o ⟨hacc, hreg, hfail | ⟨hwa, s, hs⟩⟩
+  rintro o ⟨hacc, hreg, hfail | ⟨s, hs⟩⟩
   · exact Or.inl ⟨hacc, hreg, hfail⟩
-  · exact Or.inr ⟨s, Finset.mem_univ s, ⟨hreg, accepts_registered hacc, hwa⟩, hs⟩
+  · exact Or.inr ⟨s, Finset.mem_univ s, ⟨hreg, accepts_registered hacc, accepts_wipe hacc⟩, hs⟩
 
 /-- **Its hypotheses hold at the honest deployment**: at registered files, where each subprotocol's honest lemma holds
 (`Vocab.HonestHolds`, `WipeVocab.HonestHolds`), the deployment's honest prover meets the six targets with probability
@@ -66,7 +94,7 @@ theorem soundness_honest (h : ∀ a, V.HonestHolds a) (hw : W.HonestHolds) (θ F
         (V.honest θ F c) ≤ W.error θ F c (V.honest θ F c) s) ∧
       Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧
           ((∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o) ∨
-            (WipeAccepts o.sent ∧ ∃ s, ¬ W.Holds θ F c (V.honest θ F c) s o))) (V.game θ F c) (V.honest θ F c) = 0 := by
+            ∃ s, ¬ W.Holds θ F c (V.honest θ F c) s o)) (V.game θ F c) (V.honest θ F c) = 0 := by
   have h5 := (soundness_of_subprotocols_honest V h θ F c hreg).2
   have h0 : ∀ s, Game.prob (fun o => ¬ W.Holds θ F c (V.honest θ F c) s o) (V.game θ F c) (V.honest θ F c) = 0 :=
     hw θ F c hreg
@@ -77,12 +105,12 @@ theorem soundness_honest (h : ∀ a, V.HonestHolds a) (hw : W.HonestHolds) (θ F
     exact zero_le
   · calc Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧
             ((∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o) ∨
-              (WipeAccepts o.sent ∧ ∃ s, ¬ W.Holds θ F c (V.honest θ F c) s o))) (V.game θ F c) (V.honest θ F c)
+              ∃ s, ¬ W.Holds θ F c (V.honest θ F c) s o)) (V.game θ F c) (V.honest θ F c)
         ≤ Game.prob (fun o => (Accepts o.sent ∧ V.Registered o.params o.file ∧
               ∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o) ∨
             ∃ s ∈ Finset.univ, ¬ W.Holds θ F c (V.honest θ F c) s o) (V.game θ F c) (V.honest θ F c) :=
           Game.prob_mono (fun o ⟨hacc, hreg, hf⟩ => hf.elim (fun ha => Or.inl ⟨hacc, hreg, ha⟩)
-            fun ⟨_, s, hs⟩ => Or.inr ⟨s, Finset.mem_univ s, hs⟩) _ _
+            fun ⟨s, hs⟩ => Or.inr ⟨s, Finset.mem_univ s, hs⟩) _ _
       _ ≤ _ := Game.prob_or_le _ _ _ _
       _ ≤ 0 + ∑ s, Game.prob (fun o => ¬ W.Holds θ F c (V.honest θ F c) s o) (V.game θ F c) (V.honest θ F c) :=
           add_le_add h5.le (prob_exists_finset_le _ _ _ _)
@@ -97,7 +125,7 @@ theorem soundness_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ
   intro h
   have h1 := prob_play_eq_one (V.rounds θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧
-      ((∃ a, ¬ V.Holds θ F c σ a o) ∨ (WipeAccepts o.sent ∧ ∃ s, ¬ W.Holds θ F c σ s o)))
+      ((∃ a, ¬ V.Holds θ F c σ a o) ∨ ∃ s, ¬ W.Holds θ F c σ s o))
     (fun _ _ => ⟨trivial, hreg, Or.inl ⟨a, hfail _⟩⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
