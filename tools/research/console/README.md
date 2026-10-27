@@ -5,9 +5,9 @@ them with the `panels:write` key. This is the master copy. The hosts run copies 
 on a host.
 
 - **`--group node1`** runs on vy-nebius-1 every 5 minutes, via `infra/nebius/verity-console.{service,timer}`. It builds:
-  - the node's Prometheus and Kueue panels (`verity/node1-*`);
-  - the pool panels (`infra/*`), from `/workspace/usage/infra-pool.json`;
-  - the proofs hill-climb tables (`verity/hillclimb-*`), from `/workspace/usage/hillclimb/*.json`.
+  - the node's Prometheus and Kueue panels (`verity/node1-*`), node 2's hours (`verity/node2-hours`) and the held-idle table
+    (`verity/held-idle-hourly`);
+  - the pool panels (`infra/*`), from `/workspace/usage/infra-pool.json`.
 
   It needs `util_collect.py` beside it, and the `cluster` package (`infra/cluster/src/cluster`) in `cluster/` beside it: the
   GPU usage rows (`cluster.usage`) it records in `/workspace/usage/usage-hourly.jsonl`, which `research usage` reads, and

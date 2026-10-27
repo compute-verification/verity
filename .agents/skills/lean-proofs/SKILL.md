@@ -4,9 +4,9 @@ description: >
   How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE on a node's
   warm tree; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
   tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
-  lean-audit.json, moving them without a DM to Daniel (--moved), the shape of a property, watching dependencies for
+  lean-audit.json, moving them without a landing DM (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
-  build directories, and Daniel's standing Lean rulings. Use when adding or changing Lean proofs, definitions or
+  build directories, and the standing Lean rulings. Use when adding or changing Lean proofs, definitions or
   packages (verity/core/service/flock, Security and its Proofs and Properties, a protocol's lean/), when a Lean build
   or proof is slow or runs out of memory, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean
   dependency, or preparing a Lean PR.
@@ -44,7 +44,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
   `--kind lean-audit`.
 - **The fast path is for the lock and the mark**, once `verity lean try` passes: your records and the `--update` printout
-  Daniel's DM carries, without a build of your own (`lean_changed.py`'s docstring).
+  the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
 
   ~~~text
   research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
@@ -84,7 +84,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
   takes that this repository defines, and every assumption a premise mentions, with a digest, so strengthening a
   premise is a record change. AGENTS.md "Lean" has the rest.
-- **Statement first, then red team, then a card to Daniel for each new premise, then the proof.** State the guarantee on
+- **Statement first, then red team, then an ask for each new premise, then the proof.** State the guarantee on
   a `sorry` stub in your lane branch, list it and run `--update`, so the record shows if it moves. Never make a guarantee
   easier: no stronger input relation, weaker output relation, smaller challenge space, unmotivated hypothesis, or
   verifier check moved into an assumption.
@@ -122,7 +122,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Standing rulings
 
-Daniel's Lean rulings in force, each stated as itself; who set each one, when and why, are in his decisions log.
+The Lean rulings in force, each stated as itself; who set each one, when and why, are in the decisions log, outside the
+repository.
 
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.

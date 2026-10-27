@@ -226,7 +226,7 @@ class Wipe:
     game_delta_coin: float = 2.0**-128
     prf_advantage: float = 0.0
 
-    #: the per-server bound against `M_s` is memory-accounting's (Wed 28 Oct 06:00Z); per device, the streamed wipe
+    #: the per-server bound against `M_s` is a draft; per device, the streamed wipe
     SERVER = ("draft:wipe-per-server",)
     DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB", "Accounting.Guarantees.Actual.WipeReadHeld",
               "Accounting.Guarantees.Actual.WipeLag")

@@ -1048,6 +1048,21 @@ def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys)
     assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
 
 
+def test_read_shows_a_user_group_as_its_handle_a_doorbell_s_bare_id_included(fake, registry, capsys):
+    reg = json.loads(registry.read_text())
+    for h in reg["handles"]:
+        if h["handle"] == "infra":
+            h["usergroup"] = group = "S0INFRA0001"
+    registry.write_text(json.dumps(reg))
+    start = fake.add(COORD, text="before", user="U1")
+    fake.add(COORD, text=f"<!subteam^{group}> is node 2 free?", username="top", bot_id=BOT)
+    fake.add(COORD, text=f"from top, thread 1.2: @{group} the check", username="router", bot_id=BOT)
+    rc, out, _ = run(capsys, "read", "--since", start["ts"])
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["@infra is node 2 free?",
+                                                                                  "from top, thread 1.2: @infra the check"]
+    assert slack.plain(f"<!subteam^{group}> hi") == f"@{group} hi"                 # no registry: the id, as before
+
+
 def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsys):
     """`--since` with `--thread` was refused, so a lane following a thread re-read all of it each time."""
     fake.page = 2

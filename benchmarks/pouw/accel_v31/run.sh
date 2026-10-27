@@ -36,9 +36,8 @@
 # GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup (rp=5: and a hash warpgroup of its own, r5h its
 # registers, and the prefix-sum rows in the GEMM of the prefix sums unless r5w=0; tst=1 its stores through shared memory
 # with TMA), and the bench adds wgmma.linear's arm (wgl).
-# Each item's timing, clock and the board's energy go to out/items/TAG/ (GK_ITEM_MS, an item's length; GK_POWER_MS, the
-# power sampled across it: gpu_kit/bench.cuh; V31_ARMS, the arms timed, else all). FILL_GATES=0 skips the gates (the
-# canary and the bench's own sampled tiles still run).
+# Each item's timing and clock go to out/items/TAG/. FILL_GATES=0 skips the gates (the canary and the bench's own
+# sampled tiles still run).
 # FILL_GATE_KNOBS=1 runs the gates (and FILL_DITHER's recheck) under the first variant's knobs (else v31.cu's defaults). FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
 # circuit/dither.py). FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls
 # after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
@@ -46,12 +45,19 @@
 # (OVL_CALLS overlapped calls, default 4) for the first variant on each shape and L, and h200_pipes.py's duty of each pipe
 # over the overlapped call (pipes.md).
 #
-# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
+# MODE=build: the builds alone (no GPU), and each one's ptxas line for RP 5's kernels (registers, spills), ptxas-r5.txt.
+#
+# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill|build (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
-# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0) (v31.cu's
-# Knobs) and nreg (the GEMM's
-# register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS
+# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), r5src (0), r5nhw (0), hall (0), hchunk (0), wgw (1),
+# lminb (5), sahead (0) (v31.cu's
+# Knobs), nreg (the GEMM's
+# register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), sha (ADD.ROT.ROLL:
+# sha512.cuh's SHA_ADD, SHA_ROT and SHA_ROLL, a build of its own; default SHA_FLAGS) and sx (V.ROLL: sha512x.cuh's compress
+# in hash_blocks, V31_SX_V and V31_SX, a build of its own; default sha::compress), hcv (1: with sx at ROLL 0 or 1, the
+# chaining value in local memory through the rounds, V31_HCV, a build of its own) and r5s (RP 5's one register split,
+# V31_R5_SPLITS, a build of its own and r5h's default), default row=8192; BUILD_JOBS (default 6) builds at once; REPS
 # (default 7); Q, the proof blocks a
 # verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -85,11 +91,36 @@ knob_env() {
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
     "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_CM=$(knob "$1" cm 0) V31_WGG=$(knob "$1" wgg 16)" \
-    "V31_RP=$(knob "$1" rp 0) V31_R5H=$(knob "$1" r5h 96) V31_HALL=$(knob "$1" hall 0) V31_HCHUNK=$(knob "$1" hchunk 0)" \
-    "V31_WGW=$(knob "$1" wgw 1) V31_R5W=$(knob "$1" r5w 1) V31_TST=$(knob "$1" tst 0)" \
+    "V31_RP=$(knob "$1" rp 0) V31_R5H=$(knob "$1" r5h "$(knob "$1" r5s 96)") V31_HALL=$(knob "$1" hall 0)" \
+    "V31_HCHUNK=$(knob "$1" hchunk 0)" \
+    "V31_WGW=$(knob "$1" wgw 1) V31_R5W=$(knob "$1" r5w 1) V31_TST=$(knob "$1" tst 0) V31_R5SRC=$(knob "$1" r5src 0)" \
+    "V31_R5NHW=$(knob "$1" r5nhw 0)" \
     "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0)"
 }
-export -f knob knob_env
+# vbin VARIANT: its binary's suffix after $W/v31 (nreg, sha, sx, hcv and r5s each make a build of their own; empty: the
+# default build)
+vbin() {
+  local n s x r c
+  n=$(knob "$1" nreg ""); s=$(knob "$1" sha ""); x=$(knob "$1" sx ""); r=$(knob "$1" r5s ""); c=$(knob "$1" hcv "")
+  echo "${n:+-n$n}${s:+-s$s}${x:+-x$x}${c:+-c}${r:+-r$r}"
+}
+# vflags VARIANT: its build's nvcc flags but sha512.cuh's; vsha VARIANT: those (empty: SHA_FLAGS)
+vflags() {
+  local n x r xv xr f=""
+  n=$(knob "$1" nreg ""); x=$(knob "$1" sx ""); r=$(knob "$1" r5s "")
+  [ -n "$n" ] && f+=" -DV31_MAXNREG=$n -DV31_WG_NREG=$n"
+  [ -n "$x" ] && IFS=. read -r xv xr <<< "$x" && f+=" -DV31_SX=${xr:-2} -DV31_SX_V=$xv"
+  [ -n "$r" ] && f+=" -DV31_R5_SPLITS=$r"
+  [ -n "$(knob "$1" hcv "")" ] && f+=" -DV31_HCV"
+  echo "$f"
+}
+vsha() {
+  local s sa sr sl
+  s=$(knob "$1" sha "")
+  [ -n "$s" ] && IFS=. read -r sa sr sl <<< "$s" && echo "-DSHA_ADD=$sa -DSHA_ROT=$sr -DSHA_ROLL=${sl:-1}"
+  return 0
+}
+export -f knob knob_env vbin vflags vsha
 
 # CUTLASS's int8 GEMMs, the second baseline: the harness's cutlass_2x.cu at the harness's CUTLASS pin, cloned once into
 # V31_CACHE and its object kept there under a hash of its inputs; CUTLASS=0 builds without it (cuBLASLt's baseline alone)
@@ -118,18 +149,31 @@ if [ "${CUTLASS:-1}" != 0 ]; then
   echo "build cutlass rc $?" >> "$O/rc.txt"
   CUT=(-DV31_CUTLASS "$obj")
 fi
-build() {   # BIN LOG [nvcc flags]
+build() {   # BIN LOG [nvcc flags] (BSHA: sha512.cuh's flags in place of SHA_FLAGS)
   # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1} "${CUT[@]}" ${NVFLAGS:-} "${@:3}" \
-    -o "$1" $D/v31.cu -lcuda -lcublasLt > "$2" 2>&1
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${BSHA:-${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1}} "${CUT[@]}" \
+    ${NVFLAGS:-} "${@:3}" -o "$1" $D/v31.cu -lcuda -lcublasLt > "$2" 2>&1
 }
 build "$W/v31" "$O/build.log"
 echo "build rc $?" >> "$O/rc.txt"
 [ -x "$W/v31" ] || { cat "$O/rc.txt"; tail -20 "$O/build.log"; exit 1; }
-for n in $(for v in $VARIANTS; do knob "$v" nreg ""; done | sort -u); do
-  build "$W/v31-n$n" "$O/build-n$n.log" -DV31_MAXNREG="$n" -DV31_WG_NREG="$n"
-  echo "build n$n rc $?" >> "$O/rc.txt"
+for v in $VARIANTS; do
+  b=$(vbin "$v")
+  { [ -z "$b" ] || [ -e "$W/.b$b" ]; } && continue
+  : > "$W/.b$b"
+  # shellcheck disable=SC2046
+  { BSHA=$(vsha "$v") build "$W/v31$b" "$O/build$b.log" $(vflags "$v"); echo "build ${b#-} rc $?" >> "$O/rc.txt"; } &
+  while [ "$(jobs -rp | wc -l)" -ge "${BUILD_JOBS:-6}" ]; do wait -n; done
 done
+wait
+if [ "$MODE" = build ]; then
+  for f in "$O"/build*.log; do
+    awk -v f="${f##*/}" 'match($0, /Compiling entry function .*gemm_r5[A-Za-z0-9_]*/) { k = substr($0, RSTART + 25, RLENGTH - 25) }
+      k && /spill stores/ { s = $0 } k && /Used [0-9]+ registers/ { print f, k, s, $0; k = "" }' "$f"
+  done > "$O/ptxas-r5.txt"
+  cat "$O/rc.txt"
+  exit 0
+fi
 
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
 if [ "$MODE" = fill ]; then
@@ -137,9 +181,12 @@ if [ "$MODE" = fill ]; then
   FILL_LS=${FILL_LS:-"768 2048"}
   FILL_SHAPES=${FILL_SHAPES:-"8B-qkv:16384:6144:4096 8B-o:16384:4096:4096 8B-up:16384:28672:4096 8B-down:16384:4096:14336"}
   export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY
-  # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1} -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
-    -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
+  # FILL_GATE_KNOBS=1: the lib is the first variant's build, as its knobs are the gates'
+  lv=; [ "${FILL_GATE_KNOBS:-0}" = 1 ] && lv=${VARIANTS%% *}
+  lsha=$(vsha "$lv")
+  # shellcheck disable=SC2086,SC2046
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${lsha:-${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1}} -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
+    $(vflags "$lv") -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
   echo "build lib rc $?" >> "$O/rc.txt"
   for v in $VARIANTS; do
     for L in $FILL_LS; do
@@ -159,7 +206,8 @@ if [ "$MODE" = fill ]; then
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
     v=${VARIANTS%% *} L=${FILL_LS%% *} s=${FILL_SHAPES%% *}
     # shellcheck disable=SC2046
-    env $(knob_env "$v") timeout 300 "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$O/canary.log" 2>&1
+    env $(knob_env "$v") timeout 300 "$W/v31$(vbin "$v")" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" \
+      > "$O/canary.log" 2>&1
     rc=$?
     echo "canary rc $rc" >> "$O/rc.txt"
     [ $rc = 0 ] || exit 3
@@ -196,7 +244,7 @@ if [ "$MODE" = fill ]; then
             f="$O/nsys-$tag-${s%%:*}"
             # shellcheck disable=SC2046
             env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" "$NSYS" profile -t cuda -s none --cpuctxsw none -f true -o "$f" \
-              "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+              "$W/v31$(vbin "$v")" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
             echo "nsys $tag ${s%%:*} rc $?" >> "$O/rc.txt"
           done
         done
@@ -217,13 +265,13 @@ if [ "$MODE" = fill ]; then
       # shellcheck disable=SC2016
       $LEASE bash -c '
         tag=$(tr "," "-" <<< "$v" | tr -d "=")-L$L
-        n=$(knob "$v" nreg "")
+        b=$(vbin "$v")
         nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu,utilization.gpu --format=csv -lms 500 \
           ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi-$tag.csv" 2>&1 &
         smi=$!
         mkdir -p "$W/fbench/$tag"
         # shellcheck disable=SC2046,SC2086
-        env $(knob_env "$v") "$W/v31${n:+-n$n}" fill-bench "$REPS" "$W/fbench/$tag" "$W/fparams" "$LP" "$L" \
+        env $(knob_env "$v") "$W/v31$b" fill-bench "$REPS" "$W/fbench/$tag" "$W/fparams" "$LP" "$L" \
           "$(knob "$v" row 1024)" $FILL_SHAPES > "$O/fill-bench-$tag.jsonl" 2> "$O/fill-bench-$tag.err"
         echo "fill-bench $tag rc $?" >> "$O/rc.txt"
         kill $smi'
@@ -238,7 +286,7 @@ if [ "$MODE" = fill ]; then
     $LEASE bash -c '
       v=${VARIANTS%% *}
       tag=$(tr "," "-" <<< "$v" | tr -d "=")
-      n=$(knob "$v" nreg "")
+      b=$(vbin "$v")
       # the tensor pipes this chip counts, beside the section pipes (ncu refuses a metric it lacks)
       "$NCU" --query-metrics --chip "${NCU_CHIP:-gh100}" > "$O/ncu-metrics.txt" 2>&1
       tens=$(awk "{print \$1}" "$O/ncu-metrics.txt" | grep -E "^sm__(pipe_tensor[a-z0-9_]*_cycles_active|inst_executed_pipe_tensor[a-z0-9_]*)$" |
@@ -249,7 +297,7 @@ if [ "$MODE" = fill ]; then
           for extra in "${tens:+,$tens}" ""; do
             env $(knob_env "$v") V31_ONCE_OVL="${OVL_CALLS:-4}" V31_LT_TUNE=0 "$NCU" --clock-control none --section ComputeWorkloadAnalysis \
               --section SpeedOfLight --metrics "sm__cycles_active.avg,sm__cycles_elapsed.avg$extra" -f -o "$f" \
-              "$W/v31${n:+-n$n}" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+              "$W/v31$b" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
             rc=$?
             [ $rc = 0 ] && break
           done
@@ -369,9 +417,9 @@ if [ "$MODE" = bench ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
     smi=$!
     for v in $VARIANTS; do
       tag=$(tr ',' '-' <<< "$v" | tr -d '=')
-      n=$(knob "$v" nreg "")
+      b=$(vbin "$v")
       mkdir -p "$W/bench/$tag"
-      env $(knob_env "$v") "$W/v31${n:+-n$n}" bench "$REPS" "$W/bench/$tag" "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" \
+      env $(knob_env "$v") "$W/v31$b" bench "$REPS" "$W/bench/$tag" "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" \
         $SHAPES > "$O/bench-$tag.jsonl" 2> "$O/bench-$tag.err"
       echo "bench $tag rc $?" >> "$O/rc.txt"
     done
@@ -386,11 +434,11 @@ elif [ "$MODE" = prof ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
   $LEASE bash -c '
     for v in $VARIANTS; do
       tag=$(tr ',' '-' <<< "$v" | tr -d '=')
-      n=$(knob "$v" nreg "")
+      b=$(vbin "$v")
       for s in $SHAPES; do
         f="$O/ncu-$tag-${s%%:*}"
         env $(knob_env "$v") "$NCU" --clock-control none -k "regex:$PROF_KERNELS" -c "$PROF_COUNT" --set full -f -o "$f" \
-          "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
+          "$W/v31$b" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
         echo "prof $tag ${s%%:*} rc $?" >> "$O/rc.txt"
         "$NCU" -i "$f.ncu-rep" --csv --page details > "$f.csv" 2>> "$f.log"
         "$NCU" -i "$f.ncu-rep" --csv --page raw > "$f.raw.csv" 2>> "$f.log"
@@ -405,11 +453,11 @@ elif [ "$MODE" = nsys ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
   $LEASE bash -c '
     for v in $VARIANTS; do
       tag=$(tr ',' '-' <<< "$v" | tr -d '=')
-      n=$(knob "$v" nreg "")
+      b=$(vbin "$v")
       for s in $SHAPES; do
         f="$O/nsys-$tag-${s%%:*}"
         env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" "$NSYS" profile -t cuda -s none --cpuctxsw none -f true -o "$f" \
-          "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
+          "$W/v31$b" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
         echo "nsys $tag ${s%%:*} rc $?" >> "$O/rc.txt"
       done
     done'
@@ -428,13 +476,13 @@ elif [ "$MODE" = duty ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
   $LEASE bash -c '
     for v in $VARIANTS; do
       tag=$(tr "," "-" <<< "$v" | tr -d "=")
-      n=$(knob "$v" nreg "")
+      b=$(vbin "$v")
       for s in $SHAPES; do
         for r in ovl wgl; do
           f="$O/duty-$tag-${s%%:*}-$r"
           env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" V31_ONCE_RANGE=$r "$NCU" --clock-control none --replay-mode app-range \
             --metrics "$(tr -d " \n" < '"$D"'/duty.metrics)" -f -o "$f" \
-            "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
+            "$W/v31$b" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
           echo "duty $tag ${s%%:*} $r rc $?" >> "$O/rc.txt"
           "$NCU" -i "$f.ncu-rep" --csv --page raw --print-units base > "$f.csv" 2>> "$f.log"
         done

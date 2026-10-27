@@ -1,4 +1,4 @@
-"""Red-team phase 12's target 3 on the end-to-end report: on a compact run the I/O tie holds each response's records to
+"""The compact finish on the end-to-end report: on a compact run the I/O tie holds each response's records to
 its sampled ids (`negatives.tie_run`'s ``finish``, `active.compact_finish_violations`), and the report requires it of
 the honest run (`chain.TIE_REQUIRED`). The runs are the gate's own compact rehearsal (network_traces' `gate_compact`:
 `certifier-rehearse --traffic varied --compact 8`, honest and token, against one endpoint), tied to the endpoint's

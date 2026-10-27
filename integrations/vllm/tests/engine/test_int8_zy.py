@@ -1,5 +1,5 @@
-"""`verity_int8::scaled_mm_zy`: scaled_mm's y and, from the same product, the call's z/y records (`int8_exact.zy_records`,
-CA's layout of 21 Oct 04:32Z): one record a 32 x 32 unit over the call's T slots, its exact s32 z over the whole K, then its
+"""`verity_int8::scaled_mm_zy`: scaled_mm's y and, from the same product, the call's z/y records (`int8_exact.zy_records`):
+one record a 32 x 32 unit over the call's T slots, its exact s32 z over the whole K, then its
 y = dq(z) in bf16, both row-major and little-endian, units in row-block-major order, empty slots zero bytes."""
 from __future__ import annotations
 

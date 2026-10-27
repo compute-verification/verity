@@ -9,8 +9,8 @@
 # STEPS (default "tests check bench"; a failing tests step ends the lease; "step" runs step.py's time on STEP_ARGS, layout
 # files and options; STEP_WRAP, a command it runs under, e.g. nsys profile ...), CHECK_ARGS, BENCH_ARGS, STEP_ARGS,
 # LEASE_MIN (default 25), PY,
-# LEASE_END (a UTC time, e.g. 2026-10-26T02:40Z, on a card lent until then: a lease that starts too late to end by it runs
-# nothing).
+# LEASE_END (a UTC time `date -d` reads, e.g. YYYY-MM-DDTHH:MMZ, on a card lent until then: a lease that starts too late
+# to end by it runs nothing).
 set -uo pipefail
 O=${OUT:?}
 ROOT=$PWD D=benchmarks/torch_gpu/commit_slots
