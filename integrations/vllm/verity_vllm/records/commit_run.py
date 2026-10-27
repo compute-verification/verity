@@ -5,7 +5,7 @@ Its writers are `pipeline.commit` (`verity/commit-integ/delta/v1`; the retired `
 `pipeline.tp.commit` (`verity/commit-integ/delta-tp/v1`; the retired `tp2_commit.py` before it) and `pipeline.serve_seal` (a sealed
 serving window's run, with no schema field).  A top-level field none of them writes is refused by name.  The run's `commit` block
 is each rule's evidence, which `check.commit_rules` reads as written (`CommitBlock.entry`); the fields the verdict reads beside the
-rules are typed from it.
+rules are typed from it, and so is its binding map (`records.commit_binding`), whose sub-records the rules read.
 
     runs = CommitRun.load_lines(row_dir / "commit" / "runs.jsonl")   # a refusal names the file, the line and the field
     [r for r in runs if r.arm != "control" and r.commit is not None]
@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.records.commit_binding import CommitBinding
 from verity_vllm.records.fields import RecordError, only, optional, required
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -48,6 +49,7 @@ class CommitBlock:
     rules_version: str | None                         # written from the binding: a TP run, a sealed window and a run whose binding failed have none
     classes: Mapping[str, Any] | None                 # the run's coverage declaration read back; TP runs and sealed windows record none
     openings_after_release: Mapping[str, Any] | None  # only a run opened after its release (`--open-after-release`)
+    binding: CommitBinding | None                     # a TP run (its ranks' blocks carry theirs) and older runs have none
     binding_program_digest: str | None                # `binding.program_digest`: a run without a binding, or whose binding failed, has none
     weights_pin_program_digest: str | None            # `weights_pin.program_digest`: a run without a weights pin has none
     coverage_manifest_digest: str | None              # `coverage.manifest_digest`: a run without a required manifest has none
@@ -58,19 +60,20 @@ class CommitBlock:
     def of(cls, doc: Any, where: str) -> CommitBlock:
         if not isinstance(doc, Mapping):
             raise RecordError(where, "commit", f"is a {type(doc).__name__}, not a JSON object")
-        binding = _within(doc, "binding", where, "commit.binding")
+        b = doc.get("binding")
+        binding = None if b is None else CommitBinding.of(b, where)
         return cls(commit_pass=optional(doc, "commit_pass", where, bool, "commit.commit_pass"),
                    commit_fail_reason=optional(doc, "commit_fail_reason", where, str, "commit.commit_fail_reason"),
                    run_root=optional(doc, "run_root", where, str, "commit.run_root"),
                    rules_version=optional(doc, "rules_version", where, str, "commit.rules_version"),
                    classes=optional(doc, "classes", where, Mapping, "commit.classes"),
                    openings_after_release=optional(doc, "openings_after_release", where, Mapping, "commit.openings_after_release"),
-                   binding_program_digest=optional(binding, "program_digest", where, str, "commit.binding.program_digest"),
+                   binding=binding, binding_program_digest=None if binding is None else binding.program_digest,
                    weights_pin_program_digest=optional(_within(doc, "weights_pin", where, "commit.weights_pin"), "program_digest", where, str,
                                                        "commit.weights_pin.program_digest"),
                    coverage_manifest_digest=optional(_within(doc, "coverage", where, "commit.coverage"), "manifest_digest", where, str,
                                                      "commit.coverage.manifest_digest"),
-                   collector=optional(binding, "collector", where, Mapping, "commit.binding.collector"), entry=doc)
+                   collector=None if binding is None else binding.collector, entry=doc)
 
 
 @dataclass(frozen=True)

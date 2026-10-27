@@ -60,7 +60,7 @@ FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 #: certifier releases only into it pins the work that depends on it, while k, the bits that could carry it out before
 #: registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
-#: a block's proof units counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
+#: a block's proof blocks counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
 #: Program's partition (proofs, review 4)
 SERVED_PARTITION = Assumption("served-partition", 1, "premise", "declared")
 #: σ, the side channel from each server to machines off its block, under Daniel's premise (19 Oct 04:30Z) that no
