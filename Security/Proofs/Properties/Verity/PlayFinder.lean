@@ -62,7 +62,7 @@ theorem Ex_run (f : α → ℝ) (g : Game α) :
   | @coin C iF iN k ih =>
     intro s
     classical
-    haveI : ∀ c, Fintype (Tape (k c) (s c)) := fun c => instFintypeTape (k c) (s c)
+    letI : ∀ c, Fintype (Tape (k c) (s c)) := fun c => instFintypeTape (k c) (s c)
     haveI : ∀ c, Nonempty (Tape (k c) (s c)) := fun c => instNonemptyTape (k c) (s c)
     calc Claims.Ex (fun t : Tape (Game.coin C k) s => f (run (Game.coin C k) s t))
         = @Claims.Ex (C × ((c : C) → Tape (k c) (s c))) inferInstance

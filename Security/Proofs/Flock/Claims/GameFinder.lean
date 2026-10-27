@@ -51,8 +51,8 @@ theorem Finder.mix_Pr {ι : Type} [Fintype ι] [Nonempty ι] (H : Msg → Msg) (
   haveI := Classical.decEq ι
   classical
   unfold Finder.Pr
-  show Pr (fun x : ι × ((i : ι) → (fam i).S) => ∃ u v, (fam x.1).out (x.2 x.1) = some (u, v) ∧ Collision H u v) =
-    Ex fun i => Pr fun s : (fam i).S => ∃ u v, (fam i).out s = some (u, v) ∧ Collision H u v
+  show Claims.Pr (fun x : ι × ((i : ι) → (fam i).S) => ∃ u v, (fam x.1).out (x.2 x.1) = some (u, v) ∧ Collision H u v) =
+    Ex fun i => Claims.Pr fun s : (fam i).S => ∃ u v, (fam i).out s = some (u, v) ∧ Collision H u v
   rw [← Ex_ind, Ex_prod]
   congr 1
   funext i
@@ -135,7 +135,7 @@ theorem Ex_run (f : α → ℝ) (g : Game α) :
   | @coin C iF iN k ih =>
     intro s
     classical
-    haveI : ∀ c, Fintype (Tape (k c) (s c)) := fun c => instFintypeTape (k c) (s c)
+    letI : ∀ c, Fintype (Tape (k c) (s c)) := fun c => instFintypeTape (k c) (s c)
     haveI : ∀ c, Nonempty (Tape (k c) (s c)) := fun c => instNonemptyTape (k c) (s c)
     calc Claims.Ex (fun t : Tape (Game.coin C k) s => f (run (Game.coin C k) s t))
         = @Claims.Ex (C × ((c : C) → Tape (k c) (s c))) inferInstance
