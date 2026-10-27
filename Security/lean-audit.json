@@ -1342,10 +1342,6 @@
    "owner": "@training",
    "digest": "80287a42cbb5ffc13ca43712b0bdec36063c3c78f35dd195573dae179936034b"
   },
-  "Nci.Cover.Assumptions.ConditionalUpdateHardness": {
-   "owner": "@training",
-   "digest": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69"
-  },
   "Nci.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
    "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
@@ -22253,9 +22249,8 @@
    ]
   },
   "Definitions.Nci.Assumptions.Cover": {
-   "digest": "a04704eebdfb82ed9aaabe753c8da10d9545f1ee04005c218cfb94db51c21f77",
+   "digest": "965b05d4a6a9f4cd967e097c76d429728c7653b8d7a24513a9751aae7602c3e4",
    "definitions": {
-    "Nci.Cover.Assumptions.ConditionalUpdateHardness": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69",
     "Nci.Cover.Assumptions.UpdateHardness": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
    },
    "guarantees": [
