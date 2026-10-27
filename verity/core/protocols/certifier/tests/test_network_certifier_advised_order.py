@@ -1,6 +1,6 @@
 """A runner's Commit order other than the certified arrival order, against N2's advised counts (`advised`) under the tie
-(IoTieRequest's verdict, `advised.IoTieVerdict`). network-e2e's closer on a served run (r20261024-150521-0551) had its
-endpoint's Commit windows number two pairs of requests opposite to their arrival: prompts of 239 and 230 tokens, one
+(IoTieRequest's verdict, `advised.IoTieVerdict`). On a served run, network-e2e's endpoint's Commit windows can number
+two pairs of requests opposite to their arrival: prompts of 239 and 230 tokens, one
 frame each at B = 4,096, so `advised.ends` doesn't move, and of 377 and 142, two frames and one. v0 numbers requests in
 order of first row and advice request j is the link's j-th arrival, so the swapped prompt lengths are the tie's to
 refuse: the stand-in on the prompt lengths refuses every window, and IoTieRequest on the warden's cells the window a
