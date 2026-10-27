@@ -135,7 +135,8 @@ def main(argv: list[str] | None = None) -> int:
             w = {n: ck.get(p + n + ".weight") for n in ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj",
                                                          "self_attn.o_proj", "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj")}
             s = {n: ck.get(p + n + ".weight_scale").float().reshape(-1) for n in w}
-            cat = lambda *ns: (torch.cat([w[n] for n in ns]), torch.cat([s[n] for n in ns]))  # noqa: E731
+            def cat(*ns, w=w, s=s):
+                return torch.cat([w[n] for n in ns]), torch.cat([s[n] for n in ns])
             keep = t < nb
 
             def call(name: str, h: torch.Tensor, ws: tuple) -> torch.Tensor:

@@ -56,14 +56,16 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):   # one BLAS thread a pool worker
-    os.environ.setdefault(_v, "1")
-
-import numpy as np  # noqa: E402
-
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[2]
 sys.path.insert(0, str(HERE))
+
+import settings  # noqa: E402
+
+settings.one_blas_thread()
+
+import numpy as np  # noqa: E402
+
 sys.path.insert(0, str(TREE / "benchmarks" / "one_stage"))
 
 import v31  # noqa: E402
@@ -431,7 +433,7 @@ def verify_pick(job: dict, ans: dict) -> str | None:
 def prove_and_verify(job: dict) -> tuple[int, str | None]:
     try:
         return job["index"], verify_pick(job, answer(job))
-    except Exception as e:  # a failed answer is a failed pick, never a retry
+    except Exception as e:  # noqa: BLE001 (a failed answer, whatever raised, is a failed pick, never a retry)
         return job["index"], f"{type(e).__name__}: {e}"
 
 
@@ -480,7 +482,7 @@ class GpuDriver:
         self.plain = []
         for linear in dict.fromkeys(name.split(".")[0] for name, _, _ in LAYERS):
             lis = [li for li, (name, _, _) in enumerate(LAYERS) if name.split(".")[0] == linear]
-            join = (lambda x: x[lis[0]]) if len(lis) == 1 else (lambda x: torch.cat([x[li] for li in lis], dim=2))  # noqa: E731
+            join = (lambda x: x[lis[0]]) if len(lis) == 1 else (lambda x: torch.cat([x[li] for li in lis], dim=2))
             self.plain.append((join(self.A), join(self.B), self.out[lis[0]] if len(lis) == 1 else
                                torch.empty((M, LAYERS[lis[0]][1]), dtype=torch.int32, device="cuda")))
         # each layer's trees of one block, rmax steps, as native u64 words (8 a node), page-locked for hu_levels_async
@@ -488,22 +490,19 @@ class GpuDriver:
                        for w, _, _ in self.geom]
         torch.cuda.synchronize()
         self.keys: dict[tuple[int, int], tuple[bytes, int]] = {}
-        self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {os.environ.get('V31_LTW', '0')}"]
+        self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {settings.ltw()}"]
         self._poll_clock()
 
     def _poll_clock(self) -> None:
         """The SM clock, sampled every 200 ms by one nvidia-smi beside the run (none inside a timed block); HU_CLOCK=0: none
         (run.sh's nsys runs, where nsys would trace it too)."""
         import threading
-        uuid = os.environ.get("GPU_LEASE_UUID")
+        uuid = settings.lease_uuid()
         self.clock, self.smi = 0, None
-        if os.environ.get("HU_CLOCK") == "0":
+        if not settings.poll_clock() or not shutil.which("nvidia-smi"):
             return
-        try:
-            self.smi = subprocess.Popen(["nvidia-smi", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits", "-lms", "200",
-                                         *(["-i", uuid] if uuid else [])], stdout=subprocess.PIPE, text=True)
-        except OSError:
-            return
+        self.smi = subprocess.Popen(["nvidia-smi", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits", "-lms", "200",
+                                     *(["-i", uuid] if uuid else [])], stdout=subprocess.PIPE, text=True)
 
         def read() -> None:
             for line in self.smi.stdout:
@@ -685,7 +684,7 @@ class Coins:
                 pinned = str(e)
             return {"trusted": True, "bad_openings": bad, "pinned_session": pinned, "released": {k: len(v) for k, v in roots.items()},
                     "session": session.session}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 (any failure of the challenger's session makes the period untrusted, recorded)
             return {"trusted": False, "error": f"{type(e).__name__}: {e}", "session": getattr(session, "session", None)}
 
 
