@@ -286,7 +286,7 @@ is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's epo
 so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
 Its Lean port is open.
 
-**Filler periods** (`fill`, CMP-172, CMP-67; Lean `PouwCheck.Fill`). Filler windows run Dither calls
+**Filler periods** (`fill`; Lean `PouwCheck.Fill`). Filler windows run Dither calls
 (`circuit.dither`) on tensor pipes the served windows leave idle, each call's A its per-call pad (`dither.fill_seeds`)
 and its B a published checkpoint's s8 weights, its proof blocks `PouwDitherBlock_v1`'s. They count toward the served
 period's companion ``<name>:fill``, whose open commits its circuit (`fill.descriptor`: the filler shape, whose
@@ -303,7 +303,7 @@ covers it no decision reads it: the period reports its fill, credited or ``{refu
 the same without it (the verifier gains no form ahead of its proof). Beside the fill the credit carries ``gaps``
 (`period_check.GAPS`), which says no guarantee covers the fill yet, so no reader takes it as proved.
 
-**Utilization** (IDLE-COVERED, CMP-67). Given the period's monitored capacity C in MACs (``capacity``, the verifier's
+**Utilization**. Given the period's monitored capacity C in MACs (``capacity``, the verifier's
 parameter), the credit carries ``utilization``: C, ``certified``, the served work alone, the work
 `H1J10RCheckedCreditPeriod` covers, and its share of C. Nothing named certified holds the fill. The protocol carries no
 policy parameter: the period surfaces what its draw established, and whoever reads it decides whether it was idle. The
@@ -1664,7 +1664,7 @@ site that fills none (decode's few tokens); the vLLM integration serving the com
 
 Dither, PoUW's no-fold protocol, credit for a served model's int8 matmuls from committed noised prefix sums, is specified
 in `verity/core/protocols/pouw/dither/PROTOCOL.md` while it is experimental. The served PoUW moves to Dither's no-fold
-receipt (CMP-172): its H1 and J10-R units fold their words into keyed receipts, whose detection rests on
+receipt: its H1 and J10-R units fold their words into keyed receipts, whose detection rests on
 `SharedNoiseLucks` (`Properties.Pouw.PeriodJ10R`), and that premise has no place in Dither.
 
 ## Not here yet

@@ -1,7 +1,7 @@
 import PouwCheck.Credit
 
 /-!
-# A period's filler windows and the `fill` it credits beside its `work` (`fill.py`; CMP-172, CMP-67)
+# A period's filler windows and the `fill` it credits beside its `work` (`fill.py`)
 
 The verifier of record of `verity/core/protocols/pouw/fill.py`, which `tests/test_period_difftest.py` holds to it
 through `pouw-period` (`PouwCheck.Period`), string for string. `periodFill` is the one entry.

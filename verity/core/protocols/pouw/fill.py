@@ -1,4 +1,4 @@
-"""PoUW's filler windows and the ``fill`` a period credits beside its ``work`` (CMP-172, CMP-67): the Python the Lean
+"""PoUW's filler windows and the ``fill`` a period credits beside its ``work``: the Python the Lean
 `PouwCheck.Fill` is held to through ``pouw-period`` (`period_check`, the difftest ``lean/check/tests/test_period_difftest.py``).
 
 A filler window is Dither calls (`circuit.dither`) the prover runs on tensor pipes its served windows leave idle, each a

@@ -1,4 +1,4 @@
-# One filler period end to end on a development gate (`fill_period.py`, CMP-172). Not a package: the tests run here as a
+# One filler period end to end on a development gate (`fill_period.py`). Not a package: the tests run here as a
 # suite (`uv run tools/verity/check/suites.py benchmarks/pouw/fill_period`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]

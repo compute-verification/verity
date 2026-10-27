@@ -1,4 +1,4 @@
-"""One filler period end to end on a development gate (CMP-172, CMP-67): the fill period ``<name>:fill`` opened on the
+"""One filler period end to end on a development gate: the fill period ``<name>:fill`` opened on the
 auditor's ledger, one filler window of Dither calls under its live coins, and `fill.period_fill`'s verdict on it, with
 the verifier of record a stand-in.
 
