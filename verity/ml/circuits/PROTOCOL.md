@@ -2,7 +2,7 @@
 
 This is the byte format of a Program and the rules that turn it into a circuit: from the canonical bytes of a descriptor, a
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
-implementation (the Lean port of `Q_word` first). It describes the bytes the codec already writes and moves no digest.
+implementation, such as the Lean port of `Q_word` (`verity/core/service/sampled_proofs/`). It describes the bytes the codec writes and moves no digest.
 
 - Reference: `verity.ml.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
@@ -127,7 +127,7 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 
 A primitive is one gate producing one `Value<w>`. Its evaluator is code, found by id in a registry, and the decoder refuses a
 primitive whose `params` or `ret` differ from the registry's; an `Input<w>_v1` or `RegisteredInput<w>_v1` id always denotes
-the IR's input primitive of that binding time (§5.2). A body's `params` and `ret_type` are inline types, not interned.
+the Program's input primitive of that binding time (§5.2). A body's `params` and `ret_type` are inline types, not interned.
 
 Either entry may also carry `ports` (§12), and carries it only when its Definition declares port types. An entry without it is
 exactly the entry above.
@@ -213,6 +213,9 @@ have):
 - a descriptor outside the canonical JSON domain (§1);
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
+- a binding record of a composite the registry holds that names a static the registered composite lacks, or that its `refuse`
+  names a reason against: the record `defs.bind` refuses, judged with each function reference the registry's own where it
+  holds it;
 - a primitive id that a family materialised by id matches only in part, or spells otherwise than its member's id (§5.2, §9);
 - a root that is not a composite without parameters;
 - an input node (§5.2) in a definition other than the root;
@@ -268,7 +271,7 @@ the claimed input), not computed, and never held by the program. The decoder mat
 registry entry. An input node appears only in the root's body: `Program` and the decoder (§4.6) refuse one in any other
 definition, where no parameter would bind it.
 
-The Program's Calls (`partition_object.calls`, the units of `Q_word`) are the root body's nodes that are not input nodes, in
+The Program's Calls (`partition_object.calls`, the proof blocks of `Q_word`) are the root body's nodes that are not input nodes, in
 body order.
 
 Vectors: `input_ids` (id, whether it is an Input id), `input_lowering` (type, its Input nodes), `program` (the vector's root
@@ -278,7 +281,7 @@ key, Input nodes, Input gate count and Calls); `binding_ids` (id, its binding ti
 ### 5.3 What a Program holds
 
 An operation's own definition is gates: the constants of the floating-point formats, the round constants of SHA-512 and
-Keccak-f, and every measured MUFU table (exp2, rcp, sqrt, rsq and tanh). Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
+Keccak-f, and every measured MUFU table (exp2, rcp, sqrt, rsq, tanh and lg2). Everything a program or a request brings is a value: a program's weights, constants and tables (a norm's
 epsilon, the attention scale, a softcap, `gelu_tanh_bf16`, `tanh_rn`) are registered inputs, and a request's data and parameters
 (temperature, top-p, the Philox positions) are run inputs. A constant primitive (`Const<w>[0x…]_v1`) is therefore an operation's
 own bits, and a Program holds no data.
@@ -300,11 +303,10 @@ composites are no operations and their constants are listed.
 
 The guard therefore runs at registration, on the producer's registry. A verifier that receives a descriptor cannot run it: a
 decoded Program matches no operation, since the match is the registry's own Definition object, not a descriptor. A
-verifier-side check needs operations matched by descriptor digest, under a new `verity/operations` version; that is a later
-step.
+verifier-side check would need operations matched by descriptor digest, under a new `verity/operations` version.
 
 No statement or table claims that a Program's values are always hidden until the guard returns {} for it.
-`Program(fn, strict=guard)` refuses a Program that holds data; it is off by default until programs move their data to inputs.
+`Program(fn, strict=guard)` refuses a Program that holds data; it is off by default.
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
 to registered inputs under new ids.
 
@@ -377,7 +379,7 @@ changing any of them is a new version of the query.
   `query-inapplicable` (the definition, node, argument and reference). `cut.CallGraph` keeps a gate-level check (an operand
   inside the Call comes before its gate) as a backstop.
 - **Wiring** (`cut.WIRING`): the primitive ids `Bf16ToF32_v1`, `F32BitsShl23_v1` and `F32Fabs_v1`. Like constants
-  (primitives without parameters) their gates are structure: computed in no unit, readable by any, outside the committed set. The list is
+  (primitives without parameters) their gates are structure: computed in no proof block, readable by any, outside the committed set. The list is
   a set of ids, not derived from the descriptor; that each only rearranges bits is checked on the registry by a vLLM test.
 - **Wide gates**: a gate whose primitive has more than `cut.WIDE_FAN_IN` = 4096 parameter leaves, so more than 4096
   operands. The layout's operands are the same for every gate (the reference returns a lazy sequence for a wide gate, with the
@@ -388,7 +390,7 @@ changing any of them is a new version of the query.
   - takes its own recompute token, so it is never a recompute of an earlier gate and no later gate is a recompute of it;
   - is never folded into a constant.
 
-  This is v1 behaviour, not a property of the circuit, and should go when the query is next revised. `cut.WIDE_FAN_IN` is the
+  This is v1 behaviour, not a property of the circuit. `cut.WIDE_FAN_IN` is the
   query's own constant, not the layout's lazy-operand threshold (`layout.WIDE_FAN_IN`, which has no effect on operands).
 
 `WIRING` and `WIDE_FAN_IN` are pinned as data in `verity/ml/circuits/tests/qword_vectors.json`, with vectors for every step of the algorithm, every
@@ -418,7 +420,7 @@ The three gates are fixed by this format: a registry holds exactly these definit
 the same id. AND and XOR are one family each, with a member per number of inputs n (decimal, no leading zeros), which a decoder
 materialises from its id like the constant family; `And2_v1` and `Xor2_v1` are the two-input gates. A gate with more than
 `WIDE_FAN_IN` inputs is a wide gate under `Q_word` v1 (§8). The constant bits are the 1-bit members of the constant family (`Const<w>[0x<hex>]_v1`): primitives without
-parameters, so structure under `Q_word` v1 (§8), computed in no unit.
+parameters, so structure under `Q_word` v1 (§8), computed in no proof block.
 
 **Ids of the families.** A family member has one id, which the decoder materialises (§4.6) and nothing else does: the whole id
 matches its family's pattern, and the member it denotes carries exactly that id. `And<n>_v1` and `Xor<n>_v1` match
@@ -445,11 +447,11 @@ descriptor, digest, gate table and truth table on words.
 ## 10. `Q_word` v2
 
 `Q_word` v2 (`partition_object.QUERIES`, the parameters `X` and `W` checked as v1's) reads a Program as v1 does, with §8's
-conventions and v1's Calls, units, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
-two units (a recomputed pair whose gates have two owners) is reported in `verify`'s detail (`recomputed_across`), not refused
+conventions and v1's Calls, proof blocks, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
+two proof blocks (a recomputed pair whose gates have two owners) is reported in `verify`'s detail (`recomputed_across`), not refused
 (`gate-recomputed`). Every other code and the width rule are v1's, and `validate_unit_cut` and `cut.check_cut` refuse by default.
-v2's units may compute a common value, so a count of v2 units or gates bounds wrong work from above but is not distinct work, and a
-consumer that credits work (PoUW) does not take `Q_word` v2.
+v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the faulty proof blocks' size from
+above but counts a shared value more than once, and a consumer that credits size (PoUW) does not take `Q_word` v2.
 
 Vectors: `qword_vectors.json` → `v2`: v1's recompute-free evaluation and every verify refusal at v2, and the program v1 refuses
 only for `gate-recomputed` (two members of one Call each computing `x0 + x1`), which v2 accepts and reports.
@@ -457,8 +459,8 @@ only for `gate-recomputed` (two members of one Call each computing `x0 + x1`), w
 ## 11. `Q_call` v1
 
 `Q_call` v1 (`partition_object.QUERIES`, `call_query`; the algorithm in `verity.ml.circuits.cut`'s docstring, `cut.evaluate_call`) is a
-query of its own, `{"name": "Q_call", "version": 1, "params": {"X": X}}`, with one parameter: X, an integer in 1..2^16 (32 is the
-agreed value). It reads a Program through §1–§7. A *proof block* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
+query of its own, `{"name": "Q_call", "version": 1, "params": {"X": X}}`, with one parameter: X, an integer in 1..2^16 (32 in
+use). It reads a Program through §1–§7. A *proof block* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
 defines them, counted in bits at any gate width. The one rule is w_out(S) ≤ X; inputs are unbounded. This section is a delta
 on §8 and §10.
 
@@ -468,15 +470,15 @@ What carries over from §8 and §10:
   A root `batch` or `scan` is refused with `why: "root-form"`.
 - **Calls.** §8's Calls (the root's non-input nodes, in body order). Each is cut as its Definition's activation in a one-Call
   Program, every returned leaf a designated output, so activations of one Definition share their cut.
-- **Recomputes.** §10's report: a value computed in two units is `verify`'s `detail["recomputed_across"]`, never a code. The
-  §10 caveat holds: a count of units bounds wrong work but is not distinct work, so a consumer that credits work (PoUW) does
-  not take `Q_call` v1.
+- **Recomputes.** §10's report: a value computed in two proof blocks is `verify`'s `detail["recomputed_across"]`, never a code. The
+  §10 caveat holds: a count of proof blocks bounds the faulty ones' size but counts a shared value more than once, so a
+  consumer that credits size (PoUW) does not take `Q_call` v1.
 
 What changes:
 
 - **Inputs.** A gate whose primitive has no parameters is an input: input gates of either binding time (§5.2) and constants (an
-  operation's own bits, §5.3), of any width. It is in no unit and outside the committed set: like an input gate, a constant is
-  bound outside the partition, and the cut never reads its value. Every other gate is *computing* and is in exactly one unit.
+  operation's own bits, §5.3), of any width. It is in no proof block and outside the committed set: like an input gate, a constant is
+  bound outside the partition, and the cut never reads its value. Every other gate is *computing* and is in exactly one proof block.
 - **No structure rules.** §8's wiring list (`cut.WIRING`), its constant folding (a gate computed from constants alone) and its
   wide-gate convention (`cut.WIDE_FAN_IN`) do not apply. Every operand of every gate is read.
 - **Wide gates.** A computing gate whose declared width exceeds X makes the query inapplicable, with `why: "gate-too-wide"` and
@@ -485,18 +487,18 @@ What changes:
   batch or scan node. Its outputs are its computing gates that a later gate of the Call reads, or that the Call returns. The layout
   is topological, so no gate before the piece reads inside it, and these outputs are out(S) for S the piece's computing gates.
 - **The cut**, depth first in layout order from the Call:
-  - a piece without computing gates is no unit;
-  - a piece whose outputs total at most X bits is one unit;
+  - a piece without computing gates is no proof block;
+  - a piece whose outputs total at most X bits is one proof block;
   - otherwise its children are the pieces: for a composite activation (the Call, a call node's callee, a composite member) its
     body's nodes, and for a batch or scan node its members or iterations.
 
   A primitive piece is one gate of at most X bits, so it always fits.
-- **Units.** Each unit is an interval `[lo, hi)` of the Call's local gates with a path of steps from the Call's activation: `[k]` is
-  body node k, and `[k, m]` is member m of node k. Units are numbered by Call, then in layout order. `CallPartition.locate`
-  gives the path, and `gates` gives the root interval. Input gates and constants inside an interval are in no unit.
-- **The committed set.** A computing gate is committed when a unit other than its own reads it, or when the Call returns it. A
-  unit's committed bits are its w_out. `verify` derives it from the reads (`cut.check_call_cut`) and checks the invariant
-  (`validate_unit_cut`, whose structure is the constants: gates any unit may read, bound outside the partition) and w_out ≤ X
+- **Proof blocks.** Each proof block is an interval `[lo, hi)` of the Call's local gates with a path of steps from the Call's activation: `[k]` is
+  body node k, and `[k, m]` is member m of node k. Proof blocks are numbered by Call, then in layout order. `CallPartition.locate`
+  gives the path, and `gates` gives the root interval. Input gates and constants inside an interval are in no proof block.
+- **The committed set.** A computing gate is committed when a proof block other than its own reads it, or when the Call returns it. A
+  proof block's committed bits are its w_out. `verify` derives it from the reads (`cut.check_call_cut`) and checks the invariant
+  (`validate_unit_cut`, whose structure is the constants: gates any proof block may read, bound outside the partition) and w_out ≤ X
   (`unit-too-wide`). Served commits are numbered by the
   Call's computing gates in layout order (`cut.CallGates.keep`) and checked as under §8.
 - **Recompute keys.** A key is (primitive id, operand tokens). A parameter leaf's token is interned from `("i", leaf)` and a
@@ -505,23 +507,23 @@ What changes:
   leaf alike are a pair, and recomputes from a value that was a constant become recomputes from the input that carries it. A computing gate whose key an earlier computing
   gate had is a recomputed pair and takes that gate's token.
 
-Rules the IR left open, pinned here:
+Rules the Program format left open, pinned here:
 
 - **A pass-through output** is a returned leaf that resolves to a parameter of the Call, or to a constant, rather than to a
-  computing gate of it. It is no output of any of the Call's units. The value is the Call's input, or a constant, bound outside
+  computing gate of it. It is no output of any of the Call's proof blocks. The value is the Call's input, or a constant, bound outside
   the partition like an input.
 - **A scan's carry** follows from the reads: an iteration's returned carry is an output of that iteration when the next iteration
   reads it, and of the Call when it is the final carry. A carry an iteration passes through unchanged resolves to the scan's
   `init` (§7), so it is a pass-through.
-- **A call node of no computing gates** (one that only rearranges its parameters, or returns constants) is no unit.
-- **A unit with no outputs** (a dead gate) is still a unit: every computing gate is in exactly one.
+- **A call node of no computing gates** (one that only rearranges its parameters, or returns constants) is no proof block.
+- **A proof block with no outputs** (a dead gate) is still a proof block: every computing gate is in exactly one.
 - **An unread parameter leaf** is in the input unit and is not committed.
 
 Vectors: `qcall_vectors.json`, written by `python verity/ml/circuits/tests/test_qcall_vectors.py --write`. They cover a word
 program and a Boolean program at two values of X. The word program has a Call that fits; one that splits into sub-Calls two levels
 down; a batch of a composite and of a primitive; a scan with a chained carry and one with a passed-through carry; pass-through
-outputs; a constant read by two units; a constant-derived gate committed across units; a 64-bit input and constant; a recompute
-across units and one within a unit; former wiring; a dead gate; and a gate of 4,097 operands. The Boolean program has a 32-bit
+outputs; a constant read by two proof blocks; a constant-derived gate committed across proof blocks; a 64-bit input and constant; a recompute
+across proof blocks and one within a proof block; former wiring; a dead gate; and a gate of 4,097 operands. The Boolean program has a 32-bit
 Call, two 32-bit sub-Calls, constant bits, a 33-bit ripple-carry adder and a 5,000-input AND. The refusals are `gate-too-wide` (at
 X = 16 and for a 64-bit gate), `root-form` (batch, scan), not topological, another program, every served-commit check, and the
 objects `validate` refuses.
@@ -567,7 +569,7 @@ a word type (or none). The origins are:
 - `input` and `registered`, for an input node's leaf by its binding time;
 - `coin`, for an input leaf whose port is `"kind": "coin"`;
 - `theta`, in place of `input` or `registered`, for a leaf of an input node the Program marks as the model's weights.
-- `position`, for an input leaf whose port is `"kind": "position"` (a unit's position).
+- `position`, for an input leaf whose port is `"kind": "position"` (a proof block's position).
 
 `Program(fn, theta=names)` names the parameters that are the model's weights, and the annotation `theta` lists the root's
 input nodes they lower to, ascending. It is outside both digests, so it binds nothing: a consumer that treats a leaf
@@ -606,7 +608,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   one whose origin is not exactly `static`; a `"kind": "position"` port reads one whose origin is not exactly `position`; an
   input node's port is `"kind": "static"`; a registered input node's is `"kind": "coin"`; or a theta input node's is
   `"kind": "coin"` (where the marking is read: `Program` and `ports.facts`). So a noise derivation whose ports are coins and
-  statics reads live verifier coins, passed through untouched, and constants only, and no unit computes its position. (A one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
+  statics reads live verifier coins, passed through untouched, and constants only, and no proof block computes its position. (A one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
   builds a static port's operand from an input, and is never decoded.)
 - **`E_PORT_WORD`**: a port with `word` `t` reads a leaf whose word type is not `t` when that leaf has one or its origin
   includes `gate`; a composite's declared `word` is not the word type its body returns there; or a composite other than the
@@ -620,15 +622,15 @@ as declared, so a composite over exact steps declares the intervals its operands
   Definition, the root included, returns one. A primitive with a coin port is a *noise primitive* when its return is not all
   sinks (it derives noise, or adds it to an operand it takes) and a *receipt fold* when it is (the coin is its key). A
   Definition, primitive or composite, with a coin port and a `"kind": "position"` port and no sink in its return is a
-  *seed*: it derives a unit's seed from the coin and the unit's position, and inside a seed's body its coin port's leaves
+  *seed*: it derives a proof block's seed from the coin and the proof block's position, and inside a seed's body its coin port's leaves
   have origin `gate` (no rule follows the coin into it). So a coin reaches only the coin port of a noise primitive, a
   receipt fold or a seed, never any other node, directly or through a return. A seed's output and the values computed
-  from it (the unit's noise) are values no port rule follows, read any number of times. Where they reach is the unit's
-  check: PoUW's compile pass holds a unit's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
+  from it (the proof block's noise) are values no port rule follows, read any number of times. Where they reach is the proof block's
+  check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/core/protocols/pouw/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a unit's
-  sink return, as a padded unit's key count with no coin port beside it (never a seed), or in a test named with its reason
+  `verity/core/protocols/pouw/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
   of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
@@ -639,7 +641,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   view independence of `Accounting.Guarantees.CoinFlow` (`Security/`): every value outside a noise's forward cone is a
   function of the coins it does not read. Also refused (seeds): an input leaf of origin `coin` that a seed reads is read by
   a receipt fold too; or an input leaf of origin `position` is read by more than one seed. Any number of seeds may read one
-  coin, each at positions of its own, so each (coin, position) seeds one unit; that distinct position leaves hold distinct
+  coin, each at positions of its own, so each (coin, position) seeds one proof block; that distinct position leaves hold distinct
   values is the verifier's, which binds them.
 - **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
 
@@ -650,6 +652,6 @@ Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and re
 narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
 and a limb split's bound on them; an explicit limb split with its carries; a word read at
 another width (`E_REINTERPRET`), built and in a tampered descriptor; the coin rules through calls,
-batches and scans; seeds batched over positions, and a unit's z read from its noise;
+batches and scans; seeds batched over positions, and a proof block's z read from its noise;
 tampered descriptors; the canonical form; and a pinned
 digest of one typed descriptor.

@@ -1,4 +1,4 @@
-"""The fixtures' inputs and their writer and reader, on the CPU: the restated served weights equal ALLP-IFACE's generator
+"""The fixtures' inputs and their writer and reader, on the CPU: the restated served weights equal the seeded generator
 (values read from its module), the step's unit positions and sampled units, and `fixtures.expected` at a shrunken linear
 against `h1tile.j10r_reference` called directly, with a tampered array refused by `fixtures.load`."""
 from __future__ import annotations
@@ -17,9 +17,9 @@ import fixtures as F
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-#: per linear: B's row 0 [:4], its last row [-4:], and its first and last channel scales' f32 words, from ALLP-IFACE's
+#: per linear: B's row 0 [:4], its last row [-4:], and its first and last channel scales' f32 words, from the generator's
 #: weights module at the frozen shape
-ALLP = {"q": ([-22, 16, -79, 90], [111, 22, -24, 35], 0x370F91F7, 0x3759C24C),
+GENERATOR = {"q": ([-22, 16, -79, 90], [111, 22, -24, 35], 0x370F91F7, 0x3759C24C),
         "kv": ([-126, -43, -60, 4], [96, 122, -40, 108], 0x38D16AF1, 0x388DB6BD),
         "o": ([-63, -80, -87, 8], [12, -65, 80, -127], 0x3892C008, 0x38A3017E),
         "up": ([-14, 7, -116, 44], [-96, -8, -36, -107], 0x38A718DB, 0x38C602E9),
@@ -27,10 +27,10 @@ ALLP = {"q": ([-22, 16, -79, 90], [111, 22, -24, 35], 0x370F91F7, 0x3759C24C),
         "head": ([103, 106, -22, 40], [38, 60, -7, 5], 0x38A48456, 0x388757D9)}
 
 
-@pytest.mark.parametrize("linear", list(ALLP))
+@pytest.mark.parametrize("linear", list(GENERATOR))
 def test_the_served_weights_are_allp_ifaces(linear):
     n, k = S.LINEARS[linear]
-    first, last, s0, s1 = ALLP[linear]
+    first, last, s0, s1 = GENERATOR[linear]
     b = S.weight_rows(linear, [0, n - 1])
     assert b.shape == (2, k) and b.dtype == np.int8
     assert b[0, :4].tolist() == first and b[1, -4:].tolist() == last

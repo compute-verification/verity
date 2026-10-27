@@ -68,6 +68,10 @@ KINDS: dict[str, str] = {
                                     "Boolean export per census subcircuit (subcircuits/<id>.boolean.json); meta {schema, census, entries: "
                                     "[{id, display, template, params, descriptor_id, default_statics, program_digests, export, counts, "
                                     "missing?}]}; refs.circuit_check = the circuit-check-report/v1 its counts cite",
+    "verity/status/v0": "the docs site's status document (tools/research/console/status_export.py): payload file status.json, "
+                        "canonical JSON of that schema (every lock guarantee proved, resting on named assumptions or unknown, the "
+                        "locks' assumptions, the results of record); meta {commit}; refs.facts = the run record whose Lean audit "
+                        "facts it read",
     "kernel-attempt/v1": "one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py, written by verify.py): meta = the "
                          "variant id, parent, tier, harness commit and gate version, metrics and step times, gamma at both FP32 prices, "
                          "the verifier's lines, the hypothesis; refs.parent = the attempt it changes; labels kernel_outcome, kernel_reason",
@@ -144,6 +148,11 @@ KINDS: dict[str, str] = {
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",
+    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (examples/h200/m3bundle.py build), what "
+                          "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
+                          "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
+                          "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "
+                          "commit, verdict}",
 }
 
 

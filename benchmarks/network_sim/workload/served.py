@@ -15,8 +15,7 @@ token. `Served.calls` gives each Call its round (as `CallInfo.request`) and laye
 the last layer's), which is what a pipeline placement reads; round r's layer l runs at engine step 1 + r·layers + l,
 since a round needs the token the round before it chose.
 
-`Served` has `model.Model`'s interface, so placement, framing, the block processes and the N3 check run on it as they do on
-the MLP. There is no torch oracle on CPU (vLLM's kernels are stand-ins there), so `reference` is the Program evaluated in
+`Served` has `model.Model`'s interface, so placement, framing and the block processes run on it as they do on the MLP. There is no torch oracle on CPU (vLLM's kernels are stand-ins there), so `reference` is the Program evaluated in
 one process, which a distributed run has to reproduce.
 """
 from __future__ import annotations

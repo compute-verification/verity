@@ -4,7 +4,7 @@ each request's instances with the shared ones of its engine steps merged in (`sh
 
 from __future__ import annotations
 
-SHARED = "*weight-only*"   # owner sentinel of a weight-only instance (F-r19-int-15); never a request id
+SHARED = "*weight-only*"   # owner sentinel of a weight-only instance; never a request id
 
 
 def is_weight_only(r: dict, weights_nodes: frozenset, shared_nodes: set, compact: bool) -> bool:
@@ -49,8 +49,8 @@ def attribute(meta: dict, st: dict) -> tuple[str | None, str]:
         return (st["rows"][row][0], "token") if row < n_tok else (None, "row-out-of-range")
     if rows == n_log:
         return (st["logits_rows"][row][0], "logits") if row < n_log else (None, "row-out-of-range")
-    # [R14 moe] fused-MoE expert instances (MoeExpertGemm / SiluMul / MoeExpertGemmW) run over the TOPK*tokens pair rows, pair-major
-    # p = t*TOPK + k (the Program's addressing, independent of the sorted block schedule): row p belongs to token p // TOPK.  The R13 MoE
+    # fused-MoE expert instances (MoeExpertGemm / SiluMul / MoeExpertGemmW) run over the TOPK*tokens pair rows, pair-major
+    # p = t*TOPK + k (the Program's addressing, independent of the sorted block schedule): row p belongs to token p // TOPK.  The MoE
     # X-09 rule; without it every MoE-block instance is "attributed to no request" (OLMoE b1: 110 208 of 165 950).
     if n_tok and rows > n_tok and rows % n_tok == 0:
         k = rows // n_tok

@@ -4,7 +4,7 @@ What is pinned here: (1) the schema round-trips (dumps -> load -> the same docum
 (2) the old -> new MAPPING is complete with no loss -- every compat field a check names is documented in OLD_TO_NEW and every
 documented old fact lands on a check that exists, every group has rules and a claim; (3) DECISION EQUIVALENCE with v1 -- over a PASS
 record and one-fault mutations of it, `run_outcome(run_checks(...)) == PASS` iff `commit_verdict(...)[0]`; (4) a MISSING INPUT is
-INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`, F-r19-int-19) grade
+INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`) grade
 `execution_extent` INSUFFICIENT_EVIDENCE while the overall verdict is still not PASS (v1 fails the same record by name); (5) X-03's
 per-layer uniformity finding is carried as the named difference `fa2_layers_bad` under `program_source_identity/identity_layout`;
 (6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; a pre-P5
@@ -67,7 +67,7 @@ def _link(ok: bool = True, required: bool = False, problems: list | None = None)
 
 
 def _base() -> dict:
-    # the record's shape: executed_prefix.py's outputs live under binding.coverage (commit_delta [R17-27]) and the facts of record under
+    # the record's shape: executed_prefix.py's outputs live under binding.coverage (commit_delta) and the facts of record under
     # sampled_replay.executed_prefix_of_record.facts_of_record (sampled_replay executed_prefix=)
     sr = _sr()
     sr["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 8, "cap": 8, "linked": True, "account_missing": []}}}

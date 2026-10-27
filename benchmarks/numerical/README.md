@@ -4,12 +4,16 @@ Frozen: kept, not developed. The exception is the bench spine `verity_numerical.
 lowerings, the cell checks and `bench.interaction`, a result's interaction time), which C-Flock and `circuit-check` read,
 and `bench.unit_costs`, the per-unit-type cost inventory (gates, nonzeros, sampled units, work weight) over the census
 workloads.
-What the merge gate runs here: `../../archive/README.md`.
 
-Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST` (rules: `archive/AGENTS.md`). `verity_numerical.reference`
-is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. `security` is the soundness
-calculator for A-GKR and B-Ligero (`accounting`, `census`), `gkr_export` A-GKR's circuit exporter, `explore` cost-model
-explorations and `redteam` the red team's forgeries against the checkers.
+The canonical tables, their drill-downs and views are evidence, not code. Their final render is
+`art:607c4bd1c7d80a861e70545bbc78aecde068576f0e20d570ffab2d35181ac358` (`tables`, `drilldown` and `views`, each as `.md`
+and `.json`, with the docs site's last entities JSON and the last parity report), over the cells of the
+`dataset-snapshot/v1` `art:4e132904a89b5f8c766bccb1bdbb20742be82b69bae274393b03d0351e0d42d3`. The renderers are in Git
+history.
+
+Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST`. `verity_numerical.reference`
+is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. The archived systems' exporter,
+drivers, explorations and red-team forgeries were deleted with the archive in `2091252fe3`.
 
 ## The subcircuit catalog
 
@@ -30,7 +34,7 @@ run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref cir
 ## WP1: independence audit of the existing columns
 
 The target names three executable columns of the finite-domain step: Python `verity.ml.circuits.silicon.silicon`, Rust
-`archive/sp1/common/src/tc.rs`, Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
+`tc.rs` (SP1's guest, deleted with the archive in `2091252fe3`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
 casts). Reading them against Hawkeye's pinned simulator (`verity/ml/circuits/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
 

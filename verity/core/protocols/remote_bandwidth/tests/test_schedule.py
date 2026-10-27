@@ -56,7 +56,7 @@ def test_the_honest_session_s_plans_are_its_schedule_s_and_the_verdict_carries_t
 
 
 def test_the_cap_committed_before_the_coins_is_credited_and_a_schedule_over_it_is_refused(honest) -> None:
-    """RD-18 (note:20261024T2155Z-report-redteam-5): the schedule is published after the coins, so its length can
+    """The red team's RD-18: the schedule is published after the coins, so its length can
     follow them.  `padded` gives every pass the honest plan, as `HONEST_SCHEDULE` does, at 264 bits (registered block
     7 freed at step 2^40, after every pass), so a prover may publish either on the same plans, as the coins say.
     Credited at its own schedule's bits, its 200-bit sessions would read a `SteeredLayout` bound that holds only at

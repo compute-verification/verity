@@ -13,7 +13,7 @@ of `RS[2^d, 2^cols + t]` at the points `ω_q` (`PadCode.encAt`), and the masked 
 (`zkLevelZero`): the plain level-0 code with `e` more lanes and `t` more coefficients per lane, on the same positions.
 At `t ≤ 2^cols` a masked lane is the plain lane of its message plus the padding's codeword
 `Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols + j})` (`zkEnc_eq_add_pad`).
-A message (`ZkMessage`) is every lane's `M` and `μ`, a column every lane's symbol (`zkEnc`). #2104's decoder therefore
+A message (`ZkMessage`) is every lane's `M` and `μ`, a column every lane's symbol (`zkEnc`). The decoder therefore
 meets `ListComplete` for it at the Johnson count `johnsonCount (2^cols + t) agree = ⌊(2^cols + t + 1)/agree²⌋ + 1`, at
 every `agree > 0` (`listComplete_zkLevelZero`), and on opened columns at distinct positions below `2^64` it is the
 Guruswami–Sudan path once `agree ≤ 1` is above `√((2^cols + t + 1)/N)` (`zkLevelZero_regime`), and `[]` outside that

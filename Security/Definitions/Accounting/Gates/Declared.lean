@@ -3,12 +3,12 @@ import Definitions.Accounting.Gates.Ranges
 /-!
 # Declared bounds, earned: what a declared interval may rest on, and the int8 circuits that need nothing else (trusted)
 
-A declared bound is never taken on trust (the ruling of 18 Oct, 02:29Z). An input is declared at its type's whole
-range (`TypeRange`), so the one thing asked of an input assignment is that each slot carry a word of its type
-(`Typed`). A budgeted gate's declared interval holds its evaluator's value on every operand in that operand's derived
-interval (`Declared`): the evaluator's type width (a saturating cast, a word read at its width), a producer's proven
-interval (`Ranges`), or a range check's clamp, which is budgeted. A run input narrower than its type gets its bound
-only through such a gate. Gathers and the free gates are derived (`Proven`), never declared.
+A declared bound is never taken on trust. An input is declared at its type's whole range (`TypeRange`), so the one thing
+asked of an input assignment is that each slot carry a word of its type (`Typed`). A budgeted gate's declared interval
+holds its evaluator's value on every operand in that operand's derived interval (`Declared`): the evaluator's type width
+(a saturating cast, a word read at its width), a producer's proven interval (`Ranges`), or a range check's clamp, which
+is budgeted. A run input narrower than its type gets its bound only through such a gate. Gathers and the free gates are
+derived (`Proven`), never declared.
 
 Two circuits of the exact-int8 profile (`verity_vllm/program/registry/int8_exact.py`) whose window then holds by
 theorem: `int8Linear`, one coordinate of `Int8Linear{K,N}` (`Int8RowQuant`, then `ScaledMmS8_v1`'s s8·s8 dot), and
