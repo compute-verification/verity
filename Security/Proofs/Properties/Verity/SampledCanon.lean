@@ -955,6 +955,27 @@ theorem served_req (D : PlayDevice) (rs : List Release) :
   rw [PlayDevice.served_eq]
   exact Served.foldl_req Release.answers PlayDevice.requestOf D.serveCond rs [] (by simp)
 
+/-- **The releases `tagOfServed` tags are the served ones `tagOfPlay` tags**, of `m` bits, in order. -/
+theorem tagged_served (D : PlayDevice) (draw : String) (streamOf : String → Option (ℕ × Fin 2)) (m : ℕ)
+    (hs : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool))) :
+    (Game.LiveDrive.annot [] hs).filter (Game.LiveDrive.Tagged m (tagOfServed D draw streamOf)) =
+      ((Game.LiveDrive.annot [] hs).filter fun z => servesNext D z.2.1.1 z.2.1.2).filter
+        fun z => decide (z.1 = m) && (tagOfPlay draw streamOf z.2.1.2).isSome := by
+  rw [List.filter_filter]
+  refine List.filter_congr fun z _ => ?_
+  simp only [Game.LiveDrive.Tagged, tagOfServed]
+  cases servesNext D z.2.1.1 z.2.1.2 <;> simp
+
+/-- **The served releases' requests are the device's entries' families and roots**, in order. -/
+theorem served_requests (D : PlayDevice) (hs : List (Σ m : ℕ, ByteArray × (Fin m → Bool))) :
+    ((Game.LiveDrive.annot [] hs).filter fun z => servesNext D z.2.1.1 z.2.1.2).map
+        (fun z => PlayDevice.requestOf z.2.1.2) =
+      (D.served (hs.map (Game.recOf releaseOf))).map fun e => some (e.1, e.2.2.1) := by
+  have h := congrArg (List.map fun r : Release => PlayDevice.requestOf r.answers) (served_play D hs)
+  simp only [List.map_map, Function.comp_def, releaseOf] at h
+  rw [← h]
+  exact List.map_congr_left fun e he => served_req D _ e he
+
 
 /-! ## The record's coins as the challenger's
 
