@@ -9,11 +9,11 @@
 # the auditor's, so the run certifies nothing. cwd = a clone, as demo.sh's:
 #
 #   research run --on NODE --project verity --source . --cwd clone --timeout 60m -- \
-#     bash benchmarks/pous/streamed_wipe/peer.sh PEER [--port P] [--tunnel] -- DEMO_OPTIONS
+#     bash examples/wipe/peer.sh PEER [--port P] [--tunnel] -- DEMO_OPTIONS
 #
 # The peer's scratch (the tree, its venv, the challenger's key and session log) is removed on exit.
 set -euo pipefail
-cd "$(dirname "$0")/../../.."
+cd "$(dirname "$0")/../.."
 PEER=${1:?usage: peer.sh PEER [--port P] [--tunnel] -- DEMO_OPTIONS}
 shift
 PORT=47611 TUNNEL=0
@@ -56,6 +56,6 @@ if [ "$TUNNEL" = 1 ]; then
 fi
 READS=() A=("$@")
 for i in "${!A[@]}"; do [ "${A[$i]}" = --reads ] && READS=(--reads "${A[$((i + 1))]}"); done
-bash benchmarks/pous/streamed_wipe/demo.sh --challenger "$PEER" --challenger-address "$TARGET" \
+bash examples/wipe/demo.sh --challenger "$PEER" --challenger-address "$TARGET" \
   --challenger-command "${SSH[*]} cd $D && exec $D/.venv/bin/python -m verity.core.protocols.pous.wipe_party --device $D/device --listen $LISTEN ${READS[*]} --streamer build" \
   "${LINK[@]}" "$@"

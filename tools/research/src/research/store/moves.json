@@ -1482,6 +1482,12 @@
         "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
         "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/streamed_wipe/demo.sh": "examples/wipe/demo.sh",
+        "benchmarks/pous/streamed_wipe/peer.sh": "examples/wipe/peer.sh"
+      }
     }
   ]
 }
