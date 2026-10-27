@@ -147,7 +147,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     assert note is None and fail.startswith("C2 population does not reconcile with Q(P) (R17-3)") and "identities_without_rows x1" in fail
     # through the verdict of record: a row-procedure record (binding block) with this replay FAILs by that name, whatever else holds
     rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "run_root": run_root,
-           "binding": {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}},
+           "binding": {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}},
            "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
            "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
            "weights_pin": {"result": True, "compared": 5, "mismatched": [], "missing": []}, "sampled_replay": rep}

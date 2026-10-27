@@ -1,10 +1,10 @@
 """Attacks: constructions that finish counted products in a block, so ρ's upper end.
 
 An attack is an `Argument` on the `attack` side: `allowance(profile)` is what the construction finishes in a block with
-that budget (never more than the block's compute, which `theorem.share` caps). Its `cites` are what it rests on: an
-analysis (`draft:`), a measured run (`art:`), a finding (`note:`). The best attack for an algorithm sets its `hi`; a
-bound above an attack's achieved count (`lo > hi`) means a premise is false for that algorithm at that budget, and
-`scenario.evaluate` reports it.
+that budget (never more than the block's compute, which `theorem.terms` caps), in the FLOP model as the classes are
+(`classes.FlopBudget`). Its `cites` are what it rests on: an analysis (`draft:`), a measured run (`art:`), a finding
+(`note:`). The best attack for an algorithm sets its `hi`; a bound above an attack's achieved count (`lo > hi`) means a
+premise is false for that algorithm at that budget, and `scenario.evaluate` reports it.
 
 Every allowance here is achieved: a lower bound on the most a block can finish, never an estimate of it. Where a
 construction's count is of another set than the profile's `κ` (the tile's forward products), it is converted as a
@@ -19,9 +19,17 @@ from dataclasses import dataclass, field
 from functools import cache, lru_cache
 from typing import Literal
 
-from rho.classes import E1, FINDINGS, Argument, Outside, counted, need
+from rho.classes import (
+    E1,
+    FINDINGS,
+    Allowance,
+    Argument,
+    FlopBudget,
+    Outside,
+    counted,
+    need,
+)
 from rho.profile import Profile
-from rho.theorem import Allowance, Budget
 
 
 @dataclass(frozen=True)
@@ -46,7 +54,7 @@ class StateFits:
     cites: tuple[str, ...] = ("draft:N1",)
 
     def allowance(self, p: Profile) -> Allowance:
-        def a(budget: Budget) -> float:
+        def a(budget: FlopBudget) -> float:
             return p.kappa * budget.compute / 2 if p.state_bits <= budget.inputs else 0.0
         return a
 
@@ -90,9 +98,9 @@ class Shard:
         u, splits, flops, cut, data, decode, shared = need(
             p, "token_state_bits", "state_splits", "flops_per_token", "cut_bits", "token_bits", "decode_flops",
             "shared_state_bits")
-        memo: dict[Budget, float] = {}
+        memo: dict[FlopBudget, float] = {}
 
-        def a(budget: Budget) -> float:
+        def a(budget: FlopBudget) -> float:
             if budget not in memo:
                 memo[budget] = p.kappa / 2 * search(u, splits, flops, cut, data, decode, budget.inputs, budget.compute,
                                                      shared)
@@ -161,7 +169,7 @@ class Measured:
         if p.name not in self.families:
             raise Outside(f"{self.name} was measured on {', '.join(self.families)}, not {p.name}")
 
-        def a(budget: Budget) -> float:
+        def a(budget: FlopBudget) -> float:
             best = 0.0
             for pt in self.points:
                 if pt.flops is None:

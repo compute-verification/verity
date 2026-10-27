@@ -33,6 +33,11 @@ theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} (h 
   | error => cases h
   | ok a => exact ⟨a, rfl, Except.ok.inj h⟩
 
+theorem mapError_ok {ε ε' A : Type} {x : Except ε A} {f : ε → ε'} {a : A} (h : x.mapError f = .ok a) : x = .ok a := by
+  cases x with
+  | error e => cases h
+  | ok a' => cases h; rfl
+
 /-! `Except`'s evaluation, for `simp only` on a step whose every discriminant is fixed. -/
 
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl

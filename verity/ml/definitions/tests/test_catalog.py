@@ -6,8 +6,8 @@ The count is the registry's own: 1,287 on main before the move less PoUW's circu
 `verity.core.protocols.pouw.circuit` registers), which `pouw_rows` stopped importing once `NcpDequant` moved to
 `verity.ml.circuits.ops.ncp`, 1,242 since `AttentionHead_v18` and `Attention_v18` (bcf1e1aade), 1,250 since
 `AttentionHead_v19`, `Attention_v19`, `AttnBlockFirst_v1` and `AttnHeadEnd_v1` (d37b243ac6) and ops' `GemmCoordinatePad_v1`,
-`_v2`, `ScaledMmS8CoordinateRows_v1` and `_v2` (fa7065c758), and 1,256 since ops' `F32ToS8RniSat_v1`, `_v2`, `U32Hi16_v1`
-and `_v2` (#4433) and `PvRow_v1` and `_v2` (#4556)."""
+`_v2`, `ScaledMmS8CoordinateRows_v1` and `_v2` (fa7065c758), 1,256 since ops' `F32ToS8RniSat_v1`, `_v2`, `U32Hi16_v1`
+and `_v2` (#4433) and `PvRow_v1` and `_v2` (#4556), and 1,257 with `io_shell.TokenFeed_v1`."""
 from __future__ import annotations
 
 import sys
@@ -17,7 +17,9 @@ from verity.ml.definitions.registry import catalog
 
 REPO = Path(__file__).resolve().parents[4]
 
-COUNT = 1256
+COUNT = 1257
+
+COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merges with any other change to the count
 
 
 def test_the_catalog_loads_every_definition_and_no_other():

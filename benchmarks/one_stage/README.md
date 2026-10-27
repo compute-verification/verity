@@ -51,7 +51,7 @@ negatives.
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `llama1b_tp1_commit.sh`: the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
@@ -91,7 +91,9 @@ negatives.
   draw's receipt and record. Each drawn member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
   draw, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
   proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the firewall and
-  refused by Lean without it.
+  refused by Lean without it. `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and firewall into its `out/bin`, stamped
+  with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
+  source, so M3's reserved window doesn't spend time on the build.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
