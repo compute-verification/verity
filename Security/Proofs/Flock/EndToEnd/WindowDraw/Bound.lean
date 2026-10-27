@@ -25,7 +25,7 @@ theorem prob_map_strategy {α β : Type} (p : β → Prop) (f : α → β) : ∀
   | .send _ k, s => prob_map_strategy p f (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => congrArg avg (funext fun c => prob_map_strategy p f (k c) (s c))
 
-theorem prob_cast_body {X β : Type} (G : X → Game β) (p : X → β → Prop) {x y : X} (h : x = y)
+theorem prob_cast_body {Ix β : Type} (G : Ix → Game β) (p : Ix → β → Prop) {x y : Ix} (h : x = y)
     (s : Strategy (G x)) :
     prob (p y) (G y) (cast (congrArg (fun z => Strategy (G z)) h) s) = prob (p x) (G x) s := by
   subst h
