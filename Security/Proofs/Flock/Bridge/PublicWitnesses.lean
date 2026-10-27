@@ -26,6 +26,9 @@ import Proofs.Flock.Soundness.Game.Prob
   unfold, so no proof exhibits a file that parses), the draw setup `y₀` and the records' custody `hCust` (set up from
   those files; custody is the named assumption `live-verifier`), A3, and `B^τ`'s collision probability (what
   `cr/sha-512` bounds).
+* **Vacuous as stated** (`Bridge.outputs_noPort`, `HiddenReturns`): with the parse `hD` of an untyped statement in
+  scope, a circuit with no port returns no gate, so the structural premises of `sampledKSLivePub_nontrivial` and
+  `sampledKSLiveV2_nontrivial` are never met together, and both hold for want of an instance.
 -/
 
 namespace Flock.Bridge

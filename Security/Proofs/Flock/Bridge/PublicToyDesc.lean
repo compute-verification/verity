@@ -14,8 +14,8 @@ returned output on its leaf, the key program's unit has the copy's constant at c
 and the shared constant at column 2: column 1 is the returned output's bit 0 (`OutColAt`), so its gate is in `outsOf`,
 and it is a row. The key program has `2 + 2 = 4` gates.
 
-What stays open is that no circuit file is shown to parse to it: `Flock.Desc.parse` reads the file through
-`Lean.Json.parse`, a `partial def`.
+No circuit file parses to it from an untyped statement in scope (`toyDesc_unparsed`, `HiddenReturns`): there a
+returned gate is an output row's bit, so a circuit that returns one has a port.
 -/
 
 namespace Flock.Bridge
