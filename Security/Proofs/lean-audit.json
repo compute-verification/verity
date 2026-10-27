@@ -58,6 +58,7 @@
   "Proofs.Properties.Composition",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.NetworkCertifier.Period",
   "Proofs.Properties.Verity.Subprotocols"
  ],
  "exempt": {
