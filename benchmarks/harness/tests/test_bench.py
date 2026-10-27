@@ -325,6 +325,17 @@ def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
         load_spec(_spec_with(tmp_path, "warmups = 3\nmax_warmups = 2"))
 
 
+def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
+    from verity_bench.vllm.presets import ENGINE_SETTINGS
+
+    path = tmp_path / "spec.toml"
+    path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
+        "[preset.engine_settings]\n", '[preset.engine_settings]\nattention_backend = "FLASH_ATTN"\n'))
+    refusal = f"unknown engine_settings ['attention_backend']; known: {list(ENGINE_SETTINGS)}"
+    with pytest.raises(ValueError, match=re.escape(refusal)):
+        load_spec(path)
+
+
 def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     spec = resolve_spec(_spec_with(tmp_path, 'setup = "benchmarks/harness/setup/vllm_encoded.sh"\n[env]\nARM_KNOB = "on"'))
