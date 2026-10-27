@@ -67,3 +67,12 @@ def test_a_coin_not_this_steps_is_refused(tmp_path, why, kw) -> None:
 
 def test_no_coin_refuses_the_step(tmp_path) -> None:
     assert PB.held_coin(tmp_path, REG, {"units": []}, None)[0] == {"coin": False}
+
+
+def test_a_coin_dir_beside_the_tree_is_read_and_only_it(tmp_path) -> None:
+    (tmp_path / "coin").mkdir()
+    (tmp_path / "step").mkdir()
+    d, draw = _tree(tmp_path / "coin")
+    held, derived, _ = PB.held_coin(tmp_path / "step", REG, draw, None, coin_dir=d)
+    assert derived == draw["units"] and held["coin:units"] is True
+    assert PB.held_coin(d, REG, draw, None, coin_dir=tmp_path / "step")[0] == {"coin": False}

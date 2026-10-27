@@ -211,9 +211,11 @@ def _lms_verify(key, message: bytes, signature: bytes) -> bool:
         return False
 
 
-def held_coin(sdir: Path, reg: dict, draw: dict, main: Path | None) -> tuple[dict[str, bool], list[int] | None, dict]:
-    """The step's live coin, `e2e_h200/m3coin.py`'s (``coin.json`` with its session's files beside it, in ``sdir`` or
-    ``sdir/coin/``), re-derived here rather than taken from ``draw.json``: ``({check: ok}, the derived units, info)``.
+def held_coin(sdir: Path, reg: dict, draw: dict, main: Path | None,
+              coin_dir: Path | None = None) -> tuple[dict[str, bool], list[int] | None, dict]:
+    """The step's live coin, `e2e_h200/m3coin.py`'s (``coin.json`` with its session's files beside it, in ``coin_dir`` when
+    given, else in ``sdir`` or ``sdir/coin/``), re-derived here rather than taken from ``draw.json``: ``({check: ok}, the
+    derived units, info)``. Where the files come from doesn't matter: only the pinned key's signatures vouch for them.
     The session is the one vy-challenger-1's ledger, signed under infra's pinned key (`CHALLENGER_PIN`), opens on the
     step registration's digest, from a commit on main's first-parent line (``main``: ``git rev-list --first-parent``);
     its commitment opens the recorded coin after that digest; and the units are m3coin's ``derive(coin, DOMAIN,
@@ -223,9 +225,10 @@ def held_coin(sdir: Path, reg: dict, draw: dict, main: Path | None) -> tuple[dic
     import m3coin as COIN
     import served_commit as SC
     from verity.core.protocols.sampled_proofs import challenger as Ch, remote as RM
-    path = next((p for p in (sdir / "coin.json", sdir / "coin" / "coin.json") if p.is_file()), None)
+    places = (coin_dir / "coin.json",) if coin_dir else (sdir / "coin.json", sdir / "coin" / "coin.json")
+    path = next((p for p in places if p.is_file()), None)
     if path is None:
-        return {"coin": False}, None, {"why": "no coin.json in the step tree"}
+        return {"coin": False}, None, {"why": f"no coin.json in {coin_dir or 'the step tree'}"}
     coin, d, digest = json.loads(path.read_text()), path.parent, RB.step_digest(reg)
     k, n = reg["law"]["k"], reg["population"]
     held = {"coin:registration": coin.get("registration") == digest,
@@ -549,7 +552,8 @@ def main_step(a, out: Path) -> int:
     drawn = json.loads((sdir / "draw.json").read_text())
     derived, coin = None, None
     if a.coin:
-        got, derived, coin = held_coin(sdir, reg, drawn, Path(a.main) if a.main else None)
+        got, derived, coin = held_coin(sdir, reg, drawn, Path(a.main) if a.main else None,
+                                       Path(a.coin_dir) if a.coin_dir else None)
         held.update(got)
     print("DRAWN " + json.dumps({"registration": RB.step_digest(reg), "receipt": json.loads((sdir / "receipt.json").read_text()),
                                  "law": reg["law"], "population": reg["population"], "units": drawn.get("units"),
@@ -618,6 +622,8 @@ def main(argv=None) -> int:
     ap.add_argument("--coin", action="store_true",
                     help="with --step: the draw must re-derive from the challenger's live coin (coin.json, `held_coin`)")
     ap.add_argument("--main", help="with --coin: main's first-parent history (git rev-list --first-parent origin/main)")
+    ap.add_argument("--coin-dir", help="with --coin: the coin's directory (coin.json, its session, ledger and pins) when "
+                                       "it isn't in the step tree")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", required=True)
