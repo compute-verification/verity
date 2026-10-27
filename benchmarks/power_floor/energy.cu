@@ -590,27 +590,30 @@ struct Gemm {
         fprintf(stderr, "no cuBLASLt algo for %s\n", s.name);
         exit(3);
       }
-      // the fastest of the heuristic's candidates, timed once
+      // the fastest of the heuristic's candidates, timed in a second pass: in the first the clock is still ramping up
+      // from idle (unlocked, it starts at 180 MHz), which made a slower candidate win at default clocks
       int best = 0;
       float bt = 1e30f;
       cudaEvent_t e0, e1;
       cudaEventCreate(&e0);
       cudaEventCreate(&e1);
-      for (int i = 0; i < n; i++) {
-        int32_t al = 1, be = 0;
-        if (cublasLtMatmul(lt, d, &al, w, A, x, B, &be, c, C, c, C, &res[i].algo, ws, wsz, 0) != CUBLAS_STATUS_SUCCESS)
-          continue;
-        cudaEventRecord(e0);
-        for (int q = 0; q < 3; q++) cublasLtMatmul(lt, d, &al, w, A, x, B, &be, c, C, c, C, &res[i].algo, ws, wsz, 0);
-        cudaEventRecord(e1);
-        cudaEventSynchronize(e1);
-        float ms;
-        cudaEventElapsedTime(&ms, e0, e1);
-        if (ms < bt) {
-          bt = ms;
-          best = i;
+      for (int pass = 0; pass < 2; pass++)
+        for (int i = 0; i < n; i++) {
+          int32_t al = 1, be = 0;
+          if (cublasLtMatmul(lt, d, &al, w, A, x, B, &be, c, C, c, C, &res[i].algo, ws, wsz, 0) != CUBLAS_STATUS_SUCCESS)
+            continue;
+          cudaEventRecord(e0);
+          for (int q = 0; q < 3; q++) cublasLtMatmul(lt, d, &al, w, A, x, B, &be, c, C, c, C, &res[i].algo, ws, wsz, 0);
+          cudaEventRecord(e1);
+          cudaEventSynchronize(e1);
+          float ms;
+          cudaEventElapsedTime(&ms, e0, e1);
+          if (pass == 1 && ms < bt) {
+            bt = ms;
+            best = i;
+          }
         }
-      }
+      fprintf(stderr, "gemm %s: candidate %d of %d, %.3f ms for 3\n", s.name, best, n, bt);
       desc.push_back(d);
       la.push_back(A);
       lb.push_back(B);

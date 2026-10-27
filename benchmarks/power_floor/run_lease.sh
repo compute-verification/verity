@@ -130,6 +130,18 @@ case ${PF_PLAN:-full} in
     cap
     PF_CLOCKS=${PF_CAP_CLOCKS:-2430 2250 2100} sweep
     ;;
+  gemm)  # the honest GEMMs alone, at the default clocks and then locked at PF_CLOCKS
+    arm && sudo -n nvidia-smi -i "$UUID" -rgc >>"$OUT/lgc.txt" 2>&1 || echo "sudo -n nvidia-smi -rgc refused" >>"$OUT/lgc.txt"
+    one "cap-sleep" sleep sleep 0 "$S" "$W"
+    one "cap-gemm-1" gemm 1 "$S" "$W"
+    one "cap-gemm-0" gemm 0 "$S" "$W"
+    one "cap-gemm-1-again" gemm 1 "$S" "$W"
+    for f in ${PF_CLOCKS:-}; do
+      arm && sudo -n nvidia-smi -i "$UUID" -lgc "$f,$f" >>"$OUT/lgc.txt" 2>&1 || continue
+      one "lgc$f-sleep" sleep sleep 0 10 4
+      one "lgc$f-gemm-1" gemm 1 10 4
+    done
+    ;;
 esac
 nvidia-smi -i "$UUID" -q >"$OUT/nvsmi-after.txt" 2>&1
 rm -f "$LINE"

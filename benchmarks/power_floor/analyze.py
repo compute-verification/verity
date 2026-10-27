@@ -3,7 +3,9 @@ with and without a power premise.
 
     python benchmarks/power_floor/analyze.py RUN_DIR... [--json FILE] [--honest-mhz RTX=2250]
 
-RUN_DIR is a fetched run (its out/energy.jsonl). A unit's energy is marginal: the config's board power less the
+RUN_DIR is a fetched run (its out/energy.jsonl). The runs of one card are read together: each clock setting (a run's
+own rows, a PF_PLAN=cap run's default-clock rows) gets its table and ε, with every locked clock the card's runs swept and
+every row they measured as the falsification set. A unit's energy is marginal: the config's board power less the
 resident-idle kernel's (sleep: every SM holding a block of nanosleeping warps, the same clock), over the rate counted.
 
 ε is 1 − R_h / C: R_h is the honest prover's MAC rate (cuBLASLt's s8 GEMMs at the demo's shapes, the run's gemm-1), C the
@@ -49,6 +51,8 @@ def wgmma_dead(run: Path) -> bool:
 
 
 def load(run: Path) -> list[dict]:
+    """A run's rows, each with its `set`: `run` (the plan's own clocks), `cap` (PF_PLAN=cap's default clocks, the label's
+    `cap-` dropped) or `lgc` (a locked clock)."""
     rows = []
     dead = wgmma_dead(run)
     for line in (run / "out" / "energy.jsonl").read_text().splitlines():
@@ -56,6 +60,10 @@ def load(run: Path) -> list[dict]:
         if d.get("failed") is not None:
             continue
         d["run"] = run.name
+        d["label0"] = d["label"]
+        d["set"] = "lgc" if d["label"].startswith("lgc") else "run"
+        if d["label"].startswith("cap-"):
+            d["set"], d["label"] = "cap", d["label"][4:]
         if dead and d.get("role_a") == "wgmma":
             d["rate_a"] /= 4
             d["ops_a"] /= 4
@@ -71,12 +79,18 @@ PER = {  # role -> (𝓜 resource, its units per counted unit, label)
 }
 
 
-def energies(rows: list[dict]) -> dict:
-    by = {d["label"]: d for d in rows}
+def energies(rows: list[dict], every: list[dict] | None = None) -> dict:
+    """`rows`: one clock setting's rows and the locked-clock rows; `every`: all the card's rows, for the falsification."""
+    by = {}
+    for d in rows:
+        by.setdefault(d["label"], d)  # the first of a repeated label; `-again` rows are their own labels
     base = by["sleep"]["power_w"]
     out = {"p_sleep": base, "p_idle": by.get("idle", {}).get("power_w"), "p_none": by.get("none", {}).get("power_w"),
-           "single": {}, "pairs": {}, "frac": {}, "gemm": {}, "lgc": {}, "rows": rows}
+           "single": {}, "pairs": {}, "frac": {}, "gemm": {}, "lgc": {}, "again": {}, "rows": every or rows}
     for lab, d in by.items():
+        if lab.endswith("-again") and d.get("kind") == "pipe":
+            out["again"][lab] = dict(power_w=d["power_w"], rate_a=d["rate_a"], mhz=d.get("sm_mhz_kernel"))
+            continue
         if d.get("kind") == "gemm":
             g = dict(power_w=d["power_w"], mac_per_s=d["mac_per_s"], pj_mac_total=d["power_w"] / d["mac_per_s"] * 1e12,
                      pj_mac_marginal=(d["power_w"] - base) / d["mac_per_s"] * 1e12, mhz=d.get("nvml_mhz_median"),
@@ -187,7 +201,7 @@ def falsify(rows: list[dict], card: str, e: dict, p0: float) -> list[dict]:
             continue
         need = p0 + sum(e.get(r, 0.0) * v for r, v in u.items()) * 1e-12
         if need > d["power_w"] * 1.0 + 1e-9:
-            bad.append(dict(label=d["label"], power_w=d["power_w"], premise_w=need))
+                bad.append(dict(label=d.get("label0", d["label"]), power_w=d["power_w"], premise_w=need))
     return bad
 
 
@@ -297,22 +311,35 @@ def main() -> None:
     a = ap.parse_args()
     scale = dict(s.split("=") for s in a.honest_mhz)
     report = {}
+    cards: dict[str, list[dict]] = {}
     for run in a.runs:
         rows = load(run)
-        card = card_of(rows[0]["device"])
-        en = energies(rows)
-        g = en["gemm"].get("gemm-1")
-        res = dict(run=run.name, card=card, energies=en)
-        if g:
-            mhz = g["mhz"]
-            hon = g["mac_per_s"]
-            key = "RTX" if card.startswith("RTX") else "H200"
-            res["epsilon"] = {f"honest at {mhz} MHz (measured)": epsilon(card, en, hon, mhz)}
-            if key in scale:
-                m2 = float(scale[key])
-                res["epsilon"][f"honest at {m2:.0f} MHz (scaled)"] = epsilon(card, en, hon * m2 / mhz, m2)
-        report[run.name] = res
-        print_run(res)
+        cards.setdefault(card_of(rows[0]["device"]), []).extend(rows)
+    # each clock setting (a run's own rows, a cap plan's default-clock rows) with every locked clock the card has
+    for card, every in cards.items():
+        lgc = [d for d in every if d["set"] == "lgc"]
+        settings = {}
+        for d in every:
+            if d["set"] != "lgc":
+                settings.setdefault((d["run"], d["set"]), []).append(d)
+        for (run, st), rows in settings.items():
+            if not any(d["label"] == "sleep" for d in rows):
+                continue
+            en = energies(rows + lgc, every)
+            name = f"{run} ({'default clocks' if st == 'cap' else 'its clocks'})"
+            res = dict(run=name, card=card, energies=en)
+            # the honest prover's best setting: any clock lock (an operator may lock lower), any of the repeats
+            gs = {k: g for k, g in {**en["gemm"], **en["lgc"]}.items() if "mac_per_s" in g and "gemm-1" in k}
+            if gs:
+                k, g = max(gs.items(), key=lambda kg: kg[1]["mac_per_s"])
+                mhz, hon = g["mhz"], g["mac_per_s"]
+                key = "RTX" if card.startswith("RTX") else "H200"
+                res["epsilon"] = {f"honest at {mhz} MHz ({k}, the best gemm-1)": epsilon(card, en, hon, mhz)}
+                if key in scale:
+                    m2 = float(scale[key])
+                    res["epsilon"][f"honest at {m2:.0f} MHz (scaled)"] = epsilon(card, en, hon * m2 / mhz, m2)
+            report[name] = res
+            print_run(res)
     if a.json:
         for r in report.values():
             r["energies"].pop("rows", None)
@@ -321,13 +348,16 @@ def main() -> None:
 
 def print_run(res: dict) -> None:
     en = res["energies"]
-    print(f"\n== {res['run']} {res['card']}: idle {en['p_idle']:.1f} W, empty launches {en['p_none']:.1f} W, "
-          f"resident-idle {en['p_sleep']:.1f} W")
+    w = lambda v: f"{v:.1f} W" if v is not None else "not run"
+    print(f"\n== {res['run']} {res['card']}: idle {w(en['p_idle'])}, empty launches {w(en['p_none'])}, "
+          f"resident-idle {w(en['p_sleep'])}")
     print(f"{'single':<10} {'W':>7} {'marg W':>7} {'rate/s':>10} {'MHz':>7} {'e':>8}  unit")
     for k, r in sorted(en["single"].items()):
         role = k.rsplit("-", 1)[0]
         print(f"{k:<10} {r['power_w']:7.1f} {r['marginal_w']:7.1f} {r['rate_a']:10.3e} {r['mhz'] or 0:7.1f} "
               f"{r['e']:8.3f}  {PER[role][2]} {r['reasons']}")
+    for k, r in sorted(en["again"].items()):
+        print(f"{k:<18} {r['power_w']:7.1f} W rate {r['rate_a']:.3e} {r['mhz'] or 0:.0f} MHz (the repeat)")
     for k, r in sorted(en["frac"].items()):
         if k.endswith("fit"):
             print(f"{k:<18} slope {r['slope_pj']:.3f} pJ, intercept {r['intercept_w']:.1f} W over {r['points']} loads")
