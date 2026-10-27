@@ -12,7 +12,8 @@
 * **Rule.** Everything a drawn proof block's statement can depend on is fixed by the record, or by objects the verifier already
   holds, before the draw. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
   clock, and only then draws.
-* **The checks** (`check`): the record has exactly these keys, and
+* **The checks** (`check`): the record has exactly these keys, every string of it, key or value, is ASCII (`ascii`;
+  `record` refuses one that isn't), and
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
     (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
   - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
@@ -93,6 +94,18 @@ _ROOT_KEYS = {"port", "root", "leaves", "domain"}
 _HEX = re.compile(r"[0-9a-f]+")
 
 
+def ascii_only(x: Any) -> bool:
+    """Every string of `x`, key or value, is ASCII. A registration record is ASCII-only: `canonical_json` escapes a
+    non-ASCII character and the Lean's canonical JSON writes it as UTF-8, so only on ASCII do both digests agree."""
+    if isinstance(x, str):
+        return x.isascii()
+    if isinstance(x, Mapping):
+        return all(ascii_only(k) and ascii_only(v) for k, v in x.items())
+    if isinstance(x, (list, tuple)):
+        return all(ascii_only(v) for v in x)
+    return True
+
+
 def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
@@ -114,6 +127,8 @@ def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], s
     if registered:
         rec["registered"] = [{**{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in G.ENTRY_KEYS},
                               **G.width_entry(int(e.get(G.WIDTH_KEY, G.WORD_BITS)))} for e in registered]
+    if not ascii_only(rec):
+        raise ValueError("a registration record's strings are ASCII, and this one's are not (check's `ascii`)")
     return rec
 
 
@@ -189,6 +204,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
+        return c.verdict()
+    if not ascii_only(rec):
+        c.fail("ascii", "a registration record's strings are ASCII")
         return c.verdict()
     # R1
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
@@ -481,6 +499,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest", "held_roots",
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "ascii_only", "check", "digest",
+           "held_roots",
            "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "unwindowed",
            "window_domain"]

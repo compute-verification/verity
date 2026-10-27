@@ -3342,6 +3342,19 @@ def test_a_many_port_registration_agrees(pieces):
     assert codes(lambda rs: bump(rs[4000], "domain")) == ["R3-domain"]
 
 
+def test_a_non_ascii_record_is_refused(pieces):
+    """A registration record is ASCII-only on both sides: a v1 and a v2 record with a non-ASCII string in a digest R2
+    reads or in the window's provenance give `ascii` alone, Lean and Python agreeing, where the two digests (Python's
+    escaped, the Lean's UTF-8) would differ; the same records in ASCII are accepted."""
+    v2 = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
+    for a in (_REGISTRATION_OF(_v1_audit("subset")), _REGISTRATION_OF(v2)):
+        assert D.replay(REGISTRATION, _json(a), pieces) == ("output", D.canonical({"codes": []}))
+        for change in (lambda r: r.update(partition="d\u00e9/0"), lambda r: r["window"].update(note="d\u00e9")):
+            b = copy.deepcopy(a)
+            change(b["record"])
+            assert D.replay(REGISTRATION, _json(b), pieces) == ("output", D.canonical({"codes": ["ascii"]}))
+
+
 def test_every_public_items_code_is_reached(pieces):
     """Each change to the rule's input on a v1 audit and a v2 one, Lean and Python agreeing on each: together they reach
     every code of `check_public` and a reject, which the drawn runs only probably do, and the unchanged audits none."""

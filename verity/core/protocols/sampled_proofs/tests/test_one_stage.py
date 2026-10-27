@@ -258,6 +258,17 @@ def test_registration_refusals():
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
+def test_a_non_ascii_record_is_refused():
+    """A registration record is ASCII-only: `check` gives `ascii` alone for a non-ASCII string anywhere in it, and
+    `record` refuses to write one."""
+    prog, q, rec = _registration(6)
+    for change in ({"partition": "d\u00e9/0"}, {"window": {**SERVED, "note": "d\u00e9"}}):
+        assert _check({**rec, **change}, prog, q).codes == ("ascii",)
+    assert _check({**rec, "window": {**SERVED, "note": "de"}}, prog, q).ok
+    with pytest.raises(ValueError, match="ASCII"):
+        _registration(6, window={**SERVED, "note": "d\u00e9"})
+
+
 def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
     from verity.ml.commitments.identity import identity_digest_sha512
     from verity.ml.commitments.indexed import RangeIndexedDomain
