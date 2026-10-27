@@ -181,7 +181,13 @@ owner = "infra"
 [[file]]
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/vy/peers"
+src = "tools/research/src/research/pods/nebius/peers-public"
+nodes = ["vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]  # a oneshot each minute (vy-slot-only.timer on cpu-1, vy-direct-nice.timer on node 1) reads it fresh: nothing to restart
