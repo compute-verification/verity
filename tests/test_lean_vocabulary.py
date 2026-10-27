@@ -1,4 +1,4 @@
-"""One vocabulary (AGENTS.md "Lean", Daniel, 25 Oct): a concept that more than one guarantee reads has one definition in the
+"""One vocabulary (AGENTS.md "Lean"): a concept that more than one guarantee reads has one definition in the
 spec, in `Security/Definitions/Core` or `Security/Definitions/Hash`, and every area and protocol reads that one.
 
 A type-forming declaration (`structure`, `inductive`, `class`, `abbrev`, `opaque`, or a `def` whose type is `Type` or `Sort`,
@@ -45,21 +45,22 @@ KNOWN: dict[str, str] = {
     f"{D}Pouw/TileBound/Defs.lean::Pouw.TileBound.Gate": "one m16n8k64 tile firing, a name clash: rename; wave 2",
     f"{P}Flock/Soundness/GateRows.lean::FlockSoundness.GateRows.Gate": "C-Flock's gate rows' AND/XOR/NOT gate; wave 2",
     f"{P}Flock/Soundness/Types/Flatten.lean::FlockSoundness.Types.Flatten.Gate": "C-Flock's flattened gate; wave 2",
-    f"{P}Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Gate": "RS-MODEL's proof-local gate; wave 2",
+    f"{P}Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Gate": "relative security's proof-local gate; wave 2",
     # Op: Core/Boolean's `Verity.Boolean.Op`.
     f"{D}Accounting/Gates/Model.lean::Accounting.Gates.Op": "the gate accounting's operation over input slots; wave 2",
+    f"{D}Core/Accel/Isa.lean::Verity.Accel.Op": "an opcode over stores, a name clash with Core/Boolean's: rename; wave 2",
     f"{D}Flock/Circuit.lean::FlockSoundness.Audit.Op": "C-Flock's audit gate op, a copy of Core/Boolean's; wave 2",
     f"{D}Pouw/Assumptions/Dimension/Embed.lean::Pouw.Dimension.Embed.Op": "an M4090 instruction, a name clash: rename; wave 2",
     # Partition: Core/Partition's `Verity.Partition`.
     f"{D}Claims/Sampling.lean::Claims.Sampling.Partition": "the sampling claim's classes, strata and units; wave 2",
     f"{D}Flock/Circuit.lean::FlockSoundness.Audit.Partition": "C-Flock's audit partition, a copy of Core's; wave 2",
-    # Prog
-    f"{D}Claims/Sampling.lean::Claims.Sampling.Prog": "the sampling claim's flattened program (#4330's `Lowers`); wave 2",
+    # Prog: Core/Accel/Machine's `Verity.Accel.Machine.Prog`.
+    f"{D}Claims/Sampling.lean::Claims.Sampling.Prog": "the sampling claim's flattened program; wave 2",
     f"{D}Pous/Game/Oracle.lean::Pous.Prog": "PoUS's parallel oracle program, a name clash: rename; wave 2",
     f"{D}Pouw/Eps1/M3.lean::Pouw.Eps1.Prog": "an M3 program for Dither's words; wave 2",
     f"{D}Pouw/PearlC/W1.lean::Pouw.PearlC.W1.Prog": "Pearl-C's W1 program, a constant bank and a code tree; wave 2",
     f"{D}Flock/Lowering.lean::FlockSoundness.Prog": "C-Flock's program of template units; wave 2",
-    f"{P}Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog": "RS-MODEL's proof-local program; wave 2",
+    f"{P}Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog": "relative security's proof-local program; wave 2",
     # Program
     f"{D}Accounting/CoinFlow.lean::Accounting.CoinFlow.Program": "a Program's dataflow over coins and values; wave 2",
     f"{D}NetworkCertifier/Run.lean::NetTiming.Program": "a committed Program's egress prediction; wave 2",
@@ -75,7 +76,7 @@ KNOWN: dict[str, str] = {
         "a session directory's files, a name clash: rename; wave 2",
     # Witness: Core/TC/Relation's `Verity.TC.Relation.Witness`, a tensor-core step's witness until wave 2 settles one.
     f"{D}Flock/Statement.lean::FlockSoundness.Model.Witness": "C-Flock's statement's witness bits; wave 2",
-    # Coins
+    # Coins: Core/Draw's `Verity.Coins`.
     f"{D}Accounting/BoundReceipt.lean::Accounting.BoundReceipt.Coins": "a bound receipt window's coins; wave 3",
     f"{D}Accounting/RateAudit.lean::Accounting.Rate.Coins": "a rate audit window's coins; wave 3",
     f"{D}Accounting/RateAuditSketch.lean::Accounting.RateSketch.Coins": "the rate sketch window's coins; wave 3",
@@ -88,13 +89,13 @@ KNOWN: dict[str, str] = {
     # CoinTree
     f"{P}Flock/Claims/Bridge/Committed.lean::Claims.Bridge.CoinTree": "the claims bridge's coin tree over k rounds; wave 3",
     f"{P}Flock/Soundness/ZK/GK/Extract.lean::FlockSoundness.ZK.GK.CoinTree": "the ZK extractor's coin tree; wave 3",
-    # Draw
+    # Draw: Core/Draw's `Verity.Draw`.
     f"{D}Accounting/Gates/Codec.lean::Accounting.Gates.Draw": "a k-round key's draw, a name clash: rename; wave 3",
     f"{D}Claims/Recursion.lean::Claims.Recursion.Draw": "a V* session's draw as its record holds it; wave 3",
-    f"{D}SampledProofs/DrawPressure.lean::Population.Exfil.Draw": "k of n units without replacement; wave 3",
+    f"{D}Population/DrawPressure.lean::Population.Exfil.Draw": "k of n units without replacement; wave 3",
     # Law: Core/Draw's `Verity.Law`.
-    f"{D}Flock/Audit/Law.lean::FlockSoundness.Audit.Law": "C-Flock's audit's copy of the draw law; wave 3",
-    # Collision
+    f"{D}Flock/Audit/Law.lean::FlockSoundness.Audit.Law": "C-Flock's audit's draw law over `Fin n`, an alias of Core's; wave 3",
+    # Collision: Hash/Basic's `Hash.Collision`.
     f"{D}Claims.lean::Claims.Collision": "a collision of a hash on messages; wave 4",
     f"{D}Flock/Merkle.lean::FlockSoundness.Merkle.Collision": "a collision of a hash on byte strings; wave 4",
     f"{P}Flock/Verifier/Hash.lean::Flock.Sha256.Collision": "a SHA-256 collision; wave 4",
@@ -104,6 +105,7 @@ KNOWN: dict[str, str] = {
     f"{D}Accounting/RateAudit.lean::Accounting.Rate.Device": "the rate audit's device; wave 5",
     f"{D}Accounting/RateAuditSketch.lean::Accounting.RateSketch.Device": "the rate sketch's device; wave 5",
     f"{D}Accounting/Bandwidth/Game.lean::Bandwidth.Device": "the bandwidth game's device; wave 5",
+    "Security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device": "what the auditor devices sign, by key; wave 5",
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device": "the memory challengers; wave 5",
     # InteractiveDevice
     f"{D}Accounting/RateAuditInteractive.lean::Accounting.Rate.InteractiveDevice": "the rate audit's; wave 5",
