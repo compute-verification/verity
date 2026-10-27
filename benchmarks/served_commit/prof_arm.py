@@ -1,4 +1,4 @@
-"""served_commit's noretain arm with NVTX ranges for nsys: one per run, per engine step (exec:<tokens>), per drain and per
+"""served_commit's arm (`arm.py`) with NVTX ranges for nsys: one per run, per engine step (exec:<tokens>), per drain and per
 committer step end. Measurement only."""
 from __future__ import annotations
 
@@ -205,7 +205,7 @@ class SwitchArm(RootsArm):
 
 
 class NativeDrainArm(RootsArm):
-    """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
+    """`RootsArm` whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
     ``host_fast`` False puts the committer's step back as it was before its host-cost changes (slots staged as views, the step end in
     several calls, the row order expanded on the serving thread); ``batch_copies`` False, the source's captured copies one by one.
     ``window`` (MiB, slots) sizes the staging ring in place of the collector's default (256 MiB x 8)."""
@@ -238,7 +238,7 @@ class NativeDrainBatchArm(NativeDrainArm):
 
 
 class RowsArm(NativeDrainArm):
-    """The nativedrain arm committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
+    """`NativeDrainArm` committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
 
     commit_scheme = "rows-sha512"
 
@@ -355,7 +355,7 @@ class RowsLayerCapArm(RowsCapArm, RowsLayerArm):
 
 
 class HiPrioArm(NativeDrainArm):
-    """The nativedrain arm with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
+    """`NativeDrainArm` with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
     on its side stream at the default priority (CUDA's lowest), gets a CTA slot only when no serving CTA waits for one."""
 
     def ready(self, target: Any) -> None:
@@ -369,7 +369,7 @@ class HiPrioArm(NativeDrainArm):
 
 
 class RowsHiPrioArm(HiPrioArm):
-    """The hiprio arm committing under rows-sha512."""
+    """`HiPrioArm` committing under rows-sha512."""
 
     commit_scheme = "rows-sha512"
 
@@ -432,15 +432,9 @@ class NoMemoArm(NativeDrainArm):
         com.finalize = finalize
 
 
-SERVED_COMMIT_PROF = RootsArm("served-commit-prof", retain="none")
-SERVED_COMMIT_SWITCH = SwitchArm("served-commit-switch", retain="none")
-SERVED_COMMIT_NATIVEDRAIN = NativeDrainArm("served-commit-nativedrain", retain="none")
-SERVED_COMMIT_NATIVEDRAIN_BASE = NativeDrainBaseArm("served-commit-nativedrain-base", retain="none")
-SERVED_COMMIT_NATIVEDRAIN_BATCH = NativeDrainBatchArm("served-commit-nativedrain-batch", retain="none")
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
 SERVED_COMMIT_ROWS_BASE = RowsBaseArm("served-commit-rows-base", retain="none")
 SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none")
-SERVED_COMMIT_NATIVEDRAIN_RING8 = NativeDrainRing8Arm("served-commit-nativedrain-ring8", retain="none")
 SERVED_COMMIT_ROWS_RING8 = RowsRing8Arm("served-commit-rows-ring8", retain="none")
 SERVED_COMMIT_ROWS_W64 = RowsW64Arm("served-commit-rows-w64", retain="none")
 SERVED_COMMIT_ROWS_CAP = RowsCapArm("served-commit-rows-cap", retain="none")
@@ -450,8 +444,5 @@ SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none
 SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
 SERVED_COMMIT_ROWS_4K_CAP = Rows4kCapArm("served-commit-rows-4k-cap", retain="none")
 SERVED_COMMIT_ROWS_LAYER_CAP = RowsLayerCapArm("served-commit-rows-layer-cap", retain="none")
-SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
 SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
-SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")
-SERVED_COMMIT_NOMEMO = NoMemoArm("served-commit-nomemo", retain="none")
 STOCK_PROF = StockProfArm("stock-prof")
