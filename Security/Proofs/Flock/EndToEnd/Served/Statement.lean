@@ -25,8 +25,8 @@ family of `Lc` bytes over a finite space `Ωc`, cut into one tape per stratum wh
 
 The coins are the challenger's, drawn before the epoch and committed under hm96 leaves; the game draws them after the
 prover registers (`auditLive`: the registration, then the coin), so the theorems take them independent of the prover's
-commitments, which holds with the challenger off the prover's node (`trusted-nebius-host`) releasing a coin only after
-its root (`trusted-host`) and the hm96 leaves hiding the coins perfectly. A draw that runs out of coins is a visible
+commitments, which holds with the challenger on a host the prover doesn't control, releasing a coin only after its
+root (`trusted-host`), and the hm96 leaves hiding the coins perfectly. A draw that runs out of coins is a visible
 failure the service never retries, so no accepted draw reads a spare byte. `Select.select` replays the bytes the draw
 read, the coins' first bytes (`coins.read_reason`), on which `drawUnits` draws what it draws on the whole family.
 -/
