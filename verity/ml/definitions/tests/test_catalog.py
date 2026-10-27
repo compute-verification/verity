@@ -48,6 +48,8 @@ COUNT = 1261
 
 COUNT -= 3  # `GeluTanhMulBf16_v2`, `GeluTanhMul_v2` and `GeluTanhMul_v3`, retired once `GeluTanhMul_v4` superseded them
 
+COUNT += 1  # `dead_free`'s AttnBlockFirst_v2, a line of its own so it merges with any other change to the count
+
 COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
 
 COUNT += 1  # dead_free's TokenSelectGroups_v1, a line of its own so it merges with any other change to the count
