@@ -252,9 +252,11 @@ DEV uint32_t words(int32_t a, int32_t b, float sr, float c0, float c1) {
   return (uint32_t)__bfloat16_as_ushort(__float2bfloat16_rn(ya)) | (uint32_t)__bfloat16_as_ushort(__float2bfloat16_rn(yb)) << 16;
 }
 
-// the epilogue's y words of a thread's accumulators in 8-column groups J0 .. J1 - 1, rows `row` and `row` + 8
-template <int J0, int J1> DEV void y_store(const int32_t* d, const Params& p, int row, int col0, bool live0, bool live1, float r0,
-                                           float r1) {
+// the epilogue's y words of a thread's accumulators in 8-column groups J0 .. J1 - 1, rows `row` and `row` + 8 (SW: groups
+// in A's order, `a_order`'s)
+template <int J0, int J1, bool SW = false>
+DEV void y_store(const int32_t* d, const Params& p, int row, int col0, bool live0, bool live1, float r0, float r1) {
+  constexpr int I1 = SW ? 2 : 1, I2 = SW ? 1 : 2;
   uint32_t* y0 = reinterpret_cast<uint32_t*>(p.y + (size_t)row * p.N);
   uint32_t* y1 = reinterpret_cast<uint32_t*>(p.y + (size_t)(row + 8) * p.N);
 #pragma unroll
@@ -262,10 +264,19 @@ template <int J0, int J1> DEV void y_store(const int32_t* d, const Params& p, in
     const int col = col0 + 8 * j;
     if (col < p.N) {
       const float2 c = *reinterpret_cast<const float2*>(p.sw + col);
-      if (live0) y0[col / 2] = words(d[4 * j], d[4 * j + 1], r0, c.x, c.y);
-      if (live1) y1[col / 2] = words(d[4 * j + 2], d[4 * j + 3], r1, c.x, c.y);
+      if (live0) y0[col / 2] = words(d[4 * j], d[4 * j + I1], r0, c.x, c.y);
+      if (live1) y1[col / 2] = words(d[4 * j + I2], d[4 * j + 3], r1, c.x, c.y);
     }
   }
+}
+
+// 8-column groups J0 .. J1 - 1 of a thread's accumulators put in A's order: the group's words 1 (row `row`, column 2 (x % 4)
+// + 1) and 2 (row `row` + 8, column 2 (x % 4)) exchanged in their own registers, so each group's four consecutive registers
+// are A's fragment for depth 32 (rows g, g + 8, g, g + 8) with no copy
+template <int J0, int J1> DEV void a_order(int32_t* d) {
+#pragma unroll
+  for (int j = J0; j < J1; j++)
+    asm volatile("{\n\txor.b32 %0, %0, %1;\n\txor.b32 %1, %1, %0;\n\txor.b32 %0, %0, %1;\n}" : "+r"(d[4 * j + 1]), "+r"(d[4 * j + 2]));
 }
 
 // a consumer warp's release of stage `bar`: to its own CTA's producer, and with CL = 2 to both CTAs', each of which writes
@@ -438,13 +449,15 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
     if constexpr (RR == 0) {
       y_store<0, NA / 4>(d, p, row, col0, live0, live1, r0, r1);
     } else {
-      // the reduction: chunk c's four atoms take accumulator groups 4 c .. 4 c + 3 as A.  The first half's atoms run under
-      // the second half's y words and the second half's under the first's, so no thread reads an accumulator an atom in
-      // flight reads.  Each R stage is released once no atom reads it (s8mrb: once the bulk add has read the sums over it)
+      // the reduction: chunk c's four atoms take accumulator groups 4 c .. 4 c + 3, in A's order, as A.  The first half's
+      // atoms run under the second half's y words and the second half's under the first's, so no thread reads an accumulator
+      // an atom in flight reads, and each half is put in A's order before the fence its atoms follow.  Each R stage is
+      // released once no atom reads it (s8mrb: once the bulk add has read the sums over it)
       using G = Red<TM, BN, RR>;
       constexpr int CH = G::CH, Q = G::Q, RST = G::RST;
       int32_t zs[RR / 2];
       int rs[RST];
+      a_order<0, NA / 8>(d);
       WG_FENCE;
 #pragma unroll
       for (int c = 0; c < CH; c++) {
@@ -457,6 +470,7 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
             for (int i = 0; i < RST; i++)
               if ((i + 1) * Q <= CH / 2 && lane == 0) release<CL>(bars + 8 * (STAGES + rs[i]));
           }
+          a_order<NA / 8, NA / 4>(d);
           WG_FENCE;
         }
         if (c % Q == 0) {
@@ -468,11 +482,11 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
 #pragma unroll
         for (int jj = 0; jj < 4; jj++) {
           const int j = 4 * c + jj;
-          immr<RR>(zs, d[4 * j], d[4 * j + 2], d[4 * j + 1], d[4 * j + 3], desc_sw128(a + 32 * jj), c + jj > 0);
+          immr<RR>(zs, d[4 * j], d[4 * j + 1], d[4 * j + 2], d[4 * j + 3], desc_sw128(a + 32 * jj), c + jj > 0);
         }
       }
       WG_COMMIT;
-      y_store<0, NA / 8>(d, p, row, col0, live0, live1, r0, r1);
+      y_store<0, NA / 8, true>(d, p, row, col0, live0, live1, r0, r1);
       WG_WAIT(0);
       acc_fence<RR / 2>(zs);
       acc_fence<NA>(d);
