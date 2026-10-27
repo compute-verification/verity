@@ -832,10 +832,10 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, one class, and its draw's
-    checked proof blocks. The strata are `partition.strata`'s, each unit a replay unit: its gates
+    checked proof blocks. The strata are `partition.strata`'s, each unit a replay block: its gates
     (`partition.unit_gates`), then a one-gate block per input row it owns, in gate order. A unit owns a gate of the root's
     input nodes (`program.is_input`) when it is the least unit one of whose gates has it as an operand; an input no unit
-    reads is in no slot. A replay unit's slot is its index in that order, and the checked proof blocks are every
+    reads is in no slot. A replay block's slot is its index in that order, and the checked proof blocks are every
     `(slot, index)` of each unit the draw proves (`draw.proved`), in slot order."""
     out = select(j)
     j = _json(j)
@@ -3040,7 +3040,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
     slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the layout is one class, and
-    each input row is a one-gate block of the first unit that reads it, so the replay units' gates are every gate of the
+    each input row is a one-gate block of the first unit that reads it, so the replay blocks' gates are every gate of the
     program once; and the checked proof blocks are every block of the drawn units' slots, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
@@ -3097,7 +3097,7 @@ def test_the_call_queries_cut_call_by_call(pieces):
     word = slots({**case, "query": _json(PO.query())})
     assert D.replay(SLOTS, {**case, "query": _json(PO.query())}, pieces) == ("output", D.canonical(word))
     assert [[r["unit"] for r in s] for s in word["classes"][0]] == [[0, 4], [1, 2, 3], [5]]
-    (first,), (second,) = word["classes"][0][1][0]["pus"], word["classes"][0][1][1]["pus"]
+    first, second = word["classes"][0][1][0]["pus"][0], word["classes"][0][1][1]["pus"][0]
     assert first[0] < second[0] < second[1] < first[1]
     call = slots({**case, "query": _json(PO.call_query(8))})
     assert D.replay(SLOTS, {**case, "query": _json(PO.call_query(8))}, pieces) == ("output", D.canonical(call))
