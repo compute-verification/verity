@@ -38,7 +38,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import statistics
 import sys
 from pathlib import Path
@@ -76,12 +75,13 @@ def linears(models: tuple[str, ...]) -> list[tuple[str, str, int, int]]:
 
 
 def probe():
-    """[SM clock MHz, board power W] of the leased GPU (NVML), or [None, None]."""
+    """[SM clock MHz, board power W] of torch's GPU (NVML, by the device's UUID: NVML's indices ignore
+    CUDA_VISIBLE_DEVICES), or [None, None]."""
     try:
         import pynvml
         pynvml.nvmlInit()
-        uuid = os.environ.get("GPU_LEASE_UUID")
-        h = pynvml.nvmlDeviceGetHandleByUUID(uuid) if uuid else pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
+        uuid = str(torch.cuda.get_device_properties(torch.cuda.current_device()).uuid)
+        h = pynvml.nvmlDeviceGetHandleByUUID(uuid if uuid.startswith("GPU-") else f"GPU-{uuid}")
         return lambda: [pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM), round(pynvml.nvmlDeviceGetPowerUsage(h) / 1e3)]
     except Exception:  # noqa: BLE001
         return lambda: [None, None]
