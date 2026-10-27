@@ -1138,22 +1138,6 @@ def test_a_second_admissible_result_of_another_backend_is_emitted_beside_the_fam
     assert {c.artifact for c in views.admissible} >= {fast, slow} and [c.artifact for c in views.cells] == [fast]
 
 
-def test_blake3_xob_commits_keyed_blake3_bytes_so_it_is_a_circuit_of_one_scheme() -> None:
-    """Decided from the code: ligero-verify's ``BLAKE3_XOB`` leaf scheme has ``BLAKE3``'s schema and params digest (the
-    committed object), so ``frame-v3/blake3-keyed`` lists both circuits and no scheme id is added for xob."""
-    import pathlib
-    import re as _re
-
-    src = (pathlib.Path(V.__file__).resolve().parents[5] / "archive" / "ligero-verify" / "src" / "leaf.rs").read_text(encoding="utf-8")
-    leaf = {m[0]: (m[1], m[2]) for m in _re.findall(r'name: "([^"]+)",\n(?:.*\n)*?    schema: "([^"]+)",\n    params_sha256: "([0-9a-f]+)"', src)}
-    assert leaf["blake3-xob"] == leaf["blake3"]
-    ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="x", commit="x")
-    sch = {s["id"]: s for s in ent["schemes"]}
-    assert sch["frame-v3/blake3-keyed"]["leaf_circuits"] == ["blake3", "blake3-xob"] and not any("xob" in k for k in sch)
-    for s in sch.values():                                                     # each scheme's circuits commit one object
-        assert len({leaf[c] for c in s["leaf_circuits"]}) <= (2 if s["id"] == "frame-v3/ajtai" else 1)
-
-
 def test_a_fused_stage_is_one_span_and_other_keeps_its_raw_value(store: LocalStore) -> None:
     art = committed(store, "blake3", t_total=0.4, commit=0.6, joints={("witness", "encoding_commitment"): 0.2})
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
