@@ -37,6 +37,7 @@
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
+  "Proofs.Properties.Attest",
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
