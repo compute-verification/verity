@@ -12,7 +12,15 @@ negatives.
 - `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its run root, the
   commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture, committed under rows-sha512
   (`COMMIT_SCHEME` names no other: vllm-v1 is kept only to read recorded runs), its window from `verity-vllm serving-rows`
-  (with `WINDOW=served`, the in-Commit hook's), and M0 and Lean built from the run's tree.
+  (with `WINDOW=served`, the in-Commit hook's), and M0 and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
+  single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the window its C2
+  site committed (`A5_WINDOW`).
+- `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on vy-dc-h200 (`research run --on vy-dc-h200 --cwd clone --
+  bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
+  Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
+  (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
+  a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
+  and that window, whose private bodies stay on the node.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the draw): GLM-5.3's TP8 Commit with
