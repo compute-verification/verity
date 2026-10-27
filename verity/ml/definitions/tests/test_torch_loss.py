@@ -2,7 +2,7 @@
 (`numerics.torch_kernels`), warp by warp at V = 12,288 (three loads a thread, the least vocabulary the block kernel runs at), on
 rows of normal logits and rows with special words (NaN, ±inf, all -0, the extremes). The model then matches torch's CPU
 cross-entropy and its backward to f32 rounding: the CPU kernels sum in another order and with another expf. The CUDA kernels
-themselves are `test_torch_training_sm120.py`'s. The target's logit is picked in numpy, since `GatherBf16x{V}_v2` is made on demand and has
+themselves are `test_torch_training_gpu.py`'s. The target's logit is picked in numpy, since `GatherBf16x{V}_v2` is made on demand and has
 its own tests."""
 from __future__ import annotations
 

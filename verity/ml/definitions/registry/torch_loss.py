@@ -29,8 +29,8 @@ each of its KL loads, so warp w (threads 32w .. 32w + 31) reads KL runs of 128 c
   memory, and warp 0 runs ``WarpReduce`` once more over the 32. Lane 0's tree is ``s_l = op(s_l, s_{l+h})`` for h = 16 .. 1
   (`WarpReduceMax`, ``a < b ? b : a``; `WarpReduceSum`, ``a + b``). A thread's max is never a NaN, so neither is the row's.
 - The sum: each thread folds ``sum + expf(x - max)`` from +0 in the same order (`LogSoftmaxLaneSumExp`), and the same two
-  trees add. ``expf`` is libdevice's `__nv_expf` (`NvExpf_v2`'s gates), whose MUFU.EX2 is `MufuEx2Ftz_v2`: KATTN-REF's sweep
-  (run r20261027-024703-41d4) found sm_120's ``ex2.approx.ftz.f32`` equal to it on all 2^32 inputs.
+  trees add. ``expf`` is libdevice's `__nv_expf` (`NvExpf_v2`'s gates), whose MUFU.EX2 is `MufuEx2Ftz_v2`: a sweep found
+  sm_120's ``ex2.approx.ftz.f32`` equal to it on all 2^32 inputs.
 - `LogSoftmaxWarpMax{V}` and `LogSoftmaxWarpSumExp{V}` are one warp's part, a proof block each; the second takes the 32 warps'
   maxes and reduces them itself, so the row's max is never a value of its own. `LogSoftmaxRowEnd` reduces both, takes
   ``logsum = logf(sum)`` (libdevice's `__nv_logf`, `NvLogf_v3`; its argument is at least 1 or not finite, so none of its
@@ -76,7 +76,7 @@ from verity.ml.circuits.types import Array, Tuple
 from . import boolean_moe as BMOE
 from .boolean_dsa_topk import DsaTopKOneHot, popcount
 from .gumbel_boolean import NvLogf
-from .torch_attention import SM120, SM120_SHAPES, SM120_STEP, nv_expf
+from .torch_attention import GPU_SHAPES, GPU_STEP, ON_GPU, nv_expf
 
 __all__ = ["LogSoftmaxAt", "LogSoftmaxLaneMax", "LogSoftmaxLaneSumExp", "LogSoftmaxNllBackwardElem", "LogSoftmaxNllBackwardWarp",
            "LogSoftmaxNllSlots", "LogSoftmaxRowEnd", "LogSoftmaxWarpMax", "LogSoftmaxWarpSumExp", "NllLossTorch",
@@ -97,12 +97,12 @@ SPAN = ILP * THREADS
 #: KL loads of 4096 logits: the least the block kernel runs at (below, the shared-memory kernel), and a chunk position's bound
 KL_MIN, KL_MAX = 3, 1 << 10
 M_MIN, M_MAX = 16, 1 << 24
-_ROWS = f"every row (V = 49,152) of {SM120_STEP}"
-_ON_ROWS = f"exact-model-tested; {_ROWS}: {SM120}"
+_ROWS = f"every row (V = 49,152) of {GPU_STEP}"
+_ON_ROWS = f"exact-model-tested; {_ROWS}: {ON_GPU}"
 
 
 def _inside(*names: str) -> str:
-    return f"exact-model-tested; inside {', '.join(names)}, on {_ROWS}: {SM120}"
+    return f"exact-model-tested; inside {', '.join(names)}, on {_ROWS}: {ON_GPU}"
 
 
 def _add(C, a, b):
@@ -306,19 +306,19 @@ NllLossTorch = specialized(
     doc="nll_loss_forward_reduce_cuda_kernel_2d on M rows: T = nll_loss_threads(M) threads, sh -= lp over each thread's rows "
         "with a label below V, the stride tree, (MEAN ? sh / tw : sh, tw), tw the count of valid labels",
     refuse=_refuse("M", "V", "MEAN"),
-    conformance=f"exact-model-tested; at MEAN = 1, M = 256 in {SM120_STEP} and M = 4,096 in {SM120_SHAPES}: {SM120}; MEAN = 0 "
+    conformance=f"exact-model-tested; at MEAN = 1, M = 256 in {GPU_STEP} and M = 4,096 in {GPU_SHAPES}: {ON_GPU}; MEAN = 0 "
                 "(a sum) is the same tree without the division, not run on a GPU")
 NllLossTorchBackward = specialized(
     "NllLossTorchBackward", 1, ("MEAN",), lambda S: lambda C, *w: _nll_backward(C, S, *w), _nll_backward_sig,
     doc="nll_loss_backward_reduce_cuda_kernel_2d's gradient: -(MEAN ? go / tw : go)",
-    refuse=_refuse("MEAN"), conformance=f"exact-model-tested; at MEAN = 1 in {SM120_STEP}: {SM120}; MEAN = 0 not run on a GPU")
+    refuse=_refuse("MEAN"), conformance=f"exact-model-tested; at MEAN = 1 in {GPU_STEP}: {ON_GPU}; MEAN = 0 not run on a GPU")
 LogSoftmaxNllSlots = specialized(
     "LogSoftmaxNllSlots", 1, ("V",), lambda S: lambda C, t, g: _slots(C, S, t, g),
     lambda S: ((("t", U32), ("g", F32)), Tuple(Array(LANES, U32), F32)),
     doc="a row's label t and gradient g as each warp's chunk reads them: t's position in its warp's chunk, 0xFFFFFFFF in the "
         "others (all 32 when t >= V), and the row's gradient sum, +0 + g (+0 when t >= V)",
     refuse=_refuse("V"),
-    conformance=f"exact-model-tested; the logits' gradient on {_ROWS}, with LogSoftmaxNllBackwardWarp_v1: {SM120}")
+    conformance=f"exact-model-tested; the logits' gradient on {_ROWS}, with LogSoftmaxNllBackwardWarp_v1: {ON_GPU}")
 LogSoftmaxNllBackwardElem = definition(
     "LogSoftmaxNllBackwardElem", 1, _backward_elem,
     (("x", BF16), ("hit", BIT), ("mx", F32), ("ls", F32), ("s", F32), ("g", F32)), BF16,
@@ -336,4 +336,4 @@ LogSoftmaxNllBackwardWarp = CompositeDefinition(
     lambda S: ((("x", _chunk(S)), ("p", U32), ("mx", F32), ("ls", F32), ("s", F32), ("g", F32)), _chunk(S)), _backward_warp,
     doc="cross-entropy's backward on one warp's chunk of a row of V bf16 logits: DsaTopKOneHot_v1{N = V / 32} of the target's "
         "position p, then LogSoftmaxNllBackwardElem on each logit",
-    conformance=f"exact-model-tested; the logits' gradient on {_ROWS}, with LogSoftmaxNllSlots_v1: {SM120}", refuse=_refuse("V"))
+    conformance=f"exact-model-tested; the logits' gradient on {_ROWS}, with LogSoftmaxNllSlots_v1: {ON_GPU}", refuse=_refuse("V"))

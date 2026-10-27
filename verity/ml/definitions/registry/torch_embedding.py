@@ -44,7 +44,7 @@ from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 
-from .torch_attention import SM120, SM120_SHAPES, SM120_STEP
+from .torch_attention import GPU_SHAPES, GPU_STEP, ON_GPU
 
 __all__ = ["EmbeddingBackwardFeature", "EmbeddingBackwardFeatureChunk", "EmbeddingBackwardSortEnd", "EmbeddingBackwardSortRun",
            "EmbeddingBackwardSortStep", "EmbeddingBackwardTorch", "plus_zero_bf16"]
@@ -63,9 +63,9 @@ FEATURE_MAX, CHUNK = 3072, 32
 #: the tokens of one `EmbeddingBackwardSortRun` in `EmbeddingBackwardTorch`, a proof block
 RUN = 8192
 M_MAX = 1 << 24
-_SORT = f"at M = 4,096 in {SM120_SHAPES}, all 576 features of 65 entries (the model: of all 3,859 the tokens hold)"
-_IN_SORT = f"exact-model-tested; inside EmbeddingBackwardTorch_v1, {_SORT}: {SM120}"
-_FEATURE = f"at M = 256 in {SM120_STEP}, all 576 features of the 253 entries its tokens hold and of 32 they don't"
+_SORT = f"at M = 4,096 in {GPU_SHAPES}, all 576 features of 65 entries (the model: of all 3,859 the tokens hold)"
+_IN_SORT = f"exact-model-tested; inside EmbeddingBackwardTorch_v1, {_SORT}: {ON_GPU}"
+_FEATURE = f"at M = 256 in {GPU_STEP}, all 576 features of the 253 entries its tokens hold and of 32 they don't"
 
 
 def _add(C, a, b):
@@ -179,13 +179,13 @@ EmbeddingBackwardTorch = CompositeDefinition(
     doc="embedding_dense_backward_cuda's sort path (M > 3072, deterministic) for entry v and one feature over M tokens: "
         "partials of 10 of v's tokens summed from +0 in position order, the partials summed from +0, rounded to bf16; "
         "EmbeddingBackwardSortRun on runs of 8192 tokens from +0, then EmbeddingBackwardSortEnd",
-    conformance=f"exact-model-tested; {_SORT}: {SM120}", refuse=_refuse("M", FEATURE_MAX + 1, M_MAX))
+    conformance=f"exact-model-tested; {_SORT}: {ON_GPU}", refuse=_refuse("M", FEATURE_MAX + 1, M_MAX))
 EmbeddingBackwardFeatureChunk = specialized(
     "EmbeddingBackwardFeatureChunk", 1, ("N",), lambda S: lambda C, *w: _feature_chunk(C, S, *w),
     lambda S: ((("acc", BF16), ("v", U32)) + _tokens(_statics(S, "N", 1, CHUNK).N), BF16),
     doc="one chunk of N <= 32 tokens of embedding_backward_feature_kernel for entry v: v's tokens summed in f32 from the "
         "first's gradient in position order, then acc = bf16(acc + bf16(sum)); acc when no token is v",
-    refuse=_refuse("N", 1, CHUNK), conformance=f"exact-model-tested; inside EmbeddingBackwardFeature_v1, {_FEATURE}: {SM120}")
+    refuse=_refuse("N", 1, CHUNK), conformance=f"exact-model-tested; inside EmbeddingBackwardFeature_v1, {_FEATURE}: {ON_GPU}")
 
 
 def _feature(B, S, v, t, g):
@@ -201,4 +201,4 @@ EmbeddingBackwardFeature = CompositeDefinition(
     _feature,
     doc="embedding_dense_backward_cuda's feature kernel (M <= 3072) for entry v and one feature over M tokens: "
         "EmbeddingBackwardFeatureChunk on each 32 consecutive tokens, from +0",
-    conformance=f"exact-model-tested; {_FEATURE}: {SM120}", refuse=_refuse("M", 1, FEATURE_MAX))
+    conformance=f"exact-model-tested; {_FEATURE}: {ON_GPU}", refuse=_refuse("M", 1, FEATURE_MAX))
