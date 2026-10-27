@@ -147,7 +147,8 @@ MODES = {0: "zeros", 1: "uniform", 2: "uniform, toggling", 3: "sparse 1/8", 4: "
          6: "weight-like N(0,37)", 7: "constant 1", 8: "ternary", 9: "unsigned [0,3]", 10: "unsigned [0,15]",
          11: "unsigned [0,127]", 12: "real (Llama-3.1-8B layer 0)"}
 ALL_MODES = tuple(MODES)
-HIDDEN_SCALES = (0.3, 0.45, 0.6, 0.8, 0.9, 1.0)
+HIDDEN_SCALES = tuple(round(0.25 + 0.01 * i, 2) for i in range(76))  # 0.25 to 1.00
+PRINTED_SCALES = (0.3, 0.45, 0.6, 0.8, 0.9, 1.0)
 
 
 def entropy_table(en: dict) -> list[dict]:
@@ -482,7 +483,7 @@ def print_run(res: dict) -> None:
         if ep.get("hidden_scaled"):
             print(f"   two classes, the hidden work at s × the certified work's floors, × {MARGIN}: " + "; ".join(
                 f"s {s}: ε {v['eps']:.3f} (C {v['capacity']:.3e} at {v['mhz']} MHz)"
-                for s, v in ep["hidden_scaled"].items()))
+                for s, v in ep["hidden_scaled"].items() if s in PRINTED_SCALES))
 
 
 if __name__ == "__main__":
