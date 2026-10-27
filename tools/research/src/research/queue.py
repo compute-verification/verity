@@ -860,11 +860,20 @@ class Queue:
 
     def fetch(self, prs: Iterable[PR] = ()) -> dict[int, str]:
         """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`;
-        return each fetched pull ref's commit, which can briefly differ from GitHub's API head."""
+        return each fetched pull ref's commit, which can briefly differ from GitHub's API head, and none for a PR whose pull ref
+        GitHub doesn't have (it waits, `fetch_prs`)."""
         prs = list(prs)
         self._registry = None
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
-        self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
+        if self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs, ok=None).returncode:
+            # one pull ref GitHub hasn't made yet fails the whole fetch (27 Oct: #5290 had only refs/pull/5290/merge, and every
+            # tick from 13:14Z ended rc=1): fetch `main` alone, raising as before, then each PR's ref, leaving out what's missing
+            self._remote(self.workdir, "fetch", "-q", "--prune", "origin", specs[0])
+            for p, spec in zip(prs, specs[1:], strict=True):
+                if (r := self._remote(self.workdir, "fetch", "-q", "origin", spec, ok=None)).returncode:
+                    _git(self.workdir, "update-ref", "-d", f"refs/queue/pr/{p.number}", check=False)
+                    self.log(f"research queue: #{p.number}'s pull ref can't be fetched, so it waits this sync: "
+                             f"{(r.stderr or r.stdout).strip()[-200:]}")
         # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
         # drivers (27 Oct: an agent VM's clone, checked out at 21 Oct, refused #4835 over a lean-audit.json conflict main's
         # merge.py resolves).  Drive's checkout, `next`'s tip, contains `main` and stays
@@ -875,7 +884,8 @@ class Queue:
             self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
         else:
             _git(self.workdir, "update-ref", "-d", f"refs/remotes/origin/{self.branch}", check=False)
-        return {p.number: _out(self.workdir, "rev-parse", f"refs/queue/pr/{p.number}") for p in prs}
+        heads = {p.number: _git(self.workdir, "rev-parse", "-q", "--verify", f"refs/queue/pr/{p.number}", check=False) for p in prs}
+        return {n: r.stdout.strip() for n, r in heads.items() if not r.returncode}
 
     def fetch_prs(self, prs: list[PR]) -> tuple[list[PR], dict[int, Entry]]:
         """Fetch ``prs`` and separate any whose API head disagrees with its pull ref, so one GitHub propagation race cannot stop
@@ -883,6 +893,9 @@ class Queue:
         fetched = self.fetch(prs)
         consistent, waiting = [], {}
         for p in prs:
+            if p.number not in fetched:
+                waiting[p.number] = Entry(p, state="waiting", why="GitHub has no pull ref for its head yet; retrying next sync")
+                continue
             if fetched[p.number] == p.head:
                 consistent.append(p)
                 continue
