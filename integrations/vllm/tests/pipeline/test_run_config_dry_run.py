@@ -180,7 +180,7 @@ def test_local_cpu_stages_on_m1(tmp_path):
     gates = json.loads((run / "gates.json").read_text())
     assert gates["verdict"] == "INCOMPLETE" and list(gates["gates"]) == list(G.ALL_GATES)
     st = {g: v["status"] for g, v in gates["gates"].items()}
-    # nothing fails on m1; every frozen gate lacks an artifact we skipped (G8: no query_use.json); [R9 ref] R1 reads the fold summary
+    # nothing fails on m1; every frozen gate lacks an artifact we skipped (G8: no query_use.json); R1 reads the fold summary
     # that IS written (errors/unresolved/unsupported 0) and passes -- it is never `skipped`
     assert st == {**{g: "skipped" for g in G.GATES + G.STRUCTURAL_GATES}, "R1": "pass"}, st
     assert "replay_a skipped" in gates["gates"]["G4"]["reason"] and "--skip" in gates["gates"]["G4"]["reason"]

@@ -71,10 +71,9 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
         return None
     dtype = str(buf.dtype).removeprefix("torch.")
     if buf.dtype != torch.bfloat16:
-        # [r8 E-cleanup, fp16 (d) `cos_sin_cache` root] a served-fp16 model's table is float16: it used to be silently NOT observed
-        # (a reader then found no captured cos_sin_cache.npy, which reads as a capture defect).  Observe it in its own dtype
+        # A served-fp16 model's table is float16: observe it (an unobserved table reads as a capture defect) in its own dtype
         # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers take bf16 words -- and label it; the bf16
-        # path below is unchanged.  There is still no fp16 analytic table.
+        # path below is unchanged.  There is no fp16 analytic table.
         if buf.dtype != torch.float16:
             return None
         words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)

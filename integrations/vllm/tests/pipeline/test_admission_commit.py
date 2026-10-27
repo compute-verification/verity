@@ -191,7 +191,7 @@ def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch,
 
 
 def test_the_commit_admission_counts_the_declared_lag():
-    """The host admission's lag rows are the manifest target's declared LAG, not a hard-coded 1 (the import used to miss and fall back)."""
+    """The host admission's lag rows are the manifest target's declared LAG, never a fallback of 1 when an import misses."""
     pytest.importorskip("torch")
     import inspect
 
