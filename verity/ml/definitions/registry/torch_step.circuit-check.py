@@ -26,8 +26,8 @@ def _boolean_roots() -> list[Any]:
 
 
 def _by_calls_roots() -> list[Any]:
-    """The whole step at one layer, B 1 x S 256, checked by its calls: 5.7e13 gates, too large to build whole, and
-    `TrainStep_v1` refuses a shape the cuBLAS capture doesn't cover, so no smaller one builds."""
+    """The whole step at one layer, B 1 x S 256, checked by its calls: lm_head's three GEMMs alone are past what circuit-check
+    builds whole, and `TrainStep_v1` refuses a shape the cuBLAS capture doesn't cover, so no smaller one builds."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import torch_step as TS
 
