@@ -26,6 +26,7 @@ import Proofs.Core.Fp32
 import Proofs.Core.Formalism
 import Proofs.Core.Expand
 import Proofs.Core.Padding
+import Proofs.Core.Unroll
 
 /-!
 # Proofs of core's guarantees

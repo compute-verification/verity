@@ -18,6 +18,8 @@ import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
 import Definitions.Accounting.Filler
+import Definitions.Accounting.FixedMachine
+import Definitions.Accounting.FixedMachine.Instances
 import Definitions.Accounting.HMu
 import Definitions.Accounting.Gates
 import Definitions.Accounting.Headline
@@ -73,5 +75,6 @@ run's guarantee per run is, PoUW's verdict, credits and help on one node of the 
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
 its, a pass's layout as the verifier's plan of a schedule of counted bits (`ScheduleDeterministic`), the run tree of
-a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds on a declared
-circuit are proved over (`Gates`). -/
+a prover's wipes that the memory cap's lifetime pool is over, the gate model the lower bounds on a declared
+circuit are proved over (`Gates`), and an actual circuit that is a fixed machine run for a number of steps, with its
+proof blocks' initial information (`FixedMachine`). -/

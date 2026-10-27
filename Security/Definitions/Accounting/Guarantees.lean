@@ -16,6 +16,7 @@ import Definitions.Accounting.Guarantees.Compose
 import Definitions.Accounting.Guarantees.ComposePeriod
 import Definitions.Accounting.Guarantees.Confidence
 import Definitions.Accounting.Guarantees.FillerLuck
+import Definitions.Accounting.Guarantees.FixedMachine
 import Definitions.Accounting.Guarantees.FpG1
 import Definitions.Accounting.Guarantees.HMu
 import Definitions.Accounting.Guarantees.DeclaredCircuit
@@ -80,4 +81,5 @@ circuit compiled to its templates, a declared circuit's live and read bits from 
 credits and help as its placed execution's gates, the grinding premium under hashed seeds and the deployed tile's
 moment, stacking's carrier lemma with the deployed remote audit for devices that read from carriers, also read against
 a declared circuit's requirement, and the composed guarantee for a declared circuit that passes the stacking property:
-its credited live and read bits from an accepted stacked audit. -/
+its credited live and read bits from an accepted stacked audit, and a fixed machine's gate count and its proof blocks'
+descriptions within their initial budgets and ingress (`FixedMachine`). -/
