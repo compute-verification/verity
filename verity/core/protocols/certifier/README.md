@@ -49,6 +49,8 @@ through when frames leave, once the Program fixes every frame's content and orde
   - `commitment`: the record v1.
   - `certificate`: the record v2, its salted digest, the `Issuer` and the LMS signer and key.
   - `audit`: the exact audit with record-and-reject, and the ingress status check.
+  - `lean_audit`: `audit.Audit` with every verdict computed by the Lean check (`NetworkCheck.Records`), the Python
+    beside it as the reference.
 - **Through the proof service** (N2).
   - `service.LinkWindows`, with `head_check`.
   - `served`: a served link's counts.
