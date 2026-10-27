@@ -6,7 +6,7 @@ skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
-rebuilds in a scratch of its own.
+rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.
 """
 from __future__ import annotations
 
@@ -112,6 +112,22 @@ def test_a_registered_fixture_is_found_by_its_path():
     art, rel = next(iter(reg.items()))
     assert resolver.registered(resolver.REGISTRY.parents[1] / rel) == art
     assert resolver.registered(resolver.EXPECTED_DIR / "no-such-row.json") is None
+    assert resolver.registered(resolver.FILES) is not None
+
+
+def test_a_rows_pins_are_files_tomls_and_nothing_resolves_unpinned_without_it(tmp_path, monkeypatch):
+    """An indexed row's sha256 / bytes pins are files.toml's (a registered fixture), read on first use: where files.toml is not
+    here, a file the row resolves is NotResolvable, never used unchecked."""
+    (tmp_path / "rows" / "k").mkdir(parents=True)
+    (tmp_path / "rows" / "k" / "a.json").write_text("{}")
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.setattr(resolver, "FILES", tmp_path / "files.toml")
+    row = resolver.Row("k", {"row": 9}, fixtures={}, indexed=True)
+    with pytest.raises(resolver.NotResolvable, match="fetch-fixtures"):
+        row.path("a.json")
+    (tmp_path / "files.toml").write_text('[rows."k".files."a.json"]\nrole = "record"\nbytes = 3\n')
+    with pytest.raises(resolver.InputMismatch, match="2 bytes on disk, pinned 3"):
+        row.path("a.json")
 
 
 def _post_flip_row(tmp_path, monkeypatch, *, rc: int | None):

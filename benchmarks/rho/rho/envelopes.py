@@ -1,20 +1,23 @@
-"""Layer 2, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the working draft's §8).
+"""Protocol soundness, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the
+working draft's §8).
 
-An envelope `E_i` narrows the prior if its verifier accepts, except with probability `δ_i(S)` per serving block. Each
-one here carries its parameters, the slack it leaves (shares of capacity by route, the uncertified gates `U` no
-inference block constrains) and its `delta`, split into the coins' draws and the cryptography's advantage:
+An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
+summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
+uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' draws and the
+cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (the host CPUs, known compute running no declared work), `gap` (its floor credit `residual` and the clock above the
-  credited one; with `undecl`, the audited residual `r̂`) and `skip` (its deficit `ε_W` and the certificate slack `ε'`).
+  (monitored capacity running no certified declared work: the host CPUs, the GPUs outside the floor credit `residual`
+  and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
+  certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
   the faulty blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
   accepted faulty blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
-* `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the prior content of its whole memory `M_s` (`per =
-  "server"`, Daniel's operating point, 26 Oct 12:16 PM PDT), or, the per-device sensitivity, each device
+* `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the earlier content of its whole memory `M_s` (`per =
+  "server"`, the ruled operating point), or, the per-device sensitivity, each device
   `residual_bits` and each host `host_residual_bits` (`per = "device"`); a boot disk the wipe doesn't reach keeps
   `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
   one game per server (or device) per wipe, summed over the horizon.
@@ -48,9 +51,9 @@ from rho.hardware import Fleet, Horizon, Location, Units
 from rho.params import Registry
 from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
 
-#: the routes of the uncertified gates, the prefix of each slack term's key (the working draft's §8: `ε_undecl`,
-#: `ε_gap`, `ε_skip`, `ε_break`, and Lean's `χ` as `exfil`)
-ROUTES = ("undecl", "gap", "skip", "break", "exfil")
+#: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
+#: Lean's `χ` as `exfil`)
+ROUTES = ("undecl", "skip", "break", "exfil")
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,9 @@ class Policy:
     name: str
     gamma: float
     k: float
+    #: the inference overhead: the honest inference workload's circuit under this partition over its unpartitioned
+    #: size, a factor beside the training overhead. NaN where it isn't modeled (its source says so).
+    inference_overhead: float = math.nan
 
 
 @dataclass(frozen=True)
@@ -84,8 +90,8 @@ class Context:
 
 @dataclass(frozen=True)
 class Delta:
-    """`Σ_i Σ_S δ_i(S)`, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the devices' logged coins (LMS), is
-    named beside it and not bounded here."""
+    """`Σ_a δ_a`, over envelopes and serving blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
+    devices' logged coins (LMS), is named beside it and not bounded here."""
 
     by: Mapping[str, tuple[float, float]]
 
@@ -129,8 +135,8 @@ class Pouw:
 
     def slack(self, loc: Location) -> dict[str, float]:
         r = self.audited(loc)
-        return {"undecl.host": self.host * loc.host_phi / loc.phi, "gap.floor": self.residual,
-                "gap.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
+        return {"undecl.host": self.host * loc.host_phi / loc.phi, "undecl.gpu": self.residual,
+                "undecl.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
 
     def delta(self, ctx: Context) -> tuple[float, float]:
         return self.window_delta_coin / self.eps_agg, self.window_delta_crypto / self.eps_agg
@@ -216,7 +222,7 @@ class Wipe:
     host_residual_bits: float = 0.0
     #: bits each server's boot disk keeps through a wipe that doesn't reach it (today's), on top of either form
     boot_disk_bits: float = 0.0
-    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (#4707's retention game)
+    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (the streamed wipe's retention game)
     game_delta_coin: float = 2.0**-128
     prf_advantage: float = 0.0
 
@@ -286,7 +292,7 @@ class Certifier:
     """A network certifier on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server. At the warden form's public parameters (the `WardenParams` of
+    inference block runs on a single server (ruled). At the warden form's public parameters (the `WardenParams` of
     `benchmarks/network_traces/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
@@ -302,16 +308,17 @@ class Certifier:
         r_out ≤ lanes ⌈T / (D + 1)⌉ (KO IDB + ⌈log₂(KO + 1)⌉) / (T τ_b)
 
     (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the Lean statement
-    `Properties.NetworkCertifier.PerServerIngress`; the egress at the same requests). The bound is stated per
-    link-window, so the rate is too: rho never cites less than the bound states. This is its honest-δ form, at a δ
-    where only the empty faulty set is possible. A faulty ingress unit adds `faulty_unit_bits` (`faultyIngressBits`),
-    which this form excludes; it is 0 when every ingress unit is drawn. The bound is a draft until that statement is
-    proved, so `declared_x` keeps the line rate as the ingress's upper end: the ingress is `declared_x · hosts · r_in`,
-    at most the location's `links`. A cadence whose `r_in` is below the prompt rate of the serving credited at the
-    location can't feed that serving, so `declared` is off by default until a deployment picks one that does."""
+    `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
+    bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
+    its honest-δ form, at a δ where only the empty faulty set is possible. A faulty ingress unit adds
+    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
+    bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
+    is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
+    the serving credited at the location can't feed that serving, so `declared` is off by default until a deployment
+    picks one that does."""
 
-    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1, since a
-    #: server's ingress carries only its declared inputs (without `declared`)
+    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 when a
+    #: server's ingress admits only declared inputs (without `declared`)
     intake: float = 1.0
     #: the certified prompt ingress in bit/s per location, given directly (None: `hosts · r_in` with `declared`, else
     #: `intake · α Φ`)
@@ -333,15 +340,15 @@ class Certifier:
     hold: float = math.nan
     outputs: float = math.nan
     bucket_s: float = math.nan
-    #: `T`, buckets a link-window (the warden's `window`), the length the bound is stated per
+    #: `T`, buckets a link-window (the warden's `window`), the length the per-server bound is stated per
     window_buckets: float = math.nan
-    #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1, and
-    #: line rate the upper end until the bound is proved
+    #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
+    #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
     declared_x: float = 1.0
 
     CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
-    INTAKE = ("draft:per-server-declared-io",)
-    DECLARED = ("draft:per-server-declared-io", "draft:per-server-ingress")
+    INTAKE = ("draft:declared-ingress",)
+    DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
 
     def __post_init__(self) -> None:
         unset = [k for k in DECLARED_IO if self.declared and not math.isfinite(getattr(self, k))]
@@ -446,7 +453,7 @@ def _dark(ctx: Context) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class Unmonitored:
-    """No protocol: every serving block is unconstrained (`g = 1`, `ρ = μ`)."""
+    """No protocol: every serving block is unconstrained (`g = 1`, overhead `μ`)."""
 
     name: str
 
@@ -471,7 +478,7 @@ class Remote:
     #: premises, and the registration
     CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.BaselineRegistered",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
-    ABIDING = ("undecl.host", "gap.floor", "gap.clock", "skip.pouw")
+    ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
     def envelopes(self) -> dict[str, Any]:
         return {"pouw": self.pouw, "detection": self.detection}

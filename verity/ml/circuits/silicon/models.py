@@ -9,7 +9,7 @@ A *model* is the executable, bit-exact semantics of one accumulator coordinate o
   summed exactly, and the sum is normalised back to ``width`` bits by truncation (round toward zero).  The result
   of one group is the accumulator of the next.  ``Pipeline`` is this class's historical name and stays an alias.
 * :class:`BlockScaledAlignAdd` -- Blackwell's block-scaled FP4 path (``mma.sync kind::mxf4nvf4`` on sm_120), as
-  measured on the RTX 5090 by lanes fp4-5090 and fp4-re: four *exact* 16-term group dots over E2M1, per-block
+  measured on the RTX 5090: four *exact* 16-term group dots over E2M1, per-block
   scales applied losslessly, then one five-way align-add of the four scaled terms and the carried accumulator whose
   alignment grid is set by the *scale exponents* of the leading live group (27 bits below the unit weight of its
   scaled dot) and by a 36-bit window riding the accumulator's exponent, truncating toward zero, normalised RZ, every
@@ -30,11 +30,10 @@ exponent floor are parameters, plus the saturation rule measured on Ada (a group
 sticky infinity).  BlockScaledAlignAdd started as a port of autoproof ``fp4-ref/src/native.rs`` (``transducer`` /
 ``native_dot_f32``) and ``spec/src/dyadic.rs`` (``trunc_rz``, ``to_f32``) as adopted in
 ``spec/SEMANTICS.lock.v1.json`` (replica: ``verity/ml/circuits/silicon/captures/autoproof-SEMANTICS.lock.v1.json``); its alignment rule was
-re-fitted by lane fp4-re on the RTX 5090 captures of lane fp4-5090 (log entries D16, D17, D18) and confirmed by the
-fp4-re runs cited in each instance's ``validated`` string.
+re-fitted on the RTX 5090 captures (log entries D16, D17, D18) and confirmed by the runs cited in each instance's
+``validated`` string.
 
-The ``GroupSum`` code moved here from ``silicon.py`` unchanged (Phase 0 of the silicon campaign); ``silicon.py``
-re-exports every name, so ``silicon.tc_dot`` is still the executable definition the frozen target names.
+``silicon.py`` re-exports every name, so ``silicon.tc_dot`` is still the executable definition the frozen target names.
 """
 from __future__ import annotations
 
@@ -357,7 +356,7 @@ ADA_E4M3_M16N8K32 = GroupSum(
 # --- E5M2 hypotheses (no silicon measured) -------------------------------------------------------------------------
 # The FP8 adder does not know which FP8 format fed the products (the product of two E5M2 operands is a 6-bit
 # integer at a wider exponent range); the hypothesis is therefore "the E4M3 pipeline with E5M2 products".  The
-# probe lane must confirm groups, width and floor before either is called validated.
+# hardware probe must confirm groups, width and floor before either is called validated.
 
 ADA_E5M2_M16N8K32 = GroupSum(
     name="ada_e5m2_m16n8k32",
@@ -517,8 +516,8 @@ def _scale_dyadic(scale: str, code: int) -> tuple[int, int]:
             raise InvalidArtifact("UE8M0 NaN scale")
         return 8, code - 130                        # 2^(code-127) written with a 4-bit mantissa like UE4M3's
     if scale == "ue4m3":
-        # sm_120 reads a UE4M3 scale from its low 7 bits and ignores bit 7 (all 256 bytes, r20260930-093120-b2f2; the
-        # 17 bit-7 vectors of the Lean scale-decode review replayed on the RTX PRO 6000, r20260930-161935-83a8), so
+        # sm_120 reads a UE4M3 scale from its low 7 bits and ignores bit 7 (all 256 bytes, and the 17 bit-7 vectors of the
+        # Lean scale-decode review replayed on the RTX PRO 6000), so
         # 0x80 is a zero scale like 0x00 and 0xFF is NaN like 0x7F
         code &= 0x7F
         e, m = code >> 3, code & 7
@@ -584,11 +583,10 @@ class BlockScaledAlignAdd:
     live group had both UE4M3 exponent fields at 15.  Both are what the rule above produces when the leading
     group's mantissa is 15 bits wide (the clip: ``X = 8`` for exponent fields 15/15, ``8 - 27 = -19``); when it is
     not, model5 mis-predicts opposite-sign accumulators 37..42 binades below the leading exponent by 1 ulp (D17,
-    12,790 / 1.5M of lane fp4-5090's cases), the rule above does not (fp4-re: 0 / 1,736,704 nvfp4 and
-    0 / 622,592 mxfp4 elements of the same captures).  The exponent-field accumulator anchor and ``grid_floor``
-    were fitted by lane fp4-re on the subnormal-result regime of UE8M0 (run r20260922-215831-c3d8: 528 residual
-    mismatches under the true-msb anchor without a floor -> 0; the floor's minimum is sharp, -173 and -175 each
-    leave > 20; log entry D19).
+    about 1% of the captured cases), the rule above does not (0 mismatches over the same captures).  The
+    exponent-field accumulator anchor and ``grid_floor`` were fitted on the subnormal-result regime of UE8M0 (the
+    true-msb anchor without a floor leaves residual mismatches, this rule none; the floor's minimum is sharp, -173 and
+    -175 each leave some; log entry D19).
 
     ``step`` takes ``a_words = a_codes[0..k] + a_scales[0..k/block]`` (likewise ``b``); :meth:`step_scaled`
     takes them apart.  ``dyadic.rs``-style helpers (``_trunc_rz_to_grid``, ``_to_f32_rz``) are autoproof's.
@@ -825,7 +823,7 @@ BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
 
 # mxfp4 (UE8M0 scales over blocks of 32): the same adder, the same constants -- the UE8M0 scale is 2^(code-127)
 # written as the 4-bit mantissa 8 at 2^(code-130), so the anchor follows the raw exponent fields with a 6-bit offset
-# (lane fp4-5090 fitted 33 in raw-exponent units; that is 27 here).  Log entry D18.  ``underflow_zero`` (D13):
+# (the fit's 33 in raw-exponent units is 27 here).  Log entry D18.  ``underflow_zero`` (D13):
 # the sign of a nonzero sum lying entirely below the FP32 subnormal grid.
 BLACKWELL_SM120_MXF4 = BlockScaledAlignAdd(
     name="blackwell_sm120_mxf4_m16n8k64",
@@ -864,8 +862,8 @@ BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
 
 
 # Blackwell datacenter (sm_100, B200): ``tcgen05.mma`` is a different instruction (tensor-memory accumulators, M = 128 minimum,
-# issued by one thread, completion through an mbarrier) and lane fp4-re refused to assume it computes the sm_120 words.  Lane
-# tcgen05 measured it: the sm_120 constants, unchanged, reproduce every word.  These are separate model objects so the registry
+# issued by one thread, completion through an mbarrier), so it was not assumed to compute the sm_120 words.  Measured on
+# the B200, the sm_120 constants, unchanged, reproduce every word.  These are separate model objects so the registry
 # names the architecture it was measured on; their parameters are BLACKWELL_SM120_*'s to the bit.
 _TCGEN05_PIN = (
     "lane tcgen05 2026-09-23, NVIDIA B200 (sm_100, cc 10.0, driver 580.126.09, nvcc 12.9.86 -gencode compute_100a/sm_100a, "

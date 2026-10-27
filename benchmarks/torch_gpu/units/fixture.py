@@ -1,5 +1,5 @@
 """The units' check data, from the twins: pools of random and special rows and every word the kernels must write for them,
-and the exhaustive sweeps' block digests (sweep.py).
+and the exhaustive sweeps' chunk digests (sweep.py).
 
 CHECK/rmsnorm.npz   per width N in RMS_N (16384 the frozen one): x (P, N), w (2, N) two gains, out (2, P, N) for each gain,
                     chunks (P, nc), groups (P, ng), rs (P,), kind (P,)
@@ -8,7 +8,7 @@ CHECK/softmax.npz   x (P, 32) and, at every length n = 1..32, p (P, 32, 32) [row
 CHECK/argmax.npz    per V in ARGMAX_V (256 the frozen one): x (P, V), token, best, idx
 CHECK/relu.npz      every bf16 word and its ReLU
 CHECK/add.npz       a, b (P, 16384) and y, the residual add, kind (P,)
-CHECK/sweep.json    every op's block digests (sweep.OPS)
+CHECK/sweep.json    every op's chunk digests (sweep.OPS)
 CHECK/fixture.json  the seeds, kinds and counts, the cross-checks and each file's sha256
 Each pool's rows come from KINDS of generators (normal values, wide exponents, subnormals, overflow, ties, signed zeros,
 NaN and infinities, uniform random words, ...), each row from its own seed.
@@ -413,8 +413,8 @@ def sha256(path: str) -> str:
 
 
 def _digest(task: tuple[int, int]) -> tuple[int, int, int]:
-    op, b = task
-    return op, b, SW.digest(op, b)
+    op, c = task
+    return op, c, SW.digest(op, c)
 
 
 def main(argv: list[str]) -> int:
@@ -470,11 +470,11 @@ def main(argv: list[str]) -> int:
     files = ["rmsnorm.npz", "quant.npz", "softmax.npz", "argmax.npz", "relu.npz", "add.npz"]
     if not a.no_sweep:
         t1 = time.time()
-        tasks = [(op, b) for op in SW.OPS for b in range(SW.blocks(op))]
+        tasks = [(op, c) for op in SW.OPS for c in range(SW.chunks(op))]
         with mp.get_context("spawn").Pool(int(os.environ.get("PROCS", "8"))) as pool:
             res = pool.map(_digest, tasks, chunksize=1)
         sw = {str(op): {"name": SW.OPS[op][0], "n": SW.OPS[op][1], "arg": SW.OPS[op][2],
-                        "blocks": [f"{d:016x}" for o, b, d in sorted(res) if o == op]} for op in SW.OPS}
+                        "chunks": [f"{d:016x}" for o, c, d in sorted(res) if o == op]} for op in SW.OPS}
         with open(os.path.join(out, "sweep.json"), "w") as f:
             json.dump(sw, f, indent=0)
         files.append("sweep.json")

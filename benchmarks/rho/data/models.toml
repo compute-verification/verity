@@ -131,8 +131,8 @@ step_tokens = { value = 6.7e7, unit = "token", source = "Kimi K2 technical repor
 [run.frontier-pretrain]
 model = "deepseek-v4-pro"
 kind = "pretrain"
-compute = { value = 3e26, unit = "FLOP", source = "a frontier pretraining run of 2026, about 3e26 FLOP (the training lane's brief), on V4-Pro's architecture, the newest frontier one with known shapes (overtrained at 49B active: about 1e15 tokens)", status = "assumed" }
-step_tokens = { value = 9.44e7, unit = "token", source = "ruling: Daniel 25 Oct work reference, one V4-Pro optimizer step is a 94.4M-token batch (run.v4-step)", status = "ruled" }
+compute = { value = 3e26, unit = "FLOP", source = "a frontier pretraining run of 2026, about 3e26 FLOP (assumed), on V4-Pro's architecture, the newest frontier one with known shapes (overtrained at 49B active: about 1e15 tokens)", status = "assumed" }
+step_tokens = { value = 9.44e7, unit = "token", source = "ruled: the work reference, one V4-Pro optimizer step is a 94.4M-token batch (run.v4-step)", status = "ruled" }
 
 [run.llama3-405b-pretrain]
 model = "llama3-405b"
@@ -154,7 +154,7 @@ tokens = { value = 1.8e13, unit = "token", source = "Qwen2.5 technical report: 1
 [run.kimi-k2-rl]
 model = "kimi-k2"
 kind = "rl-agentic"
-compute = { value = 1e25, unit = "FLOP", source = "frontier agentic RL at about pretraining's compute (benchmarks/nci/parameters.json rl.compute_share/frontier-2025 high 1.0; the training lane's brief: about 1e25), over three times Kimi K2's own 3e24", status = "assumed" }
+compute = { value = 1e25, unit = "FLOP", source = "frontier agentic RL at about pretraining's compute (benchmarks/nci/parameters.json rl.compute_share/frontier-2025 high 1.0; about 1e25), over three times Kimi K2's own 3e24", status = "assumed" }
 
 [run.kimi-k2-rlvr]
 model = "kimi-k2"
@@ -164,7 +164,7 @@ compute = { value = 3e23, unit = "FLOP", source = "benchmarks/nci/parameters.jso
 [run.qwen25-1b5-grpo]
 model = "qwen25-1b5"
 kind = "rl-elicit"
-tokens = { value = 2.6e7, unit = "token", source = "note:training-20261024T2336Z-report-tvi-findings A2 (art:d8feafe2a5fc): GRPO on GSM8K, 48 prompts x 100 steps (the 7B arm used a third); about 8 rollouts of about 700 tokens a prompt, assumed", status = "assumed" }
+tokens = { value = 2.6e7, unit = "token", source = "A2's measured runs: GRPO on GSM8K, 48 prompts x 100 steps (the 7B arm used a third); about 8 rollouts of about 700 tokens a prompt, assumed", status = "assumed" }
 step_tokens = { value = 2.6e5, unit = "token", source = "a hundredth of the run's tokens: 48 prompts x about 8 rollouts x about 700 tokens a step", status = "assumed" }
 
 [run.kimi-k2-sft]
