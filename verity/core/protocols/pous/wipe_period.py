@@ -30,7 +30,7 @@ periods). No network certifier counts the session's egress yet, so the challenge
 leg's bound is vacuous: its verdict is real and its quantity isn't. The leg's record names what the bound doesn't cover
 (`uncertified`): the key off its own host, an uncounted egress, the node's memory outside the declared tiers
 (`undeclared`) and each link leaving the node that no network certifier counts (`wipe_party.link`).
-`main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU).
+`main` runs the leg on this node and prints its `summary` (`examples/wipe/demo.sh` runs it on one GPU).
 """
 
 from __future__ import annotations
