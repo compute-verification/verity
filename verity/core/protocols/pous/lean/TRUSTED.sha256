@@ -7,7 +7,7 @@ ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../../../../Security/lean-toolchain
 7f635cbaebed26f11d2673c27e952f2a19281528b5bd0b1f20ef10dcfa6d11fb  ../../../../../Security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
-0930aa61ef10caf3a7bc94eec8d7876c5d38cd9aac9e14b794136723df36a5ba  ../../../../../Security/Proofs/lakefile.toml
+494b1b31ac6341f2563c72ea24f4e88347ddb2732a8acf6c2bb234a4032c4086  ../../../../../Security/Proofs/lakefile.toml
 f4cb72d3c83b113593469e056cc6fb514bd049421264f74adca175527ba3bb29  ../../../../../Security/Proofs/lake-manifest.json
 dcd2ec45928a625652ff19f6d8ddb5b28aea2e71ae920e3a957634822c7e3325  ../../../../../Security/Definitions/Pous.lean
 3dec494c279c59a29d7d17d53987e71bfce51434dc21052f220abca76e219eca  ../../../../../Security/Proofs/Pous/Statements.lean
@@ -20,7 +20,7 @@ f880248af5267b110f4cdfd91c67000c4a81917eb942429f7cae2ee5d4850f66  ../../../../..
 900c51a66e89220a189e1e48e2d7adf5746b7e201580c8f3f50c86f110c41544  ../../../../../Security/Definitions/Pous/Accounting/PubMeets.lean
 d288169b3dc60861ae150688cdc6facb8ae60d95a9ab91704852285843434db0  ../../../../../Security/Definitions/Pous/Accounting/Rebuild.lean
 80287395e1bd5ee050165df0215af429058d3a5903e4031d6830514caa24e9fe  ../../../../../Security/Definitions/Pous/Assumptions.lean
-7c185b45b0586268ca7e87ebb9b3352e39f0daece3964a56e64d069f110d3441  ../../../../../Security/Definitions/Pous/Assumptions/P2.lean
+09fe74a82c160c88a3ad8dca233227ec179ec130e5f85a13f83974078c8c315c  ../../../../../Security/Definitions/Pous/Assumptions/P2.lean
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
 16bdbfdeebc9c9be1ba8cbb7306b2eca23ea0f5d28103bf8b3728b77e1af8059  ../../../../../Security/Definitions/Pous/Guarantees.lean

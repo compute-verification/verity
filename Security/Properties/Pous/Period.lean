@@ -19,11 +19,13 @@ record, a function of all the run's coins.
   audit has its per-run guarantee (`Accounting.Run.CapacitySoundPerRun`), the input `Accounting.Guarantees.JointPerRun`
   takes, and its sure-bound form (`Accounting.Run.CapacitySound`), the one `Accounting.Guarantees.Joint` takes.
 
-Both rest on the conjecture `P2RingAuditSecure`, which `Pous.EndToEnd.EndToEndRing` takes, and on `RingDevice`, the
-per-run reading of `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` (`Pous.EndToEnd`'s
-header): no Lean theorem discharges it, since it is the step from the deployed device to the ring model. The setup
-check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`) are proved against `SetupProtocol.protocol.check`
-(`Proofs.Properties.Pous.Setup`), so neither is a premise.
+Both rest on the conjecture `P2RingAuditSecure` at a budget `(D, Q, L)`, which `Pous.EndToEnd.EndToEndRing` takes,
+and which is false at some budgets; `Pous.Period.PeriodHeldDeployed` (`Properties.Pous.PeriodDeployed`) takes it only
+at the budget the deadline and the round floor give. Both rest also on `RingDevice`, the per-run reading of
+`pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` (`Pous.EndToEnd`'s header): no Lean theorem discharges
+it, since it is the step from the deployed device to the ring model. The setup check's `AcceptsDecodes` and
+`PublishesRoot` (`Properties.Pous`) are proved against `SetupProtocol.protocol.check` (`Proofs.Properties.Pous.Setup`),
+so neither is a premise.
 
 The certificate is graded by the peak (`Accounting.Guarantees.CapacityOfStateBound`'s reading): the bit-ticks below
 `S · len` bound the capacity account's memory at every tick of the window by `S · len`, so `S · len + S_chip + c` must
