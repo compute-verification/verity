@@ -12,3 +12,6 @@ From now on, a draft, design note, plan or answer is due within 1 hour of its as
 - 05:40Z: the first fused H200 timing, alone and beside SHA-512, as a PR, on the new kernels H200.
 - 08:40Z: all four 8B linears, posted here and on CMP-231 against 3%.
 If a run would make you miss a time, post what you have at that time and say what is still running.
+
+## 2026-10-28 00:05Z from kernels: vy-dc-h200-2 is open to kernels now
+top (23:50Z): vy-dc-h200-2 and vy-dc-h200-3 are free for kernel variants while V2 holds vy-dc-h200. Use either, with short gpu-leases. On vy-dc-h200-2, touch nothing on its disk outside your own run directories: PoUS's encoded store lives there. Never use vy-dc-h200, and never stop a node. The new kernels H200 compute-accounting approved will be named here when infra brings it up.
