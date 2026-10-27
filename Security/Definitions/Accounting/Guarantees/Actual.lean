@@ -1,7 +1,7 @@
 import Definitions.Accounting.Physical
 import Definitions.Core.Partition
-import Definitions.Nci.Reads
-import Definitions.Nci.Assumptions
+import Definitions.InferenceOnly.Reads
+import Definitions.InferenceOnly.Assumptions
 
 /-!
 # The actual circuit's runtime statements (trusted)
@@ -13,14 +13,14 @@ the baseline `θ_A` (`Placed.declaration`), is the declaration NCI's statements 
 * `WindowsAt` (the capacity form at any cuts): for any cuts `τ` of `[0, t)` and any set `G` of gates, the windows
   `A[X i, [τ j, τ (j + 1))]` divide that declaration's computed gates into `n J` IUs, each of at most
   `Φ_X (τ (j + 1) − τ j)` gates and reading at most `stateIn_X(τ j, G) + β_X (τ (j + 1) − τ j)` bits in `G`, baseline
-  included (`Nci.readsIn`). It takes no memory constraint: the state at each cut is in the bound.
+  included (`InferenceOnly.readsIn`). It takes no memory constraint: the state at each cut is in the bound.
 * `Windows` (the capacity form): the windows `A[X i, [kω, (k + 1)ω)]`, cut at `t`, divide that declaration's computed
   gates into `n ⌈t/ω⌉` IUs, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
   `M_X + β_X ω` novel bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
 * `Runtime` (the corollary): when, in a run, the developer's region before every `t` by which it holds `P`'s outputs
   at positions fixed across the values of `P`'s inputs (the runtime reads the strategy, v2.8: `Actual.runtime`) runs a
   chain of at least `G` products, under NCI's two incompressibility assumptions at `(Γ_A, K_A)`, the runtime is at least
-  `ω (G f(K_A) / (n K_A) − 1)`, where `f = Nci.readFactor` (`F = f(K)/(2α)`) and `Γ_A ≥ Φ_X ω`, `K_A ≥ M_X + β_X ω` at
+  `ω (G f(K_A) / (n K_A) − 1)`, where `f = InferenceOnly.readFactor` (`F = f(K)/(2α)`) and `Γ_A ≥ Φ_X ω`, `K_A ≥ M_X + β_X ω` at
   every location.
 
 The proofs are in `Security/Proofs/Accounting/Actual/`.
@@ -28,7 +28,7 @@ The proofs are in `Security/Proofs/Accounting/Actual/`.
 
 namespace Accounting.Guarantees.Actual
 
-open Verity Nci Finset
+open Verity InferenceOnly Finset
 
 /-- **The windows at any cuts divide the developer's region into small IUs** (capacity form at cuts). For every actual
 circuit `A` meeting causality, unit-priced compute rate and links at the developer's pairwise disjoint locations `X i`,
@@ -73,7 +73,7 @@ circuit `A` meets the constraints of `Windows` at the locations and `ω` as ther
 `K ≥ M_{X i} + β_{X i} ω` at every location, and such that at every `t` by which positions of the developer's before
 `t`, the same in every run, hold `P`'s outputs (`Actual.Computes`, v2.8), `A[X, [0, t))` runs a chain of at least `G`
 products, of inner dimensions at least `d`, under NCI's two incompressibility assumptions at `(Γ, K)`: every `t` at or
-past the runtime `t_A(P)` is at least `ω (G f(K) / (n K) − 1)`, `f = Nci.readFactor`, so `t_A(P)` is. -/
+past the runtime `t_A(P)` is at least `ω (G f(K) / (n K) − 1)`, `f = InferenceOnly.readFactor`, so `t_A(P)` is. -/
 def Runtime : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (P : Circuit) (S : P.Transcript → Actual.Run L) (v : P.Transcript)
     (ℓ : L → L → ℕ) (Φ M : Finset L → ℕ) (ends : E → L × L) (β : E → ℕ)

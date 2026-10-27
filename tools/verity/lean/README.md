@@ -343,7 +343,7 @@ statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other li
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
 
-`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
+`four_names` lists the namespace roots (`["InferenceOnly", "NetTiming"]`) whose guarantees are all in the four-name form: each is
 `X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
 audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
 lifted, or no longer a guarantee.

@@ -5,7 +5,7 @@ import NciCheck.Desc
 
 `NciCheck.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
 says what value it holds, so a developer could put values computed on unmonitored hardware in θ and read them for free.
-`Nci.Assumptions.BaselineRegistered` states what θ must hold: registered public data, registered at the start of the
+`InferenceOnly.Assumptions.BaselineRegistered` states what θ must hold: registered public data, registered at the start of the
 deployment. An output of an earlier run, certified or not, is never θ (Daniel, 21 Oct: registration happens at the start
 of a deployment and essentially never changes). One registration log is one deployment, and θ holds what its first
 record registers (compute-accounting, 21 Oct): the first run's θ cites its own record, which opens the log, and every
@@ -35,7 +35,7 @@ The trusted input, beside the instance, is what the service holds, never the pro
 Each θ entry lies in a root input node `k` whose gates are `w` bits each, part of the parameter `p` whose input nodes hold
 `n_p` gates. The run's own record registers `p` (R7) under a hiding root, and the entry is bound when that root is the
 cited `R`: the frame-v3-sha512 root over hm96-sha512 rows determines the rows, short of a SHA-512 collision among the
-inputs hashed along the two trees (`Nci.Assumptions.RootsBind`, the binding premise the reduction names). That is
+inputs hashed along the two trees (`InferenceOnly.Assumptions.RootsBind`, the binding premise the reduction names). That is
 R7's `held` rule: a value keeps its root across records (`one_stage/registration.py`).
 
 ## Refusals
@@ -78,7 +78,7 @@ def keys? : Json → Option (Array String)
   | _ => none
 
 /-- `j` as a string, `none` where it is none. A field is compared with a string through it, never with `Json`'s `==`,
-which is `partial`, so that what the check compares is what `Properties.Nci.Baseline` can state. -/
+which is `partial`, so that what the check compares is what `Properties.InferenceOnly.Baseline` can state. -/
 def strOf? : Json → Option String
   | .str s => some s
   | _ => none

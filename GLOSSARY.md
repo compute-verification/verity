@@ -24,7 +24,7 @@ appear).
 | (c, k), 𝒞_{c,k} | A partition's gates per block, exactly (padded), and unregistered input bits per block, at most: \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the class of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
 | A, x(g), t(g) | The actual circuit: everything run in the period, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
-| W_cert(X, J), U(X, J) | The certified declared gate occurrences at X during J; the uncertified gates, \|A[X, J]\| − \|A[X, J] ∩ W_cert(X, J)\|. | the share 1 − W_cert/C: `Nci.Dampener.residualShare`; the sets not yet in Lean |
+| W_cert(X, J), U(X, J) | The certified declared gate occurrences at X during J; the uncertified gates, \|A[X, J]\| − \|A[X, J] ∩ W_cert(X, J)\|. | the share 1 − W_cert/C: `InferenceOnly.Dampener.residualShare`; the sets not yet in Lean |
 | s_× | The fewest gates of a counted operation, in the same count: U uncertified gates complete at most U/s_× counted operations. | not yet in Lean |
 
 **The physical model**
@@ -63,10 +63,10 @@ appear).
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| ε_dark | The dark leaves' share of the fleet's capacity, Φ(L_dark) = ε_dark·Φ_total; mainline 10^-3, range 10^-4 to 10^-2. | `Nci.Dampener.unmonitoredShare` |
-| ε_undecl | Monitored capacity running no certified declared work, 1 − W_cert/C_X, C_X the location's capacity in 𝓜's resources at each SKU's ceiling, reported as counted operations (Φ_X, in gates per second, stays for the partition, c_S and the counting): model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. ε_skip + ε_undecl is the number driven to 0; a prover's overhead is certified work, in neither, with γ ≤ 10 allowed. | `Nci.Dampener.residualShare` |
+| ε_dark | The dark leaves' share of the fleet's capacity, Φ(L_dark) = ε_dark·Φ_total; mainline 10^-3, range 10^-4 to 10^-2. | `InferenceOnly.Dampener.unmonitoredShare` |
+| ε_undecl | Monitored capacity running no certified declared work, 1 − W_cert/C_X, C_X the location's capacity in 𝓜's resources at each SKU's ceiling, reported as counted operations (Φ_X, in gates per second, stays for the partition, c_S and the counting): model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. ε_skip + ε_undecl is the number driven to 0; a prover's overhead is certified work, in neither, with γ ≤ 10 allowed. | `InferenceOnly.Dampener.residualShare` |
 | ε_skip | Certified work not done: PoUW's ε_W of the certified share, ε_W·(1 − ε_undecl), and the wrong certificates. | `Accounting.Compose` (ε_♭ = ε_skip + ε_cert + ε_route) |
-| ε_break | The gates of the faulty proof blocks F. | `Nci.Guarantees.Dampener` (its χ) |
+| ε_break | The gates of the faulty proof blocks F. | `InferenceOnly.Guarantees.Dampener` (its χ) |
 
 ## Size, credit and exclusion
 
@@ -175,7 +175,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until it is renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until they are renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
-| ρ, "slowdown" and "the circuit-size slowdown" for \|C\|/T_0, "dampener", "compute dampener"; `benchmarks/rho` (its `Slowdown.rho`, `slowdown()`, the `rho` command) until they are renamed, the Lean's `Nci.Dampener` and `Dampener*` names (`DampenerRemotePeriod`) until they are renamed | overhead(𝒢, 𝒜′, η); "slowdown" is wall-clock time only, and ρ is 𝓜's resource rate |
+| ρ, "slowdown" and "the circuit-size slowdown" for \|C\|/T_0, "dampener", "compute dampener"; `benchmarks/rho` (its `Slowdown.rho`, `slowdown()`, the `rho` command) until they are renamed, the Lean's `InferenceOnly.Dampener` and `Dampener*` names (`DampenerRemotePeriod`) until they are renamed | overhead(𝒢, 𝒜′, η); "slowdown" is wall-clock time only, and ρ is 𝓜's resource rate |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the threshold T_𝒢(η; 𝒜_phys), which a reference construction bounds; the time to the task, at least T_𝒢(η; 𝒜′) of server-time |
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝒜_phys, 𝒜_a, δ_a, 𝒜′; the physical model, protocol soundness, the exclusion bound |
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until they are renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |

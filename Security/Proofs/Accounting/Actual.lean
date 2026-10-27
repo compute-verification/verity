@@ -39,7 +39,7 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
   multiplication the declaration doesn't compute a dark gate.
 * `Actual/Dampener.lean`: `DampenerWindowsCap`, the compute dampener's windows hypothesis
-  (`Nci.Guarantees.DampenerWindows`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
+  (`InferenceOnly.Guarantees.DampenerWindows`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
   residual and the declared computation together.
 * `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at
   the window's start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by
