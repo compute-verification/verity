@@ -211,15 +211,16 @@ def chain() -> I.Circuit:
                                    step=(REQUESTS, 1))))
 
 
-def chain_values(seed: int = 0) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """`chain`'s units' inputs (x, w) and outputs in its order, each unit's input its writer's output."""
+def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """`chain`'s units' inputs (x, w) and outputs in its order, each unit's input its writer's output; ``first``: each
+    request's input at layer 0, step 0 (else drawn)."""
     rng = np.random.default_rng(seed)
 
     def bf16(a: np.ndarray) -> np.ndarray:
         return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
     w = [bf16(rng.standard_normal((16, 16)) / 4) for _ in range(LAYERS)]
-    x = {(0, 0, r): bf16(rng.standard_normal(16)) for r in range(REQUESTS)}
+    x = {(0, 0, r): bf16(rng.standard_normal(16)) if first is None else first[r] for r in range(REQUESTS)}
     y = {}
     for s in range(STEPS):
         for layer in range(LAYERS):
@@ -629,6 +630,88 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     with pytest.raises(ValueError, match="own rows"):
         CS.Window(win.window.program, win.window.query, LAW, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
+
+
+class Bound(Held):
+    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`): 16-bit leaves, its row
+    schema and each row's ``b || c`` under its salt."""
+
+    def __init__(self, name: str, rows: np.ndarray) -> None:
+        super().__init__(name, rows)
+        self.word_bits, self.schema, inner = 16, V2, CS._inner(V2, self.words)
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
+                    for r, s in zip(rows, self.salts)]
+
+
+def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
+    """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, and the
+    files `write` writes, byte for byte."""
+    a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
+    assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
+    assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
+    record = lambda _program, *x, **k: {"x": json.dumps(x, sort_keys=True), **k}
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
+    files = []
+    for win, c, d in ((full, a, tmp_path / "full"), (refd, b, tmp_path / "refd")):
+        win.write(c, d, {"by": "test"}, registrar=reg)
+        got = {f.name: f.read_bytes() for f in d.iterdir()}
+        got["window.json"] = {k: v for k, v in json.loads(got["window.json"]).items() if k != "seconds"}
+        files.append(got)
+    assert files[0] == files[1]
+
+
+SRC = bind(G.Gemm, K=32, N=16, **G.GEMM_AMPERE)
+SID = descriptor_id(SRC)
+
+
+def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_given_in_full(tmp_path):
+    """`chain` fed by a ``Gemm_v2{K=32, N=16}`` unit a request, each layer's ``w`` a registered row, its units recorded with
+    no inputs at all: a wired ``x`` row is its writer's output row and a ``w`` the value's, so the commitment, the rows and
+    every file are the full record's, and the mismatch check gathers the inputs it evaluates on (`Window.input_words`)."""
+    rng = np.random.default_rng(3)
+    sx = (rng.standard_normal((REQUESTS, 32)).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    sw = ((rng.standard_normal((REQUESTS, 16, 32)) / 4).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    sy = np.asarray(evaluate_batch(SRC, sx, sw, kernel="reference"), dtype=np.uint16).reshape(REQUESTS, 16)
+    ins, outs = chain_values(first=sy)
+    layer = REQUESTS * STEPS
+    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    circuit = replace(chain(), templates=((SRC, REQUESTS), (GEMM, LAYERS * layer)), external=(f"{SID}/x", f"{SID}/w"),
+                      wires=(I.Wire(GID, "x", SID, "o0", at=0, radix=(REQUESTS,), base=0, step=(1,)), *chain().wires),
+                      registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
+    full, refd = (I.Window(circuit, RUN, LAW, 2, registered={"w": w}) for _ in range(2))
+    for win, given in ((full, ins), (refd, [None, None])):
+        win.record(SRC, [sx, sw], [sy])
+        win.record(GEMM, given, outs)
+    assert all(np.array_equal(a, b.reshape(8, -1)) for a, b in zip(refd.input_words(GID, 0, 8), ins))
+    assert refd.mismatches() == full.mismatches() == {}
+    _same_commit(full, refd, tmp_path)
+    with pytest.raises(ValueError, match="no wire or registered read fills it"):
+        free = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+        free.record(SRC, [None, sw], [sy])
+        free.record(GEMM, ins, outs)
+        free.close(salt_key=bytes(32))
+
+
+def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):
+    """`sliced`'s position units recorded with ``x`` by reference and ``w`` in full: each cut row ``x#j`` is its slice's
+    output row, committed as the full record commits it; one template's parameter is by reference for all its units or
+    none."""
+    c = sliced()
+    ins8, outs8, ins, outs = sliced_values()
+    full, refd = (I.Window(c, RUN, LAW, 2) for _ in range(2))
+    for win, x in ((full, ins[0]), (refd, None)):
+        win.record(G8, ins8, outs8)
+        win.record(GEMM, [x, ins[1]], outs)
+    assert np.array_equal(refd.input_words(GID, 1, 2)[0], ins[0][1:])
+    assert refd.mismatches() == {}
+    _same_commit(full, refd, tmp_path)
+    mixed = I.Window(c, RUN, LAW, 2)
+    mixed.record(G8, ins8, outs8)
+    mixed.record(GEMM, [None, ins[1][:1]], [outs[0][:1]])
+    mixed.record(GEMM, [ins[0][1:], ins[1][1:]], [outs[0][1:]])
+    with pytest.raises(ValueError, match="by reference for some units"):
+        mixed.close(salt_key=bytes(32))
 
 
 class Table(Held):
