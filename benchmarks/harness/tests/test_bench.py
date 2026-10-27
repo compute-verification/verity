@@ -413,14 +413,15 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
         assert (root / source).is_file(), source
 
 
-def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path():
+def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path_at_six_reps():
     from verity_bench.vllm import runner
 
-    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served")
-    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled")
+    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled") and served_spec.reps == 6
     assert served_spec.arm_settings["stock-fp8@compiled"].control == "none"
     assert replace(graph.preset, id=served_spec.preset.id) == served_spec.preset
-    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset)
+    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset,
+                reps=served_spec.reps)
     assert replace(graph, **same) == served_spec
 
     stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
@@ -434,13 +435,6 @@ def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_bes
     assert "compilation_config" not in built[1] and built[1]["execution"] == "compiled"
     assert not built[0]["enforce_eager"] and not built[1]["enforce_eager"]
     assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
-
-
-def test_the_six_rep_served_bandwidth_spec_is_the_served_spec_at_an_even_rep_count():
-    served, r6 = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
-    assert r6.reps == 6
-    same = dict(id=r6.id, reps=r6.reps, preset=replace(served.preset, id=r6.preset.id))
-    assert replace(served, **same) == r6
 
 
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
@@ -481,15 +475,6 @@ def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
     assert parser.parse_args(["run", "llama31-8b-fp8-1gpu"]).command == "run"
     assert parser.parse_args(["check", "llama31-8b-fp8-1gpu"]).command == "check"
     assert parser.parse_args(["compare", str(tmp_path / "a"), str(tmp_path / "b")]).command == "compare"
-
-
-def test_glm53_keeps_the_verified_vllm_scheduler_default_and_runs_eager():
-    preset = load_spec("glm53-fp8-8gpu").preset
-    assert preset.revision == "aca966e4e02791568aa6a4ced368624b3d897f42"
-    assert "max_num_batched_tokens" not in preset.engine_settings
-    graphs_off, eager = served(preset, eager=False)
-    assert eager is True and graphs_off.engine_settings["cuda_graphs"] is False
-    assert load_spec("llama31-8b-fp8-1gpu").preset.engine_settings["max_num_batched_tokens"] == 16_384
 
 
 def test_stock_precisions_are_independent_reference_arms():
@@ -797,7 +782,6 @@ def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
 def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
-    assert "block_kv_cache_memory_bytes" not in load_spec("glm53-fp8-8gpu").preset.engine_settings
 
 
 def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
@@ -854,12 +838,12 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
 
 
 def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_eager_spec(monkeypatch):
-    """Every protocol row times eager against eager while vLLM serves compiled: `llama31-8b-fp8-1gpu-compiled` times
+    """Every protocol row times eager against eager while vLLM serves compiled: `llama31-8b-fp8-1gpu-compiled-full` times
     the eager rows' stock FP8 engine against itself at vLLM's serving defaults, eager and compiled, in one spec."""
 
     from verity_bench.vllm import runner
 
-    spec = resolve_spec("llama31-8b-fp8-1gpu-compiled")
+    spec = resolve_spec("llama31-8b-fp8-1gpu-compiled-full")
     assert spec.eager and "serving_defaults" not in spec.preset.engine_settings
     base, served_eager, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution) for a in (base, served_eager, compiled)] == [
@@ -905,18 +889,8 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
     assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
 
 
-def test_the_full_sweep_compiled_spec_is_the_quick_one_over_the_full_sweep():
-    """`llama31-8b-fp8-1gpu-compiled-full` restates the quick spec's factor at every shape, so it must time the same
-    engines: only its id (and its preset's, which must match) and its sweep differ."""
-
-    quick, full = load_spec(SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml"), load_spec(
-        SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled-full.toml")
-    assert (quick.sweep, full.sweep) == ("quick", "full")
-    assert replace(full, id=quick.id, sweep=quick.sweep, preset=replace(full.preset, id=quick.preset.id)) == quick
-
-
 def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
-    source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
+    source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled-full.toml").read_text()
     path = tmp_path / "spec.toml"
     section = '[arm_settings."stock-fp8@compiled"]\ncontrol = "none"'
     assert section in source
@@ -981,8 +955,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
 
     from verity_bench.vllm.arms import protocols_config
 
-    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol")
-    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
+    control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision) == ("stock-fp8", "fp8")
     assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
     assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120",
@@ -1005,24 +979,24 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
 
 
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
-    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol.toml").read_text()
+    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml").read_text()
     path = tmp_path / "spec.toml"
     for control, want in (("stock-fp8", "stock-fp8"), ("none", None)):
-        path.write_text(source.replace('control = "none"', f'control = "{control}"'))
+        path.write_text(source.replace('control = "none"', f'control = "{control}"', 1))
         spec = load_spec(path)
         assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
-    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"]', 'arms = ["stock-fp8", "pouw:ncp-v1"]',
-                           "must name a protocol arm"),
+    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]',
+                           'arms = ["stock-fp8", "pouw:ncp-v1", "stock-fp8@compiled"]', "must name a protocol arm"),
                           ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
                           ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
                           ('control = "none"', 'control = "stock"', "control must be another arm"),
                           ('control = "none"', 'control = "pouw:pearl-c-sm120-v1-h3"', "control must be another arm")):
         assert old in source
-        path.write_text(source.replace(old, new))
+        path.write_text(source.replace(old, new, 1))
         with pytest.raises(ValueError, match=why):
             load_spec(path)
     with pytest.raises(ValueError, match="not in --arms"):
-        resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol").arm_settings)
+        resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol-served").arm_settings)
 
 
 def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
@@ -1110,17 +1084,13 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 
 
 def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
-    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so its Pearl-C arm
-    and preset are the protocol row's and every arm's engine shares its step budget, sequence bound and KV pool."""
+    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so every arm's engine
+    shares its step budget, sequence bound and KV pool."""
 
     from verity_bench.vllm import runner
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
-    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol")
     pearl = "pouw:pearl-c-sm120-v1-h3"
-    assert spec.arm_settings[pearl] == protocol.arm_settings[pearl]
-    assert (spec.setup, spec.sweep, spec.reps, spec.eager) == (protocol.setup, protocol.sweep, protocol.reps, True)
-    assert {**protocol.preset.engine_settings, "max_num_seqs": 128} == spec.preset.engine_settings
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
         ("stock-fp8", "fp8", None, None),
@@ -1268,7 +1238,7 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
     pearl = "pouw:pearl-c-sm120-v1-h3"
-    assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol").arm_settings[pearl]
+    assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol-served").arm_settings[pearl]
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
         ("stock-fp8", "fp8", None, None, False), (pearl, "bfloat16", None, None, False),

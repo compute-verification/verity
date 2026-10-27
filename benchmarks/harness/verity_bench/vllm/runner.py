@@ -821,8 +821,6 @@ class _VllmEngine:
     """One worker process's live vLLM engine."""
 
     def __init__(self, arm: Arm, preset: Preset, resident: bool, eager: bool) -> None:
-        if preset.unavailable_reason:
-            raise ValueError(f"preset {preset.id} is unavailable: {preset.unavailable_reason}")
         if preset.revision is None and preset.model_digest is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
         from verity_vllm.engine import env as engine_env
@@ -1197,8 +1195,8 @@ class ProcessEngineFactory:
             if bound:
                 raise ValueError(
                     f"arm {arm.id!r} binds its served kernels to the row's Build ({', '.join(bound)}); CUDA graphs can "
-                    "change the served kernels so they no longer match it: run with --eager (or enforce_eager = true "
-                    "in the preset's engine settings)")
+                    "change the served kernels so they no longer match it: run with --eager (or eager = true in the "
+                    "spec)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
         if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
