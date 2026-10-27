@@ -37,7 +37,7 @@ settings = of(__file__)
 LABEL = "noise=j10-banded (kernels' reading of SharedNoise.lean; not CA's reference)"
 NOISE = "j10-banded/kernels-reading"
 CA_SHA = "1a4d1de024"
-CA_LABEL = f"noise=j10-banded (CA #2866 @ {CA_SHA})"
+CA_LABEL = f"noise=j10-banded (credit's banded reference @ {CA_SHA})"
 HERE = Path(__file__).resolve().parent
 _CA: dict = {}
 

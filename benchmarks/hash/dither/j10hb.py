@@ -485,8 +485,8 @@ def main() -> int:
            "sms": props.multi_processor_count, "l2_bytes": l2, "torch": torch.__version__,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "builds": builds, "ref_lib": args.ref_lib,
            "gs": gs, "fault_shift": shift,
-           "reference": "per-unit: served_h1/receipts.py, h1zref.cu (z = A B^T in float64); banded: CA's banded_reference "
-                        f"(#2866 @ {JB.CA_SHA}) on 4 units a shape and arm, the leaders against the per-unit arm",
+           "reference": "per-unit: served_h1/receipts.py, h1zref.cu (z = A B^T in float64); banded: credit's banded_reference "
+                        f"(at {JB.CA_SHA}) on 4 units a shape and arm, the leaders against the per-unit arm",
            "timing": "seeds (kh_seeds) included in every arm; -noise and -units arms are the two launches alone",
            "shapes": []}
     xs: dict = {}

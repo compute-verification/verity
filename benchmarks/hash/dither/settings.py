@@ -32,8 +32,8 @@ REGISTRY = Registry(
     S("DITHER_H1O", str, None, WHERE, f"libh1o.so, the one-stream window's units: {BUILD}"),
     S("DITHER_UNITS", str, "block", VALUE, "dither_one's units form (block, mix, ...): which kernel computes a call's units"),
     S("DITHER_PEEL", one, False, VALUE, "1: z = A B^T from O (CA's peel of b and c), so y is today's served y"),
-    S("DITHER_PERCALL", str, None, VALUE, "ASK-64's per-call waits, measured only: a file of ns waits h1o_percall replays, "
-                                          "0 no wait"),
+    S("DITHER_PERCALL", str, None, VALUE, "the per-call challenger round's waits, measured only: a file of ns "
+                                          "waits h1o_percall replays, 0 no wait"),
     S("DITHER_PERCALL_WAITS", str, None, VALUE, "the per-call waits' file sbench.sh found in the run's inputs, which a "
                                                 "-percall arm's DITHER_PERCALL takes"),
     S("DITHER_A_STEP", one, False, VALUE, "1: one A table a K a step (dither_so's -aom/-aomn without -ov), built after the "
@@ -47,8 +47,8 @@ REGISTRY = Registry(
     S("DITHER_ZY1_KC", str, None, VALUE, "DITHER_ZY1 for the dither-a-hbc arms, which sbench copies into DITHER_ZY1"),
     S("DITHER_ZDEAD", one, False, VALUE, "1: the z/y and y tables' rows past m take their x from dead_rows and hash no "
                                          "segments; the same roots"),
-    S("DITHER_YCMP", one, False, VALUE, "1 (-zy under DITHER_ZDEAD): RT4-INT-11's compare of the served y with the records' "
-                                        "y halves on their bytes, a differing call refusing its step"),
+    S("DITHER_YCMP", one, False, VALUE, "1 (-zy under DITHER_ZDEAD): the compare of the served y with the records' y "
+                                        "halves on their bytes, a differing call refusing its step"),
     S("DITHER_LANE_REFS", str, None, VALUE, "the gate step's option A partials against SERVE-REG's gated lane: 1 checks "
                                             "them in the gate, a path saves their records there"),
     S("DITHER_MM_CFG", str, None, VALUE, "N,K,MMAX=CFG+...: a call's GEMM config in place of exactlin.pick's"),
@@ -78,7 +78,7 @@ REGISTRY = Registry(
     S("DITHER_SO_UNITS_SMQ", str, None, VALUE, "the fused units' SMs: q, q/den or q/den/cap; the same receipts"),
     S("DITHER_SO_RDEAD", one, False, VALUE, "1: a dead row block's receipt rows take their x from one hash of that row; the "
                                             "same leaves"),
-    S("DITHER_SO_UNITS", str, "today", VALUE, "dither_so's units form (today, or j10r: RT-ALGO-16's)"),
+    S("DITHER_SO_UNITS", str, "today", VALUE, "dither_so's units form (today, or j10r: J10-R's call-scale noise)"),
     S("DITHER_SO_J10RC_MIN_T", int, 0, VALUE, "the smallest T at which j10r's units take their c form"),
     S("DITHER_SO_J10R_M", str, "slot", VALUE, "j10r's M: slot, the slot T with every row block computed, or the call's"),
     S("DITHER_UNITS_SKIP_DEAD", one, False, VALUE, "1 (with DITHER_SO_UNITS=j10r): a row block wholly past the live rows "

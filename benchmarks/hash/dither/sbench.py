@@ -86,9 +86,9 @@ Arms:
                  call's A table reads another's); -aomn (-hbk, -hbr) is -aoms with each call's noise there as well, so
                  the side stream runs the units alone.  With -pt last, between steps the receipt trees and the admit tables run on streams of
                  their own beside the z tables and the step trees (`Window.tree_streams`); with -ls after that, each step's
-                 seeds read the live salt of the round before it (`Window.step_salt`, CA's ask 11)
+                 seeds read the live salt of the round before it (`Window.step_salt`)
     dither-a-so  dither-a-hbk-zy, dither-a-hbr-zy and dither-a-hbc-zy (-hbr's call from dither-a-hbc's builds,
-                 HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (RT4-INT-12, `dither_so`): the
+                 HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (`dither_so`): the
                  forward computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step
                  s's seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
                  receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 10), -aom
@@ -1114,7 +1114,7 @@ def main() -> int:
             if failed:
                 timed_picks = [arm for arm in failed if gate_doc[arm].get("verdict", {}).get("ok") and pick_of(arm) is None]
                 hint = {"hint": f"{timed_picks}: verdict ok, tokens not exact's, under timed picks: the node's shared "
-                                "Inductor cache can hand an arm a reduction config exact never ran (VLLM-48); rerun with "
+                                "Inductor cache can hand an arm a reduction config exact never ran; rerun with "
                                 f"{PICK_ENV}=first {PICK_ARMS_ENV}=exact,dither"} if timed_picks else {}
                 print(json.dumps({"gate_failed": failed, "timed": a.time_passed, **hint}), flush=True)
                 for arm in failed if a.time_passed else arms:
