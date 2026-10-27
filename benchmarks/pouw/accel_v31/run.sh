@@ -248,7 +248,7 @@ elif [ "$MODE" = duty ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
         for r in ovl wgl; do
           f="$O/duty-$tag-${s%%:*}-$r"
           env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" V31_ONCE_RANGE=$r "$NCU" --clock-control none --replay-mode app-range \
-            --profile-from-start off --metrics "$(tr -d " \n" < '"$D"'/duty.metrics)" -f -o "$f" \
+            --metrics "$(tr -d " \n" < '"$D"'/duty.metrics)" -f -o "$f" \
             "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
           echo "duty $tag ${s%%:*} $r rc $?" >> "$O/rc.txt"
           "$NCU" -i "$f.ncu-rep" --csv --page raw --print-units base > "$f.csv" 2>> "$f.log"

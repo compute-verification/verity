@@ -1568,11 +1568,11 @@ struct Ctx {
     else wgp::gemm<128, 0><<<wgrid, T0, S128, st>>>(g);
   }
   // wgmma.linear on A and B (bf16 words into O[b]): the plain GEMM a served call runs, gamma's denominator, always on
-  // RP 0's registers (wgmma.linear's own)
+  // RP 0's registers (wgmma.linear's own) and CM 1's kernel, which holds no tail registers (mode 2 has no tail) and spills none
   void wgl(cudaStream_t st, int b) {
     wgp::Args g = wa_wgl;
     g.O = O[b];
-    wg_launch(st, g, 0, 0);
+    wg_launch(st, g, 1, 0);
   }
 #endif
   // launches that share gctr run in one stream's order, so each one's base is the tiles launched before it
