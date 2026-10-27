@@ -64,11 +64,15 @@ copy of main's first-parent history, fetched from the tree's origin into KEEP/RU
 CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
 **The endpoint.** vllm starts it by hand on vy-dc-h200-2 (`HAND_START`) at 11:15Z on 28 Oct, ahead of the session's
-``--at``, and it listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl
-and serve.json. requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this runbook neither
-fetches nor publishes it. The chain's endpoint step builds the endpoint's advice (`verity-vllm advice`) from
-requests.jsonl, the Commit record that names each engine request's user, so on that art alone the endpoint step is
-refused ("made no index").
+``--at``, and it listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl,
+serve.json and `USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line, requests.jsonl's
+keys). requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this runbook neither fetches
+nor publishes it. The endpoint step's advice (`verity-vllm advice`) needs it, the Commit record, so ``chain`` rebuilds
+it (`endpoint_records`) from `USERS` and the kept warden run's certified I/O (`warden_chain.io`), each request's prompt
+and streamed ids as the warden's cells carry them and its finish (`finish`), in KEEP/RUN/endpoint-rebuilt (0700, outside
+the run dir). chain_record.sh's copy of it is in its scratch, removed on exit, and its leak guard reads the record
+against the warden's witness; the endpoint's trace is then checked against the certified I/O, not the prover's record
+of it. An endpoint that holds requests.jsonl (a dry rehearsal's stand-in's) is read as it is.
 
 The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate directory there):
 
@@ -98,6 +102,7 @@ import json
 import os
 import secrets
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -135,6 +140,8 @@ ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol i
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
+#: vllm's record in its records art: each engine request's id and its warden user, requests.jsonl less its values
+USERS = "users.jsonl"
 HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
@@ -400,6 +407,64 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
             "--challenger-key", str(key), "--gate-key", str(a.key)]
 
 
+def certified_io(fetch: Path) -> dict:
+    """The kept warden run's certified I/O (`warden_chain.io`), read in a scratch directory beside the fetch."""
+    sys.path[:0] = [str(TREE), str(HERE)]
+    import warden_chain as WC
+    with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
+        with tarfile.open(fetch, "r:gz") as tar:
+            tar.extractall(d, filter="data")
+        try:
+            return WC.io(next(p for p in Path(d).iterdir() if p.is_dir()))
+        except SystemExit as e:
+            raise Refused(f"{fetch}: {e}") from None
+
+
+def finish(out: list[int], max_tokens: int, eos: set[int]) -> dict:
+    """serve-openai's finish of an answer `out`: the model's EOS when it ends at one or short of its max_tokens, else
+    its length."""
+    stop = (bool(out) and out[-1] in eos) or len(out) < max_tokens
+    return {"reason": "stop" if stop else "length", "stop_reason": None}
+
+
+def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
+    """The endpoint's records as the chain reads them: `src` when it holds requests.jsonl, else `dest` (0700) with
+    `src`'s records (an art: id, a directory or a tarball) and requests.jsonl rebuilt beside its `USERS`."""
+    path = Path(src)
+    if path.is_dir() and any(path.rglob("requests.jsonl")):
+        return src
+    dest.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if src.startswith("art:"):
+        got = subprocess.run(["research", "data", "fetch", src, "--to", str(dest)], capture_output=True, text=True)
+        if got.returncode:
+            raise Refused(f"research data fetch {src} (exit {got.returncode}): {got.stderr.strip()[-300:]}")
+    elif path.is_dir():
+        if path.resolve() != dest.resolve():
+            shutil.copytree(path, dest, dirs_exist_ok=True)
+    elif path.is_file():
+        with tarfile.open(path) as tar:
+            tar.extractall(dest, filter="data")
+    dest.chmod(0o700)
+    ep = next((p.parent for p in dest.rglob("advice_trace.jsonl")), None)
+    if ep is None or not (ep / USERS).is_file():
+        raise Refused(f"--endpoint {src}: no requests.jsonl, and no {USERS} beside an advice_trace.jsonl to rebuild it "
+                      "from: give vllm's records art")
+    io = certified_io(fetch)
+    if not io["accepted"]:
+        raise Refused(f"the kept warden run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
+    by, lines = {r["user"]: r for r in io["records"]}, []
+    for m in map(json.loads, filter(str.strip, (ep / USERS).read_text().splitlines())):
+        if (r := by.get(m["user"])) is None:
+            raise Refused(f"{USERS}: engine request {m['engine_id']}'s user {m['user']!r} is no certified request")
+        lines.append(json.dumps({"engine_id": m["engine_id"], "user": m["user"], "prompt_ids": r["prompt"],
+                                 "streamed_ids": r["output"], "finish": finish(r["output"], r["max_tokens"], set(eos))}))
+    rebuilt = ep / "requests.jsonl"
+    rebuilt.write_text("".join(line + "\n" for line in lines))
+    rebuilt.chmod(0o600)
+    print(f"chain: requests.jsonl rebuilt in {ep}: {len(lines)} requests from {USERS} and the certified I/O", flush=True)
+    return str(dest)
+
+
 def chain(a: argparse.Namespace) -> int:
     if not (HERE / "leak_guard.py").is_file():
         raise Refused("this tree has no record leak guard (leak_guard.py, #5218), which chain_record.sh runs on its "
@@ -413,8 +478,6 @@ def chain(a: argparse.Namespace) -> int:
     env = dict(os.environ)
     env.update({"CR_PATH": "warden", "CR_GATES": str(fetch), "CR_MEM_GB": "96", "CR_N2_DRAW": "8",
                 "CR_TIE_WINDOWS": "8"})
-    if endpoint:
-        env.update({"CR_ENDPOINT": endpoint, "CR_EOS_IDS": a.eos_ids})
     for kv in a.set:
         k, eq, v = kv.partition("=")
         if not (eq and k.startswith("CR_")):
@@ -428,6 +491,10 @@ def chain(a: argparse.Namespace) -> int:
         raise Refused(f"{coins}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give paths without it")
     if scan := " ".join(coins):
         env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
+    if endpoint:
+        eos = [int(t) for t in a.eos_ids.split(",")]
+        env.update({"CR_ENDPOINT": endpoint_records(endpoint, a.keep / a.run / "endpoint-rebuilt", fetch, eos),
+                    "CR_EOS_IDS": a.eos_ids})
     return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode
 
 
@@ -454,7 +521,7 @@ def parser() -> argparse.ArgumentParser:
     q = sub.add_parser("chain")
     q.add_argument("--run", required=True)
     q.add_argument("--keep", type=Path, default=KEEP)
-    q.add_argument("--endpoint")
+    q.add_argument("--endpoint", help=f"the endpoint's records: vllm's art (with {USERS}), a directory or a tarball")
     q.add_argument("--eos-ids")
     q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
