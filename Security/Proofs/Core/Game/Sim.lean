@@ -1,3 +1,4 @@
+import Mathlib.Data.Fintype.Lattice
 import Proofs.Core.Game.Tape
 import Proofs.Pouw.PearlC.FlockTile.Bridge
 

@@ -1,5 +1,6 @@
 import Proofs.Properties.Verity.SampledDeploy
 import Proofs.Properties.SampledProofs.OneStageZkRun
+import Proofs.Properties.SampledProofs
 import Proofs.Core.Game.Sim
 
 /-!
