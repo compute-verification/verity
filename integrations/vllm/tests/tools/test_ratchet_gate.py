@@ -344,7 +344,7 @@ def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(r
     assert [G.gate("main", t) for t in tops] == fresh
     assert judged == tops
     assert [G.gate("main", t) for t in tops] == fresh and judged == tops
-    sorted(verdict_cache.glob("*.json"))[0].write_text("{")
+    next(p for p in sorted(verdict_cache.glob("*.json")) if "verdict" in json.loads(p.read_text())).write_text("{")
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == len(tops) + 1
     monkeypatch.setattr(G, "SELF", "another gate")
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == 2 * len(tops) + 1
