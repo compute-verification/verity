@@ -238,10 +238,8 @@ def sessionOf (key : ChallengerKey) (record log close : Json) : V (LiveCommitmen
     | .ok c => pure c
     | .error e => throw s!"the challenger's close record is malformed: {e}"
   let m ← closeMessage (key.pub.extract 0 16) r.host r.commitment c.session c.lines c.chain c.ended
-  let ok : Bool := match Lms.Signature.decode key.params c.signature with
-    | .ok sig => (Lms.verify key.params key.pub m sig).toOption == some true
-    | .error _ => false
-  unless ok do throw "the challenger's close record's signature does not verify under the verifier's challenger key"
+  unless verifies key m c.signature do
+    throw "the challenger's close record's signature does not verify under the verifier's challenger key"
   let .arr ls := log | throw LOG_FORM
   let lines ← ls.toList.mapM fun | .str s => pure s | _ => throw LOG_FORM
   unless lines.length == c.lines do
@@ -417,12 +415,6 @@ def ledgerEntry? (line : Json) : Option LedgerEntry := do
     | _, _ => none
   guard (isBodyOf kind (schema == LEDGER_SCHEMA) body)
   pure ⟨e, text, schema, seq, prev, kind, session, sig, body⟩
-
-/-- `verify`'s at LMS over the key's parameters, false for a signature that doesn't decode. -/
-private def verifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
-  match Lms.Signature.decode key.params sig with
-  | .ok s => (Lms.verify key.params key.pub m s).toOption == some true
-  | .error _ => false
 
 /-- A window `verifyLedger` read: its root, its open and the leaf the open was signed at, and its end once read. -/
 structure Win where

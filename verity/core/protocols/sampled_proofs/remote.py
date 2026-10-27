@@ -1,13 +1,15 @@
 """The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
-prover's process reaches it over the stream (`benchmarks/live_challenger/run.sh` places it as `benchmarks/remote_session`
-places its verifier: `ssh -R PORT` to the prover's machine, whose own 127.0.0.1:PORT the prover connects to).  On its
-host, before the stream opens, `open_session` signs the challenger's record and writes it, the key and the head of the
-release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the session id the auditor
-launched it under; `serve` refuses a session whose record isn't written there, so no coin opens before it.  When the
-session ends, however it ends, the challenger signs its release log and writes the close record, `challenger.json`
-(`close_session`; `challenger`'s "The session's close").
+prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
+vy-challenger-1, that port is one of the prover machine's certifier coin link (`benchmarks/live_challenger/auditor.py`,
+the coins' path, with its premises `CoinsConfidential` and `OneClock`); in development
+(`benchmarks/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
+its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
+and the head of the release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the
+session id the auditor launched it under; `serve` refuses a session whose record isn't written there, so no coin opens
+before it.  When the session ends, however it ends, the challenger signs its release log and writes the close record,
+`challenger.json` (`close_session`; `challenger`'s "The session's close").
 
 ~~~text
 frame       u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body empty

@@ -156,7 +156,8 @@ theorem session_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} 
   · next r hrun =>
     split at hacc
     · next pub' prof' hchk =>
-      obtain ⟨_, _, _, _, _, _, hva, _⟩ := (Properties.SampledProofs.acceptMeans_iff _ _ _ _ _).1 hchk
+      obtain ⟨_, _, _, _, _, _, hva, _⟩ :=
+        (Properties.SampledProofs.acceptMeans_iff _ _ _ _ _).1 (Properties.Challenger.oneStage_check_of_accept hchk)
       obtain ⟨x, hx, -⟩ := hva.2.1
       rcases hl : e.sessions.toList with _ | ⟨s, l⟩
       · exfalso

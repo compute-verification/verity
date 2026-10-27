@@ -1,22 +1,34 @@
+import CoreComposition.Product
 import CoreProtocol.Live
+import Properties.Pous.MemoryChallenger
 import SampledProofs.ChallengerDraw
+import SampledProofs.ChallengerRounds
 import SampledProofs.OneStage
+import SampledProofs.OneStageZk
 
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
 
-The one-theorem plan's ONE-4 (`note:proofs/20261026T0332Z-report-onethm`). A component whose draw reads live coins
-(`Core.Live`) decides at the coins it reads from the challenger's signed record in its evidence. These properties say
+A component whose draw reads live coins (`Core.Live`) decides at the coins it reads from the challenger's signed record in its evidence. These properties say
 what that record shows, for every input: the coins the challenger device drew, or a break the run carries.
 
 * `LiveAnswer`: what `Protocol.answer` accepts, `Protocol.answerAt` accepts at the coins its evidence's record shows.
   It follows from `Live.factors` and reads no device.
-* `CoinsFromLog`, ONE-4's target: what a component that reads its coins through that reader (`ReadsChallenger`)
+* `CoinsFromLog`, the target: what a component that reads its coins through that reader (`ReadsChallenger`)
   accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a session of the device released after `after`, a session the device's
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
+* `RoundsByDevice`: what `SampledProofs.Challenger.roundCoins` reads for v2's uses (the window's draw, each session's
+  link points and rounds) is, use by use, what one session of the device released of the use's family after its root,
+  a session the device's own ledger opens withheld on the window; that session's log shows every family of its layout
+  released after exactly the uses' roots, coin for coin (one release a use: a second query is refused, not charged);
+  and its log releases each pair of `order` in order (the draw before every session's families, a session's link
+  points before its rounds). Or the fixed finder outputs a break from one use's record.
+* `keyOfParams`: the challenger key v2's compiled check reads from the registered components' parameters, and
+  `lmsKey` it as LMS's parameters and public key. Every LMS check the reader makes is `Challenger.verifies` under that
+  key, which accepts exactly what `LmsVerifies` does there (`verifies_iff`, `verifies_registered`, security_proofs).
 
 **The device** (`Device`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs sessions
 (`Session`): it draws each coin and its salt by position, commits to the frame-v3 root over their live leaves
@@ -25,10 +37,9 @@ released after it), and signs its record before any coin opens and its close ove
 session its ledger opens withheld (`OpensOn`, `remote.open_session(..., withhold=True)`) releases, while it runs, each
 coin's raw bytes and nothing else, and its commitment, salts and paths only once its close is signed, after the prover's
 commitments are in: nothing the prover sees before a coin depends on a coin not yet released, so no hiding premise on
-the root enters soundness (Daniel, 26 Oct). It
-also signs the auditor's ledger, line by line. `Signed` is all it signs under a key. One role per key: a key also used
-for another role is outside the model, and a `forgery` witness is then an EUF-CMA break only under that one-role
-reading.
+the root enters soundness. It also signs the auditor's ledger, line by line. `Signed` is all it signs under a key.
+One role per key: a key also used for another role is outside the model, and a `forgery` witness is then an EUF-CMA
+break only under that one-role reading.
 
 **The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a draw reads the concatenation
 of the coins it was released (`take`, in `SampledProofs.Draw.drawUnits`), with no hash between: no SHA-512-expanded
@@ -36,7 +47,7 @@ stream is read as uniform. In the causal game each coin is one release of `8 * C
 bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
 session's releases are those bits alone.
 
-**The break** (`Break`) is one adversary form's (Daniel, 26 Oct): it is no event of the run but what one fixed finder
+**The break** (`Break`) is one adversary form's: it is no event of the run but what one fixed finder
 outputs. `findBreak` is a computable function of the run (the record the evidence carries and the device's log), the
 same for every prover; its SHA-512 calls are one per string in `readHashed` and `deviceHashed` and an LMS verification
 per signature `drawCoins` checks, so at most a constant times the reader's and the device's own. It outputs a `Witness`,
@@ -138,16 +149,11 @@ def OpensOn (dev : Device) (pk : ByteArray) (w id : String) : Prop :=
 
 /-! ## What the reader checks and hashes -/
 
-/-- Whether the LMS verifier accepts `sig`, once decoded, under the key over the message `m`. -/
-def lmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
-  match Lms.Signature.decode key.params sig with
-  | .ok σ => match Lms.verify key.params key.pub m σ with
-    | .ok b => b
-    | .error _ => false
-  | .error _ => false
-
-/-- The LMS verifier accepts `sig`, once decoded, under the key over the message `m`. -/
-def LmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Prop := lmsVerifies key m sig = true
+/-- The LMS verifier accepts `sig`, once decoded, under the key over the message `m`: the one definition
+(`MemoryChallenger.Properties.LmsVerifies`) at the key's parameters and public key. The reader's own check,
+`Challenger.verifies`, accepts exactly these (`verifies_iff`, security_proofs). -/
+def LmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Prop :=
+  MemoryChallenger.Properties.LmsVerifies key.params key.pub m sig
 
 /-- The signatures `drawCoins` checks under `key`, each with the message it signs: the session's record and close, and
 each line of the ledger. -/
@@ -341,7 +347,7 @@ def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
 under `key` in `coins` that verifies over a message the device didn't sign, else the first collision among the strings
 the reader hashes in `coins` and the device hashes under `key`. -/
 def findBreak (dev : Device) (key : ChallengerKey) (label : String) (coins : Json) : Option Witness :=
-  match (signatures key coins).find? fun x => lmsVerifies key x.1 x.2 && !((signedBy dev key.pub).contains x.1) with
+  match (signatures key coins).find? fun x => verifies key x.1 x.2 && !((signedBy dev key.pub).contains x.1) with
   | some (m, sig) => some (.forgery m sig)
   | none => (collisionIn (readHashed key label coins ++ deviceHashed dev key.pub)).map fun (x, y) => .collision x y
 
@@ -373,13 +379,53 @@ def DrawnByDeviceAt (read : ChallengerKey → String → String → ByteArray �
       (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
         Break dev key label coins
 
+/-- The roots session `s`'s release log shows it received for family `label`, in order (`releasedRootsOf` on its own
+log); none when its layout or its log doesn't read. -/
+def Session.rootsOf (s : Session) (label : String) : List ByteArray :=
+  match s.commitment with
+  | none => []
+  | some c => match releasedRootsOf c s.log with
+    | .error _ => []
+    | .ok roots => ((roots.find? (·.1 == label)).map (·.2)).getD []
+
+/-- Session `s`'s log receives every root of family `a` before any of family `b` (`receivedOrder`). -/
+def Session.Before (s : Session) (a b : String) : Prop :=
+  ∀ i j : Nat, (receivedOrder s.log)[i]? = some a → (receivedOrder s.log)[j]? = some b → i < j
+
+/-- The record `roundCoins` reads use `i`'s coins from, as `drawCoins` reads it: `coins` with its `i`th segment as the
+segment. -/
+def useCoins (coins : Json) (i : Nat) : Json :=
+  Json.mkObj [("ledger", getD coins "ledger"), ("main", getD coins "main"), ("pins", getD coins "pins"),
+    ("segment", match getD coins "segments" with | .arr ss => ss.getD i .null | _ => .null),
+    ("session", getD coins "session")]
+
+/-- `RoundsByDevice` for the reader `read` in `roundCoins`' place. -/
+def RoundsByDeviceAt
+    (read : ChallengerKey → String → List Use → List (String × String) → Json → Flock.V (List ByteArray)) : Prop :=
+  ∀ (dev : Device) (key : ChallengerKey) (w : String) (us : List Use) (order : List (String × String)) (coins : Json)
+    (ξs : List ByteArray), read key w us order coins = .ok ξs →
+      (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧
+          (∀ (i : Nat) (u : Use), us[i]? = some u → ξs[i]? = some (s.released u.label u.after)) ∧
+          (∀ ℓ ∈ s.families.map (·.1), s.rootsOf ℓ = Use.roots us ℓ) ∧
+          ∀ ab ∈ order, s.Before ab.1 ab.2) ∨
+        ∃ (i : Nat) (u : Use), us[i]? = some u ∧ Break dev key u.label (useCoins coins i)
+
+/-- **Every coin a v2 window reads is its challenger's, one release a use, in the play's order.** For every challenger
+device, if `roundCoins` reads `ξs` for the uses `us` (each a family, the root its coins were released after, and how
+many) under the verifier's key `key` and window `w`, then one session of the device under `key`, which the device's own
+ledger opens withheld on `w`, released each use's coins (`ξs[i]` is what it released of `us[i]`'s family after its
+root), its log shows every family of its layout released after exactly the uses' roots, coin for coin and in order
+(`Use.roots`: no second release for one use, none no use reads), and its log receives every root of `a` before any of
+`b` for each pair of `order`; or the fixed finder outputs a break from some use's record (`useCoins`). -/
+def RoundsByDevice : Prop := RoundsByDeviceAt roundCoins
+
 /-- **The coins a draw reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`
 from `coins` under the verifier's key `key`, window `w` (its open root, lowercase hex) and family `label`, released
 after `after`, then `ξ` is the coins of `label` that a session of the device under `key` released after `after`, a
 session the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
 def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
 
-/-! ## ONE-4's target: a component's coins, from the device's log -/
+/-! ## The target: a component's coins, from the device's log -/
 
 /-- What a draw's coins are read under, all of it the verifier's: the challenger's key, the window (its open root,
 lowercase hex), the family, and what the coins were released after. -/
@@ -399,7 +445,7 @@ structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
   reads : ∀ p c d, source p c = some d → ∀ e ξ, L.coins p c e = .ok ξ →
     ∃ raw, drawCoins d.key d.window d.label d.after (record e) = .ok raw ∧ decode raw = ξ
 
-/-- **ONE-4: what a component accepts, it accepts at the coins its challenger device drew, or the run carries a
+/-- **What a component accepts, it accepts at the coins its challenger device drew, or the run carries a
 break.** For every protocol whose check reads its coins through the challenger's reader (`ReadsChallenger`) and every
 challenger device: if `answer` accepts `a`, `b`, `e`, they decode to `p`, `c`, `ev`, and `answerAt` accepts them at
 the coins `ξ` the evidence's record shows; and where `p` and `c` name a challenger (`source`), `ξ` is the decoding of
@@ -445,5 +491,23 @@ def oneStageReads : ReadsChallenger SampledProofs.OneStage.protocol SampledProof
   record := SampledProofs.OneStage.Evidence.coins
   decode := fun b => (some b : Option ByteArray)
   reads := oneStage_reads
+
+/-! ## The device's registered key -/
+
+/-- **The challenger key v2's compiled check reads from the registered components' parameters `ps`** (as
+`Core.Composition.decodeRegisteredParams` decodes them): the entry named v2's id, its parameters read as v2 reads its own
+(`OneStageZk.paramsOfJson` on their canonical JSON), and the key of the challenger they name, which `roundsWhy` and
+`OneStage.coinsOf` hand `roundCoins` and `drawCoins`. None when no entry is v2's, its parameters don't read, or they
+name no challenger, where v2 refuses every window (`ROUNDS_NEED_CHALLENGER`). The entry is the first with v2's id, the
+one the composition pairs with v2 when the components' ids are distinct. -/
+def keyOfParams (ps : List Core.Composition.Named) : Option ChallengerKey :=
+  (ps.find? (·.id == OneStageZk.PROTOCOL)).bind fun n =>
+    (Core.canonicalJson n.params.toUTF8 >>= OneStageZk.paramsOfJson).toOption.bind fun p =>
+      p.base.challenger.map (·.1)
+
+/-- A key as LMS's parameters and public key; LMS's deployed parameters and the empty key where there is none. -/
+def lmsKey : Option ChallengerKey → Lms.Params × ByteArray
+  | some k => (k.params, k.pub)
+  | none => (Lms.deployed, ByteArray.empty)
 
 end Properties.Challenger

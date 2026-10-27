@@ -5,7 +5,8 @@ import Proofs.Flock.Recursive.Witness
 
 /-! # Proofs of one-stage v2's property (`Properties.SampledProofs.OneStageZk`)
 
-`checkBlobs` accepts only when `run` returned a run whose every session accepted and v1's check accepted its verdicts.
+`checkBlobs` accepts only when `run` returned a run whose every session accepted and v1's live check accepted its
+verdicts, so v1's coin-free check did too (`Properties.Challenger.oneStage_check_of_accept`).
 `run` is a `foldlM` of `step` over the evidence's sessions, so `fold_ok` reads each session's acceptance off the fold, one
 `step` at a time (`step_ok`): its record is the blob its digest names (`get_ofArray`), its setup (`setupAt_ok`, through
 `sessionAt_ok` and `buildSessionOf_ok`) is `Flock.Witness.setupOf` at its record's draw with every table's shape, the
@@ -265,7 +266,10 @@ theorem acceptMeans : AcceptMeans := by
     · next pub' prof' hchk =>
       by_cases hall : r.all = true
       · rw [if_pos hall] at h
+        split at h
+        · cases h
         cases h
+        have hchk := Properties.Challenger.oneStage_check_of_accept hchk
         obtain ⟨tags, circuitB, pubB, htags, hcirc, hpub, hsize, hprog, ss, hlen, hss, hunits⟩ := run_ok hrun hall
         obtain ⟨_, _, _, -, -, -, hva, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ hchk
         obtain ⟨x, hx, -⟩ := hva.2.1
