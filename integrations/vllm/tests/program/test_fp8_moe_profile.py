@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.engine.profiles import dense_generic as dg
-from verity_vllm.engine.profiles import generic as G
+from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.program import model as M
 
 #: Qwen/Qwen3-235B-A22B-FP8 at revision 39eb2b06, the bytes the 235B pin records as its config_sha256
@@ -136,7 +136,7 @@ def test_fp8_moe_block_agrees_with_vllms_function():
 
 
 def test_the_profile_binds_the_expert_scales_only_under_fp8_experts():
-    mod = G.make_module(f"verity_vllm.engine.profiles.{G.module_name('QWEN3_30B_A3B_FP8', 1)}")
+    mod = G.make_module(f"verity_vllm.observe.fold.profiles.{G.module_name('QWEN3_30B_A3B_FP8', 1)}")
     wf, rc = mod.weight_field, mod.root_class
     assert wf(EXPERTS + "w13_weight_scale_inv") == ("layers", 0, "w13_ws") and rc(EXPERTS + "w13_weight_scale_inv") == "weight"
     assert wf(EXPERTS + "w2_weight_scale_inv") == ("layers", 0, "w2_ws") and rc(EXPERTS + "w2_weight_scale_inv") == "weight"
@@ -144,5 +144,5 @@ def test_the_profile_binds_the_expert_scales_only_under_fp8_experts():
     for unbound in ("mlp.gate.weight_scale_inv", "mlp.gate_up_proj.weight_scale_inv", "mlp.down_proj.weight_scale_inv",
                     "mlp.experts.routed_experts.w13_input_scale", "mlp.experts.w13_weight_scale_inv"):
         assert wf(LAYER + unbound) is None, unbound
-    bf16 = G.make_module(f"verity_vllm.engine.profiles.{G.module_name('QWEN3_30B_A3B', 1)}").weight_field
+    bf16 = G.make_module(f"verity_vllm.observe.fold.profiles.{G.module_name('QWEN3_30B_A3B', 1)}").weight_field
     assert bf16(EXPERTS + "w13_weight") == ("layers", 0, "w13") and bf16(EXPERTS + "w13_weight_scale_inv") is None

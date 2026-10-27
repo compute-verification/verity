@@ -16,7 +16,7 @@ C-Flock is the one active backend family. The others are frozen: kept, still in 
 | `sp1/` | D-SP1 | frozen | the SP1 zkVM checker guest, its host and the Python driver `verity_sp1` |
 | `vole/` | VOLE (QuickSilver, designated verifier) | frozen | the WP2 checker exported for Diet Mac'n'Cheese, a patch to swanky, the bench driver |
 | `numerical/` | none | frozen | `verity_numerical`: independent references, the WP2 checker, the soundness calculator, and the bench spine (`verity_numerical.bench`) that C-Flock and the table renderers still use |
-| `shared/` | none | frozen | GPU Merkle hashing (`../verity/ml/kernels/hash_gpu/`) and the A100 re-pricing (`shared/anchor_a100/`) for A-GKR and B-Ligero |
+| `shared/` | none | frozen | GPU Merkle hashing (`shared/hash_gpu/`: Poseidon2, BLAKE3 and SHA-256 trees, and SHA-256 frame-v3 trees) and the A100 re-pricing (`shared/anchor_a100/`) for A-GKR and B-Ligero |
 | `redteam/` | none | frozen | red-team forgery harnesses against A-GKR and B-Ligero |
 | `pouw-blake3/` | none | frozen | Pearl-C's BLAKE3 hashing formats (-h1, -h2, the BLAKE3 -h3), their kernels, benches and vectors, kept after the 2026-10-06 ruling that standardized PoUW on SHA-512 (`pouw-blake3/README.md`); no tests |
 
@@ -42,7 +42,7 @@ no GPU). Rust counts are `#[test]` functions. C-Flock's row gives no counts, sin
 | D-SP1 | frozen | `sp1/tests`: 10, of which 3 skip without `VERITY_SP1_RELATION_ONLY_HOST` or `VERITY_SP1_PROVE=1`; `test_typed.py` skips whole without a built host | none | `sp1/common`: 135; `sp1/host`: 1 |
 | VOLE | frozen | none: `vole/` has no tests | none | none (the swanky patch is applied outside the repository) |
 | numerical | frozen | `../benchmarks/numerical/tests`: 1,059, of which 9 skip | none | none |
-| shared | frozen | none | `../verity/ml/kernels/hash_gpu/tests`: 132 | none |
+| shared | frozen | none | `shared/hash_gpu/tests`: 132 | none |
 
 Outside `backends/`, `check` also runs `integrations/vllm`'s suite on the CPU; its GPU, vLLM-runtime and pod tests skip
 themselves, and its known failures on `main` are listed in `integrations/vllm/tests/conftest.py`.

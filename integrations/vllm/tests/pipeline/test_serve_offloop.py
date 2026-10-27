@@ -585,7 +585,9 @@ def test_a_draining_loop_refuses_new_requests_and_ends_once_idle():
 
 
 def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
-    base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300"]
+    (man := tmp_path / "manifest.json").write_text("{}")
+    base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300",
+            "--required-manifest", str(man)]
     opts = cli.parse("serve-openai", base, environ={})
     with pytest.raises(UsageError, match="disk floor .*--disk-floor-gb"):
         so.preflight(opts, which=lambda _: "/v/bin/ninja", usage=lambda _p: SimpleNamespace(free=309 * ss.GB))
@@ -612,7 +614,7 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     (src / "requests.jsonl").write_bytes(b'{"d": 4}\n')
     m()
     assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
-    assert so.records_mirror(src, str(src)) is None and so.records_mirror(src, None) is None
+    assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
     assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()
 
 
