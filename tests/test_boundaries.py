@@ -76,7 +76,7 @@ ALLOWED = {
     # deployment layer (`wipe_parties`), their messages the wire's.
     "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
                             "ml.randomness"},
-    # The bandwidth audit's store is PoUS's `C*`,
+    # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The remote bandwidth audit commits receipts in frame-v3-sha512
