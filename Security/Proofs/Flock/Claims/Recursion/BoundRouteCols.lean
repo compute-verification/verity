@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Recursion.LastBindsEC
 
 `ksBoundRoute_of_bridge` reads (P4, `Bound.LastBinds`) once, in `forksBind_nf`, and (P4) was false at the deployed
 record before S0 (a trailing space in the record's text, `BindsDeployed`). This file proves the route with (P4) replaced by `Bound.LastBindsEC` and
-`Bound.LastCoinFree`, through the chain as it stands (`KS_of_flockKS_binds`):
+`Bound.LastCoinFree`, through REC1's chain as it stands (`KS_of_flockKS_binds`):
 
 * The compiled record's inner view reads the last message as a representative of its reading (`RecDeploy.deployRecC`):
   `IVStar`'s decision with the set of its calls, and `DE`'s columns of the opened view (`Bound.readL`), at the coins
