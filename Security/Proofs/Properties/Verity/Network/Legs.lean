@@ -10,7 +10,8 @@ coupling's verdict at the code (`Vocab.Coupling.verdict`), whose first conjunct 
 (`networkWindowLe_verdict`). So the network certifier at the code (`Verity.Subprotocol.network_atCode`, at the
 coupling's run, `Vocab.Coupling.atCode`) rests on the bridge's assumptions (`KS`, `Commitment.Binds`,
 `Flock.ListWithin`, and `trusted-host` in the realization) and NET-85's named steps (`network_atCode_of_steps`): S2–S6,
-the ρ gap and S8's two premises (`Proofs.Properties.Verity.Network.Window`).
+the ρ gap and S8's two premises (`Proofs.Properties.Verity.Network.Window`). At a coupling, that is the per-period
+guarantee `Vocab.networkSound_of_coupling` reads (`coupling_atCode_of_steps`).
 -/
 
 namespace Verity.Network
@@ -64,5 +65,29 @@ theorem network_atCode_of_steps {r : PeriodRun d α C Ω} (c : Certificates) (p 
     (atCode r A).Sound c p .network (n * (δ + εks + εbind + εtap)) :=
   network_atCode c p R hks hb hδ hdec εks εbind εtap herr hbind htap
     (networkWindowLe hA W h2 h3 h4 h5 h6 hρ hreg hcov)
+
+/-- **A network coupling's guarantee at the code from NET-85's steps**: the coupled run at the verdict at the code
+(`Vocab.Coupling.atCode`) meets `CommOfPeriodLeakAccepted`'s bound at the published certificates and the coupling's
+price, the per-period guarantee `Vocab.networkSound_of_coupling` reads, from the bridge's assumptions and the steps at
+what the prover sent at the outcome the coins lead to. -/
+theorem coupling_atCode_of_steps {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    (q : V.Coupling .network θ F c σ)
+    (R : RealizesCommOfPeriodLeakAccepted q.run (V.certOf θ).K H D L Kₒ S lay k δ decode reg Dj n) (hks : KS H D)
+    (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
+    (εks εbind εtap : ℝ)
+    (herr : ∀ ξ i, Claims.Sampling.κ D δ (R.stmt ξ i) - δ +
+      Real.sqrt (Claims.Sampling.γ D (R.stmt ξ i) * PrB H D.V (R.prover ξ i) (R.stmt ξ i)) ≤ εks)
+    (hbind : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ εbind)
+    (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
+      εtap)
+    (W : WindowRuns R) (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h3 : V2AcceptMeans W)
+    (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W)
+    (h6 : NetworkCouples R (fun ξ => (V.outcome θ F c σ q.coins ξ).sent) W)
+    (hρ : WindowValuesRegistered R fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
+    (hreg : WindowRegistersAs W fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
+    (hcov : RecordCovers W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) :
+    q.atCode.Sound (V.certOf θ) q.price .network (n * (δ + εks + εbind + εtap)) :=
+  network_atCode_of_steps (V.certOf θ) q.price R hks hb hδ hdec εks εbind εtap herr hbind htap (fun _ h => h.1) W h2
+    h3 h4 h5 h6 hρ hreg hcov
 
 end Verity.Network
