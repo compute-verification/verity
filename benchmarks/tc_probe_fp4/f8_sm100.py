@@ -864,7 +864,7 @@ def pin(args) -> int:
         out[kind] = chosen
     gpu = (src / "gpu.csv").read_text().strip().splitlines()[-1] if (src / "gpu.csv").exists() else ""
     nvcc = (src / "nvcc.txt").read_text().strip().splitlines()[-2:] if (src / "nvcc.txt").exists() else []
-    prov = {"run_record": args.run_record, "device": f"{capture_doc['identity']['name']} (cc {capture_doc['identity']['cc']})",
+    prov = {"run": args.run, "device": f"{capture_doc['identity']['name']} (cc {capture_doc['identity']['cc']})",
             "nvidia_smi": gpu, "nvcc": " / ".join(nvcc), "host": capture_doc["host"], "seed": summary["plan"]["seed"], "bulk_seed": summary["plan"]["bulk_seed"],
             "totals": {k: v[truth] for k, v in summary["totals"].items()}, "selection": PIN_SELECTION}
     doc = {"schema": "verity/tc-capture-sample/v0", "provenance": {**prov, "uniform": args.uniform}, "kinds": out}
@@ -879,7 +879,7 @@ def main(argv=None) -> int:
     ap.add_argument("phase", choices=("gen", "capture", "eval", "pin"))
     ap.add_argument("--scratch")
     ap.add_argument("--run-out", help="pin: a run's out/ (summary.json, fixture.json, capture.json)")
-    ap.add_argument("--run-record", help="pin: that run's record in the evidence store (its art: id)")
+    ap.add_argument("--run", help="pin: that run's id")
     ap.add_argument("--uniform", type=int, default=2, help="pin: uniform records a family")
     ap.add_argument("--out", default=SHARED.OUT or ".")
     ap.add_argument("--lib")

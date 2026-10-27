@@ -225,11 +225,11 @@ def test_fp4_probe_envelope_attributes_the_primary_model_and_ignores_the_control
     registry = trust.INSTRUCTIONS[ins].model.name
     fams = {"random_zero_acc": {"elements": 1000, "mismatches": {"model5": 7, "verity": 0}, "record_only": False},
             "specials": {"elements": 10, "mismatches": {"model5": 3, "verity": 3}, "record_only": True}}
-    meta = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": "run-fp4a", "instruction": ins, "sku": "NVIDIA GeForce RTX 5090",
+    meta = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": "r20260922-000000-fp4a", "instruction": ins, "sku": "NVIDIA GeForce RTX 5090",
             "arch": "sm_120a", "primary_model": "verity", "counts": {"elements": 1010, "mismatches": {"model5": 7, "verity": 0}}, "families": fams,
             "workload_fingerprint": {"instruction": ins}, "validation": {"status": "passed"}}
     art = store.put_artifact("tc-evidence/v1", meta)
-    old = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": "run-fp4b", "instruction": ins, "sku": "NVIDIA GeForce RTX 5090",
+    old = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": "r20260922-000000-fp4b", "instruction": ins, "sku": "NVIDIA GeForce RTX 5090",
            "arch": "sm_120a", "counts": {"elements": 500, "mismatches": {"model5": 29118}, "replay_cases": 1601, "replay_matched": 1601},
            "families": {"random_zero_acc": {"elements": 500, "mismatches": {"model5": 29118}}}, "workload_fingerprint": {"instruction": ins, "replays": ["probe3.json"]},
            "validation": {"status": "failed"}}
@@ -326,7 +326,7 @@ def test_open_d_entry_blocks_trusted(store, repo):
 
 def test_red_team_downgrade_label_blocks_trusted(store, repo):
     trusted(store)
-    art = hw(store, elements=1000, extra_labels=(("trust_downgrade", "redteam-downgrade"),))
+    art = hw(store, elements=1000, extra_labels=(("trust_downgrade", "verifier rejected an honest run"),))
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "PINNED"
     assert not crit(rep, "Tf").passed and any(art in m for m in rep.missing_to_next)

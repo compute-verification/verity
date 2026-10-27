@@ -77,9 +77,9 @@ def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path):
             "smi": {"n_samples": 20, "clocks_sm_mhz": {"median": 2520.0, "min": 2505.0, "max": 2520.0, "n": 20}, "clocks_mem_mhz": None,
                     "power_w": {"median": 430.0, "min": 400.0, "max": 449.0, "n": 20}, "temperature_c": None, "throttle_reasons": []}}
     (tmp_path / "native_peak.json").write_text("{}")
-    doc = m.build_result("run-a", "bf16", envd, [size], {"sass": "not captured", "error": "ncu not on PATH"}, {"n_samples": 20}, None, 12.0,
+    doc = m.build_result("r20260922-000000-abcd", "bf16", envd, [size], {"sass": "not captured", "error": "ncu not on PATH"}, {"n_samples": 20}, None, 12.0,
                          ["native_peak.json"])
-    chk = R.check_doc(tmp_path, doc, "run-a")
+    chk = R.check_doc(tmp_path, doc, "r20260922-000000-abcd")
     assert chk.valid, chk.errors
     assert doc["kind"] == "native-peak/v1" and doc["device"] == envd["device"] and doc["dtype"] == "bf16" and doc["accumulate"] == "fp32"
     assert doc["spec_flop_per_second"] == 165.2e12 and abs(doc["fraction_of_spec"] - doc["flop_per_second"] / 165.2e12) < 1e-12
@@ -87,9 +87,9 @@ def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path):
     assert doc["method"].startswith("cublas dense gemm 8192^3, median of 5")
     assert doc["validation"]["status"] == "passed" and {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "fraction_of_spec", "gemm_8192_seconds"}
     json.dumps(doc)   # serialisable as written
-    skipped = m.build_result("run-a", "e4m3", {"device": "NVIDIA A100-SXM4-80GB"}, [], {"sass": "not captured"}, {"n_samples": 0},
+    skipped = m.build_result("r20260922-000000-abcd", "e4m3", {"device": "NVIDIA A100-SXM4-80GB"}, [], {"sass": "not captured"}, {"n_samples": 0},
                              "FP8 tensor cores need sm_89+", 1.0, [])
-    assert R.check_doc(tmp_path, skipped, "run-a").valid
+    assert R.check_doc(tmp_path, skipped, "r20260922-000000-abcd").valid
     assert skipped["validation"]["status"] == "not_run" and skipped["flop_per_second"] is None and skipped["spec_flop_per_second"] is None
 
 
@@ -112,8 +112,8 @@ def test_nvfp4_instruction_result_document(tmp_path):
                    "power_w": {"median": 500.0, "min": 400.0, "max": 575.0, "n": 20}, "temperature_c": None, "throttle_reasons": []}}
     gemm = {"attempted": True, "n": 8192, "supported": False, "reason": "torch has no float4_e2m1fn_x2", "flop_per_second": None}
     (tmp_path / "native_peak.json").write_text("{}")
-    doc = m.build_result("run-nvfp4", "nvfp4", envd, [rec], sass, {"n_samples": 20}, None, 30.0, ["native_peak.json"], gemm)
-    chk = R.check_doc(tmp_path, doc, "run-nvfp4")
+    doc = m.build_result("r20260923-000000-abcd", "nvfp4", envd, [rec], sass, {"n_samples": 20}, None, 30.0, ["native_peak.json"], gemm)
+    chk = R.check_doc(tmp_path, doc, "r20260923-000000-abcd")
     assert chk.valid, chk.errors
     assert doc["dtype"] == "nvfp4" and doc["spec_flop_per_second"] == 1676.0e12 and doc["flop_per_second"] == flop
     assert abs(doc["fraction_of_spec"] - flop / 1676.0e12) < 1e-12 and doc["sass"] == sass["sass"] and doc["gemm_attempt"] is gemm
@@ -128,11 +128,11 @@ def test_measure_bf16_small_on_cuda(tmp_path, monkeypatch):
     if not torch.cuda.is_available():
         pytest.skip("no CUDA device")
     m = _measure()
-    monkeypatch.setenv("RESEARCH_RUN_ID", "run-cuda")
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20260922-000000-cuda")
     rc = m.main(["--dtype", "bf16", "--sizes", "1024", "--warmup", "1", "--reps", "3", "--sustain-s", "0.2", "--out", str(tmp_path), "--no-sass"])
     assert rc == 0
     doc = json.loads((tmp_path / "result.json").read_text())
-    assert R.check_doc(tmp_path, doc, "run-cuda").valid and doc["validation"]["status"] == "passed"
+    assert R.check_doc(tmp_path, doc, "r20260922-000000-cuda").valid and doc["validation"]["status"] == "passed"
     assert doc["flop_per_second"] > 0 and "1024^3" in doc["sizes"] and doc["sizes"]["1024^3"]["check_ok"]
 
 
