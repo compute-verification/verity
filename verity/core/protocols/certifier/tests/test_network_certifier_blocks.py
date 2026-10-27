@@ -193,8 +193,8 @@ ADD, R = "I32Add_v2", 2
 
 def demo() -> tuple[IF.Circuit, dict]:
     """The demo's per-request rows at the frozen shape (P = 8 prompt bytes, G = 24 generated) for R = 2 slots, on a
-    stand-in for the units that read and write them, which aren't on main (the embedding's token read, CIR-104's
-    ``EmbeddingPosition_v1``, and CIR-100's argmax): `I32Add_v2`'s unit r·G + g reads request row r·P + g mod P as its
+    stand-in for the units that read and write them, which aren't on main (the embedding's token read,
+    ``EmbeddingPosition_v1``, and the argmax): `I32Add_v2`'s unit r·G + g reads request row r·P + g mod P as its
     ``a`` (2 words, the token key) and the loaded ``k`` as its ``b``, and its i32 ``o0`` is response row r·G + g, at
     step g + 1 of the server-time window."""
     P, G = TR.PROMPT, TR.GENERATED
@@ -440,7 +440,7 @@ def test_a_wires_in_may_come_before_its_out_but_not_on_its_own_server():
 
 #: the refusal of an inference block on two servers (NET-92), where both are named
 ON_TWO = ("inference block (slot {slot}, step {step}): units of {a} on server {sa} and of {b} on server {sb}; an inference "
-          "block runs on one server, the one that may read its inputs (NET-92)")
+          "block runs on one server, the one that may read its inputs")
 
 
 def test_refuses_an_inference_block_on_two_servers():

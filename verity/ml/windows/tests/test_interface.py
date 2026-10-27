@@ -16,7 +16,9 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -576,17 +578,20 @@ def test_coalesce_merges_runs_of_like_patterns():
 
 class Held:
     """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` u16 words,
-    one salt a row, a root (a stand-in's), and a statement's table of the rows at some positions (the paths are core's;
-    none here)."""
+    one salt a row, a root and each row's path (a stand-in's), and a statement's table of the rows at some positions."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
         self.name, self.rows, self.words, self.leaves = name, rows, rows.shape[1], len(rows)
+        self.value = name
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(CS.SALT_BYTES) for i in range(len(rows))]
         self.root = hashlib.sha512(b"root " + name.encode()).digest()
 
+    def path(self, position: int) -> bytes:
+        return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
+
     def statement(self, positions):
         return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
-                {"value": self.name, "positions": list(positions), "paths": []})
+                {"value": self.name, "positions": list(positions), "paths": [self.path(p).hex() for p in positions]})
 
 
 class Supplied(Held):
@@ -703,7 +708,7 @@ def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_und
     assert m1.tables == (("x", 4), ("sx", 4), ("wrow", 2), ("sw", 4))
     assert np.array_equal(c.rows[m1.port("wrow")], w.rows[[2, 3]]) and c.salts[m1.port("wrow")] == w.salts[2] + w.salts[3]
     assert c.refs[1][:, 2].tolist() == [0, 0, 1, 1] and c.refs[1][:, 0].tolist() == [0, 1, 2, 3]
-    assert win._entries[m1.key] == {"wrow": {"value": "w", "positions": [2, 3], "paths": []}}
+    assert win._entries[m1.key] == {"wrow": w.statement([2, 3])[2]} and w.statement([2, 3])[2]["paths"][1] == w.path(3).hex()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
     assert mine.members == win.window.members
@@ -808,6 +813,79 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
     return circuit, w, [sx, sw], [sy], ins, outs
 
 
+def _loop_turns(f) -> int:
+    """The jumps Python makes in `verity.ml.windows`' modules while ``f()`` runs (`sys.monitoring`'s JUMP events: every
+    turn of a loop, a comprehension's included, is one): the work a window does in Python, counted, not timed."""
+    mon, here, ours = sys.monitoring, str(Path(I.__file__).parent), {}
+    tool, turns = next(t for t in range(6) if mon.get_tool(t) is None), 0
+
+    def jump(code, _at, _to):
+        nonlocal turns
+        if (mine := ours.get(code)) is None:
+            mine = ours[code] = str(Path(code.co_filename).parent) == here
+        if not mine:
+            return mon.DISABLE
+        turns += 1
+
+    mon.use_tool_id(tool, "loop turns")
+    try:
+        mon.register_callback(tool, mon.events.JUMP, jump)
+        mon.set_events(tool, mon.events.JUMP)
+        f()
+    finally:
+        mon.set_events(tool, mon.events.NO_EVENTS)
+        mon.register_callback(tool, mon.events.JUMP, None)
+        mon.free_tool_id(tool)
+        mon.restart_events()
+    return turns
+
+
+def _long_chain(layers: int, d: Path) -> None:
+    """A ``Gemm_v2{K=16, N=16}`` chain of ``layers`` layers of two units, a member a unit (cap 1), layer 0's ``x`` a
+    ``Gemm_v2{K=32, N=16}`` feed's output and layer l's layer l - 1's, a wire each, and each layer's ``w`` its own row of
+    a registered value, a read each, both recorded by reference: the window built, recorded, closed and written, and the
+    verifier's window, wiring check and ``--registered`` files made from its record."""
+    rng = np.random.default_rng(5)
+
+    def bf16(a: np.ndarray) -> np.ndarray:
+        return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+    sx, sw, w = bf16(rng.standard_normal((2, 32))), bf16(rng.standard_normal((2, 16, 32)) / 4), bf16(
+        rng.standard_normal((layers, 16, 16)) / 4)
+    ys = [np.asarray(evaluate_batch(SRC, sx, sw, kernel="reference"), dtype=np.uint16).reshape(2, 16)]
+    for j in range(layers):
+        ys.append(np.asarray(evaluate_batch(GEMM, ys[-1], np.repeat(w[j][None], 2, axis=0), kernel="reference"),
+                             dtype=np.uint16).reshape(2, 16))
+    wires = [I.Wire(GID, "x", SID if j == 0 else GID, "o0", at=2 * j, radix=(2,), base=2 * max(j - 1, 0), step=(1,))
+             for j in range(layers)]
+    reads = tuple(I.Read(GID, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(layers))
+    circuit = I.Circuit("long", ((SRC, 2), (GEMM, 2 * layers)), external=(f"{SID}/x", f"{SID}/w"), wires=tuple(wires),
+                        registered=I.Registered({"w": 256 * layers}, reads=reads))
+    win = I.Window(circuit, RUN, LAW, 1, registered={"w": Bound("w", w.reshape(layers, 256))})
+    win.record(SRC, [sx, sw], ys[:1])
+    win.record(GEMM, [None, None], [np.concatenate(ys[1:])])
+    c = win.close(salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
+                         "digest": staticmethod(lambda rec: "d")})
+    win.write(c, d, {"by": "test"}, registrar=reg)
+    doc = json.loads((d / "circuit.json").read_bytes())
+    mine = I.window_of_record(doc, LAW, {SID: SRC, GID: GEMM}.__getitem__)
+    assert WI.check(mine.members, {m.key: c.public_body(k) for k, m in enumerate(mine.members)}) == {}
+    pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": layers, "words": 256, "domain": "ef" * 64}}
+    assert len(I.registered_reads(doc, mine, pin, registered=REG)) == 2 * layers
+
+
+def test_a_windows_commit_is_linear_in_its_members(tmp_path):
+    """A window's commit and the verifier's rebuild of it from its record (`_long_chain`) run loops whose turns grow with
+    its members, wires and reads, not with their products: from 32 layers to 64 the turns grow at most about twice what
+    they grow from 16 to 32 (the difference drops what a window does once, such as its hiding tables). The 4,32,4 window
+    class's commit (58,719 members, 166,038 wired member ports, 6,727 reads) ran each port's hashes past every port's, each
+    member past every read and each wired port past every member, hours on one core; a timing can't say which, a count
+    can."""
+    a, b, c = (_loop_turns(lambda n=n: _long_chain(n, tmp_path / str(n))) for n in (16, 32, 64))
+    assert c - b <= 2.2 * (b - a), (a, b, c)
+
+
 def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_given_in_full(tmp_path):
     """`fed_chain`'s units recorded with no inputs at all: a wired ``x`` row is its writer's output row and a ``w`` the
     value's, so the commitment, the rows and every file are the full record's, and the mismatch check gathers the inputs it
@@ -825,6 +903,36 @@ def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_gi
         free.record(SRC, [None, sw], feed)
         free.record(GEMM, ins, outs)
         free.close(salt_key=bytes(32))
+
+
+class _Counted(list):
+    """A value's salts, each read counted."""
+
+    reads = 0
+
+    def __getitem__(self, i):
+        self.reads += 1
+        return super().__getitem__(i)
+
+
+def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
+    """`fed_chain`'s chain members, two a layer, each read their layer's one row of ``w``: committing and writing the window
+    reads each row's salt once, however many members read it, and asks for no statement. Core's ``Registered.statement``
+    draws a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
+    them a third time: 10,565,136 draws at the 4,32,4 class, whose members read 37,788 distinct rows."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    w.salts = _Counted(w.salts)
+    monkeypatch.setattr(Bound, "statement", lambda *_: pytest.fail("a statement of the reads drew their salts again"))
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    c = win.close(salt_key=bytes(32))
+    reads = [e["w"]["positions"] for e in win._entries.values()]
+    assert w.salts.reads == LAYERS and len(reads) == 2 * LAYERS and sorted(reads) == [[0], [0], [1], [1]]
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
+                         "digest": staticmethod(lambda rec: "d")})
+    win.write(c, tmp_path, {"by": "test"}, registrar=reg)
+    assert w.salts.reads == LAYERS
 
 
 def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):
@@ -873,13 +981,15 @@ def _like(value: Bound, **fields) -> Bound:
     return out
 
 
-def _value_rows(value=None, positions=None):
-    """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)``, each as given when None."""
+def _value_rows(value=None, positions=None, salts=None):
+    """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)`` under ``salts(the salts
+    `Window.close` drew)``, each as given when None (the salts drawn again by `rows.commit` when the positions change)."""
     def edit(window: CS.Window, data: list[dict]) -> CS.Window:
         k = _first(window, GID)
         src = data[k]["rows"]["w"]
         data[k]["rows"]["w"] = CS.ValueRows(src.value if value is None else value(src.value),
-                                            src.positions if positions is None else positions)
+                                            src.positions if positions is None else positions,
+                                            (src.salts if positions is None else None) if salts is None else salts(src.salts))
         return window
     return edit
 
@@ -912,6 +1022,7 @@ REFUSED = {
     "a position past the value's rows": (_value_rows(positions=(LAYERS,)), f"positions outside its {LAYERS} rows"),
     "a negative position": (_value_rows(positions=(-1,)), f"positions outside its {LAYERS} rows"),
     "two rows for the port's one": (_value_rows(positions=(0, 1)), "2 rows, not 1"),
+    "salts short of its rows": (_value_rows(salts=lambda s: s[:-1]), f"salts not one {CS.SALT_BYTES}-byte salt a row"),
     "wired rows on a port no wire writes": (_feed_x_wired, f"given as {CS.WIRED} rows, but no wire writes it"),
     "rows by reference in a window with row tables": (_beside_a_row_table, "in a window with row tables"),
 }
@@ -921,7 +1032,8 @@ REFUSED = {
 def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(monkeypatch, edit, why):
     """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width, schema or
     leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
-    than the port's rows; `rows.WIRED` rows on a port no wire writes; and a port by reference in a window with row tables,
+    than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a port no wire writes; and a port by
+    reference in a window with row tables,
     whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
     is refused."""
     window, data, _w = given_by_reference(monkeypatch)

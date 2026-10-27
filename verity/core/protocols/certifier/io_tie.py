@@ -30,7 +30,7 @@ reads the map inside the proof under the advice's hiding root.
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit
 registers (`verity.ml.commitments.advice`'s registration: `hm96-sha512/row/v2` leaves under `domain`). Bucket t's
 unit reads S rows (`Shape.S`), at the steps its bucket's outputs were sampled in (`window_map`'s steps, public with the
-map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vllm's Commit (its binding map's
+map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vLLM's Commit (its binding map's
 `sampled_token_ids` under the run root), which this fake upstream stands in for.
 
 **What 1 means** (`reference`): every bucket row is row t of the warden's registered root, and every port row bucket t
