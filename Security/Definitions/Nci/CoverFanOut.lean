@@ -3,7 +3,7 @@ import Definitions.Nci.Cover
 /-!
 # The cover theorem's fan-in/fan-out tightening: the vocabulary
 
-The covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
+Daniel's covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
 multiplications it completes. Fan-in and fan-out charge it for the values it reads: a block that reads a value of a
 token (an activation, a word) finishes
 only the products whose activations key back to that value, at most `aOut` of them, and to do more of a token's work
