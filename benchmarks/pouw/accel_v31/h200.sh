@@ -13,14 +13,14 @@
 #   research run --on vy-dc-h200 --project verity --campaign cmp-172 --source . --cwd source --timeout 120m \
 #     --env GPU_LEASE_WHO=kernels-kcommitfb -- bash benchmarks/pouw/accel_v31/h200.sh
 #
-# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, MODEL (h200_step.py's
+# Env: TS (default "8 16"), LP (the bench's and the per-t gates' L', default 512), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, MODEL (h200_step.py's
 # --model: h200, or 8b with SHAPES8B's calls), and run.sh's (NVFLAGS=-DV31_WG with a gemm=1 variant: wg_proto.cuh's GEMMs).
 # SHAPES8B: the demo's 8B calls at M = 16,384 (Llama-3-8B: QKV, O, gate-up, down).
 set -uo pipefail
 D=benchmarks/pouw/accel_v31
 O=${OUT:?}
 PY=${PY:-uv run -q --no-project --with numpy python}
-export GENCODE=arch=compute_90a,code=sm_90a CUTLASS=${CUTLASS:-0} LP=512 ROW=1024
+export GENCODE=arch=compute_90a,code=sm_90a CUTLASS=${CUTLASS:-0} LP=${LP:-512} ROW=1024
 export VARIANTS=${VARIANTS:-row=1024 row=8192} REPS=${REPS:-5}
 SHAPES8B="8b-qkv:16384:6144:4096 8b-o:16384:4096:4096 8b-up:16384:28672:4096 8b-down:16384:4096:14336"
 [ "${MODEL:-h200}" = 8b ] && SHAPES=${SHAPES:-$SHAPES8B}
@@ -50,9 +50,9 @@ c-t16-forgeO 256 256 16384 llm forgeO:0.25 512 16 1024
 first=1
 for t in ${TS:-8 16}; do
   mkdir -p "$O/t$t"
-  g="g-t$t 256 256 16384 llm none 512 $t 1024"
+  g="g-t$t 256 256 16384 llm none $LP $t 1024"
   if [ "${QUICK:-0}" = 1 ]; then g="$g
-c-t$t-skip 256 256 16384 llm skip:3 512 $t 1024"
+c-t$t-skip 256 256 16384 llm skip:3 $LP $t 1024"
   elif [ "$first" = 1 ]; then g=$ALL; fi
   OUT="$O/t$t" T=$t GATES="$g" bash $D/run.sh > "$O/t$t/run.log" 2>&1
   echo "t$t run.sh rc $?" >> "$O/rc.txt"

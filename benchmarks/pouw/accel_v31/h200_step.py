@@ -9,7 +9,8 @@ W the step's MACs and θ the H200's sheet rate (4,096 MACs an SM a clock, 132 SM
 
 --model 8b: the demo's model instead (HIGHUTIL, CMP-172), Llama-3-8B's 32 layers of QKV (6,144, 4,096), O (4,096, 4,096),
 gate-up (28,672, 4,096) and down (4,096, 14,336), no head. Where every call has the `wgl` arm (V31_GEMM 1: wgmma.linear
-itself, timed beside the protocol's arms), gamma is taken against that step, with its ratio to the 1.05 target.
+itself, timed beside the protocol's arms), gamma is taken against that step, with its ratio to the bound 10 and the
+ideal 2 (Daniel, 27 Oct 03:52Z; prover overhead counts as certified, so gamma is spent to keep every pipe busy).
 
     python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06] [--model h200|8b]
 """
@@ -24,7 +25,7 @@ CALLS = {(16384, 16384): 2 * LAYERS, (128, 16384): LAYERS, (65536, 16384): LAYER
          (256, 16384): 1}
 CALLS_8B = {(6144, 4096): 32, (4096, 4096): 32, (28672, 4096): 32, (4096, 14336): 32}
 MODELS = {"h200": CALLS, "8b": CALLS_8B}
-TARGET = 1.05
+BOUND, IDEAL = 10.0, 2.0
 THETA = 4096 * 132 * 1.83e9
 ARMS = ("lt", "plain", "coins", "form", "wrap", "gemm", "commit", "call", "ovl")
 
@@ -69,17 +70,19 @@ def main() -> int:
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for (lp, t, row, var), v in st.items():
         s = v["s"]
+        base = s.get("wgl", a.wgmma)
         mhz = f"{v['mhz'][0]:.0f}-{v['mhz'][1]:.0f}" if v["mhz"] else "-"
-        print(f"| {lp} | {t} | {lp * t} | {row} | {var} | {s['ovl']:.3f} | {s['ovl'] / a.wgmma:.3f} | {s['call']:.3f} | "
-              f"{s['call'] / a.wgmma:.3f} | {s['gemm']:.3f} | {s['coins'] + s['commit']:.3f} | {s['form'] + s['wrap']:.3f} | "
+        print(f"| {lp} | {t} | {lp * t} | {row} | {var} | {s['ovl']:.3f} | {s['ovl'] / base:.3f} | {s['call']:.3f} | "
+              f"{s['call'] / base:.3f} | {s['gemm']:.3f} | {s['coins'] + s['commit']:.3f} | {s['form'] + s['wrap']:.3f} | "
               f"{s['plain']:.3f} | {s['lt']:.3f} | {1 - v['macs'] / (s['ovl'] * THETA):.3f} | {mhz} |")
     for (lp, t, row, var), v in st.items():
         s = v["s"]
         base, what = (s["wgl"], "wgmma.linear's step timed beside it") if "wgl" in s else (a.wgmma, "wgmma's")
-        g = s["ovl"] / base
+        g, h = s["ovl"] / base, s["coins"] + s["commit"]
         print(f"summary: {a.model} L' {lp} L {lp * t} row {row} {var}: step {s['ovl']:.3f} s overlapped, gamma_u {g:.3f} against "
-              f"{what} {base:.3f} s ({g / TARGET:.3f} x the {TARGET} target); serial {s['call']:.3f} s; gemm {s['gemm']:.3f} "
-              f"(gemm / base {s['gemm'] / base:.3f}), hashing {s['coins'] + s['commit']:.3f}, other {s['form'] + s['wrap']:.3f} s")
+              f"{what} {base:.3f} s ({g / BOUND:.3f} x the bound {BOUND:g}, {g / IDEAL:.3f} x the ideal {IDEAL:g}); serial "
+              f"{s['call']:.3f} s; gemm {s['gemm']:.3f} (gemm / base {s['gemm'] / base:.3f}), hashing {h:.3f} "
+              f"({h / s['call']:.0%} of serial), other {s['form'] + s['wrap']:.3f} s")
     if not st:
         print("summary: no complete step (a bench shape is missing)")
     return 0 if st else 1
