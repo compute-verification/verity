@@ -30,15 +30,15 @@ from typing import Any
 
 import numpy as np
 
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.refs import runs
 from verity.ml.commitments.gates import embedding as E
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.definitions.numerics.rows import ROWS
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.b1 import NEG_INF_BF16
 from verity.ml.windows import interface as IF
+from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
 from .window_builder import WEIGHTS, table_param, weight_param
@@ -297,8 +297,8 @@ class Served:
 class Rows:
     """Every unit's output rows of ``lowered``'s circuit (module docstring) as u16 words by template and output, with each
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
-    registered values by parameter (`registered_values`), of which an embedding read opens its table's (its ``rows``,
-    ``salts`` and ``path``). Refused unless every unit's every row is filled once."""
+    registered values by parameter (`weight_values` and `slot_rows_value`), of which an embedding read opens its table's
+    (its ``rows``, ``salts`` and ``path``). Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
         if len(slots) != len(lowered.programs):
@@ -430,29 +430,36 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def registered_values(circuit: IF.Circuit, fields: Callable[[str], np.ndarray], slot_rows: Sequence[Sequence[int]],
-                      commit: Callable[[str, np.ndarray, str, str | None], Any], *, window: str) -> dict[str, Any]:
-    """The values ``circuit``'s registered reads and tables read, by parameter, each ``commit(name, rows, schema,
-    window)`` of its rows of u16 words: a weight's parameter (`window_builder.weight_param`) its words in rows of the
-    reading port's (``row/v2``), a table's (`window_builder.table_param`) its rows (``row-seg``), and `SLOT_ROWS` the
-    slots' rows (``row/v2``, a per-window value under the window's root ``window``). ``fields(label)``: a weight's
-    elements in their unsigned width."""
+def weight_values(circuit: IF.Circuit, program: str, fields: Callable[[str], np.ndarray], key: bytes,
+                  nonce: int = 0) -> dict[str, G.Registered]:
+    """Every weight parameter ``circuit`` reads registered, committed once before a period's first window's coins and held
+    across its windows: a weight's parameter (`window_builder.weight_param`) its words in rows of the reading port's
+    (``row/v2``), a table's (`window_builder.table_param`) its rows (``row-seg``), each under the committer's secret
+    ``key`` (`pouw.h1.registered.commit`), the i-th parameter in name order at salt nonce ``nonce + i``, so the verifier
+    learns only each weight's size and hiding root. ``fields(label)``: a weight's elements in their unsigned width."""
     out = {}
-    for name, leaves in (circuit.registered.params if circuit.registered else {}).items():
-        if name == SLOT_ROWS:
-            rows = np.concatenate([_i32(r) for r in slot_rows])
-            out[name] = commit(name, rows, V2, window)
-            continue
+    params = circuit.registered.params if circuit.registered else {}
+    for i, name in enumerate(sorted(n for n in params if n != SLOT_ROWS)):
         body = name[len(WEIGHTS) + 1:] if name.startswith(f"{WEIGHTS}/") else ""
         label, _, words = body.removesuffix("/table").rpartition("@")
         table = body.endswith("/table")
         if not words.isdigit() or name != (table_param if table else weight_param)(label, int(words)):
             raise ValueError(f"{name}: no weight's registered parameter nor the slot rows")
         w = np.ascontiguousarray(fields(label)).view("<u2")
-        if w.size != leaves:
-            raise ValueError(f"{name}: weight {label} of {w.size} words, its parameter's {leaves}")
-        out[name] = commit(name, w.reshape(-1, int(words)), SEG if table else V2, None)
+        if w.size != params[name]:
+            raise ValueError(f"{name}: weight {label} of {w.size} words, its parameter's {params[name]}")
+        out[name] = H1R.commit(program, name, w.reshape(-1, int(words)), key, nonce + i, keep_rows=True,
+                               schema=G.SCHEMA_SEG if table else G.SCHEMA_V2)
     return out
 
 
-__all__ = ["COMPUTED", "EVALUATED", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "registered_values"]
+def slot_rows_value(program: str, slot_rows: Sequence[Sequence[int]], key: bytes, nonce: int, *,
+                    window: str) -> G.Registered:
+    """`SLOT_ROWS`: the slots' rows (``row/v2``), a per-window value under the window's root ``window``, committed under
+    the committer's secret ``key`` at salt nonce ``nonce``, which no other value under ``key`` takes."""
+    return H1R.commit(program, SLOT_ROWS, np.concatenate([_i32(r) for r in slot_rows]), key, nonce, keep_rows=True,
+                      window=window)
+
+
+__all__ = ["COMPUTED", "EVALUATED", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "slot_rows_value",
+           "weight_values"]

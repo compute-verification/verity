@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.window_rows: a window's rows, every unit of `window_circuit.lower`'s class circuit given its
 output rows from its slots' values. Pinned on `test_window_circuit`'s TINY class (2 slots, 4 prompt ids, 2 outputs: 5
 positions a Program) at its grain, TINY's exact-int8 checkpoint on the H200 (FA3's `Attention_v4`, the class 4,32,4's
-attention), with random weights and the embedding table registered as core registers it.
+attention), with random weights registered under a committer's key.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
 
+from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -32,6 +33,8 @@ SLOTS = ([1, 4, 17, 3, 250, 9], [1, 3, 5, 77, 42, 0])
 PRUNED = 3
 EMBED = "model.embed_tokens.weight"
 TABLE = WB.table_param(EMBED, 64)
+#: the committer's secret key, and the slot rows' salt nonce past every weight parameter's
+KEY, SLOT_NONCE = bytes(range(32)), 1 << 20
 
 
 def _bf16(x) -> np.ndarray:
@@ -59,18 +62,19 @@ def _weights(fn) -> dict[str, np.ndarray]:
 
 @pytest.fixture(scope="module")
 def window():
-    """The class circuit lowered, its weights, the embedding table registered (its parameter's value, as `Rows` takes it)
-    and each slot's `Slot`."""
+    """The class circuit lowered, its weights, its registered values under `KEY` (each weight's parameter and the slot
+    rows, as `Rows` and `Window` take them) and each slot's `Slot`."""
     phi = S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": {**S.TINY, "quantization_config": dict(INT8_EXACT_QUANT)}},
                 target={**H200, "int8_exact": "linears"})
     low = WC.lower(S.Registered.of(phi, default_seed=7), CLASS, None, GRAIN)
     fields = _weights(low.fn)
-    table = {TABLE: CR.Registered.commit(PROGRAM, TABLE, fields[EMBED].reshape(-1, 64), schema=CR.SCHEMA_SEG)}
+    values = {**WR.weight_values(low.circuit, PROGRAM, fields.__getitem__, KEY),
+              WC.SLOT_ROWS: WR.slot_rows_value(PROGRAM, SLOTS, KEY, SLOT_NONCE, window=RUN)}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
 
-    return low, fields, table, weights, [WR.Slot(low.fn, CLASS, row, weights) for row in SLOTS]
+    return low, fields, values, weights, [WR.Slot(low.fn, CLASS, row, weights) for row in SLOTS]
 
 
 def _position(fn, family: str) -> list[int]:
@@ -233,40 +237,42 @@ def test_a_served_value_is_the_nodes_value_and_the_rest_are_computed(window):
 
 def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
-    (``row-seg``) and the slot rows the slots' rows of i32s under the window's root; another parameter is refused."""
-    low, fields, *_ = window
-    got = WR.registered_values(low.circuit, fields.__getitem__, SLOTS, lambda *a: a, window=RUN)
+    (``row-seg``), and the slot rows the slots' rows of i32s under the window's root, each committed under the committer's
+    key at a nonce of its own: the table and a weight are core's commits of those rows under `audit.hm96_salt`'s salts,
+    and the entries name nothing but each value's size, domain and hiding root. Another parameter is refused."""
+    low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)
-    name, rows, schema, win = got[TABLE]
-    assert (name, rows.shape, schema, win) == (TABLE, (256, 64), CR.SCHEMA_SEG, None) and schema == E.SCHEMA
-    assert np.array_equal(rows.reshape(-1), fields[EMBED])
-    assert got[WB.weight_param(EMBED, 512)][1].shape == (32, 512)
-    assert got[WB.weight_param(EMBED, 64)][2] == CR.SCHEMA_V2
-    _, srows, sschema, swin = got[WC.SLOT_ROWS]
-    assert srows.shape == (2, 12) and _i32(srows[1]) == SLOTS[1] and (sschema, swin) == (CR.SCHEMA_V2, RUN)
-    s8 = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 512)][1]
+    t = got[TABLE]
+    assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
+    assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
+    names = sorted(n for n in got if n != WC.SLOT_ROWS)
+    for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),
+                               (WB.weight_param(EMBED, 512), fields[EMBED].reshape(-1, 512), CR.SCHEMA_V2)):
+        salts = [hm96_salt(KEY, names.index(name), j) for j in range(len(rows))]
+        ref = CR.Registered.commit(PROGRAM, name, rows.tolist(), salts, schema=schema)
+        assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
+        assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
+    s = got[WC.SLOT_ROWS]
+    assert (s.leaves, s.words, s.window, s.schema) == (2, 12, RUN, CR.SCHEMA_V2) and _i32(s.rows[:][1]) == SLOTS[1]
+    assert len({bytes(v.salts[0]) for v in got.values()}) == len(got)
+    s8 = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 512)].rows[:]
     assert s8.shape == (8, 512) and np.array_equal(s8.reshape(-1).view(np.uint8), fields["model.layers.0.mlp.down_proj.weight"])
     odd = SimpleNamespace(registered=SimpleNamespace(params={"weights/x@3/rows": 3}))
     with pytest.raises(ValueError, match="no weight's registered parameter nor the slot rows"):
-        WR.registered_values(odd, fields.__getitem__, SLOTS, lambda *a: a, window=RUN)
+        WR.weight_values(odd, PROGRAM, fields.__getitem__, KEY)
 
 
 @pytest.mark.slow
 def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs(window):
-    """The rows recorded into a `Window` (its registered values committed as core commits them, the tables' supplied) are
+    """The rows recorded into a `Window` (its registered values under the committer's key, the tables' supplied) are
     every unit's Definition on the inputs the window commits: its wired rows, its registered reads' rows and its openings',
     each word template's outputs under the reference evaluator, each embedding read's by `gates.embedding.reference`; the
     window closes over them, labelled by step and source. What no cheaper test reaches: the circuit's own wires and reads
     resolved by the window, against every Definition. Slow (minutes) for the window's members, which trace the embedding
     read's population Program, and the reference evaluator on every unit."""
-    low, fields, _t, weights, slots = window
+    low, _f, values, weights, slots = window
     rows_, store = _served(low, slots[0], T=1)
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, _read(store)))
-
-    def commit(name, r, schema, win):
-        return CR.Registered.commit(PROGRAM, name, r, schema=schema, window=win)
-
-    values = WR.registered_values(low.circuit, fields.__getitem__, SLOTS, commit, window=RUN)
     rows = WR.Rows(low, [s0, slots[1]], values)
     win = IF.Window(low.circuit, RUN, LAW, 64, registered=values)
     win.supply(CR)
