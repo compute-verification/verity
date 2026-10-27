@@ -87,7 +87,7 @@ def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_
     """The auditor host's `load-relay` runs `rehearse` as `warden-rehearse` does, with the load first: the store's
     stream of the request's shape relayed to the sink tunnels' local ends for its program, the endpoint given the
     gate's `LOAD_READY_S`; a request without a load passes none. The gate's shapes are `load_relay`'s, and its
-    `load_minutes` cover each shape's weights stream and witness at `LOAD_RATE` and the endpoint's wait: 67 at H200."""
+    `load_minutes` cover each shape's weights stream and witness at `LOAD_RATE` and the endpoint's wait: 46 at H200."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     program, sinks = "ab" * 64, [("127.0.0.1", 50001 + i) for i in range(4)]
@@ -105,7 +105,7 @@ def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_
         values = ws.lr.manifest(ws.lr.SHAPES[shape])
         link = values[-1].offset + values[-1].nbytes + ws.lr.SALT_BYTES * sum(v.leaves for v in values)
         assert A.load_minutes(shape) * 60 >= link / A.LOAD_RATE + A.LOAD_READY_S > (A.load_minutes(shape) - 1) * 60
-    assert (A.load_minutes("h200"), A.load_minutes("tiny")) == (67, 16)
+    assert (A.load_minutes("h200"), A.load_minutes("tiny")) == (46, 16)
 
 
 def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_traffic(tmp_path):
