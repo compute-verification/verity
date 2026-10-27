@@ -1,4 +1,4 @@
-"""H1's served tables registered at serving scale (VLLM-76): `registered.Registered.commit` of rows of 16-bit words as
+"""H1's served tables registered at serving scale: `registered.Registered.commit` of rows of 16-bit words as
 ``hm96-sha512/row/v2`` bit rows, row j salted `audit.hm96_salt` of the run's key at the value's nonce, with the same
 salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
 
@@ -16,7 +16,7 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
   Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
-* **On the GPU** (VLLM-79): where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
+* **On the GPU**: where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
   (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
   the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
   NumPy path above is the reference the device is held to
