@@ -1,8 +1,10 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
-commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, a
-wire pattern wires whole members unit by unit under its writers' salts, a cut port's rows are each wired from their own
-writer, a registered read's ports are tables of the registered rows under the value's salts, every other input row is
+commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
+the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
+against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
+cut port's rows are each wired from their own writer, a registered read's ports are tables of the registered rows under
+the value's salts, every other input row is
 declared registered, ingress or free and counted from the description, and the verifier's window (and its registered
 reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
@@ -151,6 +153,58 @@ def test_labels_are_opaque_runs_of_each_members_units():
                                                              [[8, 10, {"run": 1}]]]
     with pytest.raises(TypeError):
         I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4).record(COORD, ins, outs, object())
+
+
+#: twelve coordinates at 3 steps of 2 slots, two units an inference block: [0, 2) slot 0 step 0, [2, 4) slot 1 step 0,
+#: [4, 6) slot 0 step 1, and so on
+STEPS_SLOTS = I.Blocks(2, 3, (I.InferenceEntry(TID, 0, (3, 2, 2), ("step", "slot", "-"), 0),))
+FORMS = ("node", "evaluated")
+#: each inference block's units a run, labelled by its step, slot and form
+HONEST = [(2, {"step": t, "slot": s, "form": FORMS[t % 2]}) for t in range(3) for s in range(2)]
+
+
+def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> I.Window:
+    """A window of `STEPS_SLOTS`' twelve coordinates in members of 4, each run ``(units, label)`` recorded in turn."""
+    win = I.Window(I.Circuit("test", ((COORD, 12),), blocks=STEPS_SLOTS), RUN, LAW, 4, forms=forms)
+    (ins, outs), at = values(12), 0
+    for n, label in runs:
+        win.record(COORD, [a[at:at + n] for a in ins], [a[at:at + n] for a in outs], label)
+        at += n
+    return win
+
+
+def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
+    """A labelled run starts and ends where its template's units change inference block, labelled by its step and slot and
+    a form of the window's: the honest labelling commits what the unlabelled window does, and the index shows only those
+    bounds and the members', an unlabelled stretch of runs one run."""
+    win = labelled(HONEST)
+    assert win.close(salt_key=bytes(32)).roots == labelled([(12, None)]).close(salt_key=bytes(32)).roots
+    assert [m["labels"] for m in win.labels()["members"]] == [[[4 * m + 2 * j, 4 * m + 2 * j + 2, HONEST[2 * m + j][1]]
+                                                               for j in range(2)] for m in range(3)]
+    whole = labelled([(4, {"step": 0}), (2, {"slot": 0, "form": "evaluated"}), (1, None), (1, None), (4, {})])
+    assert [m["labels"] for m in whole.labels()["members"]] == [[[0, 4, {"step": 0}]],
+                                                                [[4, 6, {"slot": 0, "form": "evaluated"}], [6, 8, None]],
+                                                                [[8, 12, {}]]]
+    with pytest.raises(ValueError, match="a window's forms are names"):
+        labelled([], (0,))
+
+
+@pytest.mark.parametrize("runs, forms, why", [
+    ([(3, {"step": 0})], FORMS, "starts and ends where its template's units change inference block"),
+    ([(1, None), (2, {"step": 0})], FORMS, "starts and ends where its template's units change inference block"),
+    ([(4, {"step": 0, "slot": 0})], FORMS, "its units are at slot [0, 1], not its label's 0"),
+    ([(2, {"step": 1, "slot": 0})], FORMS, "its units are at step [0], not its label's 1"),
+    ([(2, {"step": 0, "slot": 0, "request": 3})], FORMS, "class structure, never a value"),
+    ([(2, {"step": 0, "form": "served"})], FORMS, "class structure, never a value"),
+    ([(2, {"step": 0, "form": "node"})], (), "class structure, never a value"),
+    ([(2, {"step": "0"})], FORMS, "class structure, never a value"),
+    ([(2, {"slot": True})], FORMS, "class structure, never a value"),
+    ([(2, [0, 0])], FORMS, "class structure, never a value"),
+], ids=["ends-inside-a-block", "starts-inside-a-block", "two-slots-as-one", "another-step", "extra-key", "form-outside-forms",
+        "window-without-forms", "step-a-string", "slot-a-bool", "not-a-mapping"])
+def test_a_label_that_is_not_its_runs_class_structure_is_refused(runs, forms, why):
+    with pytest.raises(ValueError, match=re.escape(why)):
+        labelled(runs, forms)
 
 
 def test_mismatches_are_the_units_whose_outputs_are_not_the_definitions():
