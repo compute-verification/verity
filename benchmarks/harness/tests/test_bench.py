@@ -1665,7 +1665,7 @@ def _stores(tmp_path, remote_attempts):
 
 
 def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tmp_path):
-    """BENCH-10: the lookup read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
+    """The lookup once read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
     have launched them again). It pulls the remote's attempts since the commit, once, and nothing older."""
 
     from research.store.local import LocalStore
