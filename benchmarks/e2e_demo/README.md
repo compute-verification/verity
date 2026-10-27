@@ -13,11 +13,11 @@ member, subset draw and `frame_v3` header entry. A JSON document holds the publi
 binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each unit's rows in
 order, each row's u16 words little-endian then its 192-byte salt.
 
-The step commitment is kernels' commit call (CMP-95 item 3, `verity/commit-slots/v1`): a step tree over slot trees over
+The step commitment is kernels' commit call (`verity/commit-slots/v1`): a step tree over slot trees over
 unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
 row opens where its producer committed it, and names the producer's coordinates (the torch loop's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
-`verity_e2e_demo/commit_slots.py` is kernels' CPU reference vendored at the commit its header names (#4469). Once their
+`verity_e2e_demo/commit_slots.py` is kernels' CPU reference vendored at the commit its header names. Once their
 commit_slots package is on `main`, import it and delete the copy. The suite pins the SHA-512 of their fixture,
 `commit-slots-v1.json` at the commit `REFERENCE` pins, which the copy must reproduce.
 

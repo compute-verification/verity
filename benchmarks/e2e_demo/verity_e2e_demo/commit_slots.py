@@ -1,5 +1,5 @@
-# Vendored verbatim from benchmarks/torch_gpu/commit_slots/slots.py at 8819d294f8e6ade1614b8997d8cf846826f63bc1 (#4469,
-# kernels' CMP-95 item 3): import that module instead once it is on main, and delete this copy.
+# Vendored verbatim from benchmarks/torch_gpu/commit_slots/slots.py at 8819d294f8e6ade1614b8997d8cf846826f63bc1 (kernels'
+# commit call): import that module instead once it is on main, and delete this copy.
 """The serve-time commit call's CPU reference: a serving step's unit outputs as ``hm96-sha512/row/v2`` rows under hiding
 leaves in ``frame-v3-sha512`` trees, one subtree per sequence slot (README.md is the call's specification).
 

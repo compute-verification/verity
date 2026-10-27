@@ -1,4 +1,4 @@
-# The E2E demo's interfaces (P-CMP-1, CMP-95 items 5 and 6). Not a package: the suite checks the drawn-unit replay bundle
+# The E2E demo's interfaces: the drawn-unit replay bundle and the block record. Not a package: the suite checks the drawn-unit replay bundle
 # (`verity_e2e_demo.replay_bundle`) and the block record (`verity_e2e_demo.block_record`) against their schemas and
 # fixtures, and builds a fresh bundle from the torch loop's window.
 [tool.pytest.ini_options]
