@@ -271,11 +271,12 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
 
 /-- **Each window's registration is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
 `Credit.window`'s registered inputs (`Registered`). It keeps window `w`'s round coins, the salt among them, so it carries
-the registration before the draw coin and not the order binding needs: RT-LEAN's L22 has CMP-91 commit H1's anchors
-(`x`, `sx`, the weight rows, `sw`; J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt)
-before the window's salt coin, released against their root. ALLP-SALT's #4573 has the check open the salt on an epoch
-root that binds the window's committed activations, and its follow-up states the order as a premise of its own (each
-anchor's root invariant under `spliceAt w 0`). -/
+the registration before the draw coin and not the order binding needs: RT-LEAN's L22 has H1's anchors (`x`, `sx`, the
+weight rows, `sw`; J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before
+the window's salt coin, released against their root. The check holds a live window to that order since #4573: its salt
+opens on `anchoredEpochRoot W X k`, `X` the root of the activations the window committed (`windowAnchors`), and #4594
+commits the H1 tiles' A and B rows there, though not yet the served `x` and `sx`. No premise states the order yet (each
+anchor's root invariant under `spliceAt w 0`, the salt's coordinate). -/
 def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditWindows (Paths C m × B) n) : Prop :=
   ∀ (x z : Paths (Paths C m × B) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
 

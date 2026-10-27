@@ -104,12 +104,13 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The check reads it since CMP-90 (#4405): a live
   window (`coins` live in its check item) carries its salt in its service answer, and `PouwCheck.windowSaltReason`
   (`Properties.Pouw.Check.SaltKept`) accepts it only as the round-0 salt of a salt-only live session's coin, opened on
-  the salt epoch's root `epochOpenRoot W k` of the registered weights' root `W`. The deployed loop doesn't run live
-  windows yet: it is given its salt before it serves, its check item names no coin mode and it registers no `W`
-  (`root_W` null), so its windows are seeded and `Scope`'s `Declared.Live` and `LayerCommitted` fail of the circuit it
-  runs. What remains is ALLP-H1LOOP's (the loop registers `W`, takes its salt from the live session and records it
-  with the verifier's `live` inputs) and CMP-91's: the tiles' salt port held to the checked salt, and the salt opened
-  after the window's anchors (#4573; `RegisteredBeforeDraw`).
+  the salt epoch's root `anchoredEpochRoot W X k` of the registration's weights' root `W` and the root `X` of the
+  activations its window committed before the salt (`windowAnchors`, #4573). The loop runs such a window only with
+  `--pouw-live` (#4594: the H1 tiles' A and B rows committed as `X`'s entries, then the salt), and takes its salt from a
+  development gate on its own machine, which the prover controls. By default it is given its salt before it serves and
+  its check item names no coin mode, so its windows are seeded and `Scope`'s `Declared.Live` and `LayerCommitted` fail
+  of the circuit it runs. What remains: the salt from the auditor's challenger, on a `trusted-host` machine, and
+  CMP-91's tie of the proved tiles to that salt (their salt port is still a value the prover records).
 * `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
   reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
   and `StagedPins` is what links it to the flat tile's rightness, which the lucks are claims of (`flatAtCoin`). No Lean
@@ -311,10 +312,12 @@ def CheckedCreditPeriod : Prop :=
 salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
 every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
 round's values are committed. The check holds a live window to it since CMP-90 (#4405): `PouwCheck.windowSaltReason`
-accepts a live window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`). The deployed loop
-doesn't meet it: it is given its salt before it serves and its check item names no coin mode, so its windows are seeded,
-until ALLP-H1LOOP runs them live and CMP-91 holds the tiles' salt port to the checked salt. A named assumption in the
-lock (ASK-133, option A, decided by the lane): a deployment gap until then. -/
+accepts a live window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the
+window's committed activations since #4573 (`anchoredEpochRoot W X k`). The deployed loop doesn't meet it: its windows
+are seeded unless it runs with `--pouw-live` (#4594), whose salt comes from a development gate on the prover's own
+machine, and the proved tiles' salt port is still a value the prover records (CMP-91). A named assumption in the lock
+(ASK-133, option A, decided by the lane): a deployment gap until the auditor's challenger issues the salt and CMP-91
+ties the tiles to it. -/
 def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C m × B) n → Fin n → ByteArray)
     (enc : C → ByteArray) : Prop :=
   ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)
