@@ -80,9 +80,9 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
 
 /-- `RoundsByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
 device's ledger opens no session and an empty list of uses has no use whose record could carry a break. -/
-theorem roundsByDevice_nontrivial : ¬ RoundsByDeviceAt (fun _ _ _ _ _ => .ok []) := by
+theorem roundsByDevice_nontrivial : ¬ RoundsByDeviceAt (fun _ _ _ _ _ _ => .ok []) := by
   intro h
-  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" [] [] Lean.Json.null [] rfl with
+  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" [] [] [] Lean.Json.null [] rfl with
     ⟨s, hs, -⟩ | ⟨i, u, hu, -⟩
   · simp at hs
   · simp at hu

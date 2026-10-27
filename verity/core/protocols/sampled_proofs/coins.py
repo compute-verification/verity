@@ -394,18 +394,54 @@ def release_order_reason(labels: Sequence[str], order: Sequence[tuple[str, str]]
     return None
 
 
+RUNS = ("the challenger's log releases another coin of a use's group inside one use's coins, or other coins than the "
+        "uses': each use's coins must be one run among its group's releases")
+
+
+def runs_reason(fuel: int, pending: Sequence[Use], labels: Sequence[str]) -> str | None:
+    """Lean `runsReason`: why the labels `labels` don't release the uses `pending` one run each, walking `labels`: its
+    first label starts that family's first use of `pending`, whose `coins` releases are the next ones, all of that
+    family, and the walk goes on after them without that use; None when the labels and the uses run out together."""
+    pending, labels = list(pending), list(labels)
+    while labels:
+        if fuel == 0:
+            return RUNS
+        fuel -= 1
+        i = next((k for k, u in enumerate(pending) if u.label == labels[0]), None)
+        if i is None:
+            return RUNS
+        n = pending[i].coins
+        if not (n <= len(labels) and all(x == labels[0] for x in labels[:n])):
+            return RUNS
+        pending, labels = pending[:i] + pending[i + 1:], labels[n:]
+    return RUNS if pending else None
+
+
+def runs_why(uses: Sequence[Use], groups: Sequence[Sequence[str]], labels: Sequence[str]) -> str | None:
+    """Lean `runsWhy`: for each group (a list of families), why the log's labels `labels` restricted to the group's
+    families don't release the group's uses of `uses` (those with a coin) one run each (`runs_reason`); None when every
+    group's do."""
+    for g in groups:
+        pending = [u for u in uses if u.label in g and u.coins != 0]
+        why = runs_reason(len(pending) + 1, pending, [x for x in labels if x in g])
+        if why is not None:
+            return why
+    return None
+
+
 ROUNDS_FORM = ("a session's round coins are {ledger, main, pins, segments, session}: the auditor's ledger, the verifier's "
                "copy of main's first-parent history, the host's pins log, one segment a use (Segment.to_json) and the "
                "challenger session's files")
 
 
-def round_coins(key: ChallengerKey, window: str, uses: Sequence[Use], order: Sequence[tuple[str, str]], coins: Any,
-                verify: Verify) -> list[bytes]:
+def round_coins(key: ChallengerKey, window: str, uses: Sequence[Use], order: Sequence[tuple[str, str]],
+                groups: Sequence[Sequence[str]], coins: Any, verify: Verify) -> list[bytes]:
     """Lean `Challenger.roundCoins`: each use's coins, `draw_coins` under `key`, `window`, the use's family and `after`
     on its segment (`coins["segments"]`, one a use, in order), `coins` coins of 64 bytes each; the release log of the
     session the ledger opens on `window` exactly the uses (`exactly_reason`); and, for each pair `(a, b)` of `order`,
-    every release of family `a` before every release of family `b` (`release_order_reason`). v2 reads the window's draw
-    and every session's link points and rounds through it. Raises `CoinError`."""
+    every release of family `a` before every release of family `b` (`release_order_reason`); and, for each group of
+    `groups`, each of its uses' coins one run among the group's releases (`runs_why`). v2 reads the window's draw and
+    every session's link points and rounds through it, one group a session. Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segments", "session"]:
         raise CoinError(ROUNDS_FORM)
     segments = coins["segments"]
@@ -433,6 +469,9 @@ def round_coins(key: ChallengerKey, window: str, uses: Sequence[Use], order: Seq
     if type(log) is not list or any(type(x) is not str for x in log):
         raise CoinError(LOG_FORM)
     why = release_order_reason(received_order(log), order)
+    if why is not None:
+        raise CoinError(why)
+    why = runs_why(uses, groups, received_order(log))
     if why is not None:
         raise CoinError(why)
     return out
@@ -496,4 +535,5 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
 
 __all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "ROUNDS_FORM", "SEGMENT_FORM", "Segment",
            "Use", "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "exactly_reason",
-           "release_order_reason", "read_reason", "received_order", "round_coins", "use_roots"]
+           "release_order_reason", "read_reason", "received_order", "round_coins", "runs_reason", "runs_why",
+           "use_roots"]

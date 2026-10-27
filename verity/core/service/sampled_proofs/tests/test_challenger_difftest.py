@@ -1712,7 +1712,7 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
 # ---- every coin a v2 window reads -------------------------------------------------------------------------------------
 
 def rounds(j: Any) -> Any:
-    _request(j, ["coins", "key", "order", "uses", "window"])
+    _request(j, ["coins", "groups", "key", "order", "uses", "window"])
     if type(j["window"]) is not str:
         raise D.Reject("window is not a string")
     if type(j["uses"]) is not list:
@@ -1730,23 +1730,34 @@ def rounds(j: Any) -> Any:
         if not (type(o) is list and len(o) == 2 and all(type(x) is str for x in o)):
             raise D.Reject("an order entry is [a, b], two family labels")
         order.append((o[0], o[1]))
+    if type(j["groups"]) is not list:
+        raise D.Reject("groups is not a list")
+    if not all(type(g) is list and all(type(x) is str for x in g) for g in j["groups"]):
+        raise D.Reject("a group is a list of family labels")
     return _refusing(lambda: {"coins": [x.hex() for x in T.round_coins(Ch.ChallengerKey.from_json(j["key"]), j["window"],
-                                                                         uses, order, j["coins"], lms_verify)]})
+                                                                         uses, order, j["groups"], j["coins"],
+                                                                         lms_verify)]})
 
 
 class Rounds:
     """A v2 window's coins from one ledger session's challenger: the draw (family `draw`, after the registration's
-    digest), then for each used slot its link points (`slot/<i>/session`, after their digest) and its stream's rounds
-    (`slot/<i>/s/rep0`, each after its round's digest), each use read through its own `ChallengerCoins` segment,
-    released in that order unless `late` names the `draw` (released after every slot's) or slot 0's `points`
-    (released after its rounds). The layout holds one slot more than `slots` uses, which an honest window never
-    releases."""
+    digest), then for each used slot its link points (`slot/<i>/session`, after their digest) and its rounds, each on
+    stream `s/rep0` or `s/rep1` after its round's digest, each use read through its own `ChallengerCoins` segment. Each
+    slot's uses are released one after another, each whole, in the live order (rounds alternate between the streams), and
+    listed as the record lists them (its points, then each stream's rounds); with `concurrent`, the slots' coins are
+    released interleaved coin by coin, as sessions sharing the window's challenger would, each slot's still in its own
+    order. `late` names the `draw` (released after every slot's) or slot 0's `points` (released after its rounds);
+    `split` releases slot 0's first `s/rep1` round between the two coins of an `s/rep0` round before it. The layout
+    holds one slot more than `slots` uses, which an honest window never releases."""
 
-    def __init__(self, rng: random.Random, slots: int = 1, late: str | None = None) -> None:
+    STREAMS = ("s/rep0", "s/rep1")
+
+    def __init__(self, rng: random.Random, slots: int = 1, late: str | None = None, concurrent: bool = False,
+                 split: bool = False) -> None:
         s = self.s = _ledger_session(rng)
         self.slots = slots
-        families = [("draw", 4)] + [(f"slot/{i}/{f}", n) for i in range(slots + 1) for f, n in (("session", 3),
-                                                                                                  ("s/rep0", 12))]
+        families = [("draw", 4)] + [(f"slot/{i}/{f}", n) for i in range(slots + 1) for f, n in (
+            ("session", 3), *((x, 12) for x in self.STREAMS))]
         s.ch = _challenger(rng, families)
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
         s.lines = [canonical_json_text({"event": "commitment", "root": s.ch.commitment.root.hex()})]
@@ -1757,18 +1768,49 @@ class Rounds:
         draw = (rng.randbytes(64), rng.randint(1, 2))
         if late != "draw":
             self.use("draw", *draw)
+        plans = []
         for i in range(slots):
-            points = rng.randbytes(64)
-            if not (late == "points" and i == 0):
-                self.use(f"slot/{i}/session", points, 1)
-            for _ in range(rng.randint(1, 3)):
-                self.use(f"slot/{i}/s/rep0", rng.randbytes(64), rng.randint(1, 2))
-            if late == "points" and i == 0:
-                self.use(f"slot/{i}/session", points, 1)
+            rds = [(f"slot/{i}/{rng.choice(self.STREAMS)}", rng.randbytes(64), rng.randint(1, 2))
+                   for _ in range(rng.randint(1, 3))]
+            if split and i == 0:
+                rds = [("slot/0/s/rep0", rng.randbytes(64), 2), ("slot/0/s/rep1", rng.randbytes(64), 1)] + rds
+            points = (f"slot/{i}/session", rng.randbytes(64), 1)
+            plans.append(rds + [points] if late == "points" and i == 0 else [points] + rds)
+        steps = [[(k, c) for k, u in enumerate(plan) for c in range(u[2])] for plan in plans]
+        if split:
+            a = next(n for n, (k, _) in enumerate(steps[0]) if plans[0][k][0] == "slot/0/s/rep0" and plans[0][k][2] == 2)
+            b = next(n for n, (k, _) in enumerate(steps[0]) if plans[0][k][0] == "slot/0/s/rep1")
+            steps[0].insert(a + 1, steps[0].pop(b))
+        start = len(self.uses)
+        for i, k, c in self._schedule(rng, steps, concurrent):
+            label, after, coins = plans[i][k]
+            if c == 0:
+                self.segments.append(self.readers[label].commit(after))
+                self.uses.append(T.Use(label, after, coins))
+            n = len(self.records[label].log)
+            self.readers[label](Ch.COIN_BYTES)
+            self.s.lines += _pairs(self.records[label].log[n:])
+        rank = {f"slot/{i}/{f}": (i, r) for i in range(slots) for r, f in enumerate(("session", *self.STREAMS))}
+        listed = sorted(range(start, len(self.uses)), key=lambda n: rank[self.uses[n].label])
+        self.uses[start:] = [self.uses[n] for n in listed]
+        self.segments[start:] = [self.segments[n] for n in listed]
         if late == "draw":
             self.use("draw", *draw)
-        self.order = [("draw", f"slot/{i}/{f}") for i in range(slots) for f in ("session", "s/rep0")] + [
-            (f"slot/{i}/session", f"slot/{i}/s/rep0") for i in range(slots)]
+        self.order = [("draw", f"slot/{i}/{f}") for i in range(slots) for f in ("session", *self.STREAMS)] + [
+            (f"slot/{i}/session", f"slot/{i}/{x}") for i in range(slots) for x in self.STREAMS]
+        self.groups = [[f"slot/{i}/{f}" for f in ("session", *self.STREAMS)] for i in range(slots)]
+
+    @staticmethod
+    def _schedule(rng: random.Random, steps: list[list[tuple[int, int]]], concurrent: bool):
+        """Each slot's (use, coin) steps in its own order: slot by slot, or interleaved at random."""
+        if not concurrent:
+            return [(i, k, c) for i, st in enumerate(steps) for k, c in st]
+        at, out = [0] * len(steps), []
+        while any(at[i] < len(st) for i, st in enumerate(steps)):
+            i = rng.choice([i for i, st in enumerate(steps) if at[i] < len(st)])
+            out.append((i, *steps[i][at[i]]))
+            at[i] += 1
+        return out
 
     def use(self, label: str, after: bytes, coins: int) -> None:
         n = len(self.records[label].log)
@@ -1793,15 +1835,15 @@ class Rounds:
         segments = [x.to_json() for x in self.segments] if segments is None else segments
         coins = {"ledger": self.ledger.lines(), "main": self.main, "pins": self.pins, "segments": list(segments),
                  "session": self.s.files()}
-        return {"coins": coins, "key": self.s.key.to_json(),
+        return {"coins": coins, "groups": self.groups, "key": self.s.key.to_json(),
                 "order": [list(o) for o in self.order],
                 "uses": [{"after": u.after.hex(), "coins": u.coins, "label": u.label} for u in uses],
                 "window": self.ledger.window["root"]}
 
 
 ROUNDS_NAMES = ["honest", "chosen", "second-release", "requery", "unused-slot", "draw-elsewhere", "use-short",
-                "use-dropped", "segment-dropped", "other-after", "points-late", "draw-late", "unordered", "rounds-form",
-                "order-form", "request"]
+                "use-dropped", "segment-dropped", "other-after", "points-late", "draw-late", "unordered", "interleaved",
+                "ungrouped", "concurrent", "rounds-form", "order-form", "groups-form", "request"]
 
 
 def rounds_case(rng: random.Random, name: str) -> Any:
@@ -1811,11 +1853,15 @@ def rounds_case(rng: random.Random, name: str) -> Any:
     released after another root. `use-short`, `use-dropped`: the uses miss a coin, or a use, the log shows released.
     `segment-dropped`: one segment fewer than uses. `other-after`: a round's use and segment after another digest.
     `points-late`: slot 0's link points released after its rounds. `draw-late`: the draw released after every slot's
-    coins. `unordered`: `draw-late`'s log under an `order` that asks nothing, which accepts."""
+    coins. `unordered`: `draw-late`'s log under an `order` that asks nothing, which accepts. `interleaved`: slot 0
+    releases a round of one stream between the two coins of a round of the other. `ungrouped`: `interleaved`'s log
+    with the groups asking nothing, which accepts. `concurrent`: two slots' coins released interleaved coin by coin,
+    each slot's uses one after another, each whole, which accepts."""
     rng = _seeded(rng)
     late = {"points-late": "points", "draw-late": "draw", "unordered": "draw"}.get(name)
-    r = Rounds(rng, slots=rng.randint(1, 2), late=late)
-    rounds_at = [k for k, u in enumerate(r.uses) if u.label.endswith("/s/rep0")]
+    r = Rounds(rng, slots=2 if name == "concurrent" else rng.randint(1, 2), late=late, concurrent=name == "concurrent",
+               split=name in ("interleaved", "ungrouped"))
+    rounds_at = [k for k, u in enumerate(r.uses) if "/s/rep" in u.label]
     k = rng.choice(rounds_at)
     u = r.uses[k]
     uses, segments = None, None
@@ -1856,8 +1902,12 @@ def rounds_case(rng: random.Random, name: str) -> Any:
     match name:
         case "unordered":
             j["order"] = rng.choice([[], [["slot/0/session", "slot/0/s/rep0"]]])
+        case "ungrouped":
+            j["groups"] = rng.choice([[], [[g] for g in j["groups"][0]] + j["groups"][1:]])
         case "order-form":
             j["order"] = rng.choice([None, {}, [["draw"]], [["draw", 0]], [["a", "b", "c"]], ["draw"]])
+        case "groups-form":
+            j["groups"] = rng.choice([None, {}, ["draw"], [["draw", 0]], [[None]], "draw"])
         case "rounds-form":
             j["coins"] = rng.choice([_body(j["coins"], segments=DROP), {**j["coins"], "segments": {}}, None,
                                      {**j["coins"], "segment": j["coins"]["segments"]}])
@@ -1904,8 +1954,9 @@ ROUNDS = D.Port(PIECES, "challenger_rounds", rounds, _cases(rounds_case, ROUNDS_
 pieces = D.server_fixture(COMMITMENT)
 
 #: the cases besides `honest` a piece accepts: `unordered` is `draw-late`'s log under an order that asks nothing, so it
-#: shows the order is what refuses `draw-late`
-ACCEPTED = {"challenger_rounds": ("unordered",)}
+#: shows the order is what refuses `draw-late`; `ungrouped` is `interleaved`'s log under groups that ask nothing of
+#: it, so it shows the groups are what refuse `interleaved`; `concurrent` interleaves only different groups' coins
+ACCEPTED = {"challenger_rounds": ("unordered", "ungrouped", "concurrent")}
 
 RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_case, OPENING_NAMES, 300),
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
