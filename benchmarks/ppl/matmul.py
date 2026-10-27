@@ -18,6 +18,19 @@ FP32_EXACT = 2 ** 24
 FP64_EXACT = 2 ** 53
 #: rows of each product recomputed in float64 on the check window
 CHECK_ROWS = {"linear": 32, "qk": 64, "pv": 64}
+#: f64_mm copies b to float64 at most this many bytes at a time
+F64_BYTES = 2 ** 30
+
+
+def f64_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """a @ b in float64, for integer-valued a, b whose every sum is exact in float64. When b's float64 copy would pass
+    F64_BYTES (V repeated over V4-Pro's 128 heads is 5 GiB at 8K), b's first dim runs in chunks; each batch element's
+    product is exact, so the chunks change no bit."""
+    if b.dim() < 3 or a.dim() > b.dim() or b.numel() * 8 <= F64_BYTES:
+        return a.double() @ b.double()
+    n = max(1, F64_BYTES // (b[0].numel() * 8))
+    per = a.dim() == b.dim() and a.shape[0] == b.shape[0]
+    return torch.cat([(a[i:i + n] if per else a).double() @ b[i:i + n].double() for i in range(0, b.shape[0], n)])
 
 
 def int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -218,9 +231,7 @@ class MM:
         if self.checking:
             m = x.shape[-2]
             idx = torch.linspace(0, m - 1, min(CHECK_ROWS[self.kind], m), device=x.device).long()
-            xs = x.index_select(-2, idx).double()
-            wd = w.double()
-            ref = xs @ (wd.transpose(-1, -2) if self.kind != "pv" else wd)
+            ref = f64_mm(x.index_select(-2, idx), w.transpose(-1, -2) if self.kind != "pv" else w)
             self.gate("product_exact", bool(torch.equal(acc.index_select(-2, idx).double(), ref)))
         return acc
 

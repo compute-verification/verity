@@ -9,9 +9,11 @@ import types
 from pathlib import Path
 
 import dsv4
+import matmul
 import model as M
 import numpy as np
 import pytest
+import steps
 import torch
 import torch.nn.functional as F
 from conftest import write_safetensors
@@ -240,6 +242,43 @@ def test_the_chunked_path_is_the_whole_one(v4, ids, calib, monkeypatch, arms):
     assert prefixes == [32] * len(KINDS)
     assert {7, 8, 32} <= rows and max(rows) == 32, rows
     assert whole["nll"].keys() == chunked["nll"].keys()
+    for k in whole["nll"]:
+        assert np.array_equal(whole["nll"][k], chunked["nll"][k]), k
+
+
+def test_f64_mm_in_chunks_is_the_whole_product(monkeypatch):
+    g = torch.Generator().manual_seed(0)
+    v = torch.randint(-128, 128, (1, 40, 16), generator=g).float().expand(8, 40, 16)
+    causal, x = torch.randint(0, 2, (5, 40), generator=g).bool(), torch.randint(-127, 128, (8, 5, 40), generator=g)
+    for a in (causal, x.float()):
+        whole = matmul.f64_mm(a, v)
+        monkeypatch.setattr(matmul, "F64_BYTES", 3 * 40 * 16 * 8)
+        assert torch.equal(matmul.f64_mm(a, v), whole) and torch.equal(whole, a.double() @ v.double())
+        monkeypatch.undo()
+
+
+def test_float64_products_against_v_run_in_head_chunks(v4, ids, calib, monkeypatch):
+    """Past F64_BYTES (V repeated over V4-Pro's 128 heads is 5 GiB in float64 at 8K), the float64 products against V
+    (the dithered P's mean, and the check window's peel and product_exact) run a head at a time, and change no NLL and
+    no gate."""
+    arms = ["adopted-bd-lm-pv", "int8-all"]
+    whole = evaluate(v4, ids[:2], arms, calib=calib)
+    chunked_calls, real = [], matmul.f64_mm
+
+    def spy(a, b):
+        if b.dim() >= 3 and b.numel() * 8 > matmul.F64_BYTES:
+            chunked_calls.append(tuple(b.shape))
+        return real(a, b)
+
+    monkeypatch.setattr(matmul, "F64_BYTES", 1)
+    monkeypatch.setattr(matmul, "f64_mm", spy)
+    monkeypatch.setattr(steps, "f64_mm", spy)
+    chunked = evaluate(v4, ids[:2], arms, calib=calib)
+    assert {s[0] for s in chunked_calls} == {HEADS}
+    assert passed(chunked), chunked["gates"]
+    checked = {k: g["checked"] for k, g in whole["gates"].items()}
+    assert {k: g["checked"] for k, g in chunked["gates"].items()} == checked
+    assert chunked["gates"]["peel"]["checked"] > 0 and chunked["gates"]["product_exact"]["checked"] > 0
     for k in whole["nll"]:
         assert np.array_equal(whole["nll"][k], chunked["nll"][k]), k
 

@@ -286,8 +286,9 @@ GPUs, and checked by `hf_reference`. It has mHC's four residual streams, and mul
 layers 0–2) and one shared. Arms reach every linear but the routers, the indexer's weights_proj and mHC, each routed
 expert's on its rows. Their attention runs over the window's keys then the entries, with the query's visible ones as
 the mask, so `pv1024`'s blocks are of that layout, not of the gathered keys. The LUT softmax is refused. At 8K the
-reference attention and the indexer's scores run on chunks of query rows, and `hf_reference` compares the first 4,224
-tokens of one window, past the indexer's top-k (`dsv4.check_prefix`).
+reference attention and the indexer's scores run on chunks of query rows, `hf_reference` compares the first 4,224
+tokens of one window, past the indexer's top-k (`dsv4.check_prefix`), and the float64 products against V repeated over
+the 128 heads take a few heads at a time (`matmul.f64_mm`).
 
 `error_probe.py measure` gives those factors' inputs: an arm's relative error per linear class on synthetic operands of
 each model's (k, n), and per attention shape (whole, Q K^T alone, P V alone) over a grid of logit spreads and sink

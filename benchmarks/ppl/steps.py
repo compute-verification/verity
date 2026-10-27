@@ -21,7 +21,7 @@ import zlib
 import torch
 
 import gates as G
-from matmul import Softmaxed, terminal
+from matmul import Softmaxed, f64_mm, terminal
 from spec import attention_step, linear_step
 
 GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv", "self_attn.o_proj": "o",
@@ -644,7 +644,7 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
             pi = pi + mm.coins(pi.shape) * causal
         prod = nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
         if p == "dither":
-            prod = prod - 0.5 * (causal.double() @ vi[..., a:b, :].double())
+            prod = prod - 0.5 * f64_mm(causal, vi[..., a:b, :])
         part = sb.double() * prod
         num = part if num is None else num + part
     return (num * sv.double()).float()
@@ -693,9 +693,9 @@ def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
         if mm.extra.get("general_mask"):
             # any visibility mask (a sliding window beside compressed entries): E V and the offset's sum of V
             # directly, rows x keys, in float64 (exact)
-            vb = mm.weight().double()
-            e = (U[r0:r1][:, keys % PEEL_L] * causal).double()
-            got = mm.int_product(served, mm.weight()) - e @ vb + offset * (causal.double() @ vb)
+            v = mm.weight()
+            e = U[r0:r1][:, keys % PEEL_L] * causal
+            got = mm.int_product(served, v) - f64_mm(e, v) + offset * f64_mm(causal, v)
             mm.gate("peel", bool(torch.equal(got, acc)))
             return acc
         vi = mm.extra["v_full"]
