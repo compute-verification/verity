@@ -1,13 +1,17 @@
 """`verity.ml.commitments.gates.lms`: the Boolean LMS verifier accepts every signature `lms.sign_at` makes at
 (N, W) = (64, 1) on trees of height 1 and 2, refuses each with one thing wrong (a chain value, C, a path node, the leaf index,
-the message, I, the root) exactly where `lms.verify` does, and its parts cost the gates pinned here and carry their builders."""
+the message, I, the root) exactly where `lms.verify` does, its parts cost the gates pinned here, and C-Flock lowers a part
+by the builder its trace was taken from."""
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.commitments.gates import lms as G
 from verity.ml.crypto import lms as R
 
@@ -68,9 +72,17 @@ def test_the_parts_cost_the_pinned_gates() -> None:
         assert getattr(G, name).traced(*statics).counts == {"and": ands, "xor": xors, "not": nots}, name
 
 
-def test_every_part_carries_its_builder() -> None:
-    """C-Flock lowers a part by its ``build`` when it has one, and gate by gate otherwise, where one compression passes 1 GB."""
-    assert all(callable(getattr(G, name).build) for name, _ in PARTS)
+@pytest.mark.parametrize("name, statics", [("Sha512Compress", ()), ("LmsEqual", (64,))])
+def test_a_part_lowers_by_the_builder_its_trace_was_taken_from(name, statics) -> None:
+    """C-Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`: ``build(C, *e)`` for a part without
+    statics, ``build(C, S, *e)`` with), whose commits keep a compression's forms short; called so, it traces to the part's
+    own gates."""
+    d = getattr(G, name)
+    S = SimpleNamespace(**dict(zip(d.statics, statics)))
+    params, ret = d.signature(S)
+    build = (lambda C, *e: d.build(C, S, *e)) if d.statics else d.build
+    got, want = TR.trace(build, [t for _, t in params], ret), d.traced(*statics)
+    assert (got.gates, got.outputs) == (want.gates, want.outputs)
 
 
 @pytest.mark.slow
