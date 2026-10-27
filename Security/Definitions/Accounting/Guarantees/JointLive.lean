@@ -121,7 +121,8 @@ suppose, over `G` at every strategy `s`:
 * the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
   state survive beyond the committed carried state with probability at most `ε_wipe b s`;
 * block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds
-  `σ_b · U + S_chip + c` (`σ_b` the share PoUS certifies for block `b`) with probability at most `δ_PoUS b s`.
+  `σ_b · M + S_chip + c` (`σ_b` the share PoUS certifies for block `b`, `M` the device's memory) with probability at
+  most `δ_PoUS b s`.
 
 Then at every strategy `s` the probability that some block's accepted subprotocol's claim fails, some accepted wipe's
 survivor bound fails, or some block's memory term fails while its PoUS accepted is at most

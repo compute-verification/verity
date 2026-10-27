@@ -174,12 +174,12 @@ structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : �
 
 /-- **Block `b`'s memory term at share `σ`** on the run `o` of the strategy `s` (`BlocksRun.MemoryTerm`'s): at each of
 its PoUS challenge times, the bits of its weights that its capacity account doesn't hold in device memory are at most
-`σ · U + S_chip + ∑_i cap_i · T_read`. -/
+`σ · M + S_chip + ∑_i cap_i · T_read`, `M` the device's memory. -/
 def BlocksLive.MemoryTerm {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {B : ℕ}
     {C : Fin B → Verity.Circuit} {O : Type} {G : Verity.Game O} (S : BlocksLive d α B C G) (σ : ℝ)
     (s : Verity.Game.Strategy G) (b : Fin B) (o : O) : Prop :=
   ∀ t ∈ S.chal b o, (S.weights b : ℝ) -
       ((((S.block b).world s o).schedule t).mem (((S.block b).world s o).acct .capacity) : ℝ) ≤
-    σ * S.weights b + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
+    σ * d.mem + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
 
 end Accounting
