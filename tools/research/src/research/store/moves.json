@@ -1513,8 +1513,15 @@
     },
     {
       "paths": {
-        "benchmarks/network_e2e/": "examples/network_vllm/",
-        "benchmarks/network_sim/": "examples/network_sim/"
+        "benchmarks/e2e_h200/": "examples/h200/",
+        "benchmarks/e2e_demo/": "examples/h200/interfaces/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/network_e2e/": "benchmarks/network_certifier/e2e/",
+        "benchmarks/network_sim/": "benchmarks/network_certifier/sim/",
+        "benchmarks/datacenter/": "examples/network/"
       }
     }
   ]

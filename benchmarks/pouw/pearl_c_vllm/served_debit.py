@@ -19,14 +19,14 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
 
-**Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs (lean's ruling on #923):
+**Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs:
 N seeded inputs of each (k, n), an input being one matmul of the pass, each measured in full up to ``--census-max`` tiles
 and otherwise by ``--draws`` work-weighted draws, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
 ``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
 derived from ``--fresh-source`` (recorded OS randomness drawn after the pass, fixed in the command), so that the trials
 are independent draws of the input's rate itself (`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and
-Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (lean's ruling: `HonestCap.lean`'s
+Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestCap.lean`'s
 fourth case; lines in ``<label>.fresh-tiles.jsonl``).  The cited limit uses every trial run for an input.
 
 A tile is replayed on `fast_tile`'s batch forms (``--scalar``: the scalar reference only), every ``--cross-check``-th tile
@@ -50,7 +50,7 @@ thread a worker (``--jobs`` defaults to the CPUs this process may use)::
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
 
 A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of node 2's queue cores (Llama-3.1-8B's
-1,023 sampled tiles: 98 min on 44, r20261002-173355-4eef).  Add no ``taskset`` of your own: the queue pins the job's cores.
+1,023 sampled tiles: 98 min on 44).  Add no ``taskset`` of your own: the queue pins the job's cores.
 """
 from __future__ import annotations
 
@@ -406,7 +406,8 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
-    tile_of = lambda item: item if isinstance(item, int) else item[0]
+    def tile_of(item):
+        return item if isinstance(item, int) else item[0]
     got: dict = {}
     for item in picks:
         t = prior.get(_item_key(item))
@@ -526,7 +527,8 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
     """An upper limit on the mean work-weighted rate μ/W of independent tiles from their observed weighted failures x:
     Bernstein's lower tail, P[X <= μ - t] <= exp(-t² / (2·w_max·μ + 2·w_max·t/3)), solved for the largest μ it allows."""
     L = math.log(1 / delta)
-    ok = lambda mu: mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
+    def ok(mu):
+        return mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
     lo, hi = x, total
     for _ in range(100):
         mid = (lo + hi) / 2
@@ -535,9 +537,9 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
 
 
 def input_bound(row: dict, delta: float) -> tuple[float, str]:
-    """Lean's ruling on #923: each input's rate p = E[X] (X its work-weighted failing fraction under the tiles' noise) at a
-    simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail independently (each tile's
-    noise is the oracle at points of its own).  With a = w_max/W:
+    """The completeness citation's bound: each input's rate p = E[X] (X its work-weighted failing fraction under the
+    tiles' noise) at a simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail
+    independently (each tile's noise is the oracle at points of its own).  With a = w_max/W:
     - a census with no failure: ln(1/δ)·a (P[none fail] = Π(1 - p_g) <= exp(-p/a));
     - n work-weighted draws with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
       Clopper–Pearson on the draws would bound the realized X, not p;

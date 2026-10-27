@@ -1,5 +1,4 @@
-"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces
-(note:20261024T0615Z-draft-verity-vllm-vision, sections 3 and 5).
+"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
 
 ``PUBLIC`` names each public module and the interface it is. Outside code may import it, and from it only the names its
 ``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
@@ -42,6 +41,13 @@ PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
+    "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
+    "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
+                                          "own Build without a trace",
+    "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
+                                                  "verifier's pins of it (VLLM-113)",
+    "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
+                                               "values (VLLM-125)",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -51,7 +57,6 @@ KNOWN = frozenset({
     "verity_vllm.acquire.sources.taps",
     "verity_vllm.check.batch",
     "verity_vllm.check.checkpoint_index",
-    "verity_vllm.check.codes",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
     "verity_vllm.check.oracle_compare",
@@ -80,7 +85,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.env",
     "verity_vllm.engine.hooks",
     "verity_vllm.engine.int8_attention",
-    "verity_vllm.engine.int8_attention_vllm",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
     "verity_vllm.engine.int8_ops",
@@ -171,9 +175,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_bytes'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_put'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_zeros'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
     ('verity_vllm.query.program_view', '_registry'),
     ('verity_vllm.query.program_view', '_spec_id'),
@@ -238,8 +239,10 @@ def exported(module: str) -> tuple[str, ...]:
 def _definitions(module: str) -> dict[str, tuple[str, ast.AST | None]]:
     """name -> (where it is bound: "top", "type-checking" or "lazy", its def or class node when this module defines it, or the
     module it imports it from)."""
-    tree = ast.parse(_module_file(module).read_text(encoding="utf-8"))
+    path = _module_file(module)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     out: dict[str, tuple[str, ast.AST | str | None]] = {}
+    package = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
 
     def bind(nodes, where):
         for n in nodes:
@@ -248,8 +251,9 @@ def _definitions(module: str) -> dict[str, tuple[str, ast.AST | None]]:
             elif isinstance(n, (ast.Assign, ast.AnnAssign)):
                 for t in n.targets if isinstance(n, ast.Assign) else [n.target]:
                     out.update({x.id: (where, None) for x in ast.walk(t) if isinstance(x, ast.Name)})
-            elif isinstance(n, ast.ImportFrom) and n.level == 0:
-                out.update({a.asname or a.name: (where, f"{n.module}.{a.name}") for a in n.names})
+            elif isinstance(n, ast.ImportFrom):
+                src = n.module if n.level == 0 else ".".join([*package[:len(package) + 1 - n.level], *filter(None, [n.module])])
+                out.update({a.asname or a.name: (where, f"{src}.{a.name}") for a in n.names})
             elif isinstance(n, ast.If) and "TYPE_CHECKING" in ast.unparse(n.test):
                 bind(n.body, "type-checking")
 

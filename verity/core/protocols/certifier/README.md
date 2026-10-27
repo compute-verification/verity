@@ -13,9 +13,9 @@ A spec-level reference for network accounting's timing channel:
   against the digest its certificate signs), with a host-side verifier of record (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
-  is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
-  behaviour (`examples/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
-  stays counts only until N3 is a proof-service unit with Selection `All`. The network verdict of record is
+  is at the profile. Nothing here holds the frames, the rest of the egress grid (N3, the content check prototyped in
+  `benchmarks/network_certifier/sim`, is retired, superseded by the step-indexed scan, `ingress_scan` and `egress`, outside this
+  protocol). The network verdict of record is
   `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window of the
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
@@ -37,7 +37,7 @@ A spec-level reference for network accounting's timing channel:
   start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
   what its size class or the prefix layer's counts can't express. It is the compile unit's core, between the committed
   decisions and `compile_steps`' Programs, and is held step for step to the replay
-  (`examples/network_vllm/encodings/replay_vectors.py`); it is in no proof-service Spec yet. It takes the circuits
+  (`benchmarks/network_certifier/e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet. It takes the circuits
   and their evaluator from `verity`;
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
   served through the warden's egress, every cell of an egress link-window is opened, each a pad, the canonical event of
@@ -97,7 +97,7 @@ A spec-level reference for network accounting's timing channel:
   replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
   are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`examples/network_vllm/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+  (`benchmarks/network_certifier/e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
 - the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
   checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
   lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
@@ -138,7 +138,7 @@ A spec-level reference for network accounting's timing channel:
   registered book's counts, never witness. The bit-checking variant, the alternative: `ArithEncodeStep_v1{K, BIN}` and
   `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
   `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
-  v1's windows and on ENC-DERIVED's still-sent fields (`examples/network_vllm/encodings/arith_vectors.py`), and it is
+  v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_certifier/e2e/encodings/arith_vectors.py`), and it is
   in no proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
 - the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hm96 rows,
   window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
@@ -201,7 +201,7 @@ A spec-level reference for network accounting's timing channel:
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
   `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
-  declaration and not a private partition, so it is checked in the clear with no proof unit;
+  declaration and not a private partition, so it is checked in the clear with no proof block;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
@@ -293,7 +293,10 @@ The two terms of the charge the capacity bounds leave open are fixed in the trus
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
 - the challenger's coins (D7), an ingress link whose timing is charged on the ingress grid and whose content costs
-  0 bits.
+  0 bits. The coin link (`coin_link`, run by `benchmarks/live_challenger/coin_link.py`) carries a window's session
+  between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
+  grids, exempts only the verified, expected, once-only coin openings, and counts everything else
+  (`protocol/coin-link.md`).
 
 ~~~python
 from verity.core.protocols.certifier.audit import Audit
@@ -320,8 +323,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound, while N3, the content check, is the design (Daniel's provisional
-call on ASK-70, 19 Oct).
+the declared sync), beside the proved timing bound (Daniel's provisional call on ASK-70, 19 Oct). N3, the content check,
+is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
 (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of C-Flock's Lean
@@ -353,9 +356,9 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   plain unit's public row with both ends' grids at the warden's parameters digest, which both take as an input (the
   warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest isn't 64
   bytes, whose ends have a profile, or whose two grids differ.
-- every recorded proving run of N2 replays through both to the verdict it recorded, negative controls included
-  (`benchmarks/network_traces/n2_lean_replay.py`): 193 link-windows of seven runs, plain and served, 180 accepted and 13
-  refused, each with nine injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
+- every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
+  controls included: 193 link-windows of seven runs, plain and served, 180 accepted and 13 refused, each with nine
+  injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
   warden runs give 30 link-windows from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a draw of 8 on the
   H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
   r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and

@@ -4,7 +4,7 @@
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the served
     workloads' Definitions (ml.definitions) on the catalog and the kernels;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
-    ``ALLOWED``, and no third-party package;  a verifier imports no ml (Daniel, 18 Oct): until a protocol's verifier of
+    ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier of
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (C-Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
@@ -52,28 +52,35 @@ ALLOWED = {
     "ml.private_circuits": {"ml.circuits"},
     # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
     "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
-    # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
+    # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
+    # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
+    # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
+    # it, and signs and verifies only through keys its caller hands it, so neither gains an ml edge.
+    "core.wire": set(),
+    "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     "core.protocols.sampled_proofs": {"core.claims", "ml.circuits", "ml.commitments", "ml.randomness",
                                       "core.protocols.profile"},
-    "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
+    # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
+    # deployment layer (`wipe_parties`), their messages the wire's.
+    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
+                            "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
-    # 2026-10-12 (memory accounting's remote bandwidth program): the remote audit commits receipts in frame-v3-sha512
+    # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
-    # 2026-10-26 (memory accounting, the owner's ruling of 25 Oct, 6:47 PM PDT: the real bandwidth audit is over the
-    # P2-encoded weights store): a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
+    # proof service's one challenger's (`sampled_proofs.challenger`).
+    # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
-    # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
+    # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
@@ -122,8 +129,8 @@ ML_IMPORTS_CORE = {
                                                         "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
                                                         "entry), and moves with them in the follow-up to T2",
 }
-#: A verifier imports no ``verity.ml`` code (Daniel, 18 Oct; AGENTS.md "Design rules"): Lean is the definition and the
-#: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the 8 Oct procedure,
+#: A verifier imports no ``verity.ml`` code (AGENTS.md "Design rules"): Lean is the definition and the
+#: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the switch procedure,
 #: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it on 18 Oct, frozen here,
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
@@ -156,6 +163,14 @@ TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
                          "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
+}
+
+#: Modules of ``verity.ml`` that only a prover's or developer's build turns on, which nothing in ``verity/core`` names (an
+#: import, an attribute or a string), each with the module and why a verifier must not read it.
+PROVER_ONLY = {
+    "trace_cache": ("verity/ml/circuits/ops/boolean/trace_cache.py",
+                    "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
+                    "entry for a Definition's gates"),
 }
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
@@ -310,7 +325,7 @@ def _core_ml_growth(allowed: dict[str, set[str]]) -> list[str]:
 
 
 def test_core_gains_no_edge_into_ml() -> None:
-    """No core unit gains an ml edge, and core's reach into ml doesn't grow (Daniel, 18 Oct): the edges only shrink, each
+    """No core unit gains an ml edge, and core's reach into ml doesn't grow: the edges only shrink, each
     with its protocol's switch to Lean."""
     grown = _core_ml_growth(ALLOWED)
     assert not grown, f"{grown}: {LEAN_OF_RECORD}"
@@ -423,6 +438,20 @@ def test_a_use_past_a_guard_is_found() -> None:
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
     assert _is_test("verity/ml/circuits/tests/test_partition_v2.py") and not _is_test("verity/ml/circuits/partition_v2.py")
+
+
+def test_core_never_names_a_prover_only_module() -> None:
+    """No file of ``verity/core`` (its tests included) names a module of ``PROVER_ONLY``, and each still exists."""
+    offenders = []
+    for path in sorted((SRC / "core").rglob("*.py")):
+        if {".lake", "__pycache__"} & set(path.relative_to(SRC).parts):
+            continue
+        hits = _uses(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)), set(PROVER_ONLY))
+        hits += [(name, line) for name, line, _ in _imports(path) if set(name.split(".")) & set(PROVER_ONLY)]
+        offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line in hits]
+    assert not offenders, "a verifier reads no prover-only module (PROVER_ONLY):\n" + "\n".join(offenders)
+    missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
+    assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
 
 
 def _docstrings(tree: ast.AST) -> set[int]:

@@ -30,7 +30,7 @@ SCRIPTS = frozenset({".sh", ".toml", ".yaml", ".yml"})
 
 #: commands run from outside integrations/vllm, each with one caller
 PUBLIC_COMMANDS: dict[str, str] = {
-    "advice": "examples/network_vllm/e2e.py (ADVICE)",
+    "advice": "benchmarks/network_certifier/e2e/e2e.py (ADVICE)",
     "advice-windows": "benchmarks/one_stage/a5_tp.sh",
     "build": "benchmarks/stacked_share/job.sh",
     "epoch": "benchmarks/one_stage/llama1b_tp1_commit.sh",

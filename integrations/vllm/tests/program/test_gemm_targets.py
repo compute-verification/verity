@@ -177,7 +177,7 @@ def test_ada_table_pins_every_vllm_key_verbatim():
     for (n, k) in ((75968, 2048), (2560, 2048), (128, 2048), (5120, 2048)):
         assert ada.launch_config(2, n, k)[3] == "default[ada]"
     try:
-        from vllm.model_executor.determinism.batch_invariant_configs import _BATCH_INVARIANT_MATMUL_TUNED_CONFIGS as VT  # noqa: PLC0415
+        from vllm.model_executor.determinism.batch_invariant_configs import _BATCH_INVARIANT_MATMUL_TUNED_CONFIGS as VT
     except Exception:  # noqa: BLE001
         pytest.skip("pinned vLLM not importable here: the verbatim check runs on the construction/capture hosts")
     vt = VT["ada"]

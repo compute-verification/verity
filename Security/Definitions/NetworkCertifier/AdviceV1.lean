@@ -6,7 +6,7 @@ import Mathlib.Data.List.OfFn
 
 Definitions only. They mirror `verity/core/protocols/certifier/arith_encode.py`'s references one for one, with each
 Python name in its docstring: `ChargeCount_v1{N}`'s charge (`reference_charge`), the bits ENC-CODE's 32-bit
-Witten–Neal–Cleary arithmetic coder (`examples/network_vllm/encodings/code.py`'s `ArithEncoder`) would write for a
+Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`'s `ArithEncoder`) would write for a
 window that sends only decisions, counted rather than written (the counting variant, which the composition charges).
 
 A window codes the number of decisions it sends (n_arrived) as the book's Exp-Golomb bin and its offset in the bin, then
@@ -22,7 +22,7 @@ and their decisions (`bit`). A slot that doesn't ask changes nothing, so the cha
 slots that ask, in order: the window's decision stream, a `List Bool`. The run's decision stream is one per window. The
 asks themselves are not advice: the compile slice, its charge included, is proved on every advised window and never
 sampled, so `en` is the scan that slice proves, pinned by it. The carry from window to window (the KT counts and the
-run) is committed across windows and chained from the book's priors (#3801, `charge_chain.check_chain`), as `charges`
+run) is committed across windows and chained from the book's priors (`charge_chain.check_chain`), as `charges`
 starts from `priors` and passes each window's carry on.
 
 **What is left.** That `ChargeCount_v1`'s circuit computes `window` is not proved in Lean. circuit-check holds the circuit

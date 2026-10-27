@@ -1,6 +1,6 @@
 """The C2 rules of one instrumented run's Commit record (local replay, boundary linkage, weights of record) and its execution
 extent, each a `CheckResult`, with the helpers the decision (`verdict.commit_verdict`) shares: form (B) coverage of the replay's named
-gaps, the seed of record, the population scope against Q(P).  The cuBLAS route pin's rule reads the block `check.cublas_route_pin`
+gaps, the seed of record, the population scope against Q(P).  The cuBLAS route pin's rule reads the section `check.cublas_route_pin`
 stamps on the record.
 
 The rules decide from the structured codes the sampled replay stamps on its record (`replay_codes`: the class / family / domain of
@@ -112,7 +112,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     reconciliation itself fails: a VU whose address is not a required identity, a required identity no Program row produces, a block height
     that disagrees, a rank set that disagrees, a required family with no stated mechanism.  A replay record WITHOUT a manifest to
     reconcile against (`query_checks.ok` None) carries a note naming that; a record predating the fields is graded as before (no note --
-    rows recorded before the fields keep their text).  A `query_checks` block missing a field its writers all write FAILs, naming the
+    rows recorded before the fields keep their text).  A `query_checks` section missing a field its writers all write FAILs, naming the
     field (`records.query_checks`).  The grade rules above stand either way."""
     if not isinstance(sr, dict):
         return None, None
@@ -383,9 +383,9 @@ def _batch_attribution_note(n_req: int, oc) -> str | None:
     an equal-shape request swap relabels every row of a shared step together, so the committed record stays self-consistent and the sampled
     replay passes by construction; boundary linkage sees it only at the first swapped boundary and only when the two requests' tokens differ
     there.  Form (B) is not made mandatory here (the verdict stays what the record establishes) -- but a PASS at B>=2 without a
-    complete request attribution on the row's own record NAMES the gap, so no reader has to infer it from an absent block: (None) at B=1, or when
+    complete request attribution on the workload's own record NAMES the gap, so no reader has to infer it from an absent section: (None) at B=1, or when
     the oracle compare's attribution is complete; else the note for the PASS text.  Value-partial by snapshot gaps is not this: the
-    attribution block is complete there."""
+    attribution section is complete there."""
     if n_req < 2:
         return None
     if not isinstance(oc, dict):
@@ -452,7 +452,7 @@ C_WP = ("checkpoint_binding/weights_of_record", "MAN-09 / rev-cb M-0610",
 
 
 def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
-    """The C2-of-record block of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
+    """The C2-of-record section of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
     the SAME nesting (a branch v1 never took is not taken here), emitting: local_replay/sampled_replay, /seed_of_record, /population_gaps,
     /population_scope, /attribution, /cublas_route_pin; boundary_linkage/ordered_linkage; checkpoint_binding/weights_of_record."""
     sr, lk, wp = _replay_of(commit), _linkage_of(commit), commit.get("weights_pin")
@@ -596,7 +596,7 @@ C_ROUTE = ("local_replay/cublas_route_pin", "note:20261018T1929Z-finding-redteam
 
 
 def rule_route_pin(commit: dict, ctx: dict) -> CheckResult:
-    """v1: `cublas_route_pin.ok is False` -> FAIL by its `why`, on any record (`check.cublas_route_pin.stamp`); NOT_RUN when no block is
+    """v1: `cublas_route_pin.ok is False` -> FAIL by its `why`, on any record (`check.cublas_route_pin.stamp`); NOT_RUN when no section is
     stamped (the Program binds none of the pin's Definitions)."""
     rp = commit.get("cublas_route_pin")
     if not isinstance(rp, dict):

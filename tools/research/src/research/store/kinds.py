@@ -101,7 +101,7 @@ KINDS: dict[str, str] = {
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
     "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
-                          "(examples/network_vllm/encodings/measure.py): payload tree = table.json (per trace, window, "
+                          "(benchmarks/network_certifier/e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
                           "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",
     "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
@@ -111,11 +111,11 @@ KINDS: dict[str, str] = {
                         "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
-    "vllm-trace-corpus/v1": "real vLLM V1 scheduler traces under varied traffic (examples/network_vllm/traces): payload tree = "
+    "vllm-trace-corpus/v1": "real vLLM V1 scheduler traces under varied traffic (benchmarks/network_certifier/e2e/traces): payload tree = "
                             "README.md + summary.json + meta.json + plan.jsonl + one <trace>/ a traffic setting (steps.jsonl, "
                             "requests.jsonl, client.jsonl, meta.json, server.log, raw/ the hook's files), and optionally "
                             "compare/ (compare.json, COMPARE.md: output ids against other corpora of the same plan)",
-    "vllm-adversarial-schedule/v1": "batch invariance against a hostile vLLM scheduler (examples/network_vllm/traces, "
+    "vllm-adversarial-schedule/v1": "batch invariance against a hostile vLLM scheduler (benchmarks/network_certifier/e2e/traces, "
                                     "vllm_adversarial_plugin): payload tree = corpus/<model>-<variant>/, each a "
                                     "vllm-trace-corpus/v1 tree of corpus.HOSTILE's traces (honest and hostile schedulers, the "
                                     "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
@@ -144,6 +144,11 @@ KINDS: dict[str, str] = {
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",
+    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (examples/h200/m3bundle.py build), what "
+                          "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
+                          "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
+                          "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "
+                          "commit, verdict}",
 }
 
 

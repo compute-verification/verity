@@ -263,7 +263,7 @@ class TpRow(Row):
         return (r, out or f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8")
 
     def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
-        """A request derive; the AOT Build's predicts its launch batch from the row's requests (`predict.build.launch_batch`)."""
+        """A request derive; the AOT Build's predicts its launch batch from the row's requests (`predict.common.launch_batch`)."""
         out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
         shutil.rmtree(out, ignore_errors=True)
         return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t), *([] if self.aot is not None else self.launch_of(lp, t)))
