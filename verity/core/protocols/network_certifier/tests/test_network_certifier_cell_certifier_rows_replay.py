@@ -62,7 +62,7 @@ def test_the_honest_registration_reads_back(tmp_path):
 
 
 def test_a_real_cross_window_root_and_certificate_replay_is_refused(tmp_path):
-    """A REAL warden-signed window-0 root and certificate can't be presented for window 1: the window-0 document is
+    """A REAL cell-certifier-signed window-0 root and certificate can't be presented for window 1: the window-0 document is
     refused by the field check, and relabelling it to window 1 with the window-0 root and certificate is refused because
     the certificate signs the window-0 head."""
     issuer = _issuer(tmp_path)

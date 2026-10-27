@@ -1,4 +1,4 @@
-"""warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
+"""cell-certifier-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose cell certifier is driven tick by tick on a `VirtualClock`, its records certified by an LMS
 key: the check accepts the run, whose server got each request with its release order under the run id `deployment.json`
 names, and refuses a record that isn't what was certified, a cell that reached its client in
@@ -380,7 +380,7 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
 
 
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
-    """`rehearse --ids`: an `id_traffic` request, sent warden-form (`active.id_request`), is answered with its
+    """`rehearse --ids`: an `id_traffic` request, sent cell-certifier-form (`active.id_request`), is answered with its
     `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
     `parse_id_response` reads its count, and a cut or altered response isn't complete."""
     sys.path.insert(0, str(HERE))

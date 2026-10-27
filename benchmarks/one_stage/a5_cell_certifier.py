@@ -423,7 +423,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool) -> bool:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="a5_cell_certifier.py", description=__doc__.splitlines()[0])
-    ap.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory (cell_certifier_serve.py rehearse)")
+    ap.add_argument("--run", required=True, type=Path, help="a cell-certifier-serve run's directory (cell_certifier_serve.py rehearse)")
     ap.add_argument("--units", type=int, default=16, help="n: each transfer-gate chunk's units")
     ap.add_argument("--rest", type=int, default=8, help="the rest's units, drawn by the work law")
     ap.add_argument("--m0-pythonpath", required=True)

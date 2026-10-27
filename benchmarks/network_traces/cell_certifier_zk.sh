@@ -4,7 +4,7 @@
 #   research run --on NODE --source . --project verity --as LANE --cwd clone --cpus 16 --mem-gb 64 --timeout 180m \
 #     --env WZ_MEM_GB=64 -- env CHECK_SLOTS=SLOTS python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/cell_certifier_zk.sh
-# The run: a warden-serve rehearsal against the fake endpoint (`cell_certifier_serve.py rehearse --fake`), whose cell certifier commits
+# The run: a cell-certifier-serve rehearsal against the fake endpoint (`cell_certifier_serve.py rehearse --fake`), whose cell certifier commits
 # and signs each window's bucket rows while serving; then `cell_certifier_zk.py prove` on it.
 # env: WZ_MEM_GB (what job.sh's stages may take, within the slot's)  WZ_REQUESTS (rehearse's --requests, 6)
 #      WZ_UNITS (cell_certifier_zk.py's --units, 16)  WZ_CACHE (the build cache, kept across runs where

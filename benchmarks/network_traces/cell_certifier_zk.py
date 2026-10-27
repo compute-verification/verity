@@ -1,4 +1,4 @@
-"""warden-zk: the cell certifier's bucket rows read by the proof system. A toy unit over one row's bits, its port registered
+"""cell-certifier-zk: the cell certifier's bucket rows read by the proof system. A toy unit over one row's bits, its port registered
 against the cell certifier's signed egress root (`cell_certifier_rows`), proved by C-Flock `prove --zk` behind the Lean firewall and
 held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through the one-stage audit as
 N2-ZK's driver proves N2's head checks.
@@ -6,7 +6,7 @@ N2-ZK's driver proves N2's head checks.
     python benchmarks/network_traces/cell_certifier_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--units 16] [--dry]
 
-* **The run.** A warden-serve run's directory (`cell_certifier_serve.py rehearse`'s): `deployment.json`, the records, and the
+* **The run.** A cell-certifier-serve run's directory (`cell_certifier_serve.py rehearse`'s): `deployment.json`, the records, and the
   rows the cell certifier committed and signed while serving, a row a bucket: `cells.jsonl` (each link-window's registration)
   and `cells.salts` (the rows' salts and the wiring's, witness, which the cell certifier hands the prover alone).
 * **The registration.** An egress link-window's: its registration read by the verifier
@@ -446,7 +446,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="cell_certifier_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="the toy unit's ports registered against the cell certifier's egress root, proved --zk")
-    p.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory")
+    p.add_argument("--run", required=True, type=Path, help="a cell-certifier-serve run's directory")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
