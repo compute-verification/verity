@@ -33,7 +33,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1, theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
 | `tiers.py` | compute efficiency eta and the compute dampener D under the verification stack, per tier; `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what eta is most exposed to: ranges, tornados, elasticities, thresholds on 1/eta, and the closed forms of mu, nu and chi |
-| `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
+| `fit.py` | the fit bound: the memory cap when no server block holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
 | `figures.py` | the dampener's talk figures, to the evidence store |
 | `statement.py` | every number the Notion page "The compute dampener: claims, model and tiers" quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
@@ -153,14 +153,16 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   constructions are analytic; none has been run.
 - `chain` is the partial-sum law, `Nci.SecurityProofs.ContainedTraining`: \(\rho \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
   with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumptions are that
-  one chain of the reference circuit is incompressible at \(b_w\) and \(b_a\), in support form. A chain charges each
-  weight once per layer, so it is one forward path, and a row's `chain` gives that path's share \(\kappa_{\text{chain}}\)
-  and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared expert), 7% of training's
-  work. The activation rate is capped by a compressed boundary's bits per residual entry. Rows without a chain get none.
+  one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\), in support form. A
+  chain charges each weight once per layer, so it is one forward path, and a row's `chain` gives that path's share
+  \(\kappa_{\text{chain}}\) and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared
+  expert), 7% of training's work. The activation rate is capped by a compressed boundary's bits per residual entry.
+  Rows without a chain get none.
 
 \(\kappa\) is the thread theorem's hypothesis \(\kappa\,|\text{computed}| \le 2|M|\): twice the multiplications of an
-updated weight by an activation or an activation gradient, over every gate of the reference circuit, one gate per scalar
-operation (a multiply-add is two). `kappa.py` counts both from each model's config and its report's pretraining
+updated weight by an activation or an activation gradient, over every gate of the reference training algorithm's
+circuit, one gate per scalar operation (a multiply-add is two). `kappa.py` counts both from each model's config and
+its report's pretraining
 schedule. The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
 and the optimizer step are in the denominator only, so \(\kappa < 2/3\). Kimi K2's schedule gives 0.60 (0.603 at 4k,
 0.40 at 32k), DeepSeek-V3's 0.56, Llama 3 405B's 0.63 and Qwen3-235B's 0.57. The adversarial 0.5 is an attention-heavy
@@ -242,7 +244,7 @@ All values below are from `parameters.json`; render the index for the findings b
     bracket by about 5–10, but it also shrinks the free headroom for non-text state.
   - `K` caps what a block reads, not what it serves: outputs are never charged, so tokens a block generates, and prompts
     committed in `θ`, cost it nothing. Threads crowd out only fresh inputs read outside `θ`.
-- **Gradient compression does not evade a per-block cap.** DiLoCo-family methods cut traffic 100–3000x between workers
+- **Gradient compression does not evade a per-block limit.** DiLoCo-family methods cut traffic 100–3000x between workers
   that each hold a full model (`grad.compression_ratio/frontier`). Their achieved per-step updates, 0.04–0.6 bits per
   parameter, are thousands of times `K` at frontier scale (`update.bits_per_param_step/pretraining`).
 - **Shared headroom is elicitation.**

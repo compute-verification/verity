@@ -151,4 +151,4 @@ Daniel's Lean rulings in force, each stated as itself; who set each one, when an
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
-  server-window is stated on `Accounting.Placed` with `WindowsAt`.
+  server block is stated on `Accounting.Placed` with `WindowsAt`.

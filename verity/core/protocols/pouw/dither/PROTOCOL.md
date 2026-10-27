@@ -8,8 +8,8 @@ the fixes RT-POOL routed to it (note:compute-research/20261026T1752Z-draft-accel
 CMP-154), written in the shared notation (CMP-158).
 
 Its credit at pub(μ°) against W_reg is superseded (Daniel, 26 Oct, 6:40 PM PDT, tentative): credit is a sampling block's
-size in AND gates, a statement about values, and 𝓜's resources appear only inside the exclusion argument
-(`GLOSSARY.md`, "Size, credit and exclusion"). CMP-158 restates this document and D6 in it.
+size in AND gates, a statement about values, and 𝓜's resources appear only inside the overhead lower
+bound (`GLOSSARY.md`, "Size, credit and the overhead lower bound"). CMP-158 restates this document and D6 in it.
 
 The protocol is experimental. Its guarantee is stated in Lean on open PRs: `Pouw.Guarantees.Dither.WorkSound` and its
 card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on
@@ -53,7 +53,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 - **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
   proof block in Dither's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
-  is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
+  is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_acc.
 - **W_reg**: a replica's budget for a monitoring period, registered before its first coin.
 - **W_F, W_cap and W_S**: a fleet's registered total, or its registered cap, and the total of its accepted replicas'
   W_reg (see "The fleet").

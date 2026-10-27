@@ -30,7 +30,7 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   sensitivity (each cost group scaled, each input at its low and high) and the hints (`plan.json`), and prints the
   tables.
 
-- `transformer.py`: the end-to-end demo's transformer (PRF-166), CMP-92's decoder block over one server-time block of
+- `transformer.py`: the end-to-end demo's transformer (PRF-166), CMP-92's decoder block over one server block of
   serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`:
   compute-accounting's 70 layers at width 8,192, 128 heads of 64 and an MLP of 32,768, 52.5 GiB of INT8 linears and
   35.0 GiB of KV for 1,023 sequences on one 96 GiB card, its requests a block from an estimated 195 ms step; each
@@ -62,7 +62,7 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   half leaked output bits, each half weighted at each budget by the least bound that budget certifies for it alone;
   each point reports `certify`'s `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, the tile stratum's ε
   (`eps_at`), and the knee. The plan of record is proving within 1% of the sampling block's GPU time, for sampling
-  blocks of one serving block, the least that affords a plan, a week, a month and a year, with its draw a subcircuit
+  blocks of one server block, the least that affords a plan, a week, a month and a year, with its draw a subcircuit
   and the commits beside it; then M3's uniform 8-unit draw against the block's GPU time, and each Definition's share
   of the ANDs against the step's GPU time.
 

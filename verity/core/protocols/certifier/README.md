@@ -187,7 +187,7 @@ A spec-level reference for network accounting's timing channel:
   it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
   (`benchmarks/network_traces/transfer_zk.py`; the load relayed and committed as it crosses,
   `benchmarks/network_traces/load_relay.py`);
-- the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
+- the blocks (`blocks`): the proof blocks each server runs, the steps the circuit spans and its transfer gates, schema
   `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
   blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
   transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row

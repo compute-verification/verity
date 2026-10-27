@@ -41,7 +41,7 @@ uv run machine-model headline             # each family's design of record at th
 uv run machine-model --device sm_100 sheet   # the data sheet: its DS lines against the census, each peak at its clock
 uv run machine-model --device sm_90 sheet --eps   # the headline's sheet reading on the sheet's lines, A3 at f_max
 uv run machine-model --device sm_100 sheet --eps --uni 0.1 0.02   # ... with a uniform instruction at 0.1, 0.02 a slot
-uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
+uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the accounted share σ of a window's capacity
 uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
 uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
 uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H, γ, units, c_sha
@@ -114,8 +114,8 @@ The code:
   and ε_machine's LP.
 - `verity_machine_model/counts.py`: n(H)(m, n, k) from that closed form, the model bound it gives at any shape the
   kernel runs, its fit and its check.
-- `verity_machine_model/capacity.py`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity,
-  hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream,
+- `verity_machine_model/capacity.py`: the accounted share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity,
+  hidden(n̄) the useful work any program could still add beside the pooled accounted load n̄ (the filler workstream,
   decision 77; note:20261017T0652Z-draft-filler).
 - `verity_machine_model/redteam.py`: the red-team audit of a headline design against a device's committed census.
 - `verity_machine_model/headline.py`: the per-family headline, every number computed from the design files and vectors.
@@ -373,7 +373,7 @@ credited time `T_cred` on that device, not of that device's own time.
 
 A per-GPU reading of ε comes only through the attribution layer, under two conditions:
 
-- **LOC's host deduction** (decision 37, LOC: the node computes its own certified work): what the host CPU can compute
+- **LOC's host deduction** (decision 37, LOC: the node does its own accounted compute): what the host CPU can compute
   of the credited work exactly is deducted from the GPUs' credit. On int8 that is AMX for a tile's products and AVX-512
   for the fold and credited fillers, each bit-exact.
 - **The peer-GPU premise**: every billable GPU on the node is credited each window, so no uncredited peer computes a
