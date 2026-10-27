@@ -135,6 +135,14 @@ Sanity.lean     a satisfiability witness for every named hypothesis, the joint w
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
                                          record, and `G_nontrivial`, its conclusion false at a verifier
                                          that accepts everything
+WitnessToys.lean  the instances they are stated at, built by hand (the negation's statement, the accepting
+                                         verifiers `leakD` and `tapD`, the rows format of the Python fixture
+                                         `fxQueue`), and the facts about them that read no deployed record
+PeriodWitnesses.lean  the monitoring period's two pairs (PeriodLeakAccepted, HorizonLeakAccepted), in the
+                                         lock's `witnesses`: no binder over the instance, the sampled verifier's
+                                         code the one named assumption (Assumptions/SampledCode.lean)
+Assumptions/SampledCode.lean  `NetTiming.Assumptions.SampledCodeRuns`: the sampled verifier the service runs
+                                         is a `SamplingDeploy.Code` whose run meets the record's facts
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program

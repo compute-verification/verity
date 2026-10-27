@@ -4,6 +4,7 @@ import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.Meets
 import Proofs.Flock.Claims.KS.ZkExtend
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
+import Proofs.NetworkCertifier.WitnessToys
 
 /-!
 # The honest and nontrivial lemmas of the network certifier's acceptance guarantees
@@ -26,6 +27,8 @@ whose verifier accepts everything.
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
+The instances at the accepting verifier, and the facts about them that read no deployed record, are `WitnessToys`'s;
+the monitoring period's pairs, in the lock's `witnesses`, are `PeriodWitnesses`'.
 -/
 
 namespace NetTiming.Witness
@@ -136,175 +139,9 @@ end Honest
 
 /-! ## At the accepting verifier -/
 
-/-- A layout of one link of one slot, with no gate. -/
-def trivLay : Layout 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
-
-/-- One input gate and its negation, the negation returned. -/
-def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
-
-/-- The program, drawn `all`. -/
-def notStmt : Claims.Sampling.Stmt := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
-
-/-- One class of one stratum of one replay unit, the proof unit `{0, 1}`. -/
-def notPart : Claims.Sampling.Partition := ⟨[[[[[0, 1]]]]]⟩
-
-/-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : Layout 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
-
-/-- One step: no frame on the link, every status complete. -/
-def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
-
-theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
-  refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
-  · rcases g with _ | _ | g
-    · simp [notStmt, notProg] at hx
-      subst hx
-      simp [BGate.reads] at hi
-    · simp [notStmt, notProg] at hx
-      subst hx
-      simp [BGate.reads] at hi
-      omega
-    · simp [notStmt, notProg] at hx
-  · simp [notStmt, notPart, Claims.Sampling.Rule.WellFormed, Claims.Sampling.OneStage.WellFormed]
-
-theorem notLay_fits : notLay.Fits notProg 1 := by
-  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
-  · simp [notLay, slotGates] at hg
-    subst hg
-    decide
-  · simp [notLay] at hg
-    subst hg
-    rfl
-
-theorem rejCm_val_none (H : Msg → Msg) (s : Claims.Sampling.Stmt) (w : Claims.Sampling.Wit) (g : ℕ) :
-    w.val H rejCm s g = none := by
-  simp [Wit.val, Commitment.Opens, rejCm, OC.eval]
-
-/-- With nothing held and the input `false`, the circuit computes the negation `true`. -/
-theorem notProg_val (inp : ℕ → Bool) (h0 : inp 0 = false) : valOver notProg inp (fun _ => none) 1 = true := by
-  have hg0 : notProg.gates[0]? = some .input := rfl
-  have hg1 : notProg.gates[1]? = some (.not 0) := rfl
-  have hv0 : valOver notProg inp (fun _ => none) 0 = false := by
-    rw [valOver]
-    simp [hg0, BGate.val, h0]
-  rw [valOver]
-  simp [hg1, BGate.val, hv0]
-
 section Toy
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-
-/-- `sksD` at `notStmt`: the verifier accepts, no opening passes, and no unit has a session. -/
-noncomputable def leakD (Coin : Type) : Claims.Sampling.Deploy Coin Unit Unit :=
-  { sksD Coin with parse := fun _ => some notStmt, partition := fun _ => some notPart }
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem leakD_scopeAcc (x : Msg) : ScopeAcc (leakD Coin) (fun _ => notLay) (fun _ => 1) x :=
-  ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem leakD_κ (x : Msg) : Claims.Sampling.κ (leakD Coin) 0 x < 1 / 3 :=
-  sksD_κ (Coin := Coin) x
-
-theorem leakD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) Unit silentP x).Pr H = 0 := by
-  simp only [Bext]
-  rw [dite_eq_left (show 0 < (leakD Coin).V.k x from Nat.one_pos)]
-  unfold Finder.Pr
-  rw [Pr_congr fun s => iff_false_intro (by
-    simp [ownLog_noHash _ _ _ (noHash_E (leakD Coin) (fun _ _ _ => rfl) _ _ _ _), findColl])]
-  exact Pr_false
-
-theorem leakD_breg (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) (leakD Coin).commit (leakD Coin).parse
-      (fun _ => []) Unit silentP x).Pr H = 0 := by
-  unfold Finder.Pr
-  rw [Pr_congr fun s => iff_false_intro (by
-    simp only [Breg, ownLog_noHash _ _ _ (noHash_E (leakD Coin) (fun _ _ _ => rfl) _ _ _ _)]
-    simp [regLog, leakD, findColl])]
-  exact Pr_false
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **No witness is in `RLeak`** at `leakD`, at one step at `δ = 0`, whatever the inputs `As` admits: the step the
-trace carries has no frame, where the circuit, the negation of the ingress the trace carries, holds one, and the only
-possible faulty set is empty, since the one unit is drawn `all`. -/
-theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.Stmt → (ℕ → Bool) → Set (ℕ → Bool)) (x : Msg)
-    (w : Claims.Sampling.Wit) :
-    ¬ RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As 1
-      x w := by
-  rintro ⟨s, P, hs, hP, h⟩
-  simp only [leakD, Option.some.injEq] at hs hP
-  subst hs hP
-  have hval := rejCm_val_none H notStmt w
-  have hcar : Carries notLay notProg (w.val H rejCm notStmt) (fun _ _ => [false]) 1 [obs0] := by
-    intro t ht
-    obtain rfl : t = 0 := by omega
-    refine ⟨Nat.one_pos, fun ℓ => ?_, ?_⟩
-    · funext σ
-      simp [obs0, rowOf, notLay, traceVal, Prog.read, notProg, hval]
-    · simp [notLay, traceVal, Prog.read, notProg, hval]
-  have hcov : Covered 1 [obs0] := by
-    intro t ht _ κ
-    obtain rfl : t = 0 := by omega
-    rfl
-  obtain ⟨-, -, F, hF, a, -, free, hfree, hacc⟩ := h (fun _ _ => [false]) [obs0] hcar hcov rfl (by simp [obs0])
-  have hF0 : F = ∅ := by
-    classical
-    simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
-    obtain ⟨hsub, -, hdis⟩ := hF
-    refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
-    have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
-    obtain rfl : v = 0 := by omega
-    exact Finset.disjoint_left.1 hdis hv (by decide)
-  subst hF0
-  have hnone : free = fun _ => none := funext fun g => by
-    cases hg : free g with
-    | none => rfl
-    | some b =>
-      obtain ⟨v, hv, -⟩ := hfree g b hg
-      simp at hv
-  subst hnone
-  obtain ⟨_, hrows, -⟩ := hacc 0 Nat.one_pos
-  have hin : notLay.inputOf 1 [[false]] a 0 = false := rfl
-  have h1 : (none : Option (List Bool)) =
-      rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 :=
-    congrFun (congrFun hrows 0) 0
-  have hrow : rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 =
-      if valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none) 1 then
-        some (([] : List ℕ).map (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)))
-      else none := rfl
-  rw [hrow, notProg_val _ hin] at h1
-  simp at h1
-
-/-- `KSLin`'s bound fails at `leakD`'s silent prover, at a relation with no witness at `x` and a bound `κ' < 1`. -/
-theorem leakD_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (Rx : Rel Claims.Sampling.Wit)
-    (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w) (hκ : κ' < 1) :
-    ¬ PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP ≤
-      κ' + Real.sqrt (Claims.Sampling.γ (leakD Coin) x * PrB H (leakD Coin).V silentP x) +
-        1 * (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) Unit silentP x).Pr H := by
-  intro h
-  have hp : PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP = 1 :=
-    prBad_accV H Rx _ x silentP hR
-  have hb : PrB H (leakD Coin).V silentP x = 0 := prB_accV H silentP x
-  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakD_bext] at h
-  linarith
-
-/-- `SampledLeakRegistered`'s bound fails at `leakD`'s silent prover, at a relation with no witness at `x`, a bound
-`κ' < 1` and no registration. -/
-theorem leakD_reg_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (Rx : Rel Claims.Sampling.Wit)
-    (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w) (hκ : κ' < 1) :
-    ¬ PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP ≤
-      κ' + Real.sqrt (Claims.Sampling.γ (leakD Coin) x * PrB H (leakD Coin).V silentP x) +
-        (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) Unit silentP x).Pr H +
-        (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) (leakD Coin).commit (leakD Coin).parse
-          (fun _ => []) Unit silentP x).Pr H := by
-  intro h
-  have hp : PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP = 1 :=
-    prBad_accV H Rx _ x silentP hR
-  have hb : PrB H (leakD Coin).V silentP x = 0 := prB_accV H silentP x
-  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakD_bext, leakD_breg] at h
-  linarith
 
 /-- **`SampledAuditAccepted`'s conclusion fails at the accepting verifier** `sksD`, at a horizon of no step: no opening
 passes, so no witness is in `RelS`, and `RAcc` reads `RelS`. -/
