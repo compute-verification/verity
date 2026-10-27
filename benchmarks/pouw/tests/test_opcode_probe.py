@@ -173,7 +173,7 @@ def test_an_until_loop_counts_only_the_fixed_roles_time():
     assert r["stop_gap"] == pytest.approx((0.1 + 0.0) / 2)
 
 
-# ---- EPS1's facets -----------------------------------------------------------------------------------------------------
+# ---- the issue facets --------------------------------------------------------------------------------------------------
 
 eps1 = _load("opcode_probe_eps1", POUW / "opcode_probe" / "eps1.py")
 

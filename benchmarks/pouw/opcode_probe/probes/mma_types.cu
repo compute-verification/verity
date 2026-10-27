@@ -1,7 +1,7 @@
-// RT-MACHINE (note:20261019T0456Z-draft-rt-machine, RT-MACHINE-2 and -5): the tensor forms A7's menu prices as one class
+// The tensor forms A7's menu prices as one class
 // or not at all, each timed beside the int8 and E4M3 references in one interleaved run.
 //   qmma_<t>  kind::f8f6f4 m16n8k32 at t = e4m3, e5m2, e3m2, e2m3, e2m1: on sm_120a each is one QMMA.16832.F32.<T>.<T>
-//             (isa_accept.sh, r20261019-050044-6f93), which loads.py prices as the single class QMMA16832 whatever t is.
+//             (isa_accept.sh), which loads.py prices as the single class QMMA16832 whatever t is.
 //             Equal rates keep that one class; a faster FP6/FP4 rate means the class under-prices those types.
 //   dmma      mma.sync m8n8k4 f64: one DMMA.8x8x4 on sm_120a, exact for int8 products, with no census class (loads.py
 //             gives None) and no sheet FP64 tensor peak, so the data-sheet machine prices it at nothing.

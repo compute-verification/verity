@@ -1,6 +1,6 @@
-// Mixed-stream issue ceiling (compute-accounting Q1, note lanes/compute-accounting *-draft-issue-ceiling.md).
+// Mixed-stream issue ceiling.
 //
-// RS-MODEL §7's clean priced floor pays every single-word opcode through one "issue row" worth ≈53% of the weight,
+// The clean priced floor pays every single-word opcode through one "issue row" worth ≈53% of the weight,
 // and that row rests on a hardware fact: one warp instruction per SM sub-partition per cycle. The census measured it
 // only on single-pipe streams (note *-draft-census-sm120 §3, FFMA/LOP3/IMAD/… beside QMMA). The referee
 // (note *-draft-theorem-e-referee II.2) flags it as the model's largest soundness dependency: if a stream that mixes

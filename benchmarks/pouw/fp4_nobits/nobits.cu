@@ -1,5 +1,5 @@
-// NOBITS probe (HYB, cmp-13): does an NVFP4/MXFP4 (kind::mxf4nvf4) MMA leave the committed s32 word's bits in a register
-// for free on sm_120?  P2-FF round 6 (note:20261016T0525Z-draft-fullfloor-s-r6, §4) bounds the FP4 route at >= 1.25 of
+// NOBITS probe: does an NVFP4/MXFP4 (kind::mxf4nvf4) MMA leave the committed s32 word's bits in a register
+// for free on sm_120?  The fold's round-6 bound puts the FP4 route at >= 1.25 of
 // honest under the premise NOBITS: "no MMA leaves the committed word's bits in a register without an op on the word".  The
 // FP4 MMA accumulates in FP32; the honest int8 IMMA accumulates in s32 and its accumulator IS the committed word.
 //

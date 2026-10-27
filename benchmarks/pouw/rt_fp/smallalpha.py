@@ -1,4 +1,4 @@
-"""RT-FP-13: a Dither-2S word on the FP forms when the committed data keeps every operand on the FP grid.
+"""A Dither-2S word on the FP forms when the committed data keeps every operand on the FP grid.
 
 The machine model's FP forms (data/forms.toml) take `split` passes an s8 product, a bound for operands that range over
 all 256 s8 values (OMMASF16864 3, QMMA16832 3). Dither-2S puts one fresh {0, 1} coin on each operand and nothing
@@ -10,7 +10,7 @@ form's (OMMASF16864, kind::mxf4nvf4), whose one output a cell holds two 32-deep 
 scale 2^10: 288·1025 < 2^24, exact), so a mask and a shift a pair cost it one ALU a word even with the conversion free.
 
 It prices, at the floor credit with operands free:
-  sm_120 (data/): Dither-2S, FPX-DESIGN's fpx-g1s-fx1 (dither-2s with one more IMAD a word of fold, as FPX-DESIGN
+  sm_120 (data/): Dither-2S, fpx_design's fpx-g1s-fx1 (dither-2s with one more IMAD a word of fold, as fpx_design
     31899b9c10's fpx_eps.py writes it) and the record dither-c-peel-fx1 (H1 + fx1: its co32c and cohalf words carry
     H1's U, 32 values, which keeps them off split 1 (`h1_grid.py`), but its P·V is Dither-2S; the model gives every
     word of a design one set of forms, so `fp1` lets all of the record's words take them), as data/ has them (`base`),

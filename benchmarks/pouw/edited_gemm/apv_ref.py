@@ -1,5 +1,5 @@
 """apv.cu's gate judged on the CPU: each dumped tile recomputed from P_prob, V and the per-call key alone, through
-CHECKED-STRIP's own construction (`benchmarks/pouw/theory/checked_strip.py`'s `pv_words` and `pv_served`).
+checked_strip's own construction (`benchmarks/pouw/theory/checked_strip.py`'s `pv_words` and `pv_served`).
 
 From the key (meta.json's four big-endian words): b (tag 7, NS 1's patch layout over V^T, kvh 128 x s) and U (tag 14:
 row q, block q / 2, digest byte (q % 2) 32 + rho, U = (byte & 63) + 1, negated where bit 6 is set; egemm_ref.u_rows' map).

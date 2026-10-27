@@ -37,7 +37,7 @@ def tmpl_ints(mangled):
 def parse_sass(path):
     """Return {mangled_function: info} where info has the hottest loop's opcode histogram, its length and the
     whole-function length. Keyed by the mangled name so the template arguments (M,X,R) join to the JSONL exactly;
-    demangling turns the template ints into enum values and loses that join (combiner bug fixed 16 Oct)."""
+    demangling turns the template ints into enum values and loses that join."""
     if not path.exists():
         return {}
     funcs = {}

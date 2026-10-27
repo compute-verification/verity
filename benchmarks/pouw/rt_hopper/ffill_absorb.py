@@ -1,4 +1,4 @@
-"""RT-HOPPER-6: how many of ffill's FFMA steps an adversary's words can make absorbed (the chain unchanged, so the step
+"""How many of ffill's FFMA steps an adversary's words can make absorbed (the chain unchanged, so the step
 can be skipped with the receipt still right), with ffill_ref's exact FMA.
 
 A step is absorbed when f·s is under half an ulp of x, so |x| must reach about 2^24·f·s. f = BIAS + w read as binary32

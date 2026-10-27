@@ -1,4 +1,4 @@
-# HIGHUTIL: a GPU at full batch on useful matmuls, certified
+# highutil: a GPU at full batch on useful matmuls, certified
 
 Llama-3-8B's four linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x 14336) at
 M = 16,384, s8 x s8 with int32 accumulation, called back to back on one RTX PRO 6000 (sm_120) or H200 (sm_90a). Each call goes through

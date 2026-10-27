@@ -1,4 +1,5 @@
-"""H-FALSIFY's reference: the zero instance's tiled transcript, route (a)'s identity, and the duo receipt the arms fold into.
+"""h_falsify's reference: the zero instance's tiled transcript, route (a)'s identity, and the duo receipt the arms fold
+into.
 
 The GPU arms (`h_falsify/hfalsify.cu`) dump their receipts and are judged bit for bit against `ref.receipt` on the card's
 run; these tests hold the reference itself: the transcript against a plain loop, T_ℓ = P_ℓ Uᵀ at B* = 0, the vectorized

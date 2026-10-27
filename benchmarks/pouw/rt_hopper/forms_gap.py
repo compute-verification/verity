@@ -1,18 +1,18 @@
-"""RT-HOPPER's CPU witnesses on the H200 (sm_90): the machine model's ε when the cheater may use a wgmma form the census
+"""CPU witnesses on the H200 (sm_90): the machine model's ε when the cheater may use a wgmma form the census
 already prices, and the data-sheet vector's cliffs in A2u and the fold.
 
-    python forms_gap.py            RT-HOPPER-1: the measured reading with IGMMA_S8_N256_RS offered beside the honest form
-    python forms_gap.py --sheet    RT-HOPPER-2/3: DS-90's ε against the fold's cost and against A2u's uniform issue cost
-    python forms_gap.py --b1       RT-HOPPER-1/2: BGMMA_B1_N256 offered at split 8 (the least: t binary products separate
+    python forms_gap.py            the measured reading with IGMMA_S8_N256_RS offered beside the honest form
+    python forms_gap.py --sheet    DS-90's ε against the fold's cost and against A2u's uniform issue cost
+    python forms_gap.py --b1       BGMMA_B1_N256 offered at split 8 (the least: t binary products separate
                                    at most 2^t values of an s8 operand) and 64 (bit planes); DS-90 prices it on issue alone
-    python forms_gap.py --rs-fit   RT-HOPPER-1: RS offered at SS's joint coefficients times the H200's matched-pair ratio
-    python forms_gap.py --honest-true  RT-HOPPER-8: γ with honest timed by the loop that folds the wgmma's accumulators,
-                                   and RT-HOPPER-10: each loop at the toml's 122.41 / f and on the clock, 128.01 / f
-    python forms_gap.py --fan-in   RT-HOPPER-2: ε at the fold costs FoldFanIn proves (1/(f − 1) a word), without FoldOpt
-    python forms_gap.py --b1-fit   RT-HOPPER-1: b1 offered at splits 8 and 64 at SS's joint lines times the H200's ratio
-    python forms_gap.py --menu     RT-HOPPER-1: each s8-exact sibling (N128, N64, mma.sync m16n8k32) offered beside it,
+    python forms_gap.py --rs-fit   RS offered at SS's joint coefficients times the H200's matched-pair ratio
+    python forms_gap.py --honest-true  γ with honest timed by the loop that folds the wgmma's accumulators,
+                                   and each loop at the toml's 122.41 / f and on the clock, 128.01 / f
+    python forms_gap.py --fan-in   ε at the fold costs FoldFanIn proves (1/(f − 1) a word), without FoldOpt
+    python forms_gap.py --b1-fit   b1 offered at splits 8 and 64 at SS's joint lines times the H200's ratio
+    python forms_gap.py --menu     each s8-exact sibling (N128, N64, mma.sync m16n8k32) offered beside it,
                                    then every form FIT has fitted from the H200, at once
-    python forms_gap.py --menu-fp  RT-HOPPER-1: each FP kind (f16, bf16, tf32, e4m3, e5m2) at the lane default, by MACs,
+    python forms_gap.py --menu-fp  each FP kind (f16, bf16, tf32, e4m3, e5m2) at the lane default, by MACs,
                                    by tensor time and at its H200 fit; then all 22 fitted forms at once, and each kind's
                                    break-even
 
@@ -102,7 +102,7 @@ def forms_gap() -> None:
 
 
 def set_census(data: Path, kind: str, row: str, u: float) -> None:
-    """Set the one census line of `kind` on `row`, in census.csv or an epoch's census/*.csv (DS-90's, on MM-SHEETS)."""
+    """Set the one census line of `kind` on `row`, in census.csv or an epoch's census/*.csv (DS-90's)."""
     hits = 0
     for p in [data / "census.csv", *sorted((data / "census").glob("*.csv"))]:
         if p.is_file():
@@ -214,8 +214,9 @@ def rs_fit() -> None:
 
 
 def menu() -> None:
-    """RT-HOPPER-1 beyond RS: each form the census prices at s8's rate offered beside the honest form at the census's
-    lane default, at IGMMA's joint lines by its MACs, and at its fit once read; then every fitted form at once."""
+    """The form escape beyond RS: each form the census prices at s8's rate offered beside the honest form at the
+    census's lane default, at IGMMA's joint lines by its MACs, and at its fit once read; then every fitted form at
+    once."""
     with tempfile.TemporaryDirectory() as t:
         for kind in SIBLINGS:
             for scale in (None, 1.0, "fit"):
@@ -231,9 +232,9 @@ def menu() -> None:
 
 
 def menu_fp() -> None:
-    """RT-HOPPER-1's FP forms: each FP kind offered beside the honest form at the lane default, at IGMMA's joint lines
-    by its MACs, by its tensor time (where the s8 siblings' fits fell, at 0.8-1.0 of it) and at 0.8 of that, and at its
-    fit once timed; then the untimed ones at once beside every fitted form, and each kind's break-even."""
+    """The form escape's FP forms: each FP kind offered beside the honest form at the lane default, at IGMMA's joint
+    lines by its MACs, by its tensor time (where the s8 siblings' fits fell, at 0.8-1.0 of it) and at 0.8 of that, and
+    at its fit once timed; then the untimed ones at once beside every fitted form, and each kind's break-even."""
     fitted = {k: "fit" for k, f in FIT.items() if f[4] is not None}
     with tempfile.TemporaryDirectory() as t:
         for kind, (_, _, n256, tt) in FP.items():
@@ -262,7 +263,8 @@ def menu_fp() -> None:
 
 
 def b1_fit() -> None:
-    """RT-HOPPER-1's b1 branch: BGMMA offered at splits 8 and 64 with its joint lines at SS's, and at its fit once read."""
+    """The form escape's b1 branch: BGMMA offered at splits 8 and 64 with its joint lines at SS's, and at its fit once
+    read."""
     with tempfile.TemporaryDirectory() as t:
         for split in (8, 64):
             for scale in (1.0, "fit"):
@@ -276,18 +278,18 @@ def b1_fit() -> None:
                     print(line(f"{vector} q*={q} b1 split {split} at {label}", eps(d, vector, q)))
 
 
-# The loops that fold the wgmma's own accumulators, the plain GEMM's 122.41 over their tensor fraction: wgli_true_w2 in
-# r20261019-055823-616f (0.42158), and the fastest, wgli_db_w2 in r20261019-070001-df11 (0.45574)
+# The loops that fold the wgmma's own accumulators, the plain GEMM's 122.41 over their tensor fraction: wgli_true_w2
+# (0.42158), and the fastest, wgli_db_w2 (0.45574)
 TRUE_LOOPS = (290.36, 268.60)
 # The toml's 122.41 is the model's plain GEMM on DC-90 (lanes beside the tensor, JI90_2), not a time on the clock: a MMA
 # alone takes 4 / 0.0312468 = 128.01 SMSP-cycles (census IGMMA_S8_N256 M), so a loop at fraction f takes 128.01 / f
-# (RT-HOPPER-10).
+#.
 PLAIN, ALONE = 122.41, 4 / 0.0312468
 
 
 def honest_true() -> None:
-    """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators (RT-HOPPER-8), each loop
-    at the toml's convention (122.41 / f) and on the clock (128.01 / f, RT-HOPPER-10)."""
+    """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators, each loop
+    at the toml's convention (122.41 / f) and on the clock (128.01 / f)."""
     with tempfile.TemporaryDirectory() as t:
         d = scratch(Path(t), rs=False)
         p = d / "honest" / "dc90-licpw-redux-l32.toml"
@@ -320,7 +322,7 @@ FAN_IN = {"LI, FOLD-OPT": 1.0546875, "DS-90's cliff": 0.922, "f=3": 1 / 2, "f=5"
 
 
 def fan_in() -> None:
-    """RT-HOPPER-2: the headline at the fold costs FoldFanIn proves, which is all the TS guarantee has without FoldOpt."""
+    """The headline at the fold costs FoldFanIn proves, which is all the TS guarantee has without FoldOpt."""
     with tempfile.TemporaryDirectory() as t:
         d = scratch(Path(t), rs=False)
         for label, r in FAN_IN.items():

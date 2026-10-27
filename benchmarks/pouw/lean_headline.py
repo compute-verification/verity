@@ -7,7 +7,7 @@ A family's data-sheet instance (`Accounting.TS.Headline.SmNN`, read by `Accounti
 its device's data sheet (`DS-NN`) as `Accounting.TS.Sheet` data, its headline design as a TS model on it, the floor
 program ♭ with ε_skip's skippable work, and π*, the certificate the machine model's LP finds at q* = ½. Every number is
 exact: a census value or a TOML value read as its decimal, and eps_budget's ε_skip as the decimal Python prints.
-`FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe certificate (RT-LOGIC-10).
+`FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe certificate.
 
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity is at most
@@ -16,7 +16,7 @@ the family's headline. That bound is the larger of two branches (`Whole.headline
 at the whole-unit luck ½ (`WholeLuckAt`), `1 − (N_w w* + N_w φ*)/B_♭ · (1 − 41/S)`.
 
 The vector classes (`vec`, which A6's `SheetWords` and SCALAR-ROUTE sum over) are model.toml's `cuda` lane classes and
-the 64-bit lane classes it leaves out, ALU64, CVT64, DMUL, IMADW and MOV64 (`VEC_64`, RT2-120-6): a run that heads
+the 64-bit lane classes it leaves out, ALU64, CVT64, DMUL, IMADW and MOV64 (`VEC_64`): a run that heads
 vector words with IMAD.WIDE meets A6 then. Each of the five costs what IMAD does at both π*, so ε doesn't move.
 
 sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
@@ -24,8 +24,8 @@ sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
 rows sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar
 routes at `q = q_T = 9/8`, ♭'s skippable work at the vector's ε_skip, and π* at q* = 9/8. `measured()` checks it the
 same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of `Real.hasSum_log_one_add_inv` at
-7). The vector is VF3s-16, RT-FACET's refit of VF3r-16's joint issue rows, and not model.toml's `current` (VF3r-16):
-measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in honest's IMMA16832; RT2-LOGIC-9),
+7). The vector is VF3s-16, facet_break's refit of VF3r-16's joint issue rows, and not model.toml's `current` (VF3r-16):
+measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in honest's IMMA16832),
 and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
 """
 from __future__ import annotations
@@ -107,7 +107,7 @@ OFF_MENU = ("MMA", "UNI64")        # census lines no writer kind is: the forms' 
 STAR = {"DS_issue": "issue", "DS_tensor": "tensor", "DS_smem": "smem"}
 #: A5b's unit: a bulk or TMA instruction counts its shared-memory bytes over 99 KB in UTMABIG (`loads.bulk_counts`)
 BULK = Fraction(1, 101376)
-#: The bulk-reduction floors (RT4-SHEET-1), counts a unit of N_w = 128 words. fx1's step u = y ⊕ d′ ⊕ k on the bulk
+#: The bulk-reduction floors, counts a unit of N_w = 128 words. fx1's step u = y ⊕ d′ ⊕ k on the bulk
 #: engine's two-input reductions takes two a word, 8 B of shared-memory source; the lanes keep d′ = w·m1, y′ and the
 #: rotate-add (IMAD 8 + ALU 4) and move d′, y and u at the widest forms, STS.128 (one a unit), STG.256 (NOROW, A2's
 #: catch-all) and LDG.256 (half a unit each); a bulk copy moves 4 B a word. DS-120's π* must price each at least

@@ -1,19 +1,19 @@
-"""RT2-FP: S14's packed slots (SLOT-LEMMA, #2755) against ε_machine's own lanes route, and premise (M) against F1.
+"""S14's packed slots against ε_machine's own lanes route, and premise (M) against F1.
 
-#2755 (`benchmarks/pouw/theory/isa_escape_joint.py` at a3a9fea37c) prices a packed slot, w committed words through one
+The packed-slot model (`isa_escape_joint.py`, not in this tree) prices a packed slot, w committed words through one
 slot's output, each extracted at e lane instructions, against the credited route alone: a word's load is
 max(step/w, the MMA's issue share/w + (fold + e)/32) on the sheet's rows, and on sm_120 also VF3e's joint rows
 a·MMA + b·lanes. It calls sm_120 open for decodes between A6's 1/2 and the break-even. ε_machine's LP
 (`machine_model/verity_machine_model/eps.py`) also has the lanes route, q* lane instructions a word folded on lanes,
-which is #2755's `per_word` at w → ∞ with e = q*. A packed word's load is 1/w of a credited word's MMA part plus
+which is the model's `per_word` at w → ∞ with e = q*. A packed word's load is 1/w of a credited word's MMA part plus
 (fold + e) lanes. One word made 1/w on the credited route and (1 − 1/w) on the lanes route loads 1/w of the MMA part plus
 (fold + (1 − 1/w)·q*) lanes. So on every row linear in (MMAs, slots, lane instructions) the packed route is dominated
 when e ≥ (1 − 1/w)·q*, and A6's e ≥ 1/2 gives that at q* = 1/2 for every w.
 
-This checks the domination by exact LP on #2755's rows (every device, fold, reading and q*), decodes a radix-64 two-row
-packing bit-exactly (a realization of #2755's credited-row window on words of spread under 64), and puts F1's measured
-sm_120 rates (r20260930-111747-26f3) on the shallow forms #2755 grades "M unmeasured". #2755's constants (`MMA_ISSUE`,
-`JI3E`, the steps) are copied so this runs from main. Stdlib only.
+This checks the domination by exact LP on the model's rows (every device, fold, reading and q*), decodes a radix-64
+two-row packing bit-exactly (a realization of the model's credited-row window on words of spread under 64), and puts
+F1's measured sm_120 rates on the shallow forms the model grades "M unmeasured". The model's constants (`MMA_ISSUE`,
+`JI3E`, the steps) are copied here. Stdlib only.
 Run: `python benchmarks/pouw/rt2_fp/slot_pack.py [--json OUT]`.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ FOLDS = {"0": Q(0), "1/2": Q(1, 2), "FOLD-OPT 3": Q(3), "7/2": Q(7, 2), "fx1 4":
 WS = (Q(3, 2), Q(2), Q(3), Q(4), Q(8), Q(32))
 ES = (Q(1, 2), Q(2, 3), Q(3, 4), Q(1), Q(5, 3), Q(2), Q(3))
 
-# F1 (r20260930-111747-26f3, art:3d41a851…, sm_120 at locked 2100 MHz): MACs an SM-clock, and a slot's physical
+# F1 (sm_120 at locked 2100 MHz): MACs an SM-clock, and a slot's physical
 # positions (a 2:4 shape's half its logical k; F1 counts a sparse form's nonzero products: sp s8 k64 = dense s8 k32).
 F1 = {
     ("s8", False, "m16n8k32"): ("s8_k32", "1022.6734254939101", 32),
@@ -56,7 +56,7 @@ UNMEASURED_2755 = [("bf16", False, "m16n8k8"), ("bf16", True, "m16n8k16"), ("e4m
 
 
 def per_word(dev: str, w: Q | None, e: Q, f: Q, joint: bool) -> dict[str, Q]:
-    """#2755's `per_word`: a word's load on each row, SMSP-cycles; w None is the lanes route (w → ∞)."""
+    """The model's `per_word`: a word's load on each row, SMSP-cycles; w None is the lanes route (w → ∞)."""
     mma = Q(0) if w is None else MMA_ISSUE[dev] / w
     out = {"tensor": Q(0) if w is None else STEP[dev] / w, "issue": mma + (f + e) / 32}
     if joint:
@@ -65,7 +65,7 @@ def per_word(dev: str, w: Q | None, e: Q, f: Q, joint: bool) -> dict[str, Q]:
 
 
 def credited_gain(dev: str, w: Q, e: Q, f: Q, joint: bool) -> Q:
-    """#2755's `packing_gain`: the credited route's load a word over the packed route's."""
+    """The model's `packing_gain`: the credited route's load a word over the packed route's."""
     return max(per_word(dev, Q(1), Q(0), f, joint).values()) / max(per_word(dev, w, e, f, joint).values())
 
 
@@ -148,7 +148,7 @@ def two_row(rng: random.Random, trials: int, L: int = 32) -> dict:
 
 
 def f1_slots() -> dict:
-    """F1's time a slot, 4·P/R SMSP-cycles, against sm_120's step 1/8, on the forms #2755 grades "M unmeasured"."""
+    """F1's time a slot, 4·P/R SMSP-cycles, against sm_120's step 1/8, on the forms the model grades "M unmeasured"."""
     out = {}
     for key in UNMEASURED_2755 + [k for k in F1 if k[0] in ("s8", "f64")]:
         name = f"{key[0]}{'.sp' if key[1] else ''} {key[2]}"

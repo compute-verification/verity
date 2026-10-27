@@ -1,7 +1,7 @@
 // PoUW's device hashing on sm_120, one header for the FP8 and FP4 streams: TurboSHAKE128 (RFC 9861, the binding), SHA-256
 // (FIPS 180-4: NCP's, and the comparison) and BLAKE3 (Pearl-C's seeds, noise lines and keyed tickets), with the pieces a GEMM
-// epilogue calls to hash FP32 accumulator words where they sit. Built from #449's `pearl_c.cu` (TurboSHAKE128, the keyed BLAKE3
-// block), #468's `ncp2_tiles.cuh` (the SHA-256 compression) and the H100 `hash90` (Keccak's LOP3 form).
+// epilogue calls to hash FP32 accumulator words where they sit. Built from `pearl_c.cu` (TurboSHAKE128, the keyed BLAKE3
+// block), `ncp2_tiles.cuh` (the SHA-256 compression) and the H100 `hash90` (Keccak's LOP3 form).
 //
 // Every function compiles for the host (g++ -x c++, no CUDA) and the device (nvcc, sm_120a). `pouw_hash_bench.cu check` prints
 // the same vectors from both, and `check.py` holds them to hashlib, the `blake3` package, verity.ml.crypto.turboshake and
@@ -264,7 +264,7 @@ PH_HD void sha256_iv(uint32_t h[8]) {
 #pragma unroll
   for (int i = 0; i < 8; ++i) h[i] = IV[i];
 }
-// One compression of 16 big-endian words (#468's `tile_compress`): h + K + W summed a round ahead, Ch and Maj as one
+// One compression of 16 big-endian words (`tile_compress`): h + K + W summed a round ahead, Ch and Maj as one
 // three-input operation each, each message word scheduled a round before its use, the working variables renamed, not moved.
 PH_HD void sha256_compress(uint32_t h[8], const uint32_t blk[16]) {
   const uint32_t K[64] = {

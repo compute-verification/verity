@@ -1,4 +1,4 @@
-// The filler scorer's device driver (SCORER, cmp-13; note:20261016T0435Z-report-filler-spec). It times CAP's serving
+// The filler scorer's device driver. It times dcap's serving
 // workload (dcap.cu's decode step and prefill linears, cuBLASLt int8 candidates gated bit for bit before use) beside FILL's
 // DRAM-free filler (dcap.cu's dfill_k ABI: DFill, dfill_make, dfill_launch, dfill_check, dfill_ref) under an arm's
 // placement, interleaved block by block with serving alone. dcap.cu is included unchanged; its main is renamed away.

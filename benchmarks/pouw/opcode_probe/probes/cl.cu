@@ -139,7 +139,7 @@ static const OpProbe PROBES[] = {
     CL_SELF(dsm_red_add_self, "ATOM.E.ADD.STRONG.GPU"),
     CL_SELF64(dsm_atom_exch64_self, "ATOM.E.EXCH.64.STRONG.GPU"),
     CL_SELF64(dsm_atom_cas64_self, "ATOM.E.CAS.64.STRONG.GPU"),
-    // round 7's ROW_ATOME64 (0.29523, r20261016-145213-5ed0): ATOM.E.ADD.64 and its QSPC + CAST.SPIN fallback loop
+    // round 7's ROW_ATOME64 (0.29523): ATOM.E.ADD.64 and its QSPC + CAST.SPIN fallback loop
     CL_SELF64(dsm_red_add64_self, "ATOM.E.ADD.64.STRONG.GPU", .refuse = "loops",
               .note = "red.add.u64 at the own rank: a fallback CAST.SPIN loop nested in the timed loop, untimeable"),
 };

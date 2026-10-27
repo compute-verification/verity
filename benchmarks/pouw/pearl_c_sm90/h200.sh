@@ -4,7 +4,7 @@
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
 #   research run --on vy-dc-h200 --project verity --campaign pouw --source . --cwd clone --timeout 240m \
-#     --env GPU_LEASE_WHO=kernels-pc90 --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
+#     --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
 #
 # Outside any lease: the ship (build.sh's tree) unpacked into this directory and held to its MANIFEST.sha256, nvcc and the
 # card recorded.  Under one lease of at most LEASE_MIN minutes (default 60): run.py's check at the fixture's shape with its
