@@ -1,5 +1,5 @@
 """The served rows' tie (`served_tie.ServedRowsTie_v2`, the routed form) on the compile slice's corpus-smallkv window: the
-honest served rows against the honest batch's committed positions are accepted, and REDTEAM phase 10's six passes, which
+honest served rows against the honest batch's committed positions are accepted, and the six-pass run's rows, which
 the slice accepts under their own registered row, are refused against the batch the server ran. Each negative is refused
 by exactly the checks `check` names, in the circuit's verdict; the circuit is `reference` under any switches and accepts
 only what `check` accepts; a window's blocks (G < P) are each the whole unit's; the port's shared read gives back the ids
@@ -67,7 +67,7 @@ def test_the_honest_window_is_accepted(x):
 
 
 def test_six_passes_are_refused_against_the_batch_the_server_ran(x):
-    """REDTEAM phase 10 finding 2 through the tie. The prover registers the six-pass run's rows (user-1 never admitted),
+    """The six-pass run through the tie. The prover registers the six-pass run's rows (user-1 never admitted),
     consistently: their row is the registered one, so the slice accepts them at 0x1F with a 17-bit charge. The batch the
     server ran admitted user-1 at step 6, 29 prefill tokens beside user-0's decode, and those positions are committed;
     the cheap rows end step 6 at 1 token of its 30 and leave 29 uncovered, so the tie refuses on both bits."""
