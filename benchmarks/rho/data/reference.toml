@@ -38,14 +38,14 @@ k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "ruling: Da
 [fleet.world-h200]
 location = "h200-hgx"
 count = { value = 4.42e7, unit = "location", source = "8.82e30 / (1.583e16 x 3.1536e7 x 0.4); top's 1.8e7 is at 100% use", status = "derived" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruling: Daniel 26 Oct 6:55 PM PDT, mainline 0.1%; one connected unencumbered pool (Daniel 25 Oct, operating points 0.1% and 1%); high: the 25 Oct 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 
 [fleet.world-nvl72]
 location = "gb200-nvl72"
 count = { value = 1.94e6, unit = "location", source = "8.82e30 / (3.6e17 x 3.1536e7 x 0.4); top's 7.8e5 is at 100% use", status = "derived" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruling: Daniel 26 Oct 6:55 PM PDT, mainline 0.1%; one connected unencumbered pool (Daniel 25 Oct, operating points 0.1% and 1%); high: the 25 Oct 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 
@@ -87,6 +87,15 @@ families = ["full"]
 [scenario.reference-onsite-nvl72]
 fleet = "world-nvl72"
 regime = "onsite"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+
+# reference-onsite-h200 with each server's ingress at its declared inputs at W63's toy cadence (NET-92).
+[scenario.onsite-w63]
+fleet = "world-h200"
+regime = "onsite-w63"
 policy = "v4-pro-session"
 horizon = "year"
 run = "v4-pretrain"
