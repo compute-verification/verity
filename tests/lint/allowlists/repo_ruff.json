@@ -42,8 +42,6 @@
     {"file": "benchmarks/hash/dither/j10served.py", "rule": "E402", "count": 3},
     {"file": "benchmarks/hash/dither/kbench.py", "rule": "F821", "count": 5},
     {"file": "benchmarks/hash/dither/overlap.py", "rule": "E731", "count": 1},
-    {"file": "benchmarks/hash/dither/percall_rtt.py", "rule": "E402", "count": 1},
-    {"file": "benchmarks/hash/dither/percall_rtt.py", "rule": "E731", "count": 1},
     {"file": "benchmarks/hash/dither/sbench.py", "rule": "UP017", "count": 2},
     {"file": "benchmarks/hash/dither/tests/test_j10r_ws.py", "rule": "E402", "count": 1},
     {"file": "benchmarks/hash/dither/unitsbench.py", "rule": "E402", "count": 7},
