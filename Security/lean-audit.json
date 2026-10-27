@@ -5969,6 +5969,12 @@
    "assumptions": [],
    "type_hash": "f6d2860cab7c3a1fa7ef9c5606fb73022c00cb5014777733e04e9bf2cad48007"
   },
+  "Flock.SecurityProofs.DeltaPubDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed"],
+   "assumptions": [],
+   "type_hash": "a813a423e9fcecd92d7162f686abe1533dde2a5b1b1e1a17c659b78b3a361e5c"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -12494,7 +12500,8 @@
    "Accounting.SecurityProofs.JointPeriodLive_honest": "lemma: JointPeriodLive's honest witness, soundness's ask (LEAN-64): an honest prover meets every claim, so the joint event is empty at it; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
    "Accounting.SecurityProofs.JointPeriodLive_nontrivial": "lemma: JointPeriodLive's failing witness, soundness's ask (LEAN-64): a one-gate period whose extractor reads the wrong bit fails the integrity claim with probability 1, so the bound is not vacuous; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
    "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": "frozen (no-function): It states no property: it reads Pous.Guarantees.StreamedWipeMeetsInfo, so the lock records its text, and it leaves when StreamedWipeMeetsInfo's own theorem is proved and listed.",
-   "Pous.Guarantees.StreamedWipeMeetsInfo": "unstated: StreamedWipe's retention as conditional mutual information, I(z ; held | c) <= max(M + E - (g+1)b + log2(k C(N,g+1)), 0) + q((g/N)^k + listAdvantage) + 3 bits over uniform z, c and key, with the labels and key hidden (MEM-98, read by the end-to-end overhead bound's WipeState bridge); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under StreamedWipeMeetsInfoStated, and its theorem Pous.SecurityProofs.StreamedWipeMeetsInfo is due Mon 2 Nov with its honest and nontrivial lemmas."
+   "Pous.Guarantees.StreamedWipeMeetsInfo": "unstated: StreamedWipe's retention as conditional mutual information, I(z ; held | c) <= max(M + E - (g+1)b + log2(k C(N,g+1)), 0) + q((g/N)^k + listAdvantage) + 3 bits over uniform z, c and key, with the labels and key hidden (MEM-98, read by the end-to-end overhead bound's WipeState bridge); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under StreamedWipeMeetsInfoStated, and its theorem Pous.SecurityProofs.StreamedWipeMeetsInfo is due Mon 2 Nov with its honest and nontrivial lemmas.",
+   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets up to 2^82, t' ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -39594,7 +39601,15 @@
     "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
     "Flock.Guarantees.SampledKSLivePub": "d3f967c477902566490163001fb7605945785000bf19a79330f51ba829118bf1"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
+  },
+  "Proofs.Flock.Bridge.PublicDeployed": {
+   "digest": "ec0aeebbc912b6af0ab01c53496fda04c4414600addf1604dc41a01295d300bb",
+   "definitions": {
+    "Flock.Bridge.kDep": "42de2a83a7ada5b7648cc8ae849f80addd01693605d8f38a0b276a1788c50800",
+    "Flock.Guarantees.DeltaPubDeployed": "ea36f50d3234447fc82529abdbbac712789c6d8b357f7d74764ae7376087e22f"
+   },
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
   },
   "Proofs.Flock.Bridge.Refused": {
    "digest": "03c8629c14e93927bf2373c5847707d8f319b1d89607fb258f7a9d3d16944469",
@@ -43722,7 +43737,7 @@
     "FlockSoundness.Discharge.ZkLink.ksClosedM1": "7c15d0f99d5d1410d07f04db7c4641abfb062e0106f6de11c87d5538801dc20a",
     "FlockSoundness.Discharge.ZkLink.rateM1": "f5dd0e040b4db220db97929c7a4504a5573b97c7335d216000a0212eea49f545"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered": {
    "digest": "5f05d9c0d438af3248be184b3f3c16ff38a4f45bf9e78cdbbd38ee44776978d8",
