@@ -1,4 +1,4 @@
-"""A party: a next-message machine, sans-IO (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §1).
+"""A party: a next-message machine, sans-IO.
 
 `Security/Definitions/Claims.lean` states parties this way: `Prover.next` gives the next message from the messages so far
 and the prover's tape, `Verifier.next` the next from the prover's messages and its coins. A `Party` is that function as an

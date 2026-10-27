@@ -1,6 +1,5 @@
-"""The deployment configuration (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to
-00:30Z): the public file a run starts from (`verity run CONFIG`), which `verity config new | check | hash` writes, checks
-and hashes.
+"""The deployment configuration: the public file a run starts from (`verity run CONFIG`), which `verity config new | check |
+hash` writes, checks and hashes.
 
     format = "verity/config/v0"
     protocols = ["sampled-proofs", "certifier"]      the components, by the six subprotocols' names

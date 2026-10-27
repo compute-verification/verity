@@ -1,5 +1,4 @@
-"""Channels: ordered pipes of frames between two parties, untrusted by both
-(`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §2, §4.4). The runtime holds one end of a pipe per party
+"""Channels: ordered pipes of frames between two parties, untrusted by both. The runtime holds one end of a pipe per party
 and channel:
 
 - `MemoryPipe`: in one process, for tests and for the parties of one machine; in a simulated run each frame arrives

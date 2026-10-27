@@ -81,7 +81,7 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("ajtai-n64", "Ajtai n = 64", algebraic=True),
     Instance("ajtai-n128", "Ajtai n = 128", algebraic=True),
     Instance("io-getrandombytes", "IO.getRandomBytes"),
-    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window (#423)
+    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window
     Instance("python-secrets", "Python's secrets"),
     # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), drawn after the prover's message
     Instance("flock-coin-server", "Flock's coin server"),
@@ -162,11 +162,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "whose ops are charged to accounts other than the compute account", "Rate device"),
     # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
     # they encode and the rest of the word, in less than that of the compute account's units, by any schedule. At k = 2
-    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits (r20261012-163319-2804), and fplll, the
-    # best of five reducers, costs 12.3x the claim at 512 bits (r20261012-164518-ccba); the 1.2x at the reduction's
-    # operation-count floor is an estimate from operation counts, unmeasured (r20261012-170958-f49a). At k = 1 with the
-    # payload known, F27 (r20261012-132841-565e) is such a completion, at a floor of half a GMP extended GCD
-    # (r20261012-164518-ccba). In partial-completion form it is `Accounting.Assumptions.WorkHardness`
+    # a 4-dimensional lattice completes a tail of up to b/10 bits, and fplll, the best of five reducers, costs 12.3x the
+    # claim at 512 bits; the 1.2x at the reduction's operation-count floor is an estimate from operation counts,
+    # unmeasured. At k = 1 with the payload known, a 2-dimensional lattice is such a completion, at a floor of half a GMP
+    # extended GCD. In partial-completion form it is `Accounting.Assumptions.WorkHardness`
     # (Security/Definitions/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
@@ -227,7 +226,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form, a premise of the
     # proof-of-space pool's count (Accounting.Guarantees.Actual.AnsweredOfQuiet, WipeReadHeld): with the memory
     # challenger's acceptance of late answers only (Accounting.Assumptions.LateAnswers) it refuses a label sent before
-    # its read (red team 3's H2). Falsified by a delivery slower than the ceiling, measured on the server's certified
+    # its read. Falsified by a delivery slower than the ceiling, measured on the server's certified
     # egress links
     Entry("latency-ceiling", "assumption",
           "Latency ceiling: every wire from the audited server to the network certifier on its egress delivers within "
@@ -244,9 +243,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
-    # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
-    # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
+    # the modelled single-core floor (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the
+    # 8-core cooperation run (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
     # stated device falsifies it
     Entry("pous-ring-speed", "assumption",
           "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
@@ -280,7 +278,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
@@ -314,8 +312,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
-    # What the declared capacity Π rests on, per node and per window (ASK-74 = A; note:20261019T0455Z-draft-rt-scope,
-    # "Device identity and clock"): ε is relative to Π (decision 100), and ASK-65 = A made the floor the node's. Its
+    # What the declared capacity Π rests on, per node and per window: ε is relative to Π, and the floor is the node's. Its
     # trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's placement; nothing checks
     # it at run time but the prover's own driver, and NVIDIA's attestation states no clock and can't rule out an
     # undeclared GPU
@@ -324,7 +321,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
@@ -482,7 +479,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises UnitFixed rests on (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
