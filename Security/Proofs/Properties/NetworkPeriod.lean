@@ -123,19 +123,22 @@ theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Ans
   unfold auditCheck at h
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
+    simp only [ha, bind, Except.bind] at h
     by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-      simp [c1, ha, bind, Except.bind, refuse, pure, Except.pure] at h
+      simp [c1, refuse, pure, Except.pure] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
+      simp only [ha, hf, bind, Except.bind] at h
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-        simp [c1, ha, hf, bind, Except.bind, refuse, pure, Except.pure] at h
+        simp [c1, refuse, pure, Except.pure] at h
     | ok g =>
       refine ⟨prof, pub, g, ha, hf, ?_⟩
+      simp only [ha, hf, bind, Except.bind] at h
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
         by_cases c2 : g.units = a.units <;> by_cases c3 : g.drawn = g.units <;>
-          simp_all [bind, Except.bind, refuse, pure, Except.pure]
+          simp_all [refuse, pure, Except.pure]
 
 /-- The refusal refuses no audit drawn whole: one passes the tied check as it passes the untied one. -/
 theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Answer} {f : Facts}
@@ -143,17 +146,20 @@ theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Registration} {x : Co
   unfold auditCheck at h ⊢
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
+    simp only [ha, bind, Except.bind] at h
     by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-      simp [c1, ha, bind, Except.bind, refuse, pure, Except.pure] at h
+      simp [c1, refuse, pure, Except.pure] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
+      simp only [ha, hf, bind, Except.bind] at h
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-        simp [c1, ha, hf, bind, Except.bind, refuse, pure, Except.pure] at h
+        simp [c1, refuse, pure, Except.pure] at h
     | ok g =>
+      simp only [ha, hf, bind, Except.bind] at h ⊢
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-        by_cases c2 : g.units = a.units <;> simp_all [bind, Except.bind, refuse, pure, Except.pure]
+        by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
 
 theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
     (h : check p c e = .accept pub prof) : c.audits.size = p.audits.size := by
