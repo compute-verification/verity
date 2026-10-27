@@ -339,9 +339,13 @@ theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circ
   have hdelta :
       (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ (storeHold d (S := F + d.chip)) = 0 :=
     pr_eq_zero fun x hx => hx.2 (Finset.mem_univ _)
+  have key : ε₀ + Pous.StreamedWipe.prfAdvantage prf
+        ((cheat d s b n k carry).distinguisher (fun _ _ _ => True) Finset.univ (storeHold d) (storeKeep hF)) +
+      (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ (storeHold d (S := F + d.chip)) = ε₀ := by
+    rw [hadv, hdelta, add_zero, add_zero]
   beta_reduce at h
-  rw [value_draw_pr, Pous.pr_eq_one, hadv, hdelta, add_zero, add_zero] at h
-  · exact absurd h (not_le.mpr hε)
+  rw [value_draw_pr, Pous.pr_eq_one] at h
+  · exact absurd (h.trans_eq key) (not_le.mpr hε)
   · exact fun x => ⟨trivial, storeKeep_hold hF _ _ _⟩
 
 /-- The segment's published `foreign_bits` fit in its store beside its on-chip state. -/
