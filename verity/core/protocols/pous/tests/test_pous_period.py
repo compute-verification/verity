@@ -240,8 +240,8 @@ def test_the_records_keep_only_the_ledger_entries_their_window_cites(tmp_path):
 
 def test_a_ledger_that_opens_no_cited_session_is_refused(tmp_path):
     """A copy of the ledger that doesn't open the session a close record beside it cites (a head older than the
-    window's open) is refused, naming the file and the session, and so is a copy with no close record beside it: the
-    store never holds a ledger cut short of what its window cites."""
+    window's open) is refused, naming the file and the session: the store never holds a ledger cut short of what its
+    window cites. A copy with no close record beside it cites nothing, and is kept whole."""
     lines, s, kept = _ledger(8)
     files = _window(tmp_path, lines, s)
     (tmp_path / "pouw/salt-session/windows.jsonl").write_text("".join(x + "\n" for x in lines[:kept[1] + 1]))
@@ -250,9 +250,12 @@ def test_a_ledger_that_opens_no_cited_session_is_refused(tmp_path):
     (tmp_path / "pouw/salt-session/windows.jsonl").write_bytes(files["pouw/salt-session/windows.jsonl"])
     (tmp_path / "pouw/elsewhere").mkdir()
     (tmp_path / "pouw/elsewhere/windows.jsonl").write_bytes(files["pouw/salt-session/windows.jsonl"])
-    with pytest.raises(ValueError, match="^pouw/elsewhere/windows.jsonl: no challenger session is cited beside"):
-        period.records(tmp_path)
+    got = _unframe(period.records(tmp_path))
+    assert got["pouw/elsewhere/windows.jsonl"] == files["pouw/salt-session/windows.jsonl"]
+    assert got["pouw/salt-session/windows.jsonl"].decode().split("\n") == [*(lines[i] for i in kept), ""]
     assert period.cited([json.loads(x) for x in lines], {s}) == kept
+    with pytest.raises(ValueError, match="^no challenger session is cited beside the auditor's ledger"):
+        period.cited([json.loads(x) for x in lines], set())
 
 
 def test_pous_accepts_the_cut_records_as_it_does_the_whole(tmp_path):

@@ -452,10 +452,12 @@ def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
     copy is a `.jsonl` file each of whose lines is a ledger entry (infra's ``windows.jsonl``) or a list of such lines in a
     `.json` document (`window_salt.Issued.live`'s ``ledger``); the sessions it cites are those of the challenger close
     records (``{chain, ended, lines, session, signature}``, as `.json` files or inside one) under the copy's directory,
-    its own document included. A document holding a copy is written back as `json.dumps(doc, sort_keys=True)`, as
-    ``salt.json`` is written; every other file is kept as it is. Raises `ValueError` naming the file when a copy would
-    keep no entry of a session cited beside it, so the records never hold a ledger cut short of what their window cites.
-    PoUW's verifier reads the whole ledger (every entry, chained from seq 0), so the uncut copy it reads stays on disk."""
+    its own document included. A copy with no close record beside it is kept whole: nothing cites its entries, so
+    nothing says what a reader of it needs. A document holding a cut copy is written back as
+    `json.dumps(doc, sort_keys=True)`, as ``salt.json`` is written; every other file is kept as it is. Raises
+    `ValueError` naming the file when a copy would keep no entry of a session cited beside it, so the records never hold
+    a ledger cut short of what their window cites. PoUW's verifier reads the whole ledger (every entry, chained from
+    seq 0), so the uncut copy it reads stays on disk."""
     docs: dict[str, Any] = {}
     for name, data in files.items():
         if name.endswith(".json") and b'"session"' in data:
@@ -478,10 +480,12 @@ def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
     for name, doc in docs.items():
         walk(name, doc)
 
-    def cut(name: str, lines: list[str], entries: list[dict]) -> list[str]:
+    def cut(name: str, lines: list[str], entries: list[dict]) -> list[str] | None:
         scope = name.rsplit("/", 1)[0] + "/" if "/" in name else ""
+        if not (sessions := {s for n, s in closes if n.startswith(scope)}):
+            return None
         try:
-            return [lines[i] for i in cited(entries, {s for n, s in closes if n.startswith(scope)})]
+            return [lines[i] for i in cited(entries, sessions)]
         except ValueError as e:
             raise ValueError(f"{name}: {e}") from None
 
@@ -492,15 +496,15 @@ def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
                 lines = [x for x in data.decode().split("\n") if x]
             except UnicodeDecodeError:
                 continue
-            if (entries := _ledger(lines)) is not None:
-                out[name] = "".join(x + "\n" for x in cut(name, lines, entries)).encode()
+            if (entries := _ledger(lines)) is not None and (kept := cut(name, lines, entries)) is not None:
+                out[name] = "".join(x + "\n" for x in kept).encode()
 
     def copies(name: str, v: Any) -> Any:
         if isinstance(v, dict):
             return {k: copies(name, x) for k, x in v.items()}
         if isinstance(v, list):
             if (entries := _ledger(v)) is not None:
-                return cut(name, v, entries)
+                return v if (kept := cut(name, v, entries)) is None else kept
             return [copies(name, x) for x in v]
         return v
 
