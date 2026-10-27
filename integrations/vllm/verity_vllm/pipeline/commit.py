@@ -1465,7 +1465,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             asz["host_memory_cap_source"] = host_cap_src
             # the record NAMES the admission that governs this run (a field, not an
             # inference from which file is present): a run must satisfy the admission whose domain is its retention mode -- the bounded
-            # HOST BOUND (below) for --bounded-staging, the F-dA-15 host-retention envelope for the unbounded --retain host path; the other
+            # HOST BOUND (below) for --bounded-staging, the host-retention envelope for the unbounded --retain host path; the other
             # stays on the record beside it and does not refuse alone.  Rides on arena_sizing_<kind>.json and host_admission_<kind>.json.
             asz["admission_of_record"] = {
                 "governing": ("bounded_host_admission" if getattr(com, "bounded", False)
@@ -1600,18 +1600,18 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 asz["admission"] = adm
                 (out / f"admission_{kind}.json").write_text(json.dumps(adm, indent=1, default=str) + "\n")
                 _s = adm["scheduled"]
-                print(f"[delta] F-dA-15 ADMISSION ({kind}): scheduled raw {adm['scheduled_raw_bytes'] >> 20} MiB over {_s['steps']} steps "
+                print(f"[delta] HOST ADMISSION ({kind}): scheduled raw {adm['scheduled_raw_bytes'] >> 20} MiB over {_s['steps']} steps "
                       f"({_s['prompt_tokens']} prompt tokens + {_s['decode_rows']} decode rows, lag {_s['lag']}; peak step {_s['peak_step']} = "
                       f"{_s['peak_step_bytes'] >> 20} MiB) -> predicted host {adm['predicted_host_bytes'] >> 20} MiB vs limit "
                       f"{(host_cap or 0) >> 20 if host_cap else 'none'} MiB: {'ADMITTED' if adm['admitted'] else 'REFUSED'} -- {adm['why']}", flush=True)
                 if not adm["admitted"] and not adm["override"] and adm["governs_this_run"]:
-                    print(f"[delta] REFUSE: F-dA-15 admission -- {adm['why']} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
+                    print(f"[delta] REFUSE: host admission -- {adm['why']} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
                     sys.exit(3)
                 if not adm["admitted"] and not adm["governs_this_run"]:
-                    print(f"[delta] NOTE F-dA-15 envelope admission not met ({adm['why'][:160]}) -- recorded, not governing: this is a --bounded-staging run "
+                    print(f"[delta] NOTE host-retention envelope admission not met ({adm['why'][:160]}) -- recorded, not governing: this is a --bounded-staging run "
                           f"(the bounded HOST BOUND above governs)", flush=True)
                 elif not adm["admitted"]:
-                    print("[delta] WARNING F-dA-15 admission OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1 (named on the record): the run may be OOM-killed", flush=True)
+                    print("[delta] WARNING host admission OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1 (named on the record): the run may be OOM-killed", flush=True)
             except SystemExit:
                 raise
             except Exception as _ae:  # noqa: BLE001  -- an unreadable schedule is named, never a silent skip of the admission
@@ -1623,9 +1623,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                     "why": f"admission not computed: {_ae!r}"[:300] + (" -- refused: an uncomputed admission is not an admission (--retain host)" if _host and not _ovr else "")}
                 (out / f"admission_{kind}.json").write_text(json.dumps(asz["admission"], indent=1, default=str) + "\n")
                 if _host and not _ovr:
-                    print(f"[delta] REFUSE: F-dA-15 admission not computed on a --retain host run: {_ae!r} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
+                    print(f"[delta] REFUSE: host admission not computed on a --retain host run: {_ae!r} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
                     sys.exit(3)
-                print(f"[delta] WARNING F-dA-15 admission not computed: {_ae!r}" + (" (OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1, named on the record)" if _host else " (retain != host: nothing pinned for the run)"), flush=True)
+                print(f"[delta] WARNING host admission not computed: {_ae!r}" + (" (OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1, named on the record)" if _host else " (retain != host: nothing pinned for the run)"), flush=True)
             if getattr(com, "windowed", False):
                 # windowed staging ring instead of per-step blocks; device staging = slots x window regardless of the step size
                 wi = com.enable_windows(asz)
