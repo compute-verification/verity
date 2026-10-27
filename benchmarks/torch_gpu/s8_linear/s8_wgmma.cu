@@ -386,6 +386,9 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
   int s = 0;
   uint32_t ph = 0;
   int32_t d[NA];
+  // the reduction's sums, carried across tiles like d: a fresh array would be undefined at each tile's first atom, and the
+  // compiler's definitions of it could land between the fence and the atom, serializing the wgmma pipeline
+  int32_t zs[RR > 0 ? RR / 2 : 1];
   for (int t = first_u; t < total; t += step_u) {
     int tm, tn;
     const int u = t % units;
@@ -455,7 +458,6 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
       // released once no atom reads it (s8mrb: once the bulk add has read the sums over it)
       using G = Red<TM, BN, RR>;
       constexpr int CH = G::CH, Q = G::Q, RST = G::RST;
-      int32_t zs[RR / 2];
       int rs[RST];
       a_order<0, NA / 8>(d);
       WG_FENCE;
