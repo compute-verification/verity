@@ -571,6 +571,28 @@ goes out).
 - **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
   `COMPLETE_*` class.
 
+**The window's withheld challenger** (`challenger-withheld/v1`: `SessionConfig::challenger`, `FC_COINS=challenger` with
+`FC_COIN_SLOT` and `FC_COIN_RELAY`, the firewall's `Flock.Firewall.Session.answerChallenger`). A sampled-proofs v2 window
+takes every coin from the auditor's challenger device, which releases its window's commitment only at its close, so
+nothing is committed at `Hello`:
+- `Hello`'s `coins` is `{scheme: "challenger-withheld/v1", slot: i}`, the window's session `i`, answered `Ok`. Under the
+  firewall the prover receives the loop's own 64-byte handle, which names the session.
+- At `Commit` the server asks the challenger for family `slot/<i>/session` after the SHA-512 of the tables' root_B
+  digests in key order, `⌈points·m/4⌉` coins, and the link points are their bytes.
+- Round k of stream `s` asks family `slot/<i>/<s>` after the stream's chain `a_k = SHA-512(a_{k-1} ‖ SHA-512(round k))`,
+  `a_{-1}` empty, for `⌈n/4⌉` coins. A coin is 64 bytes and an F128 is 16 of them (hi, then lo, big-endian), so the
+  record's hex is the bytes'. Under the chain, two rounds of equal bytes (two squeezes of one count) are two uses, and
+  round k's coins can't be asked before round k-1's bytes are fixed.
+- Each use is asked once. A refusal (the challenger released those coins already) stops the session, and nothing is
+  retried.
+- The audit holds the record to the challenger's log. v2's `roundsWhy` recomputes every use from the record
+  (`SampledProofs.OneStageZk.sessionUses`), and the log must release exactly those, each once, in order.
+  `flock-verify verify --challenger-slot i` checks the session itself (`Flock.Zk.verifyChallenger`).
+- Zero knowledge against the auditor rests on the challenger being its trusted device (`trusted-host`): its coins are
+  uniform and independent of the prover's messages. This section's simulator needs a commitment at `Hello`, and
+  `Zk.verify`'s theorems cover the keyed coin tree only, so this path is outside them until they are instantiated at
+  the challenger's coins.
+
 ## 10. The firewall's send check: nothing leaves the GPU that the firewall did not fix
 
 In a recursive session the developer runs a **firewall** it trusts between its workers, which nobody trusts, and the

@@ -271,14 +271,19 @@ def _uses(slot: int, text: str) -> dict:
         return {"refused": str(refused)}
 
 
-def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_digest():
+def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_streams_chain():
     """`session_uses` (the prover's side of v2's round-coins check, `OneStageZk.roundsWhy`): the link points after the
-    SHA-512 of the tables' root_B digests in key order, then each round after its own digest, a 64-byte coin for each
-    four F128s, under the session's slot."""
+    SHA-512 of the tables' root_B digests in key order, then each round after its stream's chain (the SHA-512 of the
+    previous round's `after` and its own digest), a 64-byte coin for each four F128s, under the session's slot. Two
+    rounds of equal bytes are two uses."""
     pts = ["0" * 32, "1" * 32, "2" * 32, "3" * 32, "4" * 32]
+    a0 = hashlib.sha512(b"\x01" * 64).digest()
+    a1 = hashlib.sha512(a0 + b"\x02" * 64).digest()
     assert PF.session_uses(3, json.dumps(_record())) == [
         ("slot/3/session", hashlib.sha512(b"\xaa" * 64 + b"\xbb" * 64).digest(), 2, pts),
-        ("slot/3/t/rep0", b"\x01" * 64, 2, ["5" * 32] * 5), ("slot/3/t/rep0", b"\x02" * 64, 1, ["6" * 32] * 4)]
+        ("slot/3/t/rep0", a0, 2, ["5" * 32] * 5), ("slot/3/t/rep0", a1, 1, ["6" * 32] * 4)]
+    same = PF.session_uses(3, json.dumps(_record(**{"streams.0.rounds.1.msg_sha512": "01" * 64})))
+    assert same[1][1] != same[2][1] and same[2][1] == hashlib.sha512(a0 + b"\x01" * 64).digest()
     for name, r in REFUSED.items():
         assert "refused" in _uses(0, r if isinstance(r, str) else json.dumps(r)), name
 

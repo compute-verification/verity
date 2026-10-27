@@ -1207,7 +1207,8 @@ pub struct SessionConfig {
     pub draw_given: Option<Value>,
     /// The window's withheld challenger ([`CHALLENGER_SCHEME`]), as session `slot` of the window: the link points are the
     /// challenger's release for `slot/<slot>/session` after the SHA-512 of the tables' root_B digests, and each round's coins
-    /// its release for `slot/<slot>/<stream>` after the SHA-512 of the round's bytes, each asked once ([`ChallengerHook`]).
+    /// its release for `slot/<slot>/<stream>` after the stream's chain at that round (`after_k = SHA-512(after_{k-1} ‖
+    /// SHA-512(round k))`, `after_{-1}` empty: `Server::round_chain`), each asked once ([`ChallengerHook`]).
     /// Nothing is committed at `Hello`: the challenger releases its commitment only at its close, and the audit holds the
     /// record's coins to it (sampled proofs' `roundCoins`).
     pub challenger: Option<u32>,
@@ -1485,6 +1486,13 @@ impl Server {
             return Err(format!("challenger: {label}: {} bytes for {} coins", b.len(), n.div_ceil(COIN_F128S)));
         }
         challenger_f128s(&b, n)
+    }
+
+    /// What `stream`'s next round on the window's challenger is released after, before its own bytes: nothing at its first
+    /// round, else its last round's `after`, so round k's is `dg(after_{k-1} ‖ dg(round k))`. Two rounds of equal bytes
+    /// (two squeezes of one count) are two uses, and round k's coins can only be asked once round k-1's bytes are fixed.
+    fn round_chain(&self, stream: &str) -> Vec<u8> {
+        self.streams[stream].rounds.iter().fold(Vec::new(), |a, r| self.cfg.dg(&[a, r.sha.clone()].concat()))
     }
 
     pub fn try_new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Result<Self, String> {
@@ -1928,7 +1936,7 @@ impl Server {
                 }
                 let at = self.streams[&stream].rounds.len();
                 let (coins, answer) = if self.cfg.challenger.is_some() {
-                    let after = self.cfg.dg(&content);
+                    let after = self.cfg.dg(&[self.round_chain(&stream), self.cfg.dg(&content)].concat());
                     match self.challenger_coins(&stream, &after, n as usize) {
                         Ok(c) => (c.clone(), c),
                         Err(e) => return self.refuse(e),
@@ -2688,8 +2696,9 @@ mod coin_server_tests {
 
     /// On the window's challenger, `Hello` commits nothing; the link points are the challenger's release for
     /// `slot/<i>/session` after the SHA-512 of the root_B digests, and each round's coins its release for
-    /// `slot/<i>/<stream>` after the round's SHA-512, the bytes' own hex in the record; a round asked again after the same
-    /// bytes is the challenger's to refuse, and the session stops there.
+    /// `slot/<i>/<stream>` after the stream's chain (`round_chain`), the bytes' own hex in the record; a later round of the
+    /// same bytes is another use, and a use whose coins the challenger already released is its to refuse, and the session
+    /// stops there.
     #[test]
     fn challenger_coins_are_asked_once_after_each_commitment_and_a_replayed_round_stops_the_session() {
         let (mut s, asks) = on_challenger();
@@ -2715,20 +2724,28 @@ mod coin_server_tests {
             r => panic!("round: {r:?}"),
         };
         assert_eq!(coins.len(), 5);
+        let a1 = c.dg(&c.dg(&content));
         {
             let a = asks.lock().unwrap();
-            assert_eq!((a[1].0.as_str(), &a[1].1[..], a[1].2), ("slot/5/t/rep0", &c.dg(&content)[..], 2));
+            assert_eq!((a[1].0.as_str(), &a[1].1[..], a[1].2), ("slot/5/t/rep0", &a1[..], 2));
         }
         let rec = s.record_json();
         let first = rec["streams"][0]["rounds"][0]["coins"][0].as_str().unwrap().to_string();
-        let b0: Vec<u8> = (0..16).map(|i| (slot_family(5, &stream).len() as u8) ^ c.dg(&content)[0] ^ i as u8).collect();
+        let b0: Vec<u8> = (0..16).map(|i| (slot_family(5, &stream).len() as u8) ^ a1[0] ^ i as u8).collect();
         assert_eq!(first, hex(&b0), "the record's F128 is the coin bytes' own hex");
         assert_eq!(rec["streams"][0]["rounds"][0][format!("msg_{}", c.dk())], json!(hex(&c.dg(&content))));
-        // the same round's bytes again: a second ask after the same digest, refused, and the session stops
-        let again = s.handle(Req::Round { stream: stream.clone(), content, n: 5 });
+        // the same bytes in the next round (two squeezes of one count): another use, after the chain
+        assert!(matches!(s.handle(Req::Round { stream: stream.clone(), content: content.clone(), n: 5 }), Resp::Coins(_)));
+        let a2 = c.dg(&[a1, c.dg(&content)].concat());
+        assert_eq!(asks.lock().unwrap()[2].1[..], a2[..]);
+        // the next use's coins already released (asked on another connection): refused, and the session stops
+        let next = frame(OP_BYTES, b"x");
+        let a3: [u8; 64] = c.dg(&[a2, c.dg(&next)].concat()).try_into().unwrap();
+        asks.lock().unwrap().push(("slot/5/t/rep0".into(), a3, 1));
+        let again = s.handle(Req::Round { stream: stream.clone(), content: next, n: 1 });
         assert!(matches!(again, Resp::Refused(ref e) if e.contains("open already")), "{again:?}");
         assert!(matches!(s.handle(Req::Round { stream, content: vec![0; 16], n: 1 }), Resp::Refused(ref e) if e.contains("aborted")));
-        assert_eq!(asks.lock().unwrap().len(), 2);
+        assert_eq!(asks.lock().unwrap().len(), 4);
     }
 
     /// A server on the window's challenger with no connection to it refuses `Hello`; a configuration that also commits a

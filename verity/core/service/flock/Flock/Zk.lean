@@ -336,7 +336,7 @@ def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs :
 
 /-- The coin source of a session on the window's withheld challenger (live PROTOCOL.md §9): its link points are the
 challenger's release for `slot/<i>/session` after the SHA-512 of its tables' root_B digests, each round's coins its release
-for `slot/<i>/<stream>` after the round's SHA-512. -/
+for `slot/<i>/<stream>` after the stream's chain, `a_k = SHA-512(a_{k-1} ‖ SHA-512(round k))` from `a_{-1}` empty. -/
 def CHALLENGER_SCHEME : String := "challenger-withheld/v1"
 
 /-- `Hello`'s `coins` on the window's challenger as session `slot`. -/
@@ -427,7 +427,7 @@ private def s (x : String) : Json := Json.str x
 
 /-- The identity's `verifier_coins` on the window's withheld challenger (upstream's `CHALLENGER_COINS`). -/
 def CHALLENGER_COINS : String :=
-  "the window's withheld challenger's (challenger-withheld/v1): the link points its release for slot/<i>/session after the sha512 of the tables' root_b digests, each round's coins its release for slot/<i>/<stream> after the round's sha512, each asked once; nothing committed at hello, and the audit holds the record's coins to the challenger's log"
+  "the window's withheld challenger's (challenger-withheld/v1): the link points its release for slot/<i>/session after the sha512 of the tables' root_b digests, each round's coins its release for slot/<i>/<stream> after the stream's chain sha512(previous round's after || sha512(round)), each asked once; nothing committed at hello, and the audit holds the record's coins to the challenger's log"
 
 /-- The identity's `hooks` for a `--zk` statement (upstream's `zk_identity`): what is masked, and how; `tables` for a session
 of several tables; `os` when the prover's every random value is the OS's bytes (`Tags.osMasks`), else its pads and every

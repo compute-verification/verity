@@ -258,10 +258,11 @@ def test_a_held_v2_session_serves_each_use_once_and_settles_them_in_the_sessions
     rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
     rb = "ee" * 64
     points_after = hashlib.sha512(bytes.fromhex(rb)).hexdigest()
-    r0, r1 = "01" * 64, "02" * 64
+    m0, m1 = "01" * 64, "02" * 64
     record = {"link": {"points": [["11" * 16] * 5], "root_b_sha512": {"circuit": rb}},
-              "streams": [{"stream": "circuit/rep0", "rounds": [{"msg_sha512": r0, "coins": ["22" * 16] * 4}]},
-                          {"stream": "circuit/rep1", "rounds": [{"msg_sha512": r1, "coins": ["33" * 16] * 6}]}]}
+              "streams": [{"stream": "circuit/rep0", "rounds": [{"msg_sha512": m0, "coins": ["22" * 16] * 4}]},
+                          {"stream": "circuit/rep1", "rounds": [{"msg_sha512": m1, "coins": ["33" * 16] * 6}]}]}
+    r0, r1 = (hashlib.sha512(bytes.fromhex(m)).hexdigest() for m in (m0, m1))
     manager, draws, opener = local(tmp_path, monkeypatch, [0], reserve=lambda needs: AC.v2_families(needs, 1), held=True)
     relay = None
     try:

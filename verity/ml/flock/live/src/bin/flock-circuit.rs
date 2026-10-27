@@ -336,7 +336,8 @@ fn zk_identity(c: &Composite) -> Value {
 /// The verifier's coins under `FC_COINS=challenger`, as the identity pins them (Lean's `Flock.Zk.CHALLENGER_COINS`).
 const CHALLENGER_COINS: &str = "the window's withheld challenger's (challenger-withheld/v1): the link points its release for \
                                 slot/<i>/session after the sha512 of the tables' root_b digests, each round's coins its release \
-                                for slot/<i>/<stream> after the round's sha512, each asked once; nothing committed at hello, and \
+                                for slot/<i>/<stream> after the stream's chain sha512(previous round's after || sha512(round)), each \
+                                asked once; nothing committed at hello, and \
                                 the audit holds the record's coins to the challenger's log";
 
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).

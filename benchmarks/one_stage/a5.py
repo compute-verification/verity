@@ -462,9 +462,9 @@ def v2_audit(a: argparse.Namespace, rec: dict, mine: CS.Window, want: dict, leaf
     params = {**RP.params(mine.program, mine.query, mine.law, want, leaf_layer,
                           str(Fraction(a.delta).limit_denominator(10**12)), partition=part, work_table=mine.work_table),
               "challenger": {"key": published["key"], "label": AC.FAMILY}, "window_root": a.window_root}
-    evidence = {"draw": draw, "instances": given["instances"], "proved_units": given["proved_units"], "receipt": receipt,
-                "served": given["served"], "session_roots": given["session_roots"], "sessions": sessions,
-                "statement": statement, "verdicts": verdicts, "coins": ev}
+    evidence = RP.strings({"draw": draw, "instances": given["instances"], "proved_units": given["proved_units"],
+                           "receipt": receipt, "served": given["served"], "session_roots": given["session_roots"],
+                           "sessions": sessions, "statement": statement, "verdicts": verdicts, "coins": ev})
     kw = {"circuit_sha512": PF.file_sha512(proof.circuit), "registered": reads.get(mm["m"].key)}
     out = PF.check_v2(params, rec, evidence, proof, coins=[segs], **kw)
     bad = {"v2-no-round-coins": []}

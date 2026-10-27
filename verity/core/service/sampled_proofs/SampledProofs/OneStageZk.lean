@@ -316,8 +316,9 @@ def pointsAfter (link : Json) : V ByteArray := do
 
 /-- Session `slot`'s uses of the challenger's coins, each with the coins (as the record's F128 hex) its bytes must
 begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`, then each stream's rounds in the
-record's order, of family `slot/<slot>/<stream>` after the round's `msg_sha512` (`Round.sha`); `⌈n/4⌉` coins of 64
-bytes for `n` F128s. -/
+record's order, of family `slot/<slot>/<stream>` after the stream's chain at that round, `a_k = SHA-512(a_{k-1} ‖
+msg_sha512_k)` from `a_{-1}` empty (live PROTOCOL.md §9), so two rounds of equal bytes are two uses; `⌈n/4⌉` coins of
+64 bytes for `n` F128s. -/
 def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
   let j ← (Json.parse record).mapError (s!"record: not JSON: {·}")
   let link := getD j "link"
@@ -330,11 +331,13 @@ def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Arra
     let .str name := getD s "stream" | throw "record: a stream's name is not a string"
     if name == POINTS then throw s!"record: a stream is named {POINTS}, the link points' family"
     let .arr rs := getD s "rounds" | throw s!"record: {name}'s rounds are not a list"
+    let mut chain := ByteArray.empty
     for r in rs do
       let .str sha := getD r "msg_sha512" | throw s!"record: a round of {name} has no msg_sha512"
       if sha.length != 128 then throw s!"record: a round of {name}'s msg_sha512 is not 64 bytes of hex"
       let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
-      out := out ++ [({ label := Hello.slotStream slot name, after := ← Flock.unhex sha, coins := (cs.size + 3) / 4 }, cs)]
+      chain := Flock.Sha512.hash (chain ++ (← Flock.unhex sha))
+      out := out ++ [({ label := Hello.slotStream slot name, after := chain, coins := (cs.size + 3) / 4 }, cs)]
   return out
 
 /-- Why the coins `ξ` don't begin with the F128s `want` (record hex, `{hi:016x}{lo:016x}`, 16 bytes each); none when
