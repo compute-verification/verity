@@ -328,8 +328,8 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
 
 
 def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
-    """A sync gates each PR on its merge onto `next`, every PR below it included (#4183's gate held drive's tick ~20 min a PR on
-    26 Oct): with the cache, N merges cost N judgments, not N(N+1)/2."""
+    """A sync gates each PR on its merge onto `next`, every PR below it included: with the cache, N merges cost N judgments, not
+    N(N+1)/2."""
     base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
     heads = []
     for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
@@ -412,8 +412,8 @@ def test_a_revert_and_a_pure_move_are_exempt(linted):
 
 
 def test_once_main_moves_a_passed_change_is_not_judged_again_and_a_failed_one_is(repo, monkeypatch):
-    """Drive's sync after a landing gates `next` on a new `main`: keyed by BASE, every verdict missed and the first sync's gate run
-    went past drive's 600 s (27 Oct, #4927). Only a failed change's exemptions read BASE, so only it is judged again."""
+    """Drive's sync after a landing gates `next` on a new `main`: keyed by BASE, every verdict would miss and the first sync's gate
+    run would pass drive's 600 s. Only a failed change's exemptions read BASE, so only it is judged again."""
     base = repo.git("rev-parse", "main")
     repo.git("checkout", "-q", "-b", "ok", base)
     ok = repo.commit("retires A", {"integrations/vllm/verity_vllm/a.py": "A = 2\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
@@ -433,8 +433,8 @@ def test_once_main_moves_a_passed_change_is_not_judged_again_and_a_failed_one_is
 
 
 def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, monkeypatch):
-    """26 Oct on drive's pod: `git worktree remove --force` failed ("Directory not empty"), the gate exited 2, and the sync left
-    the PR out of `next`."""
+    """When `git worktree remove --force` fails ("Directory not empty"), the gate still decides the verdict: it doesn't exit 2,
+    which would leave the PR out of `next`."""
     linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
                                                        P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
     run = subprocess.run

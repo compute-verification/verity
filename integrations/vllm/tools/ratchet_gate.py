@@ -1,5 +1,5 @@
-"""The ratchet rule: no change grows the vLLM integration's ratchets, and a change to a lint is judged like source (Daniel's
-delegation to the vLLM coordinator, 25 Oct 09:40Z).  Dedicated cleanup lanes pay the exceptions down; a feature PR owes none.
+"""The ratchet rule: no change grows the vLLM integration's ratchets, and a change to a lint is judged like source.  Dedicated
+cleanup lanes pay the exceptions down; a feature PR owes none.
 
     python3 integrations/vllm/tools/ratchet_gate.py BASE TOP [--json]
 
@@ -23,12 +23,10 @@ when:
 
 * in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
-  at least as much, so a move from one package to another passes (the vLLM coordinator, 26 Oct).  A repository list
+  at least as much, so a move from one package to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
-  so a list behind its tree catches up, while growth past the base's own findings is held as before (the vLLM
-  coordinator, 27 Oct 06:20Z, CI-198: PRs on `next` before each repository lint landed left `main` with findings no list
-  held);
+  so a list behind its tree catches up, while growth past the base's own findings is held as before;
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
@@ -40,13 +38,13 @@ when:
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
 
-A ``# noqa`` is an exception too (the vLLM coordinator, 25 Oct 11:20Z, under that delegation), held by count with no
+A ``# noqa`` is an exception too, held by count with no
 allowlist, and every change is judged by it: in the ``*.py`` files it touches under ``integrations/vllm``, a change may add
 no more ``noqa`` comments (``# noqa``, ``# noqa: CODE``, a file's ``# ruff: noqa``) than it removes.  A line is matched by its stripped text, codes included, so one
 that moves with its code counts as kept, and deleting a stale ``noqa`` pays for a new one.
 
-The top change's Python is linted too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run, so a new
-finding would land and be reverted), when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
+The top change's Python is linted too (drive lands before the suites run, so a new finding would land and be reverted),
+when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
 adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
 under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
 grows, naming each new finding ``file:line RULE message``.  (file, rule) is the repository's ruff lint's key too, so a
@@ -57,10 +55,10 @@ the change doesn't touch is never linted.
 
 Each counted lint's sites are counted the same way, when its base has the lint, loaded from the base and counting as it
 counts: each ``*.py`` file the change adds or modifies outside that lint's ``LEFT_OUT`` fails when its count grows, naming the
-new sites and the lint's fix.  Its direct environment reads (the vLLM coordinator, 27 Oct 01:30Z: configuration in one
-place), unless the file is a settings registry at the change's base (a ``settings.py``, or a file the base's list marks, so a
-mark that comes with the reads it would exempt doesn't count): the fix is the area's settings registry.  Its except handlers
-that swallow what they catch (02:05Z: recorded outcomes): the fix is to re-raise, record the outcome, or narrow the handler.
+new sites and the lint's fix.  Its direct environment reads (configuration is read in one place), unless the file is a
+settings registry at the change's base (a ``settings.py``, or a file the base's list marks, so a mark that comes with the
+reads it would exempt doesn't count): the fix is the area's settings registry.  Its except handlers that swallow what they
+catch (every outcome is recorded): the fix is to re-raise, record the outcome, or narrow the handler.
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
 Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
@@ -786,8 +784,8 @@ def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
 
 
 def drop_worktree(tree: Path) -> None:
-    """Remove the lints' worktree. Cleanup decides no verdict: when git won't remove it (26 Oct on drive's pod: "Directory not
-    empty"), the directory goes by hand and git forgets it."""
+    """Remove the lints' worktree. Cleanup decides no verdict: when git won't remove it ("Directory not empty"), the directory
+    goes by hand and git forgets it."""
     if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
         shutil.rmtree(tree, ignore_errors=True)
         subprocess.run(["git", "worktree", "prune"], capture_output=True)
