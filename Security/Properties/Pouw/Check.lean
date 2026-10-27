@@ -122,4 +122,34 @@ def DigestIsOneStage's : Prop :=
 /-- A decoded registration keeps the bytes it was read from, so its digest is of exactly those bytes. -/
 def CommitmentKeepsBytes : Prop := ∀ (b : ByteArray) (c : Registration), protocol.commitment b = .ok c → c.bytes = b
 
+/-! ## The hash
+
+The check's own hashes are `checkWith`'s parameter. `DeployedHash` says the deployed check is `checkWith` at SHA-512,
+and its digest SHA-512 of the digest's input; `HashesRead` says `checkWith` reads its hash only at the inputs it hashes
+(`hashed`). Those inputs are the check's own; the code a live window's salt check calls past its epoch root hashes with
+SHA-512 itself (`PouwCheck.Check`'s docstring). -/
+
+/-- The inputs the check hashes itself on `(p, c, e)` under `hash`: the registration's digest input, and for a live
+window whose answer carries a salt, the values inputs of its registered weights and its activations, and its salt epoch
+root's input once its anchors and epoch are read. -/
+def hashed (hash : ByteArray → ByteArray) (p : Params) (c : Registration) (e : Evidence) : List ByteArray :=
+  c.digestInput :: if p.check.coins != some "live" then [] else match e.salt with
+    | none => []
+    | some s =>
+      (c.window.registered.bind valuesInput?).toList ++ (c.window.activations.bind valuesInput?).toList ++
+        match windowAnchors hash c, saltEpochOf? s with
+        | .ok (w, x), some k => [anchoredEpochInput w x k]
+        | _, _ => []
+
+/-- The deployed check is `checkWith` at SHA-512, and the deployed digest SHA-512 of the registration's digest input. -/
+def DeployedHash : Prop :=
+  protocol.check = checkWith Flock.Sha512.hash ∧ ∀ c : Registration, protocol.digest c = Flock.Sha512.hash c.digestInput
+
+open Classical in
+/-- `checkWith` reads its hash only at the inputs it hashes: its verdict under `hash` is its verdict under every hash
+that agrees with `hash` on `hashed hash p c e`, `hash'` elsewhere. -/
+def HashesRead : Prop :=
+  ∀ (hash hash' : ByteArray → ByteArray) (p : Params) (c : Registration) (e : Evidence),
+    checkWith (fun u => if u ∈ hashed hash p c e then hash u else hash' u) p c e = checkWith hash p c e
+
 end Properties.Pouw.Check

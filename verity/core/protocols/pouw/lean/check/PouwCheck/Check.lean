@@ -21,6 +21,11 @@ this order, with `core_check.py`'s reason.
 
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
 profile is the service's `Core.Integrity`, passed through.
+
+The check's own hashes (the registration's digest, a live window's anchors' values roots and its salt epoch's root) are
+`checkWith`'s parameter `hash`, and the deployed `check` is `checkWith` at `Flock.Sha512.hash`. The hashes of the code a
+live window's salt check calls past its epoch root (its salt session's ledger and challenger, its coin's opening and
+round key) are SHA-512 in that code.
 -/
 
 namespace PouwCheck
@@ -139,9 +144,11 @@ instance instDecidableUnitsOk (units : Array Nat) (k n : Nat) : Decidable (Units
 
 def drawnJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
 
-/-- The service's answer to a registration that keeps PoUW's rule. -/
-def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
-  let d := Flock.hexOf c.digest
+/-- The service's answer to a registration that keeps PoUW's rule, with the check's own hashes (the registration's
+digest, the window's salt anchors and epoch root) under `hash`. -/
+def outcome (hash : ByteArray → ByteArray) (p : Params) (c : Registration) (f : Fixed) (e : Evidence) :
+    Core.Outcome Public Core.Integrity :=
+  let d := Flock.hexOf (hash c.digestInput)
   let k := f.sampling.k
   let n := f.work.n
   if e.protocol ≠ oneStage then .reject s!"outcome: protocol {e.protocol}, not one-stage's {oneStage}"
@@ -167,13 +174,18 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else
-      let why := windowSaltReason p c e.salt
+      let why := windowSaltReasonWith hash p c e.salt
       if why.isSome then .reject s!"salt: {why.getD ""}"
       else .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof
 
-def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+/-- PoUW's check with its own hashes under `hash`. -/
+def checkWith (hash : ByteArray → ByteArray) (p : Params) (c : Registration) (e : Evidence) :
+    Core.Outcome Public Core.Integrity :=
   match registered p c with
   | .error r => .reject r
-  | .ok f => outcome p c f e
+  | .ok f => outcome hash p c f e
+
+/-- The deployed check (`protocol.check`): `checkWith` at SHA-512. -/
+def check : Params → Registration → Evidence → Core.Outcome Public Core.Integrity := checkWith Flock.Sha512.hash
 
 end PouwCheck

@@ -44,10 +44,14 @@ def ANCHORED_EPOCH_TAG : ByteArray := "verity/pouw-epoch-open/v2".toUTF8
 /-- `core_check.VALUES_TAG` -/
 def VALUES_TAG : ByteArray := "verity/pouw-window-values/v1".toUTF8
 
+/-- What an epoch's open root hashes: `ANCHORED_EPOCH_TAG` ‖ W ‖ X ‖ u64be(`k`). -/
+def anchoredEpochInput (weights anchors : ByteArray) (k : Nat) : ByteArray :=
+  ANCHORED_EPOCH_TAG ++ weights ++ anchors ++ PouwCommit.be8 k
+
 /-- `salt.anchored_epoch_root`: an H1 window's salt epoch's open root, SHA-512(`ANCHORED_EPOCH_TAG` ‖ W ‖ X ‖
-u64be(`k`)), W its weights' root, X its anchors' root and `k` its salt epoch's number among W's. -/
-def anchoredEpochRoot (weights anchors : ByteArray) (k : Nat) : ByteArray :=
-  Flock.Sha512.hash (ANCHORED_EPOCH_TAG ++ weights ++ anchors ++ PouwCommit.be8 k)
+u64be(`k`)) at `hash` SHA-512, W its weights' root, X its anchors' root and `k` its salt epoch's number among W's. -/
+def anchoredEpochRoot (hash : ByteArray → ByteArray) (weights anchors : ByteArray) (k : Nat) : ByteArray :=
+  hash (anchoredEpochInput weights anchors k)
 
 /-- A string as u64be(its UTF-8 length) ‖ its UTF-8 (`core_check._sized`). -/
 def sized (s : String) : ByteArray := PouwCommit.be8 s.toUTF8.size ++ s.toUTF8
@@ -56,11 +60,11 @@ def sized (s : String) : ByteArray := PouwCommit.be8 s.toUTF8.size ++ s.toUTF8
 def digest? (j : Json) : Option ByteArray :=
   ((str? j).filter isHexDigest).bind fun h => (PouwCommit.pyFromHex h).toOption
 
-/-- `core_check.values_root`: the root of a group of committed values `{program, values}` the window names, `values` a
+/-- What `valuesRoot?` hashes for a group of committed values `{program, values}` the window names, `values` a
 non-empty object of entries by value name, each naming its value and its `domain` and `root`, SHA-512 digests:
-SHA-512(`VALUES_TAG` ‖ `sized` program ‖ for each name in sorted order: `sized` name ‖ domain ‖ root); `none` when `g`
-is not such a group. -/
-def valuesRoot? (g : Json) : Option ByteArray := do
+`VALUES_TAG` ‖ `sized` program ‖ for each name in sorted order: `sized` name ‖ domain ‖ root; `none` when `g` is not
+such a group. -/
+def valuesInput? (g : Json) : Option ByteArray := do
   guard (keys g == some ["program", "values"])
   let program ← str? (get g "program")
   let vs := get g "values"
@@ -71,20 +75,34 @@ def valuesRoot? (g : Json) : Option ByteArray := do
     guard (keys e).isSome
     guard (str? (get e "value") == some n)
     pure (sized n ++ (← digest? (get e "domain")) ++ (← digest? (get e "root")))
-  pure (Flock.Sha512.hash (parts.foldl (· ++ ·) (VALUES_TAG ++ sized program)))
+  pure (parts.foldl (· ++ ·) (VALUES_TAG ++ sized program))
+
+/-- `core_check.values_root`: `hash` (SHA-512 deployed) of `valuesInput? g`, the root of the group of committed values
+`g`; `none` when `g` is not such a group. -/
+def valuesRoot? (hash : ByteArray → ByteArray) (g : Json) : Option ByteArray := (valuesInput? g).map hash
 
 /-- `core_check.window_anchors`: the registration's weights' root W and anchors' root X, which its salt epoch's root
 binds, or why it names none. W is its `W` root, a SHA-512 digest, or, when it registers none, the root of its registered
 weights' entries (`window.registered`); a window with both names no one W. X is the root of the activations it
 committed after serving (`window.activations`). -/
-def windowAnchors (c : Registration) : Except String (ByteArray × ByteArray) := do
+def windowAnchors (hash : ByteArray → ByteArray) (c : Registration) : Except String (ByteArray × ByteArray) := do
   let port := (c.roots.find? (·.port == "W")).map (·.root)
   let w := match c.window.registered with
     | none => (port.filter isHexDigest).bind fun h => (PouwCommit.pyFromHex h).toOption
-    | some g => if port.isNone then valuesRoot? g else none
+    | some g => if port.isNone then valuesRoot? hash g else none
   let some w := w | throw WINDOW_NO_W
-  let some x := c.window.activations.bind valuesRoot? | throw WINDOW_NO_X
+  let some x := c.window.activations.bind (valuesRoot? hash) | throw WINDOW_NO_X
   pure (w, x)
+
+/-- The answer's salt epoch `k`: an integer in [0, 2^64). -/
+def saltEpochOf? (s : Json) : Option Nat := (PouwWindow.natOf? (at? s "epoch")).filter (· < 2 ^ 64)
+
+/-- The salt epoch's root R of a live window's answer's salt `s` (`anchoredEpochRoot` of its anchors and epoch), or the
+first of `core_check.window_salt`'s refusals of them. -/
+def windowSaltEpoch (hash : ByteArray → ByteArray) (c : Registration) (s : Json) : R ByteArray := do
+  let (w, x) ← (windowAnchors hash c).mapError (("salt", ·))
+  let some k := saltEpochOf? s | throw ("salt", WINDOW_EPOCH)
+  pure (anchoredEpochRoot hash w x k)
 
 /-- `core_check._salt_epoch`: the salt-only session opened on salt epoch root `r`, when it counts (LIVESALT2): a
 Pearl-C salt session's commitment, reserved for its salt coin alone and opened binding that reserve, ended complete
@@ -109,11 +127,9 @@ def saltEpoch (key ledger pins main session : Json) (r : ByteArray) : R (Audited
 
 /-- The steps of `core_check.window_salt` on a live window's answer's salt `s`, under the verifier's `live` inputs and the
 window's registration `c`. -/
-def windowSaltCheck (live : Json) (c : Registration) (s : Json) : R Unit := do
+def windowSaltCheck (hash : ByteArray → ByteArray) (live : Json) (c : Registration) (s : Json) : R Unit := do
   unless keys s == some WINDOW_SALT_KEYS do throw ("salt", WINDOW_SALT_FORM)
-  let (w, x) ← (windowAnchors c).mapError (("salt", ·))
-  let some k := (PouwWindow.natOf? (at? s "epoch")).filter (· < 2 ^ 64) | throw ("salt", WINDOW_EPOCH)
-  let r := anchoredEpochRoot w x k
+  let r ← windowSaltEpoch hash c s
   let g := SampledProofs.getD live
   let (a, c, opened) ← saltEpoch (g "key") (g "ledger") (g "pins") (g "main") (g "session") r
   let claimed ← (LiveCommitment.ofJson (at? s "coins")).mapError fun e => ("coin", s!"the salt's coins are malformed: {e}")
@@ -125,15 +141,19 @@ def windowSaltCheck (live : Json) (c : Registration) (s : Json) : R Unit := do
     coin WINDOW_SALT
   unless carries (at? s "session") a.session opened.seq r a.commitment do coin WINDOW_SESSION
 
-/-- `core_check.window_salt`: why the salt an accepted window's answer carries (`none` when it carries none) is not its
-live salt, or `none`. -/
-def windowSaltReason (p : Params) (c : Registration) (salt : Option Json) : Option String :=
+/-- `core_check.window_salt` with the window's own hashes (its anchors' and its epoch root's) under `hash`: why the
+salt an accepted window's answer carries (`none` when it carries none) is not its live salt, or `none`. -/
+def windowSaltReasonWith (hash : ByteArray → ByteArray) (p : Params) (c : Registration) (salt : Option Json) :
+    Option String :=
   if p.check.coins != some "live" then
     if salt.isSome then some SEEDED_SALT else none
   else match salt with
     | none => some NO_WINDOW_SALT
-    | some s => match windowSaltCheck (p.live.getD .null) c s with
+    | some s => match windowSaltCheck hash (p.live.getD .null) c s with
       | .ok () => none
       | .error (_, why) => some why
+
+/-- `core_check.window_salt`, at SHA-512. -/
+def windowSaltReason : Params → Registration → Option Json → Option String := windowSaltReasonWith Flock.Sha512.hash
 
 end PouwCheck

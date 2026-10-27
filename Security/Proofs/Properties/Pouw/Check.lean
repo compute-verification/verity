@@ -24,12 +24,17 @@ theorem neverNull : NeverNull := fun _ _ => ⟨nofun, nofun⟩
 theorem digestIsOneStage's : DigestIsOneStage's := fun _ => rfl
 
 theorem check_eq (p : Params) (c : Registration) (e : Evidence) :
-    protocol.check p c e = PouwCheck.check p c e := rfl
+    protocol.check p c e = checkWith Flock.Sha512.hash p c e := rfl
+
+theorem digest_sha (c : Registration) : Flock.Sha512.hash c.digestInput = c.digest := rfl
+
+theorem saltReason_sha (p : Params) (c : Registration) (s : Option Lean.Json) :
+    windowSaltReasonWith Flock.Sha512.hash p c s = windowSaltReason p c s := rfl
 
 theorem serviceReject_rejects (p : Params) (c : Registration) (e : Evidence) (r : String) (h : e.said = .reject r) :
     ∃ r', protocol.check p c e = .reject r' := by
   rw [check_eq]
-  unfold PouwCheck.check
+  unfold checkWith
   split
   · exact ⟨_, rfl⟩
   · unfold outcome
@@ -117,11 +122,12 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
 
 theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
-    outcome p c f e = .accept pub prof ↔
+    outcome Flock.Sha512.hash p c f e = .accept pub prof ↔
       ∃ draw, ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ := by
   unfold outcome ServiceAccepted SaltKept
   dsimp only
+  rw [digest_sha, saltReason_sha]
   by_cases h1 : e.protocol = oneStage
   case neg => simp only [ite_eq_left h1, reduceCtorEq, h1, false_and, exists_false]
   rw [ite_eq_right (Classical.not_not.mpr h1)]
@@ -188,7 +194,7 @@ theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Pu
       ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ := by
   rw [check_eq]
-  unfold PouwCheck.check
+  unfold checkWith
   constructor
   · intro h
     split at h
@@ -239,12 +245,13 @@ theorem ite_reject_eq_undecided {c : Prop} [Decidable c] {a r : String}
 theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
   intro p c e r h
   rw [check_eq] at h
-  unfold PouwCheck.check at h
+  unfold checkWith at h
   split at h
   · cases h
   rename_i f hf
   unfold outcome at h
   dsimp only at h
+  rw [digest_sha] at h
   by_cases h1 : e.protocol = oneStage
   case neg => rw [ite_eq_left h1] at h; cases h
   rw [ite_eq_right (Classical.not_not.mpr h1)] at h
@@ -298,5 +305,76 @@ theorem commitmentKeepsBytes : CommitmentKeepsBytes := by
   unfold registrationOf at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' (first | (split at h) | (cases h; rfl) | cases h)
+
+/-! ## The hash -/
+
+theorem deployedHash : DeployedHash := ⟨rfl, fun _ => rfl⟩
+
+theorem valuesRoot_congr (h h' : ByteArray → ByteArray) (o : Option Lean.Json)
+    (hu : ∀ u ∈ (o.bind valuesInput?).toList, h u = h' u) : o.bind (valuesRoot? h) = o.bind (valuesRoot? h') := by
+  cases o with
+  | none => rfl
+  | some g =>
+    cases hg : valuesInput? g with
+    | none => simp [valuesRoot?, hg]
+    | some u => simp only [Option.bind_some, hg, Option.toList_some, List.mem_singleton, forall_eq] at hu; simp [valuesRoot?, hg, hu]
+
+theorem windowAnchors_congr (h h' : ByteArray → ByteArray) (c : Registration)
+    (hr : ∀ u ∈ (c.window.registered.bind valuesInput?).toList, h u = h' u)
+    (ha : ∀ u ∈ (c.window.activations.bind valuesInput?).toList, h u = h' u) :
+    windowAnchors h c = windowAnchors h' c := by
+  have hR := valuesRoot_congr h h' _ hr
+  unfold windowAnchors
+  rw [valuesRoot_congr h h' _ ha]
+  cases hreg : c.window.registered with
+  | none => rfl
+  | some g =>
+    simp only [hreg, Option.bind_some] at hR
+    simp only [hR]
+
+theorem windowSaltEpoch_congr (h h' : ByteArray → ByteArray) (c : Registration) (s : Lean.Json)
+    (hA : windowAnchors h c = windowAnchors h' c)
+    (he : ∀ w x k, windowAnchors h c = .ok (w, x) → saltEpochOf? s = some k →
+      h (anchoredEpochInput w x k) = h' (anchoredEpochInput w x k)) :
+    windowSaltEpoch h c s = windowSaltEpoch h' c s := by
+  unfold windowSaltEpoch anchoredEpochRoot
+  rw [← hA]
+  cases hw : windowAnchors h c with
+  | error _ => rfl
+  | ok wx =>
+    obtain ⟨w, x⟩ := wx
+    cases hk : saltEpochOf? s with
+    | none => rfl
+    | some k => exact congrArg Except.ok (he w x k hw hk)
+
+/-- `checkWith` under two hashes that agree on the inputs it hashes under the first gives one verdict. -/
+theorem checkWith_congr (h h' : ByteArray → ByteArray) (p : Params) (c : Registration) (e : Evidence)
+    (hu : ∀ u ∈ hashed h p c e, h u = h' u) : checkWith h p c e = checkWith h' p c e := by
+  have hd : h c.digestInput = h' c.digestInput := hu _ List.mem_cons_self
+  have hs : windowSaltReasonWith h p c e.salt = windowSaltReasonWith h' p c e.salt := by
+    unfold windowSaltReasonWith
+    by_cases hl : (p.check.coins != some "live") = true
+    · simp only [hl, ite_true]
+    simp only [hl]
+    cases hsalt : e.salt with
+    | none => rfl
+    | some s =>
+      unfold hashed at hu
+      simp only [hl, hsalt, Bool.false_eq_true, ite_false] at hu
+      have hu' := fun u m => hu u (List.mem_cons_of_mem _ m)
+      have hA := windowAnchors_congr h h' c (fun u m => hu' u (List.mem_append_left _ (List.mem_append_left _ m)))
+        (fun u m => hu' u (List.mem_append_left _ (List.mem_append_right _ m)))
+      have hE := windowSaltEpoch_congr h h' c s hA fun w x k hw hk =>
+        hu' _ (List.mem_append_right _ (by rw [hw, hk]; exact List.mem_singleton_self _))
+      simp only
+      unfold windowSaltCheck
+      rw [hE]
+  unfold checkWith outcome
+  simp only [hd, hs]
+
+theorem hashesRead : HashesRead := by
+  intro h h' p c e
+  refine (checkWith_congr h _ p c e fun u m => ?_).symm
+  simp only [m, ite_true]
 
 end Properties.Pouw.Check
