@@ -82,10 +82,10 @@ theorem rootTerm_le {qS : ℝ} (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) : qS ^ 2 / 
   have h513 : (2 : ℝ) ^ (513 : ℝ) = 2 ^ (513 : ℕ) := by norm_num
   rw [h513]
   have hq2 : qS ^ 2 ≤ 2 ^ 164 := by nlinarith [mul_le_mul hS hS hS0 (by norm_num : (0 : ℝ) ≤ 2 ^ 82)]
+  have hsplit : (2 : ℝ) ^ (513 : ℕ) = 2 ^ 164 * 2 ^ 349 := by rw [← pow_add] <;> norm_num
   calc qS ^ 2 / 2 ^ (513 : ℕ) ≤ 2 ^ 164 / 2 ^ (513 : ℕ) := by gcongr
-    _ ≤ 1 / 2 ^ (200 : ℕ) := by
-      rw [div_le_div_iff₀ (by positivity) (by positivity), one_mul, ← pow_add]
-      exact pow_le_pow_right₀ (by norm_num) (by norm_num)
+    _ = 1 / 2 ^ 349 := by rw [hsplit, div_mul_eq_div_div, div_self (show (2 : ℝ) ^ 164 ≠ 0 by positivity)]
+    _ ≤ 1 / 2 ^ (200 : ℕ) := one_div_le_one_div_of_le (by positivity) (pow_le_pow_right₀ (by norm_num) (by norm_num))
 
 end Flock.Bridge
 
