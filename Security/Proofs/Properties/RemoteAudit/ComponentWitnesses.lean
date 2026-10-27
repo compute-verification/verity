@@ -48,8 +48,8 @@ theorem lineHeldAtComponent_iff : LineHeldAtComponent ↔ LineHeldAtComponentBy 
 /-! ## The premises at an honest node -/
 
 theorem bucket_zero {Ω : Type} (ω : Ω) (u v : ℕ) {β B : ℝ} (hβ : 0 ≤ β) (hB : 0 ≤ B) :
-    ((over (fun _ _ => 0) ω u v : ℕ) : ℝ) ≤ β * (v - u : ℕ) + B := by
-  simp only [over, Finset.sum_const_zero, Nat.cast_zero]
+    ((Accounting.Remote.Held.over (fun _ _ => 0) ω u v : ℕ) : ℝ) ≤ β * (v - u : ℕ) + B := by
+  simp only [Accounting.Remote.Held.over, Finset.sum_const_zero, Nat.cast_zero]
   exact add_nonneg (mul_nonneg hβ (Nat.cast_nonneg _)) hB
 
 theorem ns_pos : (0 : ℝ) < ((_root_.RemoteAudit.Line.ns : ℚ) : ℝ) := by
@@ -107,7 +107,7 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
   unfold SketchBoundAt Trace.Holds
   refine le_of_eq (Pouw.pr_eq_zero fun ω hω => hω.2 fun p hp j _ => ?_)
   obtain ⟨t, h1, h2, h3⟩ := h ω p hp
-  exact ⟨t, h1, h2, mem_union_left _ (by rw [h3]; exact mem_univ j)⟩
+  exact ⟨t, h1, h2, mem_union_left _ (h3 ▸ mem_univ j)⟩
 
 theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
     (T : Trace (Coins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
@@ -230,9 +230,9 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
   · have e : (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com =
         (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play (Committed.junk com t) := by
       unfold Committed.play
-      congr 1 <;> funext t' ω <;> first
-        | exact Fin.ext (congrArg (min · receiptMax) (hsize _ _ ω ω t'))
-        | rfl
+      congr 1
+      funext t' ω
+      exact Fin.ext (congrArg (min · receiptMax) (hsize _ _ ω ω t'))
     unfold Committed.hide
     rw [← e, tsub_self, tsub_self, add_zero]
 
@@ -484,7 +484,6 @@ theorem toy_paced {Ω : Type} (ver : Node → Record → Prop) :
   · show released (groupsBy Toy.sum Toy.node Toy.rec) Toy.node.windows a ≤
       released (groupsBy Toy.sum Toy.node Toy.rec) Toy.node.windows b
     unfold released
-    apply le_of_eq
     rw [show Toy.node.windows - 1 = 0 from rfl, Nat.min_zero, Nat.min_zero]
   · change g ≤ 0 at hg
     obtain rfl := Nat.le_zero.1 hg
@@ -521,6 +520,7 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
       simp
     · show (if (0 : ℕ) < 10 then Finset.univ else ∅) ∪ ∅ = Finset.univ
       simp
+      rfl
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
     (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
@@ -548,7 +548,8 @@ theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
     (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _) rfl
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
-  · norm_num [binding_empty, toy_delta]
+  · simp [binding_empty, toy_delta]
+    norm_num
   · exact fun ω => ⟨trivial, toy_not_held _ rfl (fun _ t ht => if_neg (by omega)) ω⟩
 
 /-- **The line credits only what the trace held**: on one node, record and summary, every link-charged stretch
@@ -567,12 +568,15 @@ theorem lineHeldAtComponent_bites : ∃ (node : Node) (r : Record) (sm : RemoteA
   have hh : Toy.full.heldOver () 10 20 = 10 := by
     unfold Trace.heldOver
     simp [Toy.full]
+    rfl
   refine ⟨?_, ?_, fun R _ => ?_⟩
   · rw [hs0, hsp, toy_start, toy_stop]
   · rw [hs0, toy_start, toy_stop, hh, hsp, hl0]
     norm_num [Toy.full, Toy.trace]
   · rw [hw0, Rat.cast_zero, mul_zero]
-    positivity
+    first
+      | exact mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+      | exact mul_nonneg (Nat.cast_nonneg _) (Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _)
 
 /-! ## `AcceptIsVerified` at a check that accepts everything, and at the deployed check -/
 
