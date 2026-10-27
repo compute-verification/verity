@@ -48,7 +48,6 @@
     {"file": "verity_vllm/commit/index.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/serving-rows/index/v0"},
     {"file": "verity_vllm/commit/merkle.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/commitments/v1"},
     {"file": "verity_vllm/commit/served_record.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-record/v1"},
-    {"file": "verity_vllm/commit/step_rows.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/step-rows/v1"},
     {"file": "verity_vllm/commit/store_dump.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/committed-store/v1"},
     {"file": "verity_vllm/correspondence", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "schema-literal", "symbol": "requalify", "detail": "verity-ir/correspondence/v0"},
