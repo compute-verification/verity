@@ -347,7 +347,10 @@ def slots_sig(S):
 def slots_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC, LP, MAX, IDS) -> list[tuple[list[int], list[int]]]:
     """`ScanSlots_v1`'s function on the row's u16 words: each lane's (row, head) as i32 encodings."""
     x = sum(w << 16 * i for i, w in enumerate(state))
-    at = lambda lo, w: x >> lo & (1 << w) - 1
+
+    def at(lo: int, w: int) -> int:
+        return x >> lo & (1 << w) - 1
+
     return [([at(o, 32), at(lp, 32), *[at(ids + IDB * position(K0, K, p), IDB) for p in range(NP)]], [at(lp, 32), at(m, 32)])
             for o, lp, m, ids in zip(OCC, LP, MAX, IDS)]
 
