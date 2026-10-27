@@ -25,7 +25,8 @@
 //               row g % 64
 //   m2h2_<v>    NM 2, NH 2: 5 warpgroups, four m64n64k32 an atom, the MMA warpgroups at 152
 // v: the hash's compression, lowreg.cu's r (sx::compress<0, 1>) or rs (lowreg.cuh's rounds, the chaining value in shared
-// memory, 8 KiB a hash warpgroup).
+// memory, 8 KiB a hash warpgroup). _sus: every mbarrier wait with a suspend-time hint (SUS_BIT), so the producer's and
+// the MMA warpgroups' waits park rather than reissue try_wait in the hash warps' issue slots.
 // Arms (a launch's mode): mma (the hash warpgroups exit at once), hash (the GEMM's warpgroups exit; each hash thread hashes
 // its seed row's bytes in the O buffer, the whole row or its first half, as many times as make the CTA's O tiles' bytes),
 // free (both: the hash passes over the O buffer until the GEMM ends, so the tensor pipe's time beside a busy ALU is the
@@ -77,14 +78,24 @@ DEV void mbar_expect_tx(uint32_t bar, uint32_t bytes) {
   asm volatile("mbarrier.arrive.expect_tx.shared::cta.b64 _, [%0], %1;" ::"r"(bar), "r"(bytes) : "memory");
 }
 DEV void mbar_arrive(uint32_t bar) { asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(bar) : "memory"); }
-DEV void mbar_wait(uint32_t bar, uint32_t parity) {
-  asm volatile(
-      "{\n .reg .pred p;\n WAIT:\n mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n @!p bra WAIT;\n}\n" ::"r"(bar),
-      "r"(parity)
-      : "memory");
+// SUS: try_wait with a suspend-time hint (CUTLASS's ClusterBarrier::wait, 10 ms), so a waiting warp parks until the phase
+// completes rather than reissuing try_wait, and leaves its scheduler's issue slots to the hash warp beside it
+constexpr uint32_t SUSPEND_NS = 0x989680;
+constexpr int SUS_BIT = 16;
+template <bool SUS = false> DEV void mbar_wait(uint32_t bar, uint32_t parity) {
+  if constexpr (SUS)
+    asm volatile(
+        "{\n .reg .pred p;\n WAIT:\n mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1, %2;\n @!p bra WAIT;\n}\n" ::"r"(bar),
+        "r"(parity), "r"(SUSPEND_NS)
+        : "memory");
+  else
+    asm volatile(
+        "{\n .reg .pred p;\n WAIT:\n mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n @!p bra WAIT;\n}\n" ::"r"(bar),
+        "r"(parity)
+        : "memory");
 }
-DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
-  mbar_wait(bar, parity);
+template <bool SUS = false> DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
+  mbar_wait<SUS>(bar, parity);
   __syncwarp();
 }
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
@@ -151,7 +162,7 @@ template <int NM, int NH> struct Cta {
 template <int NM, int NH, int STAGES, int OT, int VAR> struct Layout {
   static constexpr int TMC = Cta<NM, NH>::TMC, A_BYTES = TMC * BK, STAGE = (TMC + BN) * BK;
   static constexpr int O_OFF = STAGES * STAGE, S_OFF = O_OFF + (OT == 1 ? TMC * TSTRIDE : OT == 2 ? TMC * HROWB : 0);
-  static constexpr int BAR_OFF = S_OFF + (VAR == 3 ? NH * 8 * 8 * 128 : 0);
+  static constexpr int BAR_OFF = S_OFF + ((VAR & 3) == 3 ? NH * 8 * 8 * 128 : 0);
   static constexpr int SMEM = 1024 + BAR_OFF + 8 * (2 * STAGES + 2) + 8;
 };
 
@@ -210,7 +221,8 @@ DEV void body(const Params& p) {
   static_assert(NFORM == 64 || NFORM == 128 || (NFORM == 256 && C::LAUNCH >= 154), "ptxas refuses n256 below 154 registers");
   static_assert(P + NM * Y + NH * H <= NWG * C::LAUNCH, "the warpgroups' registers exceed the launch's");
   static_assert(L::SMEM <= 232448, "shared memory");
-  constexpr bool CAN_HANDOFF = NM == 2 && NH == 1;
+  constexpr bool CAN_HANDOFF = NM == 2 && NH == 1, SUS = VAR & SUS_BIT;
+  constexpr int HV = VAR & 3;
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t s0 = smem_at(smem), base = (s0 + 1023) & ~1023u;
   uint8_t* gb = smem + (base - s0);
@@ -256,7 +268,7 @@ DEV void body(const Params& p) {
         for (int tn = 0; tn < tiles_n; tn++)
           for (int kb = 0; kb < KB; kb++) {
             const uint32_t st = base + s * L::STAGE, full = full0 + 8 * s;
-            mbar_wait(empty0 + 8 * s, ph ^ 1);
+            mbar_wait<SUS>(empty0 + 8 * s, ph ^ 1);
             mbar_expect_tx(full, L::STAGE);
             tma_load(st, &p.a, full, kb * BK, tm * TMC);
             tma_load(st + L::A_BYTES, &p.b, full, kb * BK, tn * BN);
@@ -271,7 +283,7 @@ DEV void body(const Params& p) {
       regs_to<H, C::LAUNCH>();
       if (!hash_on) asm volatile("exit;");
       const int h = wg - 1 - NM, g = 128 * h + x;
-      Row<VAR> r;
+      Row<HV> r;
       r.Ss = reinterpret_cast<u64*>(gb + L::S_OFF) + 1024 * h + x;
       const int hr = g % TMC, sw = OT == 2 ? hr % 8 : 0;
       const uint8_t* row = otile + hr * RB;
@@ -282,7 +294,7 @@ DEV void body(const Params& p) {
         for (int tm = blockIdx.x; tm < tiles_m; tm += gridDim.x) {
           r.init(p.mid);
           for (int f = 0; f < tiles_n * (4 / CH); f++, j++) {
-            mbar_wait(tfull, j & 1);
+            mbar_wait<SUS>(tfull, j & 1);
 #pragma unroll 1
             for (int c = 0; c < CH; c++) r.chunk(row + 128 * c, sw);
             mbar_arrive(tempty);
@@ -324,7 +336,7 @@ DEV void body(const Params& p) {
     for (int tm = blockIdx.x; tm < tiles_m; tm += gridDim.x)
       for (int tn = 0; tn < tiles_n; tn++) {
         for (int kb = 0; kb < KB; kb++) {
-          mbar_wait_warp(full0 + 8 * s, ph);
+          mbar_wait_warp<SUS>(full0 + 8 * s, ph);
           const uint32_t a0 = base + s * L::STAGE + wl * 64 * BK, b0 = base + s * L::STAGE + L::A_BYTES;
           WG_FENCE;
 #pragma unroll
@@ -356,7 +368,7 @@ DEV void body(const Params& p) {
         const uint32_t ob = smem_at(otile) + rl * RB + 4 * (x % 4), s8 = (x % 32) / 4;
 #pragma unroll
         for (int f = 0; f < 4 / CH; f++, j++) {
-          if (handoff) mbar_wait(tempty, (j & 1) ^ 1);
+          if (handoff) mbar_wait<SUS>(tempty, (j & 1) ^ 1);
 #pragma unroll
           for (int u = 0; u < NA / 4 * CH / 4; u++) {
             const int q = f * (NA / 4 * CH / 4) + u;
@@ -410,6 +422,10 @@ static const Kern KERNS[] = {
     KERN("m1h2_r", 1, 2, 128, 4, 1, 24, 232, 128, 0),    KERN("m1h3_r", 1, 3, 64, 4, 1, 24, 240, 72, 0),
     KERN("m1h3_rs", 1, 3, 64, 4, 1, 24, 256, 64, 3),     KERN("m1h4_rs", 1, 4, 64, 4, 1, 24, 200, 64, 3),
     KERN("m2h2_r", 2, 2, 64, 3, 1, 24, 152, 72, 0),      KERN("m2h2_r_s4", 2, 2, 64, 4, 2, 24, 152, 72, 0),
+    KERN("h72_rs_sus", 2, 1, 128, 3, 1, 24, 208, 72, 3 | SUS_BIT),
+    KERN("h128_r_sus", 2, 1, 128, 3, 1, 32, 176, 128, SUS_BIT),
+    KERN("h128_r_s4_sus", 2, 1, 128, 4, 2, 32, 176, 128, SUS_BIT),
+    KERN("m1h2_r_sus", 1, 2, 128, 4, 1, 24, 232, 128, SUS_BIT),
 };
 static const char* const ARMS[] = {"mma", "hash", "free", "handoff"};
 static const int ARM_MODE[] = {MMA, HASH, MMA | HASH, MMA | HASH | HANDOFF};
@@ -702,7 +718,8 @@ static void time_arm(const Kern& k, Run& r, int arm, int launches, Nv& nv) {
          "\"stages\": %d, \"ot\": %d, \"P\": %d, \"Y\": %d, \"H\": %d, \"var\": \"%s\", \"regs\": %d, \"local_bytes\": %zu, "
          "\"ms\": %.5f, \"mma_us\": %.2f, \"hash_us\": %.2f, \"compressions\": %.0f, \"tops\": %.2f, \"hash_gcomp_per_s\": %.4f, "
          "\"mhz\": %.0f, \"watts\": %.0f, \"launches\": %d}\n",
-         k.name, ARMS[arm], k.nwg(), k.nm, k.nh, k.tmc(), grid, k.nform, k.stages, k.ot, k.P, k.Y, k.H, k.var == 3 ? "rs" : "r",
+         k.name, ARMS[arm], k.nwg(), k.nm, k.nh, k.tmc(), grid, k.nform, k.stages, k.ot, k.P, k.Y, k.H,
+         (k.var & 3) == 3 ? (k.var & SUS_BIT ? "rs, suspend" : "rs") : (k.var & SUS_BIT ? "r, suspend" : "r"),
          fa.numRegs, fa.localSizeBytes, tm, mu, hu, c, (ARM_MODE[arm] & MMA) ? ops / (tm * 1e-3) * 1e-12 : 0.0,
          hu > 0 ? c / (hu * 1e-6) * 1e-9 : 0.0, median(mhz), median(watts), launches);
   fflush(stdout);
