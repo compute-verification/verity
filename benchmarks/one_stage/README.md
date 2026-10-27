@@ -80,6 +80,10 @@ negatives.
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
   `out/verdicts.txt`.
+- `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
+  decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
+  staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
+  share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--piece DIR`
   holds one subprotocol's `case.json` (its `serve` line, with `blobs` the paths of the files it reads) and its own Lean
   answer on it, `answer.json`, whose `commitment` is its digest; onsite's `--registration DIR` is NCI's. It writes the
@@ -87,10 +91,6 @@ negatives.
   and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs. A subprotocol with no piece (or no
   case or answer in its directory) didn't run and enters as undecided ("not run"): nothing is composed, a run piece's
   rejection still rejects, and otherwise the product is undecided.
-- `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
-  decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
-  staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
-  share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the drawn blocks' bytes, and the
