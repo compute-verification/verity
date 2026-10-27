@@ -1,3 +1,4 @@
+import Proofs.Core.Defs
 import Proofs.Core.Circuit
 import Proofs.Core.Advice
 import Proofs.Core.PrivatePartition
