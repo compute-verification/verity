@@ -358,7 +358,6 @@
     {"file": "benchmarks/sampling_plan/transformer.py", "rule": "RUF100", "count": 9},
     {"file": "benchmarks/serve_bandwidth/mix.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/serve_bandwidth/timeline.py", "rule": "RUF100", "count": 1},
-    {"file": "benchmarks/served_commit/prof_arm.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/stacked_share/beta.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/stacked_share/frontier.py", "rule": "F541", "count": 1},
     {"file": "benchmarks/stacked_share/share.py", "rule": "RUF100", "count": 1},
