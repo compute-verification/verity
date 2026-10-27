@@ -39,6 +39,13 @@ the units, their feeds, gathers and weight reads, and wires them):
   read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
   `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
   `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
+- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way (VLLM-127): its first visited block
+  `AttnBlockFirst_v1` (FA3's first iteration is FA2's word for word), each full block below it
+  `AttnBlock_v4{FIRST=False, CHECK = b >= MASKED_FROM}` and its end `AttnHeadEnd_v1{D, INV=Fa3InvSum_v1}`. `CUTS` names
+  the versions cut by key block and the cut of each.
+- Any other attention version (`Attention_v2`, as `fa3_construction = "guard-every-block"` binds) is its heads, a unit
+  each of its own head Definition (`AttentionHead_v2{T}`), while T is at most `KEYS`: a head's keys and values are one row
+  a KV group, an `AllGather_v1{T, D}` over every key's own row, and past `KEYS` keys it is refused.
 - `TokenSelect_v4{V}` is its function at ``grain.select`` logits a chunk (its body's own form at another C): chunks
   `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and `TokenSelectCombine_v2{V, C}` over them:
   ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and ``x0`` (``logits[0]``) from one
@@ -68,8 +75,9 @@ Refused by name (`Unexpressible`): a window past its class's slots (more request
 than its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose last
 output is past the window's last bucket (`ACROSS`), a request whose Program would read more than its prompt and the weights
 (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's peers), a request a Commit window carries in or out,
-byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16 words, a row form the cut rule
-can't state and a unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran
+byte ingress, a family this lowering doesn't know, a head past `KEYS` keys of an attention version with no per-key-block
+cut, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a unit of more than ``grain.rows``
+rows. The circuit is completeness only: that it computes what serving ran
 is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings, of every ``weights/<label>@<words>``, count registered
@@ -91,6 +99,7 @@ from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19
+from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
 
@@ -109,6 +118,12 @@ SLOT_ROW = IO.SlotRow
 #: across a window boundary is open (thread 1793030365.246499), and a slot that does needs a Program running into the next
 #: window
 ACROSS = "held across the window's end"
+#: the most keys a head reads through one `AllGather_v1{T, D}` where its attention's version has no per-key-block cut (its
+#: gather's T parts and output within a unit's 256 rows, with room for its reader's cut)
+KEYS = 136
+#: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
+#: by v19, FA3's v4 by v20
+CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
 
 
 @dataclass(frozen=True)
@@ -423,17 +438,18 @@ class _Program:
         self.outs[j] = [(0, H * D, Row(tid, u, "o0", D))]
 
     def _plan(self, fn: Any, NH: int) -> list[tuple[Any, list[tuple[str, tuple[str, tuple[Any, ...]]]]]]:
-        """``fn``'s heads as `Attention_v19`'s, read once a Definition (`_Builder.plans`): each Call of `AttentionHead_v19`'s
-        body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys [a, b)) or
-        ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
+        """``fn``'s heads as its cut's (`CUTS`: `Attention_v19`'s or v20's), read once a Definition (`_Builder.plans`): each
+        Call of the cut's head's body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys
+        [a, b)) or ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
         key = descriptor_id(fn)
         if key in self.b.plans:
             return self.b.plans[key]
+        cut = CUTS[fn.version]
         try:
-            head = self._heads(bind(AttentionV19, **fn.bindings), "AttentionHead", NH)
+            head = self._heads(bind(cut, **fn.bindings), "AttentionHead", NH)
             body = head.body
         except (TypeError, ValueError, KeyError) as e:
-            raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v19`'s ({e})") from None
+            raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v{cut.version}`'s ({e})") from None
         params, D = [p for p, _ in head.signature()[0]], fn.bindings["D"]
         plan = []
         for i, n in enumerate(body.nodes):
@@ -491,10 +507,10 @@ class _Program:
 
     def _Attention(self, j: int, node: Any) -> None:
         s = node.fn.bindings
-        if node.fn.version not in (18, 19):
-            raise Unexpressible(f"{node.fn.id}: the window's lowering cuts `Attention_v18`'s heads as v19's, not "
-                                f"v{node.fn.version}'s")
         T, NH, KVH, D, BN = s["T"], s["NH"], s["KVH"], s["D"], s["BN"]
+        if node.fn.version not in CUTS:
+            self._whole_heads(j, node)
+            return
         plan = self._plan(node.fn, NH)
         q, kc, vc = node.args
         keys = {"k": self._cache("k", kc, T, KVH), "v": self._cache("v", vc, T, KVH)}
@@ -511,6 +527,27 @@ class _Program:
                 else:
                     self._each(tid, port, u, [(r,) for r in self._block(keys[kind], *x, BN)], NH // KVH)
             calls.append((tid, u))
+        self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
+
+    def _whole_heads(self, j: int, node: Any) -> None:
+        """An attention whose version has no per-key-block cut (not in `CUTS`): a unit a head of its own head Definition, its
+        keys and values each one row a KV group, an `AllGather_v1{T, D}` over every key's row (`_cache`'s), refused past
+        `KEYS` keys."""
+        s = node.fn.bindings
+        T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
+        if T > KEYS:
+            cut = ", ".join(map(str, sorted(CUTS)))
+            raise Unexpressible(f"{node.fn.id}: a head of {T} keys, past the {KEYS} one `AllGather_v1` reads; the window's "
+                                f"lowering cuts a head by key block only at `Attention` versions {cut} (`CUTS`), not "
+                                f"{node.fn.version}")
+        head = self._heads(node.fn, "AttentionHead", NH)
+        q, kc, vc = node.args
+        tid, u = self.b.unit(head, NH)
+        self._each(tid, "q", u, self._split(q.refs, NH))
+        for port, c in (("k", kc), ("v", vc)):
+            rows = self._cache(port, c, T, KVH).rows
+            self._each(tid, port, u, [(r,) for r in self.b.gathers([tuple(r[g] for r in rows) for g in range(KVH)])],
+                       NH // KVH)
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
 
     def _TokenSelect(self, j: int, node: Any) -> None:
@@ -700,5 +737,5 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
                                 kv_cache_dtype=kv_cache_dtype, fields=fields)
 
 
-__all__ = ["ACROSS", "CLASS_OF_RECORD", "FAMILIES", "Grain", "NAME", "Row", "SLOT_ROW", "WindowClass", "class_circuit",
+__all__ = ["ACROSS", "CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "SLOT_ROW", "WindowClass", "class_circuit",
            "class_program", "weights_record", "window_circuit"]
