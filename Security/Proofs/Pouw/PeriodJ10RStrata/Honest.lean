@@ -48,6 +48,10 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB)
 block's draw. -/
 abbrev View (s : Fin mB) : Type := Coin Bool (Rest σ s) (HonestJ10R.circuit (tileCount σ s)).rounds σ s
 
+/-- The honest circuit has one round a window, the statement's `hM`. -/
+theorem rounds1 (N : ℕ) : (HonestJ10R.circuit N).rounds = 1 :=
+  rfl
+
 /-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and the block's draw. -/
 def windows (regOf : Bool → Registered) (evOf : Bool → BlockDraw σ → Answered) (n : ℕ) :
@@ -86,7 +90,7 @@ theorem strata_meets_period (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β
 /-- **Stratum `s`'s live words are `N_s·n`**: every window credited, every tile live, one word each. -/
 theorem stratumLive_all (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (s : Fin mB)
     (x : Paths (StrataCoin Bool 1 σ) n) :
-    stratumLive Honest.scheme (HonestJ10R.circuit (tileCount σ s)) rfl σ s
+    stratumLive Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (rounds1 _) σ s
       (HonestJ10R.period (View σ s) (tileCount σ s) n) (windows σ regOf evOf n) x = tileCount σ s * n := by
   unfold stratumLive
   calc _ = ∑ _w : Fin n, (tileCount σ s : ℝ) := Finset.sum_congr rfl fun w _ => by
@@ -116,19 +120,19 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
         (HonestJ10R.period (View σ s) (tileCount σ s) n) ∧
     (HonestJ10R.period (View σ s) (tileCount σ s) n).EveryWindow
       (fun live _ => DeadConeDead Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) live) ∧
-    PrefixOf (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) rfl σ k hk s unitOf
+    PrefixOf (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf
       (windows σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
       (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).game ∧
-    (∀ w, prob (fun y => (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) rfl σ k hk s unitOf
+    (∀ w, prob (fun y => (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf
       (windows σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile).MovedIn y w) ≤ 0) ∧
-    TileServiceSound σ s unitOf (creditAt rfl σ s (windows σ regOf evOf n)) (pullAt rfl σ s HonestJ10R.opened)
-      (relAt rfl σ s (windows σ regOf evOf n) HonestJ10R.place HonestJ10R.tile) 0 ∧
+    TileServiceSound σ s unitOf (creditAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n)) (pullAt (rounds1 (tileCount σ s)) σ s HonestJ10R.opened)
+      (relAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n) HonestJ10R.place HonestJ10R.tile) 0 ∧
     SharedNoiseLucks Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n) ∧
     UnitFixed (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n)
-      (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) rfl σ k hk s unitOf (windows σ regOf evOf n)
+      (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
         HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
       (periodMode (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n)
-        (runAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) rfl σ k hk s unitOf (windows σ regOf evOf n)
+        (runAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
           HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile))
       (fun _ t => (tileWords Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) t : ℝ))
       (fun _ => (tileCount σ s : ℝ)) := by
@@ -184,18 +188,18 @@ theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, WindowAcc
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u)
     (n : ℕ) (hn : 0 < n) {δs : Fin mB → ℝ} (hδs : ∀ s ∈ S, 0 < δs s) :
     prob (fun x : Paths (StrataCoin Bool 1 σ) n =>
-      (∀ s ∈ S, (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).accepts (pathsAt Bool rfl σ s n x)) ∧
-      n * ∑ s ∈ S, ((HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).run (pathsAt Bool rfl σ s n x)).fixed <
+      (∀ s ∈ S, (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).accepts (pathsAt Bool (rounds1 (tileCount σ s)) σ s n x)) ∧
+      n * ∑ s ∈ S, ((HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).run (pathsAt Bool (rounds1 (tileCount σ s)) σ s n x)).fixed <
         ∑ s ∈ S, creditPrefix Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s)
           ((windows σ regOf evOf n).prefixLen x)
-          (stratumLive Honest.scheme (HonestJ10R.circuit (tileCount σ s)) rfl σ s
+          (stratumLive Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (rounds1 _) σ s
             (HonestJ10R.period (View σ s) (tileCount σ s) n) (windows σ regOf evOf n) x) 1 1 (j10rRate (k s) 1)
           (δs s)) ≤
       ∑ s ∈ S, (δs s + n * (0 + 0)) := by
   obtain ⟨hReg, hDraw, hSalt, -⟩ := strata_meets_period σ k hk S unitOf regOf evOf enc hacc hsalt hdraw n
   have hm := fun s (hs : s ∈ S) => strata_meets_stratum σ k hk unitOf regOf evOf enc s (hKd s hs) n hn (hδs s hs)
   exact h1J10RCheckedCreditPeriodStrata σ k hk S unitOf Honest.scheme (fun s => HonestJ10R.circuit (tileCount σ s)) hn
-    (fun _ _ => le_rfl) (fun _ => HonestJ10R.hr1 _) (fun _ => rfl) hKd (windows σ regOf evOf n) HonestJ10R.opened enc
+    (fun _ _ => le_rfl) (fun _ => HonestJ10R.hr1 _) (fun s => rounds1 (tileCount σ s)) hKd (windows σ regOf evOf n) HonestJ10R.opened enc
     (fun _ => HonestJ10R.place) (fun _ => HonestJ10R.tile) (fun s => HonestJ10R.period (View σ s) (tileCount σ s) n)
     (fun s => HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n) (fun s _ => (tileCount σ s : ℝ)) (fun _ => 1) δs
     (fun _ => 0) (fun _ => 0) hReg hDraw hSalt (fun s hs => (hm s hs).1) (fun _ _ => ⟨one_pos, le_rfl⟩)
@@ -269,7 +273,7 @@ theorem prefixLenBy_all {Ω : Type} {n : ℕ} (x : Paths Ω n) : prefixLenBy (fu
   rw [Finset.filter_true_of_mem fun _ _ _ _ => trivial, Finset.card_univ, Fintype.card_fin]
 
 theorem stratumLiveBy_all {nB mB n : ℕ} (σ : Fin nB → Fin mB) (s : Fin mB) (x : Paths (StrataCoin Bool 1 σ) n) :
-    stratumLiveBy Honest.scheme (HonestJ10R.circuit (tileCount σ s)) rfl σ s
+    stratumLiveBy Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (rounds1 _) σ s
       (HonestJ10R.period (View σ s) (tileCount σ s) n) (fun _ _ => True) x = (tileCount σ s : ℝ) * n := by
   unfold stratumLiveBy
   calc _ = ∑ _w : Fin n, (tileCount σ s : ℝ) := Finset.sum_congr rfl fun w _ => by
@@ -318,11 +322,11 @@ theorem strata_nontrivial {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB →
     {δs δbind δks : Fin mB → ℝ} (hΛ : ∀ s ∈ S, j10rRate (k s) 1 * Real.log (1 / δs s) < n)
     (hδ : ∑ s ∈ S, (δs s + n * (δbind s + δks s)) < 1) :
     ¬ prob (fun x : Paths (StrataCoin Bool 1 σ) n =>
-        (∀ s ∈ S, (idlePlay (Rest σ s) (tileCount σ s) (k s) n).accepts (pathsAt Bool rfl σ s n x)) ∧
-        n * ∑ s ∈ S, ((idlePlay (Rest σ s) (tileCount σ s) (k s) n).run (pathsAt Bool rfl σ s n x)).fixed <
+        (∀ s ∈ S, (idlePlay (Rest σ s) (tileCount σ s) (k s) n).accepts (pathsAt Bool (rounds1 (tileCount σ s)) σ s n x)) ∧
+        n * ∑ s ∈ S, ((idlePlay (Rest σ s) (tileCount σ s) (k s) n).run (pathsAt Bool (rounds1 (tileCount σ s)) σ s n x)).fixed <
           ∑ s ∈ S, creditPrefix Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s)
             (prefixLenBy (fun _ _ => True) x)
-            (stratumLiveBy Honest.scheme (HonestJ10R.circuit (tileCount σ s)) rfl σ s
+            (stratumLiveBy Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (rounds1 _) σ s
               (HonestJ10R.period (View σ s) (tileCount σ s) n) (fun _ _ => True) x) 1 1 (j10rRate (k s) 1) (δs s)) ≤
       ∑ s ∈ S, (δs s + n * (δbind s + δks s)) := by
   intro h

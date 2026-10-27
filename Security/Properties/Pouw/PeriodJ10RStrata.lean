@@ -60,7 +60,7 @@ J10-R's unit on `PouwH1Tile_v5` whose units are at one or more `K`, each `K` one
 every stratum's game reads the window's one round coin and the prover adapts across strata, so the strata's failure
 events are not independent, and the union bound, `∑_{s ∈ S}` of the one-stratum bounds, is what holds.
 
-The proof is to be in `Proofs.Pouw.PeriodJ10RStrata`: at each stratum, what `Proofs.Pouw.PeriodJ10R` applies
+The proof is `Proofs.Pouw.PeriodJ10RStrata`'s: at each stratum, what `Proofs.Pouw.PeriodJ10R` applies
 (`CircuitCreditPeriod` at `tileRun`), with the stratum's joint soundness from `StrataDrawIsCoin` and its
 `TileServiceSound`, carried to the period's coins by `pathsAt`, then the union bound.
 -/
