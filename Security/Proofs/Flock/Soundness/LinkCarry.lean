@@ -42,6 +42,7 @@ theorem errAt_eq (X : Val) : errAt T sT rd X = rRd T sT rd - pRd T sT rd X := by
   rw [errAt, rRd_eq]
   ring
 
+omit [DecidableEq Val] in
 theorem errAt_nonneg (X : Val) : 0 ≤ errAt T sT rd X := by
   have h := Finset.single_le_sum (fun v _ => pRd_nonneg T sT rd v) (Finset.mem_univ X)
   have hs := sRd_nonneg T sT rd
@@ -91,18 +92,18 @@ theorem expect_mixG (F : (Σ i, τ i) → ℝ) :
 variable {V : Type} [Fintype V] [DecidableEq V] (rd : (i : ι) → τ i → Finset V)
 
 /-- The mixture's readings: trial `i`'s. -/
-def rdΣ : (Σ i, τ i) → Finset V := fun x => rd x.1 x.2
+def rdSig : (Σ i, τ i) → Finset V := fun x => rd x.1 x.2
 
 theorem pRd_mixG (v : V) :
-    pRd (mixG T) (mixStrat T s) (rdΣ rd) v = (∑ i, pRd (T i) (s i) (rd i) v) / Fintype.card ι :=
+    pRd (mixG T) (mixStrat T s) (rdSig rd) v = (∑ i, pRd (T i) (s i) (rd i) v) / Fintype.card ι :=
   expect_mixG T s _
 
-theorem sRd_mixG : sRd (mixG T) (mixStrat T s) (rdΣ rd) = (∑ i, sRd (T i) (s i) (rd i)) / Fintype.card ι :=
+theorem sRd_mixG : sRd (mixG T) (mixStrat T s) (rdSig rd) = (∑ i, sRd (T i) (s i) (rd i)) / Fintype.card ι :=
   expect_mixG T s _
 
 /-- **The mixture's binding error is the average of the trials'**, at any `X`. -/
 theorem errAt_mixG (X : V) :
-    errAt (mixG T) (mixStrat T s) (rdΣ rd) X = (∑ i, errAt (T i) (s i) (rd i) X) / Fintype.card ι := by
+    errAt (mixG T) (mixStrat T s) (rdSig rd) X = (∑ i, errAt (T i) (s i) (rd i) X) / Fintype.card ι := by
   unfold errAt
   simp only [sRd_mixG, pRd_mixG]
   rw [← Finset.sum_div, Finset.sum_comm, Finset.sum_add_distrib, Finset.sum_sub_distrib]
@@ -110,7 +111,7 @@ theorem errAt_mixG (X : V) :
 
 /-- **Each trial's binding error is at most `m` times the mixture's**, at any `X`, with `m` the number of trials. -/
 theorem errAt_le_mix (i : ι) (X : V) :
-    errAt (T i) (s i) (rd i) X ≤ Fintype.card ι * errAt (mixG T) (mixStrat T s) (rdΣ rd) X := by
+    errAt (T i) (s i) (rd i) X ≤ Fintype.card ι * errAt (mixG T) (mixStrat T s) (rdSig rd) X := by
   have hm : (Fintype.card ι : ℝ) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
   rw [errAt_mixG, mul_div_assoc', mul_comm, mul_div_assoc, div_self hm, mul_one]
   exact Finset.single_le_sum (fun j _ => errAt_nonneg (T j) (s j) (rd j) X) (Finset.mem_univ i)
@@ -192,7 +193,7 @@ variable {ι : Type} [Fintype ι] [Nonempty ι] {τ : ι → Type} (T : (i : ι)
   (e : (i : ι) → Val i → V)
 
 /-- The mixture's readings, each trial's embedded in `V`. -/
-def rdMix : (Σ i, τ i) → Finset V := rdΣ fun i x => (rd i x).image (e i)
+def rdMix : (Σ i, τ i) → Finset V := rdSig fun i x => (rd i x).image (e i)
 
 /-- **The carried leaf's binding error in each sampling block**: read as the pulled-back value `pull e_i Xm`, each
 trial's binding error is at most `m` times the mixture's at `Xm`, with `m` the number of sampling blocks that share
