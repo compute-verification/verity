@@ -247,7 +247,7 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
 
 
 def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its_timing_term():
-    """r20261015-203743-d101 (15 Oct), 8 GPUs' HBM and a host tier, every pass the whole store: its parts are #2089's
+    """A whole-node session (`d101`), 8 GPUs' HBM and a host tier, every pass the whole store: its parts are the timing
     split, and at either R they sum to the ledger's timing term."""
     d101 = {"span_ns": 420_074_057_129, "passes": 6430, "reads_bytes": 4_888_145_229_250_560, "pass_ns": 65_259_603,
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
