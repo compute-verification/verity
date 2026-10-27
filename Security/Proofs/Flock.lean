@@ -4,6 +4,7 @@ import Proofs.Flock.Soundness
 import Proofs.Flock.EndToEnd
 import Proofs.Flock.EndToEnd.Window
 import Proofs.Flock.EndToEnd.WindowShare
+import Proofs.Flock.EndToEnd.WindowDraw
 import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEnd.Period

@@ -894,6 +894,9 @@
    "owner": "@proofs",
    "digest": "ce23ada52fbd67f4a84875d02b79ea92d1973c7b181c104aa8c5299eaf78207b"
   },
+  "Flock.Assumptions.PinnedWindowDraws": {
+   "owner": "@training"
+  },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
    "digest": "c9624861b2572dfa4fe1887a5972b0d62070ac779fbebd0f5f6a0782ee367024"
@@ -2641,6 +2644,12 @@
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Flock.Guarantees"],
    "except": [],
    "why": "a guarantee is a Prop over Mathlib, never over a proof",
+   "sealed": true
+  },
+  "Definitions.Flock.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Flock", "Definitions.Flock.Assumptions"],
+   "except": [],
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof",
    "sealed": true
   },
   "Definitions.Accounting": {
@@ -6318,6 +6327,18 @@
    "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
    "assumptions": [],
    "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
+  },
+  "Flock.SecurityProofs.WindowBound": {
+   "owner": "@training"
+  },
+  "Flock.SecurityProofs.WindowBound_honest": {
+   "owner": "@training"
+  },
+  "Flock.SecurityProofs.WindowBound_nontrivial": {
+   "owner": "@training"
+  },
+  "Flock.SecurityProofs.WindowDraw": {
+   "owner": "@training"
   },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
@@ -12260,6 +12281,10 @@
    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": "frozen (verdict): as WorkSoundOnCardH200, on the RTX PRO 6000 (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000 (CMP-136).",
+   "Flock.SecurityProofs.WindowDraw": "frozen (no-function): The decomposition of a window's stratified law at a member, and the service's split of a draw file into the members' session files (Member.sessionFile, a model of benchmarks/one_stage/a5.py's split in Security/Definitions/Flock/Audit/Window rather than executable code): a statement about a law and a model, with no acceptance of a function to take.",
+   "Flock.SecurityProofs.WindowBound": "frozen (no-function): The union bound of a window's members' session bounds, over any window body and members' events: it takes each member's bound in its own subset session game as a hypothesis (what a member's session guarantee gives once its strategy runs the rest of the window around the session) and composes them, with no acceptance of a function to take.",
+   "Flock.SecurityProofs.WindowBound_honest": "completeness: the honest lemma of WindowDraw and WindowBound: at the deployed window, through the one premise PinnedWindowDraws (its draw file and its three sessions' draw files by SHA-512), the window's draw is a draw of its stratified law (3744 units, strata of 2496, 624 and 624 units, one unit each), its thirteen members tile it inside their strata, the service's split of its draw file is the three pinned session files, every share has at most one unit, and the composed bound is at most 3 b when every member's session bound is at most b",
+   "Flock.SecurityProofs.WindowBound_nontrivial": "completeness: the nontrivial lemma of WindowBound: at a window of 3 units in two strata drawing one unit each, with one member across both whose event is a share of two units, every hypothesis but the member's being inside its stratum holds (its session bound is 0), and the window's event is above the composed bound 0",
    "Flock.SecurityProofs.JointStratified": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizon": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizonMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
