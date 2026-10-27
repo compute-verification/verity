@@ -51,10 +51,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import j10r_units as J10R
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
@@ -283,7 +282,7 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
         r["fault_call_seed_moved"], r["fault_call_seed_want"] = int(cm.numel()), jc.units
         r["fault_call_seed_conforming"] = cm.numel() == jc.units
     out.copy_(keep)
-    del keep
+    keep = None
     r.update({"ws_bytes": int(mu.rws[0].numel()), "ws_end_written": ws_end, "ws_tail_written": mu.tail_written()})
     r["ok"] = (r["poison_left"] == 0 and r["bad_words"] == 0 and r["vs_base_bad_words"] in (None, 0)
                and r["seed_bad"] == 0 and r["sm_poison_left"] == 0 and r["sm_vs_units_bad_words"] == 0
@@ -369,7 +368,7 @@ def wgmma_of(d: str):
 
 
 def time_(args) -> int:
-    sys.path.append(str(HERE.parents[1] / "torch_gpu" / "s8_linear"))
+    sys.path.append(str(Path(__file__).resolve().parents[2] / "torch_gpu" / "s8_linear"))
     import int_mm as IM
     import unitsbench as U
     from hb_kbench import Clock
@@ -388,7 +387,6 @@ def time_(args) -> int:
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "calls": []}
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     for c in calls(args.ms, args.linears):
-        key = f"{c['linear']}.{c['m']}"
         a = operand_all(c["a_seed"], c["m"], c["k"])
         b = operand_all(c["b_seed"], c["n"], c["k"])
         g = torch.Generator(device="cuda").manual_seed(c["b_seed"])
@@ -441,7 +439,7 @@ def time_(args) -> int:
                "vs_base_bad_words": same, "poison_left": left}
         print(json.dumps({k: v for k, v in rec.items() if k not in ("ms", "sm_mhz")}), flush=True)
         doc["calls"].append(rec)
-        del keep, arms, a, b
+        keep = arms = a = b = None
         torch.cuda.empty_cache()
         (out / "j10r90-time.json").write_text(json.dumps(doc, indent=1))
     doc["layer"] = {}
