@@ -54,9 +54,7 @@ theorem OnsiteServingEndToEnd_honest {ι α : Type} [Fintype α] {d : Device ι}
   refine ⟨soundness_of_subprotocols, ?_⟩
   have key := Accounting.SecurityProofs.ServingRoute.ServingEndToEnd (V.game θ F c) P play
     (fun _ o => Accepts o.sent ∧ V.Registered o.params o.file)
-    (fun s o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c s a o) success N
-    (fun s => Game.prob (fun o => (Accepts o.sent ∧ V.Registered o.params o.file) ∧
-      ¬ (Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c s a o)) (V.game θ F c) s)
+    (fun s o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c s a o) success N _
     δb η hcS hqS (fun _ => le_rfl) hbr hcov (V.honest θ F c)
   have h0 : Game.prob (fun o => (Accepts o.sent ∧ V.Registered o.params o.file) ∧
       ¬ (Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c (V.honest θ F c) a o))
@@ -72,7 +70,7 @@ theorem OnsiteServingEndToEnd_honest {ι α : Type} [Fintype α] {d : Device ι}
 strategy on whose every play the computation succeeds on fewer server-windows than `windowsMin N`, and the
 subprotocols' errors, `δ_b` and `η` summing below one there. -/
 theorem OnsiteServingEndToEnd_nontrivial {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) {L σ E : Type}
-    (P : Params L σ E) (θ F c : ByteArray)
+    [Fintype σ] [Fintype E] (P : Params L σ E) (θ F c : ByteArray)
     (play : Game.Strategy (V.game θ F c) → Outcome → Play L σ)
     (success : Game.Strategy (V.game θ F c) → Outcome → Prop) (N : ℝ) (δb η : Game.Strategy (V.game θ F c) → ℝ≥0∞)
     (s : Game.Strategy (V.game θ F c)) (hreg : V.Registered θ F)
