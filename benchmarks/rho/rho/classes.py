@@ -81,6 +81,8 @@ class Structure:
     #: where `s_×`'s gates come from, as `Units.basis` says it for `gates_per_flop` (`REFERENCE` is the FLOP model's);
     #: none needed at `s_× ≤ 1`, which holds in every design
     basis: str = ""
+    #: the runs that measured `s_×` (`art:` ids), cited beside the straddling premise
+    evidence: tuple[str, ...] = ()
 
     #: `U / s_×` counts the operations inside the uncertified gates only if none has gates on both sides; at `s_× = 1`
     #: each operation is charged to one gate, its output, and none can straddle
@@ -108,7 +110,7 @@ class Structure:
         return self.omega_max / self.gates(w)
 
     def cites(self) -> tuple[str, ...]:
-        return self.STRADDLE if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
+        return self.STRADDLE + self.evidence if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
 
     def elementary(self) -> Structure:
         """One counted operation per gate, at most: the cap that needs no straddling premise."""
@@ -116,7 +118,8 @@ class Structure:
 
 
 def structure(registry: Registry, name: str) -> Structure:
-    return registry.fields(Structure, f"structure.{name}")
+    t = f"structure.{name}"
+    return registry.fields(Structure, t, evidence=tuple(registry.get(f"{t}.evidence", ())))
 
 
 class Outside(Exception):

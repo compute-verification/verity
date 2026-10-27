@@ -1,4 +1,4 @@
-"""CPU tests for TP-08: the per-rank sampled-replay record (manbind MAN-06 form (A) run inside each rank's worker) -- the driver's fold over
+"""CPU tests for TP-08: the per-rank sampled-replay record (MAN-06 run inside each rank's worker) -- the driver's fold over
 ranks/pairs (`tp.c2.sampled_replay_components`) and the worker's fail-closed paths (`_tp2_sampled_replay`: no map, no Build dir,
 a Program that is not of record is REFUSED by name before any evaluation)."""
 from __future__ import annotations

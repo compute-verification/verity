@@ -3,8 +3,7 @@
     ids --Gather[embed]--> h0 --Mul[model]--> h1 --Add[model]--> h2 --RmsNorm[layernorm]--> h3 --Gemm[qkv_proj]--> q
       --RoPE[rotary_emb]/query--> qr --Add[model]--> h4 --Gemm[lm_head, tied embed weight]--> logits --Argmax[root]--> token
 
-`model`'s own body has three Calls (Mul, Add, Add); `h1` never leaves it (interior), `h2` and `h4` do (boundary -- the F-r19-int-20
-class: an interior-looking Call whose output another module reads is required because the dataflow says so, not by a pass).
+`model`'s own body has three Calls (Mul, Add, Add); `h1` never leaves it (interior), `h2` and `h4` do (boundary: an interior-looking Call whose output another module reads is required because the dataflow says so, not by a pass).
 """
 
 from __future__ import annotations
@@ -82,7 +81,7 @@ def test_module_bodies_and_boundary():
     assert B.owner[1] == B.owner[2] == B.owner[6] == W
     R = ValueRef
     assert R(1, "out") not in B.values, "h1 is interior to `model`'s own body"
-    assert {R(2, "out"), R(6, "out")} <= B.values, "h2 / h4 leave `model`'s body: boundary by dataflow (the F-r19-int-20 class)"
+    assert {R(2, "out"), R(6, "out")} <= B.values, "h2 / h4 leave `model`'s body: boundary by dataflow"
     assert B.values == {R(-2, "ids"), R(-1, EMBED_W), R(-1, QKV_W), R(0, "out"), R(2, "out"), R(3, "out"), R(4, "out"), R(5, "out"),
                         R(6, "out"), R(7, "out"), R(8, "out")}
 
@@ -222,7 +221,7 @@ def _tp_manifest(rank: int, P: ProgramView | None = None) -> dict:
 
 
 def test_a_rank_program_requires_its_rank_local_partials_beside_every_collective_output():
-    """TP-04: a collective's output and its rank-local partial are required on every rank.  A partial produced in the collective's own body
+    """A collective's output and its rank-local partial are required on every rank.  A partial produced in the collective's own body
     is its producer's Value (`part_rank<r>`); a collective site whose operand another body produced names its partial itself (`shard_rank<r>`,
     1/world of the gathered width) at the enclosing module, invocation 0.  The received `peers_<k>` inputs are neither token ids nor rows."""
     for rank in (0, 1):

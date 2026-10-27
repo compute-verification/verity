@@ -1,4 +1,4 @@
-"""H1's served tables registered at serving scale (VLLM-76): `registered.Registered.commit` of rows of 16-bit words as
+"""H1's served tables registered at serving scale: `registered.Registered.commit` of rows of 16-bit words as
 ``hm96-sha512/row/v2`` bit rows, row j salted `audit.hm96_salt` of the run's key at the value's nonce, with the same
 salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
 
@@ -16,7 +16,7 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
   Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
-* **On the GPU** (VLLM-79): where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
+* **On the GPU**: where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
   (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
   the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
   NumPy path above is the reference the device is held to
@@ -136,7 +136,8 @@ class _Frame:
 
 
 class Salts(Sequence):
-    """A registered value's salts, drawn again on read: item j is `audit.hm96_salt(key, nonce, j)`."""
+    """A registered value's salts, drawn again on read: item j is `audit.hm96_salt(key, nonce, j)`; `at` draws many at
+    once."""
 
     def __init__(self, key: bytes, nonce: int, n: int) -> None:
         self.key, self.nonce, self.n = bytes(key), int(nonce), int(n)
@@ -151,10 +152,17 @@ class Salts(Sequence):
             raise IndexError(j)
         return hm96_salt(self.key, self.nonce, j % self.n)
 
+    def at(self, positions: Sequence[int] | np.ndarray) -> bytes:
+        """Items ``positions`` (each in [0, n)) concatenated, drawn in one pass (`crypto.chacha20.hm96_salts`)."""
+        at = np.asarray(positions)
+        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
+            raise IndexError(f"a position outside the value's {self.n} rows")
+        return chacha20.hm96_salts(self.key, self.nonce, at)
+
 
 class Rows(Sequence):
-    """A registered value's rows: item j row j's words as ints (a slice, the words ``(·, W)`` u16), when kept; else every
-    read refused, the prover rebuilding them from what it keeps (`pouw_h1_prover`)."""
+    """A registered value's rows: item j row j's words as ints (a slice, the words ``(·, W)`` u16; `at`, any rows' words),
+    when kept; else every read refused, the prover rebuilding them from what it keeps (`pouw_h1_prover`)."""
 
     def __init__(self, words: np.ndarray | None, n: int) -> None:
         self.words, self.n = words, int(n)
@@ -163,12 +171,22 @@ class Rows(Sequence):
         return self.n
 
     def __getitem__(self, j: Any) -> Any:
+        if isinstance(j, slice):
+            return self._kept()[j]
+        return tuple(int(v) for v in self._kept()[j])
+
+    def at(self, positions: Sequence[int] | np.ndarray) -> np.ndarray:
+        """Rows ``positions`` (each in [0, n)) as their words ``(·, W)`` u16, gathered at once."""
+        at = np.asarray(positions, dtype=np.int64)
+        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
+            raise IndexError(f"a position outside the value's {self.n} rows")
+        return self._kept()[at]
+
+    def _kept(self) -> np.ndarray:
         if self.words is None:
             raise LookupError("this registered value's rows aren't kept here: the prover rebuilds them from its own "
                               "(pouw_h1_prover.keep_call, its weights)")
-        if isinstance(j, slice):
-            return self.words[j]
-        return tuple(int(v) for v in self.words[j])
+        return self.words
 
 
 def path() -> str:

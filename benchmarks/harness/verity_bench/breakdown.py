@@ -173,13 +173,13 @@ def from_results(paths: Sequence[Path]) -> dict[str, Any]:
     return {"schema": SCHEMA, "spec": None, "points": points, "skipped": []}
 
 
-def collect(store: Any, *, pull: bool, spec: str = SPEC) -> dict[str, Any]:
+def collect(store: Any, *, spec: str = SPEC) -> dict[str, Any]:
     """The breakdown of the newest passing run of each point of `spec` that times every arm (`served_table`'s rule)."""
 
     skipped: list[dict[str, Any]] = []
     points = []
     for sweep_point in expand_sweep(resolve_spec(spec).sweep.id):
-        found = served_table._newest(store, spec, sweep_point.id, ARMS, pull, skipped)
+        found = served_table._newest(store, spec, sweep_point.id, ARMS, skipped)
         if found is None:
             skipped.append({"spec": spec, "point": sweep_point.id, "run": None, "art": None, "why": "no passing run"})
             continue
@@ -190,13 +190,15 @@ def collect(store: Any, *, pull: bool, spec: str = SPEC) -> dict[str, Any]:
 
 def build(*, store: Any = None, root: Path | None = None, local_only: bool = False,
           added: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None) -> dict[str, Any]:
-    """`collect` after pulling the remote's attempts started since the spec was added, unless `local_only`."""
+    """`collect` after pulling the remote's labels and its attempts started since the spec was added, unless
+    `local_only`."""
 
     root = root or jobs.repository_root()
     completion = jobs.StoreCompletion(store, root=root, local_only=local_only, log=log)
     if not local_only:
+        completion.pull_labels()
         completion.pull_since((added or (lambda spec: served_table.spec_added(root, spec)))(SPEC))
-    return collect(completion.store, pull=not local_only)
+    return collect(completion.store)
 
 
 def _ms(summary: Mapping[str, Any]) -> str:
