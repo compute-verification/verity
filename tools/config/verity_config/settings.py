@@ -321,10 +321,11 @@ class Registry:
                     out.append(f"{rel}:{line}: {name} is not declared in {self.path}")
                 elif raw is not None and s.default is not None:
                     try:
-                        ok = s.type(raw) == s.default
-                    except ValueError:
-                        ok = False
-                    if not ok:
+                        parsed = s.type(raw)
+                    except ValueError as e:
+                        out.append(f"{rel}:{line}: {name}'s default {raw!r} here doesn't parse as declared: {e}")
+                        continue
+                    if parsed != s.default:
                         out.append(f"{rel}:{line}: {name}'s default {raw!r} here is not its declared {s.default!r}")
         return out
 

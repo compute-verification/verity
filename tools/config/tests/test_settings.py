@@ -146,13 +146,15 @@ def test_a_standalone_file_reads_only_declared_variables_at_their_declared_defau
         "on = 'PX_ON' in os.environ\n"
         "f = os.environ['PX_FORM']\n"
         "m = int(os.environ.get('PX_N', '4'))\n"
-        "t = os.environ.get('PX_TYPO', '')\n")
+        "t = os.environ.get('PX_TYPO', '')\n"
+        "k = int(os.environ.get('PX_N', 'three'))\n")
     r = Registry(str(tmp_path / "settings.py"), ("PX_",), Setting("PX_N", int, 3, VALUE, "a count"),
                  Setting("PX_ON", ST.one, False, VALUE, "on at 1"), Setting("PX_FORM", str, "a", VALUE, "a form"),
                  Setting("PX_DIR", str, None, WHERE, "where outputs go"), standalone=("ship/run.py",))
     assert [(line, name) for line, name, _ in ST.direct_reads((tmp_path / "ship" / "run.py").read_text())] == [
-        (2, "PX_N"), (3, "PX_DIR"), (4, "PX_ON"), (5, "PX_FORM"), (6, "PX_N"), (7, "PX_TYPO")]
+        (2, "PX_N"), (3, "PX_DIR"), (4, "PX_ON"), (5, "PX_FORM"), (6, "PX_N"), (7, "PX_TYPO"), (8, "PX_N")]
     assert r.standalone_problems() == [
         "ship/run.py:6: PX_N's default '4' here is not its declared 3",
-        f"ship/run.py:7: PX_TYPO is not declared in {tmp_path / 'settings.py'}"]
+        f"ship/run.py:7: PX_TYPO is not declared in {tmp_path / 'settings.py'}",
+        "ship/run.py:8: PX_N's default 'three' here doesn't parse as declared: invalid literal for int() with base 10: 'three'"]
     assert ST.words(" a  b ") == ("a", "b") and ST.words("") == ()
