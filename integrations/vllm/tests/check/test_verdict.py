@@ -388,7 +388,7 @@ def test_a_full_row_that_committed_no_sampled_ids_rests_on_its_match_link_alone(
     link = next(x for x in checks if x.name == "execution_extent/match_account_link")
     assert link.outcome == V.PASS and "account" not in link.scope and "commit_tokens_sha256" not in link.inputs
     bad = copy.deepcopy(c)
-    why_m = "r0: the Commit served 5 tokens (last 2) but the Match record's tokens.json served 6 (last 7): not one serving transcript (R17-27 (a))"
+    why_m = "r0: the Commit served 5 tokens (last 2) but the Match record's tokens.json served 6 (last 7): not one serving transcript (executed-prefix condition (a))"
     bad["binding"]["coverage"] |= {"match_account_link": _link(ok=False, required=True, problems=[why_m]) | {"match_dir": "/x/match", "tokens_json": cov["match_account_link"]["tokens_json"]},
                                    "ok": False, "error": "executed prefix not linked to the Match account: " + why_m}
     bad["sampled_replay"]["executed_prefix_of_record"]["facts_of_record"]["r0"]["linked"] = False

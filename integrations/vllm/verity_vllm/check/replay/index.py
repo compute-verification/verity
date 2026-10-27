@@ -307,7 +307,7 @@ class ProgramIndex:
                 d["copy_error"] = pd.get("plane_error") or "sum plane has no member"
             else:
                 pm = pd["members"][0]
-                why = "F-r19-int-24: the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
+                why = "the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
                 d["copies"] = [{"op_path": pd["op_path"], "member": pm[0], "width": int(pm[1]), "dtype": str(pm[2]), "row": int(pd["row"]),
                                 "of": d["members"][0][0], "why": why}]
         self._desc[i] = d

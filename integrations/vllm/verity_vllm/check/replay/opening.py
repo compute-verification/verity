@@ -109,7 +109,7 @@ class CommittedStore:
         if len(cov) > 1:
             where = ", ".join(f"{x.get('name')}@{x.get('stream_offset')}" for x in cov[:4])
             return None, (f"ambiguous binding: {len(cov)} entries for ({rid}, step {step}, {op_path}/{member}) [invocation {inv_min}] cover "
-                          f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity (F-r16-08)")
+                          f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity")
         e = cov[0] if cov else es[0]
         ident = e.get("identity") or {}
         rng = ident.get("element_range") or [0, None]

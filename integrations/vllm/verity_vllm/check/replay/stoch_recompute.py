@@ -252,7 +252,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
         t_eos = next((k + 1 for k, y in enumerate(served[:cap]) if y is not None and int(y) in eos_ids), None)
     if t_eos is not None and t_eos < cap and A is None:
         return None, info | {"unjudged": f"EOS served at slot {t_eos} before the cap {cap} and the scheduler profile (eos_lag_rows / "
-                                         f"async_scheduling) is unattested: the lag slot cannot be judged (M-0213 / ruling 21)"}
+                                         f"async_scheduling) is unattested: the lag slot cannot be judged"}
     if A is not None and int(A) not in (0, 1):
         return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (DP-pad-02: LAG in (0, 1)); the recurrence refuses it"}
     # served[:cap]: the recurrence runs over the C slots (pad's expected_draw_positions does the same); draws past C are EXTRA positions for
@@ -312,7 +312,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     if lag_rec is not None and lag_decl is not None and int(lag_decl) != lag_rec:
         out["problems"].append(f"draw ledger: the Program declares stop_rule.eos_lag_rows {lag_decl} but the record attests {lag_src} -> {lag_rec}")
     if lag is not None and int(lag) not in (0, 1):
-        out["problems"].append(f"draw ledger: scheduler profile A = {lag} is not 0 or 1 (R17-1 check_lag: one rule, no other profile)")
+        out["problems"].append(f"draw ledger: scheduler profile A = {lag} is not 0 or 1 (check_lag: one rule, no other profile)")
     probs = out["problems"]
     for rid, dr in sorted(draws_seen.items()):
         dr = sorted(dr, key=lambda x: (x["step"], x["row"]))
