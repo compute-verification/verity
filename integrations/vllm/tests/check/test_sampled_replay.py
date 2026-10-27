@@ -412,7 +412,7 @@ def test_equal_shape_request_swap_of_an_input_member_fails_named(world):
     # the norm rows themselves (inputs = embeddings of the right request) and the gate_up Gemm rows (input = the other request's norm) fail
     assert {"RMSNormTriton_v1", "Gemm_v1"} <= specs
     assert {x["request_id"] for x in rep["mismatch"]} == {"r0", "r1"}
-    # [moe F-moe-r17-06] EVERY mismatch is counted by name on the record, uncapped (the detail list carries 12): the counts sum to mismatch_n
+    # EVERY mismatch is counted by name on the record, uncapped (the detail list carries 12): the counts sum to mismatch_n
     mb = rep["mismatch_by"]
     n = rep["sample"]["mismatch_n"]
     assert sum(mb["by_family"].values()) == sum(mb["by_request"].values()) == sum(mb["by_phase"].values()) == sum(mb["strata"].values()) == n
@@ -941,7 +941,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
     """`model_weights_provider` is the replay's registered-input reader on the pods; the rotary table
     `...rotary_emb.cos_sin_cache` is a torch BUFFER (vLLM: `register_buffer(..., persistent=False)`, one shared RotaryEmbedding instance
     named once at layer 0).  A parameters-only reader returned None for it -> every RoPE_v1 row 'registered weight field ... not available
-    to the replay' (300/300 strata on the smollm2 int-2 canary, cp-can).  The reader's set must equal the set `register_weights` pins:
+    to the replay' (300/300 strata on the smollm2 canary).  The reader's set must equal the set `register_weights` pins:
     `named_parameters()` + `named_buffers()`; the wrapper prefix rule is unchanged; an unknown field is still None (unresolved by name)."""
     torch = pytest.importorskip("torch")
 
@@ -1872,7 +1872,7 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
 
 
 def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_member():
-    """[reqval 287783ec6 / 9f7a75f6b; moe MOE-PAD-SPEC route A (3)] `padded_moe_block` (the evaluator of MoeFfnFixedL_v1 / MoeFfnFixed_v1) is
+    """`padded_moe_block` (the evaluator of MoeFfnFixedL_v1 / MoeFfnFixed_v1) is
     value-equal to the MOE-01 composition the record's five kernels are replayed by -- MoeRouterTopK on the logits, per SELECTED slot
     MoeExpertGemm (up) -> SiluMul (act) -> MoeExpertGemmW (down, routed weight in the accumulator) -> MoeSum in id order -- and evaluates the
     UNSELECTED slots too (g = 0.0f: the construction computes them; their down words are f2fp(acc * 0) = +/-0).  Every member Q_module_v1
@@ -1944,7 +1944,7 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     have = np.full(4, bot17, dtype=np.uint32); have[3] = bot17 | 0x0001              # bot with a nonzero payload (or INV): never accepted as bot
     eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and "nonzero payload" in v
-    # revb n-52-2: an INV word (bot bit + nonzero payload) under an ACTIVE enable is named INV, never 'payload differs'
+    # an INV word (bot bit + nonzero payload) under an ACTIVE enable is named INV, never 'payload differs'
     have = payload.astype(np.uint32).copy(); have[3] |= bot17                          # payload[2] is 0x0000: bot bit there IS bot, so use [3]
     eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 3 and "INV word" in v and "Active" in v

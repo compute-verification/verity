@@ -1,6 +1,6 @@
 """The fused-expert stacks under vLLM 0.28's RoutedExperts submodule.
 
-The int-1 canary's OLMoE Commit FAILed closed at the weights pin: vLLM 0.28.1rc1 (the pods' engine) owns the fused expert stacks on a
+A canary's OLMoE Commit FAILed closed at the weights pin: vLLM 0.28.1rc1 (the pods' engine) owns the fused expert stacks on a
 RoutedExperts submodule of the FusedMoE layer -- served name `model.layers.N.mlp.experts.routed_experts.w13_weight` -- and MAN-09's
 composition rule matched only `<layer>.mlp.experts.(w13|w2)_*`, so all 32 stacks of OLMoE (about 90 percent of its parameters) were
 'no checkpoint tensor and no composition rule' (compared 180 / unresolved 32 / complete False).  A missing composition rule, named

@@ -126,7 +126,7 @@ def _plain(x: Any) -> Any:
 def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, int, int], np.ndarray | None]) -> None:
     """Read every weight field the sample consumes into the provider's cache in the PARENT (the children must not touch the model) --
     INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd, MAN-07): [measured on
-    the Qwen2.5 L40S B1 int-5 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
+    a Qwen2.5 L40S B1 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
     in a forked child -> AcceleratorError 'CUDA initialization error' -> every BiasAdd stratum 'not evaluated' -> partial -> FAIL closed."""
     seen: set[str] = set()
 
@@ -646,9 +646,9 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     for k in strata:
         strata[k]["evaluated"] = int(strata_eval.get(k, 0))
         if strata_mism.get(k):
-            strata[k]["mismatch"] = int(strata_mism[k])                       # [moe F-moe-r17-06] the stratum's own count, uncapped
+            strata[k]["mismatch"] = int(strata_mism[k])                       # the stratum's own count, uncapped
     picks_by_request_step = _picks_by_request_step(results)
-    # [moe F-moe-r17-06] EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
+    # EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
     # reader of the record learns which mechanisms / requests / phases / modules disagree without re-running the replay
     mism_by = {"by_family": dict(Counter(m["spec"].split("{")[0] for m in mism)),
                "by_request": dict(Counter(str(m["request_id"]) for m in mism)),
@@ -754,7 +754,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                             # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
                             "phase_anchor": {r: anchors[r] for r in sorted(anchors)}},
             "mismatch": [{k: m.get(k) for k in ("spec", "request_id", "step", "engine_step", "op_path", "row", "phase", "inputs", "outputs", "why")} for m in mism[:12]],
-            "mismatch_by": mism_by,                                       # [moe F-moe-r17-06] every mismatch by name, uncapped
+            "mismatch_by": mism_by,                                       # every mismatch by name, uncapped
             "not_evaluated": not_evald[:12],
             # mechanisms of the Program's rows this replay does NOT read even when the row IS evaluated (named, counted)
             "uncovered_mechanisms": _uncovered_mechanisms(all_vus, not_ev_fam),

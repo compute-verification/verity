@@ -126,7 +126,7 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
         engine["async_scheduling"] = bool(lag)
         stop_rule.update({"eos_lag_rows": int(lag), "lag": int(lag), "eos_lag_source": "mock_global_program(lag=...) (declared static)"})
         lag_block = {"value": int(lag), "async_scheduling": bool(lag), "source": "mock_global_program(lag=...)", "declared_explicitly": True}
-    return {"schema": GP_SCHEMA, "builder": "cb_a.global_match.mock_global_program (manifest + Build components; gprog's rooted Program replaces this)",
+    return {"schema": GP_SCHEMA, "builder": "cb_a.global_match.mock_global_program (manifest + Build components; the Build's rooted Program replaces this)",
             "workload": {"path": workload_path, "sha256": sha256_file(workload_path), "n_requests": len(reqs)},
             # the mock models GP-01's eager conditions; G1 fails closed on a Program without a declaration
             "applicability": {"execution": "bi-eager", "row_execution": "bi-eager", "engine": engine, "refusal": None},
@@ -300,7 +300,7 @@ ENGINE_FACT_KEYS = ("enforce_eager", "enable_prefix_caching", "enable_chunked_pr
 
 
 def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
-    """How many rows the engine computes for a request AFTER its EOS sample (DP-pad-02).
+    """How many rows the engine computes for a request AFTER its EOS sample.
 
     vLLM's async scheduling (``async_scheduling=True``) schedules step t+1 before step t's sample is known, so a request whose
     sample at step t is an EOS is still forwarded once more at t+1 (a placeholder row whose input is the EOS and whose sample is

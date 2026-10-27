@@ -1,6 +1,6 @@
 """root_of_record is a function of (weights struct, checkpoint bytes, config.json) -- not of the host.
 
-exec's Llama-3.2-1B B1 records derived on cp-r1 (EPYC 9354, numpy AVX512 dispatch) and cp-a100 (EPYC 7763, no AVX512) agreed on all
+Llama-3.2-1B B1 records derived on cp-r1 (EPYC 9354, numpy AVX512 dispatch) and cp-a100 (EPYC 7763, no AVX512) agreed on all
 162 byte-digest fields and differed in ONE: the analytic rotary entry's `inv_freq_sha256` -- numpy's fp32 `np.power(base, exps)` takes
 SVML on AVX512 hosts and returns 7 of 32 exponents one ulp off the correctly rounded value (measured on both pods).  v1 keyed the
 analytic entry of the root by those bytes, so one model had two roots.  The pin VERDICT never depended on it (check_cos_sin is a

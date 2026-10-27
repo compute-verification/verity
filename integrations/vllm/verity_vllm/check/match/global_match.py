@@ -340,7 +340,7 @@ def impl_info(mod) -> dict:
         info["stats"] = dict(GMF.last_stats) if GMF.last_stats else {k: int(v) for k, v in sorted(GMF.stats.items())}
         # the DECLARED configuration (workers cap, operand form, switches as read), beside the counters
         info["config"] = dict(GMF.config)
-        # the same fold_load under the DECLARED configuration too: the fast documents of record (int-2..int-5) named it there; readers keep working
+        # the same fold_load under the DECLARED configuration too: earlier fast documents of record named it there; readers keep working
         info["config"]["fold_load"] = dict(PL.LOAD_NOTES)
     return info
 

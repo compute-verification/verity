@@ -211,7 +211,7 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
     (None, None) when the population carries no such gap.  The NOT_YET exclusions (no-evaluator: RoPE_v1; state-linked: Attention_v3) are
     the replay's stated applicability domain and are not gated here.
 
-    A SELECTOR family with no registered evaluator (GumbelTopPTokenSelect_v1: not in NOT_YET, not in any ruling's
+    A SELECTOR family with no registered evaluator (GumbelTopPTokenSelect_v1: not in NOT_YET, not in any exclusion's
     domain) is a form-(B)-REQUIRED gap with a family-targeted test (`_form_b_selector_coverage`: every (step, request)'s sampled id compared
     by the oracle, 0 mismatch, attribution complete) -> PASS carrying the note, else FAIL by name: without it a stochastic Commit-only rerun
     (no --match-dir) PASSes with the sampled ids value-checked by NEITHER form (C1 / C3 bind them; nothing computes them)."""

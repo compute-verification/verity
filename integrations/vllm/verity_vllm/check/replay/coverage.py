@@ -505,7 +505,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                                                         required_row_identities=int(req_ids.get(r, 0)) - int(not_exec_req_rows.get(r, 0)),
                                                         batch_level_slots_not_executed=int(batch_slots_req.get(r, 0)))
                                                     for r, e in sorted((executed_prefix or {}).items())},
-                                     # [moe F-moe-r17-05] the REACH of the class over every family of Q(P): kind per family (row | named-input |
+                                     # the REACH of the class over every family of Q(P): kind per family (row | named-input |
                                      # per-request | batch-level | static) and the batch-level planes' per-request slots (identity-level
                                      # N_excluded counts a plane only when every listed request is past its stop; the Commit's per-request
                                      # expansion reconciles against request_slots_not_executed)

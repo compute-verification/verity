@@ -57,7 +57,7 @@ def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
         return {"last_step": cap_last, "anchor": "cap - 1", "cap_last_step": cap_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if eos_stop_lag else None),
                 "why": (f"the request stopped at a_r {a_r} under LAG {lag} and its executed prefix reaches the cap (n_exec {n_exec} == cap): the cap "
-                        f"anchors and its last step {n_exec - 1} is the lag step (n-39-1)" if eos_stop_lag else "the request ran to its cap")}
+                        f"anchors and its last step {n_exec - 1} is the lag step" if eos_stop_lag else "the request ran to its cap")}
     return {"last_step": cap_last, "anchor": "cap - 1", "cap_last_step": cap_last, "n_exec": None,
             "lag_step": None, "why": ("no executed prefix" if not ep else "executed prefix has faults: the cap anchors")}
 
@@ -76,12 +76,12 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
     from the committed `down` bytes.  Before FLUSH-03 the gather collector committed the same layer's down plane under the up name (vLLM's
     TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the layer's two
     GEMM launches the staged up view was read after the w2 launch had overwritten it -- 22/22 same-layer pairs identical
-    on the int-1 OLMoE records).  The comparison is over the COMMON PREFIX of the two request-local slices (min(len) bytes): when
+    on the OLMoE records).  The comparison is over the COMMON PREFIX of the two request-local slices (min(len) bytes): when
     2I == H (OLMoE) that is the whole plane; when the widths differ the alias would still show as identical leading bytes (one base pointer,
     two row strides), so a prefix test catches it on every geometry.  Result: True = every compared pair differs; False = an identical pair
     (named: request, step, layer, bytes) -- the up plane is the down plane's alias; None = no MoE layer with both planes committed (dense
     model, or the planes not bound).  A FACT beside the replay (the MAN-06f v3 GEMM relation already fails an aliased plane by name);
-    the known-good root re-pin of the OLMoE reference (int-4) stands on this line, not on the run reproducing itself."""
+    the known-good root re-pin of the OLMoE reference stands on this line, not on the run reproducing itself."""
     layers: dict[tuple[str, int, int], dict[str, tuple[int, int]]] = {}
     for (rid, step, op, mem), es in store.idx.items():
         m = _MOE_LAYER_RE.match(str(op))

@@ -104,7 +104,7 @@ def test_hopper_1024_128_with_the_m0217_value_partial_oracle_fails_by_name():
 
 @pytest.mark.parametrize("b", [1, 8])
 def test_ampere_rows_are_byte_identical(b):
-    """L40S / A100 under FA2: Gemm_v1 / Attention_v3 -- the population carries only the NOT_YET domain (phi3 B8 int-2 record shape)."""
+    """L40S / A100 under FA2: Gemm_v1 / Attention_v3 -- the population carries only the NOT_YET domain (phi3 B8 record shape)."""
     sr = {**SR_HOPPER, "population": {"vus": 242048, "not_evaluable": {K_ROPE: 68480, K_ATT3: 34240},
                                       "not_evaluable_by_family": {"RoPE_v1": 68480, "Attention_v3": 34240}}}
     assert _complete_replay_population_gap(sr, None) == (None, None)
@@ -114,7 +114,7 @@ def test_ampere_rows_are_byte_identical(b):
 
 
 def test_composed_and_direct_gemm_v2_gaps_get_the_same_rule():
-    """rev's K_06G fixture (BiasAdd over Gemm_v2, Hopper Qwen) beside the direct Gemm_v2 outputs: one FAIL naming both, one PASS covering both."""
+    """The K_06G fixture (BiasAdd over Gemm_v2, Hopper Qwen) beside the direct Gemm_v2 outputs: one FAIL naming both, one PASS covering both."""
     k_06g = "fed by interior producer(s) without an evaluator (Gemm_v2 (model.layers.*.self_attn.qkv_proj)): composition not possible in this replay (MAN-06g, v2)"
     sr = {**SR_HOPPER, "population": {**SR_HOPPER["population"], "not_evaluable": {K_ROPE: 9184, k_06g: 140, K_GEMM2: 3476}}}
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": sr}, True, min_openings=64)
