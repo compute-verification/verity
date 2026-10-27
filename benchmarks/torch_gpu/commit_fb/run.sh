@@ -3,7 +3,7 @@
 # share of the step), under one gpu-lease. The CUDA library is built before the lease (nvcc only, no GPU).
 #
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
-#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/commit_fb/run.sh [all|check|bench] [BENCH ARGS...]
+#     --env GPU_LEASE_WHO=kernels-kcommitfb -- bash benchmarks/torch_gpu/commit_fb/run.sh [all|check|bench] [BENCH ARGS...]
 #
 # Env: VERITY_BENCH_VENV (default /workspace/cp/venv312: torch with CUDA, numpy), ARCH (default the GPU's compute
 # capability, e.g. 90), LEASE_MIN (gpu-lease --max-min, default 20), GPU_LEASE_WHO (default kernels-kcommitfb).

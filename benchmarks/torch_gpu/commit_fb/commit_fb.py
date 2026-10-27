@@ -21,7 +21,7 @@ segments' roots (``ml.windows.rows.Window``), as for vLLM's engine steps.
 
 **Opening.** ``StepCommit`` keeps each table's root; `open_rows` rebuilds one table on the CPU from that table's rows (every
 sequence's, which the by-table layout needs) and opens chosen ranks against the segment's root (``row_table.StepOpening``,
-checked by ``row_table.verify_step``).  The per-sequence-slot layout (commit_slots) replaces this: there a drawn unit
+checked by ``row_table.verify_step``).  The per-sequence-slot layout (KCOMMIT, HASH-13) replaces this: there a drawn unit
 opens from its own request's replay.
 """
 from __future__ import annotations
@@ -255,7 +255,7 @@ def open_rows(commit: StepCommit, op_path: str, table: Any, salt_source: SaltSou
 
 def shape_h(d: int = 16384, heads: int = 256, head_dim: int = 64, kv_heads: int = 1, mlp: int = 65536, ctx: int = 32,
             vocab: int = 256) -> dict[str, dict[str, tuple[str, int]]]:
-    """Shape H's unit outputs per token (the frozen MQA shape's ops at d 16,384): ``{"layer": {name:
+    """Shape H's unit outputs per token (compute-accounting's frozen MQA shape, CMP-92's ops at d 16,384): ``{"layer": {name:
     (kind, n)}, "head": {...}}``, ``kind`` ``"s8"`` (a quantizer output: n codes and an f32 scale), ``"bf16"`` or ``"i32"`` (n
     elements).  A layer's table is ``model.layers.<l>.<name>``, the head's ``model.head.<name>``.  The attention scores and
     softmax rows are the ``ctx`` positions with the masked ones in, so a table's rows have one width."""

@@ -7,8 +7,8 @@
 - `LAYOUT` is the store's layout, p2_v1's fixture (`p2_v1/store.py layout`'s JSON), read by
   `layout.store_layout`. `M` is the weights stream's manifest (`verity_torch_loop.weights manifest`; with `--digests`,
   each tensor's SHA-256, which every staged tensor is held to) and `W` a file holding the stream's bytes at their stream
-  offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a session reads (the scales, a
-  matrix's last block) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
+  offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a run reads (the scales, a
+  matrix's last label) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
 - `ENC` is an encoded store (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows from
   its `seg/<s>.c` files, each held to its `seg/<s>.json`'s SHA-512, under the salt `setup.draw_salt` of the coin and
   commitment its `setup.json` is held to (`layout.store_salt`). `DIR` is a development store instead: `c.bin`, the

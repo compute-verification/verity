@@ -16,10 +16,10 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
 
 ``tensors`` are (slots, ...) arrays whose slot rows are contiguous bytes (any dtype); a part reads ``nbytes`` at a byte offset
 of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` draws row ``salt_row``'s y in slot s as ChaCha20
-blocks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
+chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
 
-The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 blocks), so the
+The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 chunks), so the
 tests hold each call to its compressions a digest.
 
 Builds are cached by a hash of the sources, flags and compiler version under ``~/.cache/verity/sha512_rows``
@@ -186,7 +186,7 @@ def hankel_table(key: bytes = KEY) -> np.ndarray:
 
 @dataclass(frozen=True)
 class SaltKey:
-    """Salts from a 32-byte key: row r's y in slot s is ChaCha20 blocks 3r .. 3r + 2 with nonce ``nonce0 + s``."""
+    """Salts from a 32-byte key: row r's y in slot s is ChaCha20 chunks 3r .. 3r + 2 with nonce ``nonce0 + s``."""
 
     key: bytes
     nonce0: int = 0
@@ -292,7 +292,7 @@ class Engine:
 
     def counts(self, reset: bool = False) -> dict[str, int]:
         """The host twin's hashing since its last reset: compressions, those over a constant schedule (``kw``) and ChaCha20
-        blocks."""
+        chunks."""
         if not self.host:
             raise ValueError("only the host twin counts")
         out = np.zeros(3, dtype=np.uint64)
@@ -300,7 +300,7 @@ class Engine:
         return {"compressions": int(out[0]), "kw": int(out[1]), "chacha": int(out[2])}
 
     def midstate(self, block: bytes) -> np.ndarray:
-        """The chaining value after one 128-byte block from the IV."""
+        """The chaining value after one 128-byte chunk from the IV."""
         if len(block) != 128:
             raise ValueError("a midstate is of one 128-byte block")
         out = np.zeros(8, dtype=np.uint64)

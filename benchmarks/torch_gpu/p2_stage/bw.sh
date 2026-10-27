@@ -5,7 +5,7 @@
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
 #     --env GPU_LEASE_WHO=LANE --send /tmp/p2lib.tar -- bash benchmarks/torch_gpu/p2_stage/bw.sh
 #
-# Under one untimed lease of at most LEASE_MIN minutes (default 10), refused near the quiet window
+# Under one untimed lease of at most LEASE_MIN minutes (default 10), refused near the quiet period
 # it names. RANDOM units of random C* (default 262144) against the reference, SAMPLE of them (default 4000) from
 # their blocks. Each step's exit code is in $OUT/rc.txt; exits non-zero if any failed.
 set -uo pipefail

@@ -14,7 +14,7 @@ left), and every other unit stays as circuits has it, so a slot commits the same
 environment, since the map imports ``verity``.
 
 ``count`` commits steps of one and two slots of random outputs with the engine's host twin and reads its counters: the
-compressions and ChaCha20 blocks a slot adds, what a step costs once, the compressions a row-slot (alone, and at a step of
+compressions and ChaCha20 chunks a slot adds, what a step costs once, the compressions a row-slot (alone, and at a step of
 ``--slots``), and how far they are from ``compressions``' model (what a slot adds includes the step tree's growth from one
 slot to two, a few compressions).
 
@@ -27,7 +27,7 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
   each is the marked step's and the profile's), with the peak memory and how long the host took to enqueue the step (an
   NVTX range, ``enqueue``, for ``launches.py``); on graphs, after a step that captures them, and each step's roots held to
   the marked step's, then one more pair under another salt key;
-- the leaf kernel alone over the widest group's first pass, at 1 and 2 blocks an SM;
+- the leaf kernel alone over the widest group's first pass, at 1 and 2 CTAs an SM;
 - one step under torch's profiler (on graphs if they were timed): each kernel's launches and time, and the side stream's
   time with no kernel running;
 - ``--samples`` random slots plus the first and the last, rebuilt by the CPU reference (``slots.commit_slot``) and checked
@@ -149,7 +149,7 @@ def describe(layout: S.Layout) -> dict[str, Any]:
 def compressions(layout: S.Layout) -> dict[str, int]:
     """A slot's SHA-512 compressions by phase, as the engine hashes them (tests/test_cost.py):
 
-    - a row's digest, one a block after its midstated P(l);
+    - a row's digest, one a chunk after its midstated P(l);
     - a row's leaf, five (c two, h two, its frame leaf one), and a one-row unit's slot-tree leaf one more, in the same thread;
     - a unit of m > 1 rows, its root: two a node of its tree padded to a power of two, a node midstate a level, a pad leaf a
       padded rank; then its slot-tree leaf, one;
@@ -191,7 +191,7 @@ def export(a: argparse.Namespace) -> int:
 
 
 def count(a: argparse.Namespace) -> int:
-    """The layout's compressions and ChaCha20 blocks as the engine's host twin hashes them (its counters), over steps of one
+    """The layout's compressions and ChaCha20 chunks as the engine's host twin hashes them (its counters), over steps of one
     and two slots: what a slot adds, and what a step costs once (each unit's frame table an add)."""
     import slots_gpu as G
 
@@ -485,7 +485,7 @@ def main(argv: list[str] | None = None) -> int:
     tm.add_argument("--reps", type=int, default=3)
     tm.add_argument("--temps", type=int, nargs="+", default=[1 << 30, 4 << 30], help="pass sizes (Plan.temp_bytes)")
     tm.add_argument("--leaf-minb", type=int, nargs="+", choices=(0, 1, 2), default=[0],
-                    help="the leaf kernel's blocks an SM (Plan.leaf_minb; 0, the build's default)")
+                    help="the leaf kernel's CTAs an SM (Plan.leaf_minb; 0, the build's default)")
     tm.add_argument("--graphs", type=int, nargs="+", choices=(0, 1), default=[0],
                     help="1: steps whose adds are CUDA graph launches (StepCommitter(graphs=True)), their roots held to the eager "
                          "step's")

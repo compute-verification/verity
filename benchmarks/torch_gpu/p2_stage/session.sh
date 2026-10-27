@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One staging session on vy-dc-h200, from build.sh's lib, the weights module, the weights manifest with
+# One staging run on vy-dc-h200, from build.sh's lib, the weights module, the weights manifest with
 # digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
 # and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
 #
@@ -17,7 +17,7 @@
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
 # with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
-# Otherwise the development store STORE under the public test salt SALT, which `encode` extends across sessions.
+# Otherwise the development store STORE under the public test salt SALT, which `encode` extends across runs.
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to the fixture's LAYOUT_SHA512, the
 # manifest to MANIFEST_SHA256; layer LAYER's stream bytes generated once into SRC/w.bin (`weights write`, seed SEED) and

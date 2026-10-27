@@ -1,4 +1,4 @@
-# The fallback serve-time commit call: vLLM's row-table committer as it is, wrapped as `commit_step`, checked and
+# The fallback serve-time commit call (HASH-17): vLLM's row-table committer as it is, wrapped as `commit_step`, checked and
 # timed on the H200 (`run.sh`). Not a package: the suite holds the call's CPU path to `verity.ml.commitments.row_table`.
 [tool.pytest.ini_options]
 testpaths = ["tests"]

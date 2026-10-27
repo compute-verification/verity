@@ -1,7 +1,7 @@
 # commit_fb: the fallback serve-time commit call
 
-The fallback to commit_slots' per-sequence-slot layout: the walking skeleton can commit its unit outputs through vLLM's
-existing row-table committer, laid out by table.
+If KCOMMIT's per-sequence-slot layout (Linear HASH-13) isn't ready, the walking skeleton
+commits its unit outputs through vLLM's existing row-table committer, laid out by table (Linear HASH-17).
 `commit_fb.py` imports that committer and copies none of it. It only lays unit outputs out the way the committer takes them.
 
 ## The call
@@ -22,8 +22,8 @@ p, rows, ranks = commit_step_async(unit_outputs, salt)   # the device path's Pen
 - `rows` (optional) holds the row ids `(request, token row)`. By default slot b is `("%08d" % b, 0)`, so a table's leaf
   order is slot order.
 
-The call matches commit_slots' where it can: `commit_step(unit_outputs, salt_source)` returns a `StepCommit` with a
-64-byte `root`.
+KCOMMIT's fixture for CMP-95 item 3 wasn't posted when this was written, so the signature is the obvious one,
+`commit_step(unit_outputs, salt_source) -> root`, with the root on `StepCommit.root`.
 
 ## What it commits
 
@@ -36,7 +36,7 @@ The call matches commit_slots' where it can: `commit_step(unit_outputs, salt_sou
 - **Salts.** Salts come from ChaCha20 under the run's row key, with the segment as nonce
   (`ml.windows.rows.segment_salts`).
 
-At shape H's planned batch (20,480 sequences) a step's unit outputs are 717 GB, or 490 GB without the fused
+At shape H's planned batch (20,480 sequences) a step's unit outputs are 717 GB, or 490 GB without compute-accounting's fused
 cuts (`shape_h`, pinned in the test). That can't all be resident. So the loop commits each layer as it finishes, as its own
 segment (`segment_of`: 52 layers and the head make 53 segments a step), and records each segment's root with the challenger.
 This is how vLLM's engine steps are committed already: a window's `row-table` port is the tree over its segments' roots.
@@ -47,7 +47,7 @@ This is how vLLM's engine steps are committed already: a window's `row-table` po
 CPU and opens chosen ranks against the segment's root (`row_table.StepOpening`, checked by `row_table.verify_step`).
 
 The by-table layout needs that table's rows for **every** sequence in the batch, so opening one drawn unit means replaying
-the whole batch at that step. commit_slots' slot layout avoids this: a drawn unit opens from its own request's replay.
+the whole batch at that step. The slot layout (HASH-13) fixes this: a drawn unit opens from its own request's replay.
 
 ## Checks and the bench
 
@@ -58,6 +58,6 @@ the whole batch at that step. commit_slots' slot layout avoids this: a drawn uni
   and (in the small cases) `row_table.commit_step`, on random unit outputs at shape H's widths. It also checks that openings
   verify against the device root.
 - `bench.py` runs on the GPU. It measures one layer's GB/s, a whole step streamed as 53 segments (every op, then fused), and
-  the hashing beside int8 GEMMs. It reports each step's share of the shape-H step,
-  staged and overlapped.
+  the hashing beside int8 GEMMs. It reports each step's share of compute-accounting's shape-H step (7.5 s staged, 3.7 s
+  overlapped).
 - `run.sh` runs both under one `gpu-lease`, with the command in its header.

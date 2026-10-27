@@ -16,7 +16,7 @@
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to LAYOUT_SHA512, the manifest to
 # MANIFEST_SHA256 and to the store's own record of it, the store's setup and record copied out; with RECEIPTS=1, the
 # receipts' and sha512_rows' kernels built for ARCH (default 90a). Under one untimed lease of at most LEASE_MIN minutes
-# (default 20), refused if it could reach one of QUIET's windows: full.py, every tensor of LAYERS (default all 52
+# (default 20), refused if it could reach one of QUIET's periods: full.py, every tensor of LAYERS (default all 52
 # layers and the head) staged and held to the manifest's SHA-256, with RECEIPTS=1 the bandwidth audit's pass beside it
 # (`--receipts`, its σ, y and salts kept in scratch), then GEMM_LAYER's matrices (default 51; empty for none) through
 # the exact W8A8 GEMM at each batch of M (default 16384). After the lease, niced on half the host's cores: check.py on the GEMM's
@@ -49,7 +49,7 @@ LEASE_MIN=${LEASE_MIN:-20}
 RECEIPTS=${RECEIPTS:-}
 ARCH=${ARCH:-90a}
 BW_SAMPLE=${BW_SAMPLE:-100000}
-# the card's windows no lease may reach, START/END in UTC
+# the card's periods no lease may reach, START/END in UTC
 QUIET=${QUIET:-2026-10-26T22:45:00Z/2026-10-27T01:00:00Z 2026-10-27T05:00:00Z/2026-10-27T10:00:00Z}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LAYOUT=$IN/store-layout.json; MANIFEST=$IN/h200-manifest.json

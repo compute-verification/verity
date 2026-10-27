@@ -34,8 +34,8 @@ a level at a time, and ``finish`` closes them with the subtrees of pads alone, w
 through in passes of as many slots as keep its temporaries (row digests, the run of slot-tree leaves, the leaves of the
 units of several rows) within the Plan's ``temp_bytes``.
 
-A row-slot of a one-row unit costs the engine nine compressions (one of them over a constant schedule), three ChaCha20
-blocks and the hm96 mask: its row digest (one), hm96's c (two) and h (two), its frame leaf in the unit's domain (one), the
+A row-slot of a one-row proof block costs the engine nine compressions (one of them over a constant schedule), three
+ChaCha20 chunks and the hm96 mask: its row digest (one), hm96's c (two) and h (two), its frame leaf in the proof block's domain (one), the
 unit's slot-tree leaf (one, from the unit's midstate, ``frame_table``, set up once an add), all in the leaf kernel's thread,
 and about one slot-tree node (two).
 """
@@ -275,7 +275,7 @@ class Plan:
     """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
     Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
     the layout repeats is laid out once, and the pads that close a slot's tree are hashed once. A step's passes keep their
-    temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` blocks an SM (the engine's ``minb``, 0 for the
+    temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` CTAs an SM (the engine's ``minb``, 0 for the
     build's default; every setting commits the same bytes).
 
     With ``sms``, the side stream is on an ``SmPartition`` of that many SMs (``partition``; ``sms`` becomes the count it
