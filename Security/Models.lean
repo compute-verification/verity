@@ -28,6 +28,10 @@ import Definitions.Nci.Guarantees.CoverPartialSum
 import Definitions.Nci.Guarantees.CoverTraining
 import Definitions.Nci.Guarantees.CoverChained
 import Definitions.Nci.Guarantees.Ldl
+import Definitions.Nci.Guarantees.Hardness
+import Definitions.Nci.Ldl.Instances
+import Definitions.Nci.Guarantees.Ldl.Witnesses
+import Definitions.Nci.Guarantees.Hardness.Witnesses
 import Definitions.Pous.Assumptions
 import Definitions.Pous.Guarantees
 import Definitions.Pouw.Assumptions
