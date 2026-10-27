@@ -11,7 +11,7 @@ The **request queue** is an input committed before the window's first coin, two 
 
 One admission unit (`PouwQueueAdmit`) reads a call's 16 slots: the step t, each slot's q from the slot map and the request
 entry at q, and each slot's committed scale (the f32 that ends its row, as a u32), and outputs their 16 admit bits as one
-word (bit b slot 16 g + b of group g), a proof unit's outputs being at most 16 bits.  Bit b is
+word (bit b slot 16 g + b of group g), a proof block's outputs being at most 16 bits.  Bit b is
 ``q_b != 0 and start_b <= t < stop_b and scale_b != 0``.  The selection is the queue's: a row can withhold its slot's
 admission, never grant it, so a row in a slot the queue leaves unassigned is never admitted, whatever it holds.
 

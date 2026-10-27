@@ -48,7 +48,7 @@ get under the target, and if not, the gap and the prefill rate that would close 
   overhead is the hashing summed over every step, divided by the serve time summed the same way.
 - Hashing is assumed not to overlap serving. On H200 every commit arm's wall time is its GPU-busy time, and SHA-512 shares the
   integer issue slots with the GEMMs (note:circuits-rows-sha512-floor, note:circuits-commit-defaults-overlap).
-- A coarser proof unit keeps only a fraction of the bytes inside the layers. The logits are kept whole, because they are
+- A coarser proof block keeps only a fraction of the bytes inside the layers. The logits are kept whole, because they are
   committed for decode tokens anyway. The fractions come from the bytes per token per layer that circuits measured:
   - `call`: today's compiled Commit, 84,736 B (Llama-3.2-1B) and 145,180 B (Qwen3-8B).
   - `block`: a layer's attention block and MLP block.

@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# `verity bench all-protocols`: every window, one run of the torch loop (integrations/torch_loop, a W8A8 MLP on CPU) audited
-# by every protocol's leg (verity_all_protocols.table: legs/<component>.py), each window's report in $OUT/w<W>/report.json and
+# `verity bench all-protocols`: every window, one run of the toy (integrations/torch_loop, a W8A8 MLP on CPU) audited by
+# every protocol's leg (verity_all_protocols.table: legs/<component>.py), each window's report in $OUT/w<W>/report.json and
 # $OUT/reports.jsonl, and the monitoring-period report over the windows so far in $OUT/monitoring-period.json
 # (verity_all_protocols.runner, .monitoring). Builds what the legs run first, as benchmarks/prove_path/run.sh does: M0's
 # flock-circuit, Lean's flock-verify and flock-firewall, the sampled-proofs verifier of record, onsite, PoUS's run and
 # setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol) and the streamed
 # wipe's (wipe-protocol), in scratch and the clone; the legs find them in period.json's tools. Its arguments go to the
-# runner (--windows N, --start I, --tamper W,..., --pouw h1, --registered); ALLP_FLOCK_WORK=DIR keeps M0's build
-# across runs.
-#   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 64 -- \
-#     bash benchmarks/all_protocols/run.sh --windows 4 --tamper 3
+# runner (--of-record, --windows N, --start I, --tamper W,..., --pouw h1, --registered, --wired, --tie, --tie-tamper W,...
+# with CERTIFIER_TAMPER=byte), which checks them (--check) before anything builds; ALLP_FLOCK_WORK=DIR keeps M0's build
+# across runs. S1's run of record, the one way a run of it counts (README), every layer chained and the output tied:
+#   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
+#     bash benchmarks/all_protocols/run.sh --of-record --wired --windows 2 --tie-tamper 0
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -18,6 +19,8 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
+RUNNER="env PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner"
+$RUNNER --out $O --tools /dev/null --check "$@" | tee $O/mode-check.json || exit 4
 (cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
@@ -43,4 +46,4 @@ $PY -c 'import json, sys; print(json.dumps(dict(zip(["flock-circuit", "flock-ver
   "pous-run-protocol", "pous-setup", "remote-audit-protocol", "wipe-protocol"], sys.argv[1:]))))' $BIN $LEAN $FWL $M0PATH $PRUN $PSET $RBW \
   $WIPE > $O/tools.json
 export RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20))
-PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner --out $O --tools $O/tools.json --onsite $ONSITE --scratch $W "$@"
+$RUNNER --out $O --tools $O/tools.json --onsite $ONSITE --scratch $W "$@"
