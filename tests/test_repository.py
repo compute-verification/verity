@@ -24,20 +24,16 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
+#: The Glossary's second file, at the root only: no directory holds a glossary (Daniel, 26 Oct).
+ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
-    "archive/direct/V2_AIR.md",
-    "archive/direct/encode/V2_SHAPE.md",
-    "archive/vole/ASSUMPTIONS.md",
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-    "benchmarks/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
-#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full), ligero-verify's
-#: discrepancies (indexed by its ``DISCREPANCIES.md``) and the network certifier's sections (``protocol/<topic>.md``, each
+#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-                       "archive/ligero-verify/discrepancies/": "archive/ligero-verify/DISCREPANCIES.md",
                        "verity/core/protocols/certifier/protocol/": "verity/core/protocols/certifier/PROTOCOL.md"}
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
@@ -62,13 +58,11 @@ BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the vLLM checkpoint
-#: manifest (append-only; most of its readers don't read the sibling manifests yet), three vLLM workload specs and two vLLM
-#: logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test
-#: fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: manifest (append-only; most of its readers don't read the sibling manifests yet) and three vLLM workload specs. Each is
+#: capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over
+#: BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
-    "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
-    "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
@@ -96,6 +90,7 @@ def _tracked() -> list[str]:
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
+                 and p not in ROOT_ONLY_MD
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
                  and not p.startswith(tuple(SPLIT_DOCUMENT_DIRS))]
     assert not offenders, (
@@ -174,8 +169,7 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
-    assert markdown_over_cap("archive/ligero-verify/DISCREPANCIES.md", MD_SIZE_CAP + 1).endswith("archive/ligero-verify/discrepancies/")
-    assert markdown_over_cap("archive/ligero-verify/README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
+    assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
     certifier = "verity/core/protocols/certifier/"
     assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
     assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
@@ -209,8 +203,8 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
-#: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "archive/shared/hash_gpu/", "verity/ml/kernels/")
+#: Test files that need torch, a GPU or cargo, and were never part of `check`.
+UNSUITED_TEST_DIRS = ("verity/ml/kernels/",)
 
 
 def _testpaths(tracked: list[str]) -> list[str]:

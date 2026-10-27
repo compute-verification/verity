@@ -6,7 +6,7 @@ words under the profile's statics.
     under the Hopper records to HP's `ServeHopper_v1` (`correspond_rebound`: same bodies, callee identity through the
     pairing; digests differ by construction because the identities carry the statics). The two records differ in
     `GEMM` and `ATTENTION` only; the cross binding is a different program.
-§3  Standalone on captured operands (CPU, numpy, the IR oracle): GEMM on the 30 authenticated RTX 4090 coordinates and
+§3  Standalone on captured operands (CPU, numpy, the reference evaluator): GEMM on the 30 authenticated RTX 4090 coordinates and
     on the H100 wgmma tiles; RMSNorm on the RTX 4090 Triton rows and the SmolLM2 fused rows; attention on the RTX 4090
     FA2 calls. Same function + Ampere statics -> Ampere words; Hopper statics -> the Hopper words (tiles) / HP's FA3
     model (no Hopper attention operands are archived locally: CAPTURE_MISSING, composition.md §3); the cross recorded.
@@ -44,7 +44,7 @@ B0_DIV = FIX / "B0-divergence-20260907T1604Z"
 TC_HOPPER = Path(os.environ.get("VERITY_HP_ARCHIVE", Path.home() / "veritor-artifacts" / "hp")) / "tc-hopper" / "r1"
 
 from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
+from verity.ml.circuits.evaluation import evaluate_call  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
 from verity.ml.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
 from verity_vllm.program.frontend import serve_families
@@ -61,7 +61,7 @@ def _need(path: Path, what: str):
 
 
 def _ev(spec, *arrays) -> np.ndarray:
-    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the IR oracle."""
+    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the reference evaluator."""
     prog, call = _standalone(spec)
     args = [int(v) for a in arrays for v in np.asarray(a).ravel()]
     return np.array(evaluate_call(prog.circuit, call, args), dtype=np.uint32)
@@ -446,7 +446,7 @@ def test_authored_v2_corresponds_to_registry_v2(label, name, statics):
 
 
 # =====================================================================================================================
-# [E7 D54 2026-09-13] Serve_v4: the kernel-geometry attention chain beside the untouched Serve_v1
+# Serve_v4: the kernel-geometry attention chain beside the untouched Serve_v1
 # =====================================================================================================================
 
 

@@ -51,7 +51,7 @@ def _small():
 
 
 class PyResponder:
-    """The native responder's wire format over a CPU tensor's blocks, read at answer time."""
+    """The native responder's wire format over a CPU tensor's labels, read at answer time."""
 
     def __init__(self, c) -> None:
         self.blocks = c.reshape(-1, c.shape[-1])
@@ -407,7 +407,7 @@ def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path)
 
 
 def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
-    """The band's recompute adversary decodes the dropped block's key and XORs `W`'s block in within the one timed call, so
+    """The band's recompute adversary decodes the dropped label's key and XORs `W`'s label in within the one timed call, so
     its reported device time covers the whole answer and nothing is computed on the host after it."""
     harness = _harness()
     width, bps = 4, 8
@@ -442,7 +442,7 @@ def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
     assert rc(13) == (bytes(k ^ w for k, w in zip([1, 2, 3, 4], w_host[13 * width:14 * width])), 2_500)
     assert state["calls"] == [True]
     xors = [timed for name, timed in state["ops"] if "xor" in name]
-    assert xors and all(xors), state["ops"]                               # the XOR with W's block is a device op, timed
+    assert xors and all(xors), state["ops"]                               # the XOR with W's label is a device op, timed
     untimed = harness._recomputer(harness.Backend("cpu", None, None, None, None, None, lambda fn: 0.0, recompute=recompute), c,
                                   None, [5, 13], w_host, bps, width)
     with pytest.raises(IndexError):                                       # a timer that skips the call leaves no answer
