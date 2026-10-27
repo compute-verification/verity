@@ -1,14 +1,13 @@
-"""The universal unit: one public Boolean Definition that runs any hidden netlist of a size class (protocol 2, private
-circuits).
+"""The universal unit: one public Boolean Definition that runs any private circuit of a size class.
 
     UniversalUnit_v1{G, N_IN, N_OUT}
         (op: Array<G, Array<2, Value<1>>>, src: Array<G, Array<2, Array<K, Value<1>>>>, out: Array<N_OUT, Array<K, Value<1>>>,
          x: Array<N_IN, Value<1>>) -> Array<N_OUT, Value<1>>
         W = N_IN + G wires, K = bit_length(W - 1) bits per wire index (at least 1)
 
-In protocol 2 the developer's gates and wiring are hidden. They become a value, a `Netlist`, that this Definition takes as
-input beside the data, so the circuit the verifier holds is the universal unit: its structure is a function of the size class
-(G, N_IN, N_OUT) alone, and the netlist is a value, hidden like any other.
+The private circuit's gates and wiring are a value, a `Netlist`, that this Definition takes as input beside the data, so the
+unit's structure is a function of the size class (G, N_IN, N_OUT) alone. It is not how a private circuit is hidden: circuit
+hiding is recursion (C-Flock's ``--hide``).
 
 **The netlist** is in SSA form: wires 0 .. N_IN - 1 are the data inputs x, and wire N_IN + g is gate g's output. Gate g is
 ``(op, a, b)``; it reads wires a and b and computes
@@ -31,7 +30,7 @@ c = m. In all (`and_count`):
 
     ANDs = sum over g < G of (2 T(N_IN + g) + 2)  +  N_OUT T(W)  ~  G (2 N_IN + G) + N_OUT W
 
-which is O(G W) with W = N_IN + G: about 2 N_IN + G ANDs per hidden gate.
+which is O(G W) with W = N_IN + G: about 2 N_IN + G ANDs per netlist gate.
 
 **Why this design.** It is the simplest universal unit, built from the multiplexer tree core already has.
 - SSA, not a register file (W registers, each gate writing a destination): a register file pays a destination decoder and a
