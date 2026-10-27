@@ -2,17 +2,17 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Soundness.Game.Expect
 
 /-!
-# A game finder as a `Claims.Finder`, diluted, and the worst of a finite family
+# A game finder as a `Claims.Finder`, and the sequential composition of a finite family
 
 C-Flock's collision finders are games played by a fixed strategy (`FlockSoundness.Game`); a `Claims.Finder` is a uniform
-coin space with an output and a cost on each coin. Three constructions relate them:
+coin space with an output and a cost on each coin. Two constructions relate them:
 
 * `Game.tapeFinder g s out cost`: one tape holds a coin for every coin node of the tree `s` plays, drawn whether or not
   the run reaches it (`Game.Tape`), and the run is read off it (`Game.run`). Its success is the game's
   (`tapeFinder_Pr`), with no loss: averages over the tape are the game's expectations (`Game.Ex_run`).
-* `Claims.Finder.dilute m N F`: `F` beside a uniform `u : Fin (N + 1)`, run where `u < m` and outputting nothing
-  elsewhere. Its success is `m / (N + 1)` times `F`'s (`dilute_Pr`).
-* `Claims.Finder.worst H fam`: a member of a finite family with the largest success at `H` (`le_worst`).
+* `Claims.Finder.seq H fam`: every member of a finite family on its own coins, in a fixed order, outputting the first
+  collision of `H` found. It succeeds at least as often as each member (`le_seq`) and costs the members' sum plus
+  two calls of `H` a check (`seq_cost_le`).
 -/
 
 namespace Claims
@@ -37,70 +37,85 @@ theorem Ex_pi_eval {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ 
     _ = Ex (fun a : T c₀ => Ex fun _ : (j : { j // j ≠ c₀ }) → T j => h a) := Ex_prod _
     _ = Ex h := by simp only [Ex_const]
 
-/-- Independent events of two coordinates. -/
-theorem Pr_and_prod {α β : Type} [Fintype α] [Fintype β] (p : α → Prop) (q : β → Prop) :
-    Pr (fun x : α × β => p x.1 ∧ q x.2) = Pr p * Pr q := by
+/-- An event of one coordinate of independent coordinates has that coordinate's probability. -/
+theorem Pr_pi_eval {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ c, Fintype (T c)]
+    [∀ c, Nonempty (T c)] (c₀ : C) (p : T c₀ → Prop) :
+    Pr (fun t : (c : C) → T c => p (t c₀)) = Pr p := by
   classical
-  rw [Pr_eq_sum (fun x : α × β => p x.1 ∧ q x.2), Pr_eq_sum p, Pr_eq_sum q, div_mul_div_comm, Finset.sum_mul_sum,
-    Fintype.sum_prod_type, Fintype.card_prod]
-  push_cast
-  congr 1
-  refine Finset.sum_congr rfl fun a _ => Finset.sum_congr rfl fun b _ => ?_
-  split_ifs <;> simp_all
+  rw [← Ex_ind, ← Ex_ind]
+  exact Ex_pi_eval c₀ (fun a => if p a then (1 : ℝ) else 0)
 
-theorem Pr_fin_lt {m N : ℕ} (hm : m ≤ N + 1) : Pr (fun u : Fin (N + 1) => u.val < m) = m / (N + 1) := by
-  rw [Pr_eq_sum, Finset.sum_boole, Fin.card_filter_val_lt, min_eq_right hm, Fintype.card_fin]
-  push_cast
+/-- The first entry of a list at which `f` returns something, where `f` returns something somewhere, satisfies
+whatever every value of `f` on the list satisfies. -/
+theorem findSome?_spec {β γ : Type} (f : β → Option γ) (P : γ → Prop) :
+    ∀ l : List β, (∀ a ∈ l, ∀ b, f a = some b → P b) → ∀ a ∈ l, (f a).isSome →
+      ∃ b, l.findSome? f = some b ∧ P b
+  | [], _, a, ha, _ => by simp at ha
+  | x :: xs, hP, a, ha, hs => by
+    cases hx : f x with
+    | some b => exact ⟨b, by simp [List.findSome?, hx], hP x (by simp) b hx⟩
+    | none =>
+      have hxs : a ∈ xs := by
+        rcases List.mem_cons.1 ha with rfl | h
+        · simp [hx] at hs
+        · exact h
+      obtain ⟨b, hb, hPb⟩ :=
+        findSome?_spec f P xs (fun a' h' => hP a' (List.mem_cons_of_mem _ h')) a hxs hs
+      exact ⟨b, by simp [List.findSome?, hx, hb], hPb⟩
 
-/-- **`F` diluted to `m` in `N + 1`**: `F` beside a uniform `u : Fin (N + 1)`, with `F`'s output and cost where
-`u < m`, and no output and no cost elsewhere. -/
-def Finder.dilute (m N : ℕ) (F : Finder) : Finder where
-  S := Fin (N + 1) × F.S
-  out x := if x.1.val < m then F.out x.2 else none
-  cost x := if x.1.val < m then F.cost x.2 else 0
+open Classical in
+/-- A finder's output where it is a collision of `H`, and nothing elsewhere. -/
+noncomputable def collisionOf (H : Msg → Msg) : Option (Msg × Msg) → Option (Msg × Msg)
+  | some (u, v) => if Collision H u v then some (u, v) else none
+  | none => none
 
-theorem Finder.dilute_Pr (H : Msg → Msg) (F : Finder) {m N : ℕ} (hm : m ≤ N + 1) :
-    (F.dilute m N).Pr H = m / (N + 1) * F.Pr H := by
+theorem collisionOf_spec (H : Msg → Msg) (o : Option (Msg × Msg)) (w : Msg × Msg) (h : collisionOf H o = some w) :
+    Collision H w.1 w.2 := by
+  rcases o with _ | ⟨u, v⟩
+  · simp [collisionOf] at h
+  · simp only [collisionOf] at h
+    by_cases hc : Collision H u v
+    · rw [if_pos hc] at h
+      cases h
+      exact hc
+    · rw [if_neg hc] at h
+      cases h
+
+/-- **The sequential composition of a finite family of finders**: every member runs on its own coins, in the order of
+`Fintype.equivFin`, and the first output that is a collision of `H` is output. Its cost is every member's plus two
+calls of `H` for each check. -/
+noncomputable def Finder.seq {ι : Type} [Fintype ι] (H : Msg → Msg) (fam : ι → Finder) : Finder :=
+  haveI := Classical.decEq ι
+  { S := (i : ι) → (fam i).S
+    out := fun x => (List.finRange (Fintype.card ι)).findSome? fun k =>
+      collisionOf H ((fam ((Fintype.equivFin ι).symm k)).out (x ((Fintype.equivFin ι).symm k)))
+    cost := fun x => ∑ i, ((fam i).cost (x i) + 2) }
+
+/-- **The sequential composition succeeds at least as often as each member.** -/
+theorem Finder.le_seq {ι : Type} [Fintype ι] (H : Msg → Msg) (fam : ι → Finder) (i : ι) :
+    (fam i).Pr H ≤ (Finder.seq H fam).Pr H := by
+  haveI := Classical.decEq ι
   unfold Finder.Pr
-  show Pr (fun x : Fin (N + 1) × F.S =>
-    ∃ u v, (if x.1.val < m then F.out x.2 else none) = some (u, v) ∧ Collision H u v) = _
-  have e : ∀ x : Fin (N + 1) × F.S,
-      (∃ u v, (if x.1.val < m then F.out x.2 else none) = some (u, v) ∧ Collision H u v) ↔
-        (x.1.val < m ∧ ∃ u v, F.out x.2 = some (u, v) ∧ Collision H u v) := by
-    intro x
-    by_cases h : x.1.val < m <;> simp [h]
-  rw [Pr_congr e, Pr_and_prod (fun u : Fin (N + 1) => u.val < m)
-    (fun s : F.S => ∃ u v, F.out s = some (u, v) ∧ Collision H u v), Pr_fin_lt hm]
+  rw [← Pr_pi_eval (T := fun j => (fam j).S) i (fun s => ∃ u v, (fam i).out s = some (u, v) ∧ Collision H u v)]
+  refine Pr_mono fun x hx => ?_
+  obtain ⟨k, rfl⟩ : ∃ k, (Fintype.equivFin ι).symm k = i := ⟨_, (Fintype.equivFin ι).symm_apply_apply i⟩
+  obtain ⟨u, v, hout, hc⟩ := hx
+  have hsome : (collisionOf H ((fam ((Fintype.equivFin ι).symm k)).out (x ((Fintype.equivFin ι).symm k)))).isSome := by
+    rw [hout]
+    simp only [collisionOf, if_pos hc, Option.isSome_some]
+  obtain ⟨⟨u', v'⟩, hb, hPb⟩ := findSome?_spec
+    (fun k => collisionOf H ((fam ((Fintype.equivFin ι).symm k)).out (x ((Fintype.equivFin ι).symm k))))
+    (fun w => Collision H w.1 w.2) (List.finRange (Fintype.card ι))
+    (fun _ _ w hw => collisionOf_spec H _ w hw) k (List.mem_finRange _) hsome
+  exact ⟨u', v', hb, hPb⟩
 
-theorem Finder.dilute_cost_le (F : Finder) (m N b : ℕ) (h : ∀ x, F.cost x ≤ b) (x : (F.dilute m N).S) :
-    (F.dilute m N).cost x ≤ b := by
-  show (if x.1.val < m then F.cost x.2 else 0) ≤ b
-  split_ifs
-  · exact h _
-  · exact Nat.zero_le _
-
-/-- **The worst of a finite family**: a member with the largest probability of outputting a collision of `H`. -/
-noncomputable def Finder.worst {ι : Type} [Finite ι] [Nonempty ι] (H : Msg → Msg) (fam : ι → Finder) : Finder :=
-  fam (Classical.choose (Finite.exists_max fun i => (fam i).Pr H))
-
-theorem Finder.le_worst {ι : Type} [Finite ι] [Nonempty ι] (H : Msg → Msg) (fam : ι → Finder) (i : ι) :
-    (fam i).Pr H ≤ (Finder.worst H fam).Pr H :=
-  Classical.choose_spec (Finite.exists_max fun i => (fam i).Pr H) i
-
-theorem Finder.worst_cost_le {ι : Type} [Finite ι] [Nonempty ι] (H : Msg → Msg) (fam : ι → Finder) (b : ℕ)
-    (h : ∀ i (x : (fam i).S), (fam i).cost x ≤ b) (x : (Finder.worst H fam).S) :
-    (Finder.worst H fam).cost x ≤ b :=
-  h _ x
-
-/-- The finder that outputs nothing. -/
-def Finder.null : Finder where
-  S := Unit
-  out _ := none
-  cost _ := 0
-
-theorem Finder.null_Pr (H : Msg → Msg) : Finder.null.Pr H = 0 := by
-  unfold Finder.Pr
-  exact (Pr_congr (q := fun _ => False) fun _ => by simp [Finder.null]).trans Pr_false
+theorem Finder.seq_cost_le {ι : Type} [Fintype ι] (H : Msg → Msg) (fam : ι → Finder) (b : ℕ)
+    (h : ∀ i (x : (fam i).S), (fam i).cost x ≤ b) (x : (Finder.seq H fam).S) :
+    (Finder.seq H fam).cost x ≤ Fintype.card ι * (b + 2) := by
+  show ∑ i, ((fam i).cost (x i) + 2) ≤ _
+  calc ∑ i, ((fam i).cost (x i) + 2) ≤ ∑ _i : ι, (b + 2) :=
+        Finset.sum_le_sum fun i _ => Nat.add_le_add_right (h i (x i)) 2
+    _ = Fintype.card ι * (b + 2) := by simp [Finset.sum_const, Finset.card_univ]
 
 end Claims
 
