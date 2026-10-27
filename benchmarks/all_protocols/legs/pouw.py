@@ -13,7 +13,9 @@ public, reason, verdict}, and writes into the directory ``out``:
 * ``pouw.answer.json``: the answer's canonical line;
 * ``pouw.detail.json``: what the loop served (units, K, MACs, max_tokens), labelled not certified; the certified work W
   (the accepted window's ``work.credited``, MACs); ε at each δ of `QUOTE_DELTAS`, what the window's draw establishes
-  over W (`window.eps_at`; null when nothing is drawn or no ε <= 1 is established); and which verifiers answered.
+  over W (`window.eps_at`; null when nothing is drawn or no ε <= 1 is established); which verifiers answered; and an H1
+  window's operands (`operands.stated`: their root X, each value's root, and what they don't establish yet, among it
+  the A rows' tie to the served x rows, a gather, CIR-100), null when it names none.
 
 **The H1 window** (the loop's ``--pouw h1`` mode): when ``<period_dir>/pouw/registration.json`` exists, the case is that
 window's. Its commitment is that one-stage registration, and its evidence the proof service's answer for it,
@@ -44,6 +46,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import operands as OP
 from verity.core.protocols.pouw import window as Wd
 
 LEAN_ENV = "VERITY_POUW_CHECK"
@@ -167,6 +170,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict:
     detail = {"node": node, "protocol": CC.ID, "window": "h1", "served": work,
               "certified_work": w, "W": w["credited"] if w else 0, "quotes": quotes(c, answer),
               "evidence": str(evidence.relative_to(period_dir)) if evidence.exists() else None,
-              "answered_by": ["core_check"] + (["pouw-check"] if lean is not None else [])}
+              "answered_by": ["core_check"] + (["pouw-check"] if lean is not None else []),
+              "operands": OP.stated(json.loads((period_dir / H1_DIR / "registration.json").read_text())["window"])}
     (out / "pouw.detail.json").write_text(json.dumps(detail, indent=1, sort_keys=True) + "\n")
     return answer

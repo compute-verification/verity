@@ -12,7 +12,7 @@
   `CoreOnsite.lean` as written;
 * windows audited at once each get their report, and the monitoring-period report over all of them leads the line;
 * under ``--pouw h1`` PoUW's audit of the H1 window runs before the legs, on the window's own PoUW circuit;
-* the network certifier's K over a week, a month and a year with the faulty units paid for once
+* the network certifier's K over a week, a month and a year with the faulty proof blocks paid for once
   (`HorizonLeakAccepted`), each window's K beside it;
 * the loop's window keeps only its public files, and its circuit is the one registered before it ran (slow).
 """

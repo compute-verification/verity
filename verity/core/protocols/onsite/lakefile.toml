@@ -4,7 +4,7 @@
 # NCI's registration check (`verity/nci/v1`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
 # drives. Code: no Mathlib.
 name = "core_onsite"
-defaultTargets = ["CoreOnsite", "onsite"]
+defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 
 [leanOptions]
 autoImplicit = false
@@ -64,3 +64,12 @@ name = "CoreOnsite"
 [[lean_exe]]
 name = "onsite"
 root = "OnsiteMain"
+
+# A configuration's product: `Core.Composition.productB` over exactly the components its `protocols` lists (onsite for all
+# six), `product IDS id | check | serve` (CoreProduct.lean).
+[[lean_lib]]
+name = "CoreProduct"
+
+[[lean_exe]]
+name = "product"
+root = "ProductMain"
