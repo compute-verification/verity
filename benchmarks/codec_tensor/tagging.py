@@ -2,7 +2,7 @@
 `u64be j ‖ E_j` is four whole BLAKE3 chunks, the last block short; 16 tags a leaf; the RFC 6962 SHA-512 tree over the
 leaves (`pous.verifier`'s shape: split at the largest power of two below the count).
 
-The tag, key, prefixes and leaves are `verity/core/protocols/bandwidth/tags.py`'s, imported from the source tree (it
+The tag, key, prefixes and leaves are `benchmarks/bandwidth/tags.py`'s, imported from the source tree (it
 is stdlib only), so the pod's Python needs no `verity` install. `tags_fast` recomputes every tag with the PyPI
 `blake3` when that is installed; `tags.py`'s own BLAKE3 (pure Python, ~3 ms a block) checks a sample.
 """
@@ -21,7 +21,7 @@ REPO = Path(__file__).resolve().parents[2]
 def tags_module():
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
-    from verity.core.protocols.bandwidth import tags
+    from benchmarks.bandwidth import tags
 
     return tags
 

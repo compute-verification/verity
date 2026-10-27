@@ -305,7 +305,7 @@ class TensorLib:
     def set_tag(self, seed: bytes | None) -> None:
         """Tag every block of E under ro-blake3/v1 with this window seed (None: no tag)."""
         if seed is not None:
-            from verity.core.protocols.bandwidth import tags
+            from benchmarks.bandwidth import tags
             if len(seed) != 32:
                 raise ValueError("a tag seed is 32 bytes")
             key = ctypes.create_string_buffer(tags.Blake3Tag().key(seed))

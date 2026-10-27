@@ -1,6 +1,6 @@
 """The wide word codecs, byte-exact: Sloth over p = 2^127 − 1, 2^255 − 19, 2^521 − 1, 2^256 − 189 and 2^512 − 569, in
 the fused GEMM's layout, with the encoded words tagged by the bandwidth audit's `ro-blake3/v1`
-(`verity.core.protocols.bandwidth.tags`).
+(`benchmarks.bandwidth.tags`).
 
 ~~~text
 field      p127 = 2^127 − 1, p521 = 2^521 − 1, p256 = 2^256 − 189, p512 = 2^512 − 569 (3 mod 4); p255 = 2^255 − 19
@@ -41,7 +41,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parents[2])]
 
 import codec  # noqa: E402
 
@@ -314,7 +314,7 @@ def block(words: list[list[int]], j: int, f: Field, tb: int = 1) -> bytes:
 # --- the bandwidth audit's tags over the encoded words ---------------------------------------------------------------
 
 def tags_of(words: list[list[int]], f: Field, seed: bytes, base: int = 0, tb: int = 1) -> list[bytes]:
-    from verity.core.protocols.bandwidth import tags
+    from benchmarks.bandwidth import tags
 
     assert len(words) % (LANES * tb) == 0
     keyed = tags.get("ro-blake3/v1").keyed(seed)
@@ -322,7 +322,7 @@ def tags_of(words: list[list[int]], f: Field, seed: bytes, base: int = 0, tb: in
 
 
 def leaves_of(ys: list[bytes], seed: bytes) -> list[bytes]:
-    from verity.core.protocols.bandwidth import tags
+    from benchmarks.bandwidth import tags
 
     return tags.leaves(tags.get("ro-blake3/v1"), seed, ys)
 

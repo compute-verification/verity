@@ -1,7 +1,8 @@
-"""The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time.  Each device's store is set up under
-a salt with its identity bound in (`draw_salt`, its GPU's 16-byte UUID, `device_id`, which the on-node challenger reads
-from the driver, `read_device`), so devices holding one `W` hold different stores, and the verifier refuses a store
-whose salt is not its device's (`Verifier`).
+"""The bandwidth audit v0 over a PoUS store `E` (P2's `C*`), one window at a time: the reference the GPU tagger and the
+benchmarks that measure its tags are held to.  Its protocol, retired from core, is `archive/bandwidth-v0/PROTOCOL.md`
+(`PROTOCOL.md` below).  Each device's store is set up under a salt with its identity bound in (`draw_salt`, its GPU's
+16-byte UUID, `device_id`, which the on-node challenger reads from the driver, `read_device`), so devices holding one
+`W` hold different stores, and the verifier refuses a store whose salt is not its device's (`Verifier`).
 
 The verifier (`Verifier`, `Window`, `ChallengerState`) is the auditor's hardware, on a machine the prover doesn't
 control; whatever runs on the GPU's node (`read_device`, the tagger's host) is the prover's, and every bound holds if it

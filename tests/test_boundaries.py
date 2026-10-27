@@ -74,9 +74,6 @@ ALLOWED = {
     # deployment layer (`wipe_parties`), their messages the wire's.
     "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
                             "ml.randomness"},
-    # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
-    # under its setup and `vk`, reused as they are.
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof service's one challenger's (`sampled_proofs.challenger`).
@@ -140,7 +137,6 @@ CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness"},
