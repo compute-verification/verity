@@ -121,7 +121,8 @@ def test_statics_without_a_layout_are_refused(kw):
 def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
     """`TokenFeed_v1` chained down a class Program of NP = 5 prompt ids from each prompt length lp = 1..5: positions below lp
     take the prompt's ids, every later one the select it reads, and each carries (lp − p − 1, ids[p + 1:], 0s) on; the first
-    position takes ids[0] whatever its slot's count, and the statics it has no layout for are refused."""
+    position takes ids[0] whatever its slot's count, and the statics it has no layout for are refused: FIRST=1 too, after
+    FIRST=True at the same NP is bound (as `window_weights.WEIGHTS_CLASS`'s feed is)."""
     NP, ids = 5, [7, 0xFFFFFFFF, 0, 123456, 1 << 31]
     sels = [1000 + p for p in range(NP)]
     first, rest = bind(X.TokenFeed, NP=NP, FIRST=True), bind(X.TokenFeed, NP=NP, FIRST=False)
@@ -142,11 +143,10 @@ def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
             assert slot == [(lp - p - 1) & 0xFFFFFFFF, *ids[p + 1:], *[0] * (p + 1)]
         assert toks == ids[:lp] + sels[lp - 1:NP - 1]
     assert run(first, [0, *ids])[0] == ids[0]
-    with pytest.raises(ValueError, match="refuses this binding"):
-        bind(X.TokenFeed, NP=0, FIRST=True)
-    # `bind`'s cache keys FIRST=1 as FIRST=True, so once a class circuit in this process has bound its feed at NP = 2 (as
-    # `window_weights.WEIGHTS_CLASS`'s does) `bind` returns that one unrefused: the rule is checked on its own.
-    assert X.feed_refuse({"NP": 2, "FIRST": 1}) and X.feed_refuse({"NP": 2, "FIRST": True}) is None
+    bind(X.TokenFeed, NP=2, FIRST=True)
+    for kw in ({"NP": 0, "FIRST": True}, {"NP": 2, "FIRST": 1}):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(X.TokenFeed, **kw)
 
 
 def _run(fn, *rows):
