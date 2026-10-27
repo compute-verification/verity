@@ -127,29 +127,35 @@ Keys and access:
 
 - (25 Oct) The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
   so stopping a machine never waits on an agent VM. A key that could also start, create or delete is a new ask.
-- (25 Oct) Workers open and edit their own lane's PRs with `research pr open|edit`, through a GitHub App on the control
-  pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head branch
-  isn't the caller's lane's. Drive's App stays the only one that can move `main`.
+- (25 Oct) Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
+  control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
+  branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
 - (25 Oct, TOP-84) A lane's development gate key on an auditor's gate (vy-challenger-1, vy-auditor-2) is no ask: the lane
   makes an ed25519 key, sends infra only the public half, and infra registers it under that lane. Only the per-lane Cursor
   secret that credit-bearing windows need is Daniel's.
 
 Landing:
 
-- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the
-  whole check before a landing. A PR that changes a `lean-audit.json` lock, or Lean that runs as code (outside
-  `Security/`), keeps its Lean check first; Lean proofs alone land on the verdict and are checked after landing, a
-  failure reverting them (25 Oct 11:19 PM PDT). Reviewers are agents ci staffs, never the PR's owner. Drive does it with
-  `land = "review"` (AGENTS.md "Checking and merging").
 - (25 Oct 09:40Z, delegated to the vLLM coordinator) The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
   cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
 - (25 Oct 11:20Z, the vLLM coordinator under that delegation) A `# noqa` is an exception too: in `integrations/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
+- (26-27 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask repo-wide) Outside `integrations/vllm/` and
+  `archive/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python, as drive lands
+  before the suites run (22:45Z): fix the code, never the list; a rename moves its entries (`--move OLD NEW`). Ruff: the
+  root `ruff.toml`, per (file, rule), `noqa` uncounted (23:47Z). No new direct environment read: use the area's settings
+  registry, a `settings.py` or a file the list marks `"registry": true` at the PR's base (01:30Z). No new swallowing
+  except handler, typed or broad: re-raise, record, or test first (02:05Z).
 
 Protocols and claims:
 
+- (26 Oct, tentative) Credit and every report of computation are in AND gates. 𝓜's resources appear only inside
+  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
+  finds a reason this is wrong floats it at once.
+- (26 Oct) A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
+  every scale; workloads compose, and "row" never names one.
 - (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
   under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.

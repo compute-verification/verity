@@ -82,7 +82,8 @@ call's `args.agentId` is the worker launched or resumed: on 19 Oct 16:49-17:03Z 
 handover note's body, stopped mid-step and none was watched), minus the coordinators and every agent the list has. Each sweep
 it reads each one once (`GET /v1/agents/{id}`; `WORKERS_NEW` first reads a sweep; one IDLE for `WORKER_IDLE_S` only when a
 note of its changes; a 404 never again), and records **worker_idle** when it went from ACTIVE to IDLE (once per transition,
-at its `updatedAt`, which moves on a status change and not during work) and **worker_long** once when it has been ACTIVE for
+at its `updatedAt`, which moves on a status change and not during work), unless its parent's Task call completed as it
+stopped (`reported_back`: it reported back, INF-277), and **worker_long** once when it has been ACTIVE for
 `--worker-long-h` (6). It records only; the relay rings the lane's handle. A worker's worker_idle and idle_after_run are
 held with its parent's others (`bursts` in `state.json`) and posted once none has joined for `BURST_QUIET_S`, or `BURST_S`
 after the first: one alone as itself, several as one **workers_failed** naming them all. Each names the wake-up the worker
@@ -276,6 +277,8 @@ LEARN_PER_READ = 4              # unknown senders whose conversation one node re
 LEARN_RETRY_S = 6 * 3600        # a sender whose brief named none is read again after this long
 WORKER_NOTES_S = 12 * 3600      # a note modified this recently names its author as a worker to watch
 WORKER_IDLE_S = 12 * 3600       # a worker IDLE this long is read again only when a note of its changes
+#: how far before a worker's IDLE read its parent's Task call may complete and still be its report back
+TASK_DONE_SLACK_S = 120
 WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-long-h)
 WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
@@ -794,6 +797,7 @@ class Watch:
         self.names: dict[str, str] = {}             # listed agent -> its name, for run_ended
         self.branches: dict[str, set[str]] = {}     # listed agent -> the branches its run records name
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
+        self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
@@ -891,6 +895,18 @@ class Watch:
                 c = self.children.setdefault(m[0], {"parent": parent, "name": ""})
                 c.update(parent=parent, t=t, name=str(args.get("description") or c["name"])[:120] if isinstance(args, dict)
                          else c["name"])
+                if data.get("status") == "completed":
+                    c["done"] = t                   # the parent has the worker's result: it knows the worker stopped
+                else:
+                    c.pop("done", None)
+
+    def reported_back(self, agent: str, idle_t: float) -> bool:
+        """Whether `agent`'s parent got its Task result as it stopped (`TASK_DONE_SLACK_S` either side of its IDLE read): it
+        reported back. A Task call that completed earlier is no report: INF-126's 14 workers had theirs complete, then stopped
+        mid-step."""
+        with self.kids_lock:
+            done = (self.children.get(agent) or {}).get("done")
+        return done is not None and done >= idle_t - TASK_DONE_SLACK_S
 
     def hold(self, kind: str, r: Run, t: float, w: dict, **detail) -> None:
         """A worker's failure, held with its parent's others (`bursts`) to be posted as one by `flush_bursts`."""
@@ -940,8 +956,12 @@ class Watch:
             b = self.bursts.pop(key)
             items = []
             for x in b["items"]:
+                if x["kind"] == "worker_idle" and self.reported_back(x["agent"], x.get("idle_t", t)):
+                    continue
                 idle_t = x.pop("idle_t", t)
                 items.append({**x, **self.wake_of(x["agent"], idle_t)})
+            if not items:
+                continue
             if len(items) == 1:
                 x = items[0]
                 self.record(x.pop("kind"), Run(x.pop("agent"), x.pop("run"), x.pop("name")), **x)
@@ -1320,7 +1340,11 @@ class Watch:
                     self.record("worker_long", r, since=iso(w["since"]), hours=int((t - w["since"]) // 3600), **detail)
             elif status == "IDLE" and prev == "ACTIVE":
                 w["idle_at"] = updated
-                self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
+                if self.reported_back(agent, updated):
+                    print(f"{iso(t)} worker {agent} idle: its parent got its Task result, so no one is rung", file=sys.stderr,
+                          flush=True)
+                else:
+                    self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
             elif status == "ARCHIVED":
                 w["gone"] = True
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
@@ -1499,6 +1523,12 @@ class Watch:
             return str(got[0])
         return next((b for b, v in (self.heads.get("heads") or {}).items() if isinstance(v, list) and v[0] == sha), "")
 
+    def sender_status(self, agent: str) -> str:
+        """The sender's status as the watch last read it (`ACTIVE` while it is in a turn, so it sees its run end itself), else
+        `unknown`."""
+        return (self.agent_status.get(agent) or self.worker_status.get(agent) or str((self.workers.get(agent) or {}).get("status")
+                or "") or "unknown") if agent else "unknown"
+
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
                  quiet: set[str] = frozenset()) -> dict | None:
         """Record `row`'s end for its sender's handle; a run whose sender no handle owns is returned instead, for `run_ends` to
@@ -1544,7 +1574,7 @@ class Watch:
                             node=node, what=what[:80], rc=row.get("rc"), state=row.get("state"),
                             after=duration(row.get("wall_s")), at=iso(ended), lane=w.get("lane") or lane or "", quiet=True,
                             cancelled_by=str(row.get("cancelled_by") or ""), cancel_reason=str(row.get("cancel_reason")),
-                            **({"parent": parent} if role == "worker" and parent else {}))
+                            sender_status=self.sender_status(agent), **({"parent": parent} if role == "worker" and parent else {}))
             if self.awaiting.pop(agent, None) is not None:
                 self.save()
             return None
@@ -1556,7 +1586,8 @@ class Watch:
         self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,
                     what=what[:80],
                     rc=row.get("rc"), state=row.get("state"), after=duration(row.get("wall_s")), at=iso(ended),
-                    lane=w.get("lane") or lane or "", **({"parent": parent} if role == "worker" and parent else {}),
+                    lane=w.get("lane") or lane or "", sender_status=self.sender_status(agent),
+                    **({"parent": parent} if role == "worker" and parent else {}),
                     **({"listed": True} if role == "worker" and agent in self.names else {}))
         # who must act on it: its sender when the list has it or it is a worker, else the lane's handle's coordinator
         target = agent if agent in self.names or role == "worker" else next((a for a, h in coords.items() if h == handle), None)
@@ -1837,6 +1868,7 @@ class Watch:
                 self.wake_up(a, handle, info["id"], why, t, info.get("status"))
         self.watch_workers(coords, listed, t)
         self.names = {a["id"]: str(a.get("name") or "") for a in agents}
+        self.agent_status = {a["id"]: str(a.get("status") or "") for a in agents}
         known, active = {}, {}
         for a in agents:
             if a["id"] in coords and a.get("status") == "ACTIVE":
