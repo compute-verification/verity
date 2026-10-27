@@ -110,9 +110,10 @@ def outAt (θ F c : ByteArray) (hs : List (Σ m' : ℕ, ByteArray × (Fin m' →
     Outcome :=
   ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩
 
-/-- **The releases split into blocks** off the break, wherever sampled proofs' verdict accepts. -/
+/-- **The releases split into blocks** off the break, wherever sampled proofs' verdict accepts, the releases of the
+play's bit counts (`Vocab.rounds`). -/
 def RunsAt (V : Vocab d α) (θ F c : ByteArray) (Brk : Outcome → Prop) (Rd : Readers A) : Prop :=
-  ∀ hs e, V.Verdict .sampled (outAt θ F c hs e) → ¬ Brk (outAt θ F c hs e) → ∃ kd' kp rds, Blocks Rd hs kd' kp rds
+  ∀ hs e, hs.map Sigma.fst = V.rounds θ → V.Verdict .sampled (outAt θ F c hs e) → ¬ Brk (outAt θ F c hs e) → ∃ kd' kp rds, Blocks Rd hs kd' kp rds
 
 /-- **The record's draw is the one the draw's block reads back to**, at any split of the releases into blocks, off the
 break, wherever sampled proofs' verdict accepts. -/
@@ -145,8 +146,8 @@ noncomputable def drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strateg
   hOf := Rd.hOf
   bytesOf := Rd.bytesOf
   pfOf := pfOf A.I θ F c
-  canon hs e hv hb := by
-    obtain ⟨kd', kp, rds, hbl⟩ := hRuns hs e hv hb
+  canon hs e hsz hv hb := by
+    obtain ⟨kd', kp, rds, hbl⟩ := hRuns hs e hsz hv hb
     obtain ⟨hPts, hRds, hAft⟩ := hLink hs e hv hb kd' kp rds hbl
     have hD := hDraw hs e hv hb kd' kp rds hbl
     obtain ⟨hc, hd, hp, hN, hr⟩ := hbl

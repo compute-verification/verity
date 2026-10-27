@@ -308,7 +308,7 @@ theorem dom_live {ρ E : Type} (mk : Msg → List Bool → ρ) (outc : List ρ �
     Dominated p (roundsThen mk (fun log => .send E fun e => .ret (outc log e)) ns) s q
       (.coin Ω fun ω => session nOf app J mPts N out (t ω)) := by
   refine dom_reach mk (G nOf app J mPts N out t m) (plan nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf)
-    (.at .pre) _ (fun hs K s' hK => ?_) ns s
+    (.at .pre) _ ns (fun hs K s' _ hK => ?_) s
   subst hK
   refine dom_send_left ?_
   by_cases hp : p (outc (hs.map (recOf mk) ++ []) s'.1)
@@ -495,16 +495,17 @@ variable {F Rd β : Type} [Fintype F] [Nonempty F] {Sub : ℕ → Type} (nOf : {
 those before each (`annot`, `histPlan`), so wherever every outcome in `p` has its annotated releases bring the reduction
 into the session's rounds, with an outcome in `q` at the proof files, the live audit dominates the play. -/
 theorem dom_liveH {ρ E : Type} (mk : M₀ → List Bool → ρ) (outc : List ρ → E → α) (pfOf : E → PF)
-    (hok : ∀ hs e, p (outc (hs.map (recOf mk)) e) → ∃ x rB pts N' rs,
+    (ns : List ℕ)
+    (hok : ∀ hs e, hs.map Sigma.fst = ns → p (outc (hs.map (recOf mk)) e) → ∃ x rB pts N' rs,
       reached (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (annot [] hs) =
           .at (.rnds x rB pts N' rs) ∧
         q (out x rB pts rs (pfOf e)))
-    (ns : List ℕ) (s : Strategy (roundsThen mk (fun log => .send E fun e => .ret (outc log e)) ns)) :
+    (s : Strategy (roundsThen mk (fun log => .send E fun e => .ret (outc log e)) ns)) :
     Dominated p (roundsThen mk (fun log => .send E fun e => .ret (outc log e)) ns) s q
       (.coin Ω fun ω => session nOf app J mPts N out (t ω)) := by
   refine dom_reach mk (fun s : St J mPts (F := F) (Rd := Rd) (RB := RB) m × List (ℕ × M₀) => G nOf app J mPts N out t m s.1)
-    (histPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf)) (.at .pre, []) _
-    (fun hs K s' hK => ?_) ns s
+    (histPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf)) (.at .pre, []) _ ns
+    (fun hs K s' hsz hK => ?_) s
   show Dominated p (K []) s' q (G nOf app J mPts N out t m (runPlan (histPlan
     (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf)) (.at .pre, []) hs).1)
   rw [runPlan_hist]
@@ -512,7 +513,7 @@ theorem dom_liveH {ρ E : Type} (mk : M₀ → List Bool → ρ) (outc : List ρ
   refine dom_send_left ?_
   by_cases hp : p (outc (hs.map (recOf mk) ++ []) s'.1)
   · rw [List.append_nil] at hp
-    obtain ⟨x, rB, pts, N', rs, hst, hq⟩ := hok hs s'.1 hp
+    obtain ⟨x, rB, pts, N', rs, hst, hq⟩ := hok hs s'.1 hsz hp
     rw [show runPlan _ _ (annot [] hs) = _ from hst]
     exact dom_tail nOf app J mPts out x rB pts (pfOf s'.1) N' rs fun _ => hq
   · exact dom_ret_not hp _ (stratG nOf app J mPts N out t m _)
@@ -626,7 +627,7 @@ theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (hOf : Game.LiveDrive.Req ByteArray → ByteArray) (bytesOf : Game.LiveDrive.Req ByteArray → ByteArray)
     (pfOf : ByteArray × Array ByteArray → Flock.Guarantees.LiveHash.Last)
-    (hok : ∀ hs e, P ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+    (hok : ∀ hs e, hs.map Sigma.fst = V.rounds θ → P ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
       ∃ x (h : ByteArray) pts N' rs, Game.LiveDrive.reached
           (q := fun o : Reg × Finset (Fin n) × Exec.Transcript => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
           Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length)
@@ -643,7 +644,7 @@ theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (releases_bind (V.rounds θ) fun log => Game.send (ByteArray × Array ByteArray) fun eb =>
       Game.ret (⟨θ, F, c, log, eb.1, eb.2⟩ : Outcome)) ?_)
   exact Game.LiveDrive.dom_liveH Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m
-    (uniform_of_A3 hA3) tagOf spΩ spP spR hOf bytesOf _ _ pfOf hok (V.rounds θ) _
+    (uniform_of_A3 hA3) tagOf spΩ spP spR hOf bytesOf _ _ pfOf (V.rounds θ) hok _
 
 /-- **`prob_le`'s domination from the device's refusals, read in the play**: where sampled proofs' verdict accepts the
 play's outcome off the break, its tagged releases (each read with the requests before it, `LiveDrive.annot`) are the
@@ -662,8 +663,8 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (hOf : Game.LiveDrive.Req ByteArray → ByteArray) (bytesOf : Game.LiveDrive.Req ByteArray → ByteArray)
     (pfOf : ByteArray × Array ByteArray → Flock.Guarantees.LiveHash.Last)
-    (hcanon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
-      ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+    (hcanon : ∀ hs e, hs.map Sigma.fst = V.rounds θ →
+      V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ → ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
       ∃ (kd kp : Game.LiveDrive.Block (Game.LiveDrive.Req ByteArray) m) (rds : List (Game.LiveDrive.RoundBlock (Game.LiveDrive.Req ByteArray) m)),
         (Game.LiveDrive.annot [] hs).filter (Game.LiveDrive.Tagged m tagOf) =
             (kd.rels ++ kp.rels ++ rds.flatMap fun r => r.k.rels).map (Game.LiveDrive.rel m) ∧
@@ -682,8 +683,8 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
       (toVerity (Exec.auditLive (FlockSoundness.Audit.Law.execOS (n := n) src law pop) Reg
         (Flock.Guarantees.LiveHash.liveOfZJH dg planZ N wrH))) := by
   refine dominated_of_drive σ _ src hA3 law pop dg planZ N wrH R₀ m tagOf spΩ spP spR hOf bytesOf pfOf
-    fun hs e ⟨hv, hacc, hb⟩ => ?_
-  obtain ⟨kd, kp, rds, hc, hd, hp, hN, hr, hpr⟩ := hcanon hs e hv hb
+    fun hs e hsz ⟨hv, hacc, hb⟩ => ?_
+  obtain ⟨kd, kp, rds, hc, hd, hp, hN, hr, hpr⟩ := hcanon hs e hsz hv hb
   refine ⟨_, _, _, _, _, Game.LiveDrive.reached_canon (q := fun o => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
     Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m (uniform_of_A3 hA3) tagOf spΩ spP spR hOf bytesOf
     (Game.LiveDrive.annot [] hs) kd kp rds hc hd hp hN hr, ?_⟩
@@ -712,7 +713,7 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
   hOf : Game.LiveDrive.Req ByteArray → ByteArray
   bytesOf : Game.LiveDrive.Req ByteArray → ByteArray
   pfOf : ByteArray × Array ByteArray → Flock.Guarantees.LiveHash.Last
-  canon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+  canon : ∀ hs e, hs.map Sigma.fst = V.rounds θ → V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
     ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
     ∃ (kd' kp : Game.LiveDrive.Block (Game.LiveDrive.Req ByteArray) m) (rds : List (Game.LiveDrive.RoundBlock (Game.LiveDrive.Req ByteArray) m)),
       (Game.LiveDrive.annot [] hs).filter (Game.LiveDrive.Tagged m tagOf) =
@@ -742,8 +743,8 @@ variable {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F 
 theorem dominated : Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK A.I (Dr.proj o) ∧ ¬ Brk o)
     (V.game θ F c) σ (fun o => ZkExec.LiveAcceptsZK A.I o) (toVerity A.GH) :=
   dominated_of_canon σ Dr.proj A.src A.hA3 (.subset kd) n A.dg (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀) A.N A.wrH
-    Dr.R₀ Dr.m Dr.tagOf Dr.spΩ Dr.spP Dr.spR Dr.hOf Dr.bytesOf Dr.pfOf fun hs e hv hb => by
-      obtain ⟨kd', kp, rds, hc, hd, hp, hN, hr, hrec, hh⟩ := Dr.canon hs e hv hb
+    Dr.R₀ Dr.m Dr.tagOf Dr.spΩ Dr.spP Dr.spR Dr.hOf Dr.bytesOf Dr.pfOf fun hs e hsz hv hb => by
+      obtain ⟨kd', kp, rds, hc, hd, hp, hN, hr, hrec, hh⟩ := Dr.canon hs e hsz hv hb
       exact ⟨kd', kp, rds, hc, hd, hp, hN, hr, fun hacc => Flock.Guarantees.LiveHash.accepts_canonWrH
         (Jf := fun S R => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length) hrec hh hacc⟩
 
