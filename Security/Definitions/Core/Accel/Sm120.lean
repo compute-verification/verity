@@ -1,13 +1,16 @@
 import Definitions.Core.Accel.Machine
 
 /-!
-# The RTX PRO 6000's numbers (trusted)
+# The RTX PRO 6000 Server Edition's numbers (trusted)
 
-The RTX PRO 6000 Blackwell (GB202, sm_120a, 188 SMs), at the ceiling over the die's 188-SM editions (RT-MODEL-MIN
-RM5). We run the Server Edition, whose maximum is 2430 MHz with 1597 GB/s of GDDR7
-(note:20261017T0324Z-draft-eps1-spec); the Workstation Edition boosts to 2617 MHz with 1792 GB/s. Nothing attests the
-edition, so the table takes the larger of each. Open: sm_120's clock offsets are unmeasured (its nodes are stopped),
-and a positive offset raises the ceiling. Data-sheet and CALIB numbers.
+A table is a SKU's, at its firmware's maximum (RT-MODEL-MIN RM5). This one is the RTX PRO 6000 Blackwell Server
+Edition (GB202, sm_120a, 188 SMs; board 900-2G153-0000-000, vBIOS 98.02.8D.00.01), the SKU our sm_120 nodes' cards
+report (run r20261027-015942-eb08): 2430 MHz SM and 12481 MHz GDDR7. Its supported clocks top at 2430 MHz and its SM
+clock offset range is [0, 0]: every lock, application clock and offset above 2430 MHz is refused or clamped
+(note:20261017T1839Z-draft-rt-clock, run r20261017-181535-5132). Another SKU is another table: the Workstation
+Edition boosts to 2617 MHz with 1792 GB/s, and NVIDIA's family headline (4 PFLOPS sparse FP4) is at about 2600 MHz.
+Which SKU and firmware a node's cards are is part of the premise that reads the table (`Assumptions.CardWithinAccel`);
+nothing the protocol checks attests it (open: an attestation of the SKU and the vBIOS). Data-sheet and CALIB numbers.
 
 **Stores** (32-bit words): the register file, 64 Ki registers an SM, plus the uniform registers and the predicates
 (3371 words an SM); shared memory with L1, 128 KB an SM; L2, 128 MiB; GDDR7, 96 GiB.
@@ -20,7 +23,8 @@ and a positive offset raises the ceiling. Data-sheet and CALIB numbers.
 * shared memory: 32 bank words; L2: 5 words read or written, a measured value, not a ceiling (CALIB measured 18.6
   bytes an SM-clock of one read pattern at 2092 MHz, run r20261017-065855-c8a9; RM6, open until a ceiling with its
   argument replaces it);
-* GDDR7: 1792 GB/s (the Workstation Edition's data sheet), 4.48 · 10¹¹ words a second.
+* GDDR7: 12481 MHz at two transfers a clock on 512 bits, 1597.6 GB/s (the data sheet's 1597 GB/s),
+  3.99392 · 10¹¹ words a second.
 -/
 
 open scoped NNRat
@@ -28,9 +32,9 @@ open scoped NNRat
 namespace Verity.Accel.Sm120
 
 /-- The clock's ceiling, Hz. -/
-def clock : ℚ≥0 := 2617 * 10 ^ 6
+def clock : ℚ≥0 := 2430 * 10 ^ 6
 
-/-- **The RTX PRO 6000's table.** -/
+/-- **The RTX PRO 6000 Server Edition's table.** -/
 def card : Card where
   size
     | .reg => 188 * (65536 + 3371)
@@ -46,7 +50,7 @@ def card : Card where
     | .f64 => 188 * 2 * clock
     | .sfu => 188 * 16 * clock
     | .l2 => 188 * 5 * clock
-    | .dram => 448 * 10 ^ 9
+    | .dram => 399392 * 10 ^ 6
   weight
     | .nvf4 | .mxf4 => 1 / 2
     | .f16 | .bf16 => 2

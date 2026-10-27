@@ -28,7 +28,8 @@ schedule chosen before the content as the card's code is, takes every such `M` t
 (`Machine.Fits`). It holds because every instruction the card executes is dominated by an envelope instruction
 (`Accel.Op`) reading and writing at least its words, at no more units of each resource (the coverage table,
 `Accel/README.md`, MODEL-COVER), and the model's coarsenings (pooling, no latency, no per-clock limit, free resources)
-only let a program do more.
+only let a program do more. A table is a SKU's at its firmware's maximum (`Accel.H200`, `Accel.Sm120`), so the premise
+at `c` says too that the cards are `c`'s SKU and firmware; nothing the protocol checks attests that (open, RM5).
 
 **Exclusions**, units no code here uses because they can't compute a committed word or a hash more cheaply than the
 model prices: the video and JPEG engines, sm_120's RT cores, the texture path's filtering, the copy engines (moves at
