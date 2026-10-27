@@ -1327,6 +1327,46 @@ def test_review_lists_the_members_lacking_a_land_verdict_and_records_one_refusin
     assert (lab.value, lab.by, lab.ref) == ("land", "lane-9", "note:ci/x")
 
 
+def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
+    """TOP-90: #4412, marked, waited on #4382's unmarked commits (CI-178) and nobody told #4382's owner.  Its owner hears once per
+    (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""
+    _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
+    h = Review(world, monkeypatch)
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    h.tick()                                                                    # drive sees #5 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # moved on from `old`, unmarked
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # branched from #5 at `old`
+    world.gh.put(8, world.change({"y.txt": "y\n"}, base=old), ready=False)      # waits too, but isn't marked: no one hears
+    world.gh.put(9, world.change({"z.txt": "z\n"}, base=world.gh.prs[5].head))  # on #5's current head
+    world.store.add_label(label_target(7, world.gh.prs[7].head), vocab.READY, "true", "marker7")
+
+    def told() -> list[str]:
+        return [p for p in h.posts if "waits for your mark" in p]
+
+    h.tick()
+    five = world.gh.prs[5].head
+    assert told() == [
+        f"@ci @lane-5 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
+        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #7 carries it",
+        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
+        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #9 carries it"], told()
+    h.tick()
+    assert len(told()) == 2                                     # once per pair of heads
+    world.gh.put(7, world.change({"k.txt": "kernels 2\n"}, base=world.gh.prs[7].head))
+    h.tick()
+    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5")
+    world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=five), ready=False)
+    h.tick()
+    # #9 holds #5's older head now; it only shares `old` with #8, which waits for nothing of #9's or #7's (`Queue.entries`)
+    assert [p.split(": mark")[0] for p in told()[3:]] == [
+        f"@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
+        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
+    world.gh.ready.add((5, world.gh.prs[5].head))
+    h.tick()
+    assert len(told()) == 5 and h.q.status()[7].state != "waiting"
+
+
 def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:
     """``h``'s Lean checks (``lean``) and post-landing runs (``post``) launched as train.sh is: detached, the launch returning at
     once with no run ids (`drive.detach`'s record), each launch's commit in the list returned.  `h.printed[launch["dir"]]` is
@@ -1810,6 +1850,59 @@ def test_a_cut_below_a_lean_change_under_a_passed_lean_check_waits_for_a_lean_ch
     assert out.startswith("landed #"), (out, world.logs)
     assert _git(world.origin, "show", "main:pkg/lean-audit.json") == '{"a": 1}'
     assert f"research queue drive: landed #1 #3 on `main` at {_main(world)[:12]} (check {again})" in world.logs, world.logs
+
+
+def test_a_failed_lean_check_below_a_passed_one_lands_nothing_on_a_check_of_another_lean(world, monkeypatch):
+    """CI-194: #1 and #3 change pkg's lock, #4 is unreviewed; the check of #1 + #2 (#1's Lean) failed and the one of #1..#4
+    passed, and drive landed #1 alone on the latter, telling @ci each Lean change below #2 had a passed Lean check."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}, base=one))
+    world.gh.put(3, world.change({"pkg/lean-audit.json": '{"a": 1, "b": 2}'}, base=one))
+    world.gh.put(4, world.change({"b.txt": "4\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 3, 4]
+    assert [c for c, *_ in h.launched] == [chain[1].commit, chain[3].commit], world.logs
+    low, high = h.lean_ids()
+    h.run_state[low] = ("done", 1, None)
+    h.run_state[high] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, low, {LEAN_STEP: "failed"}), _steps_run(world.tmp, high, {LEAN_STEP: "passed"})]
+    below = _main(world)
+    out = h.tick()
+    assert not out.startswith("landed") and _main(world) == below, (out, world.logs)
+    assert h.launched[2] == (chain[0].commit, "m1", False), world.logs                     # #1's own commit, blamed on its own
+    assert not any("each Lean change below it has a passed Lean check" in x for x in world.logs), world.logs
+    (own,) = h.lean_ids()[2:]
+    h.run_state[own] = ("done", 0, None)
+    h.evidence = [*h.evidence, _steps_run(world.tmp, own, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert out.startswith("landed #"), (out, world.logs)
+    assert _git(world.origin, "show", "main:pkg/lean-audit.json") == '{"a": 1, "b": 2}'
+    assert f"research queue drive: landed #1 #2 #3 on `main` at {_main(world)[:12]} (check {high})" in world.logs, world.logs
+
+
+def test_a_lean_change_below_a_failed_lean_check_waits_for_no_running_check_of_another_lean(world, monkeypatch):
+    """CI-194 (a): the check of #1 + #2 failed while the one of #1..#4 ran; #3 changes the lock between them, so that one's pass
+    can't cover #1, and #1 waited for it before its own check launched."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}, base=one))
+    world.gh.put(3, world.change({"pkg/lean-audit.json": '{"a": 1, "b": 2}'}, base=one))
+    world.gh.put(4, world.change({"b.txt": "4\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    chain = h.q.chain()
+    low, high = h.lean_ids()
+    h.run_state[low] = ("done", 1, None)
+    h.evidence = [_steps_run(world.tmp, low, {LEAN_STEP: "failed"})]
+    out = h.tick()
+    assert not out.startswith("landed"), (out, world.logs)
+    assert h.launched[2] == (chain[0].commit, "m1", False), world.logs
+    assert h.q.load_state()["drive"]["lean"][chain[3].commit]["state"] is None              # still running: nothing cancels it
 
 
 def test_drives_own_pushes_of_main_refuse_off_drive_and_in_shadow_too(world, monkeypatch):
