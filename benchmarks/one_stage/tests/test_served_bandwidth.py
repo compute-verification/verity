@@ -2,7 +2,8 @@
 P2 store on the CPU (P2's reference decode) against `p2_party --listen` on loopback in the auditor gate's party shape:
 the honest session's answer is a core accept that `piece_row` reads, with its credited reads, eps, δ and γ, and the
 scope beside the served window; a prover that serves later passes from its cache of the first's, reading nothing of
-the store, is rejected (`receipt`)."""
+the store, is rejected (`receipt`); and a session that left no record, asked about a window that wasn't served, is a
+reject that says both."""
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage"))
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 sys.path.insert(0, str(ROOT / "examples" / "h200" / "interfaces"))
+import served_bandwidth as SB  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from p2_v1 import bandwidth as B  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
@@ -77,3 +79,14 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     assert got["bandwidth"]["verdict"] == row["verdict"] == "reject"
     assert "receipt at window 0, draw [1, " in row["reason"] and "beside the served window" in row["reason"]
     assert row["quantity"] is None and row["answer"]["public"] is None
+
+
+def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_served(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(ROOT)
+    out = tmp_path / "pieces" / "bandwidth"
+    assert SB.main(["answer", "--session", str(out / "session" / "session.json"), "--serve-dir", str(tmp_path / "none"),
+                    "--window", "0", "--out", str(out)]) == 1
+    row = S.piece_row("bandwidth", tmp_path / "pieces")
+    assert row["verdict"] == "reject" and row["quantity"] is None and "no session record" in row["reason"]
+    assert "with no served window: window 0 of " in row["reason"] and "beside the served window" not in row["reason"]
+    assert json.loads((out / "served.json").read_text())["scope"].startswith("with no served window")

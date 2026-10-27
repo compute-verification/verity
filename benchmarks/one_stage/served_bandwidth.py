@@ -7,8 +7,9 @@ The remote bandwidth session's record (`benchmarks/pous/p2_v1/bandwidth.py sessi
 in ``DIR/answer.json`` (`answer`): the verifier's answer, held to the verifier's own record of it where the session has
 one, in the core interface's form (`p2_party.core_answer`), with γ against ``R``. The session runs on the card after
 window K was served, beside it: serving is not hooked, so its reads are the session's own, not the engine's reads of the
-window's steps (`SCOPE`). An accept has no reason in the core form, so its profile says so; any other answer says so in
-its reason. ``DIR/served.json`` names the window (`served`), the session's times and card, the verifier and the store.
+window's steps (`SCOPE`); where window K isn't served the answer says that instead (`UNSERVED`). An accept has no reason
+in the core form, so its profile says so; any other answer says so in its reason. ``DIR/served.json`` names the window
+(`served`), the session's times and card, the verifier and the store.
 """
 from __future__ import annotations
 
@@ -31,6 +32,9 @@ H200_BYTES_PER_S = 4_800_000_000_000
 SCOPE = ("beside the served window: the session ran on the card after window {k} was served, over the node's registered "
          "store, and was not interleaved with the engine's reads (serving is not hooked), so it certifies the session's "
          "own reads, not the window's")
+#: what it certifies when the window it was asked about wasn't served
+UNSERVED = ("with no served window: window {k} of {serve_dir} is not served ({error}), so the session ran on the card over "
+            "the node's registered store with no window served before it, and certifies its own reads only")
 
 
 def served(serve_dir: Path, window: int) -> dict[str, Any]:
@@ -44,8 +48,15 @@ def served(serve_dir: Path, window: int) -> dict[str, Any]:
     return {"window": window, "serve_dir": str(serve_dir), "steps": w["steps"], "requests": w["requests"]}
 
 
-def answer(session: Mapping[str, Any], window: int, r_bytes_per_s: int | None) -> dict[str, Any]:
-    """The core answer of the session's record `session` (module docstring)."""
+def scope_of(window: Mapping[str, Any]) -> str:
+    """What the session certifies of `window`, as `served` found it."""
+    if "error" in window:
+        return UNSERVED.format(k=window["window"], serve_dir=window["serve_dir"], error=window["error"])
+    return SCOPE.format(k=window["window"])
+
+
+def answer(session: Mapping[str, Any], scope: str, r_bytes_per_s: int | None) -> dict[str, Any]:
+    """The core answer of the session's record `session`, saying `scope` (module docstring)."""
     a, record = dict(session.get("answer") or {}), session.get("verifier_record")
     if "protocol" not in a:
         a = {"protocol": p2_party.PROTOCOL, "registration": (session.get("registration") or {}).get("digest"), **a}
@@ -54,7 +65,6 @@ def answer(session: Mapping[str, Any], window: int, r_bytes_per_s: int | None) -
              "reason": f"the verifier's own record of its answer ({record.get('verdict')}) is not the session's "
                        f"({a.get('verdict')})"}
     out = p2_party.core_answer(a, r_bytes_per_s)
-    scope = SCOPE.format(k=window)
     if out["verdict"] == "accept":
         out["profile"]["scope"] = scope
     else:
@@ -80,11 +90,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         doc = json.loads(a.session.read_text())
     except (OSError, ValueError) as e:
         doc = {"answer": {"verdict": "missing", "reason": f"no session record: {type(e).__name__}: {e}"[:600]}}
-    out = answer(doc, a.window, a.r_bytes_per_s)
+    window = served(a.serve_dir, a.window)
+    scope = scope_of(window)
+    out = answer(doc, scope, a.r_bytes_per_s)
     (a.out / "answer.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
     gpu = a.gpu.read_text().strip() if a.gpu is not None and a.gpu.exists() else None
     (a.out / "served.json").write_text(json.dumps({
-        "served": served(a.serve_dir, a.window), "scope": SCOPE.format(k=a.window), "session": {
+        "served": window, "scope": scope, "session": {
             "started": a.started, "ended": a.ended, "gpu": gpu, "prover_host": doc.get("prover_host"),
             "verifier": doc.get("verifier"), "verifier_host": (doc.get("answer") or {}).get("host"),
             "store": doc.get("store"), "registration": (doc.get("registration") or {}).get("digest"),
