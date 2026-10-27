@@ -3,8 +3,8 @@
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):
 
-* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the declared block's
-  compute and at the serving block's (a location between two wipes), and where each becomes vacuous.
+* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the inference block's
+  gates and at the serving block's (one server between two wipes), and where each becomes vacuous.
 * `brackets`: ρ's bracket per scenario and family: the lower end from the bounds at each status, the upper from the
   attacks.
 * `dark`: ρ against the dark share, per scenario.
@@ -28,7 +28,7 @@ from typing import Any
 
 from rho import analysis, lean
 from rho.analysis import LO, STATUSES, Metric
-from rho.classes import Outside
+from rho.classes import Outside, per_block, weight_per_gate
 from rho.params import Registry
 from rho.scenario import build, evaluate
 from rho.theorem import Budget
@@ -36,9 +36,9 @@ from rho.theorem import Budget
 WINDOWED = "onsite-h200-kimi"
 #: (default scenario, x, y): each axis a `(table, field)` of the scenario's choice of that table
 PHASES = (
-    ("onsite-h200-kimi", ("regime", "residual_bits"), ("regime", "wipe_s")),
+    ("onsite-h200-kimi", ("regime", "k_wipe"), ("regime", "wipe_s")),
     ("onsite-h200-kimi", ("regime", "side"), ("regime", "ingress")),
-    ("remote-h200-kimi", ("regime", "residual"), ("fleet", "dark")),
+    ("remote-h200-kimi", ("regime", "residual"), ("fleet", "eps_dark")),
 )
 STATUS_COLORS = {"proved": "#1a9850", "conditional": "#2c7bb6", "draft": "#f28e2b", "absent": "#999999",
                  "outside": "#cccccc"}
@@ -121,9 +121,9 @@ def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
 
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
-    """Each class's per-block slowdown `κC / (2 a(C, k))` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
-    declared block's compute `Γ` and (for a regime with a serving block) at the serving block's compute, with the
-    declared policy's `k` and the serving block's input `K` marked. Below 1 a class is vacuous: it lets the block run
+    """Each class's per-block slowdown `w c / q_T(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
+    inference block's gates `c` and (for a regime with serving blocks) at the serving block's `c_S`, with the declared
+    policy's `k` and the serving block's input `k_S` marked. Below 1 a class is vacuous: it lets the block run
     unthrottled."""
     points = 6 * grid + 1
     plt = _plt()
@@ -134,59 +134,60 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     s = build(registry, name)
     fam = s.families[min(family, len(s.families) - 1)]
     p = fam.profile(s.model, s.run)
-    gamma, k_policy = s.context.policy.gamma, s.context.policy.k
+    c, k_policy, units = s.context.c, s.context.policy.k, s.context.units
+    w = weight_per_gate(p, units)
     win = s.regime.budget(s.context) if hasattr(s.regime, "budget") else None
-    panels = [("the declared block's compute Γ", gamma)]
+    panels = [("the inference block's gates c", c)]
     if win is not None:
-        panels.append(("the serving block's compute Φ·Δτ·MFU", win.compute))
+        panels.append(("the serving block's gates c_S = ⌊Φ_s Δ_wipe⌋", win.gates))
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
-                  "slowdown": "κC / (2 a(C, k)); 0 where the statement's premise fails (no cap), ∞ where a = 0",
+                  "slowdown": "w c / q_T(c, k); 0 where the statement's premise fails (no cap), ∞ where q_T = 0",
                   "panels": []}
     fig, axes = plt.subplots(1, len(panels), figsize=(6.4 * len(panels), 5.2), sharey=True, squeeze=False)
     lines: dict[str, Any] = {}
     top = 10.0
-    for ax, (title, compute) in zip(axes[0], panels, strict=True):
-        full = p.kappa * compute / 2
-        panel: dict = {"title": title, "compute": compute, "classes": {}, "attacks": {}, "outside": {}}
+    for ax, (title, gates) in zip(axes[0], panels, strict=True):
+        full = w * gates
+        panel: dict = {"title": title, "gates": gates, "classes": {}, "attacks": {}, "outside": {}}
         for i, arg in enumerate((*s.bounds, *s.attacks)):
             try:
-                a = arg.allowance(p)
+                cap = per_block(arg.allowance(p), units)
             except Outside as e:
                 panel["outside"][arg.name] = str(e)
                 continue
 
-            def per_block(k: float, a: Any = a, compute: float = compute, full: float = full) -> float:
-                n = a(Budget(compute, k))
+            def slowdown(k: float, cap: Any = cap, gates: float = gates, full: float = full) -> float:
+                n = cap(Budget(gates, k))
                 return full / n if n > 0 else math.inf
 
-            ys = [per_block(k) for k in ks]
+            ys = [slowdown(k) for k in ks]
             status = lean.weakest(arg.cites)
             if arg.side == "attack":
                 j = next((j for j, y in enumerate(ys) if math.isfinite(y)), None)
                 first = None
                 if j is not None:
                     first = ks[0] if j == 0 else analysis.crossing(
-                        lambda k, f=per_block: float(math.isfinite(f(k))), 0.5, ks[j - 1], ks[j])
+                        lambda k, f=slowdown: float(math.isfinite(f(k))), 0.5, ks[j - 1], ks[j])
                 panel["attacks"][arg.name] = {"status": status, "first_finite_k": first, "slowdown": ys}
                 if first is not None:
                     lines[f"attack {arg.name}"] = ax.axvline(
                         first, c="k", ls=(0, (1, 2)), lw=1.2,
-                        label=f"attack {arg.name} ({status}): ρ_block = {per_block(first * 1.0001):.3g} from k = "
+                        label=f"attack {arg.name} ({status}): ρ_block = {slowdown(first * 1.0001):.3g} from k = "
                               f"{first:.2g}")
                 continue
             vacuous = next((j for j, y in enumerate(ys) if y <= 1), None)
             k_vac = None
             if vacuous is not None:
-                k_vac = ks[0] if vacuous == 0 else analysis.crossing(per_block, 1.0, ks[vacuous - 1], ks[vacuous])
+                k_vac = ks[0] if vacuous == 0 else analysis.crossing(slowdown, 1.0, ks[vacuous - 1], ks[vacuous])
             j = next((j for j, y in enumerate(ys) if y == 0), None)
             fails = None if j is None else ks[0] if j == 0 else analysis.crossing(
-                lambda k, f=per_block: float(f(k) == 0), 0.5, ks[j - 1], ks[j])
+                lambda k, f=slowdown: float(f(k) == 0), 0.5, ks[j - 1], ks[j])
             panel["classes"][arg.name] = {"status": status, "slowdown": ys, "vacuous_from_k": k_vac,
                                           "premise_fails_from_k": fails,
-                                          "at_declared_k": per_block(k_policy),
-                                          "at_window_k": per_block(win.inputs) if win else None}
+                                          "at_declared_k": slowdown(k_policy),
+                                          "at_window_k": slowdown(win.inputs) if win else None}
             color = f"C{i % 10}"
             line, = ax.plot(ks, [y if y > 0 else math.nan for y in ys], c=color, lw=1.8,
                             ls="--" if status == "draft" else "-", label=f"{arg.name} ({status})")
@@ -196,9 +197,9 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
             if fails is not None:
                 last = max((k for k, y in zip(ks, ys, strict=True) if k < fails), default=None)
                 if last is not None:
-                    ax.plot([last], [per_block(last)], "x", c=color, ms=8, mew=2)
-            if win is not None and compute == win.compute and per_block(win.inputs) > 1:
-                ax.annotate(f"{arg.name}: {per_block(win.inputs):.3g} at K", (win.inputs, per_block(win.inputs)),
+                    ax.plot([last], [slowdown(last)], "x", c=color, ms=8, mew=2)
+            if win is not None and gates == win.gates and slowdown(win.inputs) > 1:
+                ax.annotate(f"{arg.name}: {slowdown(win.inputs):.3g} at K", (win.inputs, slowdown(win.inputs)),
                             xytext=(-8, 0), textcoords="offset points", ha="right", va="center", fontsize=8,
                             color=color, weight="bold", bbox={"fc": "white", "alpha": 0.85, "lw": 0, "pad": 1})
             top = max([top, *(y for y in ys if math.isfinite(y))])
@@ -209,16 +210,16 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                                          label=f"declared policy k = {k_policy:.2g} bits")
         if win is not None:
             lines["window K"] = ax.axvline(win.inputs, c="#d7191c", lw=1, ls="-.",
-                                           label=f"serving block K = {win.inputs:.2g} bits")
+                                           label=f"serving block k_S = {win.inputs:.2g} bits")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(ks[0], ks[-1])
         ax.set_xlabel("block's novel input budget k (bits)")
-        ax.set_title(f"at {title}\nC = {compute:.3g} FLOP", fontsize=10)
+        ax.set_title(f"at {title}\nc = {gates:.3g} gates", fontsize=10)
         ax.grid(True, which="major", alpha=0.3)
         data["panels"].append(panel)
     axes[0][0].set_ylim(1e-2, top * 3)
-    axes[0][0].set_ylabel("per-block slowdown κC / (2 a(C, k))")
+    axes[0][0].set_ylabel("per-block slowdown w c / q_T(c, k)")
     fig.legend(lines.values(), [h.get_label() for h in lines.values()], loc="lower center",
                ncol=min(4, len(lines)), fontsize=8, bbox_to_anchor=(0.5, -0.02 - 0.035 * math.ceil(len(lines) / 4)))
     fig.suptitle(f"Training classes per block: {s.model.name}, family {fam.name} (× = premise fails, ○ = vacuous)",
@@ -293,20 +294,20 @@ def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
 
 def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
          grid: int = 30) -> list[Path]:
-    """ρ (lower end solid, upper dashed) against the dark share `d` (`grid + 11` points), per scenario, with `m/d`, the
-    most the dark pool alone allows."""
+    """ρ (lower end solid, upper dashed) against the dark share `ε_dark` (`grid + 11` points), per scenario, with
+    `μ/ε_dark`, the most the dark pool alone allows."""
     points = grid + 11
     plt = _plt()
-    names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "dark"))]
+    names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_dark"))]
     if not names:
         return []
-    p0 = registry.param(_key(registry, names[0], ("fleet", "dark")))
+    p0 = registry.param(_key(registry, names[0], ("fleet", "eps_dark")))
     ds = _logspace(min(1e-4, p0.low / 10), 0.5, points)
     data: dict = {"d": ds, "scenarios": {}}
     fig, ax = plt.subplots(figsize=(8, 5.2))
     ms = set()
     for i, name in enumerate(names):
-        key = _key(registry, name, ("fleet", "dark"))
+        key = _key(registry, name, ("fleet", "eps_dark"))
         lo = analysis.sweep(registry, name, key, ds, LO)
         hi = analysis.sweep(registry, name, key, ds, analysis.HI)
         base = analysis.result(registry, name)
@@ -324,9 +325,9 @@ def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targ
     _targets(ax, targets)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("dark share d (adversary's compute outside every monitored region)")
+    ax.set_xlabel("dark share ε_dark (the dark leaves' share of the inventory's capacity)")
     ax.set_ylabel("ρ")
-    ax.set_title("ρ against the dark share, per scenario (• at today's d)", fontsize=11)
+    ax.set_title("ρ̄ against the dark share, per scenario (• at today's ε_dark)", fontsize=11)
     ax.grid(True, which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
     return _save(fig, out, "dark", data)

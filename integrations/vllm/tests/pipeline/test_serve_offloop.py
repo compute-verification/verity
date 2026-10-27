@@ -614,7 +614,7 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     (src / "requests.jsonl").write_bytes(b'{"d": 4}\n')
     m()
     assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
-    assert so.records_mirror(src, str(src)) is None and so.records_mirror(src, None) is None
+    assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
     assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()
 
 

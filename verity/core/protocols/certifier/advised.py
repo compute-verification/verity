@@ -4,7 +4,7 @@ counts. The prover's advice states them instead (`LinkAdvice`): I1's advice (`ad
 session, charged by `advice.bits`) says in which egress bucket each kept output's frame is released, and how long each
 request's prompt is, which with the link's public framing (`AdvisedProfile.request_frames`) says where it ends on the
 ingress link. Each window's egress counts must be the advice's releases in its buckets, and the advice is held to the
-certified ingress head under the declared syncs. A Boolean Definition, a gated part of N2's advised proof unit
+certified ingress head under the declared syncs. A Boolean Definition, a gated part of N2's advised proof block
 (`service`'s `NetworkAdvisedLinkWindow` v2), which runs on every link-window; its one output is the ok bit. That unit's
 Program holds it as one gate that names its circuit digest (`gate`), pinned in this module's sidecar and held to the
 Definition by circuit-check, and N2's in-the-clear check runs its `reference`, which the tests hold to the circuit.
@@ -586,7 +586,7 @@ def unit(T: int, RIN: int, OWN: int):
 
 @lru_cache(maxsize=None)
 def gate(T: int, RIN: int, OWN: int) -> PrimitiveDefinition:
-    """`unit(…)` as one gate of N2's advised proof unit (`service.LinkWindows.unit`) that names the Definition and its
+    """`unit(…)` as one gate of N2's advised proof block (`service.LinkWindows.unit`) that names the Definition and its
     pinned circuit digest, `Gate[NetworkAdvisedCounts_v1{…}@<digest>]_v2`, as `head_check.gate` holds the head check."""
     d = unit(T, RIN, OWN)
     return gate_of(d, pinned_digest(d, PINS), "N2's advised counts")

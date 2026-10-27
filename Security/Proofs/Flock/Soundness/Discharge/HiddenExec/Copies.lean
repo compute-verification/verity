@@ -10,7 +10,8 @@ the twin's layout `Lf` and unit facts `F`, which read only the circuit). Each un
 hidden statement as in its twin (`UnitRowsFlat`), so:
 - `zeroPos_blockH`: each unit slot's forced-zero row carries 0 (`Layout.placed_zero`, at the hidden layout);
 - `copyAt_blockH`, `copyPos_blockH`: each of template instance `g`'s stacked unit inputs carries what its copy position
-  carries (`Layout.placed_port`, at the twin, whose Δ is `HmRow.delta`'s);
+  carries (`Layout.placed_port`, at the twin, whose Δ is `HmRow.delta`'s); `copyAt_blockR` at one input whose row reads
+  the twin's, which is all a statement with public inputs has at its kept rows;
 - `aliased_of_copiesH`: an instance that wires the inputs as Δ copies them (`Aliased.Copies` at the twin) is aliased in
   the hidden statement (`Layout.Aliased`);
 - `stack_zero_blockH`: a stacked input that reads the zero carries 0.
@@ -51,12 +52,13 @@ theorem zeroPos_blockH {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : M
       fun j => (L.placed_zero hs₀ F.check.unit_zero huse hA hB _ j rfl).2⟩
   exact hZ.block_eq hz o
 
-include hR in
-/-- **A unit slot's input carries what its copy position carries** in the hidden statement, in every block of a
-satisfying witness. -/
-theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hoff : off < st.c.unit.inWords * WORD)
-    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off) {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+/-- **A unit slot's input carries what its copy position carries** in the hidden statement, at a row that reads its flat
+twin's rows (`hRr`), in every block of a satisfying witness. -/
+theorem copyAt_blockR {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hoff : off < st.c.unit.inWords * WORD)
+    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off)
+    (hRr : ∀ j : Fin (2 ^ st.c.kLog), placedA st r j = placedA (Hidden.flatTwin st) r j ∧
+      placedB st r j = placedB (Hidden.flatTwin st) r j)
+    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o r = (L.model regs).block z o (Aliased.copyAt Lf regs F hs₀ off) := by
   unfold Aliased.copyAt
   by_cases hm : off ∈ portBits st.c.unit.inGroups
@@ -70,13 +72,11 @@ theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (ho
       omega
     have hself := port_self L.unit_built (L.unitLog_le hs₀) hm
     rw [hpt] at hself
-    have hb : (portCols st.c.unit.inGroups)[p]!.1 + t < 2 ^ st.c.unit.unitLog :=
-      lt_of_lt_of_le (L.port_lt hp ht) (L.fit st.c.unitNet).2
     have hrow := fun j => Lf.placed_port F.parse F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
       (fun j' => by rw [Lf.unit_lookup]; exact (add_zero _).trans (hself j').2) r j (by rw [hr, hpt])
     have hrow' : ∀ j, placedA st r j = (if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0) ∧
         placedB st r j = if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0 := fun j => by
-      obtain ⟨eA, eB⟩ := hR s₀ hs₀ _ hb r j (by rw [hr, hpt])
+      obtain ⟨eA, eB⟩ := hRr j
       rw [eA, eB]
       exact hrow j
     rw [hsrc]
@@ -98,6 +98,16 @@ theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (ho
       L.unit_slot_lt hs₀ (lt_of_lt_of_le hoff (L.fit st.c.unitNet).2)
     rw [dite_eq_left hlt]
     exact congrArg _ (Fin.ext hr)
+
+include hR in
+/-- **A unit slot's input carries what its copy position carries** in the hidden statement, in every block of a
+satisfying witness. -/
+theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hoff : off < st.c.unit.inWords * WORD)
+    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off) {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    (L.model regs).block z o r = (L.model regs).block z o (Aliased.copyAt Lf regs F hs₀ off) :=
+  copyAt_blockR L Lf regs F hs₀ hoff r hr
+    (fun j => hR s₀ hs₀ off (lt_of_lt_of_le hoff (L.fit st.c.unitNet).2) r j hr) hz o
 
 include hR in
 /-- **Each of template instance `g`'s stacked unit inputs carries what its copy position carries** in the hidden

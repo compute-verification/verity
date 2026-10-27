@@ -5,7 +5,8 @@ Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prove
 sampling parameters, which advice v0 doesn't carry: they come with the request's certified I/O; a stand-in, see the TODO in
 `main`), `requests.jsonl` (engine id to `user`) and `run.json` (the
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
-model on that target at that execution, without workload.  Writes, under `--out`:
+model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it), on
+that target at that execution, without workload.  Writes, under `--out`:
 
     compiled.json     `Compiled.summary()`: the compiler digest, each request's Program digest and shape, each step's row refs
     traces/           one `verity-vllm build --wrapper request` per distinct request Program (`steps.trace_commands`)
@@ -102,8 +103,8 @@ def main() -> int:
     out = Path(a.out) if a.out else run / "windows" / f"w{a.window}"
     out.mkdir(parents=True, exist_ok=True)
 
-    from verity_vllm.config import checkpoint_entries
     from verity_vllm.engine import step_trace as ST
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.phi import Phi
@@ -138,8 +139,10 @@ def main() -> int:
     advice = WA.decode(data)
     ids = {q.id for q in advice.requests}
     ingress = {k: v for k, v in bodies.items() if k in ids}
-    entry = next(c for c in checkpoint_entries() if c["repo"] == meta["model"] and c["revision"] == meta["revision"])
-    hf_config = json.loads((Path(entry["local_path"]) / "config.json").read_text())
+    config = pinned_hf_config(meta["model"], meta["revision"])
+    if config is None:
+        raise SystemExit(f"[advice-compile] {meta['model']}@{meta['revision']} is pinned in no checkpoint manifest")
+    hf_config = json.loads(config.read_text())
     phi = Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config}, target=dict(meta["target"]),
               execution=meta.get("execution") or "eager")
     cap = int(((reg_doc or {}).get("compiler") or {}).get("cap_bits") or CAP_BITS)

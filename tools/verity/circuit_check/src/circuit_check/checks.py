@@ -6,7 +6,7 @@
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof units otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
+                     proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
                      (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
@@ -978,7 +978,7 @@ def _export_counts(build: Callable[[], Any], name: str) -> dict:
 
 
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
-    """A subcircuit's C-Flock proof units: the unit circuit's digest against its module's pin, its counts against their pin
+    """A subcircuit's C-Flock proof blocks: the unit circuit's digest against its module's pin, its counts against their pin
     and the Boolean export, its redundant ANDs, and the laid-out units against the reference on the edge and random vectors."""
     from verity_flock import ir_lower as IL
     from verity_numerical.bench import lowerings

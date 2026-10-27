@@ -120,7 +120,8 @@ def honest : Prover toyG (noFoldRound (toyNF D)) k where
   St := Unit
   start := ()
   work _ := (fun p => ((), (toyNF D).merkle p.1 fun _ _ _ => word a), 2)
-  answer _ := (fun _ => ((), fun _ => (word a, ())), 0)
+  absorb _ _ _ := ()
+  answer _ := (fun _ _ => (word a, ()), 0)
 
 omit [Inhabited D] in
 /-- The honest prover is accepted on every oracle and every coin. -/
@@ -170,7 +171,7 @@ theorem honest_realization (Q : ℝ) :
     fun _ _ _ _ _ _ _ _ _ hy => ⟨0, (List.mem_singleton.mp hy).symm⟩, ?_⟩
   · intro _ _ _ _
     show ∑ _ : Fin k, (((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ)) ≤
-      ∑ _ : Fin k, (((2 : ℕ) : ℝ) + ((0 : ℕ) : ℝ)) + ((k : ℝ) * 0 + ((1 : ℕ) : ℝ) * 0)
+      ∑ _ : Fin k, ((2 : ℕ) : ℝ) + ((k : ℝ) * 0 + ((1 : ℕ) : ℝ) * 0)
     norm_num
   · intro _ _ _
     show (0 : ℝ) + 0 ≤ 0

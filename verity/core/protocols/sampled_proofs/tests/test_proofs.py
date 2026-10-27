@@ -246,9 +246,9 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (refused for its shared-row public file alone, `TABLES`, as `verify`
-    refuses it), a session whose proof bytes were tampered with (record kept or rehashed), and the honest session without
-    the verifier's registered file, its finding is `verify`'s, reason and units included."""
+    the files as blobs: on the honest session (refused for its shared rows alone, proving no unit), a session whose
+    proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's registered
+    file, its finding is `verify`'s, reason and units included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
                          (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
         got, why = _verify(fx, session, own=own)

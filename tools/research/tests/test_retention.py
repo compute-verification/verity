@@ -677,3 +677,18 @@ def test_expires_now_is_what_rm_tells_an_owner_to_record():
     assert R.parse_expires("now", now) == R.fmt_utc(now) == R.parse_expires("0h", now)
     with pytest.raises(R.RecordError, match="never, now, a date"):
         R.parse_expires("soon", now)
+
+
+def test_a_python_package_named_passes_or_anything_in_a_venv_is_no_retained_pass(tmp_path):
+    """INF-264: torch's `fx/passes` and vLLM's `compilation/passes` in every venv refused proofs' twelve approved trees on cpu-1
+    (4.47M inodes). A data dir named passes still is one, wherever it lies."""
+    root = tmp_path / "ws"
+    tree = root / "src" / ("a" * 40)
+    for pkg in (".venv/lib/python3.12/site-packages/torch/fx/passes", "vllm/compilation/passes"):
+        (tree / pkg).mkdir(parents=True)
+        (tree / pkg / "__init__.py").write_text("")
+    (tree / ".venv/lib/python3.12/site-packages/x/passes").mkdir(parents=True)     # no __init__, but inside a venv
+    assert not R._holds_passes(tree, root)
+    assert not R._holds_passes(tree / "vllm/compilation/passes", root)
+    (tree / "out/passes/r0").mkdir(parents=True)
+    assert R._holds_passes(tree, root) and R._holds_passes(tree / "out/passes/r0", root)

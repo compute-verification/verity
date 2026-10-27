@@ -130,6 +130,9 @@ Keys and access:
 - (25 Oct) Workers open and edit their own lane's PRs with `research pr open|edit`, through a GitHub App on the control
   pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head branch
   isn't the caller's lane's. Drive's App stays the only one that can move `main`.
+- (25 Oct, TOP-84) A lane's development gate key on an auditor's gate (vy-challenger-1, vy-auditor-2) is no ask: the lane
+  makes an ed25519 key, sends infra only the public half, and infra registers it under that lane. Only the per-lane Cursor
+  secret that credit-bearing windows need is Daniel's.
 
 Landing:
 
@@ -147,6 +150,9 @@ Landing:
 
 Protocols and claims:
 
+- (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
+  under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  ties them by a premise or trusts them separately.
 - (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - (8 Oct) A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
@@ -154,6 +160,9 @@ Protocols and claims:
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
   the protocol's properties from `Models/` to `Properties/`. Where it leads (18 Oct): Lean is the definition and the
   verifier of record, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+- (26 Oct) An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
+  soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
+  premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
 - (17 Oct) The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
