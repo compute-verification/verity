@@ -14274,11 +14274,11 @@
    ]
   },
   "Definitions.Accounting.Guarantees.JointLive.Honest": {
-   "digest": "57b6a4d1a3a94090f94580fcb8b8880a8fa0541b9c600bd81f9382bb5ec78a92",
+   "digest": "e6aece0bc3956af30f9ee04b21f4688b6dc7481247e0e7ed96f3062438ff4197",
    "definitions": {
-    "Accounting.Guarantees.Bridge.BandwidthOfRemoteLineLive_honest": "793c50f9db9b77938e695c5ccb84edc663c17a1b5bcd3bc55db8a3ec0718e4e4",
+    "Accounting.Guarantees.Bridge.BandwidthOfRemoteLineLive_honest": "5f764b913d957f62f87f41aa457643e7ff7688434bcb46e5f32f0fdf9a639068",
     "Accounting.Guarantees.Bridge.BandwidthOfRemoteLineLive_nontrivial": "678d3ec8ef23ddfb07be385b481b961e8e6cea5beb35692fbbeb76bf7063d80c",
-    "Accounting.Guarantees.JointHorizonBlocksLive_honest": "c7ad8972670d80c5dc0b85cf76d86bb183667b1d199a461177713a12fb5a7d91",
+    "Accounting.Guarantees.JointHorizonBlocksLive_honest": "cd1b90dc16a993adfbd5b17c9530ecf55eb860b1a1288b8087e78eb97df46560",
     "Accounting.Guarantees.JointHorizonBlocksLive_nontrivial": "785aeeea5a0c8d3db58b953c038cd87fbf9ac0bf2cab50f6fe6c98a234461acd"
    },
    "guarantees": [
