@@ -28526,6 +28526,8 @@ section Faithful
 
 variable {N B d : ℕ}
 
+theorem parentsDesc_def {n : ℕ} (G : TopoDAG n) (v : Fin n) :
+    parentsDesc G v = (G.par v).sort (fun a b => b ≤ a) := rfl
 
 theorem mem_par_band {v u : Fin B} : u ∈ (bandDAG B d).par v ↔ u < v ∧ v.val ≤ u.val + d := by
   rw [show (bandDAG B d).par v = Finset.univ.filter (fun u => u < v ∧ v.val ≤ u.val + d) from rfl]
