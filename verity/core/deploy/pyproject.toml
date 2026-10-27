@@ -1,0 +1,10 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# What the tests import of `verity`: the deployment layer, the wire it reads frames with, and S1's LMS for the parties'
+# test keys (the handshake signs with them).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/wire", "verity/ml/__init__.py",
+          "verity/ml/crypto"]

@@ -1,9 +1,9 @@
 # `verity/ml/circuits/silicon/captures/` — repo replicas of tensor-core evidence
 
 These files are byte-faithful replicas (with a `provenance` block: source repo, path, sha256, import time) of evidence
-that was measured on real silicon in other repositories. They are here so `verity.ml.circuits.silicon.instructions` can point at
-something checked in while the evidence is pending registration in the store as `tc-evidence/v1` / `fixture/v1`
-artifacts; once registered, the registry's `evidence` pointers become artifact ids and these replicas can go.
+that was measured on real silicon in other repositories, so that `verity.ml.circuits.silicon.instructions` points at
+something checked in. `autoproof-probe-vectors.json` is a replicated fixture (`fixtures/artifacts.json`): the tree holds its
+pointer and the store its bytes.
 
 | file | source | pins |
 |---|---|---|
@@ -15,6 +15,6 @@ artifacts; once registered, the registry's `evidence` pointers become artifact i
 model replays of `GemmAccumulator<K>` on `HOPPER_E4M3_K32` / `ADA_E4M3_M16N8K32` from a recorded seed and recipe -- not
 hardware captures. Their replay, D-SP1's `test_fp8_targets.py`, was deleted with the archive in `2091252fe3`.
 
-Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) stayed on the
-pod, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `verity/ml/circuits/silicon/discrepancy_log.json`
+Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) are not
+replicated, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `verity/ml/circuits/silicon/discrepancy_log.json`
 entries D10-D15 record what these replicas do and do not settle.
