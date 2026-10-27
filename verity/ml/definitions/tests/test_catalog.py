@@ -18,6 +18,8 @@ COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 an
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
+COUNT += 3  # io_shell's `ScanSlots_v1`, `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
