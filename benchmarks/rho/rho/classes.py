@@ -6,7 +6,7 @@ statement needs is unknown). A budget at which the statement's premises fail get
 the Lean statement it instantiates first, then its named assumptions; `lean.weakest(cites)` is its status, and
 `premise_status(cites, k)` is where those assumptions stand at a block of `k` bits (`data/premises.toml`).
 
-The statements are about inference blocks of `s` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
+The statements are about inference blocks of `c` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
 class is one more `Argument` in `CLASSES`: a premise set, the profile fields it reads, and its count.
 
 **Counted sets.** Each statement counts its own products: the covering family and the partial-sum and E1 bounds count
@@ -15,6 +15,11 @@ theorems count whatever products their certificate covers. A count on a set `S` 
 profile's counted products (`counted`), and where a premise covers only a share of `S` at `k` (the layers deep enough to
 be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0. Both
 conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
+
+**Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
+(`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion layer's per-block cap
+`q_T(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which ρ is
+normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×` (`data/exclusion.toml`).
 """
 
 from __future__ import annotations
@@ -26,9 +31,75 @@ from functools import lru_cache
 from typing import Literal, Protocol
 
 from rho import lean
+from rho.hardware import Units
 from rho.params import Registry
 from rho.profile import Profile
-from rho.theorem import Allowance
+from rho.theorem import Cap
+
+
+@dataclass(frozen=True)
+class FlopBudget:
+    """A block's budget as the FLOP-model statements read it: `Budget` with its gates as FLOPs (`compute`)."""
+
+    compute: float
+    inputs: float
+    cut: float = math.inf
+
+
+#: The most counted products one block with this budget finishes, in the FLOP model: a cap for a bound, a construction
+#: for an attack. `math.inf` is no cap (a bound whose premises fail at this budget).
+Allowance = Callable[[FlopBudget], float]
+
+
+def per_block(a: Allowance, units: Units) -> Cap:
+    """`q_T(c, k)`: allowance `a` on a block of `c` gates."""
+    return lambda b: a(FlopBudget(units.flops(b.gates), b.inputs, b.cut))
+
+
+def weight_per_gate(p: Profile, units: Units) -> float:
+    """`w = κ / 2G`, the reference's counted weight per gate (its counted products, `κ/2` a FLOP, over its gates): what
+    ρ is normalized by. The most a gate holds under a bound is `Structure.weight`."""
+    return p.kappa / (2 * units.gates_per_flop)
+
+
+#: `s_×` at the reference's gates per counted product, `2G / κ`: the reference's average, until the structural minimum is
+#: measured
+REFERENCE = "reference"
+
+
+@dataclass(frozen=True)
+class Structure:
+    """The elementary uncertified cap `q_U(U) = ω_max U / s_×`: what an uncertified or a dark gate holds under a bound
+    (`theorem`'s `u`), and the most any block holds, `u c`."""
+
+    name: str
+    #: `s_×`: the fewest gates in any counted operation's subcircuit, or `REFERENCE`
+    s_times: float | str
+    #: `ω_max`: the most counted weight one operation carries
+    omega_max: float = 1.0
+
+    #: `U / s_×` counts the operations inside the uncertified gates only if none has gates on both sides; at `s_× = 1`
+    #: each operation is charged to one gate, its output, and none can straddle
+    STRADDLE = ("draft:no-straddle",)
+
+    def gates(self, w: float) -> float:
+        """`s_×` in gates, given the reference's weight per gate `w` (`1 / w` at `REFERENCE`)."""
+        return 1 / w if self.s_times == REFERENCE else float(self.s_times)
+
+    def weight(self, w: float) -> float:
+        """`u = ω_max / s_×`."""
+        return self.omega_max / self.gates(w)
+
+    def cites(self) -> tuple[str, ...]:
+        return self.STRADDLE if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
+
+    def elementary(self) -> Structure:
+        """One counted operation per gate, at most: the cap that needs no straddling premise."""
+        return Structure("elementary", 1.0, self.omega_max)
+
+
+def structure(registry: Registry, name: str) -> Structure:
+    return registry.fields(Structure, f"structure.{name}")
 
 
 class Outside(Exception):

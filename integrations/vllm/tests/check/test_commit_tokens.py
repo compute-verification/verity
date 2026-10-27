@@ -37,6 +37,8 @@ SAMPLED = {"r0": [11, 12, EOS, LAG_ROW], "r1": [21, 22, 23, 24, 25]}
 SERVED = {"r0": [11, 12, EOS], "r1": [21, 22, 23, 24, 25]}
 FINISH = {"r0": C.STOP, "r1": C.LENGTH}
 STOP = {"eos": [EOS], "lag": LAG, "declared_lag": LAG, "engine_lag": LAG, "async_scheduling": True}
+#: the identity coverage `commit.binding.coverage_check` writes, which a binding's execution extent sits beside
+COVERED = {"ok": True, "expected_n": 64, "bound_n": 64, "missing_n": 0, "ambiguous_n": 0}
 
 
 @dataclasses.dataclass
@@ -191,7 +193,7 @@ def test_a_full_row_that_committed_no_sampled_ids_is_decided_by_its_match_link_a
     assert cl["not_applied"] == "no committed runner.sampler/sampled_token_ids in the binding map: the Match link alone decides"
     assert f"Commit's token record (pair 0): not applied ({cl['not_applied']})" in capsys.readouterr().out
     # the facts of record rest on the Match link alone
-    cov = {"match_account_link": alone["match_account_link"], "commit_account_link": cl, "rows_past_the_stop": w.past}
+    cov = COVERED | {"match_account_link": alone["match_account_link"], "commit_account_link": cl, "rows_past_the_stop": w.past}
     f = EP.executed_prefix_facts(w.epr, {"coverage": cov}, {"result": True}, ARRIVALS, STOP)
     assert f["r0"]["linked"] is True and f["r0"]["lag_attested"] is True and f["r0"]["a_r_source"].startswith("match record ")
     # and alone means alone: a Match account that did not pass refuses the prefix, by its name only
@@ -455,7 +457,7 @@ def test_the_boundary_linkage_runs_over_the_same_executed_prefix_and_the_facts_l
     h0 = lk["horizon"]["r0"]
     assert h0["linked_steps"] == w.epr["requests"]["r0"]["executed_prefix_len"] == 4 and lk["horizon"]["r1"]["linked_steps"] == CAP
     assert h0["eos_of_record"]["verified"] and h0["eos_of_record"]["eos_step"] == 2 and h0["eos_of_record"]["placeholder_input_ids"] == [EOS]
-    binding = {"coverage": {"match_account_link": _no_match(w), "commit_account_link": link, "rows_past_the_stop": w.past}}
+    binding = {"coverage": COVERED | {"match_account_link": _no_match(w), "commit_account_link": link, "rows_past_the_stop": w.past}}
     f = EP.executed_prefix_facts(w.epr, binding, lk, ARRIVALS, STOP)
     assert f["r0"]["a_r"] == 3 and f["r0"]["a_r_source"].startswith(f"commit token record {link['record']['path']}")
     assert f["r0"]["a_r_source"].endswith("no Match record beside the Commit (a config run has no Match stage): the prefix is linked to the Commit's "
@@ -483,7 +485,7 @@ def test_with_a_match_record_beside_the_commit_both_links_hold():
     match = {"ok": True, "required": True, "match_dir": "/row/match", "lag_attested": True, "problems": [],
              "tokens_json": {"tokens_equal": {"r0": True, "r1": True}, "served_by_request": {"r0": 3, "r1": 5}, "path": "/row/match/capture/tokens.json", "sha256": "ef" * 32},
              "global_match": {"verdict": "PASS", "path": "/row/global_match.json", "sha256": "12" * 32}}
-    cov = {"match_account_link": match, "commit_account_link": link, "rows_past_the_stop": w.past}
+    cov = COVERED | {"match_account_link": match, "commit_account_link": link, "rows_past_the_stop": w.past}
     f = EP.executed_prefix_facts(w.epr, {"coverage": cov}, lk, ARRIVALS, STOP)
     assert f["r0"]["linked"] is True and f["r0"]["a_r_source"].startswith("match record /row/match/capture/tokens.json")
     bad = dict(link, ok=False, tokens_committed={"r0": False, "r1": True})
