@@ -1,6 +1,7 @@
 import Properties.Attest
 import Proofs.Properties.Pous.MemoryChallenger.Tree
 import Proofs.Flock.Claims.Finder
+import Proofs.Properties.CertifierDevice.Lms
 
 /-!
 # Proofs of a party's signed periods (`Properties.Attest`)
@@ -25,6 +26,15 @@ or for every one since each root is 64 bytes, sends nothing in the clear. That i
 `Confined` the party emits its code's messages, under `Faithful` on its true inputs, and under `WitnessPathPrivate`
 nobody overhears its path to the prover, so the auditor sees its liveness records (`auditorSeesSkeleton`); under
 `Secret` the prover gets its messages and no access to its state (`proverSeesMessages`).
+
+**Honest and nontrivial lemmas.** Each guarantee's hypotheses hold at the honest deployed instance: keys `Lms.key`
+derives at `Lms.deployed`, the identity certifying the memory challenger's lower key at leaf 0 and the lower key
+signing a one-record period's root at leaf 0 (`honest_accepts`, by `Properties.CertifierDevice.Proofs.Lms.lmsCorrect`),
+and the party's code run as it is meant to (`meantRun`). Each conclusion fails somewhere: at the empty run, which no
+device signed and which carries no break, so a check that accepts everything fails `PeriodSigned` and `PeriodSound`
+(`periodSigned_acceptAll`, `periodSound_acceptAll`); at the party's whole output, which carries the records
+(`livenessContentFree_nontrivial`); at an overheard witness path (`auditorSeesSkeleton_nontrivial`); and at a prover
+that reads the party's state (`proverSeesMessages_nontrivial`).
 -/
 
 namespace MemoryChallenger.Attest.Properties.SecurityProofs
@@ -777,5 +787,500 @@ theorem proverSeesMessages : ProverSeesMessages := by
     rw [Parties.Code.messages, ← ht]; exact (congrArg Prod.snd hst)
   rw [e]
   rfl
+
+
+/-! ## The honest period and the empty run -/
+
+theorem roleDigest_some {tag : String} {I c r : ByteArray} (hI : I.size = 16) (hc : c.size < 2 ^ 64)
+    (hr : r.size < 2 ^ 64) : Lms.roleDigest tag I c r = .ok (Sha512.hash (roleInput tag I c r)) := by
+  unfold Lms.roleDigest
+  simp only [hI, ne_eq, not_true_eq_false, ↓reduceIte]
+  rw [if_neg (by omega)]
+  rfl
+
+theorem partyContext_some {d : ByteArray} {p : String} (hd : d.size = 64) :
+    Lms.partyContext d p = .ok (Lms.lenField d ++ Lms.lenField p.toUTF8) := by
+  unfold Lms.partyContext
+  simp only [hd, Lms.DEPLOYMENT_BYTES, ne_eq, not_true_eq_false, ↓reduceIte]
+  rfl
+
+theorem u64_some {x : Nat} {w : String} (h : x < 2 ^ 64) : Lms.u64 x w = .ok (be64 x.toUInt64) := by
+  unfold Lms.u64
+  simp only [h, ↓reduceIte]
+  rfl
+
+theorem periodContext_some {d a : ByteArray} {p l : String} {per : Nat} (hd : d.size = 64) (hper : per < 2 ^ 64) :
+    Lms.periodContext d p a l per =
+      .ok (Lms.lenField d ++ Lms.lenField p.toUTF8 ++ Lms.lenField a ++ Lms.lenField l.toUTF8 ++ be64 per.toUInt64) := by
+  unfold Lms.periodContext
+  rw [partyContext_some hd, u64_some hper]
+  rfl
+
+theorem periodRootContext_some {d a : ByteArray} {p l : String} {per n : Nat} (hd : d.size = 64)
+    (hper : per < 2 ^ 64) (hn : n < 2 ^ 64) :
+    Lms.periodRootContext d p a l per n = .ok (Lms.lenField d ++ Lms.lenField p.toUTF8 ++ Lms.lenField a ++
+      Lms.lenField l.toUTF8 ++ be64 per.toUInt64 ++ be64 n.toUInt64) := by
+  unfold Lms.periodRootContext
+  rw [periodContext_some hd hper, u64_some hn]
+  rfl
+
+theorem livenessContext_some {d a : ByteArray} {p l : String} {per b : Nat} (hd : d.size = 64)
+    (hper : per < 2 ^ 64) (hb : b < 2 ^ 64) :
+    Lms.livenessContext d p a l per b = .ok (Lms.lenField d ++ Lms.lenField p.toUTF8 ++ Lms.lenField a ++
+      Lms.lenField l.toUTF8 ++ be64 per.toUInt64 ++ be64 b.toUInt64) := by
+  unfold Lms.livenessContext
+  rw [periodContext_some hd hper, u64_some hb]
+  rfl
+
+/-- The honest period's deployment hash, 64 bytes. -/
+def HONEST_DEPLOYMENT : ByteArray := ⟨Array.replicate 64 0⟩
+
+/-- The honest period's party, the memory challenger, with its attachment and link as `test_pous_period_reports`
+has them. -/
+def HONEST_PARTY : String := "memory-challenger"
+def HONEST_LINK : String := "server-3"
+def HONEST_ATTACHMENT : ByteArray := ⟨Array.replicate 32 0⟩
+
+theorem deployment_size : HONEST_DEPLOYMENT.size = 64 := rfl
+
+theorem honest_small : (Lms.lenField HONEST_DEPLOYMENT ++ Lms.lenField HONEST_PARTY.toUTF8 ++
+    Lms.lenField HONEST_ATTACHMENT ++ Lms.lenField HONEST_LINK.toUTF8 ++ be64 (0 : Nat).toUInt64 ++
+      be64 (1 : Nat).toUInt64).size < 2 ^ 64 ∧
+    (Lms.lenField HONEST_DEPLOYMENT ++ Lms.lenField HONEST_PARTY.toUTF8 ++ Lms.lenField HONEST_ATTACHMENT ++
+      Lms.lenField HONEST_LINK.toUTF8 ++ be64 (0 : Nat).toUInt64 ++ be64 (0 : Nat).toUInt64).size < 2 ^ 64 ∧
+    (Lms.lenField HONEST_DEPLOYMENT ++ Lms.lenField HONEST_PARTY.toUTF8).size < 2 ^ 64 := by
+  simp only [ByteArray.size_append, lenField_size, be64_size]
+  have hp : HONEST_PARTY.toUTF8.size = 17 := by decide
+  have hl : HONEST_LINK.toUTF8.size = 8 := by decide
+  have ha : HONEST_ATTACHMENT.size = 32 := rfl
+  rw [hp, hl, ha, deployment_size]
+  decide
+
+/-- The honest party-key message: what an identity with identifier `I` signs to certify the lower key `lower` for the
+memory challenger in the honest deployment. -/
+theorem honest_partyKeyMessage {I lower : ByteArray} (hI : I.size = 16) (hl : lower.size = 80) :
+    ∃ cm, Lms.partyKeyMessage I HONEST_DEPLOYMENT HONEST_PARTY lower = .ok cm := by
+  unfold Lms.partyKeyMessage
+  rw [partyContext_some deployment_size]
+  exact ⟨_, roleDigest_some hI honest_small.2.2 (by omega)⟩
+
+/-- The honest period-root message: what a lower key with identifier `I` signs to close the honest one-record period
+whose record is `v`. -/
+theorem honest_periodRootMessage {I : ByteArray} (hI : I.size = 16) (v : ByteArray) :
+    ∃ rm, Lms.periodRootMessage I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 1
+      (Attest.root #[v]) = .ok rm := by
+  unfold Lms.periodRootMessage
+  rw [periodRootContext_some deployment_size (by decide) (by decide)]
+  exact ⟨_, roleDigest_some hI honest_small.1 (by rw [root_width]; decide)⟩
+
+/-- The honest liveness message: what a lower key with identifier `I` signs for sampling block 0 of the honest period. -/
+theorem honest_livenessMessage {I : ByteArray} (hI : I.size = 16) :
+    ∃ m, Lms.livenessMessage I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 0 = .ok m := by
+  unfold Lms.livenessMessage
+  rw [livenessContext_some deployment_size (by decide) (by decide)]
+  exact ⟨_, roleDigest_some hI honest_small.2.1 (by decide)⟩
+
+/-- A one-record period's root is its record's leaf. -/
+theorem root_one (v : ByteArray) :
+    Attest.root #[v] = (Attest.periodDomain 1).leaf 0 0 Attest.PERIOD_SCHEMA v := by
+  unfold Attest.root
+  rw [root_eq _ _ (leaves_isEmpty (by simp))]
+  simp [lev, base, Attest.leaves, depth]
+
+/-- A one-record period's record opens at position 0 with no siblings. -/
+theorem opening_one (v : ByteArray) :
+    verifyOpening (Attest.periodDomain 1) (Attest.root #[v]) 1 0 v Attest.PERIOD_SCHEMA #[] = true := by
+  have hc : climb (Attest.periodDomain 1) 0 Attest.PERIOD_SCHEMA v #[] =
+      (Attest.periodDomain 1).leaf 0 0 Attest.PERIOD_SCHEMA v := by
+    rw [climb_eq]
+    rfl
+  have hw := root_width #[v]
+  rw [root_one] at hw
+  simp only [verifyOpening, hc, root_one, hw]
+  simp [Attest.periodDomain, Domain.make, depth]
+
+/-- What `Lms.key` gives at the deployed parameters: a 16-byte identifier, and a public key of `16 + N` bytes that
+starts with it. -/
+theorem pub_spec {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
+    I.size = 16 ∧ k.publicKey.size = 16 + Lms.deployed.N ∧ k.publicKey.extract 0 16 = I := by
+  obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
+  have hroot : (k.tree[1]!).size = Lms.deployed.N :=
+    Properties.CertifierDevice.Proofs.Lms.node_size hk (by decide) 1 le_rfl (by decide)
+  subst hIk
+  exact ⟨hIs, by simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot],
+    ByteArray.extract_append_eq_left hIs.symm⟩
+
+/-- A key `Lms.key` derives at the deployed parameters signs every message at leaf 0 (`Lms.signAt`), and the signature
+verifies under its public key (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
+theorem signs {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) (m : ByteArray) :
+    ∃ σ, Lms.signAt k 0 m = .ok σ ∧ Lms.verify Lms.deployed k.publicKey m σ = .ok true := by
+  obtain ⟨σ, hσ⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed I seed k 0 m rfl hk (by decide)
+  exact ⟨σ, hσ, (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed I seed k 0 m σ rfl hk hσ).1⟩
+
+/-- The honest one-record period whose record is `v`, closed under the lower key `lower` with its certificate `cert`
+and the root's signature `σ`: the honest attachment and link, period 0. -/
+def honestRoot (lower : ByteArray) (cert σ : Lms.Signature) (v : ByteArray) : Attest.SignedRoot :=
+  ⟨HONEST_ATTACHMENT, HONEST_LINK, 0, 1, Attest.root #[v], ⟨lower, cert, σ⟩⟩
+
+/-- The honest period's one read: its record at position 0, with no siblings. -/
+def honestRead (v : ByteArray) : Attest.Read := ⟨0, v, #[]⟩
+
+/-- The device that signed the honest period: the identity `identity` certified `lower` for the memory challenger in
+the honest deployment, and `lower` closed the one-record period of `v`. -/
+def honestDevice (identity lower v : ByteArray) : Device where
+  issued pk := if pk = identity then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, lower⟩] else []
+  closed pk := if pk = lower then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩] else []
+  live _ := []
+
+/-- **The period check accepts the honest period**: for keys `Lms.key` derives at the deployed parameters, the identity
+`k` certifying the lower key `k'` for the memory challenger at leaf 0 and `k'` signing the one-record period's root at
+leaf 0, the check accepts the period with its one read, which is the device's. -/
+theorem honest_accepts {I seed I' seed' : ByteArray} {k k' : Lms.PrivateKey}
+    (hk : Lms.key Lms.deployed I seed = .ok k) (hk' : Lms.key Lms.deployed I' seed' = .ok k') (v : ByteArray) :
+    ∃ cm rm cert σ, Lms.partyKeyMessage I HONEST_DEPLOYMENT HONEST_PARTY k'.publicKey = .ok cm ∧
+      Lms.signAt k 0 cm = .ok cert ∧ (honestRoot k'.publicKey cert σ v).message HONEST_DEPLOYMENT HONEST_PARTY = .ok rm ∧
+      Lms.signAt k' 0 rm = .ok σ ∧
+      Attest.check Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY (honestRoot k'.publicKey cert σ v)
+        #[honestRead v] = .ok true ∧
+      OfDevice (honestDevice k.publicKey k'.publicKey v) k.publicKey HONEST_DEPLOYMENT HONEST_PARTY
+        (honestRoot k'.publicKey cert σ v) #[honestRead v] := by
+  obtain ⟨hIs, hps, hpI⟩ := pub_spec hk
+  obtain ⟨hIs', hps', hpI'⟩ := pub_spec hk'
+  obtain ⟨cm, hcm⟩ := honest_partyKeyMessage hIs hps'
+  obtain ⟨rm, hrm⟩ := honest_periodRootMessage hIs' v
+  obtain ⟨cert, hcs, hcv⟩ := signs hk cm
+  obtain ⟨σ, hσs, hσv⟩ := signs hk' rm
+  have hmsg : (honestRoot k'.publicKey cert σ v).message HONEST_DEPLOYMENT HONEST_PARTY = .ok rm := by
+    unfold Attest.SignedRoot.message
+    simp only [honestRoot, hpI']
+    exact hrm
+  refine ⟨cm, rm, cert, σ, hcm, hcs, hmsg, hσs, ?_, ?_⟩
+  · have hcert : Lms.verifyCertificate Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY k'.publicKey cert =
+        .ok true := by
+      unfold Lms.verifyCertificate
+      simp only [hps, hps', ne_eq, not_true_eq_false, ↓reduceIte, hpI, hcm]
+      exact hcv
+    have hhss : Lms.hssVerify Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY ⟨k'.publicKey, cert, σ⟩ rm =
+        .ok true := by
+      unfold Lms.hssVerify
+      simp only [hcert]
+      exact hσv
+    unfold Attest.check
+    simp only [hmsg]
+    simp only [honestRoot, hps', ne_eq, not_true_eq_false, ↓reduceIte]
+    simp [honestRead, opening_one]
+    simp only [bind, Except.bind, hhss]
+    rfl
+  · refine ⟨⟨⟨HONEST_DEPLOYMENT, HONEST_PARTY, k'.publicKey⟩, by simp [honestDevice], rfl, rfl, rfl⟩,
+      ⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩, by simp [honestDevice, honestRoot], rfl,
+      rfl, rfl, rfl, rfl, rfl, ?_⟩
+    intro r hr
+    simp [honestRead] at hr
+    subst hr
+    rfl
+
+/-- **`PeriodSigned`'s honest lemma**: its hypothesis holds at the honest deployed instance, and with it its
+conclusion's first disjunct. For keys `Lms.key` derives at the deployed parameters (`Lms.deployed`, SHA-512 with
+`n = 64`, `w = 1`, `h = 20`), the identity certifying the lower key for the memory challenger in a deployment at leaf 0
+and the lower key signing a one-record period's root at leaf 0 (`Lms.signAt`), the period check accepts the period
+with its one read, and the period and the read are the device's. -/
+theorem periodSigned_honest (v : ByteArray) :
+    ∃ (k k' : Lms.PrivateKey) (cert σ : Lms.Signature),
+      (∃ I seed, Lms.key Lms.deployed I seed = .ok k) ∧ (∃ I seed, Lms.key Lms.deployed I seed = .ok k') ∧
+      Attest.check Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY (honestRoot k'.publicKey cert σ v)
+        #[honestRead v] = .ok true ∧
+      OfDevice (honestDevice k.publicKey k'.publicKey v) k.publicKey HONEST_DEPLOYMENT HONEST_PARTY
+        (honestRoot k'.publicKey cert σ v) #[honestRead v] := by
+  obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
+    (I := ⟨Array.replicate 16 0⟩) rfl HONEST_DEPLOYMENT
+  obtain ⟨k', hk'⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
+    (I := ⟨Array.replicate 16 1⟩) rfl HONEST_DEPLOYMENT
+  obtain ⟨-, -, cert, σ, -, -, -, -, hc, ho⟩ := honest_accepts hk hk' v
+  exact ⟨k, k', cert, σ, ⟨_, _, hk⟩, ⟨_, _, hk'⟩, hc, ho⟩
+
+/-- The empty signed root: no lower key, no signature bytes, no records. -/
+def emptyRoot : Attest.SignedRoot :=
+  ⟨.empty, "", 0, 0, .empty, ⟨.empty, ⟨0, .empty, #[], #[]⟩, ⟨0, .empty, #[], #[]⟩⟩⟩
+
+/-- The device that signed nothing. -/
+def emptyDevice : Device := ⟨fun _ => [], fun _ => [], fun _ => []⟩
+
+/-- The empty run hashes nothing: its deployment hash has no bytes, so neither of its messages is formed. -/
+theorem empty_strings : runStrings emptyDevice .empty .empty "" emptyRoot #[] = [] := by
+  have h1 : Lms.partyContext ByteArray.empty "" = .error
+      s!"a deployment's hash is {Lms.DEPLOYMENT_BYTES} bytes, not {ByteArray.empty.size}" := rfl
+  have h2 : ∃ e, Lms.periodRootContext ByteArray.empty "" ByteArray.empty "" 0 0 = .error e := ⟨_, rfl⟩
+  obtain ⟨e, h2⟩ := h2
+  simp only [runStrings, roleStrings, h1, h2, keyStrings, emptyDevice, emptyRoot]
+  rfl
+
+theorem empty_partyKeyMessage (I : ByteArray) :
+    ∀ m, Lms.partyKeyMessage I .empty "" .empty ≠ .ok m := by
+  intro m h
+  cases h
+
+theorem empty_message : ∀ m, emptyRoot.message .empty "" ≠ .ok m := by
+  intro m h
+  cases h
+
+/-- **`PeriodSigned`'s nontrivial lemma**: its conclusion fails at the empty run, for any parameters: the device
+signed nothing, so the run is not its, and the run hashes no string and forms no message, so it carries no break. -/
+theorem periodSigned_nontrivial (p : Lms.Params) :
+    ¬ (OfDevice emptyDevice .empty .empty "" emptyRoot #[] ∨ Break p emptyDevice .empty .empty "" emptyRoot #[]) := by
+  rintro (⟨⟨i, hi, -⟩, -⟩ | ⟨x, hx, -⟩ | ⟨m, hm, -⟩ | ⟨m, hm, -⟩)
+  · simp [emptyDevice] at hi
+  · rw [empty_strings] at hx
+    cases hx
+  · exact empty_partyKeyMessage _ m hm
+  · exact empty_message m hm
+
+/-- **`PeriodSigned` fails at a verifier that accepts everything**: such a check accepts the empty run, where the
+conclusion fails (`periodSigned_nontrivial`). -/
+theorem periodSigned_acceptAll (p : Lms.Params)
+    (check : ByteArray → ByteArray → String → Attest.SignedRoot → Array Attest.Read → Lms.E Bool)
+    (hall : ∀ identity deployment party s reads, check identity deployment party s reads = .ok true) :
+    ¬ ∀ (identity deployment : ByteArray) (party : String) (s : Attest.SignedRoot) (reads : Array Attest.Read)
+      (dev : Device), check identity deployment party s reads = .ok true →
+        OfDevice dev identity deployment party s reads ∨ Break p dev identity deployment party s reads :=
+  fun h => periodSigned_nontrivial p (h _ _ _ _ _ _ (hall _ _ _ _ _))
+
+/-! ### `PeriodSound`'s lemmas -/
+
+theorem Pr_unit_true (q : Unit → Prop) (h : q ()) : Claims.Pr q = 1 := by
+  classical
+  unfold Claims.Pr
+  have : Finset.univ.filter q = Finset.univ := Finset.filter_true_of_mem fun u _ => by cases u; exact h
+  rw [this]
+  simp
+
+theorem Pr_unit_false (q : Unit → Prop) (h : ¬ q ()) : Claims.Pr q = 0 := by
+  classical
+  unfold Claims.Pr
+  have : Finset.univ.filter q = ∅ := Finset.filter_false_of_mem fun u _ => by cases u; exact h
+  rw [this]
+  simp
+
+/-- The honest run: the honest period's check on the honest device's period, read through an extractor that reads
+the honest values. -/
+def honestRun (k k' : Lms.PrivateKey) (cert σ : Lms.Signature) (v : ByteArray) : PeriodRun :=
+  ⟨honestDevice k.publicKey k'.publicKey v, k.publicKey, HONEST_DEPLOYMENT, HONEST_PARTY, honestRoot k'.publicKey cert σ v,
+    #[honestRead v]⟩
+
+/-- **`PeriodSound`'s honest lemma**: at the honest deployed run (`periodSigned_honest`), the check accepts with
+probability 1 and the bound's event, an accepted run that is not the device's, has probability 0. -/
+theorem periodSound_honest (v : ByteArray) :
+    ∃ τ : Unit → PeriodRun,
+      Claims.Pr (fun ω => let r := τ ω
+        Attest.check Lms.deployed r.identity r.deployment r.party r.root r.reads = .ok true) = 1 ∧
+      Claims.Pr (fun ω => let r := τ ω
+        Attest.check Lms.deployed r.identity r.deployment r.party r.root r.reads = .ok true ∧
+          ¬ OfDevice r.dev r.identity r.deployment r.party r.root r.reads) = 0 := by
+  obtain ⟨k, k', cert, σ, -, -, hc, ho⟩ := periodSigned_honest v
+  exact ⟨fun _ => honestRun k k' cert σ v, Pr_unit_true _ hc, Pr_unit_false _ fun h => h.2 ho⟩
+
+/-- The empty run, on one coin. -/
+def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, "", emptyRoot, #[]⟩
+
+theorem empty_finder : (collisionFinder Unit emptyRun).Pr sha512 = 0 := by
+  unfold Claims.Finder.Pr
+  refine Pr_unit_false _ ?_
+  rintro ⟨u, w, h, -⟩
+  simp only [collisionFinder, emptyRun, empty_strings, List.map_nil, Claims.findColl] at h
+  cases h
+
+theorem empty_forger (p : Lms.Params) :
+    Claims.Pr (fun ω => ∃ pk m σ, forger emptyRun ω = some (pk, m, σ) ∧ Forges p (emptyRun ω).dev pk m σ) = 0 := by
+  refine Pr_unit_false _ ?_
+  rintro ⟨pk, m, σ, h, -⟩
+  have h1 : Lms.partyKeyMessage (ByteArray.empty.extract 0 16) .empty "" .empty = .error
+      s!"a deployment's hash is {Lms.DEPLOYMENT_BYTES} bytes, not {ByteArray.empty.size}" := rfl
+  obtain ⟨e, h2⟩ : ∃ e, emptyRoot.message .empty "" = .error e := ⟨_, rfl⟩
+  simp only [forger, emptyRun, emptyRoot] at h
+  simp only [emptyRoot] at h2
+  rw [h1, h2] at h
+  cases h
+
+/-- **`PeriodSound`'s nontrivial lemma**: at the empty run, the bound's right side is 0 (the collision finder outputs
+nothing, the forger nothing) and the run is not the device's: a check that accepted it would put probability 1 on the
+left. -/
+theorem periodSound_nontrivial (p : Lms.Params) :
+    (collisionFinder Unit emptyRun).Pr sha512 +
+        Claims.Pr (fun ω => ∃ pk m σ, forger emptyRun ω = some (pk, m, σ) ∧ Forges p (emptyRun ω).dev pk m σ) = 0 ∧
+      ¬ OfDevice emptyDevice .empty .empty "" emptyRoot #[] := by
+  refine ⟨by rw [empty_finder, empty_forger, add_zero], fun h => periodSigned_nontrivial p (Or.inl h)⟩
+
+/-- **`PeriodSound` fails at a verifier that accepts everything**: on the empty run, such a check's bad event has
+probability 1 and the bound's right side is 0 (`periodSound_nontrivial`). -/
+theorem periodSound_acceptAll (p : Lms.Params)
+    (check : ByteArray → ByteArray → String → Attest.SignedRoot → Array Attest.Read → Lms.E Bool)
+    (hall : ∀ identity deployment party s reads, check identity deployment party s reads = .ok true) :
+    ¬ ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (τ : Ω → PeriodRun),
+      Claims.Pr (fun ω => let r := τ ω
+        check r.identity r.deployment r.party r.root r.reads = .ok true ∧
+          ¬ OfDevice r.dev r.identity r.deployment r.party r.root r.reads) ≤
+        (collisionFinder Ω τ).Pr sha512 +
+          Claims.Pr (fun ω => ∃ pk m σ, forger τ ω = some (pk, m, σ) ∧ Forges p (τ ω).dev pk m σ) := by
+  intro h
+  have hb := h Unit emptyRun
+  obtain ⟨h0, hn⟩ := periodSound_nontrivial p
+  rw [h0] at hb
+  refine absurd hb (not_le.2 ?_)
+  rw [Pr_unit_true]
+  · norm_num
+  · exact ⟨hall _ _ _ _ _, hn⟩
+
+/-! ### What the auditor and the prover see: the lemmas -/
+
+/-- The honest identifier of a lower key, 16 bytes. -/
+def HONEST_I : ByteArray := ⟨Array.replicate 16 1⟩
+
+/-- The party's code at the honest deployment, under the honest lower key. -/
+def honestCode (hss : Unit → Nat → ByteArray → ByteArray) :=
+  code HONEST_DEPLOYMENT HONEST_PARTY (fun _ => HONEST_I) hss
+
+/-- A sampling block of the honest period with the one record `v`, then the period's close. -/
+def honestSteps (v : ByteArray) : List Step :=
+  [.block HONEST_ATTACHMENT HONEST_LINK 0 0 [v], .close HONEST_ATTACHMENT HONEST_LINK 0]
+
+theorem honestSteps_skeleton (v v' : ByteArray) :
+    (honestSteps v).map Step.skeleton = (honestSteps v').map Step.skeleton := rfl
+
+/-- What the honest code sends on `honestSteps v`: the block's liveness record in the clear, then the root's signature
+and the record to the prover. -/
+theorem honest_messages (hss : Unit → Nat → ByteArray → ByteArray) (v : ByteArray) {m rm : ByteArray}
+    (hm : Lms.livenessMessage HONEST_I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 0 = .ok m)
+    (hrm : Lms.periodRootMessage HONEST_I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 1
+      (Attest.root #[v]) = .ok rm) :
+    (honestCode hss).messages () (honestSteps v) =
+      [(Ch.liveness, hss () 0 m), (Ch.root, hss () 1 rm), (Ch.record, v)] := by
+  simp only [honestCode, Parties.Code.messages, honestSteps, Parties.Code.trace, code, hm, List.nil_append,
+    List.length_singleton]
+  simp only [hrm]
+  rfl
+
+theorem honest_messages_ex (hss : Unit → Nat → ByteArray → ByteArray) :
+    ∃ m, ∀ v, ∃ rm, (honestCode hss).messages () (honestSteps v) =
+      [(Ch.liveness, hss () 0 m), (Ch.root, hss () 1 rm), (Ch.record, v)] := by
+  obtain ⟨m, hm⟩ := honest_livenessMessage (I := HONEST_I) rfl
+  refine ⟨m, fun v => ?_⟩
+  obtain ⟨rm, hrm⟩ := honest_periodRootMessage (I := HONEST_I) rfl v
+  exact ⟨rm, honest_messages hss v hm hrm⟩
+
+theorem empty_ne_zero : ByteArray.empty ≠ ⟨#[0]⟩ := fun e => absurd (congrArg ByteArray.size e) (by decide)
+
+/-- **`LivenessContentFree`'s honest lemma**: the party does publish: on a sampling block of the honest period, its
+code sends the block's liveness record in the clear. -/
+theorem livenessContentFree_honest (hss : Unit → Nat → ByteArray → ByteArray) (v : ByteArray) :
+    ∃ m, inClear ((honestCode hss).messages () (honestSteps v)) = [(Ch.liveness, hss () 0 m)] := by
+  obtain ⟨m, h⟩ := honest_messages_ex hss
+  obtain ⟨rm, h⟩ := h v
+  refine ⟨m, ?_⟩
+  rw [h]
+  rfl
+
+/-- **`LivenessContentFree`'s nontrivial lemma**: the party's whole output carries the records: on two honest periods
+whose one record differs, what its code sends differs, so a code that sent its records in the clear would fail the
+conclusion. -/
+theorem livenessContentFree_nontrivial (hss : Unit → Nat → ByteArray → ByteArray) :
+    ∃ xs xs' : List Step, xs.map Step.skeleton = xs'.map Step.skeleton ∧
+      (honestCode hss).messages () xs ≠ (honestCode hss).messages () xs' := by
+  refine ⟨honestSteps .empty, honestSteps ⟨#[0]⟩, honestSteps_skeleton _ _, ?_⟩
+  obtain ⟨m, h⟩ := honest_messages_ex hss
+  obtain ⟨rm, h1⟩ := h .empty
+  obtain ⟨rm', h2⟩ := h ⟨#[0]⟩
+  rw [h1, h2]
+  intro e
+  simp only [List.cons.injEq, Prod.mk.injEq, and_true, true_and] at e
+  exact empty_ne_zero e.2
+
+/-- The run of a party's code `c` as it is meant to run: on its true inputs `xs` from its coins `ω`, emitting each
+message as `wire` puts it on the wire to where its channel goes, with no access to its secret state and nothing
+overheard. -/
+def meantRun {Ω S I C M Wi A : Type} (c : Parties.Code Ω S I C M) (dst : C → Parties.Dest) (wire : C × M → Wi)
+    (ω : Ω) (xs : List I) : Parties.Run Ω S I C M Wi A :=
+  let t := c.trace (c.init ω) xs
+  ⟨ω, xs, xs, t.1, t.2, t.2.map fun m => (dst m.1, wire m), [], []⟩
+
+theorem meantRun_ok {Ω S I C M Wi A : Type} (c : Parties.Code Ω S I C M) (dst : C → Parties.Dest)
+    (wire : C × M → Wi) (ω : Ω) (xs : List I) :
+    Parties.Faithful c (meantRun (A := A) c dst wire ω xs) ∧ Parties.Secret (meantRun (A := A) c dst wire ω xs) ∧
+      Parties.Confined dst wire (meantRun (A := A) c dst wire ω xs) ∧
+      Parties.WitnessPathPrivate (meantRun (A := A) c dst wire ω xs) :=
+  ⟨⟨rfl, rfl⟩, rfl, rfl, rfl⟩
+
+/-- **`AuditorSeesSkeleton`'s honest lemma**: its hypotheses hold at two runs of the honest party as it is meant to
+run, on honest periods whose one record differs. -/
+theorem auditorSeesSkeleton_honest {Wi A : Type} (hss : Unit → Nat → ByteArray → ByteArray)
+    (wire : Ch × ByteArray → Wi) :
+    ∃ r r' : Parties.Run Unit (Unit × Nat × List ByteArray) Step Ch ByteArray Wi A,
+      Parties.Faithful (honestCode hss) r ∧ Parties.Confined dest wire r ∧ Parties.WitnessPathPrivate r ∧
+      Parties.Faithful (honestCode hss) r' ∧ Parties.Confined dest wire r' ∧ Parties.WitnessPathPrivate r' ∧
+      r.coins = r'.coins ∧ r.truth.map Step.skeleton = r'.truth.map Step.skeleton ∧ r.truth ≠ r'.truth := by
+  obtain ⟨h1, -, h2, h3⟩ := meantRun_ok (A := A) (honestCode hss) dest wire () (honestSteps .empty)
+  obtain ⟨h1', -, h2', h3'⟩ := meantRun_ok (A := A) (honestCode hss) dest wire () (honestSteps ⟨#[0]⟩)
+  refine ⟨_, _, h1, h2, h3, h1', h2', h3', rfl, honestSteps_skeleton _ _, ?_⟩
+  intro e
+  simp only [meantRun, honestSteps, List.cons.injEq, Step.block.injEq, and_true, true_and] at e
+  exact empty_ne_zero e
+
+/-- A run of the honest party as it is meant to run on the honest period of `v`, but for an observer on its path to
+the prover who overhears the record. -/
+def overheardRun (hss : Unit → Nat → ByteArray → ByteArray) (v : ByteArray) :
+    Parties.Run Unit (Unit × Nat × List ByteArray) Step Ch ByteArray (Ch × ByteArray) Unit :=
+  { meantRun (honestCode hss) dest id () (honestSteps v) with overheard := [(Ch.record, v)] }
+
+/-- **`AuditorSeesSkeleton`'s nontrivial lemma**: without `WitnessPathPrivate` its conclusion fails: two runs of the
+honest party, `Faithful` and `Confined`, on honest periods whose one record differs, where an observer on the path to
+the prover overhears the record, show the auditor different records. -/
+theorem auditorSeesSkeleton_nontrivial (hss : Unit → Nat → ByteArray → ByteArray) :
+    ¬ ∀ r r' : Parties.Run Unit (Unit × Nat × List ByteArray) Step Ch ByteArray (Ch × ByteArray) Unit,
+      Parties.Faithful (honestCode hss) r → Parties.Confined dest id r →
+      Parties.Faithful (honestCode hss) r' → Parties.Confined dest id r' →
+      r.coins = r'.coins → r.truth.map Step.skeleton = r'.truth.map Step.skeleton →
+        Parties.auditorView id r = Parties.auditorView id r' := by
+  intro h
+  have hok (v : ByteArray) := meantRun_ok (A := Unit) (honestCode hss) dest id () (honestSteps v)
+  have e := h (overheardRun hss .empty) (overheardRun hss ⟨#[0]⟩) (hok _).1 (hok _).2.2.1 (hok _).1 (hok _).2.2.1 rfl
+    (honestSteps_skeleton _ _)
+  obtain ⟨m, hm⟩ := honest_messages_ex hss
+  have hv (v : ByteArray) : Parties.auditorView id (overheardRun hss v) =
+      [(Ch.liveness, hss () 0 m), (Ch.record, v)] := by
+    obtain ⟨rm, h⟩ := hm v
+    show ((((honestCode hss).messages () (honestSteps v)).map fun x => (dest x.1, id x)).filter (·.1 = .clear)).map
+      (·.2) ++ [(Ch.record, v)].map id = _
+    rw [h]
+    rfl
+  rw [hv, hv] at e
+  simp only [List.cons.injEq, Prod.mk.injEq, true_and, and_true] at e
+  exact empty_ne_zero e
+
+/-- **`ProverSeesMessages`'s honest lemma**: its hypotheses hold at the honest party as it is meant to run, and what
+the prover then gets is the period's root signature and its record. -/
+theorem proverSeesMessages_honest {Wi A : Type} (hss : Unit → Nat → ByteArray → ByteArray)
+    (wire : Ch × ByteArray → Wi) (v : ByteArray) :
+    ∃ r : Parties.Run Unit (Unit × Nat × List ByteArray) Step Ch ByteArray Wi A,
+      Parties.Faithful (honestCode hss) r ∧ Parties.Secret r ∧ Parties.Confined dest wire r ∧
+      ∃ m rm, Parties.proverView r = ([wire (Ch.liveness, hss () 0 m), wire (Ch.root, hss () 1 rm),
+        wire (Ch.record, v)], []) := by
+  obtain ⟨h1, h2, h3, -⟩ := meantRun_ok (A := A) (honestCode hss) dest wire () (honestSteps v)
+  obtain ⟨m, hm⟩ := honest_messages_ex hss
+  obtain ⟨rm, h⟩ := hm v
+  refine ⟨_, h1, h2, h3, m, rm, ?_⟩
+  show ((((honestCode hss).messages () (honestSteps v)).map fun x => (dest x.1, wire x)).map (·.2), []) = _
+  rw [h]
+  rfl
+
+/-- **`ProverSeesMessages`'s nontrivial lemma**: without `Secret` its conclusion fails: the honest party, `Faithful`
+and `Confined`, whose signing state the prover reads once, gives the prover that access beside its messages. -/
+theorem proverSeesMessages_nontrivial (hss : Unit → Nat → ByteArray → ByteArray) :
+    ¬ ∀ r : Parties.Run Unit (Unit × Nat × List ByteArray) Step Ch ByteArray (Ch × ByteArray) Unit,
+      Parties.Faithful (honestCode hss) r → Parties.Confined dest id r →
+        Parties.proverView r = (((honestCode hss).messages r.coins r.truth).map id, []) := by
+  intro h
+  have hok := meantRun_ok (A := Unit) (honestCode hss) dest id () (honestSteps .empty)
+  have e := h { meantRun (A := Unit) (honestCode hss) dest id () (honestSteps .empty) with access := [()] } hok.1
+    hok.2.2.1
+  simp [Parties.proverView] at e
 
 end MemoryChallenger.Attest.Properties.SecurityProofs
