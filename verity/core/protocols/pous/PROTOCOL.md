@@ -551,7 +551,7 @@ an efficient prover. The physical premises are the game's shape, and the deploym
 The `+ N` in `StreamedWipeMeetsReads`'s threshold is the count `C(N, m) ≤ 2^N` of the sets of `m = ⌈N/r⌉ − 1`
 missing labels, `N/512` bytes, 29.5 GB on a whole 8×H200 server. `StreamedWipeMeetsReadsTight`
 (`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`, proved in
-`Security/Proofs/Pous/StreamedWipe/Server.lean`) replaces it with `m · (⌊log₂⌊3N/m⌋⌋ + 1)` (`C(N, m) ≤ (e·N/m)^m`), so the fill's share is about `(N/r) · (512 + log₂(e·r))`. Per server (Daniel, 26 Oct: the
+`Security/Proofs/Pous/StreamedWipe/Server.lean`) replaces it with `m · (⌊log₂⌊3N/m⌋⌋ + 1)` (`C(N, m) ≤ (e·N/m)^m`), so the fill's share is about `(N/r) · (512 + log₂(e·r))`. Per server (the
 wipe leaves at most 5 GB of the server's assumed memory capacity), `StreamedWipeMeetsServer` states it against the
 assumed capacity `M_s = 512 · N + R` over every tier, `R` being every bit outside the fill (the boot disk and the GPU
 contexts included): a server keeps at most `B(N, r, k, R) + E` bits, `B` the fill's share plus `R`.
