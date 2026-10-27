@@ -31,6 +31,8 @@ COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
+COUNT += 3  # `torch_train`'s RmsNormTorch_v1 with its In and Out parts
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
