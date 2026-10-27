@@ -73,4 +73,5 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Verity.AcceptRounds", "Proofs.Properties.Verity.SampledCanon",
   "Proofs.Properties.Verity.SampledCanonDraw", "Proofs.Properties.Verity.SampledProj",
   "Proofs.Properties.Verity.SampledRecs", "Proofs.Properties.Verity.SampledDrive",
-  "Proofs.Properties.Verity.SampledRuns"]
+  "Proofs.Properties.Verity.SampledRuns",
+  "Proofs.Properties.Verity.SampledSizes", "Proofs.Properties.Verity.SampledRecordDrawn"]

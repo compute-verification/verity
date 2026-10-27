@@ -477,6 +477,134 @@ def rounds_why(uses: Sequence[tuple[str, bytes, int, list[str]]]) -> str | None:
     return None if big is None else f"{big[0]} reads {len(big[1])} F128s, past 2^64 - 1"
 
 
+def sessions_why(count: int) -> str | None:
+    """Lean `OneStageZk.sessionsWhy` (one-session): why `count` sessions are not the one v2 reads; None when there is
+    exactly one."""
+    return None if count == 1 else f"the evidence names {count} sessions, and v2 reads exactly one"
+
+
+def _nat(x: Any) -> int | None:
+    return x if type(x) is int and x >= 0 else None
+
+
+def verifier_subset(law: Any, record: Any) -> tuple[int, int] | None:
+    """Lean `OneStageZk.subsetAt`: the registration `record`'s ``population`` `n` and the `k` of the subset law the
+    verifier's `law` names over it; None when the law over `n` is no subset law."""
+    n = _nat(record.get("population")) if isinstance(record, Mapping) else None
+    if n is None or not isinstance(law, Mapping) or law.get("law") != "subset" or sorted(law) != ["k", "law"]:
+        return None
+    k = _nat(law["k"])
+    return None if k is None or n < k else (n, k)
+
+
+def drawn_units(draw: Any) -> list[int]:
+    """Lean `OneStageZk.drawnUnits`: the units a draw object names, as v1 reads them."""
+    us = draw.get("units") if isinstance(draw, Mapping) else None
+    return [u for u in us if _nat(u) is not None] if isinstance(us, list) else []
+
+
+def draw_file(k: int, n: int, units: Sequence[int]) -> dict:
+    """Lean `OneStageZk.drawFile`: the verifier's own draw file, the subset draw of `k` over ``[0, n)`` of `units`."""
+    return {"law": "subset", "population": n, "k": k, "units": list(units)}
+
+
+def record_draw(record: str) -> Any:
+    """Lean `OneStageZk.rawDraw`: the session record's ``unit_draw``, when it is a draw (not absent, not null)."""
+    try:
+        j = json.loads(record)
+    except ValueError:
+        return None
+    return j.get("unit_draw") if isinstance(j, dict) else None
+
+
+def _ascending_below(us: Sequence[Any], n: int) -> bool:
+    return all(_nat(u) is not None and u < n for u in us) and all(a < b for a, b in zip(us, us[1:]))
+
+
+def _subset_draw(d: Any) -> tuple[int, int, bool]:
+    """`Flock.Draw.UnitDraw.ofJson` on a subset draw `d`: its `k`, population and whether it has a closure; a
+    `ValueError` for a draw it refuses, and a law other than ``subset`` taken as a draw of another law (its `k` -1)."""
+    if not isinstance(d, dict):
+        raise ValueError("U2: unit_draw is not an object")
+    n, us = _nat(d.get("population")), d.get("units")
+    if n is None or not isinstance(us, list) or any(_nat(u) is None for u in us):
+        raise ValueError("U2: unit_draw's population and units")
+    if d.get("law") != "subset":
+        return -1, n, "closure" in d
+    if len(d) != 4 or _nat(d.get("k")) is None:
+        raise ValueError("U2: unit_draw's keys are not law, population, k, units")
+    if not _ascending_below(us, n):
+        raise ValueError("U2: the drawn units are not ascending, distinct units of the population")
+    if d["k"] > n or len(us) != d["k"]:
+        raise ValueError("U2: a subset draw of the wrong size")
+    return d["k"], n, False
+
+
+def draw_law_why(n: int, k: int, units: Sequence[int], record: str) -> str | None:
+    """Lean `OneStageZk.drawLawAt` (draw-law): why the session record's draw is not a subset draw of the verifier's own
+    `k` over the registered population `n`, with the evidence's draw's `units` ascending and below `n`, `k` of them;
+    None when it is."""
+    if not (_ascending_below(list(units), n) and len(units) == k):
+        return f"the draw's units are not {k} ascending units below the registered population {n}"
+    d = record_draw(record)
+    if d is None:
+        return "the record names no draw"
+    try:
+        got = _subset_draw(d)
+    except ValueError as why:
+        return f"the record's draw does not decode: {why}"
+    return None if got == (k, n, False) else (
+        f"the record's draw is not a subset draw of {k} over the registered population {n}")
+
+
+def draw_file_why(n: int, k: int, units: Sequence[int], record: str) -> str | None:
+    """Lean `OneStageZk.drawFileAt` (draw-file): why the session record's draw file is not the verifier's own,
+    `draw_file(k, n, units)`, compared byte for byte in canonical JSON; None when it is."""
+    d = record_draw(record)
+    if d is None:
+        return "the record names no draw"
+    try:
+        same = _canonical(d) == _canonical(draw_file(k, n, units))
+    except ValueError:
+        same = False
+    return None if same else "the record's draw file is not the canonical encoding of the verifier's own draw"
+
+
+def proved_why(proved: Sequence[int], record: str) -> str | None:
+    """Lean `OneStageZk.provedAt` (proved-units): why the evidence's `proved` units are not the units the session
+    record's draw names; None when they are."""
+    d = record_draw(record)
+    if d is None:
+        return "the record names no draw"
+    return None if drawn_units(d) == list(proved) else (
+        "the evidence's proved_units are not the units the record's draw names")
+
+
+def record_why(n: int, k: int, units: Sequence[int], proved: Sequence[int], record: str) -> dict:
+    """The draw-law, draw-file and proved-units reasons on one session record, as `sampled-proofs-one-stage-zk record`
+    writes them."""
+    return {"file": draw_file_why(n, k, units, record), "law": draw_law_why(n, k, units, record),
+            "proved": proved_why(proved, record)}
+
+
+def units_identity_why(public: bytes) -> str | None:
+    """Lean `OneStageZk.unitsIdentityWhy` (units-identity): why the public file's header does not name the identity as
+    its ``units.indices``; None when it does."""
+    try:
+        line = public.split(b"\n", 1)[0].decode()
+    except UnicodeDecodeError:
+        return "the public file's header is not UTF-8"
+    try:
+        h = json.loads(line)
+    except ValueError:
+        return "the public file's header is not JSON"
+    units = h.get("units") if isinstance(h, dict) else None
+    indices = units.get("indices") if isinstance(units, dict) else None
+    if not isinstance(indices, list):
+        return "the public file's header names no units.indices"
+    return None if all(_nat(x) == i for i, x in enumerate(indices)) else "the public file's units.indices is not the identity"
+
+
 def _v2_line(command: str, *args: str) -> dict:
     p = subprocess.run([str(v2_executable()), command, *args], capture_output=True, text=True)
     try:
@@ -495,6 +623,29 @@ def rounds_v2(slot: int, record: Path) -> dict:
     """`rounds_why` of `session_uses` by the v2 audit's Lean (`sampled-proofs-one-stage-zk rounds`): its line,
     ``{"why": why | null}`` or ``{"refused": why}``."""
     return _v2_line("rounds", str(slot), str(record))
+
+
+def sessions_v2(count: int) -> dict:
+    """`sessions_why` by the v2 audit's Lean (`sampled-proofs-one-stage-zk sessions`): its line, ``{"why": why | null}``."""
+    return _v2_line("sessions", str(count))
+
+
+def subset_v2(law: Path, record: Path) -> dict:
+    """`verifier_subset` by the v2 audit's Lean (`sampled-proofs-one-stage-zk subset`) on the law object and the
+    registration record files: its line, ``{"subset": [n, k] | null}`` or ``{"refused": why}``."""
+    return _v2_line("subset", str(law), str(record))
+
+
+def record_v2(n: int, k: int, units: Sequence[int], proved: Sequence[int], record: Path) -> dict:
+    """`record_why` by the v2 audit's Lean (`sampled-proofs-one-stage-zk record`) on the session record file: its line,
+    ``{"file": why, "law": why, "proved": why}`` or ``{"refused": why}``."""
+    return _v2_line("record", str(n), str(k), json.dumps(list(units)), json.dumps(list(proved)), str(record))
+
+
+def identity_v2(public: Path) -> dict:
+    """`units_identity_why` by the v2 audit's Lean (`sampled-proofs-one-stage-zk identity`) on the public file: its
+    line, ``{"why": why | null}``."""
+    return _v2_line("identity", str(public))
 
 
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
@@ -519,7 +670,9 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["DRAW_KEY", "EXE", "MAX_ROUNDS", "PACKAGE", "PUBLIC_KEY", "STATEMENT", "STREAMS", "V2", "V2_EXE", "Finding",
-           "LeanError", "Proof", "check_v2", "draw_v2", "draw_why", "evidence_v2", "executable", "file_sha512",
-           "parse_round_request", "proved_units", "public_v2", "public_why", "reads_registered", "registered_draw",
-           "registered_public", "round_request", "rounds_v2", "rounds_why", "session_uses", "squeeze_count", "uses_v2",
-           "v2_executable", "verdicts_v2", "verify", "with_draw", "with_public"]
+           "LeanError", "Proof", "check_v2", "draw_file", "draw_file_why", "draw_law_why", "draw_v2", "draw_why",
+           "drawn_units", "evidence_v2", "executable", "file_sha512", "identity_v2", "parse_round_request", "proved_units",
+           "proved_why", "public_v2", "public_why", "reads_registered", "record_draw", "record_v2", "record_why",
+           "registered_draw", "registered_public", "round_request", "rounds_v2", "rounds_why", "session_uses",
+           "sessions_v2", "sessions_why", "squeeze_count", "subset_v2", "units_identity_why", "uses_v2", "v2_executable",
+           "verdicts_v2", "verifier_subset", "verify", "with_draw", "with_public"]
