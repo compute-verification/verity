@@ -19,7 +19,7 @@ reads, and no others:
 Each is a `Claims.Finder` on its strategy's coin tape (`Game.tapeFinder`). `B^τ` is their uniform mixture
 (`Claims.Finder.mix`): it picks one of the `K = card PubIx` uniformly with its own coins and runs it, so each succeeds
 at most `K` times as often as `B^τ` (`pubFam_le`, from `Claims.Finder.le_mix`). `K` counts no draw: at most `20·J` table
-slots, the committed positions and one.
+slots, the committed positions and one (`card_PubIx_le`).
 
 `tabAvg_of_mix`: where every member succeeds with probability at most `p`, each table slot's finder succeeds with
 probability at most `p` averaged over the draw (`Claims.Finder.mix_Pr`), the averaged premise `Bridge.PubAvg` reads.
@@ -185,6 +185,21 @@ instance instFinitePubIx : Finite (PubIx dj y₀ P vb L) := by
 
 variable (L) in
 noncomputable instance instFintypePubIx : Fintype (PubIx dj y₀ P vb L) := Fintype.ofFinite _
+
+variable (L) in
+/-- **The number of C-Flock's finders**: `K = card PubIx` is at most `20` slots per table, one per committed position,
+and one. No draw, registration or strategy is in the bound. -/
+theorem card_PubIx_le : Fintype.card (PubIx dj y₀ P vb L) ≤ 20 * nTab I + Fintype.card vb.Pos + 1 := by
+  classical
+  have hT : Nat.card (TabIx 7) = 20 := by
+    rw [Nat.card_eq_fintype_card]
+    simp only [TabIx, Fintype.card_sum, Fintype.card_prod, Fintype.card_fin, Fintype.card_unit]
+  have hL : Nat.card (LinkPos dj y₀ P vb L) ≤ Fintype.card vb.Pos := by
+    rw [Nat.card_eq_fintype_card]
+    convert Fintype.card_subtype_le _
+  rw [Fintype.card_eq_nat_card, Finite.card_option, Nat.card_sum, Nat.card_prod,
+    Nat.card_eq_fintype_card (α := Fin (nTab I)), Fintype.card_fin, hT]
+  omega
 
 /-- C-Flock's finders at the prover's continuation `τ`. -/
 noncomputable def pubFam (k Rw M : ℕ) (qF qS t' : ℝ) (R : Reg)
