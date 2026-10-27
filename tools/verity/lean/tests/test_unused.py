@@ -117,6 +117,13 @@ def test_a_module_a_lean_comment_outside_cites_is_kept(stand_in):
     assert got["unused"] == ["Prune.B.Group", "Prune.B.Old"] and got["docs"] == {}
     assert U.decide(pkg, policy, used, [test, U.rel(spec)], [], doubts=False)["unused"] == [
         "Prune.A.Side", "Prune.B.Group", "Prune.B.Old"]
+    spec.write_text("/-! `Prune.B.Group`: what the bound rests on. -/\ndef bound : Nat := 1\n")
+    got = U.decide(pkg, policy, used, [test, U.rel(spec)], [])
+    assert got["kept"]["Prune.B.Old"] == f"cited: imported by Prune.B.Group, which {U.rel(spec)} cites as what it gathers"
+    assert got["unused"] == []
+    spec.write_text("/-! `Prune.B.Group.bound` and `Prune` are cited, not what they gather. -/\ndef bound : Nat := 1\n")
+    got = U.decide(pkg, policy, used, [test, U.rel(spec)], [])
+    assert got["kept"]["Prune.B.Group"].startswith("cited: ") and got["unused"] == ["Prune.A.Side", "Prune.B.Old"]
 
 
 def test_syntax_nobody_writes_and_a_local_one_keep_nothing(stand_in):
@@ -181,7 +188,7 @@ def test_references_name_paths_modules_and_constants(tmp_path):
     files = {"tests/test_a.py": f'"{pkg}/Prune/A/Main.lean"\n', "b.sh": "lake env lean -e Prune.B.thm\n",
              "c.toml": f'paths = ["{pkg}/Prune/A"]\n', "d.md": f"see `{pkg}/Prune/B.lean`\n",
              "e.py": "Prune.Bx Prune.A.X Prune.A.Main.Y\n",
-             "f.lean": "import Prune.B\n\n/-! `Prune.A.Main` proves it. -/\n", "tests/test_g.py": f'"{pkg}/Prune/A/" "{pkg}/Prune/B"\n',
+             "f.lean": "import Prune.B\n\n/-! `Prune.A.Main` proves it, by `Prune.A.lemma`. -/\n", "tests/test_g.py": f'"{pkg}/Prune/A/" "{pkg}/Prune/B"\n',
              "tests/test_h.py": 'SOURCE = "import Prune.A\\n#check 1"\n',
              "tests/test_i.py": 'FILES = ["Prune/B.lean"]\nP = LEAN / "Prune" / "A" / "Main.lean"\nQ = "Prune/B"\n'}
     (tmp_path / "prune" / "Prune" / "B").mkdir(parents=True)
@@ -192,10 +199,12 @@ def test_references_name_paths_modules_and_constants(tmp_path):
     named = {k: sorted(Path(f).name for f, _ in v) for k, v in got.items()}
     assert named == {"Prune.A.Main": ["test_a.py", "test_i.py"], "Prune.B": ["b.sh", "f.lean", "test_i.py"],
                      "Prune.A": ["c.toml", "test_h.py"],
-                     ("docs", "Prune.B"): ["d.md"], ("cited", "Prune.A.Main"): ["f.lean"]}
+                     ("docs", "Prune.B"): ["d.md"], ("cited", "Prune.A.Main"): ["f.lean"],
+                     ("cited", "Prune.A"): ["f.lean"]}
     reads = {(k, Path(f).name): r for k, v in got.items() for f, r in v}
     assert not reads["Prune.A.Main", "test_a.py"] and reads["Prune.B", "b.sh"] and reads["Prune.B", "f.lean"]
     assert not reads["Prune.A", "c.toml"] and reads["Prune.A", "test_h.py"]
+    assert reads[("cited", "Prune.A.Main"), "f.lean"] and not reads[("cited", "Prune.A"), "f.lean"]
 
 
 #: the controls with an unused module (`Extra`), an aggregator of it (`Group`), a notation the proofs write (`Syn`) and a

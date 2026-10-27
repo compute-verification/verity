@@ -33,7 +33,9 @@ A module of PKG is kept, with the first reason that holds:
 - `checks`: it is a conformance check, which no guarantee reaches by design: it holds an `example`, or its name (or an
   enclosing module's) ends in `Checks` or `Vectors`. Its owner decides whether it goes;
 - `cited`: a comment of a Lean file outside PKG (a Definition's docstring) cites it, by its module's name or path or a
-  constant's name: what that text argues rests on it, and its owner decides whether it goes;
+  constant's name: what that text argues rests on it, and its owner decides whether it goes. A module that declares
+  nothing, cited by its own name or path, is cited for what it gathers, so what it imports is kept too (a lock's root
+  aside: a package's root names where its proofs are, not what one argument rests on);
 - `refs`: a kept module's declarations use its constants. A module is deleted whole, so every declaration of a kept module
   must still build, used or not;
 - `attribute`: it sets an attribute globally (`attribute [simp] f`), and a kept module imports it, whose elaboration may
@@ -184,7 +186,7 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
     from quoted parts, `"Proofs" / "A"`, is read as one; a path without `.lean` names it only where no directory has that
     path), or its     module name or a constant one component under it; a Lean file outside PKG names only what it imports.
     The mentions that read nothing are under the key `(docs, module)` for a document's, which a deletion edits, and
-    `(cited, module)` for a Lean comment's."""
+    `(cited, module)` for a Lean comment's, whose flag says whether it names the module itself rather than a constant."""
     by_path = {f"{pkg}/{r}": m for m, r in mods.items()}
     by_src = {m.replace(".", "/") + ".lean": m for m in mods}
     src = next(((ROOT / pkg / r).parents[m.count(".")] for m, r in mods.items()), ROOT / pkg)
@@ -195,18 +197,21 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
     paths = re.compile(re.escape(pkg) + r"/[\w./-]*\w")
     local = re.compile(r"(?<![\w./-])(?:" + either + r")/[\w./-]*\w")
 
-    def mentioned(text: str) -> set[str]:
-        hit: set[str] = set()
+    def mentioned(text: str) -> dict[str, bool]:
+        """{module: whether the text names the module itself (its path or name), not only a constant under it}"""
+        hit: dict[str, bool] = {}
         for found, table, base in ((paths, by_path, ROOT), (local, by_src, src)):
             for p in found.finditer(text):
                 x = p.group(0).rstrip(".")
                 if x in table:
-                    hit.add(table[x])
+                    hit[table[x]] = True
                 elif x + ".lean" in table and text[p.end():p.end() + 1] != "/" and not (base / x).is_dir():
-                    hit.add(table[x + ".lean"])
+                    hit[table[x + ".lean"]] = True
         for x in named.findall(text):
-            if x in mods or (x.rsplit(".", 1)[1][:1].islower() and (x := x.rsplit(".", 1)[0]) in mods):
-                hit.add(x)
+            if x in mods:
+                hit[x] = True
+            elif x.rsplit(".", 1)[1][:1].islower() and (x := x.rsplit(".", 1)[0]) in mods:
+                hit.setdefault(x, False)
         return hit
 
     for f in files:
@@ -224,12 +229,13 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
             imported = {i for i in source_imports(text) if i in mods}
             for m in imported:
                 out[m].append((f, True))
-            for m in mentioned(text) - imported:
-                out[("cited", m)].append((f, False))
+            for m, whole in mentioned(text).items():
+                if m not in imported:
+                    out[("cited", m)].append((f, whole))
             continue
         writes = {i for i in LEAN_IMPORT.findall(text) if i in mods}
         reads = "difftest" in f or f.endswith(".sh")
-        for m in mentioned(text) | writes:
+        for m in set(mentioned(text)) | writes:
             out[("docs", m) if f.endswith(".md") else m].append((f, reads or m in writes))
     return out
 
@@ -389,6 +395,10 @@ def decide(pkg: Path, policy: dict, used: dict, files: list[str], frozen: list[s
         for m in sorted(k[1] for k in refs if isinstance(k, tuple) and k[0] == "cited"):
             by = sorted({f for f, _ in refs[("cited", m)]})
             keep(m, f"cited: a Lean comment of {by[0]}" + (f" and {len(by) - 1} more" if len(by) > 1 else "") + " cites it")
+            whole = any(w for _, w in refs[("cited", m)])
+            if whole and m not in policy.get("roots", []) and (facts.get(m) or {}).get("constants", 1) == 0:
+                for i in sorted(closure({m}, graph, scope) - {m}):
+                    keep(i, f"cited: imported by {m}, which {by[0]} cites as what it gathers")
     changed = True
     while changed:
         changed = False
