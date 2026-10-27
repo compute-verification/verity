@@ -1,8 +1,8 @@
-"""The Hopper FP8 total step (`verity.ml.circuits.silicon.total_fp8`), promoted from veritor `core/silicon_total_fp8.py`.
+"""The Hopper FP8 total step (`verity.ml.circuits.silicon.total_fp8`).
 
 On finite operands the total step is the finite model (`silicon.tc_dot` on the same pipeline); the special encodings follow
 the rules of the BF16 total step restricted to what E4M3 encodes (NaN bytes, no infinities).  The pinned pipeline parameters
-are the ones lane QZ measured (veritor's `docs/data/tc-fp8-2026-09-08/`, replicated as
+are the ones measured on the H100 (replicated as
 `verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json`): one group of 32, 14-bit adder, floor -139.
 """
 
