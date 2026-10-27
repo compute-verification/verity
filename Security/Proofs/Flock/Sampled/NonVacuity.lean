@@ -230,8 +230,8 @@ theorem menuComplete_nonvacuous (h : menu₀.staged = true) :
 /-- Sessions that end at once. -/
 def session₁ : Finset (Fin 1) → Unit → Game Unit := fun _ _ => .ret ()
 
-/-- **An instance of the recursion's interface**: the sessions always verify, hold `h₁`, and break only away from the one draw; no
-owed outputs, and one view. -/
+/-- **An instance of the recursion's interface**: the sessions always verify, hold `h₁`, and break only away from the
+one draw; no owed outputs, and one view. -/
 noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
   verifies := fun _ => true
   hid := fun _ _ _ => h₁
@@ -253,8 +253,8 @@ noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
   hides := fun _ _ _ _ _ _ => rfl
 
 /-- **`Composition`'s hypotheses hold together**: at the one registration, the one-point law, `session₁` and `I₁`, the
-records determine their contents, `X₁` is the trace committed, and the break of the recursion's interface fires at no draw of any
-prover. -/
+records determine their contents, `X₁` is the trace committed, and the break of the recursion's interface fires at no
+draw of any prover. -/
 theorem composition_nonvacuous :
     C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧
       ∀ σ : Strategy (sampledAudit L₁ session₁ ()), ¬ ∃ ω, I₁.Break (L₁.draw ω) () (contOf σ ω) :=
