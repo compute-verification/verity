@@ -185,6 +185,55 @@ theorem periodLeakUnion : Guarantees.PeriodLeakUnion := by
       (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P)
     Γ x hx Ω P g hg εks εbind εtap herr hbind htap
 
+/-- **The union at one window**: at a period of one window whose statement `m` and prover `P` no coin fixes, its coin
+giving the run's coins uniformly (`hg`), some window failing is the sampled verifier's `PrBad` at `m` and `P`. -/
+theorem pr_windowLeakFails_one (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S)
+    (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : Stmt → Finset ℕ) (Dj : ℕ)
+    (tops : Stmt → List (Opening Bool)) {Γ₀ : Type} [Fintype Γ₀] [Inhabited Γ₀] (m : Msg) (Ω : Type) [Fintype Ω]
+    (P : Prover Ω) (g : Γ₀ → Ω × (Fin (D.V.k m) → Coin) × (E D decode).C m)
+    (hg : ∀ q : Ω × (Fin (D.V.k m) → Coin) × (E D decode).C m → Prop, Pr (fun y => q (g y)) = Pr q) :
+    Pr (fun ξ : Fin 1 → Γ₀ => ∃ i, Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops (n := 1)
+        (Γ := fun _ => Γ₀) (fun _ _ => m) (fun _ _ => Ω) (fun _ _ => P) (fun _ _ => g) i (Function.update ξ i default)
+        (ξ i)) =
+      PrBad H D.V
+        (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+        (E D decode) m P := by
+  have hex : ∀ ξ : Fin 1 → Γ₀, (∃ i, Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops (n := 1)
+      (Γ := fun _ => Γ₀) (fun _ _ => m) (fun _ _ => Ω) (fun _ _ => P) (fun _ _ => g) i (Function.update ξ i default)
+      (ξ i)) ↔
+      Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops (n := 1) (Γ := fun _ => Γ₀) (fun _ _ => m)
+        (fun _ _ => Ω) (fun _ _ => P) (fun _ _ => g) 0 (default : Fin 1 → Γ₀) (Equiv.funUnique (Fin 1) Γ₀ ξ) :=
+    fun ξ => by
+      simp only [Fin.exists_fin_one, Equiv.funUnique_apply]
+      rfl
+  simp only [hex]
+  rw [Pouw.Pr_eq_pr, Pouw.pr_equiv (Equiv.funUnique (Fin 1) Γ₀)]
+  exact hg fun s => (run H P D.V m s.1 s.2.1).out = .acc ∧
+    ¬ (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj
+      tops).ext m ((E D decode).eval H P m s.1 s.2.1 s.2.2).1
+
+/-- At one window, with each error its prover's own (`ε_ks = κ − δ + √(γ·Pr[B])`, `ε_bind = Pr[B_ext]`,
+`ε_tap = Pr[B_tap]`), `PeriodLeakUnion`'s bound is `PeriodLeakAccepted`'s per-window bound, so a statement and prover
+where the per-window bound fails (an accepting verifier's) refute the union's too, and the union's hypotheses hold where
+the per-window bound's do. -/
+theorem windowLeakFails_one_le_iff (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S)
+    (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : Stmt → Finset ℕ) (Dj : ℕ)
+    (tops : Stmt → List (Opening Bool)) {Γ₀ : Type} [Fintype Γ₀] [Inhabited Γ₀] (m : Msg) (Ω : Type) [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) (g : Γ₀ → Ω × (Fin (D.V.k m) → Coin) × (E D decode).C m)
+    (hg : ∀ q : Ω × (Fin (D.V.k m) → Coin) × (E D decode).C m → Prop, Pr (fun y => q (g y)) = Pr q) :
+    Pr (fun ξ : Fin 1 → Γ₀ => ∃ i, Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops (n := 1)
+        (Γ := fun _ => Γ₀) (fun _ _ => m) (fun _ _ => Ω) (fun _ _ => P) (fun _ _ => g) i (Function.update ξ i default)
+        (ξ i)) ≤
+      ∑ _i : Fin 1, (δ + (κ D δ m - δ + Real.sqrt (γ D m * PrB H D.V P m)) + (Bext H D.V (E D decode) Ω P m).Pr H +
+        (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H) ↔
+    PrBad H D.V
+        (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+        (E D decode) m P ≤
+      κ D δ m + Real.sqrt (γ D m * PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
+        (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H := by
+  rw [pr_windowLeakFails_one H D L K S lay k δ decode reg Dj tops m Ω P g hg, Fin.sum_univ_one]
+  constructor <;> intro h <;> linarith
+
 end Deploy
 
 end NetTiming

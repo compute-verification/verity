@@ -120,7 +120,9 @@ Period.lean     the leak through the network certifier over a monitoring period:
                                          cells decode to, read back from those observations and counted over the
                                          windows (encard_periodGood_le, periodLeak); each window's bound at the
                                          statement and prover the other windows' coins fix, summed over the
-                                         period's live coins (periodLeakUnion_of, periodLeakUnion)
+                                         period's live coins (periodLeakUnion_of, periodLeakUnion), which at one
+                                         window is the per-window bound (pr_windowLeakFails_one,
+                                         windowLeakFails_one_le_iff)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Horizon.lean    the wrong units over a horizon: a uniform draw misses `f` units with probability at most
