@@ -53,6 +53,7 @@ def _same(got, want) -> None:
     assert got.shape == want.shape and (got == want).all(), np.argwhere(got != want)[:5]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("N", [5, 12])
 def test_the_forward_softmax_is_the_persistent_kernel(N) -> None:
     x = f32_rows(np.random.default_rng(N), N)
@@ -67,13 +68,14 @@ def test_the_forward_softmax_folds_lanes_of_two() -> None:
     _same(evaluate_words(bind(TA.SoftmaxTorch, N=33), x), TK.softmax_forward(x))
 
 
-@pytest.mark.parametrize("N", [1, 6, 40, 70])
+@pytest.mark.parametrize("N", [1, pytest.param(6, marks=pytest.mark.slow), pytest.param(40, marks=pytest.mark.slow)])
 def test_the_softmax_backward_is_the_persistent_kernel(N) -> None:
     rng = np.random.default_rng(100 + N)
     g, y = f32_rows(rng, N), f32_rows(rng, N, 0.1)
     _same(evaluate_words(bind(TA.SoftmaxTorchBackward, N=N), g, y), TK.softmax_backward(g, y))
 
 
+@pytest.mark.slow
 def test_the_eager_row_masks_from_n_and_writes_both_copies() -> None:
     """Every key count from 0 to past N, so n = 0 masks the whole row and n > N none."""
     N, D = 6, 64

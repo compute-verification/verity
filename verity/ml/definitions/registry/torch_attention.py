@@ -18,8 +18,8 @@ butterfly (``__shfl_xor`` at WS/2 .. 1) folds ``a < b ? b : a`` with a the lane'
 so every lane keeps its own max, and each element's ``e = expf(x - m)`` uses its lane's. Each lane sums its e's from +0 in
 order (the padding's included), and the butterfly adds; IEEE addition is commutative, so every lane ends with the one sum the
 tree makes. The output is ``sum == 0 ? 0x7FC00000 : e / sum`` (div.rn). ``expf`` is libdevice's `__nv_expf`
-(`boolean_moe.nv_expf_in`, MUFU.EX2, `nv_expf_out`). Its MUFU.EX2 is the sm_89 table (`MufuEx2Ftz_v2`) until the sm_120 table
-is pinned.
+(`boolean_moe.nv_expf_in`, MUFU.EX2, `nv_expf_out`). Its MUFU.EX2 is `MufuEx2Ftz_v2`, which sm_120's MUFU.EX2 equals on all
+2^32 inputs (r20261027-024703-41d4).
 
 `SoftmaxTorchBackward` is `_softmax_backward_data`'s ``tmp = grad * output`` (its own FMUL kernel), then
 `softmax_warp_backward<float, float, float, L>`, which `host_softmax_backward` runs on an f32 row of N <= 1024. The lanes
@@ -108,7 +108,7 @@ def _bf16_add(C, a, b):
 
 
 def nv_expf(C, x):
-    """libdevice's ``expf`` (`NvExpf_v2`'s gates), its MUFU.EX2 the sm_89 table."""
+    """libdevice's ``expf`` (`NvExpf_v2`'s gates), its MUFU.EX2 `MufuEx2Ftz_v2`."""
     f, L = BMOE.nv_expf_in(C, x)
     return BMOE.nv_expf_out(C, mufu_ex2(C, f), L)
 
