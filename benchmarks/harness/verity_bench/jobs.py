@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -19,6 +18,7 @@ from typing import Any
 
 from verity_config import dumps, sha256, value
 
+from verity_bench import settings
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
 
 # Validation comes from result.json alone, so a run killed after writing it would read as passed; rc 0 rules that out,
@@ -72,7 +72,7 @@ def repository_root(start: str | Path | None = None) -> Path:
 
 
 def _commit(root: Path) -> str:
-    recorded = os.environ.get("RESEARCH_SOURCE_SHA")
+    recorded = settings.RESEARCH_SOURCE_SHA
     if recorded:
         return recorded
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
@@ -282,8 +282,8 @@ GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 
 def _env_flags(spec: ResolvedSpec) -> list[str]:
     flags = []
-    if os.environ.get("VERITY_BENCH_VENV"):
-        flags += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
+    if venv := settings.VERITY_BENCH_VENV:
+        flags += ["--env", f"VERITY_BENCH_VENV={venv}"]
     for name, setting in point_environment(spec).items():
         flags += ["--env", f"{name}={setting}"]
     return flags

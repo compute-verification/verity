@@ -18,8 +18,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
-from verity_vllm.engine.env import INDUCTOR_DIR_MARK
+from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_target
 
+from verity_bench import settings
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_config, is_h1, plugin, protocols_config,
                                     window_steps)
@@ -872,7 +873,7 @@ class _VllmEngine:
         else:
             config: dict[str, Any] = {}
             if arm.protocols:
-                config = protocols_config(arm, os.environ)
+                config = protocols_config(arm, settings.environ())
             if is_h1(arm):
                 rows = config.get("pouw", {}).get("rows")
                 if rows != engine.get("max_num_batched_tokens"):
@@ -1203,8 +1204,7 @@ class ProcessEngineFactory:
         if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
             # Every arm's process compiles on its own, and the kernel configurations Inductor autotunes reach the numerics
             # (a reduction's block size): one cache directory gives every arm the configurations the first one picked.
-            os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="verity_bench_inductor_")
-            os.environ[INDUCTOR_DIR_MARK] = "1"
+            apply_target({"TORCHINDUCTOR_CACHE_DIR": tempfile.mkdtemp(prefix="verity_bench_inductor_"), INDUCTOR_DIR_MARK: "1"})
         parent, child = self.context.Pipe()
         process = self.context.Process(target=_worker, args=(child, arm, preset, resident, eager))
         process.start()

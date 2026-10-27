@@ -78,6 +78,12 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   one TAG must not overlap oprove and lean, because both use `data/$TAG/v-sess`.
 - `--env` passes anything on to `job.sh` and 85: `REPEAT_<STEP>=n` sets one step's repeats, plus `LEVELS=L0,cap`,
   `LEAN_JOBS`, `PCPUS`, `WARM`, `RUNS` (the inner's sessions) and the like.
+- **Settings.** `settings.py` declares every variable `job.sh` reads (and `run.py`'s and `forge_after.py`'s), each with its
+  type, default, doc and role (`value`, `where` or `debug`). `REPEAT_` and `OPROVE_` are the job's own prefixes: `run.py`
+  refuses an `--env` under one of them that nothing reads (`REPEAT_LAEN=1`), or a declared value that doesn't parse, before
+  it launches, and `job.sh`'s first command refuses the same on the node. `job.sh` writes the value settings it was given to
+  `out/settings.json`, and `params.txt` (so the result's `params`) carries their SHA-512 digest as `settings`. 85's own
+  variables pass through undeclared.
 
 ## The pipeline (stage map)
 
