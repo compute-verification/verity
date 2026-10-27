@@ -144,7 +144,10 @@ theorem card_tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (B : F
     have hs : u ∈ (stratum σ sT : Set (Fin nB)) := Finset.mem_filter.2 ⟨Finset.mem_univ _, hσ⟩
     rw [← Finset.range_orderEmbOfFin (stratum σ sT) rfl] at hs
     obtain ⟨t, ht⟩ := hs
-    exact ⟨t, Finset.mem_filter.2 ⟨Finset.mem_univ _, ht ▸ hB⟩, ht⟩
+    refine ⟨t, Finset.mem_filter.2 ⟨Finset.mem_univ _, ?_⟩, ht⟩
+    show (stratum σ sT).orderEmbOfFin rfl t ∈ B
+    rw [ht]
+    exact hB
 
 /-- **`TileStratumEscape`**: the tile coordinate at a uniform permutation of the stratum misses `B` with the stratum's
 hypergeometric factor. -/

@@ -20,6 +20,7 @@ namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 
 open Properties.Pouw.PeriodJ10R
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
+open Accounting.SecurityProofs.ComposePeriod
 
 section By
 
@@ -105,7 +106,7 @@ theorem creditPrefix_pos {N n : ℕ} (hN : 0 < N) (hn : 0 < n) {Λ δs : ℝ} (h
 
 theorem prob_true {Ω : Type} [Fintype Ω] (a : Ω) : prob (fun _ : Ω => True) = 1 := by
   classical
-  haveI : Nonempty Ω := ⟨a⟩
+  have : Nonempty Ω := ⟨a⟩
   rw [prob_eq_card, Finset.filter_true_of_mem fun _ _ => trivial, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
