@@ -6,7 +6,7 @@
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
-        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON]]
+        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
@@ -77,10 +77,12 @@ finish, and ``summary.json`` counts the requests and checks, the seals, and the 
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
-(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``; its coins are in-process, so no window
-credits anything yet. ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``)
-to the remote bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step
-(`serve_remote`): its record is ``remote_session.json``, and a rejected session fails the exit.
+(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
+``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
+through infra's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
+bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
+record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -226,6 +228,7 @@ class Options:
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
+    gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
 
 
@@ -648,9 +651,6 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(why)
     if why := SH.refusal(opts) or SR.refusal(opts):
         raise UsageError(why)
-    if opts.protocols_config and not opts.protocols:
-        raise UsageError("--protocols-config without --protocols")
-    SH.config_of(opts.protocols_config)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
@@ -702,7 +702,7 @@ def main(opts: Options) -> int:
 
         if opts.protocols:
             arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config))
+                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
