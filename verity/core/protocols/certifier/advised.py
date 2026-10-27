@@ -204,8 +204,8 @@ class IoTieVerdict:
     its prompt is v0's `prompt_len` ids long. Only the verifier's own tie source (`TieSource`, `tie_service.Ties`)
     gives one, from IoTieRequest proofs it verified itself (`tie_service.IngressTie.tie`), and `view` holds it to the
     link and the registrations the verifier expects, so a verdict on another link or another ingress record isn't
-    this one's. At a size class with no pinned IoTieRequest digest, the served one among them, every window is
-    refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that isn't a
+    this one's. At a size class with no pinned IoTieRequest digest every window is refused (PROTOCOL.md, fail
+    closed). Construction refuses (`advice.MalformedAdvice`) a `link` that isn't a
     non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't one
     bool a registration."""
 

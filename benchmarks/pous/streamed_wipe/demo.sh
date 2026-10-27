@@ -9,7 +9,7 @@
 #     bash benchmarks/pous/streamed_wipe/demo.sh [--dry-run] [OPTIONS]
 #
 #   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
-#                        run but the size and the placement (trusted-nebius-host unmet)
+#                        run but the size and the placement (trusted-host unmet)
 #   --segments N         the fill in 32 MiB segments (default: the device's free memory less --reserve-gib; 64 dry)
 #   --reserve-gib G      device memory left out of the fill (default 1); the whole device is declared, so what the fill
 #                        doesn't reach counts in full in the published foreign_bits (R)

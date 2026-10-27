@@ -39,6 +39,10 @@ The certifier on a link:
   cells on a fixed schedule; a late cell fails its connection closed, with a `FAIL` cell that carries no reason.
 - `release`: the release-order headers a certifier puts on the server's copy of each request it releases, which never
   appear in a cell or record.
+- `coin_link`: the coin link, the one path a period's live coins take from the challenger to the server it audits (run
+  by `benchmarks/live_challenger/coin_link.py`): it re-cuts every frame into cells, re-clocks both directions on their
+  own grids, exempts only the verified, expected, once-only coin openings, and counts everything else
+  (`protocol/coin-link.md`).
 
 Records and certificates:
 - `certificate`: the network certificates, each sampling period's signed record (`Issuer`, `Certificate`,
@@ -193,7 +197,7 @@ public outputs or the digest, or which the Lean refuses, is rejected. The Lean i
   plain proof block's public row with both ends' grids at the active warden's parameters digest (`WardenParams`), which
   both take as an input (its deployment publishes it), and no sync read, as in the Python; it refuses such a case
   whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.
-- `benchmarks/network_traces/n2_lean_replay.py` replays recorded proving runs of N2 through both, each with injected
+- every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, with injected
   negative controls that both reject.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
