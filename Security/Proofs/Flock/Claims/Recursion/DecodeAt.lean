@@ -24,7 +24,7 @@ substituted, so it is alike the honest record whose rounds hold the fill's coins
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
 
-* **The statement** (`dense_stmt`): one table, no coin tree, a non-empty Σ, a printable draw that decodes to the
+* **The statement** (`dense_stmt`): one table, no coin tree, a non-empty Σ, a printable ASCII draw that decodes to the
   statement's instances, two link points, at most 1024 regions, and a `fast100` schedule.
 * **The link's `root_B`** is round 0's level-0 nodes joined, which the first proof's cap is, so it is non-empty (the
   `shaped` base check).
@@ -104,7 +104,7 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
-tree, a non-empty Σ, a printable draw that decodes to its instances, two link points, at most 1024 regions and a
+tree, a non-empty Σ, a printable ASCII draw that decodes to its instances, two link points, at most 1024 regions and a
 `fast100` schedule. -/
 theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.Stmt}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}
@@ -166,7 +166,7 @@ theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.Stmt}
   · unfold DrawOk
     rw [hU]
     dsimp only
-    exact ⟨hnn, hg, D, hD, hn⟩
+    exact ⟨hnn, hg, FlockComplete.JsonRT.ascii_of_drawn hl (hd d hdd), D, hD, hn⟩
   · rw [hU]
     exact hg
 

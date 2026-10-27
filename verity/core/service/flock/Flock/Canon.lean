@@ -103,6 +103,7 @@ decreasing_by
     simp only [Json.arr.sizeOf_spec]
     omega
   · exact sizeOf_lt_of_mem_toArray p.2
+
 /- Total accessors over parsed JSON; every failure names the field. -/
 namespace J
 

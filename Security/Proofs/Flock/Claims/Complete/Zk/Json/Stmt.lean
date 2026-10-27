@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 /-!
 # What the masked record needs of the statement, from its setup
 
-`stmtOkZk`: at every good masked case, a non-empty `Σ`, a printable draw that decodes to the statement's instances
+`stmtOkZk`: at every good masked case, a non-empty `Σ`, a printable ASCII draw that decodes to the statement's instances
 (`DrawOk`), the statement's draw the one it was set up at, and a `Hello` that parses to an object whose `coins` is an
 object, printable with the prover's nonce put in: `StmtOkZk`, from the case's setup alone, under the JSON library's
 specification (`JsonSpec`), as `stmtOk` at the plain verifier.
@@ -71,7 +71,7 @@ theorem helloZk_mk (S : Claims.JsonSpec printJ Flock.canon) {L : List (String ×
     (hg : ∀ p ∈ L, Good p.2) {cs : CoinTree.Spec} (hc : ("coins", cs.coins "") ∈ L) {hello : String}
     (h : Flock.canon (Json.mkObj L) = .ok hello) :
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
-      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
+      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧ Ascii cs.toJson := by
   have hgL := good_mkObj hd hg
   obtain ⟨j, hp, hs⟩ := S.parse_canon _ _ hgL h
   obtain ⟨cv, hcv, hcvs⟩ := hs.getObjVal (getObjVal?_mkObj hd hc)
@@ -84,18 +84,26 @@ theorem helloZk_mk (S : Claims.JsonSpec printJ Flock.canon) {L : List (String ×
       ("streams", Json.arr (cs.streams.map Json.str))] compare).insert "nonce" (Json.str "")) := rfl
   rw [hco] at hcvs
   obtain ⟨kvs, rfl, hkv, -⟩ := same_obj_wf hcvs
-  refine ⟨m, kvs, hp, hm, hkv, (mem_of_getObjVal hm hcv).2, ?_⟩
+  have hmg := (mem_of_getObjVal hm hcv).2
+  have ham : Ascii (.obj m) := ascii_of_same hs' (ascii_of_canon h)
+  have hak : Ascii (.obj kvs) := ascii_get hm ham hmg
+  obtain ⟨hA, hnk⟩ := ascii_coins (ct := cs) (by rw [hco]; exact ascii_of_same_rev hcvs hak)
   have hget : ((Json.obj m).getObjVal? "coins").toOption.getD Json.null = .obj kvs := by rw [hcv]; rfl
-  unfold helloJ
-  rw [hget]
-  exact good_setObjVal hgj (good_setObjVal hgc (.str _) _) _
+  refine ⟨m, kvs, hp, hm, hkv, hmg, ?_, ?_, hA⟩
+  · unfold helloJ
+    rw [hget]
+    exact good_setObjVal hgj (good_setObjVal hgc (.str _) _) _
+  · unfold helloJ
+    rw [hget]
+    simp only [Json.setObjVal!]
+    exact ascii_insert hm ham (ascii_key hm ham hmg) (ascii_insert hkv hak hnk (.str (ascii_zeros 64)))
 
 /-- **The masked verifier's hello**: at a keyed coin tree, it parses to an object whose `coins` is an object, printable
 with the prover's nonce put in. -/
 theorem helloZk_of (S : Claims.JsonSpec printJ Flock.canon) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
     {cs : CoinTree.Spec} {hello : String} (h : Flock.helloOf tags sigma mPts (.tree cs) = .ok hello) :
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
-      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
+      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧ Ascii cs.toJson := by
   unfold Flock.helloOf at h
   dsimp only at h
   repeat' split at h
@@ -153,7 +161,7 @@ printable with the prover's nonce put in. -/
 theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello, -⟩ := setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello, hct0⟩ := setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := insOf_true (setupOf_some c.setup).1
   obtain ⟨hzk, -, hdraw⟩ := Raw.ins_read hw
   have hz : c.s.read.zk = true := hzk.trans hwz
@@ -166,7 +174,14 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
     simp only [Readable.Read.coins, hz, ite_true]
     exact ⟨_, rfl⟩
   rw [hcs] at hhello
-  refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], by rw [hspec]; exact helloZk_of S hhello⟩
+  obtain ⟨m, kvs, hp, hm, hkv, hmg, hgh, hah, hA⟩ := helloZk_of S hhello
+  have hctr : c.spec.coinTree = some cs := by
+    rw [hspec]
+    change st.coinTree = _
+    rw [hct0, hcs]
+    rfl
+  refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], m, kvs, by rw [hspec]; exact hp, hm, hkv, hmg, hgh, hah,
+    fun ct hc => by rw [hctr] at hc; cases hc; exact hA⟩
   unfold DrawOk
   rw [hU]
   dsimp only
@@ -182,7 +197,7 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
     rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
     · exact good_stratified (draw_wf hdraw hdd) hD hK
     · exact good_subset (draw_wf hdraw hdd) hD hk
-  refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
+  refine ⟨fun hn' => ?_, hg, ascii_of_drawn hl (hd d hdd), D, hD, by rw [hspec]; exact hn⟩
   rw [hn'] at hD
   cases hD
 

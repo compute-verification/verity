@@ -62,8 +62,8 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
           RepRunJ o.resp (Claims.hOf H) o.spec (Setup.ofCircuit o.sts[i]!) schs[i]! (traces o.sts o.w)[i]! cms[i]!
             (o.extras i) o.ω i r streams[2 * i + r]!
             (1 + ((streams.toList.take (2 * i + r)).flatMap Array.toList).length) fun p => o.zp i r = p := by
-  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := id hS
-  obtain ⟨hz, hcz⟩ := S.canon_ok _ hg
+  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg, ha, hT⟩ := id hS
+  obtain ⟨hz, hcz⟩ := S.canon_ok _ hg ha
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   have hn := o.toCase.tables_nodup
@@ -115,7 +115,7 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
   have hdec : Record.decodeWith o.hs o.spec o.record = .ok (sessOf o.spec (Claims.hOf H)
       (cms.map fun c => flat c.cap) (pointsOf o.spec (Claims.coinSeq o.r 0)) ss o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZkJ S (hOf_size h64) hn hct hH hdraw hsig hrbs hrb hpts hpm hss hrs o.proofs
+    exact decode_recordObjZkJ S (hOf_size h64) hn hct (hT ct hct) hH hdraw hsig hrbs hrb hpts hpm hss hrs o.proofs
   have hsess : o.sess = sessOf o.spec (Claims.hOf H) (cms.map fun c => flat c.cap)
       (pointsOf o.spec (Claims.coinSeq o.r 0)) ss o.proofs := by
     unfold Run.sess
