@@ -213,7 +213,7 @@ MATHLIB = {"url": "https://github.com/leanprover-community/mathlib4", "type": "g
            "inherited": False, "configFile": "lakefile.lean"}
 VERITY_PATH = {"type": "path", "scope": "", "name": "verity", "manifestFile": "lake-manifest.json", "inherited": False,
                "dir": "../../packages/verity/lean", "configFile": "lakefile.toml"}
-PINS = {"Verity.SecurityProofs.G": {"signature": ["Verity.SecurityProofs.G : Verity.G"], "assumptions": [], "type_hash": "aa"}}
+GUARANTEES = {"Verity.SecurityProofs.G": {"signature": ["Verity.SecurityProofs.G : Verity.G"], "assumptions": [], "type_hash": "aa"}}
 READS = {"Verity.Guarantees": {"digest": "dd", "definitions": {"Verity.G": "ee"}}}
 FOO = "import Specs.Core.Guarantees\n\nnamespace Proofs.Core\n\ntheorem G : Verity.G := rfl\n\nend Proofs.Core\n"
 BAR = ("import Verity.SecurityProofs.Foo\nimport Mathlib.Tactic\n\nnamespace Proofs.Core\n\n"
@@ -231,7 +231,7 @@ def _lock(**fields) -> str:
 SPEC_FILES = {
     f"{SPEC}/lakefile.toml": LAKEFILE_SPEC, f"{SPEC}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
     f"{SPEC}/lake-manifest.json": _manifest("verity", MATHLIB),
-    f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS),
+    f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, guarantees=GUARANTEES, reads=READS),
     f"{SPEC}/Verity.lean": "import Definitions.Core\nimport Specs.Core.Guarantees\nimport Proofs.Core\n",
     f"{SPEC}/Verity/Protocol.lean": "def Verity.p := 1\n",
     f"{SPEC}/Verity/Guarantees.lean": "import Definitions.Core\n\ndef Verity.G : Prop := Verity.p = 1\n",
@@ -241,7 +241,7 @@ SPEC_FILES = {
 }
 
 
-def _split(tmp_path: Path, bar: str | None = None, pins: dict | None = None, files: dict | None = None,
+def _split(tmp_path: Path, bar: str | None = None, guarantees: dict | None = None, files: dict | None = None,
            base: dict | None = None) -> tuple[Path, str, dict]:
     """Core's proofs split out to `security_proofs/core` under the module root `CoreProofs`; the spec and its umbrella stay."""
     repo, base = _repo(tmp_path, {**SPEC_FILES, **(base or {})})
@@ -251,7 +251,7 @@ def _split(tmp_path: Path, bar: str | None = None, pins: dict | None = None, fil
         f"{PROOFS}/CoreProofs/Bar.lean": bar if bar is not None else BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo"),
         f"{SPEC}/Verity/SecurityProofs.lean": "import CoreProofs.Foo\nimport CoreProofs.Bar\n",
         f"{SPEC}/lean-audit.json": _lock(roots=["Verity.Protocol", "Verity.Guarantees", "Verity.SecurityProofs"],
-                                         layers={"Verity.Protocol": []}, pins=pins or PINS, reads=READS,
+                                         layers={"Verity.Protocol": []}, guarantees=guarantees or GUARANTEES, reads=READS,
                                          proved_in=["../../../security_proofs/core"]),
         f"{PROOFS}/lakefile.toml": LAKEFILE_PROOFS, f"{PROOFS}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
         f"{PROOFS}/lake-manifest.json": _manifest("coreproofs", VERITY_PATH, MATHLIB),
@@ -293,9 +293,9 @@ def test_lean_split_that_changes_a_proof_line_is_refused(tmp_path):
 
 
 def test_lean_split_that_changes_a_guarantee_record_is_refused(tmp_path):
-    pins = {"Verity.SecurityProofs.G": {**PINS["Verity.SecurityProofs.G"], "type_hash": "ab"}}
-    [f] = _split(tmp_path, pins=pins)[2]["refusals"]
-    assert f["path"] == f"{SPEC}/lean-audit.json" and f["reason"].startswith("`pins` changed")
+    guarantees = {"Verity.SecurityProofs.G": {**GUARANTEES["Verity.SecurityProofs.G"], "type_hash": "ab"}}
+    [f] = _split(tmp_path, guarantees=guarantees)[2]["refusals"]
+    assert f["path"] == f"{SPEC}/lean-audit.json" and f["reason"].startswith("`guarantees` changed")
     assert '"type_hash": "aa"' in f["hunk"] and '"type_hash": "ab"' in f["hunk"]
 
 
@@ -312,13 +312,13 @@ def test_proofs_package_lakefile_with_a_new_git_dependency_is_refused(tmp_path):
 
 
 def test_proofs_package_lock_that_lists_guarantees_is_refused(tmp_path):
-    [f] = _split(tmp_path, files={f"{PROOFS}/lean-audit.json": _lock(roots=["CoreProofs"], pins=PINS)})[2]["refusals"]
+    [f] = _split(tmp_path, files={f"{PROOFS}/lean-audit.json": _lock(roots=["CoreProofs"], guarantees=GUARANTEES)})[2]["refusals"]
     assert f["path"] == f"{PROOFS}/lean-audit.json" and "lists no guarantees" in f["reason"]
 
 
 def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
     repo, base = _repo(tmp_path, SPEC_FILES)
-    _write(repo, {f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS,
+    _write(repo, {f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, guarantees=GUARANTEES, reads=READS,
                                                    proved_in=["../../security_proofs/core"])})
     [f] = _check(repo, base)["refusals"]
     assert "`proved_in` entry" in f["reason"]
@@ -422,14 +422,14 @@ def _runs_split(tmp_path: Path, proofs_runs: dict | None, spec_runs: dict | None
     """The split, with core's lock holding a difftest whose runner module and generator move to the proofs package."""
     base_files = {**SPEC_FILES, f"{SPEC}/Verity/SecurityProofs/Difftest.lean": "def main : IO Unit := pure ()\n",
                   f"{SPEC}/scripts/difftest_vectors.py": "print(1)\n",
-                  f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS,
+                  f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, guarantees=GUARANTEES, reads=READS,
                                                    runs={"Verity.SecurityProofs.Difftest": RUN})}
     repo, base = _repo(tmp_path, base_files)
     for m in ("Foo", "Bar", "Difftest"):
         _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
     _move(repo, f"{SPEC}/scripts", f"{PROOFS}/scripts")
     spec_lock = dict(roots=["Verity.Protocol", "Verity.Guarantees", "Verity.SecurityProofs"], layers={"Verity.Protocol": []},
-                     pins=PINS, reads=READS, proved_in=["../../../security_proofs/core"])
+                     guarantees=GUARANTEES, reads=READS, proved_in=["../../../security_proofs/core"])
     _write(repo, {
         f"{PROOFS}/CoreProofs/Bar.lean": BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo"),
         f"{SPEC}/Verity/SecurityProofs.lean": "import CoreProofs.Foo\nimport CoreProofs.Bar\n",

@@ -52,8 +52,7 @@ def _record(repo: Path, rev: str, path: str) -> dict:
 
 
 def _guarantees(doc: dict) -> dict:
-    """The record's guarantees; one written before they were called that (a push's old side, at the rename) has `pins`."""
-    return doc.get("guarantees") or doc.get("pins") or {}
+    return doc.get("guarantees") or {}
 
 
 def _definitions(doc: dict) -> dict[str, tuple[str | None, str]]:

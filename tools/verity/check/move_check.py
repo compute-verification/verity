@@ -25,11 +25,10 @@ Every path git sees changed must be one of:
 - an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
   the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
   proof modules a root of their own while their declarations keep their namespace;
-- an edit to a `lean-audit.json` that keeps `pins` (the guarantees' records; `guarantees` too, if a lock has it) and
-  `reads` byte for byte (a `reads` key, a module's name, may follow the module's move), may change the structural `roots`,
-  `proved_in` (each entry a Lake package at HEAD) and `dependencies` (the fetched modules the package imports, which a
-  split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
-  names; a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
+- an edit to a `lean-audit.json` that keeps `guarantees` (the guarantees' records) and `reads` byte for byte (a `reads`
+  key, a module's name, may follow the module's move), may change the structural `roots`, `proved_in` (each entry a Lake
+  package at HEAD) and `dependencies` (the fetched modules the package imports, which a split shares out and the Lean
+  check holds to the build), and changes any other field only by moved paths and module names; a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
   renamed and its package-relative paths following the move, and must end up in exactly one, otherwise unchanged
   (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
@@ -87,7 +86,7 @@ RELATIVE_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-mani
 LAKEFILES = ("lakefile.toml", "lakefile.lean")
 LAKE_COPIES = {*LAKEFILES, "lake-manifest.json", "lean-audit.json", "lean-toolchain"}
 #: a lock's records of what its guarantees say, and its structural fields, which a split changes
-PROTECTED, STRUCTURAL = ("pins", "guarantees", "reads"), ("roots", "proved_in", "dependencies")
+PROTECTED, STRUCTURAL = ("guarantees", "reads"), ("roots", "proved_in", "dependencies")
 #: the move scripts' word maps, each a `*.toml` directly in it with `[words]` (`tools/move/rename.py`'s format)
 MAPS = "tools/move/"
 #: the files that pin other files' digests (`<sha256>  <relative path>` lines)

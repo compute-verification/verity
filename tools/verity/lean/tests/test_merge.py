@@ -252,27 +252,22 @@ def test_a_32_bit_group_merged_with_a_rehashed_one_is_a_candidate_the_train_rege
     assert A.judge(A.regenerated(merged, tree, FILES, fails), tree, FILES)[0] == []
 
 
-def before_the_rename(rec: dict) -> dict:
-    """``rec`` as a branch from before guarantees were called that writes it: under `pins`."""
-    return {("pins" if k == "guarantees" else k): v for k, v in rec.items()}
-
-
-def listing_readers(rec: dict, key: str = "guarantees", **guarantees: dict) -> dict:
-    """``rec`` as a lock from before LEAN-74 writes it, each `reads` group listing under ``key`` the guarantees that read it
-    (``guarantees``, as for `record`)."""
+def listing_readers(rec: dict, **guarantees: dict) -> dict:
+    """``rec`` as an older lock writes it, each `reads` group listing the guarantees that read it (``guarantees``, as for
+    `record`)."""
     by = A.readers(A.guarantee_reads(built(**guarantees)))
-    return rec | {"reads": {m: g | {key: by[m]} for m, g in rec["reads"].items()}}
+    return rec | {"reads": {m: g | {A.READERS: by[m]} for m, g in rec["reads"].items()}}
 
 
 def test_a_side_whose_reads_list_their_readers_merges_to_today_s_record_and_normalizes(tmp_path):
-    """A branch from before LEAN-74 merged with one from after, either way round, or two such branches (one from before
-    the rename too) are read without their readers, so the merge is the merged tree's record; `--normalize` drops them from
-    a lock alone."""
+    """A branch whose lock lists its readers merged with one whose lock doesn't, either way round, or two such branches,
+    are read without their readers, so the merge is the merged tree's record; `--normalize` drops them from a lock
+    alone."""
     t, u, v = thm([F]), thm([F, G], "P.g n = n", "00000000000000bb"), thm([H, K], "P.h n = P.k n", "00000000000000cc")
     base, ours, theirs, tree = record(t=t), record(t=t, u=u), record(t=t, v=v), record(t=t, u=u, v=v)
-    old = {"base": listing_readers(base, t=t), "ours": before_the_rename(listing_readers(ours, "pins", t=t, u=u)),
+    old = {"base": listing_readers(base, t=t), "ours": listing_readers(ours, t=t, u=u),
            "theirs": listing_readers(theirs, t=t, v=v)}
-    assert all(A.with_readers(A.as_guarantees(d)) for d in old.values())
+    assert all(A.with_readers(d) for d in old.values())
     for sides in ({"base": old["base"], "ours": ours, "theirs": old["theirs"]},
                   {"base": base, "ours": old["ours"], "theirs": theirs}, old):
         for n, d in sides.items():
@@ -283,20 +278,6 @@ def test_a_side_whose_reads_list_their_readers_merges_to_today_s_record_and_norm
     path.write_text(A.text(listing_readers(tree, t=t, u=u, v=v)))
     assert M.main(["--normalize", str(path)]) == 0 and path.read_text() == A.text(tree)
     assert M.normalize(path) == 0
-
-
-def test_a_side_from_before_the_rename_merges_under_today_s_names(tmp_path):
-    base = record(t=thm([F]))
-    ours = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"))
-    theirs = record(t=thm([F]), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"))
-    tree = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"))
-    for n, d in (("base", before_the_rename(base)), ("ours", ours), ("theirs", before_the_rename(theirs))):
-        (tmp_path / n).write_text(A.text(d))
-    assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 0
-    assert (tmp_path / "ours").read_text() == A.text(tree)
-    (tmp_path / "theirs").write_text(A.text(theirs | {"pins": {"P.w": {}}}))
-    assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 1
-    assert (tmp_path / "ours").read_text() == A.text(tree)
 
 
 def test_normalize_recomputes_each_digest_from_its_definitions(tmp_path):

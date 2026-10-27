@@ -11,8 +11,7 @@
 a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the dependencies, and the policy's own
 sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
 guarantees that read one module both change, the module's definitions merge the same way, and its digest is recomputed
-from the merged definitions (`audit.module_digest`). A side written before guarantees were called that (`pins`) is read
-under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers (`audit.READER_KEYS`)
+from the merged definitions (`audit.module_digest`). A side whose `reads` groups still list their readers (`audit.READERS`)
 is read without them, so a branch from before the lock dropped them merges with one from after.
 
 What the build determines never refuses: the records `check.py --update` writes from it and a train's Lean check
@@ -553,11 +552,11 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
 
 
 def load(path: Path) -> dict:
-    """The record at ``path`` under today's names, its `reads` groups without the readers an older record lists."""
+    """The record at ``path``, its `reads` groups without the readers an older record lists."""
     text = path.read_text()
-    doc = A.as_guarantees(json.loads(text)) if text.strip() else {}
+    doc = json.loads(text) if text.strip() else {}
     for m in A.with_readers(doc):
-        doc["reads"][m] = {k: v for k, v in doc["reads"][m].items() if k not in A.READER_KEYS}
+        doc["reads"][m] = {k: v for k, v in doc["reads"][m].items() if k != A.READERS}
     return doc
 
 
@@ -578,7 +577,7 @@ def install(repo: Path) -> None:
 def normalize(path: Path) -> int:
     """Recompute each `reads` digest of the record at ``path`` from its definitions, and drop the readers an older record
     lists (`load`); the number of groups that changed."""
-    before = A.as_guarantees(json.loads(path.read_text())).get("reads", {})
+    before = json.loads(path.read_text()).get("reads", {})
     doc = load(path)
     for g in doc.get("reads", {}).values():
         g["digest"] = A.module_digest(A.definitions(g))

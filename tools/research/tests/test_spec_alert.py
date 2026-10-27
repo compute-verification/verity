@@ -63,7 +63,8 @@ def test_a_changed_definition_names_its_module():
 
 
 def test_a_lock_that_drops_its_readers_sends_nothing(tmp_path):
-    """LEAN-74 dropped the guarantees each `reads` group listed from every lock, its definitions and hashes as they were."""
+    """A lock whose `reads` groups stop listing the guarantees that read them, their definitions and hashes as they were,
+    changes no record."""
     repo = _repo(tmp_path)
     listed = _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1})
     listed["reads"]["P.Defs"]["guarantees"] = ["P.t"]
@@ -124,15 +125,6 @@ def test_compiled_code_newly_allowed_on_a_verifiers_path_is_shown():
     assert spec.changes(base, more) == ["• compiled code allowed on the verifier's path, which no proof sees: `ByteArray.push`"]
     assert spec.changes(more, base) == [] and spec.changes(more, more) == []
     assert spec._tally(["compiled", "compiled", "new"]) == "guarantees: 1 new; verifier: 2 allowed"
-
-
-def test_a_record_from_before_the_rename_compares_by_what_it_says():
-    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1})
-    old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
-    assert spec.changes(old, new) == []
-    assert spec.changes(old, _doc({"P.t": _g("P.t : E", H2)}, {"P.D": H3})) == [
-        "• changed guarantee `P.t`, before:\n```\nP.t : D\n```\nafter:\n```\nP.t : E\n```",
-        "• definition `P.D` (`P.Defs`) changed"]
 
 
 def _repo(tmp_path: Path) -> Path:

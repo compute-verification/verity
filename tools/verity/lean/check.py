@@ -53,9 +53,8 @@ environment extension loaded, so none of the package's code runs), and replays t
                  read and the digest of those definitions, which with the type hashes fix what each guarantee reads, so
                  the record lists no readers (one that does fails until `--update`); the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
-                 checked as they are until `--update` rewrites them); a record written before guarantees were called
-                 that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
-                 (`@lane`) of the lane that answers for it
+                 checked as they are until `--update` rewrites them); or an entry has no `owner`, the handle (`@lane`)
+                 of the lane that answers for it
     witnesses    a guarantee that states what an acceptance means (a property of a function's acceptance, or a statement
                  reading a claim, the one theorem's vocabulary or a verifier's acceptance) names no `honest` lemma (its
                  hypotheses hold at the honest deployed instance) and `nontrivial` lemma (its conclusion fails at a
@@ -491,27 +490,18 @@ def took(rep: dict, step: str, since: float) -> None:
 
 
 def load(pkg: Path) -> dict:
-    return as_guarantees(json.loads((pkg / POLICY).read_text()))
+    return json.loads((pkg / POLICY).read_text())
 
 
-def as_guarantees(policy: dict) -> dict:
-    """A record under today's names: one written before guarantees were called that, on a branch from before the rename,
-    holds them as `pins`.  A record holding both is refused (`ValueError`): the audit would check one and drop the other."""
-    if "pins" in policy and "guarantees" in policy:
-        raise ValueError("the record holds both `pins` and `guarantees` (a merge with a branch from before the rename): move "
-                         "the `pins` entries under `guarantees` and run `check.py --update`")
-    return {("guarantees" if k == "pins" else k): v for k, v in policy.items()} if "pins" in policy else policy
-
-
-#: the keys under which a `reads` group of an older record lists the guarantees that read it; the type hashes and the
-#: definitions' hashes determine those, so the build gives them (`readers`), and a record holding one fails until `--update`
-#: (`merge.py` drops them)
-READER_KEYS = ("guarantees", "pins")
+#: the key under which a `reads` group of an older record lists the guarantees that read it; the type hashes and the
+#: definitions' hashes determine those, so the build gives them (`readers`), and a record holding it fails until `--update`
+#: (`merge.py` drops it)
+READERS = "guarantees"
 
 
 def with_readers(policy: dict) -> list[str]:
-    """The modules under ``policy``'s `reads` whose group still lists its readers (`READER_KEYS`)."""
-    return sorted(m for m, g in (policy.get("reads") or {}).items() if isinstance(g, dict) and any(k in g for k in READER_KEYS))
+    """The modules under ``policy``'s `reads` whose group still lists its readers (`READERS`)."""
+    return sorted(m for m, g in (policy.get("reads") or {}).items() if isinstance(g, dict) and READERS in g)
 
 
 def layout(v, pad: str = "") -> str:

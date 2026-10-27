@@ -33,10 +33,10 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   only for `L ≤ 40` columns (the range the executable's normalisers are checked on). `Level.Fits` carries those bounds,
   and every `fast100` level fits.
 - **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is `../../../../lean-audit.json`'s
-  `pins` and `reads`, and `../ASSUMPTIONS.md` for the named assumptions.
-  - `pins`: each pinned theorem's signature as Lean prints it, with its named assumptions.
+  `guarantees` and `reads`, and `../ASSUMPTIONS.md` for the named assumptions.
+  - `guarantees`: each guarantee's signature as Lean prints it, with its named assumptions.
   - `reads`: per module, the definitions those statements depend on (followed through the `meaning` modules,
-    `FlockSoundness` and `FlockLevel3`), and which pins read them. Some are in proof files (`LinkSound.lean`,
+    `FlockSoundness` and `FlockLevel3`). Some are in proof files (`LinkSound.lean`,
     `CompiledSound.lean`, `CompiledLock.lean`).
   - The audit fails when a signature or a definition it reads changes, until `check.py --update` rewrites the record.
     When a rewritten record lands on `main`, Daniel gets a DM showing it, and that is the check: a statement reviewer

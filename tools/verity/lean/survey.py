@@ -1303,7 +1303,7 @@ def measure(pkg: Path, prefix: str, facts: dict | None = None, lock: dict | None
     if read_by is None and facts is not None:
         read_by = C.readers(C.guarantee_reads(facts))
     reads: dict[str, set[str]] = defaultdict(set)
-    for m, g in C.as_guarantees(lock if lock is not None else C.load(pkg)).get("reads", {}).items():
+    for m, g in (lock if lock is not None else C.load(pkg)).get("reads", {}).items():
         reads[m] |= {C.parent(n) for n in C.definitions(g)}
     elsewhere = C.read_by_dependents(pkg, ROOT)
     defs: dict[str, set[str]] | None = None

@@ -137,20 +137,19 @@ def test_every_field_of_a_reads_record_is_checked():
 
 
 def test_a_lock_listing_its_readers_is_a_record_difference_an_update_drops():
-    """A lock from before LEAN-74 lists each module's readers (`guarantees`, or `pins` from before the rename), which the
-    type hashes and the definitions' hashes determine: it fails as `guarantees.readers`, a record difference, and the record
-    regenerated (or updated) is today's, with nothing in the review."""
+    """An older lock lists each module's readers under its `reads` group, which the type hashes and the definitions'
+    hashes determine: it fails as `guarantees.readers`, a record difference, and the record regenerated (or updated) is
+    today's, with nothing in the review."""
     pol = recorded()
-    for key in A.READER_KEYS:
-        listed = pol | {"reads": {m: g | {key: ["P.t"]} for m, g in pol["reads"].items()}}
-        assert A.with_readers(listed) == sorted(pol["reads"])
-        fails = A.judge(listed, facts(), FILES)[0]
-        assert fails == [f"guarantees: `reads` lists the guarantees that read {', '.join(sorted(pol['reads']))}, which the "
-                         "type hashes and the definitions' hashes determine and the record no longer holds; run `check.py "
-                         "--update`, or `python tools/verity/lean/merge.py --normalize` drops them"]
-        assert [f.code for f in fails] == ["guarantees.readers"] and A.RECORD_DIFFERENCE.match(fails[0])
-        assert A.regenerated(listed, facts(), FILES, fails) == pol == A.judge(listed, facts(), FILES, update=True)[1]
-        assert A.review(listed, pol, facts(), {}) == []
+    listed = pol | {"reads": {m: g | {A.READERS: ["P.t"]} for m, g in pol["reads"].items()}}
+    assert A.with_readers(listed) == sorted(pol["reads"])
+    fails = A.judge(listed, facts(), FILES)[0]
+    assert fails == [f"guarantees: `reads` lists the guarantees that read {', '.join(sorted(pol['reads']))}, which the "
+                     "type hashes and the definitions' hashes determine and the record no longer holds; run `check.py "
+                     "--update`, or `python tools/verity/lean/merge.py --normalize` drops them"]
+    assert [f.code for f in fails] == ["guarantees.readers"] and A.RECORD_DIFFERENCE.match(fails[0])
+    assert A.regenerated(listed, facts(), FILES, fails) == pol == A.judge(listed, facts(), FILES, update=True)[1]
+    assert A.review(listed, pol, facts(), {}) == []
 
 
 def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
@@ -709,9 +708,6 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     record.unlink()
     assert unshaped(audit()) == [] and (pkg / A.POLICY).read_text() == before
     assert record.read_text() == before, "an update that changes nothing writes it all the same"
-    (pkg / A.POLICY).write_text(before.replace('"guarantees"', '"pins"'))
-    rep = audit()
-    assert unshaped(rep) == [] and "review" not in rep and (pkg / A.POLICY).read_text() == before, "renamed, not reviewed"
     moved = {"Control.a": "Control.SecurityProofs.a", "Control.b": "Control.SecurityProofs.b",
              "Control.c": "Control.SecurityProofs.c", "Control.f": "Control.Protocol.f", "Control.g": "Control.Protocol.g"}
     after = ("def Control.Protocol.f (n : Nat) : Nat := n + 0\ndef Control.Protocol.g (n : Nat) : Nat := 0 + n\n"
@@ -2176,20 +2172,6 @@ def test_a_package_without_a_policy_gets_a_template(tmp_path):
     rep = A.audit(pkg, tmp_path / "out")
     assert rep["failures"][0].startswith(f"policy: {pkg} has no lean-audit.json")
     assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "guarantees": {}}') and '{"owner": "@lane"}' in rep["failures"][0]
-
-
-def test_a_record_from_before_the_rename_is_read_as_guarantees_and_one_holding_both_is_refused(tmp_path):
-    pol = recorded()
-    old = {("pins" if k == "guarantees" else k): v for k, v in pol.items()}
-    assert A.as_guarantees(json.loads(json.dumps(old))) == pol
-    assert A.judge(A.as_guarantees(old), facts(), FILES) == ([], pol)
-    with pytest.raises(ValueError, match=r"the record holds both `pins` and `guarantees`"):
-        A.as_guarantees(pol | {"pins": {"P.u": {}}})
-    pkg = tmp_path / "p"
-    pkg.mkdir()
-    (pkg / A.POLICY).write_text(A.text(pol | {"pins": {"P.u": {}}}))
-    rep = A.audit(pkg, tmp_path / "out")
-    assert len(rep["failures"]) == 1 and rep["failures"][0].startswith(f"policy: {pkg}/{A.POLICY}: the record holds both")
 
 
 def test_dependency_digests_cover_every_part_of_the_imported_modules_only(tmp_path):

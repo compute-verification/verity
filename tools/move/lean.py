@@ -509,11 +509,6 @@ def merge_locks(m: Map, root: Path, locks: dict, code_thms: dict, dry: bool):
 
         def mp(name: str, ren=None, k=k) -> str:
             return m.rename(name, k) or name
-        if "pins" in pol:
-            pol["guarantees"] = pol.pop("pins")
-            for g in pol.get("reads", {}).values():
-                if "pins" in g:
-                    g["guarantees"] = g.pop("pins")
         for x in pol.get("assumptions", []):
             if mp(x) not in sec["assumptions"]:
                 sec["assumptions"].append(mp(x))
