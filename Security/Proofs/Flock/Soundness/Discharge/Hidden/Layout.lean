@@ -5,8 +5,8 @@ import Proofs.Flock.Soundness.Discharge.Hm.Accept
 /-!
 # A hidden-output statement's layout (`HiddenLayout`)
 
-An untyped statement `Stmt.setupHidden` accepts has `layout_of`'s layout on the statement with `HmRow.delta`'s Δ, and
-`HmOut.delta` only appends `outPairs` to both of its sides (`hidden_delta'`). Every first column of `outPairs` is a
+An untyped statement `Stmt.setupHidden` accepts has `layout_of`'s layout on the statement with `HmRow.delta`'s Δ, and,
+where it pins no output, `HmOut.delta` only appends `outPairs` to both of its sides (`hidden_delta_unpinned`). Every first column of `outPairs` is a
 message bit of an output row's `sha512x3` slot or, past the row's compressions (an exact-length row's last block), of
 its `hm96` slot's `pad` (`deltaMsgCol_rowBit`). Either is an input bit of a net slot (`deltaIn_inBit`), as
 `Layout.delta` asks of every pair past the constant pairs. `Hidden.Commit` proves `HiddenLayout` (`hidden_layout'`) for

@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
+import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 import Proofs.Flock.Soundness.TmplLayout
 
 /-!
@@ -140,13 +141,14 @@ theorem outPairs_inBit_of
   have hr := deltaMsgCol_rowBit hg hlt (byte := 2 * k + t / 8) (Nat.mod_lt t (by norm_num))
   rcases hx with rfl | rfl <;> exact deltaIn_inBit_of hports hu hs hh C (hr.imp id Or.inl)
 
-/-- **A hidden-output statement's layout from its flat twin's**: `HmOut.delta` appends `outPairs` to both sides of
-`HmRow.delta`, and every first column of `outPairs` is an input bit. -/
+/-- **A hidden-output statement's layout from its flat twin's**, where it pins no output: `HmOut.delta` appends
+`outPairs` to both sides of `HmRow.delta` (`hidden_delta_unpinned`), and every first column of `outPairs` is an input
+bit. -/
 theorem hidden_layout_of
     (L : Layout { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 })
     (hty : st.c.typed = none) (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2)
-    (hout : ∀ x ∈ outPairs st.c, InBit st.c x.1) : Layout st := by
-  have hd := hidden_delta' st.c st.pin
+    (hout : ∀ x ∈ outPairs st.c, InBit st.c x.1) (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Layout st := by
+  have hd := hidden_delta_unpinned hpin st.pin
   obtain ⟨rest, h1, h2⟩ := L.delta
   exact {
     disj := L.disj
@@ -177,14 +179,14 @@ theorem hidden_layout_of
 /-- **`HiddenLayout` on the committed circuit**: an untyped session on `HmOut.parseCommit`'s circuit has the layout the
 placement reads, its unit the flat file's or, templated, the template's logical net placed at `posMap`
 (`layout_of_tmpl`). -/
-theorem hidden_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st) :
-    Layout st := by
+theorem hidden_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st)
+    (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Layout st := by
   cases hi : tags.isTmpl
   · have hP := s.parse
     rw [parseCommit_flat hi] at hP
     obtain ⟨hp, hc⟩ := parse_untyped ht hP
     have P := parse_facts hp
-    exact hidden_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed s.da s.db (outPairs_inBit hp hc)
+    exact hidden_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed s.da s.db (outPairs_inBit hp hc) hpin
   · have hT := s.parse
     rw [parseCommit_tmpl hi] at hT
     obtain ⟨tu, c₀, P, hck, he, -, -⟩ := TmplValue.parseTmpl_facts hT
@@ -197,9 +199,74 @@ theorem hidden_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit 
     have hhm : st.c.hmNet < st.c.nets.size := by rw [he]; exact P.hmNet
     have hc : HmOut.checkRows st.c = .ok () := by rw [he]; exact hck
     exact hidden_layout_of (layout_of_tmpl hT s.pin rfl rfl s.m s.kLog) hty s.da s.db
+      (outPairs_inBit_of (fun n => (hok n).1.2.2) hun hsh hhm C hc) hpin
+
+theorem hidden_layout' : HiddenLayout := fun ht h hpin => hidden_layoutC ht (setupHidden_specC h) hpin
+
+/-- **`unpin st`'s layout from its flat twin's**, pinned outputs or not: its Δ is `HmRow.delta`'s, then `outPairs`, by
+definition (`unpin`), and every first column of `outPairs` is an input bit. -/
+theorem unpin_layout_of
+    (L : Layout { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 })
+    (hty : st.c.typed = none) (hout : ∀ x ∈ outPairs st.c, InBit st.c x.1) : Layout (unpin st) := by
+  obtain ⟨rest, h1, h2⟩ := L.delta
+  exact {
+    disj := L.disj
+    bound := L.bound
+    slotLog := L.slotLog
+    fit := L.fit
+    unit_mem := L.unit_mem
+    unit_kind := L.unit_kind
+    unit_count := L.unit_count
+    unit_built := L.unit_built
+    unit_at := L.unit_at
+    unit_lookup := L.unit_lookup
+    unit_in := L.unit_in
+    unit_const := L.unit_const
+    pin := L.pin
+    delta_b := by
+      show (HmRow.delta st.c st.pin).2 ++ (outPairs st.c).toArray = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray
+      rw [delta_snd _ _ hty]
+    delta := by
+      refine ⟨rest ++ outPairs st.c, ?_, fun x hx => ?_⟩
+      · show ((HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray).toList = constPairs st.c st.pin ++ (rest ++ outPairs st.c)
+        rw [Array.toList_append, List.toList_toArray]
+        exact (congrArg (· ++ outPairs st.c) h1).trans (List.append_assoc _ _ _)
+      · rcases List.mem_append.1 hx with hx | hx
+        · exact h2 x hx
+        · exact hout x hx
+    kLog := L.kLog
+    kLog6 := L.kLog6
+    m := L.m }
+
+/-- **`unpin` of an untyped session on the committed circuit has the layout the placement reads**, pinned outputs or
+not: `layout_of`'s for a flat file, `layout_of_tmpl`'s for a templated one, with `outPairs` past its Δ. -/
+theorem unpin_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st) :
+    Layout (unpin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [parseCommit_flat hi] at hP
+    obtain ⟨hp, hc⟩ := parse_untyped ht hP
+    have P := parse_facts hp
+    exact unpin_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed (outPairs_inBit hp hc)
+  · have hT := s.parse
+    rw [parseCommit_tmpl hi] at hT
+    obtain ⟨tu, c₀, P, hck, he, -, -⟩ := TmplValue.parseTmpl_facts hT
+    have hok := parseTmpl_nets_ok hT
+    obtain ⟨ls, hcheck⟩ := P.check
+    have hty : st.c.typed = none := by rw [he]; exact P.typed
+    have C : CheckFacts st.c := check_facts (tags := tags) (ls := ls) hty (by rw [he]; exact hcheck)
+    have hun : st.c.unitNet < st.c.nets.size := by rw [he]; exact P.unitNet
+    have hsh : st.c.shaNet < st.c.nets.size := by rw [he]; exact P.shaNet
+    have hhm : st.c.hmNet < st.c.nets.size := by rw [he]; exact P.hmNet
+    have hc : HmOut.checkRows st.c = .ok () := by rw [he]; exact hck
+    exact unpin_layout_of (layout_of_tmpl hT s.pin rfl rfl s.m s.kLog) hty
       (outPairs_inBit_of (fun n => (hok n).1.2.2) hun hsh hhm C hc)
 
-theorem hidden_layout' : HiddenLayout := fun ht h => hidden_layoutC ht (setupHidden_specC h)
+/-- **`unpin` of an untyped statement `Stmt.setupHidden` accepts has the layout the placement reads**, pinned outputs
+or not (`unpin_layoutC`). -/
+theorem unpin_layout (ht : tags.typed = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : Layout (unpin st) :=
+  unpin_layoutC ht (setupHidden_specC h)
 
 /-! ## The facts read off `Spec` on the committed circuit -/
 
@@ -284,6 +351,22 @@ theorem committed_of_commit (h : HmOut.parseCommit tags cf tables = .ok c) : Com
     exact .inl h
   · rw [parseCommit_tmpl hi] at h
     exact .inr h
+
+/-- **A committed circuit of one output row per output port pins no output** (`unpinned_of_rep`, on the circuit
+`HmRow.parse` read, after a templated file's unit net). -/
+theorem Committed.unpinned_of_rep (ht : tags.typed = false) (hC : Committed tags cf tables c)
+    (h : c.outRowPorts = Array.replicate c.outPorts.size 1) : HmRow.pinnedCount c.metaJ = 0 := by
+  rcases hC with hC | hC
+  · obtain ⟨hp, hc⟩ := parse_untyped ht hC
+    exact unpinned_of_rep hp hc h
+  · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases hC
+    exact unpinned_of_rep hp hck h
+
+/-- **An untyped hidden statement of one output row per output port pins no output** (`Committed.unpinned_of_rep`). -/
+theorem setupHidden_unpinned (ht : tags.typed = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
+    (hr : st.c.outRowPorts = Array.replicate st.c.outPorts.size 1) : HmRow.pinnedCount st.c.metaJ = 0 :=
+  (committed_of_commit (setupHidden_parseCommit h)).unpinned_of_rep ht hr
 
 /-- **What a hidden-output session accepted, on its committed circuit**: `SpecOf` at `HmOut.parseCommit`
 (`setupHidden_specC`, `setupHiddenOf_specC`), or at `HmOut.parse` (`Stmt.setupHidden`, at any tags). -/
@@ -390,17 +473,34 @@ theorem Committed.outRows (hty : tags.typed = false) (h : Committed tags cf tabl
     have h := out_rows_v1Pre hp (parse_factsPre_nets hp).1 hck hv1
     exact h
 
-/-- **A session's layout**, flat or templated (`hidden_layoutC`). -/
-theorem SpecC.layout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) : Layout st :=
-  Or.elim s (hidden_layoutC ht) fun s => by
+/-- **A session's layout**, flat or templated, where it pins no output (`hidden_layoutC`). -/
+theorem SpecC.layout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st)
+    (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Layout st :=
+  Or.elim s (fun s => hidden_layoutC ht s hpin) fun s => by
     obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
     have P := parse_facts hp
-    exact hidden_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed s.da s.db (outPairs_inBit hp hc)
+    exact hidden_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed s.da s.db (outPairs_inBit hp hc) hpin
+
+/-- **A session's statement without Δ's pinned copies has a layout**, flat or templated, pinned outputs or not
+(`unpin_layoutC`). -/
+theorem SpecC.unpinLayout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) : Layout (unpin st) :=
+  Or.elim s (unpin_layoutC ht) fun s => by
+    obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
+    have P := parse_facts hp
+    exact unpin_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed (outPairs_inBit hp hc)
 
 /-- **A session's layout model is `stmtOf` of its statement**, flat or templated (`Integrate.model_eqW`). -/
 theorem SpecC.model_eq (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) (L : Layout st)
     (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) : L.model regs = stmtOf st hwf regs :=
   Integrate.model_eqW (Committed.netWidths ht s.committed) (Committed.netKinds ht s.committed) L s.self.leaf hwf regs
+
+/-- **A session's layout model without Δ's pinned copies is `stmtOf` of `unpin st`**, flat or templated
+(`Integrate.model_eqW`). -/
+theorem SpecC.model_eq_unpin (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st)
+    (L : Layout (unpin st)) (hwf : StmtWF (unpin st)) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
+    L.model regs = stmtOf (unpin st) hwf regs :=
+  Integrate.model_eqW (st := unpin st) (Committed.netWidths ht s.committed) (Committed.netKinds ht s.committed) L
+    s.self.leaf hwf regs
 
 /-- **A session's statement circuit is `HmOut.parseStmt`'s**: its committed circuit, unrolled. -/
 theorem SpecC.parseStmt_eq (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) :

@@ -33,8 +33,9 @@ theorem unit_groups_fit (L : Layout st) : ∀ g ∈ st.c.unit.inGroups.toList,
 
 /-- **An untyped hidden-output statement accepted at public inputs has the layout the placement reads**, on the
 committed circuit: its flat twin's is `layout_of`'s for a flat file, `layout_of_tmpl`'s for a templated one
-(`hidden_layoutC`). -/
-theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tables draw own pi st) : Layout st := by
+(`hidden_layoutC`), where it pins no output (`hidden_delta_unpinned`). -/
+theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tables draw own pi st)
+    (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Layout st := by
   obtain ⟨L, hty, C, hout⟩ :
       Layout { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 } ∧
         st.c.typed = none ∧ CheckFacts st.c ∧ ∀ x ∈ outPairs st.c, InBit st.c x.1 := by
@@ -58,7 +59,7 @@ theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tab
       have hc : HmOut.checkRows st.c = .ok () := by rw [he]; exact hck
       exact ⟨layout_of_tmpl hT s.pin rfl rfl s.m s.kLog, hty, C,
         outPairs_inBit_of (fun n => (hok n).1.2.2) hun hsh hhm C hc⟩
-  have hd := hidden_delta' st.c st.pin
+  have hd := hidden_delta_unpinned hpin st.pin
   obtain ⟨rest, h1, h2⟩ := L.delta
   have h1' : (HmRow.delta st.c st.pin).1.toList = constPairs st.c st.pin ++ rest := h1
   have hkc : ∀ p ∈ constPairs st.c st.pin, keepCol st.c pi p.1 = true := by

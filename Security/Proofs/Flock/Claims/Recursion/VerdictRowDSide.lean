@@ -22,8 +22,8 @@ that reader and proves the tie.
 namespace RecDeploy.Rows
 
 open Flock
-open FlockDeploy (Coin FinalP DecR decR RepCtx repCtx repLens cutLens rowsOf FitsRep readRep readPs linkR tabsOf
-  pointsOf setupOf Ins recJ mapM_some_get nodeOf)
+open FlockDeploy (Coin FinalP DecR decR RepCtx repCtx repLens cutLens rowsOf nodeOf FitsRep readRep readPs linkR tabsOf
+  pointsOf setupOf Ins recJ mapM_some_get)
 open FlockSoundness.Discharge.Recursion (HClass)
 
 noncomputable section
@@ -180,20 +180,29 @@ theorem decR_last {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
 
 /-! ## The reader -/
 
-/-- **The side a `rec-open` piece reads off the statement and the messages**: at a statement that sets up and
-messages whose last one `rd` reads, with round 0's and the later rounds' rows read back, rep `k = 2 table + rep`'s
-proof as `readRep` reads it from the `k`-th block of the later rounds' rows (at the default link coin: what it reads of
-the openings takes no coin, `sideOf_repCtx`), with the last message's `k`-th proof; the side is the table's `fast100`
-schedule, and that proof's cap and Ligerito proof. -/
-def sideAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (q : OpenPiece) : OpenSide :=
+/-- Table `t`'s `fast100` schedule at the inner statement `x`, as `repCtx` reads it. -/
+def schOf (x : Claims.Msg) (t : ℕ) : Flock.Schedule :=
+  match setupOf false x with
+  | some v => (fast100 (tabsOf v.2.2)[t]!.m).getD default
+  | none => default
+
+/-- The cap and Ligerito proof of a `rec-open` piece's side: its rep's proof as `readRep` reads it (`sideAt`). -/
+def capLigAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (q : OpenPiece) :
+    Array ByteArray × Flock.LigeritoProof :=
   match setupOf false x, ms.getLast?.bind rd, (rowsOf (ms.headD [])).map (List.map nodeOf),
     ms.tail.dropLast.mapM rowsOf with
   | some v, some fl, some r₀, some rss =>
-    match sideOf (repCtx v.2.1 v.2.2 default r₀ [] (2 * q.table + q.rep))
-        ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * q.table + q.rep) []) fl.ps[2 * q.table + q.rep]! with
-    | some cl => ⟨(fast100 (tabsOf v.2.2)[q.table]!.m).getD default, cl.1, cl.2⟩
-    | none => ⟨default, default, default⟩
-  | _, _, _, _ => ⟨default, default, default⟩
+    (sideOf (repCtx v.2.1 v.2.2 default r₀ [] (2 * q.table + q.rep))
+      ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * q.table + q.rep) []) fl.ps[2 * q.table + q.rep]!).getD default
+  | _, _, _, _ => default
+
+/-- **The side a `rec-open` piece reads off the statement and the messages**: at a statement that sets up and
+messages whose last one `rd` reads, with round 0's nodes and the later rounds' rows read back, rep `k = 2 table + rep`'s
+proof as `readRep` reads it from the `k`-th block of the later rounds' rows (at the default link coin: what it reads of
+the openings takes no coin, `sideOf_repCtx`), with the last message's `k`-th proof; the side is the table's `fast100`
+schedule (`schOf`, whatever the messages), and that proof's cap and Ligerito proof (`capLigAt`). -/
+def sideAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (q : OpenPiece) : OpenSide :=
+  ⟨schOf x q.table, (capLigAt rd x ms q).1, (capLigAt rd x ms q).2⟩
 
 namespace DecAt
 
@@ -215,10 +224,10 @@ theorem sideAt_eq (hi : i < D.sts.size) (r : Fin 2) (q : OpenPiece) (ht : q.tabl
   have hs := sideOf_repCtx (spec := v.2.1) hk2 c₁ r₀ cs.tail.dropLast
     ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * i + r.val) []) fl.ps[2 * i + r.val]!
   rw [sideOf, hrep, Option.map_some] at hs
-  unfold sideAt
+  unfold sideAt schOf capLigAt
   rw [hv, hfl, hr₀, hrss]
   dsimp only
-  rw [ht, hr, ← hs]
+  rw [ht, hr, ← hs, Option.getD_some]
   unfold DecAt.side DecAt.files
   dsimp only
   rw [hsts', hps]

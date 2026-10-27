@@ -880,7 +880,7 @@ noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kL
   inst := inst
   o := o
   col := L.col regs hg
-  placed := L.placement regs hg
+  placed := (L.placement regs hg).sat
   aliased := hal
 
 end Layout
