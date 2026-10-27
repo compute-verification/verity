@@ -162,7 +162,7 @@ Each ingress template's `ok` word and state are gates it computes (`NetworkCheck
 gate is in its instance's unit. Every template's argument is one input node's leaves (`NetworkCheck.Period.inputArg`),
 so the next bucket reads the state through its `sin` parameter, an input, and a checked gate is read only inside its
 instance. A constant checked gate is then one its unit commits, so a correct unit's committed value is the constant
-(`Prog.Correct`), and a faulty unit's checked gate reaches no other unit. -/
+(`Prog.Correct`), and a faulty proof block's checked gate reaches no other unit. -/
 def ChecksOwned (C : Prog) (P : Partition) (gs : List ℕ) : Prop :=
   ∀ g ∈ gs, ∃ r ∈ P.rus, g ∈ RU.gates r ∧ ∀ g' x, C.gates[g']? = some x → g ∈ x.reads → g' ∈ RU.gates r
 
@@ -182,9 +182,9 @@ def ScanDeclared {S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : Layout
 def OpensPass (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
   ∀ q ∈ ops, Cm.Opens H st.roots q = true
 
-/-- **The warden registers the window's rows** (named assumption; `trusted-nebius-host`, as `TapOpens`): the window
-is `T` rows, and every ingress gate of its steps has an opening in `ops`, whose value is that
-bit of the rows `ins`. -/
+/-- **The warden registers the window's rows** (named assumption; the trusted host, `trusted-host`, as `TapOpens`):
+the window is `T` rows, and every ingress gate of its steps has an opening in `ops`, whose value is that bit of the
+rows `ins`. -/
 def WardenRowsOpen (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) (ins : List (List Bool)) : Prop :=
   ins.length = s.window ∧
     ∀ t < s.window, (ins.getD t []).length = ((layOf s st).ingress t).length ∧
@@ -267,7 +267,7 @@ world, so not an assumption: the lock lists it under `shape.conjectures`, and `p
 on it while it is open. It is quantified over every statement, partition and `δ`, so no computation decides it;
 `verity/core/protocols/certifier/tests/test_network_certifier_scan_counts.py` tries to falsify it against the scan's
 reference: each term's field checks at their edges, and every window of rows over a cell alphabet at toy classes, from
-the empty state and from a faulty unit's forged states. -/
+the empty state and from a faulty proof block's forged states. -/
 def ScanCountsRequests (s : Schedule) (cls : ScanClass) (st : Stmt) (P : Partition) (δ : ℝ) : Prop :=
   (frameStream s '' ScanDeclared st.prog P st.design (layOf s st) s.window (checksOf s st).1 (checksOf s st).2 δ).encard ≤
     (scanBound s cls st P δ : ℕ∞)

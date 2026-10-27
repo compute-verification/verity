@@ -120,7 +120,7 @@ partition partitions, every unit outside `F` correct at the committed values `re
 gates committed and their units' own, and `ref` holding the openings `ops` wherever they open a gate, rows `ins` the
 openings hold at the ingress gates, every `ok` gate opened to 1 and every link's two ends opened to one value are in
 `ScanDeclared`. The advice is the trace's values; `F`'s committed gates are held at them, except a checked one, held at
-its opening. A checked gate of `F` is read only inside its faulty unit, whose gates `C` doesn't compute past its held
+its opening. A checked gate of `F` is read only inside its faulty proof block, whose gates `C` doesn't compute past its held
 ones (`valOver_agree`), so the rest of `C` runs as with the trace's values (`valOver_out`); and a checked gate outside
 `F` has the trace's value, its opening, a constant one included, since its unit commits it and is correct. -/
 theorem scanDeclared_of {S : ℕ} {C : Prog} {P : Partition} {d : Design} {lay : Layout 1 S} {k : ℕ} {ok : List ℕ}
