@@ -648,6 +648,7 @@
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
+      "linear": "TRN",
       "owns": [
         "benchmarks/rho/",
         "benchmarks/circuit_properties/"
