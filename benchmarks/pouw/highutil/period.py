@@ -16,16 +16,17 @@ seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the check
 
 **A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is
 the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
-in one sequence. Block b's operand-root receipt is H(registration, b, block b-1's value-root receipt), and its seeds coin
-opens after it. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
+in one sequence. Block b's operand-root receipt is H(registration, b, block b-2's value-root receipt; the registration's
+digest for b < 2), and its seeds coin opens after it, so blocks 0 and 1's open with the session, before the wall starts. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
 seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
 call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding; `prep --served`: the served
 form, T_1 .. T_{S-1} and O = (A + d_A)(B + d_B)^T mod 2^32, its seeds still the filler's streams) under a frame-v3-sha512 root,
 its leaf pos salted prf_salt(Ks, off + pos) under the Prover's own Ks, off = c leaves for its c-th call (dither.salts);
 block b's value-root receipt is H(registration, b, its
-roots). Its check coin opens after that receipt, with block b+1's seeds coin in the same round trip. The coin draws
+roots). Its check coin opens after that receipt, with block b+2's seeds coin in the same round trip, while block b+1 runs:
+the host enqueues each block behind the one before and never waits for the device between them. The coin draws
 Q W_b / W_reg proof blocks of b (`picks`): a call by its MACs, a cell uniformly, a segment by its length, so each MAC is
-equally likely. Each pick's tree paths come off the host copy of its call's tree before the next block overwrites it.
+equally likely. Each pick's tree paths come off the host copy of its call's tree before block b+2 overwrites it.
 
 **The verifier** (`verify_pick`), after the period: the prover's answer (`answer`: the opened rows recomputed from the
 operands and coins, their salts and paths, and A's and B's rows with their operand openings) against v31.py's
@@ -50,10 +51,12 @@ import hashlib
 import json
 import math
 import os
+import queue
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -464,9 +467,10 @@ class GpuDriver:
     on the GPU; step g's calls read block g mod NB (hu_point_b, no copy). One thread drives every Prover, as the binding
     requires: a step's calls are issued, then
     the step before's tree levels are queued for copy to page-locked host memory behind their commits (hu_levels_async,
-    before each layer's call two after is issued), so the host never waits on the device inside a block but in v31's own
-    wait for call c - 2's commit; the roots (each tree's last node) and the paths for the openings after the block's check
-    coin are read from those copies once the block is done."""
+    before each layer's call two after is issued), so the host never waits on the device, in a block or between blocks,
+    but in v31's own wait for call c - 2's commit (`issue`); the roots (each tree's last node) and the paths for the
+    openings after the block's check coin are read from those copies once the block is done (`done`, on another
+    thread), a copy a block, two in turn."""
 
     def __init__(self, lib: str, cfg: Path, row: int, rmax: int) -> None:
         import ctypes
@@ -515,11 +519,15 @@ class GpuDriver:
             algo = (ctypes.c_int * 4)()
             self.lt_algo(h, algo)
             self.lt_algos[linear] = dict(zip(("algo", "tile", "stages", "splitk"), algo))
-        # each layer's trees of one block, rmax steps, as native u64 words (8 a node), page-locked for hu_levels_async
-        self.levels = [torch.empty((rmax, 8 * (2 * w - 1)), dtype=torch.int64, pin_memory=True).numpy().view(np.uint64)
-                       for w, _, _ in self.geom]
+        # each layer's trees of a block, rmax steps, as native u64 words (8 a node), page-locked for hu_levels_async: two
+        # copies, so block b's are read for its paths while block b + 1 writes the other
+        self.levels = [[torch.empty((rmax, 8 * (2 * w - 1)), dtype=torch.int64, pin_memory=True).numpy().view(np.uint64)
+                        for w, _, _ in self.geom] for _ in range(2)]
+        stream = ctypes.CDLL(lib).hu_stream
+        stream.argtypes, stream.restype = [ctypes.c_void_p, ctypes.c_int], ctypes.c_void_p
+        self.streams = [torch.cuda.ExternalStream(stream(self.ps[0].h, w)) for w in (0, 1)]
         torch.cuda.synchronize()
-        self.keys: dict[tuple[int, int], tuple[bytes, int]] = {}
+        self.inflight: dict[int, dict] = {}
         self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {settings.ltw()}"]
         self._poll_clock()
 
@@ -544,7 +552,7 @@ class GpuDriver:
         return self.clock
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
-        torch, NL = self.torch, len(LAYERS)
+        torch = self.torch
         if steps < 1 or steps > self.rmax:
             raise ValueError(f"a block is 1 .. {self.rmax} steps")
         if arm.startswith("plain"):
@@ -566,19 +574,33 @@ class GpuDriver:
             e1.record()
             e1.synchronize()
             return {"gpu_ms": e0.elapsed_time(e1), "host_ms": 1e3 * (time.monotonic() - t0), "flags": 0, "sm_mhz": self._mhz()}
-        rec = seeds.read_bytes()
-        kind, at = _split_cheat(cheat)
-        self.keys = {}
+        self.issue(b, g0, steps, cheat, seeds.read_bytes())
+        r = self.done(b)
+        roots.write_bytes(r.pop("roots"))
+        return r
 
+    def issue(self, b: int, g0: int, steps: int, cheat: str, rec: bytes) -> None:
+        """Block b's calls, enqueued behind whatever the device is still running (block b - 1's last calls), with no
+        wait on the host but v31's own for call c - 2's commit. Its trees' levels go to copy b mod 2 of the page-locked
+        levels, which `done(b - 2)` and `paths(b - 2, ..)` must be finished with. Timing events on the compute stream
+        before the first call and on the commit stream after the last copy bound the block on the device."""
+        torch, NL = self.torch, len(LAYERS)
+        if steps < 1 or steps > self.rmax:
+            raise ValueError(f"a block is 1 .. {self.rmax} steps")
+        kind, at = _split_cheat(cheat)
         bad = [kind if kind != "none" and at in (None, li) else "none" for li in range(NL)]
+        lv, keys = self.levels[b & 1], {}
+        if b == 0:
+            self.inflight = {}
 
         def collect(s: int, li: int, c: int) -> None:
             p = self.ps[li]
-            self.lib.check(self.levels_async(p.h, c, self.levels[li][s].ctypes.data))
-            self.keys[(s, li)] = (p.ks, p.calls[c]["off"])
+            self.lib.check(self.levels_async(p.h, c, lv[li][s].ctypes.data))
+            keys[(s, li)] = (p.ks, p.calls[c]["off"])
 
-        torch.cuda.synchronize()
         t0 = time.monotonic()
+        start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        start.record(self.streams[0])
         prev: list[tuple[int, int, int]] = []
         for s in range(steps):
             t = (g0 + s) % NB
@@ -592,25 +614,38 @@ class GpuDriver:
             prev = cur
         for x in prev:
             collect(*x)
-        for p in self.ps:
-            p.sync()
-        ms = 1e3 * (time.monotonic() - t0)
-        roots.write_bytes(b"".join(self.levels[li][s][-8:].byteswap().tobytes() for s in range(steps) for li in range(NL)))
-        return {"gpu_ms": ms, "host_ms": ms, "flags": 0, "sm_mhz": self._mhz()}
+        end.record(self.streams[1])
+        self.inflight[b] = {"start": start, "end": end, "steps": steps, "keys": keys,
+                            "host_ms": 1e3 * (time.monotonic() - t0), "sm_mhz": self._mhz()}
+
+    def done(self, b: int) -> dict:
+        """Block b once the device has finished it (any thread but the one driving the Provers may wait here): its
+        roots, and its device time, from the later of its first call's start and block b - 1's end to its end, so
+        that time the device spent with nothing of this period's to run is the host's (`idle_before_ms`)."""
+        x = self.inflight[b]
+        x["end"].synchronize()
+        span = x["start"].elapsed_time(x["end"])
+        prev = self.inflight.get(b - 1) if b else None
+        since = prev["end"].elapsed_time(x["end"]) if prev else span
+        self.inflight.pop(b - 2, None)
+        lv = self.levels[b & 1]
+        roots = b"".join(lv[li][s][-8:].byteswap().tobytes() for s in range(x["steps"]) for li in range(len(LAYERS)))
+        return {"gpu_ms": min(span, since), "host_ms": x["host_ms"], "idle_before_ms": max(0.0, since - span), "flags": 0,
+                "sm_mhz": x["sm_mhz"], "roots": roots}
 
     def key(self, b: int, step: int, layer: int) -> tuple[bytes, int]:
-        return self.keys[(step, layer)]
+        return self.inflight[b]["keys"][(step, layer)]
 
     def paths(self, b: int, picks_file: Path, out: Path) -> None:
         recs = np.frombuffer(picks_file.read_bytes(), dtype="<u4").reshape(-1, 3)
         with open(out, "wb") as f:
             for s, li, pos in recs.tolist():
-                f.write(self.path(li, s, pos))
+                f.write(self.path(li, s, pos, b))
 
-    def path(self, li: int, s: int, pos: int) -> bytes:
-        """Leaf pos's siblings in step s's tree of layer li, leaf level first (64 big-endian bytes a node)."""
+    def path(self, li: int, s: int, pos: int, b: int = 0) -> bytes:
+        """Leaf pos's siblings in block b's step s's tree of layer li, leaf level first (64 big-endian bytes a node)."""
         width, depth, _ = self.geom[li]
-        lv = self.levels[li][s]
+        lv = self.levels[b & 1][li][s]
         return b"".join(lv[8 * x:8 * x + 8].byteswap().tobytes() for x in
                         (2 * width - 2 * (width >> d) + ((pos >> d) ^ 1) for d in range(depth)))
 
@@ -639,8 +674,9 @@ class RefDriver:
         self.cfg, self.row = cfg, row
         self.ks = [os.urandom(64) if secret is None else H("verity/highutil/ref-ks/v1", secret, u64(li)) for li in range(len(LAYERS))]
         self.calls = [0] * len(LAYERS)
-        self.levels: dict[tuple[int, int], list] = {}
-        self.keys: dict[tuple[int, int], tuple[bytes, int]] = {}
+        self.levels: dict[tuple[int, int, int], list] = {}
+        self.keys: dict[tuple[int, int, int], tuple[bytes, int]] = {}
+        self.roots: dict[int, bytes] = {}
         self.ready = ["ready", "ref"]
 
     def block_of(self, step: int) -> int:
@@ -649,9 +685,19 @@ class RefDriver:
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
         if arm.startswith("plain"):
             return {"gpu_ms": 0.0, "host_ms": 0.0, "flags": 0, "sm_mhz": 0}
-        NL, rec = len(LAYERS), seeds.read_bytes()
+        self.issue(b, g0, steps, cheat, seeds.read_bytes())
+        r = self.done(b)
+        roots.write_bytes(r.pop("roots"))
+        return r
+
+    def issue(self, b: int, g0: int, steps: int, cheat: str, rec: bytes) -> None:
+        NL = len(LAYERS)
         kind, at = _split_cheat(cheat)
-        self.levels, self.keys, out = {}, {}, []
+        if b == 0:
+            self.levels, self.keys, self.roots = {}, {}, {}
+        for x in [x for x in self.levels if x[0] <= b - 2]:
+            del self.levels[x], self.keys[x]
+        out = []
         for s in range(steps):
             for li, (_, n, k) in enumerate(LAYERS):
                 f = shape(n, k, self.row)
@@ -663,19 +709,21 @@ class RefDriver:
                 key = (self.ks[li], self.calls[li] * f.leaves)
                 self.calls[li] += 1
                 cm = v31.fill_commit(f, v31.fill_buffer(f, T, O), *key)
-                self.levels[(s, li)], self.keys[(s, li)] = cm.levels, key
+                self.levels[(b, s, li)], self.keys[(b, s, li)] = cm.levels, key
                 out.append(cm.root)
-        roots.write_bytes(b"".join(out))
-        return {"gpu_ms": 0.0, "host_ms": 0.0, "flags": 0, "sm_mhz": 0}
+        self.roots[b] = b"".join(out)
+
+    def done(self, b: int) -> dict:
+        return {"gpu_ms": 0.0, "host_ms": 0.0, "idle_before_ms": 0.0, "flags": 0, "sm_mhz": 0, "roots": self.roots.pop(b)}
 
     def key(self, b: int, step: int, layer: int) -> tuple[bytes, int]:
-        return self.keys[(step, layer)]
+        return self.keys[(b, step, layer)]
 
     def paths(self, b: int, picks_file: Path, out: Path) -> None:
         recs = np.frombuffer(picks_file.read_bytes(), dtype="<u4").reshape(-1, 3)
         with open(out, "wb") as f:
             for s, li, pos in recs.tolist():
-                lv = self.levels[(s, li)]
+                lv = self.levels[(b, s, li)]
                 f.write(b"".join(lv[d][(pos >> d) ^ 1] for d in range(len(lv) - 1)))
 
     def close(self) -> None:
@@ -773,9 +821,14 @@ class Period:
         t_open = time.monotonic() - t_s
         openings, blocks, all_picks, roots_of, seeds_of, keys_of = [], [], [], {}, {}, {}
         per_block_q = plan.q // plan.blocks
-        prev = reg_digest
-        val = {}
-        t0 = time.monotonic()
+        val = {-2: reg_digest, -1: reg_digest}
+
+        def receipt(b: int) -> bytes:
+            return H("verity/highutil/operand-receipt/v2", reg_digest, u64(b), val[b - 2], u64(plan.steps * step_macs()))
+
+        def seeded(b: int, coin: bytes) -> bytes:
+            seeds_of[b] = call_seeds(coin, pid, b, receipt(b), plan.steps)
+            return b"".join(seeds_of[b])
 
         def checked(b: int, coin: bytes) -> None:
             ps = picks(coin, pid, b, val[b], plan.steps, per_block_q, self.row)
@@ -799,35 +852,66 @@ class Period:
                     off += 64 * depth
                 all_picks.append((p, pos, paths))
 
+        # Block b's seeds open after block b - 2's value receipt, so the first two open with the session, before the wall
+        # starts, and block b + 2's open beside block b + 1 with block b's check coin: the thread driving the Provers
+        # issues block after block, and this one waits for each block's end, reads its roots, opens its coins and
+        # builds its paths (from its copy of the levels, which block b + 2 reuses once its seeds are out)
+        seeds_q: queue.Queue = queue.Queue()
+        issued: queue.Queue = queue.Queue()
+        t_last, failed = [0.0], []
+        t_a = time.monotonic()
         try:
-            for b in range(plan.blocks):
-                op = H("verity/highutil/operand-receipt/v1", reg_digest, u64(b), prev, u64(plan.steps * step_macs()))
-                if b == 0:
-                    got = [client.open("seeds", 0, op)]
-                else:
-                    got = client.open_many([("check", b - 1, val[b - 1]), ("seeds", b, op)])
-                    checked(b - 1, got[0].coin)
-                openings += got
-                sc = got[-1]
-                sd = call_seeds(sc.coin, pid, b, op, plan.steps)
-                seeds_of[b] = sd
-                g0 = self.g
-                rec = b"".join(sd)
-                sf, rf = self.work / f"seeds-{b}.bin", self.work / f"roots-{b}.bin"
-                sf.write_bytes(rec)
-                r = self.drv.block(b, g0, plan.steps, "proto", cheat, sf, rf)
-                self.g += plan.steps
-                raw = rf.read_bytes()
-                roots_of[b] = [raw[64 * x:64 * x + 64] for x in range(plan.steps * NL)]
-                val[b] = prev = H("verity/highutil/value-receipt/v1", reg_digest, u64(b), raw)
-                r["t_done_s"] = time.monotonic() - t0
-                blocks.append(r)
-            t_last = time.monotonic() - t0
-            last = client.open("check", plan.blocks - 1, val[plan.blocks - 1])
-            openings.append(last)
-            checked(plan.blocks - 1, last.coin)
+            got = client.open_many([("seeds", b, receipt(b)) for b in range(min(2, plan.blocks))])
+            openings += got
+            for b, o in enumerate(got):
+                seeds_q.put(seeded(b, o.coin))
+            t_ahead = time.monotonic() - t_a
+
+            def coin_side() -> None:
+                try:
+                    for b in range(plan.blocks):
+                        if issued.get() is None:
+                            return
+                        r = self.drv.done(b)
+                        raw = r.pop("roots")
+                        roots_of[b] = [raw[64 * x:64 * x + 64] for x in range(plan.steps * NL)]
+                        val[b] = H("verity/highutil/value-receipt/v1", reg_digest, u64(b), raw)
+                        r["t_done_s"] = time.monotonic() - t0
+                        blocks.append(r)
+                        if b == plan.blocks - 1:
+                            t_last[0] = r["t_done_s"]
+                        ask = [("check", b, val[b])] + ([("seeds", b + 2, receipt(b + 2))] if b + 2 < plan.blocks else [])
+                        got = client.open_many(ask) if len(ask) > 1 else [client.open(*ask[0])]
+                        openings.extend(got)
+                        checked(b, got[0].coin)
+                        if len(got) > 1:
+                            seeds_q.put(seeded(b + 2, got[1].coin))
+                except BaseException as e:  # noqa: BLE001 (re-raised on the driving thread)
+                    failed.append(e)
+                    seeds_q.put(None)
+
+            switch = sys.getswitchinterval()
+            sys.setswitchinterval(1e-4)   # the driving thread back from a wait in well under a call's time
+            side = threading.Thread(target=coin_side, daemon=True)
+            t0 = time.monotonic()
+            side.start()
+            try:
+                for b in range(plan.blocks):
+                    rec = seeds_q.get()
+                    if rec is None:
+                        break
+                    self.drv.issue(b, self.g, plan.steps, cheat, rec)
+                    self.g += plan.steps
+                    issued.put(b)
+            finally:
+                issued.put(None)
+                side.join()
+                sys.setswitchinterval(switch)
+            if failed:
+                raise failed[0]
         finally:
             client.close()
+        t_last = t_last[0]
         ev = self.coins.evidence(session, reg_digest.hex(), openings, self.work / f"challenger-{pid}")
         # the verifier: its own seeds from the coins it was given, the operand roots it registered
         jobs = []
@@ -866,11 +950,11 @@ class Period:
                 + ("" if ev.get("trusted") and not ev.get("bad_openings") else f"; coins: {ev.get('error') or ev.get('bad_openings')}"))
         return {"period": pid, "arm": "proto", "cheat": cheat, "registration": reg, "registration_digest": reg_digest.hex(),
                 "blocks": blocks, "steps": plan.blocks * plan.steps, "wall_s": t_last, "session_open_s": t_open,
+                "seeds_ahead_s": t_ahead,
                 "verify_s": t_verify, "macs": macs, "credited_macs": macs if ok else 0, "accepted": bool(ok), "q": len(jobs),
                 "eps_skip": eps_skip(len(jobs)), "delta": DELTA, "eta": ETA, "failures": [f"{all_picks[i][0]}: {w}" for i, w in fails[:8]],
                 "failed": len(fails), "coins": ev, "verdict": line,
-                "gaps_s": [blocks[b]["t_done_s"] - blocks[b - 1]["t_done_s"] - blocks[b]["host_ms"] / 1e3
-                           for b in range(1, len(blocks))]}
+                "gaps_s": [blocks[b]["idle_before_ms"] / 1e3 for b in range(1, len(blocks))]}
 
 
 def cmd_run(a: argparse.Namespace) -> int:

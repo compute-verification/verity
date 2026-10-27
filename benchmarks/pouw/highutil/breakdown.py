@@ -9,8 +9,9 @@ needs to price the protocol's own work at the public best's cost and recompute Î
   times its busy time; idle is an upper bound where a kernel wasn't profiled); the card's other pipes weren't measured;
 - `clock`: the blocks' SM clocks (NVML at each block's end) against the card's ceiling, and nvidia-smi's clocks.gr,
   clocks.sm and power.draw over the period's window;
-- `host`: the period's wall time off the GPU between blocks (the coins' round trips, the host's turn), and outside the
-  period's wall the challenger session's opening and the verifier's checks;
+- `host`: the period's wall time off the GPU (before its first block, after its last, and any time the GPU waited
+  between blocks for the host), and outside the period's wall the challenger session's opening with the first two
+  blocks' seeds and the verifier's checks;
 - `work`: each call's counted work a step from its shape (v31.Fill): MACs, leaves and their bytes, salts, tree nodes,
   dither bits and formed operand bytes, which the public best's rates price.
 
@@ -264,6 +265,7 @@ def period_breakdown(r: dict, prof: dict, prof_steps: int, shares: dict[str, flo
            "host": {"between_blocks_s": r["wall_s"] - gpu_s}}
     if r["arm"] == "proto":
         out["host"].update(gaps_s=r.get("gaps_s"), outside_the_wall={"session_open_s": r.get("session_open_s"),
+                                                                     "seeds_ahead_s": r.get("seeds_ahead_s"),
                                                                      "verify_s": r.get("verify_s")})
     return out
 

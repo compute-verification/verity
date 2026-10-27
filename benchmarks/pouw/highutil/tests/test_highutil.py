@@ -6,6 +6,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import threading
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -353,18 +355,66 @@ def test_a_served_period_commits_o_and_is_accepted_and_a_skipping_prover_refused
 
 def test_a_tampered_root_is_refused(small, monkeypatch):
     """A root the GPU didn't commit (here the first call's, altered after the block) fails every pick of that call."""
-    real = small.drv.block
+    real = small.drv.done
 
-    def block(b, g0, steps, arm, cheat, seeds, roots):
-        got = real(b, g0, steps, arm, cheat, seeds, roots)
-        raw = bytearray(Path(roots).read_bytes())
-        raw[0] ^= 1
-        Path(roots).write_bytes(bytes(raw))
+    def done(b):
+        got = real(b)
+        got["roots"] = bytes([got["roots"][0] ^ 1]) + got["roots"][1:]
         return got
-    monkeypatch.setattr(small.drv, "block", block)
+    monkeypatch.setattr(small.drv, "done", done)
     r = small.proto("t-root", P.Plan(1, 1, 24))
     first = [p for p in r["failures"] if "layer=0" in p]
     assert not r["accepted"] and first
+
+
+class _Overlapped(P.RefDriver):
+    """A driver whose block b isn't done until block b + 1 is issued: a period that waited for a block before issuing the
+    next would never finish. It records what was done when each block was issued."""
+
+    def __init__(self, *a) -> None:
+        super().__init__(*a)
+        self.blocks, self.finished, self.seen = 0, [], {}
+        self.issued = defaultdict(threading.Event)
+
+    def issue(self, b, g0, steps, cheat, rec):
+        self.seen[b] = set(self.finished)
+        super().issue(b, g0, steps, cheat, rec)
+        self.issued[b].set()
+
+    def done(self, b):
+        self.issued[min(b + 1, self.blocks - 1)].wait()
+        got = super().done(b)
+        self.finished.append(b)
+        return got
+
+
+def test_each_block_is_issued_before_the_last_is_waited_for_and_seeds_open_two_blocks_ahead(small, monkeypatch):
+    """The host never waits for the device between blocks: block b + 1 is issued while block b is still running, and its
+    seeds were opened beside block b - 1's check coin (blocks 0 and 1's with the session), so a block's seeds never wait
+    on the block before it. Block b + 2 is issued only once block b's paths are read, since it reuses b's copy of the
+    levels."""
+    drv = _Overlapped(small.cfg, small.row, b"\x07" * 64)
+    drv.blocks = 4
+    log = []
+    real = _Coins.connect
+
+    def connect(self, address, secret):
+        c = real(self, address, secret)
+        opened = c.open
+
+        def logged(label, index, after):
+            log.append((label, index))
+            return opened(label, index, after)
+        c.open = logged
+        return c
+    monkeypatch.setattr(small, "drv", drv)
+    monkeypatch.setattr(_Coins, "connect", connect)
+    r = small.proto("t-ahead", P.Plan(4, 1, 24))
+    assert r["accepted"], r["verdict"]
+    assert log == [("seeds", 0), ("seeds", 1), ("check", 0), ("seeds", 2), ("check", 1), ("seeds", 3), ("check", 2),
+                   ("check", 3)]
+    assert all(b - 2 in drv.seen[b] for b in range(2, 4))
+    assert r["gaps_s"] == [0.0] * 3 and r["seeds_ahead_s"] >= 0
 
 
 class _FirstBlockOnly(P.RefDriver):

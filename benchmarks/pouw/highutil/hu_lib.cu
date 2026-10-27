@@ -36,6 +36,13 @@ int hu_levels_async(void* h, uint64_t c, void* dst) {
   return 0;
 }
 
+// The context's compute (which 0) or commit (1) stream, for the caller's timing events: every call's compute is on the
+// first, and its commit and hu_levels_async's copies are on the second, after it.
+void* hu_stream(void* h, int which) {
+  Fill& f = ctx_of(h)->f;
+  return which ? f.s1 : f.s0;
+}
+
 // The plain arm's cuBLASLt baseline: D (m x n int32, row-major) = A (m x k int8) B^T (B n x k), through v31.cu's own
 // lt_setup (autotuned over the heuristic's candidates at these pointers, on stream st) and lt_run, the call a V31_LTW
 // call makes for its X W'^T. A later run may take other pointers of the same shapes.
