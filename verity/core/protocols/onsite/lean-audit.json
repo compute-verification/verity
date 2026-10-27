@@ -1,5 +1,5 @@
 {
- "roots": ["CoreOnsite"],
+ "roots": ["CoreOnsite", "CoreToy"],
  "exempt": {
   "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
@@ -18,6 +18,17 @@
    ],
    "except": [],
    "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "CoreToy": {
+   "imports": [
+    "CoreComposition.Blobs",
+    "CoreComposition.Cases",
+    "NciCheck.Protocol",
+    "NetworkCheck.Period",
+    "SampledProofs.OneStageZk"
+   ],
+   "except": [],
+   "why": "the toy deployment's verifier is code: the core interface, C-Flock's Lean and its two components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

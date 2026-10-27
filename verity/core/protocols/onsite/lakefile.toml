@@ -3,7 +3,7 @@
 # period, `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
 # drives. Code: no Mathlib.
 name = "core_onsite"
-defaultTargets = ["CoreOnsite", "onsite"]
+defaultTargets = ["CoreOnsite", "CoreToy", "onsite"]
 
 [leanOptions]
 autoImplicit = false
@@ -58,6 +58,11 @@ path = "../../devices/memory_challenger/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"
+
+# The toy deployment (`verity/toy/v0`, `integrations/torch_loop`): sampled proofs and the network certifier over NCI's
+# registration check.
+[[lean_lib]]
+name = "CoreToy"
 
 [[lean_exe]]
 name = "onsite"
