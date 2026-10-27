@@ -26,18 +26,18 @@ the `_hm96` forms state (`Binding/E2E.lean`).
   units' rows are the program's (`Prog.rows`), and `ProgPlaces.placed` says the table's statement holds them.
 
 **The composition.** It composes `flock_batched_count_public` and `flock_batched_drawn_public`, which are the compiled
-audit, the link theorem and knowledge soundness, all on `main`. Each piece not yet proved is a named hypothesis. The
-checklist `assumption-notes/e2e-checklist.md` gives each one's owner and how it is discharged:
-* `hExec`: the executable verifier's acceptance implies the model's. This is the refinement lane's theorem;
+audit, the link theorem and knowledge soundness. Each piece not yet proved is a named hypothesis (`ASSUMPTIONS.md`,
+The headline, gives each one's kind):
+* `hExec`: the executable verifier's acceptance implies the model's, which the verifier's refinement theorem gives;
 * `dp : DerivedPlaces`: each drawn unit's place in its table, for the rows the verifier derives. For the program's
   circuit it is `ProgPlaces`: `placed`, the table's statement holds the unit's rows (`placement_of_setupH` for the rows
   `Rows.ofNet` reads off setupH's net, and W6, that those are the program's), and `aliased` (`Layout.Aliased`);
 * `hConst : ConstCols`: at each drawn unit's place, only the constant's column sits on a gate of `ones`. No unit's input
-  column reads a constant, a fact of the circuit's wiring (S4). With it the committed values carry 1 on `ones`: the
+  column reads a constant, a fact of the circuit's wiring. With it the committed values carry 1 on `ones`: the
   committed transcript is public there (`Xpub`, `FlockPublic.lean`), since every satisfying message decodes the constant
   to 1;
 * `hZero : ZeroCols`: every column on a gate of `zeros`, the statement's zero, carries 0 in every satisfying witness.
-  These are the forced-zero rows, which the verifier's Δ copies to the slot inputs that read the zero (1d, 1e, S4). The
+  These are the forced-zero rows, which the verifier's Δ copies to the slot inputs that read the zero. The
   committed transcript is 0 there, so the profile is about the zero padding at 0. This is the zero's binding;
 * `vb : ValueBinding`: the binding of wires to registered commit strings, already named on `main`.
 -/
@@ -76,7 +76,7 @@ def RowsL1 {CB : Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → F
 /-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the model's acceptance), the
 probability that at least `K` units of the committed circuit are wrong at the committed values is at most
 `miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
-(`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`assumption-notes/e2e-checklist.md`);
+(`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb`;
 `SHA512CRExpected` for `σ`'s link finders (`hCR`) is the assumption of record. -/
 theorem flock_e2e_count
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)

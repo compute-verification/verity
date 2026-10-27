@@ -1,7 +1,7 @@
 # Flock interactive soundness: what the theorems assume
 
 For the expert reviewer and for Table 1. This file states every named assumption and every named hypothesis the Flock
-soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
+soundness theorems take, each in full; the detail behind them is in `assumption-notes/`. What is proved is in `README.md`
 and, for the audit layer, `Audit/README.md`. `DESIGN.md` holds the derivations.
 
 **The guarantee of record** for the one-stage `--zk` audit is `Flock.Guarantees.EndToEnd`
@@ -13,7 +13,7 @@ forms.
 **The end-to-end skeleton**: `flock_e2e_count` and `flock_e2e_drawn`, in `E2E.lean`, and
 `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` on the circuit of the statement's rows (`Prog.circuit`). They state the
 chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a named
-hypothesis, and `assumption-notes/e2e-checklist.md` lists them with their owners. The circuit is the one the statement's rows
+hypothesis, and the headline's footprint (below) lists them with their kinds. The circuit is the one the statement's rows
 make, chosen on the untrusted side, and the lowering does no optimizing (Daniel, Sep 30). So no hypothesis relates the
 rows to another circuit: what a correct unit computes is its certificate's (The circuit and the certificate, below). One
 hypothesis carries what the statement doesn't say yet: that the acceptance is the executable verifier's (`hExec`; in the

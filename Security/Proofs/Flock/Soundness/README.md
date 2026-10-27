@@ -155,7 +155,7 @@ link term per audit.
   `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, drawn units' reads are
   checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).
 
-### 1.4 Status
+### 1.4 The pieces, by stage
 
 | Piece | a16z stage | Lean | Status |
 |---|---|---|---|
@@ -182,9 +182,7 @@ link term per audit.
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`; the definitions in `Definitions/Flock/Compiled.lean` and `Definitions/Flock/Game/Lock.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
-| The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; Theorem GK over a model of the session's views, `gk_simulate_hm96` (`ZK/GK/`); the link to the code remains |
-| Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and sampling design, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
@@ -499,16 +497,3 @@ The weights are committed once and every later proof opens that root. The analys
   a session, not from concurrency.
 - **Statement leakage** accumulates over sessions. **Policy needed:** which predicates are public, and how many.
 - **Linkability** is intended, and it needs knowledge soundness (§1.3).
-
-## 5. What remains (by a16z stage)
-
-1. **Knowledge soundness, the rest** (§1.3). The table theorems, the link theorem and `registered_weights` are proved.
-   Remaining: the canonical `hm96` values, and discharging what the rows' value binding (`Binding/`) takes:
-   `HmRowComputes` (phase 2i) and the layout's facts.
-2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
-   model accepts.
-3. **Stages 1e and 3, zero knowledge and the reference prover** (§3): Lemmas A, B and C are proved for the model, and
-   Goldreich–Kahan simulation over a model of one session's views; that model's instance from a Lean reference prover
-   tied to `flock-circuit --zk` remains.
-4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
-   one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".

@@ -156,8 +156,6 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
     `Pr[accepted ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)` (`table_knowledge_sound_joint_tight`). Rerun list by rerun
     list, `ε·1[fails] ≤ ε_c⁻ + mass`, so no Markov step enters. At `K = √(N₀/(e·Adv₀))` this is
     `ε_c⁻ + t·2^-244.7`, which is `2^-164.7` at `t = 2^80` above `ε_c⁻`.
-  - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of
-    `t·2^-233.4/(ε − ε_c)` and `κ = ε_c + t·2^-231.4`.
 - **Not knowing ε.** For the audit, the extractor is an analysis device, and `K` may depend on `ε` and `Adv₀`. An
   efficient extractor, as recursion needs, doubles `K` until a satisfying witness is found, which is a decidable stop.
   An exponential tail comes from disjoint blocks: the unseen set is the intersection of the blocks' unseen sets, so `r`
@@ -206,7 +204,7 @@ strict time.
 - **Expected-time collision resistance, of record.**
   - **The assumption** (A2, in the expected-time sense of Chiesa–Dall'Agnol–Guan–Spooner–Yogev, ePrint 2024/1434): an
     algorithm whose *expected* number of SHA-512 evaluations is $T$ finds a collision with probability at most
-    $T/2^{256}$. It read $T/2^{256.5}$ until the correction of Sep 27 (the proximity-gap scoping lane).
+    $T/2^{256}$.
   - **Why $2^{256}$.** For a random oracle with $N=2^{512}$ outputs the sharp bound is $E[Q]/E[\tau_N]$, with $\tau_N$
     the number of distinct inputs hashed until the first collision and $E[\tau_N]=\sqrt{\pi N/2}+2/3+o(1)\approx2^{256.33}$.
     Hashing until the first collision attains it, with probability 1 at cost $E[\tau_N]$, so $2^{256}$ holds for a random
@@ -251,10 +249,8 @@ strict time.
   $2^{256}(t/q+q^2/2^{513})$, and $q^3=t\cdot2^{512}$ balances the two, so $2(1+k)t/2^{256}$ becomes
   $3(1+k)t^{2/3}/2^{512/3}$: $2^{-70.2}$ at $t=2^{80}$ for audit B, against the record's $2^{-129.4}$. Every e2e
   theorem of the non-ZK session and the headline are restated under it (`ASSUMPTIONS.md`); none is about `--zk`,
-  whose session model receives `final_c'` before the inner proof, as main's verifier does not until #793. The earlier
-  analysis balanced the knowledge term's $N_0/(eK)$ against the finder's cost instead, which left a square root (a
-  first estimate of $2^{-65.3}$ at $t=2^{80}$, audit B). Improving substantially on the strict-time loss would improve
-  the analysis of Schnorr's protocol (CDGSY24).
+  whose session model receives `final_c'` before the inner proof. Improving substantially on the strict-time loss would
+  improve the analysis of Schnorr's protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
   openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
   global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
@@ -343,13 +339,6 @@ We follow the staging and vocabulary, and differ where the setting does.
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every component inside it verified. |
 | **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
 | **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§6). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
-
-**Levels.** Our formal-verification levels (the Lean verifier study) map onto the stages as follows:
-
-- level 4a is Stage 1a–1c (interactive);
-- level 4b, which completes Stage 1 by proving A1, is done (Sep 27, from DKT26 in ArkLib);
-- level 3 is Stage 2, plus the lowering theorem of 1d;
-- levels 1–2 are the implementation that Stage 2 is about.
 
 **Stating soundness.** a16z's concrete levels are 100 bits as the bare minimum and 128 bits as standard practice. We
 target 2^-128, and state the number the way the stages suggest:
@@ -541,8 +530,7 @@ If real concurrency is ever needed:
 
 ## 12. The audit layer: the integrity profile
 
-`docs/audit-protocols.md` §4 is the plan and `Audit/README.md` the list of theorems. The full rationale is in
-`note:audit-lean/20260927T0736Z-finding-audit-layer-design`. The points a reviewer needs:
+`Audit/README.md` is the list of theorems. The points a reviewer needs:
 
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
