@@ -577,9 +577,9 @@ theorem record_ofServer (S : ServerBlocks) (s : Strategy S.game) (t : ℕ) :
     congr 1
     funext g
     unfold XlayerZC XplurZC
-    rw [(ofServer S).Xcar_free s t _ _ fun ⟨x, _⟩ => x.elim0]
   unfold CarriedBlocks.record SamplingBlock.record
   rw [hw]
+  rfl
 
 /-- **With no carried leaf, the run is `ServerBlocks`'**, so `IntegrityBlockCarried` there is `IntegrityBlock`. -/
 theorem run_ofServer (S : ServerBlocks) (s : Strategy S.game) : (ofServer S).run s = S.run s := by
