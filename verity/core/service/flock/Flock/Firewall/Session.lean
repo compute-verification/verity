@@ -755,6 +755,38 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
         try ch.write s!"err a request `{first.trim}`\n".toUTF8 catch _ => pure ()
       try (c.shutdown).block catch _ => pure ()
 
+/-- The number of CPUs in a `Cpus_allowed_list` (`0-3,8`), `none` where it is not one. -/
+def cpuCount (list : String) : Option Nat :=
+  (list.splitOn ",").foldl (fun acc r => do
+    let n ← acc
+    match r.trimAscii.toString.splitOn "-" with
+    | [a] => do let _ ← a.toNat?; pure (n + 1)
+    | [a, b] => do
+      let a ← a.toNat?
+      let b ← b.toNat?
+      if b < a then none else pure (n + (b + 1 - a))
+    | _ => none) (some 0)
+
+/-- The CPUs this process may run on (`/proc/self/status`), `none` where that can't be read. -/
+def cpusAllowed : IO (Option Nat) := do
+  let s ← try IO.FS.readFile "/proc/self/status" catch _ => return none
+  let some l := (s.splitOn "\n").find? (·.startsWith "Cpus_allowed_list:") | return none
+  return cpuCount (l.drop "Cpus_allowed_list:".length).toString
+
+/-- Starts `n` workers in Lean's task pool, each held until all have started. The pool gains a worker only when a task is
+queued with none idle, so a burst queued at once (a parse's pieces, an opening's columns) otherwise runs on the few it
+had. -/
+def warmPool (n : Nat) : IO Unit := do
+  let go : IO.Promise Unit ← IO.Promise.new
+  let started ← (List.range n).mapM fun _ => do
+    let s : IO.Promise Unit ← IO.Promise.new
+    let _ ← IO.asTask do
+      s.resolve ()
+      IO.wait go.result!
+    pure s
+  for s in started do IO.wait s.result!
+  go.resolve ()
+
 /-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the statement
 flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
 for sessions and on a port the system picks for the reps' frames, the tables' level 0 and the sessions' finish, prints `LISTENING 127.0.0.1:PORT` and then
@@ -764,8 +796,10 @@ ends, every level 0 drawn for it is freed (`Level0.Registry.close`), and where t
 `level 0: session SID ended; K drawn for it freed, N kept`. It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
 and prints the openings after the session stream's at it (`planOf`), `ok N` and a line `STREAM COINS` each, or
-`refused WHY`. `run` is the same loop with each session held by a hold `mkHold` makes for it (`core-firewall session`). -/
+`refused WHY`. `run` is the same loop with each session held by a hold `mkHold` makes for it (`core-firewall session`).
+It first starts a pool worker for each CPU it may run on (`warmPool`). -/
 def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO UInt32 := do
+  warmPool ((← cpusAllowed).getD 8)
   let S ← match ← Hello.Setup.ofArgs usage args with
     | .ok S => pure S
     | .error e => IO.eprintln e; return 2
