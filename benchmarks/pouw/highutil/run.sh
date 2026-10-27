@@ -30,7 +30,7 @@
 # revision, fetched from the hub into the run's scratch). The H200 (vy-dc-h200-2): GENCODE=arch=compute_90a,code=sm_90a
 # NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with #5202's V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
 # (benchmarks/hash/dither/pin.sh). SERVED=1: prep --served, every call in its served form (T_1 .. T_{S-1} and O committed; with
-# V31_GEMM=1 V31_RP=5 the GEMM hashes O's rows on warps of its own, #5465).
+# V31_GEMM=1 V31_RP=5 the GEMM hashes O's rows on warps of its own).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
