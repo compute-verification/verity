@@ -1,4 +1,4 @@
-"""torch 2.14's training-step kernels on CUDA as Boolean Definitions (CIR-117): the transpose a transposed GEMM reads, and the
+"""torch 2.14's training-step kernels on CUDA as Boolean Definitions: the transpose a transposed GEMM reads, and the
 backward of HF `LlamaRMSNorm` and of SiLU, each as PyTorch eager computes it in bf16 with f32 opmath.
 
     Transpose_v1{R, C}                      (x: Array<R, Array<C, U16>>) -> Array<C, Array<R, U16>>
@@ -38,16 +38,16 @@ the M tokens to the weight's shape (`sum_to_size`): `Reduce.cuh` over the slow d
 a thread, a 32 x 4 block), each column summed by the block's four warps and, from 1,024 tokens, by `column_ctas` CTAs, whose
 partials the last CTA adds (`column_sum`). That count is ceil(M / 64) (64 at M = 4,096) while it is below the device's grid
 over CTAs a column; past it, sm_120's 188 multiprocessors set it, and the Definition refuses. On sm_120 the profiler shows
-grids (5, 1) at 256 tokens and (5, 64) at 4,096 for H = 576 (r20261027-031630-ce8e).
+grids (5, 1) at 256 tokens and (5, 64) at 4,096 for H = 576.
 
 `SiluTorch_v1` is `silu_kernel`'s ``x / (1 + ::exp(-x))`` in f32, then bf16; `SiluTorchBackward_v1` is `silu_backward_kernel`'s
 ``s = 1 / (1 + exp(-x))``, ``dy * s * (1 + x * (1 - s))`` (the kernel autograd runs when the backward doesn't build a graph).
 ``exp`` is CUDA's ``expf`` (libdevice ``__nv_expf``, `boolean_moe`'s `NvExpfIn_v1` and `NvExpfOut_v1` around its
 ``ex2.approx.ftz.f32``), and EX2 is a static: the Definition of MUFU.EX2, on sm_120 `mufu.MufuEx2Ftz_v2`, which equals that
-unit on every input kernels' sm_120 table read (r20261027-024703-41d4). The divides are ``div.rn.f32``. CONTRACT is the one
+unit on every input kernels' sm_120 table read. The divides are ``div.rn.f32``. CONTRACT is the one
 contraction the source leaves to nvcc: 1 reads ``1 + x * (1 - s)`` as ``fma(x, RN(1 - s), 1)``, 0 as ``RN(1 + RN(x * RN(1 -
-s)))``; the sm_120 SASS of ``silu_backward_kernel`` in torch 2.14's libtorch_cuda.so is the FFMA, CONTRACT = 1
-(r20261027-042723-8ec6). Every NaN result is 0x7FFF.
+s)))``; the sm_120 SASS of ``silu_backward_kernel`` in torch 2.14's libtorch_cuda.so is the FFMA, CONTRACT = 1.
+Every NaN result is 0x7FFF.
 """
 from __future__ import annotations
 
