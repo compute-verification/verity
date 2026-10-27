@@ -48,6 +48,7 @@ Stress / negative-test knobs (never in headline runs; recorded when used):
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 import threading
@@ -80,7 +81,7 @@ _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def plan_key_of(sched: Any, ntok: int, nreq: int, targets: tuple = ()) -> tuple[int, str]:
+def plan_key_of(sched: Any, ntok: int, nreq: int, targets: bytes = b"") -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.
 
     [F-fp8-PLANKEY] The key used to be (ntok << 16) | nreq.  That is not the layout: the FA3 hidden M1 export
@@ -100,9 +101,9 @@ def plan_key_of(sched: Any, ntok: int, nreq: int, targets: tuple = ()) -> tuple[
     Some planes follow the engine step, not the geometry: the int8 source's Int8RowQuant_v1 sites and the call-boundary bodies are
     the manifest's, per engine step, and a served window restarts its steps at 0.  A bench manifest of 32 engine steps stages the
     quantizers' (x_q, s_a) at window steps 0..31 and none after, so a lone request after its batch-mates finish meets the same
-    geometry at window step 25 in one window and 64 in the next, and stages different bytes.  `targets`, the sorted (name, count)s
-    those sources commit at the step (`NativeCollectCommitter.step_targets`), is hashed in with the geometry; with none the key is the
-    geometry's alone.
+    geometry at window step 25 in one window and 64 in the next, and stages different bytes.  `targets`, the digest of the names
+    those sources commit at the step (`NativeCollectCommitter.step_targets`), is hashed in with the geometry; with none (b"") the key
+    is the geometry's alone.
     Returns (key, mode): mode "geometry" when the scheduler output exposes the per-request fields (vLLM V1 `SchedulerOutput`:
     scheduled_new_reqs[].num_computed_tokens, scheduled_cached_reqs.{req_ids,num_computed_tokens}, num_scheduled_tokens{}), else
     "counts" = the old key -- recorded on the run (`bounded_staging.plan_key_mode`) so a record never hides which one it used."""
@@ -118,8 +119,7 @@ def plan_key_of(sched: Any, ntok: int, nreq: int, targets: tuple = ()) -> tuple[
         if len(geo) != nreq or sum(g[1] for g in geo) != ntok:
             raise ValueError(f"scheduler output geometry {len(geo)} reqs / {sum(g[1] for g in geo)} tok != ({nreq}, {ntok})")
         geo.sort()
-        import hashlib
-        what = (int(ntok), int(nreq), geo, tuple(targets)) if targets else (int(ntok), int(nreq), geo)
+        what = (int(ntok), int(nreq), geo, bytes(targets)) if targets else (int(ntok), int(nreq), geo)
         h = hashlib.blake2b(repr(what).encode(), digest_size=8).digest()
         return int.from_bytes(h, "little") & 0x7FFF_FFFF_FFFF_FFFF, "geometry"
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
@@ -748,9 +748,17 @@ class NativeCollectCommitter(NativeHostCommitter):
             lo += k
         self.step_rows[step] = rows
 
-    def step_targets(self, step: int) -> tuple[tuple[str, int], ...]:
-        """The sorted (name, count)s the sources that commit by engine step (`targets_at`) commit at `step`: part of its plan key."""
-        return tuple(sorted(kv for src in self.sources if hasattr(src, "targets_at") for kv in src.targets_at(step).items()))
+    def step_targets(self, step: int) -> bytes:
+        """The digest of the sorted (name, count)s the sources that commit by engine step (`targets_at`) commit at `step`, b"" for none:
+        part of its plan key.  Kept per step while the sources are the same: H1's int8 source names every linear at every step."""
+        srcs = tuple(src for src in self.sources if hasattr(src, "targets_at"))
+        if getattr(self, "_targets_of", None) != srcs:
+            self._targets_of, self._targets_memo = srcs, {}
+        sig = self._targets_memo.get(int(step))
+        if sig is None:
+            names = sorted(kv for src in srcs for kv in src.targets_at(step).items())
+            sig = self._targets_memo[int(step)] = hashlib.blake2b(repr(names).encode(), digest_size=16).digest() if names else b""
+        return sig
 
     def _begin_step(self) -> None:
         job = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
