@@ -67,7 +67,7 @@ appear).
 | Symbol | Meaning | Lean |
 |---|---|---|
 | ε_dark | The dark leaves' share of the fleet's capacity, Φ(L_dark) = ε_dark·Φ_total; mainline 10^-3 (Daniel, 26 Oct, 6:55 PM PDT), range 10^-4 to 10^-2. | `Nci.Dampener.unmonitoredShare` |
-| ε_undecl | Monitored capacity running no certified declared work, 1 − \|W_cert\|/(Φ_X·\|J\|) in 𝓜's resources: model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. | `Nci.Dampener.residualShare` |
+| ε_undecl | Monitored capacity running no certified declared work, 1 − \|W_cert\|/(Φ_X·\|J\|) counted in 𝓜's resources at each SKU's ceiling (counted operations, not gates): model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. ε_skip + ε_undecl is the number driven to 0; a prover's overhead is certified work, in neither, with γ ≤ 10 allowed (Daniel, 26 Oct, 8:48 PM PDT). | `Nci.Dampener.residualShare` |
 | ε_skip | Certified work not done: PoUW's ε_W of the certified share, ε_W·(1 − ε_undecl), and the wrong certificates. | `Accounting.Compose` (ε_♭ = ε_skip + ε_cert + ε_route) |
 | ε_break | The gates of the faulty proof blocks F. | `Nci.Guarantees.Dampener` (its χ) |
 
@@ -82,16 +82,17 @@ Daniel (26 Oct, 6:40 PM PDT, tentative): credit and all reporting are in circuit
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
   Pr[accept ∧ the AND gates whose committed values are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
   needs no algorithmic premise: SAK (`SAKResidual`) is a premise of exclusion only. For the served PoUW, the
-  one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until the no-fold receipt. The
+  one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's no-fold
+  receipt (CMP-172), which takes none. The
   remote audit (`Accounting.Remote`) makes no exclusion claim, so its PoUW guarantee is the size credit alone.
 - **Exclusion** bounds how much hidden work could run beside the credited work (the exclusion bound). It is the one place the
-  accelerator model 𝓜's resources appear (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure
+  ACCEL model 𝓜's resources appear (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure
   a device's capacity, and its result converts back to AND gates for reporting.
 - **What counts every gate.** The (c, k)-partitions (inference blocks, a serving block's c_S) and the Lean's counting
   results (`Circuit.size`) count every gate, so a report that reads one converts it explicitly (lean's proposal:
   `Circuit.andSize` beside `Circuit.size`).
 - **Not yet restated.** The Lean's device-model audits still price work per op (`Accounting.Run.ComputeSound` at a
-  `Price`, and the covert residual F·T − W_cert, which is exclusion on one device), and ACCEL's `PROTOCOL.md` credits at
+  `Price`, and the covert residual F·T − W_cert, which is exclusion on one device), and Dither's `PROTOCOL.md` credits at
   pub(μ°) against W_reg until CMP-158 restates it in AND gates.
 
 Daniel's standing instruction goes with it: anyone who finds a reason this is wrong floats it the moment they find it,
@@ -163,7 +164,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `benchmarks/all_protocols/legs/` (`subprotocols/` after Demo B), the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
-| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in ACCEL's docs until CMP-158; W_cert, the Lean's `WorkSound`, `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_× |
+| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until CMP-158; W_cert, the Lean's `WorkSound`, `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_× |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
 | "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
@@ -207,6 +208,8 @@ Daniel named them on 26 Oct (7:51 PM PDT):
 
 Some words keep a different, narrower sense:
 
+- A protocol's **ε_skip**, in Dither's `PROTOCOL.md` and the Credit statement, is that protocol's own skipped share of
+  what it credits, the Notation's ε_W; the fleet's ε_skip is ε_W(1 − ε_undecl) plus the wrong certificates.
 - `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout and a `GateSelection` is a selected set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both names are serialized and stay. `verity.ml.circuits`'s gates are word-level: each outputs one `Value<w>` of w bits, not one bit, and so are the gates of the Lean model in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
 - A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
 - A **universal unit** (`verity.ml.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
