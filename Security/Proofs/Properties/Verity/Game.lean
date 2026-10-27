@@ -118,7 +118,7 @@ theorem soundness_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ
     (hlt : (∑ a, V.error a θ F c σ) + ∑ s, W.error θ F c σ s < 1) :
     ¬ V.SoundnessWithWipeFor W fun _ => True := by
   intro h
-  have h1 := prob_play_eq_one (V.rounds θ) θ F c
+  have h1 := prob_play_eq_one (V.rounds θ) (V.sign θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧
       ((∃ a, ¬ V.Holds θ F c σ a o) ∨ ∃ s, ¬ W.Holds θ F c σ s o))
     (fun _ _ => ⟨trivial, hreg, Or.inl ⟨a, hfail _⟩⟩) σ
