@@ -93,7 +93,18 @@ def test_what_a_queued_pr_touches_or_imports_is_kept(stand_in):
     assert got["kept"]["Prune.B.Group"].startswith("queued: ") and got["unused"] == ["Prune.A.Side", "Prune.B.Old"]
     doc = U.listing(pkg, got, {U.rel(pkg): policy}, used, [test], {"Prune.B.Group": got["kept"]["Prune.B.Group"]})
     assert [r["module"] for r in doc["held"]] == ["Prune.B.Group"] and doc["total"]["held"] == 1
-    assert "## Held: unused but for a queued PR (1 modules" in U.table(doc)
+    assert "## Held: unused but for a queued PR or as a check (1 modules" in U.table(doc)
+
+
+def test_a_conformance_check_is_kept_without_its_imports(stand_in):
+    pkg, policy, used, test = stand_in
+    (pkg / "Prune/B/Old.lean").write_text("import Prune.A.Side\n\nexample : 1 + 1 = 2 := rfl\ntheorem old : True := trivial\n")
+    got = U.decide(pkg, policy, used, [test], [])
+    assert got["kept"]["Prune.B.Old"].startswith("checks: ") and got["kept"]["Prune.B.Group"].startswith("aggregator: ")
+    assert got["unused"] == ["Prune.A.Side"]
+    assert U.decide(pkg, policy, used, [test], [], checks=False)["unused"] == ["Prune.A.Side", "Prune.B.Group", "Prune.B.Old"]
+    names = ["Prune.X.ChainVectors", "Prune.X.PeelChecks.Gram0", "Prune.X.CheckSum", "Prune.Vectorsx"]
+    assert [bool(U.CHECK_NAME.search(m)) for m in names] == [True, True, False, False]
 
 
 def test_syntax_nobody_writes_and_a_local_one_keep_nothing(stand_in):
@@ -150,14 +161,16 @@ def test_references_name_paths_modules_and_constants(tmp_path):
              "c.toml": f'paths = ["{pkg}/Prune/A"]\n', "d.md": f"see `{pkg}/Prune/B.lean`\n",
              "e.py": "Prune.Bx Prune.A.X Prune.A.Main.Y\n",
              "f.lean": "import Prune.B\n\n/-! `Prune.A.Main` proves it. -/\n", "tests/test_g.py": f'"{pkg}/Prune/A/" "{pkg}/Prune/B"\n',
-             "tests/test_h.py": 'SOURCE = "import Prune.A\\n#check 1"\n'}
+             "tests/test_h.py": 'SOURCE = "import Prune.A\\n#check 1"\n',
+             "tests/test_i.py": 'FILES = ["Prune/B.lean"]\nP = LEAN / "Prune" / "A" / "Main.lean"\nQ = "Prune/B"\n'}
     (tmp_path / "prune" / "Prune" / "B").mkdir(parents=True)
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
     got = U.references([os.path.relpath(tmp_path / f, U.ROOT) for f in files], pkg, mods)
     named = {k: sorted(Path(f).name for f, _ in v) for k, v in got.items()}
-    assert named == {"Prune.A.Main": ["test_a.py"], "Prune.B": ["b.sh", "f.lean"], "Prune.A": ["c.toml", "test_h.py"],
+    assert named == {"Prune.A.Main": ["test_a.py", "test_i.py"], "Prune.B": ["b.sh", "f.lean", "test_i.py"],
+                     "Prune.A": ["c.toml", "test_h.py"],
                      ("docs", "Prune.B"): ["d.md"], ("docs", "Prune.A.Main"): ["f.lean"]}
     reads = {(k, Path(f).name): r for k, v in got.items() for f, r in v}
     assert not reads["Prune.A.Main", "test_a.py"] and reads["Prune.B", "b.sh"] and reads["Prune.B", "f.lean"]
