@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Complete.Json.Decode
 import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Decode
 
 /-!
 # The honest record's checks at a value alike it
 
 `decode_recordObj` reads the printed honest record back through `FlockComplete.JsonRT.parse_print`, which hands it a parsed
 value alike the record (`Same`), and every check after that reads the parsed value only through `Same`. So the same
-checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse.
+checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse. It takes
+no JSON premise: S3 reads `require_link` by a match, and U1's `canon` is total (`canon_ok`,
+`canon_same`).
 
 * **Alike objects by lookup** (`same_mkObj`): a well-formed object (`WfObj`) is alike an object of distinct keys when
   each of that object's keys looks up a value alike its own and no other key looks up anything.

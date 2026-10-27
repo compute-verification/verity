@@ -14,7 +14,7 @@ set_option Elab.async false
 
 * `siteAddrH a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site_ofH`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
-  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnW`);
+  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnW_unpin`);
   `BcSiteH` bundles what it reads;
 * `copy_siteH`: a stacked unit input whose Δ key is message bit `bit` of byte `byte` of row `q` holds the witness's bit
   at that message column (`copyPos_blockH`, `Aliased.copyPos_key` at the flat twin);
@@ -100,7 +100,7 @@ def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) :
     HmOut.loadPublic a.tags a.st.c a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnW`), at a `BcSiteH`, for every row
+/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnW_unpin`), at a `BcSiteH`, for every row
 `p`. -/
 theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteH a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
@@ -112,7 +112,7 @@ theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u 
   dsimp only at hd hregs hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact Hidden.bc_drawnW h hpop hD hlt L regs hregs hz o hg hg2 hp hr
+  exact Hidden.bc_drawnW_unpin h hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
 /-! ## Copies at a site -/
 
@@ -134,7 +134,7 @@ theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o :
     rw [← L.unitRows_nIn]; exact hx
   rcases Aliased.copyPos_key Lf regs F hg hx' (by simp [hk]) (fun k off => by simp [hk]) with he | ⟨hn, -⟩
   · simp only [AcceptedH.col, siteAddrH, Fin.cast_eq_self]
-    rw [hb]
+    refine hb.trans ?_
     show z _ = z _
     congr 2
     apply Fin.ext
@@ -146,16 +146,16 @@ theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o :
   · exact absurd (by simp only at hk ⊢; rw [hk]; exact hin) hn
 
 /-- **An accepted statement's template instance column of copy `u'`'s computed column `c0`** is column `c0` of the unit
-slot `vu · upv + u'`. -/
+slot `vu · upv + u'`, through `upos`. -/
 theorem col_val_compH (a : AcceptedH T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) {u' c0 : ℕ}
     (hu' : u' < a.st.c.upv) (h1 : (unitRows a.st a.L.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows a.st a.L.unit_built).nIn + (unitRows a.st a.L.unit_built).nComp)
     (hx : x.val = a.st.c.upv * (unitRows a.st a.L.unit_built).nIn +
       (u' * ((unitRows a.st a.L.unit_built).nComp + 1) + (1 + (c0 - (unitRows a.st a.L.unit_built).nIn)))) :
-    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + c0 := by
+    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + upos a.st.c c0 := by
   unfold AcceptedH.col
   rw [Fin.val_cast]
-  exact Layout.stackPlace_val_comp _ _ _ _ _ hu' h1 h2 x hx
+  exact a.L.col_val_comp a.regs hg hu' h1 h2 x hx
 
 /-- **A drawn unit's returned output holds its output row's message bit**: in a satisfying witness of an accepted
 statement whose unit returns the outputs and whose rows are covered (`hrf`), at block `o` and template
@@ -182,13 +182,13 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have s := Hidden.setupHidden_spec' h
   obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' s.parse
   have P := parse_facts hpa
+  rw [upos_flat P.tmpl] at hcol
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   have L0 := flat_layout ht' h
   have F0 := flat_unitFacts ht' h
   have R : RowRanges st.c := RowRanges.ofL (st := Hidden.flatTwin st) L0 F0.parse F0.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta']
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hrows := hrf.1
   obtain ⟨h16, -, hlo⟩ := Layout.check_out P.typed ho hls
   have hget : ∀ u < st.c.upv, st.c.leavesOut.getD u #[] = st.c.leavesOut[u]! := fun u hu => by
@@ -234,10 +234,9 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
   have s := Hidden.setupHidden_spec' h
   have L0 := flat_layout ht h
   have F0 := flat_unitFacts ht h
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta']
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
-  exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv hz0 o hg hp (hrf.kind hp)
+  exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv (hz0.ex _) o hg hp (hrf.kind hp)
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement with a unit per VU
 (`hupv`) and whose rows are each fit or `sha512/row-seg/v1` (`hrf`), at block `o`, template instance `g` and row `p`, the

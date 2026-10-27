@@ -217,6 +217,22 @@ def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(worl
     assert [m.pr for m in q.sync()[0]] == [1, 2]
 
 
+def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
+    """GitHub can list an open PR before it makes refs/pull/N/head (27 Oct: #5290, and every drive tick from 13:14Z ended rc=1,
+    since one missing ref failed the whole fetch): that PR waits, and the rest of the queue syncs."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, two := world.change({"b.txt": "two\n"}))
+    _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1]
+    assert entries[2].state == "waiting" and "no pull ref" in entries[2].why
+    assert any("#2's pull ref can't be fetched" in line for line in world.logs)
+
+    _git(world.origin, "update-ref", "refs/pull/2/head", two)
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+
 def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
     """12 Oct: a flaky test on `main` failed 8577 and its fix (#1858) sat behind the next train; `--first` restacks `next` so the
     next train starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
@@ -2162,6 +2178,41 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     h2 = world.change({LOCK: rec}, base=h1)
     assert _mark(world, 1, h2) == 0
     assert f"{h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where pkg passed" in world.logs[-1]
+
+
+def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_for_it_and_one_that_differs_or_cant_be_read_doesnt(
+        world, capsys):
+    """CI-207: a PR that carries another PR's Lean change re-ran records at its own head, 1-2 h of queue on a full node, though the
+    package's inputs were byte-identical to a head where it passed.  A pass at any commit whose trees of the package, the packages
+    it requires by path, the toolchain and the checker (CI-210: `tools/verity/lean/`, `tools/verity/check/common.py`) are the
+    head's vouches for it; a commit this clone lacks is fetched, and one that can't be read vouches for nothing."""
+    world.with_store_remote()
+    _move_main(world, {"pkg/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../lib", "name": "lib"}]}),
+                       "lib/lakefile.toml": 'name = "lib"\n', "lib/L.lean": "def l := 1\n", "lean-toolchain": "v1\n",
+                       "tools/verity/lean/check.py": "# the checker\n", "tools/verity/check/common.py": "# its helpers\n"})
+    other = world.tmp / "other"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(other))
+    (other / LOCK).write_text(_lock(A="2"))
+    (other / "c.txt").write_text("the other PR's\n")
+    _git(other, "commit", "-q", "-am", "the other PR's Lean change")
+    c = _git(other, "rev-parse", "HEAD")
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()})
+
+    h = world.change({LOCK: _lock(A="2"), "a.txt": "carries it\n"})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1                                     # c is on no remote: nothing vouches
+    err = capsys.readouterr().err
+    assert "1 commit(s) with runs can't be read here or from" in err and "--records pkg --update" in err
+    _git(other, "push", "-q", "origin", f"{c}:refs/dev/other")
+    assert _mark(world, 1, h) == 0
+    assert f"research queue: records gate: pkg: a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+    for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"lean-toolchain": "v2\n"}),
+                     (4, {"tools/verity/lean/check.py": "# the checker, changed\n"}),
+                     (5, {"tools/verity/check/common.py": "# its helpers, changed\n"})):
+        capsys.readouterr()
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
+        assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
 
 
 #: `tools/verity/lean/merge.py` as the gate runs it on a lock both sides changed: ours, with each entry theirs changed

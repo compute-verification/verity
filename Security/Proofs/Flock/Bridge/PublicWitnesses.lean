@@ -2,7 +2,7 @@ import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# `SampledKSLivePub`'s honest and nontrivial lemmas (LEAN-66)
+# `SampledKSLivePub`'s honest and nontrivial lemmas
 
 * **Honest** (`sampledKSLivePub_honest`): the hypotheses of `SampledKSLivePub` on the analysis' parameters hold at the
   deployed ones (`Bridge.kDep`, `ρ = 1/2`, `M = R_w = 2^192`, `t' ≥ 0`), and there `deltaPub < 1`
@@ -273,7 +273,7 @@ def SampledKSLivePubAll : Prop :=
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) t' M Rw (Bridge.ioSum P) ρ)
 
 open Classical in
-/-- **`SampledKSLivePub`'s nontrivial lemma** (LEAN-66): `SampledKSLivePub` at the verifier that accepts everything is
+/-- **`SampledKSLivePub`'s nontrivial lemma**: `SampledKSLivePub` at the verifier that accepts everything is
 false at any setting of its file-level fields whose circuit has no port (so its commitment opens nothing) and returns a
 computed gate, with every unit drawn (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires, and the deployed parameters
 (`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`, `t', v ≤ 2^80`). There the extractor's values fail the claim at every run

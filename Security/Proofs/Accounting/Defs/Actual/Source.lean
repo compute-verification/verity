@@ -10,9 +10,6 @@ side budget `β_side (T + RTT)`. So it needs ingress from a location `Y`, and th
 
 * `ingressFrom X Y I`: `in_X(I; Y)`, the width of the gates placed in `Y` and outside `X` that `A[X, I]` reads;
 * `linkCapacityFrom ends β X Y`: the total capacity of the links across `X`'s boundary whose end outside `X` is in `Y`.
-
-Ingress is the sum over a partition of the outside into sources, and at most the sum over a cover, and under `Links`
-ingress from `Y` is at most `linkCapacityFrom` a tick (`Accounting.SecurityProofs.Actual.ingressFrom_le`).
 -/
 
 namespace Accounting

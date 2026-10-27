@@ -112,7 +112,7 @@ theorem Vocab.roundCoins_at_verdict (V : Vocab d α) {θ : ByteArray} {o : Outco
   obtain ⟨key, label, w, us, order, groups, coins, ξs, hc, hw, hr⟩ :=
     SampledProofs.OneStageZk.roundCoins_of_roundsWhy (SampledProofs.OneStageZk.roundsWhy_of_checkBlobs hacc)
   obtain ⟨n, ps, b, dg, k, ev, hD, nm, cs, hx, hp, -, -⟩ := hcase
-  obtain ⟨n', ps', b', d', k', ev', hD', -, -, hreg⟩ := hra
+  obtain ⟨n', ps', b', d', k', ev', hD', _, _, hreg⟩ := hra
   have hps : ps' = ps := congrArg Prod.snd (Except.ok.inj (hD'.1.symm.trans hD.1))
   obtain ⟨hfit, -⟩ := hreg.2.2.2.2.2.2
   rw [hps] at hfit
