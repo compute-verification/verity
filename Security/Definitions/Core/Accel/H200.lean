@@ -7,7 +7,8 @@ A table is a SKU's, at its firmware's maximum (RT-MODEL-MIN RM5). This one is th
 board 692-2G520-0280-001, vBIOS 96.00.A5.00.03, 700 W), the SKU our H200 nodes' cards report (runs
 r20261027-032540-2c81, r20261027-032553-f3b2): 132 SMs (H100 whitepaper V1.04 Table 3, H100 SXM5) at 1980 MHz SM and
 3201 MHz HBM3e, the maximum and application clocks those runs read (Table 3: 'GPU Boost Clock … 1980 MHz', footnote 2
-'GPU Peak Clock and GPU Boost Clock are synonymous'). Which SKU and firmware a node's cards are is part of the premise
+'GPU Peak Clock and GPU Boost Clock are synonymous'). Its supported clocks top at those two, and its SM and memory
+clock offset ranges are [0, 0] (run r20261027-035033-dcba). Which SKU and firmware a node's cards are is part of the premise
 that reads the table (`Assumptions.CardWithinAccel`); nothing the protocol checks attests it. Data-sheet numbers until
 CALIB (CMP-115) measures them.
 
