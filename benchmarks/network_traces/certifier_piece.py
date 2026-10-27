@@ -36,7 +36,7 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
   DIR also gets the chain's public report, job and leak-guard files and the check's three input files in DIR/period,
-  the case's one copy (it runs to hundreds of megabytes on a served window); the record's leak guard
+  the case's only copy (its params alone run to tens of megabytes on a served window); the record's leak guard
   (`leak_guard.py`) then reads DIR against the warden run's witness. ``--draw K`` is the scan's K drawn units (every
   unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
