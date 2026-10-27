@@ -5,9 +5,11 @@
 # frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
 # idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
 # --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to),
-# a registered cap (--cap) and the served weights' record (`prove_path.py weights-record`, from the checkpoint's pinned shards:
-# each window's registration records its roots, one a weight parameter, so the window circuit's weight reads count registered
-# at the verifier's pins, `window-circuit --pins weights_of_record.json`; without it, which steps.txt says, they count free),
+# a registered cap (--cap) and the committer's weights registration (`prove_path.py weights-registration`: each weight
+# committed under salts drawn from the committer's key, $D/private/weights.key, which never leaves the node, once its shards
+# check against the checkpoint's manifest; each window's registration records its roots, one a weight parameter, so the window
+# circuit's weight reads count registered at the pins the verifier holds before the first window's coins, `window-circuit
+# --pins weights_registration.json`; without it, which steps.txt says, they count free),
 # then each window's request Programs and
 # manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
 # (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
@@ -63,17 +65,17 @@ compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-dig
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 CKPT=$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV
-weights_args() {    # DIR FILE: `verity-vllm advice`'s --weights-of-record for the served run DIR, its record written to FILE
-  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-record --serve-run "$1" --checkpoint-dir "$CKPT" --out "$2") \
-    >> "$OUT/weights_of_record.txt" 2>&1 && echo "--weights-of-record $2"
+weights_args() {    # DIR FILE: `verity-vllm advice`'s --weights-of-record for the served run DIR, the committer's registration written to FILE
+  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$1" --checkpoint-dir "$CKPT" \
+    --key "$1/private/weights.key" --out "$2") >> "$OUT/weights_registration.txt" 2>&1 && echo "--weights-of-record $2"
 }
-no_weights() { echo "NO WEIGHTS OF RECORD for $1 (weights_of_record.txt): no window registers a weight's root, so every weight read counts free" | tee -a "$OUT/steps.txt"; }
+no_weights() { echo "NO WEIGHTS REGISTRATION for $1 (weights_registration.txt): no window registers a weight's root, so every weight read counts free" | tee -a "$OUT/steps.txt"; }
 
 if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed window), then WINDOW's Programs and manifest.json
   K=${WINDOW:-5}
   CA=$(compiler_args "$READVICE") && [ -n "$CA" ] || { echo "no registered compiler for $READVICE (prove_path.py compiler)"; exit 16; }
   echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
-  WA=$(weights_args "$READVICE" "$OUT/weights_of_record.json") || no_weights "$READVICE"
+  WA=$(weights_args "$READVICE" "$OUT/weights_registration.json") || no_weights "$READVICE"
   # shellcheck disable=SC2086
   vv advice "$READVICE" --cap "$CAP" $CA $WA 2>&1 | tee "$OUT/advice.log"
   "$PY" tools/advice_compile.py "$READVICE" --window "$K" > "$OUT/compile_w$K.log" 2>&1
@@ -119,12 +121,12 @@ grep "SERVE-OPENAI listening" "$OUT/serve.log" || { tail -40 "$OUT/serve.log"; e
 cp "$D/serve.json" "$OUT/" 2>/dev/null
 CA=$(compiler_args "$D") && [ -n "$CA" ] || { echo "no registered compiler for $D (prove_path.py compiler)"; kill -TERM "$SRV"; wait "$SRV"; exit 16; }
 echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
-WA=$(weights_args "$D" "$D/weights_of_record.json") || no_weights "$D"
-cp "$D/weights_of_record.json" "$OUT/" 2>/dev/null
+WA=$(weights_args "$D" "$D/weights_registration.json") || no_weights "$D"
+cp "$D/weights_registration.json" "$OUT/" 2>/dev/null
 
 # Each window's advice committed once, at serve time, as its windows.jsonl line lands: `advice --window K` into advice/.w<K>,
 # moved to advice/w<K>, and advice/windows.json the union of every window's index (committed and refused), its registration
-# recording each weight's root of record (`--weights-of-record`, `prove_path.py weights-record`).
+# recording each weight's registered root (`--weights-of-record`, `prove_path.py weights-registration`).
 closed() { "$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl" 2>/dev/null; }
 advice_pass() {
   for k in $(closed); do
