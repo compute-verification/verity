@@ -3,7 +3,7 @@ this process's own CPUs.
 
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
         [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
-        [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--remote-client HOST:PORT | --client-spin]]
+        [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--agent-port PORT | --client-spin]]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
 completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes the requests in flight), then
@@ -36,8 +36,9 @@ none of the run's records, salts or keys.
 
 Run it inside one `research run --on auto --cpus N`, so the hog loads only the run's own cores.
 
-**With `--warden --remote-client HOST:PORT`** the receiver is on another host: `warden_serve.py client-agent` there,
-one session a rehearsal. The stub, the warden, its pacer and the hogs stay here, and the client's offsets are read on
+**With `--warden --agent-port PORT`** the receiver is on another host: `warden_serve.py client-agent --warden
+THIS-HOST:PORT` there, one session a rehearsal, which reaches this host on PORT and PORT + 1 (`warden_serve.py
+rehearse --agent-port`). The stub, the warden, its pacer and the hogs stay here, and the client's offsets are read on
 its clock moved by the offset it measured to this host's. `jitter.json`'s `remote` is the rehearsal's `remote.json`:
 the agent's host, and its clock's offset and round trip before and after. `--client-spin` keeps the receiver here but
 its loop never waits in the kernel, so an offset that its wakeup carries is gone from its readings.
@@ -467,18 +468,18 @@ def main(argv=None) -> int:
                          "second, each of at most --tokens, windows of --window buckets")
     ap.add_argument("--rate", type=float, default=1.0, help="with --warden: the requests' Poisson arrivals a second")
     ap.add_argument("--window", type=int, default=60, help="with --warden: the warden's window, in buckets")
-    ap.add_argument("--remote-client", metavar="HOST:PORT",
-                    help="with --warden: the client agent on another host (warden_serve.py client-agent), the "
-                         "receiver; the stub, the warden and the hogs stay on this one")
+    ap.add_argument("--agent-port", type=int, metavar="PORT",
+                    help="with --warden: the receiver is a client agent on another host (warden_serve.py "
+                         "client-agent), which connects on PORT; the stub, the warden and the hogs stay on this one")
     ap.add_argument("--remote-wait", type=float, default=1800.0,
-                    help="with --remote-client: seconds to keep trying the agent")
+                    help="with --agent-port: seconds to wait for the agent")
     ap.add_argument("--client-spin", action="store_true",
                     help="with --warden: the local client's loop never waits in the kernel (warden_serve.py client "
                          "--spin)")
     a = ap.parse_args(argv)
-    if a.remote_client and not a.warden:
-        ap.error("--remote-client: with --warden")
-    if a.client_spin and (a.remote_client or not a.warden):
+    if a.agent_port is not None and not a.warden:
+        ap.error("--agent-port: with --warden")
+    if a.client_spin and (a.agent_port is not None or not a.warden):
         ap.error("--client-spin: with --warden and a local client")
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
@@ -491,8 +492,8 @@ def main(argv=None) -> int:
                    "--model", "stub-model", "--requests", str(a.requests), "--rate", str(a.rate), "--max-tokens",
                    str(a.tokens), "--window", str(a.window), "--tail", str(a.window / 10),
                    "--out", str(a.out / "rehearsal"), *paced,
-                   *(["--remote-client", a.remote_client, "--remote-wait", str(a.remote_wait)] if a.remote_client
-                     else []), *(["--client-spin"] if a.client_spin else [])]
+                   *(["--agent-port", str(a.agent_port), "--remote-wait", str(a.remote_wait)]
+                     if a.agent_port is not None else []), *(["--client-spin"] if a.client_spin else [])]
     else:
         command = [sys.executable, str(HERE / "certifier_serve.py"), "rehearse",
                    "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),

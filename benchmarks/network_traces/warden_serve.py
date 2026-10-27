@@ -19,7 +19,7 @@ id (`release`), which `deployment.json` names (`run_id`).
   which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's
-  host clock (`origin_unix`); with `--remote-client` it is on another host (`client-agent`), and its arrival times are
+  host clock (`origin_unix`); with `--agent-port` it is on another host (`client-agent`), and its arrival times are
   read on its own clock moved by the offset it measured to the warden's.
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
@@ -46,13 +46,13 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
         --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [schedule]
-    python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
-    python warden_serve.py client-agent --listen HOST:PORT --out DIR [--sessions 1] [--wait 3600]
+    python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR [--spin]
+    python warden_serve.py client-agent --warden HOST:PORT --out DIR [--sessions 1] [--wait 3600]
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]]
-        [--remote-client HOST:PORT [--remote-wait 1800]] [schedule]
+        [--agent-port PORT [--remote-wait 1800] | --client-spin] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, each bucket released by its pacer `--paced-ms`
@@ -85,11 +85,12 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   egress record's; `check.json`.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
-- `rehearse --remote-client HOST:PORT` runs the client on another host instead: `client-agent` there, which takes each
-  rehearsal in turn over a control connection. The warden listens on this host's address toward the agent. The agent
+- `rehearse --agent-port PORT` runs the client on another host instead: `client-agent --warden HOST:PORT` there,
+  which connects to each rehearsal in turn on PORT, its control connection. The warden then listens on PORT + 1, at
+  this host's address toward the agent, so that the agent's host reaches this one on those two ports alone. The agent
   reads the warden host's wall clock over the connection (`clock_offset`: the shortest of `PINGS` round trips, its
   midpoint), runs `client` on that clock, and returns `client.json`. `remote.json` holds where it ran and its offset
-  and round trip before and after the session.
+  and round trip before and after the session. `rehearse --client-spin` keeps the client here, with `client --spin`.
 
 **The load** (`--load-store`, the gate's `load-relay`): the serving session's weights' load, relayed and committed by
 this device and signed by its one signer. `rehearse` first relays the store to the H200's sink
@@ -856,7 +857,7 @@ async def _client(deployment: dict, traffic: list[dict], out: Path, clock) -> di
     return doc
 
 
-# The client on another host (`client-agent`, `rehearse --remote-client`): a control connection whose messages are each
+# The client on another host (`client-agent`, `rehearse --agent-port`): a control connection whose messages are each
 # a length (u32be) and that many bytes of JSON.
 
 #: the round trips a client agent reads the warden host's clock over, at each end of a session
@@ -907,8 +908,18 @@ def remote_client(sock: socket.socket, deployment: dict, traffic: list[dict], ou
     return msg
 
 
-def connect_agent(address: tuple[str, int], wait: float) -> socket.socket:
-    """A control connection to the client agent at `address`, tried every 2 s until it answers or `wait` s pass."""
+def accept_agent(port: int, wait: float) -> socket.socket:
+    """`rehearse --agent-port`'s control connection: the client agent's, accepted on `port`, waiting at most `wait` s."""
+    with socket.create_server(("0.0.0.0", port)) as server:
+        server.settimeout(wait)
+        sock, _ = server.accept()
+    sock.settimeout(None)
+    return sock
+
+
+def connect_warden(address: tuple[str, int], wait: float) -> socket.socket:
+    """The client agent's control connection to a rehearsal at `address`, tried every 2 s until it answers or `wait` s
+    pass."""
     deadline = time.monotonic() + wait
     while True:
         try:
@@ -922,34 +933,29 @@ def connect_agent(address: tuple[str, int], wait: float) -> socket.socket:
             return sock
 
 
-def client_agent(listen: tuple[str, int], out: Path, sessions: int, wait: float) -> int:
-    """`client-agent`: `client` on this host for `sessions` rehearsals in turn, each `rehearse --remote-client`'s
-    control connection to `listen`, waiting at most `wait` s for each. A session reads the warden host's clock
+def client_agent(warden: tuple[str, int], out: Path, sessions: int, wait: float) -> int:
+    """`client-agent`: `client` on this host for `sessions` rehearsals in turn, each over a control connection to
+    `rehearse --agent-port` at `warden`, tried for at most `wait` s each. A session reads the warden host's clock
     (`clock_offset`) and runs `client` on it, so its arrivals are on the warden's clock, and reads it again at its end;
     session k's `client.json` is also kept under `out`/session-k. A session whose control connection fails is printed
     and counted, and the agent goes on to the next; it returns 1 if any failed."""
     out.mkdir(parents=True, exist_ok=True)
     failed = 0
-    with socket.create_server(listen) as server:
-        server.settimeout(wait)
-        cs._announce({"listening": [listen[0], server.getsockname()[1]]})
-        for k in range(sessions):
-            sock, peer = server.accept()
-            with sock:
-                sock.settimeout(None)
-                try:
-                    session = recv_doc(sock)
-                    reserve_fds(len(session["traffic"]) + FD_MARGIN)
-                    before = clock_offset(sock)
-                    doc = asyncio.run(client(session["deployment"], session["traffic"], out / f"session-{k}",
-                                             clock=lambda shift=before["offset_s"]: time.time() + shift))
-                    send_doc(sock, {"client": doc, "clock": {"before": before, "after": clock_offset(sock)},
-                                    "peer": {"agent_host": socket.gethostname(), "warden_address": peer[0]}})
-                except (OSError, ValueError) as e:
-                    failed += 1
-                    print(json.dumps({"session": k, "failed": f"{type(e).__name__}: {e}"}), flush=True)
-                    continue
-            print(json.dumps({"session": k, "connections": len(doc["connections"]), "clock": before}), flush=True)
+    for k in range(sessions):
+        try:
+            with connect_warden(warden, wait) as sock:
+                session = recv_doc(sock)
+                reserve_fds(len(session["traffic"]) + FD_MARGIN)
+                before = clock_offset(sock)
+                doc = asyncio.run(client(session["deployment"], session["traffic"], out / f"session-{k}",
+                                         clock=lambda shift=before["offset_s"]: time.time() + shift))
+                send_doc(sock, {"client": doc, "clock": {"before": before, "after": clock_offset(sock)},
+                                "peer": {"agent_host": socket.gethostname(), "agent_address": sock.getsockname()[0]}})
+        except (OSError, ValueError) as e:
+            failed += 1
+            print(json.dumps({"session": k, "failed": f"{type(e).__name__}: {e}"}), flush=True)
+            continue
+        print(json.dumps({"session": k, "connections": len(doc["connections"]), "clock": before}), flush=True)
     return 1 if failed else 0
 
 
@@ -1202,6 +1208,8 @@ def rehearse(args) -> int:
         raise SystemExit("--prompts: id requests' prompts, with --ids")
     if args.window_per_group and args.prompts is None:
         raise SystemExit("--window-per-group: groups of the --prompts")
+    if args.client_spin and args.agent_port is not None:
+        raise SystemExit("--client-spin: the client here, without --agent-port")
     load = args.load_store is not None
     if load and not (args.load_sinks and args.load_program and lr.HEX64.fullmatch(args.load_program)):
         raise SystemExit("--load-store: with --load-sinks and --load-program, the reading program's digest in hex")
@@ -1209,8 +1217,8 @@ def rehearse(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     params = _params(args)
     me = [sys.executable, str(HERE / "warden_serve.py")]
-    control = None if args.remote_client is None else connect_agent(args.remote_client, args.remote_wait)
-    host = "127.0.0.1" if control is None else control.getsockname()[0]
+    control = None if args.agent_port is None else accept_agent(args.agent_port, args.remote_wait)
+    listen = "127.0.0.1:0" if control is None else f"{control.getsockname()[0]}:{args.agent_port + 1}"
     scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
     procs: list[subprocess.Popen] = []
     try:
@@ -1244,7 +1252,7 @@ def rehearse(args) -> int:
             (out / GROUPS).write_text(json.dumps({"groups": grouped}, indent=1))
             windows = grouped[-1]["windows"][1]
         with open(out / "serve.log", "w") as log:
-            serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", f"{host}:0",
+            serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", listen,
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
@@ -1265,7 +1273,7 @@ def rehearse(args) -> int:
                         remote_client(control, json.loads((out / "deployment.json").read_text()), traffic, out)
                         client_exit = 0
                     except (OSError, ValueError) as e:
-                        print(f"the client agent at {args.remote_client}: {type(e).__name__}: {e}", file=clog)
+                        print(f"the client agent: {type(e).__name__}: {e}", file=clog)
                         client_exit = 1
             serve_exit = serving.wait()
     finally:
@@ -1290,7 +1298,7 @@ def parser() -> argparse.ArgumentParser:
     f = sub.add_parser("fake", help="a stand-in for vLLM's streamed /v1/completions")
     s = sub.add_parser("serve", help="the warden in front of the server, for one run")
     c = sub.add_parser("client", help="the traffic, through the shim")
-    ca = sub.add_parser("client-agent", help="client on this host for rehearsals on another (rehearse --remote-client)")
+    ca = sub.add_parser("client-agent", help="client on this host for rehearsals on another (rehearse --agent-port)")
     x = sub.add_parser("check", help="the offline check of a run")
     r = sub.add_parser("rehearse", help="traffic, then serve, client and check")
     pr = sub.add_parser("probe", help="the traffic's first requests straight to the server, no warden")
@@ -1310,10 +1318,12 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--temperature", type=float, help="every request's temperature (default: drawn, 0, 0.7 or 1)")
         q.add_argument("--top-p", type=float, help="every request's top_p (default: none sent, the endpoint's own)")
     t.set_defaults(model="model")
-    for q in (f, s, ca):
+    for q in (f, s):
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
+    ca.add_argument("--warden", required=True, type=cs._address,
+                    help="the warden host's HOST:PORT, its rehearsals' --agent-port")
     ca.add_argument("--sessions", type=int, default=1, help="the rehearsals it serves, one after another")
-    ca.add_argument("--wait", type=float, default=3600.0, help="seconds it waits for each rehearsal to connect")
+    ca.add_argument("--wait", type=float, default=3600.0, help="seconds it tries each rehearsal for")
     for q in (f, r):
         q.add_argument("--token-ms", type=float, default=20.0, help="the fake endpoint's milliseconds a token")
         q.add_argument("--first-ms", type=float, default=100.0,
@@ -1350,11 +1360,11 @@ def parser() -> argparse.ArgumentParser:
     pr.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0, help="seconds the run lasts past the last request's time")
-    r.add_argument("--remote-client", type=cs._address,
-                   help="the client agent's HOST:PORT (client-agent, on another host): the client runs there, and the "
-                        "warden listens on this host's address toward it")
+    r.add_argument("--agent-port", type=int,
+                   help="the client runs on another host (client-agent), whose control connection this accepts on "
+                        "PORT; the warden listens on PORT + 1, at this host's address toward the agent")
     r.add_argument("--remote-wait", type=float, default=1800.0,
-                   help="with --remote-client: seconds to keep trying the agent before the rehearsal starts")
+                   help="with --agent-port: seconds to wait for the agent before the rehearsal starts")
     r.add_argument("--ids", action="store_true",
                    help="warden-form id requests (id_traffic), answered id-form (the fake's --id-payload): the scan's "
                         "traffic (scan_zk.py --warden-run)")
@@ -1427,7 +1437,7 @@ def main(argv=None) -> int:
         return 0
     if args.command == "client-agent":
         ar._quiet_runtime()
-        return client_agent(args.listen, args.out, args.sessions, args.wait)
+        return client_agent(args.warden, args.out, args.sessions, args.wait)
     if args.command == "check":
         result = check(args.run)
         (args.run / "check.json").write_text(json.dumps(result, indent=1))

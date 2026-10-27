@@ -5,7 +5,8 @@ names, and refuses a record that isn't what was certified, a cell that reached i
 another bucket, and a response that isn't the record's; a window in which the warden refused a connection is certified
 and signed nowhere; a window's slow commit, which faults the next window when it runs in the warden's process,
 moves no tick in `serve`'s publisher process; a spinning client reads what the plain one does; and a client agent on
-another host reads the warden host's clock over its control connection and hands back its session."""
+another host reads the warden host's clock over its control connection, connects to each rehearsal in turn and hands
+back its session."""
 
 from __future__ import annotations
 
@@ -807,3 +808,44 @@ def test_a_client_agent_reads_the_warden_hosts_clock_and_hands_back_its_session(
     assert json.loads((tmp_path / "client.json").read_text()) == {"connections": [{"index": 0}]}
     assert json.loads((tmp_path / "remote.json").read_text()) == {"peer": {"agent_host": "b"},
                                                                    "clock": {"before": got["before"]}}
+
+
+def test_a_client_agent_connects_to_each_rehearsal_in_turn_and_reads_its_cells_at_its_listener(tmp_path):
+    """`client-agent --warden` makes one control connection a session, which `rehearse --agent-port` accepts, and runs
+    that session's traffic against its deployment's listener: here two sessions, each one request answered by a cell
+    server, each session's `client.json` back in its rehearsal's directory and kept in the agent's."""
+    import socket
+    import threading
+
+    response, returned = _response(["a"]), []
+
+    def answer(server: socket.socket) -> None:
+        for _ in range(2):
+            conn, _ = server.accept()
+            with conn, conn.makefile("rb") as reader:
+                while read_cell(reader.read(PARAMS.cell_bytes), PARAMS.cell_bytes)[0] != END:
+                    pass
+                conn.sendall(cells(response, PARAMS.cell_bytes))
+
+    with socket.create_server(("127.0.0.1", 0)) as control, socket.create_server(("127.0.0.1", 0)) as listener:
+        deployment = {"params": dataclasses.asdict(PARAMS), "origin_unix": 0.0, "listen": listener.getsockname()[:2],
+                      "upstream": ["127.0.0.1", 2]}
+        threads = [threading.Thread(target=answer, args=(listener,)),
+                   threading.Thread(target=lambda: returned.append(
+                       ws.client_agent(control.getsockname()[:2], tmp_path / "agent", 2, 60.0)))]
+        for thread in threads:
+            thread.start()
+        for k in range(2):
+            (tmp_path / f"r{k}").mkdir()
+            sock, _ = control.accept()
+            with sock:
+                ws.remote_client(sock, deployment, [{"at": 0.0, "body": {"prompt": "x"}}], tmp_path / f"r{k}")
+        for thread in threads:
+            thread.join()
+    assert returned == [0]
+    for k in range(2):
+        (got,) = json.loads((tmp_path / f"r{k}" / "client.json").read_text())["connections"]
+        peer = json.loads((tmp_path / f"r{k}" / "remote.json").read_text())["peer"]
+        assert (got["outcome"], got["data_sha256"]) == ("end", ws._sha(response))
+        assert peer == {"agent_host": socket.gethostname(), "agent_address": "127.0.0.1"}
+        assert json.loads((tmp_path / "agent" / f"session-{k}" / "client.json").read_text())["connections"] == [got]
