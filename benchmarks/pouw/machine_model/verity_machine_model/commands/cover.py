@@ -1,10 +1,11 @@
 """machine-model cover [--card sm_NN] [--holes|--check]
                                           the coverage table (data/cover/): each opcode of NVIDIA's family tables and
-                                          the SASS corpus on the H200 and the RTX PRO 6000, its envelope op, units,
-                                          rate, mark, argument and source; the counts by mark (opcodes, corpus forms,
-                                          corpus instructions) and every hole with its severity; --holes prints the
-                                          counts and holes only; --check prints what fails the table and exits 1 if
-                                          anything does"""
+                                          the SASS corpus on the H200 and the RTX PRO 6000, its envelope op (MODEL-MIN's
+                                          Accel.Op, or a proposed one) and pipe, units, rate against ρ, mark, argument
+                                          and source; the counts by mark (opcodes, corpus forms, corpus instructions),
+                                          with the proposed entries and on Accel.Op alone, the rows resting on proposed
+                                          entries, and every hole with its severity; --holes prints the counts and holes
+                                          only; --check prints what fails the table and exits 1 if anything does"""
 from __future__ import annotations
 
 from verity_machine_model import cover as C
@@ -25,28 +26,34 @@ def _cell(s) -> str:
 
 
 def _rate(c: C.Cover, r: C.Row, dev: str, theta: T.Theta) -> str:
-    if r.envelope in ("T", "T.sp") and r.mark in ("covered", "coarse"):
-        x = C.rate(c, r, dev, theta)
-        w = c.envelope["device"][dev]["weight"][r.get("fmt")]
-        rho = c.envelope["device"][dev]["rho"]["tensor"]
-        kept = " / 2 kept" if r.envelope == "T.sp" else ""
-        return f"{x:g}{kept} × {w:g} = {C.tensor_units(c, r, dev, theta):g} ≤ ρ_T {rho:g}"
-    k = r.get("rate", dev)
-    if k is None:
-        return ""
-    x = theta.rates[k]
-    vals = ", ".join(f"{n} {v:g}" for n, v in (("sheet", x.sheet), ("measured", x.measured)) if v is not None)
-    return f"θ {k} ({vals} {x.unit})" if vals else f"θ {k} (no value: {x.gap or x.source})"
+    if r.envelope not in C.RATED or r.mark not in C.DOMINATED:
+        k = r.get("rate", dev)
+        return ", ".join(f"θ {x}" for x in C.as_list(k))
+    out = []
+    for d in C.demands(c, r, dev, theta):
+        if d.problem:
+            out.append(f"{d.rate}: {d.problem}")
+        else:
+            out.append(f"{d.rate} → {d.amount:.4g} ≤ ρ {d.resource} {d.rho:.4g}")
+    return "; ".join(out)
 
 
-def _counts(c: C.Cover, dev: str) -> str:
-    k = C.counts(c, dev)
+def _envelope(c: C.Cover, r: C.Row) -> str:
+    e = r.envelope + (f" on {r.get('pipe')}" if r.get("pipe") else "")
+    fmt = C.as_list(r.get("fmt"))
+    e += f" ({', '.join(fmt)})" if fmt else ""
+    rests = C.rests_on(c, r)
+    return e + (f"; rests on proposed {', '.join(rests)}" if rests else "")
+
+
+def _counts(c: C.Cover, dev: str, proposed: bool) -> str:
+    k = C.counts(c, dev, proposed)
     ops = ", ".join(f"{k.opcodes[m]} {m}" for m in (*C.MARKS, "missing") if k.opcodes[m])
     forms = ", ".join(f"{k.forms[m]} {m}" for m in (*C.MARKS, "missing") if k.forms[m])
     total = sum(k.instructions.values())
     insts = ", ".join(f"{100 * k.instructions[m] / total:.4g}% {m}" for m in (*C.MARKS, "missing")
                       if k.instructions[m])
-    return (f"{dev}: {sum(k.opcodes.values())} opcodes: {ops}; {sum(k.forms.values())} corpus forms: {forms}; "
+    return (f"{sum(k.opcodes.values())} opcodes: {ops}; {sum(k.forms.values())} corpus forms: {forms}; "
             f"{total:,} corpus instructions: {insts}")
 
 
@@ -55,13 +62,24 @@ def run(args) -> int:
     ps = C.problems(c)
     if args.check:
         print("\n".join(ps) if ps else f"cover: every opcode, corpus form and census kind of {', '.join(C.DEVICES)} "
-                                       f"has a row, and every tensor row's rate × weight is at most ρ_T")
+                                       f"has a row, and every dominated row's rate is at most its resource's ρ")
         return 1 if ps else 0
     devs = [args.card] if args.card else list(C.DEVICES)
-    ops = ", ".join(o["key"] for o in c.envelope["op"] if o["key"] != "-")
-    print(f"Coverage of the envelope ISA ({ops}; data/cover/envelope.toml, provisional: MODEL-MIN owns the list)")
+    ops = c.table("op")
+    accel = ", ".join(k for k, o in ops.items() if k != "-" and "proposed" not in o)
+    new = [*(f"op {k}" for k, o in ops.items() if "proposed" in o),
+           *(f"pipe {k}" for k, o in c.table("pipe").items() if "proposed" in o),
+           *(f"fmt {k}" for k, o in c.table("fmt").items() if "proposed" in o)]
+    print(f"Coverage of the envelope ISA: {c.envelope['source']}: {accel}; proposed: {', '.join(new)} "
+          f"(data/cover/envelope.toml)")
     for dev in devs:
-        print(_counts(c, dev))
+        print(f"{dev}: {_counts(c, dev, True)}")
+        print(f"{dev} on Accel.Op alone (a row resting on a proposed entry a hole): {_counts(c, dev, False)}")
+    print("\nRows resting on a proposed entry:")
+    for r in c.rows:
+        if r.mark in C.DOMINATED and (rests := C.rests_on(c, r)) and any(d in r.devices for d in devs):
+            forms = f" [{', '.join(r.forms)}]" if r.forms else ""
+            print(f"- {'/'.join(r.devices)} {', '.join(r.ops)}{forms}: {', '.join(rests)}")
     print("\nHoles (each a gap in the coverage premise):")
     for devices, what, sev, why in C.holes(c):
         if any(d in devices.split("/") for d in devs):
@@ -73,7 +91,8 @@ def run(args) -> int:
     for dev in devs:
         theta = T.theta(device(dev))
         print(f"\n## {dev}\n")
-        print("| Opcode | Forms | Mark | Envelope | Units | Rate a SM-clock | Argument | Source |")
+        print("| Opcode | Forms | Mark | Envelope | Units | Rate a SM-clock, in the op's units, against ρ | Argument "
+              "| Source |")
         print("|---|---|---|---|---|---|---|---|")
         for r in c.rows:
             if dev not in r.devices:
@@ -84,7 +103,7 @@ def run(args) -> int:
                 if r.forms and r.raw.get("what"):
                     forms += f" ({_cell(r.raw['what'])})"
                 mark = r.mark + (f" ({r.raw['severity']})" if r.mark == "hole" else "")
-                print(f"| {op} | {forms} | {mark} | {r.envelope} | {_cell(r.raw.get('cost'))} | "
+                print(f"| {op} | {forms} | {mark} | {_cell(_envelope(c, r))} | {_cell(r.raw.get('cost'))} | "
                       f"{_cell(_rate(c, r, dev, theta))} | {_cell(r.raw.get('argument'))} | "
                       f"{_cell(r.raw.get('source'))} |")
         print(f"\n### {dev}: units outside the SM pipes\n")

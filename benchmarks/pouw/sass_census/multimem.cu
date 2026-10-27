@@ -3,7 +3,7 @@
 // answers, and what multimem.ld_reduce (LDGMC) and multimem.red do on ordinary cudaMalloc memory, each in a child
 // process of its own (CUDA is initialized after the fork), so a fault ends only that child. The hypothesis: the card
 // supports no multicast object, so no address is a multimem one; on a unicast address LDGMC faults or returns the one
-// copy's word, and multimem.red faults or adds once: a load or an L2 reduction, which M and M.red dominate.
+// copy's word, and multimem.red faults or adds once: a load or an L2 reduction, which `move` and `atom` dominate.
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <sys/wait.h>

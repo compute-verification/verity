@@ -94,7 +94,8 @@ The data, each kind of thing a file or a line of its own:
   (`[sha512_mix]`), which SHA-512's ceiling on the card's pipes reads; and the host the card sits in on the node we
   run (`host.*`: cores a GPU, SHA-512 and AMX INT8 a core, DRAM a socket).
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
-- `data/cover/`: the coverage table ("Coverage" below): the envelope ops (`envelope.toml`), a row per opcode and a
+- `data/cover/`: the coverage table ("Coverage" below): the envelope (`envelope.toml`: MODEL-MIN's `Accel.Op` and the
+  proposed entries), a row per opcode and a
   verdict per unit outside the SM pipes (`rows.toml`), and the SASS corpus's opcodes by form (`corpus.json`).
 
 The code:
@@ -510,33 +511,44 @@ dominated by an envelope op at no fewer units of the same resource. `data/cover/
 (sm_90) and the RTX PRO 6000 (sm_120), CMP-166. It is evidence, not trusted base: no verifier and no Lean reads it.
 `machine-model cover` prints it as Markdown, a table a card, with the counts by mark and every hole.
 
-- **The envelope ops** are `envelope.toml`'s, provisional until CMP-165 fixes the list. T is dot-local: an output
-  element is any function of its accumulator and its row's k elements and block scales, at k times its format's weight,
-  since an exact-integer MMA can't simulate a float or block-scaled one. T.sp is its 2:4 form, counted in kept products.
-  L is any function of at most 6 words and 8 predicates of the warp, writing 2 words and 2 predicates to one lane, at
-  ρ_L = 32 lanes × 4 issue slots a SM-clock. M moves a word, M.bcast reads a distinct word once for any number of
-  destinations, M.red sets a location of at most 128 bits to a function of its old value. S is dominated by L. H is the
-  oracle call.
+- **The envelope** is MODEL-MIN's `Accel.Op` (`Security/Definitions/Core/Accel/` on its branch, at the commit
+  `envelope.toml`'s `source` names), with its pipes, formats and each card's numbers (ρ a SM-clock, format weights):
+  `mma` and `mmaSp` (a tile at its format's weight, 2:4 in kept products), `lane` (one of the card's lane opcodes on a
+  pipe: at most the pipe's `n_in` words in and 2 out), `move`, `atom` and `red` (words of a store at its port), `branch`
+  and none. The entries the table needs that `Accel` lacks are marked `proposed`, each with the CMP-165 item asking for
+  it: the `collective` op and resource (MATCH.ANY and REDUX share a unit at 0.5 warp instructions a SM-clock on sm_120,
+  and VOTE spends 16 alu lanes), the `tex` op and resource (4 filtered fetches a SM-clock), and the formats FP6
+  (`e3m2`, `e2m3`) and block-scaled `mxf8` and `mxf6`.
+- **The pipes**: an opcode goes on the pipe a run or the CPG places it on. One that neither places goes on `fma`, which
+  charges only the issue slot every instruction takes, marked coarse: a lane on it dominates any opcode of at most 4
+  words in and 2 out, but RT's RM7 calls that a coarsening for an opcode placed elsewhere.
 - **What must be covered** is every opcode of NVIDIA's family tables, Hopper's for sm_90 and Blackwell's for sm_120
   (CUDA Binary Utilities 12.9 §4.3 and §4.4 in `../sass_census/data/bu_12_9.json`, and CUDA 13's in
   `sass_isa_tables.json` beside it), every opcode of the SASS corpus of the CUDA 13 libraries (`corpus.json`, each
   dotted form with its instruction count), every census kind of the machine model, and every unit θ lists
   (`theta.UNITS`).
-- **A row** names its opcodes and devices, the census kinds it claims, its mark, its envelope op, its units, its rate (a
-  θ key, or `rate_value` a SM-clock), its argument and its source. A row with `forms` (regexes over the dotted form)
+- **A row** names its opcodes and devices, the census kinds it claims, its mark, its envelope op with its pipe (a lane or
+  a collective), its stores (a move, atom or red) or its formats (an MMA), its units a warp instruction, its register
+  words, its rate (θ keys, or `rate_value` with its unit), its argument and its source. A row with `forms` (regexes over
+  the dotted form)
   covers those forms of its opcodes; every opcode has a plain row too, which covers every other form. A unit outside
   the SM pipes (TMA, the copy engines, L2's reductions, NVLink SHARP, texture, RT, video) is a `[[unit]]` with the same
   marks.
 - **The marks**: `covered` (the argument dominates it at the rate), `coarse` (dominated, at a rate bounded from a coarser
   figure, such as a pipe's share or the data sheet's peak for the format), `hole` (with its severity: `low`, bounded at
   a few percent of a resource; `medium`, measured past a resource's ρ; `open`, no rate known; or `outside the card`), and `absent` (the card doesn't execute it: the family table lists it for another card, or ptxas
-  refuses the PTX). An opcode's mark is its worst row's.
-- **The tensor rule**: a dominated T or T.sp row's rate times its format's weight (halved for T.sp) is at most ρ_T, 1024
-  T units a SM-clock on sm_120 and 4096 on the H200.
+  refuses the PTX). An opcode's mark is its worst row's. A row whose op, pipe or format is proposed rests on it, and
+  `machine-model cover` counts the table twice: with the proposed entries, and on `Accel.Op` alone, with those rows as
+  holes.
+- **The rule**: each rate of a covered or coarse row, read in its op's units a SM-clock, is at most its resource's ρ:
+  tensor units (MACs times the largest weight of the row's formats, halved for `mmaSp`) against ρ_tensor, a pipe's
+  lanes (`fma`'s are the issue slot's 128) against the pipe's, fetches against `tex`'s, and words against a store's
+  (device memory's from its words a second). A lane's or collective's words are at most its op's.
 
 `tests/test_cover.py` fails when an opcode, a corpus form, a census kind or a unit has no row, when a corpus form matches
-two rows, when a tensor row's rate exceeds ρ_T, and when a hole has no severity. A new opcode, a new census kind or a
-new entry in `theta.UNITS` therefore needs its row before the tests pass.
+two rows, when a row names an op, pipe, format or θ key that doesn't exist, when a dominated row's rate exceeds its
+resource's ρ or its words exceed its op's, and when a hole has no severity. A new opcode, a new census kind or a new
+entry in `theta.UNITS` therefore needs its row before the tests pass.
 
 The lowering probe, `../sass_census/lowering.sh` over `lowering.cu`, compiles each case for sm_90a and sm_120a with the
 node's nvcc and checks the SASS it lowers to, or that ptxas refuses it. Its verdict line is `verdict: N/N cases lower as
@@ -549,12 +561,12 @@ Three GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does,
 vy-nebius-1 --cwd source` and its verdict line quoted in the row's source once it lands:
 
 - `../opcode_probe/probes/match.cu` (through `../opcode_probe/run.sh`) times MATCH.ANY with the lanes in 32, 4, 2 and 1
-  classes, and .U64, alone and beside LOP3 and FFMA. Its hypothesis is the MATCH row's: L's 119-unit simulation (238
-  for .U64) dominates it, (119 r_MATCH + 32 (r_LOP3 + r_FFMA)) / 128 ≤ 1 at every point. It failed at one point (1.11),
-  which makes MATCH.ANY a hole.
+  classes, and .U64, alone and beside LOP3 and FFMA. Its hypothesis was that a 119-unit simulation in 6-word lanes (238
+  for .U64) dominates it, (119 r_MATCH + 32 (r_LOP3 + r_FFMA)) / 128 ≤ 1 at every point. It failed at one point (1.11):
+  no fold of lanes dominates MATCH.ANY, so it is on the proposed `collective`.
 - `../opcode_probe/probes/collective.cu` times REDUX and VOTE alone, beside LOP3, and REDUX beside MATCH.ANY. Its
   hypothesis is the REDUX and VOTE rows': each spends at least a fold's 16 alu lanes, so LOP3's rate plus half the
-  collective's stays at most LOP3's cap of 2 a SM-clock. It showed REDUX on MATCH.ANY's unit.
+  collective's stays at most LOP3's cap of 2 a SM-clock. It showed REDUX on MATCH.ANY's unit and VOTE at 16 alu lanes.
 - `../sass_census/multimem.sh` reads the card's multicast attribute and what `cuMulticastCreate` answers, and runs
   `multimem.ld_reduce` (LDGMC) and `multimem.red` on ordinary memory. Its hypothesis is the sm_120 LDGMC row's: no
   multicast object exists, and on a unicast address LDGMC faults or loads the one copy.
