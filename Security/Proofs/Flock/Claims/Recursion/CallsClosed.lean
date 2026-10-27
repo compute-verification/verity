@@ -241,9 +241,8 @@ theorem lamLin2_R_ge_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     rw [hset] at hv
     cases hv
     exact hle _
-  have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 55 := by
-    have := SetupCount.innerB_le
-    first | omega | (simp only [Nat.reducePow] at this ⊢; omega)
+  have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 55 :=
+    le_trans (Nat.add_le_add_left (Nat.add_le_add_right SetupCount.innerB_le (2 ^ 24)) (2 ^ 28)) (by norm_num)
   exact lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc (innerSetupIns_le_acc hacc) ps
     SetupCount.innerB (2 ^ 24) hB
     (fun _ _ _ _ _ _ _ _ _ _ _ ha hw => FlockDeploy.KS.decisionAtS_calls_in H hin ha hw) hc
