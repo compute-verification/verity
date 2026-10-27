@@ -56,7 +56,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
   - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes.
-  - `benchmarks/numerical/`: the table tooling of the archived proof systems.
+  - `benchmarks/numerical/`: the archived proof systems' bench spine, references and checker.
 - `tools/`:
   - `verity/`: the `verity` command (`cli/`) and the tools it runs: `check/` (the one check, run on `main` after each landing),
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).

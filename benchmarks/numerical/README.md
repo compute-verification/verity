@@ -1,7 +1,7 @@
 # benchmarks/numerical
 
-Frozen: kept, still in the tables, not developed. The exception is the bench spine `verity_numerical.bench` (the result
-contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read,
+Frozen: kept, not developed. The exception is the bench spine `verity_numerical.bench` (the result contract, workloads,
+lowerings, the cell checks and `bench.interaction`, a result's interaction time), which C-Flock and `circuit-check` read,
 and `bench.unit_costs`, the per-unit-type cost inventory (gates, nonzeros, sampled units, work weight) over the census
 workloads.
 What the merge gate runs here: `../../archive/README.md`.

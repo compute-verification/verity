@@ -182,7 +182,7 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "archive/d.md": "a leg",
-        "benchmarks/numerical/CHANGELOG.md": "a leg",
+        "benchmarks/pouw/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }

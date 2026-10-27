@@ -22,7 +22,7 @@ Options (report section 2; ``OPTIONS``)
                             BabyBear, width 16 or 24, salted); the tensor digest is a Poseidon2 Merkle root over row
                             leaves and is disclosed; the ids tree above stays SHA-256 and is folded natively by the
                             verifier.  The proof still hashes the sampled rows in-circuit, but algebraically.
-(d) ``algebraic``           protocol change ``leaf/v2`` (``reference.leaf_v2``, ``LEAF_V2.md``): the tensor is a Ligero
+(d) ``algebraic``           protocol change ``leaf/v2``: the tensor is a Ligero
                             tableau (RS-encoded rows with k - l randomizers, Merkle over columns); the leaf digest is the
                             chunk roots' hash; the proof binds its witness rows by a cross-tableau IRS + linear test on
                             its existing Ligero round.  Nothing is hashed in-circuit.
