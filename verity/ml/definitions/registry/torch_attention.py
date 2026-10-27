@@ -522,7 +522,8 @@ def _attention_backward_sig(S):
     return (("do", q), ("qe", q), ("ke", kv), ("v", kv), ("y", y), ("p", p), ("cs", cs)), Tuple(q, kv, kv)
 
 
-_BLOCK = (f"exact-model-tested; against the model composed of its Definitions' models at N = 16 (tests/test_torch_attention.py), "
+_BLOCK = (f"exact-model-tested; against numerics.torch_blocks' model, composed of its Definitions' models, at N = 16 "
+          f"(tests/test_torch_attention.py), "
           f"which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of {SM120_RUN} "
           f"at S = 256 (difftest r20261027-051850-ed47, 10,452,992 words): {SM120_GPU}, 0 mismatches; its bmm's are "
           f"cublas_bf16.attention_bmm's wherever that binds (S = 256 and 512 at D = 64, TRAIN_CAPTURE)")

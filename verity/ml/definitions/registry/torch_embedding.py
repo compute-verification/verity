@@ -261,6 +261,6 @@ EmbeddingBackwardTied = CompositeDefinition(
                 ("w", Array(_statics(S, "V", 1, M_MAX).V, Array(S.H, BF16)))), Array(S.V, Array(S.H, BF16))), _tied,
     doc="the tied embedding's gradient over M tokens: g (M x H, token-major) through transpose, EmbeddingBackwardEntry_v1 on "
         "each of the V entries, then Bf16AddF2fp_v2 of the LM head's dW w and each entry's row",
-    conformance="exact-model-tested; against the model (tests/test_torch_embedding.py), whose tied add is the GPU's on every "
-                f"word of {SM120_STEP}: {SM120}",
+    conformance="exact-model-tested; against numerics.torch_blocks' model (tests/test_torch_embedding.py), whose tied add is "
+                f"the GPU's on every word of {SM120_STEP}: {SM120}",
     refuse=_refuse_all("M", "V", "H"))

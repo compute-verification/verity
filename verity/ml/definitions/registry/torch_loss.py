@@ -18,11 +18,6 @@ words; ``.float()`` widens them exactly, so each Definition reads them as bf16.
     LogSoftmaxNllBackwardWarp_v1{V}    (x: Array<C, BF16>, p: U32, mx: F32, ls: F32, s: F32, g: F32) -> Array<C, BF16>
     LogSoftmaxRow_v1{V}                (x: Array<V, BF16>, t: U32) -> Tuple<F32, F32, F32>
     LogSoftmaxNllBackwardRow_v1{V}     (x: Array<V, BF16>, t: U32, mx: F32, ls: F32, g: F32) -> Array<V, BF16>
-    CrossEntropyTorch_v1{M, V, MEAN}   (x: Array<M, Array<V, BF16>>, t: Array<M, U32>)
-                                       -> Tuple<F32, F32, Array<M, F32>, Array<M, F32>>
-    CrossEntropyTorchBackward_v1{M, V, MEAN}
-                                       (x, t, mx: Array<M, F32>, ls: Array<M, F32>, go: F32, tw: F32) -> Array<M, Array<V, BF16>>
-                                       MEAN = 0: no tw
 
 **The forward.** ``log_softmax`` of an f32 row of V = 4096·KL logits, KL >= 3 (smollm2's V = 49,152 is KL = 12), is
 `host_softmax`'s `cunn_SoftMaxForward<ILP = 4>` with a block of 1024 threads: V is past the persistent kernels' 1024, the
@@ -64,11 +59,11 @@ in the 31 others, and in all 32 for an ignored row) and s. `LogSoftmaxNllBackwar
 `DsaTopKOneHot_v1{N = C}` of its position, then `LogSoftmaxNllBackwardElem` on each logit.
 
 **The step's blocks** wire these with no gate of their own. `LogSoftmaxRow{V}` is a row: its 32 warps' max and sum, then
-`LogSoftmaxRowEnd` on the target's logit. `CrossEntropyTorch{M, V, MEAN}` is the M rows, then `NllLossTorch`; it returns the
-loss, the total weight and each row's max and logsum, which are what the backward reads of the forward.
-`LogSoftmaxNllBackwardRow{V}` is a row's `LogSoftmaxNllSlots` and its 32 warps' backward, the gradient back in column order,
-and `CrossEntropyTorchBackward{M, V, MEAN}` is `NllLossTorchBackward`, then the M rows. A row's chunks are its columns
-(`chunk_columns`), read in place.
+`LogSoftmaxRowEnd` on the target's logit. `LogSoftmaxNllBackwardRow{V}` is a row's `LogSoftmaxNllSlots` and its 32 warps'
+backward, the gradient back in column order. A row's chunks are its columns (`chunk_columns`), read in place. The step batches
+each over its M rows, with `NllLossTorch` on the rows' target log-probabilities between them and `NllLossTorchBackward` before
+the backward rows; each row's max and logsum are what the backward reads of the forward. No Definition holds the M rows: the
+least it could bind is `NllLossTorch`'s M = 16, sixteen rows of about 4.8e8 gates each, hours of circuit-check's reference.
 """
 from __future__ import annotations
 
@@ -93,10 +88,10 @@ from .boolean_gather import gather_bf16
 from .gumbel_boolean import NvLogf
 from .torch_attention import SM120, SM120_SHAPES, SM120_STEP, nv_expf
 
-__all__ = ["CrossEntropyTorch", "CrossEntropyTorchBackward", "LogSoftmaxAt", "LogSoftmaxLaneMax", "LogSoftmaxLaneSumExp",
-           "LogSoftmaxNllBackwardElem", "LogSoftmaxNllBackwardRow", "LogSoftmaxNllBackwardWarp", "LogSoftmaxNllSlots",
-           "LogSoftmaxRow", "LogSoftmaxRowEnd", "LogSoftmaxWarpMax", "LogSoftmaxWarpSumExp", "NllLossTorch",
-           "NllLossTorchBackward", "WarpReduceMax", "WarpReduceSum", "chunk_columns", "nll_threads"]
+__all__ = ["LogSoftmaxAt", "LogSoftmaxLaneMax", "LogSoftmaxLaneSumExp", "LogSoftmaxNllBackwardElem",
+           "LogSoftmaxNllBackwardRow", "LogSoftmaxNllBackwardWarp", "LogSoftmaxNllSlots", "LogSoftmaxRow", "LogSoftmaxRowEnd",
+           "LogSoftmaxWarpMax", "LogSoftmaxWarpSumExp", "NllLossTorch", "NllLossTorchBackward", "WarpReduceMax",
+           "WarpReduceSum", "chunk_columns", "nll_threads"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -357,8 +352,6 @@ LogSoftmaxNllBackwardWarp = CompositeDefinition(
 # --- the step's blocks ------------------------------------------------------------------------------------------------------
 
 _GPU_ROW = f"exact-model-tested; on a row (V = 49,152) of {SM120_STEP}: {SM120}"
-_BLOCK = ("exact-model-tested; against the model at M = 16 and 40, V = 12,288 (tests/test_torch_loss.py), its rows and "
-          "NllLossTorch_v1 being the GPU's")
 
 
 def _row_type(S) -> Array:
@@ -403,40 +396,3 @@ LogSoftmaxNllBackwardRow = CompositeDefinition(
         "LogSoftmaxNllSlots_v1, then LogSoftmaxNllBackwardWarp_v1 on each warp's chunk, the gradient in column order",
     conformance=_GPU_ROW, refuse=_refuse("V"))
 
-
-def _cross_entropy_sig(S):
-    S = _statics(S, "M", "V", "MEAN")
-    rows = Array(S.M, F32)
-    return (("x", Array(S.M, Array(S.V, BF16))), ("t", Array(S.M, U32))), Tuple(F32, F32, rows, rows)
-
-
-def _cross_entropy(B, S, x, t):
-    r = B.batch(bind(LogSoftmaxRow, V=S.V), x, t, axes=(0, 0)).reshape(Array(S.M, Array(3, F32)))
-    loss = B.call(bind(NllLossTorch, M=S.M, V=S.V, MEAN=S.MEAN), r.take(1, 2), t)
-    return Coll(Tuple(F32, F32, Array(S.M, F32), Array(S.M, F32)), concat([loss.refs, r.take(1, 0).refs, r.take(1, 1).refs]))
-
-
-CrossEntropyTorch = CompositeDefinition(
-    "CrossEntropyTorch", 1, ("M", "V", "MEAN"), _cross_entropy_sig, _cross_entropy,
-    doc="cross_entropy(logits.float(), labels, ignore_index=-100) on M rows of V bf16 logits: LogSoftmaxRow_v1 on each row, then "
-        "NllLossTorch_v1 on the rows' target log-probabilities: (the loss, the total weight, each row's max, each row's logsum)",
-    conformance=_BLOCK, refuse=_refuse("M", "V", "MEAN"))
-
-
-def _cross_entropy_backward_sig(S):
-    S = _statics(S, "M", "V", "MEAN")
-    x = Array(S.M, Array(S.V, BF16))
-    tail = (("go", F32),) + ((("tw", F32),) if S.MEAN else ())
-    return (("x", x), ("t", Array(S.M, U32)), ("mx", Array(S.M, F32)), ("ls", Array(S.M, F32))) + tail, x
-
-
-def _cross_entropy_backward(B, S, x, t, mx, ls, go, *tw):
-    g = B.call(bind(NllLossTorchBackward, MEAN=S.MEAN), go, *tw)
-    return B.batch(bind(LogSoftmaxNllBackwardRow, V=S.V), x, t, mx, ls, g, axes=(0, 0, 0, 0, None))
-
-
-CrossEntropyTorchBackward = CompositeDefinition(
-    "CrossEntropyTorchBackward", 1, ("M", "V", "MEAN"), _cross_entropy_backward_sig, _cross_entropy_backward,
-    doc="cross-entropy's backward to the bf16 logits from the loss's gradient go (and the total weight, MEAN = 1): "
-        "NllLossTorchBackward_v1, then LogSoftmaxNllBackwardRow_v1 on each row with its max and logsum from CrossEntropyTorch_v1",
-    conformance=_BLOCK, refuse=_refuse("M", "V", "MEAN"))

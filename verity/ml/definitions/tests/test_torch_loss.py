@@ -1,5 +1,5 @@
 """`registry.torch_loss`: each Boolean Definition computes, word for word, the numpy model of its torch CUDA kernel
-(`numerics.torch_kernels`), warp by warp at V = 12,288 (three loads a thread, the least vocabulary the block kernel runs at), on
+(`numerics.torch_kernels`; a row's, `numerics.torch_blocks`), warp by warp at V = 12,288 (three loads a thread, the least vocabulary the block kernel runs at), on
 rows of normal logits and rows with special words (NaN, ±inf, all -0, the extremes). The model then matches torch's CPU
 cross-entropy and its backward to f32 rounding: the CPU kernels sum in another order and with another expf. The CUDA kernels
 themselves are `test_torch_training_sm120.py`'s. The target's logit is picked in numpy, since `GatherBf16x{V}_v2` is made on demand and has
@@ -11,6 +11,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.definitions.numerics import torch_blocks as TB
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import torch_loss as TL
 
@@ -137,19 +138,12 @@ def test_each_warps_backward_is_the_epilogue_on_its_chunk() -> None:
 
 # --- the step's blocks ---------------------------------------------------------------------------------------------------------
 
-def _row_ends(x, t):
-    """The model's (max, logsum, target log-probability) a row, the last from GatherBf16x's 0x7FFF for a label outside [0, V)."""
-    _, mx, ls, _, _ = TK.log_softmax_forward(x)
-    xt = np.where(t < V, x[np.arange(len(x)), np.minimum(t, V - 1)], 0x7FFF)
-    return mx, ls, TK.add(TK.add(TK.f32(xt), TK.neg(mx)), TK.neg(ls))
-
-
 @pytest.mark.slow
 def test_a_row_is_its_warps_then_the_row_end() -> None:
     """Six rows (NaN, ±inf, the extremes, all -0), labels in all three chunks' warps, ignored and V. About 40 s."""
     x = logits(np.random.default_rng(7))
     t = np.array([4096 * 2 + 128 * 31 + 127, 0, IGNORE, 4096 + 5, V, 77], np.uint32)
-    _same(_ev(bind(TL.LogSoftmaxRow, V=V), x, t), np.stack(_row_ends(x, t), 1))
+    _same(_ev(bind(TL.LogSoftmaxRow, V=V), x, t), np.stack(TB.MODELS["LogSoftmaxRow_v1"]({"V": V}, x, t), 1))
 
 
 def test_a_rows_backward_is_its_slots_then_its_warps() -> None:
@@ -160,28 +154,8 @@ def test_a_rows_backward_is_its_slots_then_its_warps() -> None:
     ls = np.full(len(x), 0x41140000, np.uint32)
     ls[-1] = 0x7FFFFFFF
     g = np.array([0xB9800000, 0xB9800000, 0xB9800000, 0x80000000, 0x7FC00000, 0xBF800000], np.uint32)
-    _same(_ev(bind(TL.LogSoftmaxNllBackwardRow, V=V), x, t, mx, ls, g), TK.log_softmax_nll_backward(x, t, mx, ls, g, V))
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("M,MEAN", [(16, 1), (40, 0)])
-def test_the_cross_entropy_blocks_are_the_rows_and_the_loss(M, MEAN) -> None:
-    """M rows of normal logits and the special ones, every seventh label ignored: the loss, the total weight and each row's max
-    and logsum, then the logits' gradient from go = 1. It catches what the row tests can't: the blocks' wiring of each row's
-    target log-probability into NllLossTorch_v1 (at M = 40 its 32 threads' first 8 take two rows; the sum and the mean) and
-    of the loss's gradient into every row's backward. About 1.5 minutes each."""
-    rng = np.random.default_rng(9 + M)
-    x = np.concatenate([TK.bf16(_f32(rng.normal(0, 3, (M - 6, V)))), logits(rng, 2)])
-    t = _labels(rng, M)
-    mx, ls, lp = _row_ends(x, t)
-    loss, tw = TK.nll_loss(lp, t, V, bool(MEAN))
-    got = _ev(bind(TL.CrossEntropyTorch, M=M, V=V, MEAN=MEAN), x[None], t[None]).reshape(-1)
-    _same(got, np.concatenate([[loss, tw], mx, ls]))
-    go = np.array([0x3F800000], np.uint32)
-    g = TK.nll_loss_backward(go[0], tw, bool(MEAN))
-    dx = _ev(bind(TL.CrossEntropyTorchBackward, M=M, V=V, MEAN=MEAN), x[None], t[None], mx[None], ls[None], go,
-             *((np.array([tw], np.uint32),) if MEAN else ()))
-    _same(dx.reshape(M, V), TK.log_softmax_nll_backward(x, t, mx, ls, np.full(M, g, np.uint32), V))
+    want = TB.MODELS["LogSoftmaxNllBackwardRow_v1"]({"V": V}, x, t, mx, ls, g)
+    _same(_ev(bind(TL.LogSoftmaxNllBackwardRow, V=V), x, t, mx, ls, g), want)
 
 
 # --- the model against torch's CPU cross-entropy -----------------------------------------------------------------------------
@@ -223,7 +197,6 @@ def test_the_model_matches_torch_cross_entropy_to_rounding() -> None:
     (TL.NllLossTorch, {"M": 16, "V": V, "MEAN": 2}), (TL.NllLossTorchBackward, {"MEAN": -1}),
     (TL.LogSoftmaxNllSlots, {"V": 100}), (TL.LogSoftmaxNllBackwardWarp, {"V": 12288 * 2 + 1}),
     (TL.LogSoftmaxRow, {"V": 4096}), (TL.LogSoftmaxNllBackwardRow, {"V": 12289}),
-    (TL.CrossEntropyTorch, {"M": 8, "V": V, "MEAN": 1}), (TL.CrossEntropyTorchBackward, {"M": 16, "V": V, "MEAN": 3}),
 ], ids=lambda a: getattr(a, "name", repr(a)))
 def test_bind_refuses_statics_outside_the_kernels_range(d, statics) -> None:
     with pytest.raises(ValueError, match="refuses this binding"):

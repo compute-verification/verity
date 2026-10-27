@@ -11,8 +11,8 @@ import pytest
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.types import Array
+from verity.ml.definitions.numerics import torch_blocks as TB
 from verity.ml.definitions.numerics import torch_kernels as TK
-from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity.ml.definitions.registry import torch_attention as TA
 
@@ -147,51 +147,6 @@ def rope_table(N: int, D: int) -> np.ndarray:
     return np.concatenate([_bf16(np.cos(a)), _bf16(np.sin(a))], 1)
 
 
-def _heads(x, H: int, D: int) -> np.ndarray:
-    """(N, H·D) token-major rows as (H, N, D)."""
-    return x.reshape(x.shape[0], H, D).transpose(1, 0, 2)
-
-
-def _tokens(x) -> np.ndarray:
-    """(H, N, D) as (N, H·D)."""
-    return x.transpose(1, 0, 2).reshape(x.shape[1], -1)
-
-
-def attention(q, k, v, cs, n, NH: int, KVH: int, D: int):
-    """The forward block's model on one sequence, composed of its Definitions' models: (o, qe, ke, y, p) in its layouts."""
-    N, R = q.shape[0], NH // KVH
-    qe = _heads(TK.rope_hf(q.reshape(N * NH, D), np.repeat(cs, NH, 0)).reshape(N, NH * D), NH, D)
-    ke = _heads(TK.rope_hf(k.reshape(N * KVH, D), np.repeat(cs, KVH, 0)).reshape(N, KVH * D), KVH, D)
-    s = BC.bmm_rows(qe, np.repeat(ke, R, 0).transpose(0, 2, 1))
-    y, p = (a.reshape(NH, N, N) for a in TK.eager_softmax(s.reshape(NH * N, N), np.tile(n, NH), D))
-    o = BC.bmm_rows(p, np.repeat(_heads(v, KVH, D), R, 0))
-    return _tokens(o), _tokens(qe), _tokens(ke), y.transpose(1, 0, 2), p.transpose(1, 0, 2)
-
-
-def _unrepeat(g, KVH: int):
-    """repeat_kv's backward on (NH, N, D): each KV head's R query heads summed, as (N, KVH·D)."""
-    NH, N, D = g.shape
-    R = NH // KVH
-    if R == 1:
-        return _tokens(g)
-    g = g.reshape(KVH, R, N, D).transpose(0, 2, 1, 3).reshape(KVH * N, R, D)
-    return _tokens(TK.repeat_kv_backward(g).reshape(KVH, N, D))
-
-
-def attention_backward(do, qe, ke, v, y, p, cs, NH: int, KVH: int, D: int):
-    """The backward block's model, composed of its Definitions' models: (dq, dk, dv) in projection space."""
-    N, R = do.shape[0], NH // KVH
-    dO, Q = _heads(do, NH, D), _heads(qe, NH, D)
-    K, V = np.repeat(_heads(ke, KVH, D), R, 0), np.repeat(_heads(v, KVH, D), R, 0)
-    Y, P = y.transpose(1, 0, 2), p.transpose(1, 0, 2)
-    dP = BC.bmm_rows(dO, V.transpose(0, 2, 1))
-    dS = TK.eager_softmax_backward(dP.reshape(-1, N), Y.reshape(-1, N), D).reshape(NH, N, N)
-    dQ, dK, dV = BC.bmm_rows(dS, K), BC.bmm_rows(dS.transpose(0, 2, 1), Q), BC.bmm_rows(P.transpose(0, 2, 1), dO)
-    dq = TK.rope_hf_backward(_tokens(dQ).reshape(N * NH, D), np.repeat(cs, NH, 0)).reshape(N, NH * D)
-    dk = TK.rope_hf_backward(_unrepeat(dK, KVH).reshape(N * KVH, D), np.repeat(cs, KVH, 0)).reshape(N, KVH * D)
-    return dq, dk, _unrepeat(dV, KVH)
-
-
 def _projections(rng, N: int, H: int, D: int) -> np.ndarray:
     """A projection's (N, H·D) bf16 output: normal words with a few specials."""
     x = _bf16(rng.normal(0, 1.5, (N, H * D)))
@@ -214,21 +169,23 @@ def _split(out, *shapes):
 @pytest.mark.parametrize("NH,KVH", [(4, 2), (2, 2)])
 def test_the_attention_blocks_are_their_definitions_models(NH, KVH) -> None:
     """One sequence of N = 16 tokens, D = 16, with two query heads a KV head and with one, forward then backward on the saved
-    values: every word of every output. It catches what no test of a single Definition can: the blocks' wiring of the heads,
-    the bmm's rows and operands, the transposes, and the softmax rows (about 1 minute and 2 GB a case)."""
+    values: every word of every output, against `torch_blocks.MODELS`, the models the step's walk calls. It catches what no
+    test of a single Definition can: the blocks' wiring of the heads, the bmm's rows and operands, the transposes, and the
+    softmax rows (about 1 minute and 2 GB a case)."""
     N, D = 16, 16
     rng = np.random.default_rng(NH)
     q, k, v = _projections(rng, N, NH, D), _projections(rng, N, KVH, D), _projections(rng, N, KVH, D)
-    cs, n = rope_table(N, D), np.arange(1, N + 1)
-    want = attention(q, k, v, cs, n, NH, KVH, D)
+    cs, n = rope_table(N, D), np.arange(1, N + 1).astype(np.uint16)
     st = dict(N=N, NH=NH, KVH=KVH, D=D)
-    got = evaluate_words(bind(TA.EagerAttentionTorch, **st), q[None], k[None], v[None], cs[None], n.astype(np.uint16)[None])
+    args = tuple(a[None] for a in (q, k, v, cs, n))
+    want = [w[0] for w in TB.MODELS["EagerAttentionTorch_v1"](st, *args)]
+    got = evaluate_words(bind(TA.EagerAttentionTorch, **st), *args)
     for g, w in zip(_split(got, *(w.shape for w in want)), want, strict=True):
         _same(g, w)
     _, qe, ke, y, p = want
-    do = _projections(rng, N, NH, D)
-    want = attention_backward(do, qe, ke, v, y, p, cs, NH, KVH, D)
-    got = evaluate_words(bind(TA.EagerAttentionTorchBackward, **st), *(a[None] for a in (do, qe, ke, v, y, p, cs)))
+    args = tuple(a[None] for a in (_projections(rng, N, NH, D), qe, ke, v, y, p, cs))
+    want = [w[0] for w in TB.MODELS["EagerAttentionTorchBackward_v1"](st, *args)]
+    got = evaluate_words(bind(TA.EagerAttentionTorchBackward, **st), *args)
     for g, w in zip(_split(got, *(w.shape for w in want)), want, strict=True):
         _same(g, w)
 

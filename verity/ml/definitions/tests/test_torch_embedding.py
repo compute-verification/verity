@@ -13,6 +13,7 @@ import pytest
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.definitions.numerics import torch_blocks as TB
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import torch_embedding as TE
 
@@ -118,8 +119,9 @@ def test_the_tied_gradient_is_the_lm_heads_plus_each_entrys_row() -> None:
     g[3, 0], g[5, 129], g[7, 64] = 0x7FC1, 0x8000, 0x7F80
     w = TK.bf16(np.asarray(rng.normal(0, 1, (V, F)), np.float32).view(np.uint32))
     w[2, 0], w[7, 1], w[0, 2] = 0xFF80, 0x8000, 0x7FC0
-    got = evaluate_words(bind(TE.EmbeddingBackwardTied, M=M, V=V, H=F), t[None], g[None], w[None])
-    _same(got, TK.bf16_add(w, TK.embedding_dense_backward(t, g, range(V))))
+    st = dict(M=M, V=V, H=F)
+    got = evaluate_words(bind(TE.EmbeddingBackwardTied, **st), t[None], g[None], w[None])
+    _same(got, TB.MODELS["EmbeddingBackwardTied_v1"](st, t[None], g[None], w[None]))
 
 
 @pytest.mark.parametrize("M", [200, 3100])
