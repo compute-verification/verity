@@ -1,7 +1,8 @@
 """Each stratum's circuit file of a period's declared window Program, built with the auditor's own lowering, and the
 ``--circuit-files`` its period-open commits (core's `credit.committed_files`).
 
-A drawn proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))`, one of the declared
+A drawn proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))` (its unit in
+`weights.chunks` (K) chunks past `weights.CHUNK_MAX`, `h1window._chunked`, as the Program declares it), one of the declared
 Program's ``TILES``. It is lowered by C-Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
 lowers it (`h1unit.Shape.stager`, under ``HZ_STAGE``, ``fast`` by default), and bound to the window's Program and
 partition: ``{"program": its program_digest, "partition": the digest of its Q_template_instances partition object}``,
@@ -62,7 +63,7 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     from verity.ml.circuits.codec import descriptor_id
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
     tile = tuple(layout["tile"])
-    ids = {k: descriptor_id(HW.template(k, HW.tile_unit(k, tile))) for k in strata(layout)}
+    ids = {k: descriptor_id(HW.template(k, HW._chunked(k, HW.tile_unit(k, tile)))) for k in strata(layout)}
     missing = sorted(k for k, i in ids.items() if i not in desc["definitions"])
     if missing:
         raise ValueError(f"K = {missing}'s template (h1window.template over tile_unit at {list(tile)}) is not one of the "
