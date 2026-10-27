@@ -56,6 +56,7 @@ from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocols.pouw import pearl_c as PD
+from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -63,6 +64,7 @@ import fast_tile as FT
 import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier
 
+settings = of(__file__)
 DRAWS = 3
 
 
@@ -257,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("manifest", type=Path)
     p.add_argument("--draws", type=int, default=DRAWS)
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
-    p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
+    p.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA or "unknown")
     p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
     p.add_argument("--fast", action="store_true", help="replay the tiles on fast_tile's batch forms (the scalar reference's verdicts)")
     p.add_argument("--cross-check", type=int, default=64, metavar="N",

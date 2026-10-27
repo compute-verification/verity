@@ -120,10 +120,12 @@ class Registry:
         return cls(**values)
 
     def override(self, values: Mapping[str, Any]) -> Registry:
-        """A registry with these values in place of the old (each key must exist: a typo is an error, not a no-op)."""
+        """A registry with these values in place of the old (each key must exist: a typo is an error, not a no-op). A
+        `Param` replaces the whole parameter: its range, source and status with its value."""
         params = dict(self._params)
         for key, value in values.items():
-            params[key] = replace(self.param(key), value=value)
+            old = self.param(key)
+            params[key] = replace(value, key=key) if isinstance(value, Param) else replace(old, value=value)
         return Registry(params, index=self._tables())
 
 

@@ -122,26 +122,29 @@ __global__ void noise_kernel(Seeds sd, int which, u64 count, int8_t* __restrict_
   for (int i = 0; i < 16; ++i)
     if (16 * b + i < count) out[16 * b + i] = (int8_t)((int)(((u64)dword(st, i) * (2 * NOISE + 1)) >> 32) - NOISE);
 }
-// pi_tau: Fisher-Yates over L' with word tau L' + c of the P stream (c from L' - 1 down to 1), a CTA of L' threads a tile
-__global__ void perm_kernel(Seeds sd, int lp, uint16_t* __restrict__ perm) {
+// pi_tau: Fisher-Yates over L' with word tau L' + c of the P stream (c from L' - 1 down to 1), a CTA of PERM_THREADS(L')
+// threads a tile and 6 L' bytes of shared memory (at most 512 threads: its SHA-512 takes 90 registers, and a 1024-thread CTA
+// of those doesn't launch)
+__host__ __device__ constexpr int PERM_THREADS(int lp) { return lp < 512 ? lp : 512; }
+__global__ void __launch_bounds__(512) perm_kernel(Seeds sd, int lp, uint16_t* __restrict__ perm) {
   extern __shared__ u32 pw[];
   uint16_t* p = reinterpret_cast<uint16_t*>(pw + lp);
-  const int tau = blockIdx.x, t = threadIdx.x;
-  if (t < lp / 16) {
+  const int tau = blockIdx.x;
+  for (int t = threadIdx.x; t < lp / 16; t += blockDim.x) {
     u64 st[8];
     prg(sd.w[S_P], tag_of(S_P), (u64)tau * (lp / 16) + t, st);
 #pragma unroll
     for (int i = 0; i < 16; ++i) pw[16 * t + i] = dword(st, i);
   }
-  p[t] = (uint16_t)t;
+  for (int t = threadIdx.x; t < lp; t += blockDim.x) p[t] = (uint16_t)t;
   __syncthreads();
-  if (t == 0)
+  if (threadIdx.x == 0)
     for (int c = lp - 1; c > 0; --c) {
       const int x = (int)(((u64)pw[c] * (u64)(c + 1)) >> 32);
       const uint16_t s = p[c]; p[c] = p[x]; p[x] = s;
     }
   __syncthreads();
-  perm[(size_t)tau * lp + t] = p[t];
+  for (int t = threadIdx.x; t < lp; t += blockDim.x) perm[(size_t)tau * lp + t] = p[t];
 }
 
 // ---------------------------------------------------------------- forming
@@ -2144,7 +2147,7 @@ struct Ctx {
     const u64 cu = (u64)n * lp, cv = (u64)m * lp;
     noise_kernel<<<(unsigned)((cu / 16 + 127) / 128), 128, 0, st>>>(seeds, S_U, cu, U);
     noise_kernel<<<(unsigned)((cv / 16 + 127) / 128), 128, 0, st>>>(seeds, S_V, cv, V);
-    perm_kernel<<<NT, lp, lp * 6, st>>>(seeds, lp, perm);
+    perm_kernel<<<NT, PERM_THREADS(lp), lp * 6, st>>>(seeds, lp, perm);
   }
   void form(cudaStream_t st) {
     form_a_kernel<<<m / 16, lp, 16 * lp * 4, st>>>(fa());
@@ -2393,11 +2396,11 @@ struct Fill {
 
   // "": fine; else why the shape can't be committed
   static std::string bad_shape(int m, int n, int k, int lp, int L, int row) {
-    if (m <= 0 || n <= 0 || k <= 0 || m % TILE || n % TILE || k % BK || lp <= 0 || lp % BK || k % lp || lp > 1024 || L <= 0 ||
+    if (m <= 0 || n <= 0 || k <= 0 || m % TILE || n % TILE || k % BK || lp <= 0 || lp % BK || k % lp || lp > 4096 || L <= 0 ||
         L % lp || row <= 0 || row % 16 || 32768 % row)
       return "shape m " + std::to_string(m) + " n " + std::to_string(n) + " k " + std::to_string(k) + " L' " + std::to_string(lp) +
              " L " + std::to_string(L) + " ROW " + std::to_string(row) +
-             ": m, n, K, L' multiples of 128, L' | K, L' <= 1024, L a multiple of L', ROW | 32768 and a multiple of 16";
+             ": m, n, K, L' multiples of 128, L' | K, L' <= 4096, L a multiple of L', ROW | 32768 and a multiple of 16";
     if (k >= (1 << 17)) return "K " + std::to_string(k) + ": below 2^17 (dither.K_LIMIT)";
     const u64 lv = (u64)(m / TILE) * (n / TILE) * (((k + L - 1) / L) * (32768 / row) + 65536 / row);
     if (lv > (1ull << 32)) return "more than 2^32 leaves";
@@ -2516,7 +2519,7 @@ struct Fill {
       bits_kernel<<<(unsigned)((bb + 127) / 128), 128, 0, st>>>(seeds, S_DB, bb, dB);
       if (Wn) {
         noise_kernel<<<(unsigned)((cu / 16 + 127) / 128), 128, 0, st>>>(seeds, S_U, cu, U);
-        perm_kernel<<<NT, lp, lp * 6, st>>>(seeds, lp, perm);
+        perm_kernel<<<NT, PERM_THREADS(lp), lp * 6, st>>>(seeds, lp, perm);
       }
     }
   }
@@ -3297,7 +3300,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              bits_kernel<<<(unsigned)((bb + 127) / 128), 128, 0, s>>>(f.seeds, S_DB, bb, f.dB);
              if (!f.Wn) continue;
              noise_kernel<<<(unsigned)((cu / 16 + 127) / 128), 128, 0, s>>>(f.seeds, S_U, cu, f.U);
-             perm_kernel<<<f.NT, lp, lp * 6, s>>>(f.seeds, lp, f.perm);
+             perm_kernel<<<f.NT, PERM_THREADS(lp), lp * 6, s>>>(f.seeds, lp, f.perm);
            }
          }},
         {"form_a", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) f.form(s, A, false, 0); }},
@@ -3546,6 +3549,8 @@ int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, co
   f.set_seeds(seeds);
   *call = f.calls;
   f.issue(off, static_cast<const int8_t*>(a_dev), ch);
+  const cudaError_t e = cudaGetLastError();
+  if (e != cudaSuccess) return fail("call " + std::to_string(*call) + ": a launch failed: " + cudaGetErrorString(e));
   return 0;
 }
 
