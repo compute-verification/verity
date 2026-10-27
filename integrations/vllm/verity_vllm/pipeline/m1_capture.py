@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.engine import static_schedule
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # noqa: F401  (apply_env before vllm import)
 
 prof.apply_env()
@@ -120,7 +120,7 @@ def parse_steps(s: str | None) -> frozenset[int]:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_32x16_1req.json")
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     snapshot_steps: str | None = option("--snapshot-steps", default=None,
