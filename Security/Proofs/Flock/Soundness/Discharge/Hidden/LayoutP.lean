@@ -24,14 +24,15 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
   {draw : Option Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
 
 /-- **An untyped hidden-output statement accepted at public inputs has the layout the placement reads.** -/
-theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tables draw own pi st) : Layout st := by
+theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tables draw own pi st)
+    (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Layout st := by
   obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
   have P := parse_facts hp
   obtain ⟨ls, hcheck⟩ := P.check
   have C := check_facts P.typed hcheck
   have L : Layout { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 } :=
     layout_of P s.pin rfl rfl s.m s.kLog
-  have hd := hidden_delta' st.c st.pin
+  have hd := hidden_delta_unpinned hpin st.pin
   obtain ⟨rest, h1, h2⟩ := L.delta
   have h1' : (HmRow.delta st.c st.pin).1.toList = constPairs st.c st.pin ++ rest := h1
   have hkc : ∀ p ∈ constPairs st.c st.pin, keepCol st.c pi p.1 = true := by
