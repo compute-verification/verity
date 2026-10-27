@@ -46,3 +46,5 @@ wire strings (the verdict keys `integrity`, `communication`) and `Core.Protocol`
   reduction form `Pr[accept ∧ claim fails on E^τ's values] ≤ δ + f(Pr[B^τ outputs a SHA-512 collision])`, with E and B fixed
   constructions; `ecr/sha-512` is asked only of B. Every guarantee gets `<name>_honest` (hypotheses hold at the honest
   deployed instance) and `<name>_nontrivial` (the conclusion fails for an accept-everything verifier).
+
+- **Smaller tree (Daniel, 9:53 PM PDT, via top 05:00Z):** every PR that adds code says in its body what it deletes or unifies, or why nothing can go. Prefer one definition over a second; delete superseded statements, scaffolding and copies in the same PR that replaces them. main must be below 223.4 MB / 13,768 files by Wed 23:00Z, then smaller daily.
