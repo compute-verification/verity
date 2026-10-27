@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import copy
 import json
-import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -28,8 +28,11 @@ from verity_flock import rec_live as RL
 from verity_flock import rec_vstage as S
 from verity_flock import rec_vstar as V
 
-TREE = Path(os.environ["VERITY_IRDEP_TREE"]) if os.environ.get("VERITY_IRDEP_TREE") else None
-LEAN_OUT = Path(os.environ["VERITY_IRDEP_LEAN"]) if os.environ.get("VERITY_IRDEP_LEAN") else None
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import settings
+
+TREE = settings.irdep_tree()
+LEAN_OUT = settings.irdep_lean()
 pytestmark = pytest.mark.skipif(TREE is None or LEAN_OUT is None,
                                 reason="VERITY_IRDEP_TREE and VERITY_IRDEP_LEAN name no deployed run and IrDep output")
 TABLE = "circuit"
