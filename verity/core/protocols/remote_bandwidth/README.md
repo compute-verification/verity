@@ -105,7 +105,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
   control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
   or on a TCP port, it holds the auditor's registration and its plan (the units holding a tensor's block, not the
-  store's padding past them, which is PoUS's: MEM-72), drives the session on its own clock and coins, and answers
+  store's padding past them, which is PoUS's), drives the session on its own clock and coins, and answers
   the verdict with the credited reads (`q_bytes`). `prove` is the prover's side of the channel.
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
