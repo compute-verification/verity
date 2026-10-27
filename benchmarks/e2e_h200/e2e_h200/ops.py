@@ -1,5 +1,5 @@
 """The step's row ops and the W8A8 linear in torch, on whatever device their tensors are on, each the function of its units
-in circuits' FAMILIES map (`plan`; the semantics are CMP-92's plan, af6de1f1, sections 1 and 1b): every f32 op one IEEE
+in circuits' FAMILIES map (`plan`; the semantics are circuits' plan's): every f32 op one IEEE
 round to nearest (torch's elementwise kernels, no fast math, no FMA across separate ops), division and sqrt correctly
 rounded through f64 (`div_rn`, `sqrt_rn`), every reduction sequential in ascending index from +0 (`seq_sum`, never torch's
 blocked sums: a Triton kernel on CUDA, numpy on the host), every bf16 rounding RNE. NaN words are not modelled (no op here

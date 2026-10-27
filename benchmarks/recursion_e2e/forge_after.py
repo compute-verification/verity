@@ -27,12 +27,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import settings as RS
 
 CASES = {"coef": ("L0", "coef"), "dirs": ("L0", "dirs"), "message": ("alg-p0", "m0")}
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "registered.json")
@@ -61,6 +62,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     """`out/<case>` (honest, bc, stmt, value: the module docstring) from the statement `stmt`; what each changed."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
     from verity_flock import rec_outer as O
+    from verity_flock import circuit as FC
 
     text = (stmt / "circuit.txt").read_text()
     inst, pub = (stmt / "inst.bin").read_bytes(), (stmt / "pub.bin").read_bytes()
@@ -86,7 +88,10 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
         (out / case).mkdir(parents=True, exist_ok=True)
         for f in VERIFIER_FILES:
             shutil.copyfile(stmt / f, out / case / f)
-    if json.dumps(ph, sort_keys=True).encode() + b"\n" != pub[:pnl]:
+    # C-Flock's compact line (`verity_flock.circuit.public_file`), or the spaced one an earlier run's sessions were staged with
+    dump = next((d for d in (lambda h: FC.public_file(h, b""), lambda h: json.dumps(h, sort_keys=True).encode() + b"\n")
+                 if d(ph) == pub[:pnl]), None)
+    if dump is None:
         raise SystemExit(f"{stmt}: pub.bin's header is not sort_keys JSON; cannot rewrite it byte for byte")
     b = bytearray(pub)
     b[at:at + BC] = forged
@@ -98,7 +103,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
         raise SystemExit(f"{stmt}: {port}'s table b || c do not give the header's frame-v3 root")
     ph_s = json.loads(pub[:pnl])
     ph_s["frame_v3"]["roots"][port] = frame_root(text, fv, port, [forged, *tbl[1:]])
-    (out / "stmt" / "pub.bin").write_bytes(json.dumps(ph_s, sort_keys=True).encode() + b"\n" + bytes(b[pnl:]))
+    (out / "stmt" / "pub.bin").write_bytes(dump(ph_s) + bytes(b[pnl:]))
     rec["stmt"] = {"pub.bin": f"row 0's b || c and the header's frame_v3 root of {port}",
                    "frame_root": [fv["roots"][port][:16], ph_s["frame_v3"]["roots"][port][:16]]}
     skip = lambda why: (shutil.rmtree(out / "value"), rec.__setitem__("value", {"skipped": why}), rec)[-1]
@@ -117,7 +122,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     f = mk([row0 if p == pos[0] else r for p, r, _ in by_pos])
     ph_v = json.loads(json.dumps(ph_s))
     ph_v["registered"][port]["paths"] = [f.path(p).hex() for p in pos]
-    (out / "value" / "pub.bin").write_bytes(json.dumps(ph_v, sort_keys=True).encode() + b"\n" + bytes(b[pnl:]))
+    (out / "value" / "pub.bin").write_bytes(dump(ph_v) + bytes(b[pnl:]))
     reads["ports"][port] = {**port_, "root": f.root.hex()}
     (out / "value" / "registered.json").write_text(json.dumps(reads))
     rec["value"] = {"pub.bin": "as stmt, and the header's registered paths", "registered.json": f"{port}'s root",
@@ -205,7 +210,7 @@ def main() -> int:
     kinds = [k for k in CASES if k in a.kinds.replace(",", " ").split()]
     if not kinds:
         raise SystemExit(f"--kinds {a.kinds!r}: none of {', '.join(CASES)}")
-    out = Path(os.environ.get("OUT", "out")) / "forge-after"
+    out = Path(RS.OUT or "out") / "forge-after"
     out.mkdir(parents=True, exist_ok=True)
     dd = a.work / "data" / a.tag
     inner = sorted((dd / "inner").glob("s[0-9]*"), key=lambda p: int(p.name[1:]))[-1]

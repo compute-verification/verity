@@ -1676,8 +1676,13 @@ pub struct Instances {
     pub salts: Option<Vec<u8>>,
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
-    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, refs): what Σ binds
+    /// SHA-512 of the header's compact key-sorted JSON (no newline) and every public byte after the rows and salts
+    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its draw's, which no file holds, so this is no file's hash.
     pub public_sha512: [u8; 64],
+    /// SHA-512 of the verifier's own public file of the registered population (`public_file`'s bytes, which is the staged
+    /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A drawn statement
+    /// keeps its population's.
+    pub public_file_sha512: [u8; 64],
     /// the registered population's `b || c` (a drawn statement: the frame-v3 roots are over them); `None`: the statement's own
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>)>,
     /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
@@ -1798,13 +1803,15 @@ impl Instances {
             return Err("header: a staged file is a registered population; a draw is made in the session".into());
         }
         header["rows"] = Value::Bool(false);
-        let public_sha512 = Self::public_digest(&header, pubs);
-        Ok(Instances { header, n, rows, salts, bcs, public_sha512, population: None, tables, public })
+        let public_sha512 = Self::public_digest(&header, b"", pubs);
+        let public_file_sha512 = Self::public_digest(&header, b"\n", pubs);
+        Ok(Instances { header, n, rows, salts, bcs, public_sha512, public_file_sha512, population: None, tables, public })
     }
 
-    /// SHA-512 of the header's compact key-sorted JSON and the public bytes. serde_json's maps are sorted (no `preserve_order`), so
-    /// the header serializes key-sorted as it is, streamed into the hash (a population's header is about a gigabyte).
-    fn public_digest(header: &Value, pubs: &[u8]) -> [u8; 64] {
+    /// SHA-512 of the header's compact key-sorted JSON, `line_end` and the public bytes. serde_json's maps are sorted (no
+    /// `preserve_order`), so the header serializes key-sorted as it is, streamed into the hash (a population's header is about
+    /// a gigabyte).
+    fn public_digest(header: &Value, line_end: &[u8], pubs: &[u8]) -> [u8; 64] {
         struct Hash<'a>(&'a mut Sha512);
         impl std::io::Write for Hash<'_> {
             fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
@@ -1817,6 +1824,7 @@ impl Instances {
         }
         let mut h = Sha512::new();
         serde_json::to_writer(Hash(&mut h), header).unwrap();
+        h.update(line_end);
         h.update(pubs);
         h.finalize().into()
     }
@@ -1844,15 +1852,16 @@ impl Instances {
             pubs.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
         }
         pubs.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
-        let public_sha512 = Self::public_digest(&header, &pubs);
+        let public_sha512 = Self::public_digest(&header, b"", &pubs);
+        let public_file_sha512 = self.public_file_sha512;
         let population = Some((self.n, self.bcs.clone()));
         let pw = c.public_words();
         let public: Vec<u16> = units.iter().flat_map(|&u| self.public[u * pw..(u + 1) * pw].to_vec()).collect();
         if let Some(t) = &self.tables {
             // the tables stay the population's; the drawn instances keep their refs into them
             let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
-            return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512, population,
-                                  tables: Some(RowTables { refs, ..t.clone() }), public });
+            return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512,
+                                  public_file_sha512, population, tables: Some(RowTables { refs, ..t.clone() }), public });
         }
         Ok(Instances {
             header, n: units.len(),
@@ -1860,6 +1869,7 @@ impl Instances {
             salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
             bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
             public_sha512,
+            public_file_sha512,
             population,
             tables: None,
             public,
@@ -3373,6 +3383,31 @@ mod tests {
         // public_digest streams the header without sorting it: that holds while serde_json's maps are sorted (no preserve_order)
         let v: Value = serde_json::from_str(r#"{"z": 1, "a": {"y": [2, {"q": 3, "b": 4}], "c": null}, "m": "s"}"#).unwrap();
         assert_eq!(serde_json::to_vec(&v).unwrap(), serde_json::to_vec(&sorted(&v)).unwrap());
+    }
+
+    /// The verifier's public file, written as `public_file` writes it, is the file whose SHA-512 the prover's record
+    /// carries (`public_file_sha512`), and a drawn statement keeps its population's; Σ's public digest is neither.
+    #[test]
+    fn the_public_file_digest_is_the_files_own() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let n = 2;
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": false, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        b.extend((0..BC_BYTES * n * c.ports.len() + 2 * n * c.public_words()).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-public-file-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let inst = Instances::load(p.to_str().unwrap(), &c);
+        std::fs::remove_file(&p).unwrap();
+        let inst = inst.unwrap();
+        let file: [u8; 64] = Sha512::digest(&b).into();
+        assert_eq!(inst.public_file().unwrap(), b);
+        assert_eq!(inst.public_file_sha512, file);
+        assert_ne!(inst.public_sha512, file);
+        let d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+        assert_eq!(d.public_file_sha512, file);
+        assert_ne!(d.public_sha512, inst.public_sha512);
     }
 
     #[test]
