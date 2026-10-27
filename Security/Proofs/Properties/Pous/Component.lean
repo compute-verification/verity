@@ -792,7 +792,8 @@ private def canonObj (kvs : Std.TreeMap.Raw String Json) : V String := do
 private def KeysSorted (as : Array (String × String)) : Prop :=
   ∀ i (hi : i < as.size) j (hj : j < as.size), decide (as[i].1 < as[j].1) = decide (i < j)
 
-private instance (as : Array (String × String)) : Decidable (KeysSorted as) := by unfold KeysSorted; infer_instance
+private instance instDecidableKeysSorted (as : Array (String × String)) : Decidable (KeysSorted as) := by
+  unfold KeysSorted; infer_instance
 
 /-- `canonObj`, sorting only items whose keys are out of order, so that the kernel evaluates it on sorted keys. -/
 private def canonObjInOrder (kvs : Std.TreeMap.Raw String Json) : V String := do
@@ -999,6 +1000,7 @@ private theorem table_toy :
     (Merkle.root (Run.rowLeaves toyPoint.params toyPublic.salt toyDigests) == some toyPublic.root) = true := by
   decide +kernel
 
+-- elaborating `checkAt_of`'s `rfl` arguments at the toy unfolds past the default depth (r20261027-032332-2478)
 set_option maxRecDepth 100000 in
 private theorem checkAt_toy (pk sig : ByteArray)
     (hv : (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig)
