@@ -20,7 +20,7 @@ names, and that port's schema must be the row's. They are at a circuit that name
 
 The restriction is the deployed check's own: a misshaped value's leaf is the leaf of an opening `commitDep` passes only
 by a SHA-512 collision (`leaf_misshaped_dep`, `encPortH_ne_misshaped`), and so is a leaf under a salt of another length
-once the path has a level, `2 ≤ nl` units (`leaf_salt`).
+(`leaf_salt`).
 
 At the session's binding (`vbOf`), `transports_shaped` reads a registered opening of a wire with a row through
 `opens_commitDep`; `transportsLiveCS` is `Bridge.TransportsLiveC`'s conclusion at canonical openings, `RowsOk` circuit
@@ -65,13 +65,6 @@ theorem bitsOf_dataOf (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64) 
   | some x => cases x <;> rfl
 
 end Data
-
-/-- The length of a deployed opening's salt: `saltLen` bytes once its path has a level, since the path follows it. -/
-theorem saltOf_length {d : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64 * d) (hd : 1 ≤ d) :
-    (saltOf o).length = saltLen := by
-  simp only [pathOf, List.length_take, List.length_drop] at h
-  simp only [saltOf, List.length_take]
-  omega
 
 section Layout
 
@@ -302,18 +295,19 @@ theorem pathOf_length_of_opens (C : FlockSoundness.Audit.Circuit) (rows : Fin C.
   rw [size_bytes] at h2
   exact h2
 
-/-- **The deployed check refuses a salt of another length**: once the path has a level (`2 ≤ nl` units), the leaf of
-a game opening `(r, y)` whose salt isn't `saltLen` bytes is the leaf of an opening the deployed check passes only by a
-SHA-512 collision. -/
+/-- **The deployed check refuses a salt of another length**: the leaf of a game opening `(r, y)` whose salt isn't
+`saltLen` bytes is the leaf of an opening the deployed check passes only by a SHA-512 collision. -/
 theorem leaf_salt (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
     (roots : List Msg) (o : Opening Bool) (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true)
-    (hd : 1 ≤ Flock.log2ceil nl) {r y : Msg} (hy : y.length ≠ saltLen)
+    {r y : Msg} (hy : y.length ≠ saltLen)
     (hl : H512 (hm96Input r y) =
       H512 (hm96Input (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o))) :
     Collides (hm96Pair r y (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o)) := by
   refine hm96Pair_spec_salt _ _ _ _ (fun e => hy ?_) hl
+  unfold commitDep at h
+  rw [SamplingDeploy.opens_pathCommitRow] at h
   rw [e]
-  exact saltOf_length (pathOf_length_of_opens C rows c nl roots o h) hd
+  exact h.1
 
 /-- **The deployed check refuses a misshaped value**: at a position whose row has its port's bits, `16 w` of them, a
 game opening of a value that isn't `RowShaped` of the row's width has the leaf of a deployed opening's row only by a
