@@ -92,7 +92,8 @@ theorem staged_publicInputs {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s :
   split_ifs at h
   · simp at h
   have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
-  exact ⟨r, p, hr, hp, FlockDeploy.Raw.ins_publicInputs (RecRaw.ins_base (toOption_eq_some h'))⟩
+  have hpi := FlockDeploy.Raw.ins_publicInputs (RecRaw.ins_base (toOption_eq_some h'))
+  exact ⟨r, p, hr, hp, hpi⟩
 
 section Runs
 
@@ -111,7 +112,7 @@ theorem partIn_of_run_acc (hacc : (run H P (V IV st) x ω r).out = .acc) :
     rcases nextO_decide_out H ha with ho | ho
     · exact ho
     · rw [ho] at hn; exact absurd rfl hn
-  obtain ⟨⟨-, -, -, -, hc⟩, -⟩ := (nextO_decide H ha).1 hacO
+  obtain ⟨⟨_, _, -, -, hc⟩, -⟩ := (nextO_decide H ha).1 hacO
   obtain ⟨-, -, hxO⟩ := ract_sess hr
   obtain ⟨i₀, hi₀, rfl⟩ := actO_decide ha
   have hpi₀ := publicInputs_none_of_scope (scope_of_checks hc)
