@@ -587,7 +587,7 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
                          f"(block record {r['run']}).")
     if not r["composed"]["joint_horizon"]["statement"].get("proved"):
         lines.append("JointHorizon is stated, not yet proved: the error sum in part 1 is the sum it states.")
-    lines.append("The state carried across a wipe has no cross-session binding term yet, so the bound holds "
+    lines.append("PRF-167: the state carried across a wipe has no cross-session binding term yet, so the bound holds "
                  "per server-time block.")
     lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's foreign_bits "
                  "compose at M4 (Demo B), not in Demo A.")

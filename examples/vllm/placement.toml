@@ -11,7 +11,7 @@ HF_HOME = "/workspace/hf"
 # commit.sh's row dirs, LLAMA_ROOT/<commit run>/<row>; COMMIT_RUN is the Commit of record the endpoint commits under
 LLAMA_ROOT = "/workspace/research/vllm-llama1b-commit"
 COMMIT_RUN = "r20261024-055630-5377"
-# no endpoint serves with less free on its serve dir's filesystem
+# no endpoint on n1 serves with less free on its serve dir's filesystem
 DISK_FLOOR_GB = "300"
 
 [node.vy-nebius-1.serving]
