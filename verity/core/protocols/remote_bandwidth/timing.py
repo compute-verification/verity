@@ -92,9 +92,9 @@ HOST_WRITE_BYTES_PER_S = HOST_SPEC_BYTES_PER_S
 16 cores of one socket, all a guest got on a loaded node, wrote labels at 207.69 GB/s by non-temporal AVX-512 stores,
 88.16 by `rep stosb` and 82.35 by cached stores (`benchmarks/bandwidth/write_host.c`); a GPU streams labels in at
 57.25 GB/s over its link (D2H, `benchmarks/bandwidth/write.cu`), and 8 links at PCIe 5.0 x16's 63 GB/s are below the
-DRAM's rate.  The sheet's rate stands for `GPU_WRITE_BYTES_PER_S`'s reason, and so does its bound on derived labels.  No
-DPU write ceiling is stated: no BlueField-3 fill rate is measured, only its coverage, and the datacenter model reads an
-unset rate as infinite, timing a DPU's wipe by its links."""
+DRAM's rate.  The sheet's rate stands for `GPU_WRITE_BYTES_PER_S`'s reason, and so does its bound on derived labels.
+No DPU write ceiling is stated: no BlueField-3 fill rate is measured, only its coverage, and the datacenter model reads
+an unset rate as infinite, timing a DPU's wipe by its links."""
 GPU_CHIP_BYTES = 263_163_904
 """One RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches,
 uniform registers and warp state, its L2, TLB and 1 MiB of buffers (`benchmarks/bandwidth/chip.cu`)."""
