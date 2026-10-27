@@ -498,6 +498,10 @@
    "owner": "@memory-accounting",
    "digest": "417918e593039c18b2d42cfbaa2ef5de213f132ba87e2f60673bf2e2bcf56ea5"
   },
+  "Accounting.RealizesBandwidthOfRemoteLineLive": {
+   "owner": "@memory-accounting",
+   "digest": "4f3cd82a9577e588cb1d8b22d1f0b009a65e09cb52ad46bf75830fad015f0ad5"
+  },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
@@ -2057,10 +2061,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.RealizesBandwidthOfRemoteLineLive": {
-   "owner": "@memory-accounting",
-   "digest": "4f3cd82a9577e588cb1d8b22d1f0b009a65e09cb52ad46bf75830fad015f0ad5"
   }
  },
  "meaning": [
@@ -12225,8 +12225,8 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Accounting.SecurityProofs.JointPeriodLiveECR": "frozen (no-function): Like JointPeriodLive, with ecr/sha-512 asked of each subprotocol's finder: its per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointPeriodLive_honest": "lemma: JointPeriodLive's honest witness, soundness's ask (LEAN-64): an honest prover meets every claim, so the joint event is empty at it; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
-   "Accounting.SecurityProofs.JointPeriodLive_nontrivial": "lemma: JointPeriodLive's failing witness, soundness's ask (LEAN-64): a one-gate period whose extractor reads the wrong bit fails the integrity claim with probability 1, so the bound is not vacuous; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling"
+   "Accounting.SecurityProofs.JointPeriodLive_honest": "lemma: JointPeriodLive's honest witness: an honest prover meets every claim, so the joint event is empty at it; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
+   "Accounting.SecurityProofs.JointPeriodLive_nontrivial": "lemma: JointPeriodLive's failing witness: a one-gate period whose extractor reads the wrong bit fails the integrity claim with probability 1, so the bound is not vacuous; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
