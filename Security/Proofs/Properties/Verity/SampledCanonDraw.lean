@@ -308,6 +308,31 @@ theorem drawRecord_rounds (E : Json) (segs : Array Json) (hs : segs[0]? = some (
   cases h
   exact hs
 
+/-- **The record `roundsIn` reads the round coins from** carries the evidence's ledger, main, pins and session, with the
+evidence's segment first. -/
+theorem roundsIn_draw {label : String} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
+    {U : Array Challenger.Use} {W : Array (Option (String × Array String))} {O : Array (String × String)}
+    {G : Array (List String)} {coins : Json} (h : roundsIn label c e bs = .ok (U, W, O, G, coins)) :
+    ∃ segs : Array Json, segs[0]? = some (getD e.base.coins "segment") ∧
+      coins = Json.mkObj [("ledger", getD e.base.coins "ledger"), ("main", getD e.base.coins "main"),
+        ("pins", getD e.base.coins "pins"), ("segments", Json.arr segs), ("session", getD e.base.coins "session")] := by
+  unfold roundsIn at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · split at h
+    · cases h
+    · rename_i v hfor
+      obtain ⟨-, ⟨t2, e2⟩⟩ := loop_mono Heads heads_refl heads_trans _ (fun x s r hx => by
+          repeat' split at hx
+          all_goals first
+            | (cases hx; done)
+            | (rename_i heq; cases heq; done)
+            | (cases hx; exact heads_refl _)
+            | (cases hx; exact ⟨⟨_, rfl⟩, ⟨_, rfl⟩⟩)) _ _ _ hfor
+      cases h
+      exact ⟨v.2.2.1, by rw [e2, Array.getElem?_append_left (by simp)]; rfl, rfl⟩
+  · cases h
+
 /-- **The draw's coins are its use's**: where v2 accepts, v1's check read the draw's coins `src` through the challenger
 (`coinsOf`), the coins draw the evidence's draw (`coinsReason`), and `src` is the coins `roundCoins` reads for its first
 use, the draw's, from a record that carries the evidence's coins (`DrawRecord`). -/
@@ -462,6 +487,38 @@ theorem draw_at_accept (hR : Properties.Challenger.RoundsByDevice) {θ : ByteArr
   cases hc'
   exact ⟨us, segs, V.draw_at_play hR o hacc hc hw hk hrc hu
     (_root_.SampledProofs.OneStageZk.drawRecord_rounds _ segs hs) x hlaw hpop hx⟩
+
+/-- **`draw_at_play` at the uses `roundsIn` reads**: where v2 accepts evidence with a first session, the draw `drawOS`
+makes from bytes whose stream is the play's release of the draw's family after the registration's digest is the
+evidence's draw, or the finder outputs a break from one of the uses `roundsIn` reads, at the coins it reads them from. -/
+theorem draw_at_rounds (hR : Properties.Challenger.RoundsByDevice) {θ : ByteArray} (o : Outcome)
+    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
+    {e : _root_.SampledProofs.OneStageZk.Evidence} {bs pub prof} {key : ChallengerKey} {label : String}
+    {s0 : _root_.SampledProofs.OneStageZk.Session} {rest : List _root_.SampledProofs.OneStageZk.Session}
+    (hacc : _root_.SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof)
+    (hc : p.base.challenger = some (key, label)) (hk : key.pub = (registeredKey θ).2)
+    (hs0 : e.sessions.toList = s0 :: rest)
+    {n kd : ℕ} {Lb : Fin 1 → ℕ} (x : (i : Fin 1) → Fin (Lb i) → Fin 256)
+    (hlaw : _root_.SampledProofs.Draw.flockLaw p.base.verifier.law n = .ok (.subset kd))
+    (hpop : _root_.SampledProofs.nat? (_root_.SampledProofs.getD c.record "population") = some n)
+    (hx : FlockSoundness.Audit.Law.streamOf (x 0) = ((V.device θ).session o.log).released label c.digest) :
+    ∃ (uses : List Use) (wants : List (Option (String × Array String))) (order : List (String × String))
+      (groups : List (List String)) (coins : Json),
+      _root_.SampledProofs.OneStageZk.roundsIn label c e bs =
+        .ok (uses.toArray, wants.toArray, order.toArray, groups.toArray, coins) ∧
+      (Game.LiveDrive.drawOS (n := n) (.subset kd) n x =
+          Finset.univ.filter (fun u : Fin n => u.val ∈ _root_.SampledProofs.OneStage.drawnOf e.base.draw) ∨
+        ∃ (i : ℕ) (u : Use), uses[i]? = some u ∧
+          Properties.Challenger.Break (V.deviceOf θ o) key u.label (Properties.Challenger.useCoins coins i)) := by
+  obtain ⟨key', label', w, opened, uses, wants, order, groups, coins, ξs, hc', hw, -, hrc, hin, -, hS0⟩ :=
+    _root_.SampledProofs.OneStageZk.roundsWhy_spec (_root_.SampledProofs.OneStageZk.roundsWhy_of_checkBlobs hacc)
+  rw [hc] at hc'
+  cases hc'
+  obtain ⟨b, record, us0, -, -, -, -, hu, -⟩ := hS0 s0 rest hs0
+  obtain ⟨segs, hsegs, hcoins⟩ := _root_.SampledProofs.OneStageZk.roundsIn_draw hin
+  subst hcoins
+  exact ⟨uses, wants, order, groups, _, hin, V.draw_at_play hR o hacc hc hw hk hrc hu
+    (_root_.SampledProofs.OneStageZk.drawRecord_rounds _ segs hsegs) x hlaw hpop hx⟩
 
 end Vocab
 
