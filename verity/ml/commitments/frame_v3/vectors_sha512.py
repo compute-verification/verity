@@ -20,7 +20,7 @@ from typing import Any
 from .. import hm96
 from ..identity import identity_digest_sha512
 from ..indexed import RangeIndexedDomain
-from ..merkle import CommitmentDomain, _hash, _uint, domain_message
+from ..merkle import CommitmentDomain, frame_hash, _uint, domain_message
 from ..rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_SHA512_ROW_SEG, bit_row, row_leaf,
                        sha512_row_seg_digest, sha512_row_seg_prefix, sha512_row_seg_segment_prefix, sha512_row_seg_segments)
 from . import NAME_SHA512, BitRowLeaf, FrameV3, Port, RowLeaf, WordLeaf
@@ -76,7 +76,7 @@ def _row_tree(d: CommitmentDomain, n: int, label: str) -> dict[str, Any]:
     width = 1 << max(0, (n - 1).bit_length())
     return {"schema": scheme.ports["rows"].leaf.schema, "role": ROLE_X, "word_bits": 16, "n_words": 8, "domain": _domain_doc(d, n),
             "rows": [v.hex() for v in rows], "digests": [x.hex() for x in digests], "leaves": [x.hex() for x in leaves],
-            "pads": [_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, width)],
+            "pads": [frame_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, width)],
             "root": scheme.root("rows", leaves).hex(), "paths": [[p.hex() for p in scheme.path("rows", leaves, r)] for r in range(n)]}
 
 
@@ -141,7 +141,7 @@ def _bit_row_tree_vectors() -> list[dict[str, Any]]:
     leaves = [scheme.tree_leaf("rows", r, dg) for r, dg in enumerate(digests)]
     return [{"schema": BitRowLeaf.schema, "n_bits": n_bits, "domain": _domain_doc(d, n), "rows": [v.hex() for v in rows],
              "digests": [x.hex() for x in digests], "leaves": [x.hex() for x in leaves],
-             "pads": [_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, 4)],
+             "pads": [frame_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, 4)],
              "root": scheme.root("rows", leaves).hex(), "paths": [[p.hex() for p in scheme.path("rows", leaves, r)] for r in range(n)]}]
 
 
