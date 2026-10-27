@@ -257,7 +257,7 @@ def write_stream(seed: bytes, values: Sequence[Value], sink: BinaryIO, rows_at_o
 
 
 def read_manifest(doc: dict) -> tuple[Value, ...]:
-    """Interface 1's manifest JSON (``weights.py manifest``'s ``verity/seeded-weights/manifest/v1``) as values."""
+    """Interface 1's manifest JSON (``served_weights.py manifest``'s ``verity/seeded-weights/manifest/v1``) as values."""
     if doc.get("format") != "verity/seeded-weights/manifest/v1":
         raise ValueError(f"not interface 1's manifest: {doc.get('format')!r}")
     out = tuple(Value(t["name"], t["offset"], t["nbytes"], t["words"], t["kind"], t["shape"][0] if len(t["shape"]) == 2
@@ -706,12 +706,12 @@ def sign(issuer: Issuer, link: str, program: str, values: Sequence[Value], roots
 # --- the store: interface 1's weights on the auditor's disk -------------------------------------------------------------
 
 STORE_FORMAT = "verity-network-certifier/load-store/v1"
-#: interface 1's generator (`weights.FORMAT`), which its model id names
+#: interface 1's generator (`served_weights.FORMAT`), which its model id names
 GENERATOR = "verity/seeded-weights/v1"
 #: each shape's `digests_fold` of its tensors' SHA-256 under `DEMO_SEED`, the one store `write_store` keeps and the relay
-#: reads: H200's of interface 1's manifest (``weights.py manifest --digests``, vendored as
-#: ``tests/fixtures/weights-v1-h200-digests.json``), TINY's of this
-#: generator's, which is interface 1's (``test_load_relay``)
+#: reads: H200's of interface 1's manifest (``served_weights.py manifest --digests``, the fetched fixture
+#: ``tests/fixtures/weights-v1-h200-digests.json``), TINY's of this generator's, which is interface 1's
+#: (``test_load_relay``)
 STORE_DIGESTS = {
     H200.name: "247e946ed9e667a275ff816bcfcc1d4efba5382d938acdb1c6d3c290dc248454"
                "a939d6a81c899c161a9be14d6a108b03ffc917cf67364a519841d0ee2ebeb2e3",
