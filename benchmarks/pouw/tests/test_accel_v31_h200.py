@@ -199,6 +199,26 @@ def test_a_served_order_step_is_against_its_variants_fill_bench_lines(tmp_path, 
             "served1-gemm1-L4096's wgl 0.160 s") in capsys.readouterr().out
 
 
+def test_a_step_at_l_equal_k_takes_each_calls_line_at_its_own_k():
+    """fill-step at L 0 (L = K) against fill-bench's lines, which record each call's own L (its K): every call at L >= K
+    stands in the L 0 group, so the step has its reference; a run at L 4,096, where down (K 14,336) is at S 4, keeps its
+    group and has no L 0 one."""
+    calls = h200_step.MODELS["8b"]
+    at_k = [json.loads(_fill_line(n, k, True, L=k)) for n, k in calls]
+    fb = h200_step.fill_steps(at_k, calls=calls)
+    assert list(fb) == [(256, 0, 16384, True, "")] and fb[(256, 0, 16384, True, "")]["step"] == pytest.approx(128 * 3e-3)
+    today = [json.loads(_fill_line(n, k, True)) for n, k in calls]
+    assert list(h200_step.fill_steps(today, calls=calls)) == [(256, 4096, 16384, True, "")]
+    names = {(6144, 4096): "qkv", (4096, 4096): "o", (28672, 4096): "gu", (4096, 14336): "down"}
+    step = {"fill_step": True, "step": "qkv,o,gu,down*32", "layers": 32, "lp": 256, "L": 0, "row": 16384, "o": True,
+            "steady": True, "shapes": [{"shape": names[nk], "m": 16384, "n": nk[0], "k": nk[1], "calls": c}
+                                       for nk, c in calls.items()],
+            "gsms": [{"n": 0, "sms": [132, 132]}], "arms": {"step_g0": {"ms": 300.0, "mhz": 1900, "calls": 1}}}
+    so = h200_step.served_order([step], at_k)
+    assert so[0]["model"] == "8b" and so[0]["serial"] == pytest.approx(128 * 2.2e-3)
+    assert so[0]["n"][0]["apart"] == pytest.approx(128 * 3e-3)
+
+
 def test_a_steps_power_floor_is_its_joules_over_the_boards_limit(tmp_path, capsys, monkeypatch):
     """With the board's energy on the lines: each served-order N's watts and joules a step, its floor (the joules over
     the power limit), and the serial split's joules (a served call's tensor, hashing and other arms, no pad) and their

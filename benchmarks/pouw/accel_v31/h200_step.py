@@ -124,12 +124,13 @@ def served_order(steps_: list[dict], lines: list[dict], m: int = 16384, wg: dict
 def fill_steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], int] = CALLS
                ) -> dict[tuple[int, int, int, bool, str], dict]:
     """Per (L', L, ROW, served, variant) of fill-bench's lines: each arm's seconds a step (None where a call lacks the
-    arm), the arm of record's, the split's and the step's MACs, for groups that timed every call."""
+    arm), the arm of record's, the split's and the step's MACs, for groups that timed every call. L 0 is every call at
+    L = K: a line at L >= K (S = 1) stands in it too, as fill-bench records the L it ran (K) and fill-step the 0 it took."""
     groups: dict[tuple[int, int, int, bool, str], dict[tuple[int, int], dict]] = {}
     for r in lines:
         if r.get("fill") and r["m"] == m and (r["n"], r["k"]) in calls:
-            key = (r["lp"], r["L"], r["row"], bool(r.get("o")), r.get("variant", ""))
-            groups.setdefault(key, {})[(r["n"], r["k"])] = r
+            for L in {r["L"], 0} if r["L"] >= r["k"] else {r["L"]}:
+                groups.setdefault((r["lp"], L, r["row"], bool(r.get("o")), r.get("variant", "")), {})[(r["n"], r["k"])] = r
     out = {}
     for key, by in sorted(groups.items()):
         if set(by) != set(calls):
