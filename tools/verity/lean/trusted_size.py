@@ -10,7 +10,9 @@ definitions and what reads them come from a run of the Lean check on PKG: its `f
 RUN`, a records run (`lean_changed.py --records PKG`) the evidence store holds. A definition is one of `spec_definitions`
 (projections and constructors go with their structure), read when a listed guarantee's statement reads it, followed through
 `meaning`, so transitively: when the lock's `reads` lists it (`--lock`, default PKG's; a run's own with `--run`), or the
-lock of a package requiring PKG by path does (`check.read_by_dependents`), as the audit's `unread_spec` counts them.
+lock of a package requiring PKG by path does (`check.read_by_dependents`), as the audit's `unread_spec` counts them. The
+guarantees that read an area are the build's: the run's `report.json` (`readers`) with `--run`, else the facts' guarantees
+(`check.readers`; a spec whose guarantees another package proves has none in its own facts), and unknown without facts.
 Without facts the definitions are counted from the sources and the read ones are the lock's (projections and constructors
 included), both marked `~`. `--unread` lists the unread ones per module.
 """
@@ -70,33 +72,35 @@ def area_of(prefix: str, module: str) -> str | None:
     return module[len(prefix) + 1:].split(".")[0] if module.startswith(prefix + ".") else None
 
 
-def fetch_run(run: str, pkg: Path) -> tuple[Path, Path]:
-    """``run``'s `facts.json` and lock for ``pkg`` from the evidence store (its `run_files` tree), in a temporary
-    directory."""
+def fetch_run(run: str, pkg: Path) -> tuple[Path, Path, Path]:
+    """``run``'s `facts.json`, lock and `report.json` for ``pkg`` from the evidence store (its `run_files` tree), in a
+    temporary directory."""
     shown = json.loads(subprocess.run(["research", "data", "show", run, "--json"], capture_output=True, text=True,
                                       check=True, cwd=ROOT).stdout)
     tree = shown.get("outputs", {}).get("run_files")
     if not tree:
         raise SystemExit(f"trusted_size: {run} has no run_files in the store")
-    want = [f"lean-audit/audit-{pkg.name}/{f}" for f in ("facts.json", C.POLICY)]
+    want = [f"lean-audit/audit-{pkg.name}/{f}" for f in ("facts.json", C.POLICY, "report.json")]
     out = Path(tempfile.mkdtemp(prefix="trusted-size-"))
     subprocess.run(["research", "data", "fetch", tree, "--to", str(out), *(x for w in want for x in ("--path", w))],
                    check=True, cwd=ROOT, stdout=subprocess.DEVNULL)
     if not all((out / w).is_file() for w in want):
         raise SystemExit(f"trusted_size: {run}'s outputs hold no {' or '.join(want)}: was it a records run of {pkg}?")
-    return out / want[0], out / want[1]
+    return out / want[0], out / want[1], out / want[2]
 
 
-def measure(pkg: Path, prefix: str, facts: dict | None = None, lock: dict | None = None) -> dict:
+def measure(pkg: Path, prefix: str, facts: dict | None = None, lock: dict | None = None,
+            read_by: dict[str, list[str]] | None = None) -> dict:
     """{area: its row} and {module: its unread definitions} for ``pkg``'s modules under ``prefix``: the definitions from
     ``facts`` (a Lean check's `facts.json` for ``pkg``), else from the sources; the read ones from ``lock`` (default
-    ``pkg``'s `lean-audit.json`) and the locks of the packages requiring ``pkg`` by path."""
+    ``pkg``'s `lean-audit.json`) and the locks of the packages requiring ``pkg`` by path; the guarantees that read each
+    module from ``read_by`` (a Lean check's `report.json` `readers`), else from ``facts``' guarantees, else unknown."""
     modules = {m: rel for m, rel in C.lean_modules(pkg).items() if area_of(prefix, m)}
-    read_by: dict[str, set[str]] = defaultdict(set)
+    if read_by is None and facts is not None:
+        read_by = C.readers(C.guarantee_reads(facts))
     read: dict[str, set[str]] = defaultdict(set)
     for m, g in C.as_guarantees(lock if lock is not None else C.load(pkg)).get("reads", {}).items():
         read[m] |= {C.parent(n) for n in C.definitions(g)}
-        read_by[m] |= set(g.get("guarantees", []))
     elsewhere = C.read_by_dependents(pkg, ROOT)
     defs: dict[str, set[str]] | None = None
     if facts is not None:
@@ -114,7 +118,7 @@ def measure(pkg: Path, prefix: str, facts: dict | None = None, lock: dict | None
         r["lines"] += len(text.splitlines())
         r["code"] += code_lines(text)
         r["theorems"] += len(THEOREM.findall(text))
-        r["guarantees"] |= read_by.get(m, set())
+        r["guarantees"] |= set((read_by or {}).get(m, ()))
         if defs is None:
             r["definitions"] += len(DEFINITION.findall(text))
             r["read"] += len(read.get(m, ()))
@@ -127,19 +131,18 @@ def measure(pkg: Path, prefix: str, facts: dict | None = None, lock: dict | None
             unread[m] = left
     for r in rows.values():
         r["unread"] = r["definitions"] - r["read"] if defs is not None else None
-        r["guarantees"] = len(r["guarantees"])
+        r["guarantees"] = len(r["guarantees"]) if read_by is not None else None
     return {"exact": defs is not None, "areas": rows, "unread": unread}
 
 
 def table(m: dict) -> str:
     cols = ["files", "lines", "code", "theorems", "definitions", "read", "unread", "guarantees"]
     rows = sorted(m["areas"].items(), key=lambda kv: -kv[1]["lines"])
-    total = {c: sum((r[c] or 0) for _, r in rows) for c in cols}
+    total = {c: None if rows and all(r[c] is None for _, r in rows) else sum((r[c] or 0) for _, r in rows) for c in cols}
     mark = "" if m["exact"] else "~"
     out = ["| area | " + " | ".join(cols) + " | read % |", "|" + "---|" * (len(cols) + 2)]
     for a, r in [*rows, ("total", total)]:
-        cells = [str(r[c]) if c not in ("definitions", "unread") else f"{mark}{r[c] if r[c] is not None else '-'}"
-                 for c in cols]
+        cells = [f"{mark if c in ('definitions', 'unread') else ''}{r[c] if r[c] is not None else '-'}" for c in cols]
         pct = f"{100 * r['read'] / r['definitions']:.0f}" if r["definitions"] and m["exact"] else "-"
         out.append(f"| {a} | " + " | ".join(cells) + f" | {pct} |")
     return "\n".join(out)
@@ -157,9 +160,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="print the measurement as JSON")
     a = ap.parse_args(argv)
     pkg = (ROOT / a.pkg) if not Path(a.pkg).is_absolute() else Path(a.pkg)
-    facts, lock = fetch_run(a.run, pkg) if a.run else (a.facts, a.lock)
+    facts, lock, report = fetch_run(a.run, pkg) if a.run else (a.facts, a.lock, None)
     m = measure(pkg, a.prefix, json.loads(facts.read_text()) if facts else None,
-                json.loads(lock.read_text()) if lock else None)
+                json.loads(lock.read_text()) if lock else None,
+                json.loads(report.read_text()).get("readers") if report else None)
     if a.json:
         print(json.dumps(m, indent=1, sort_keys=True))
         return 0

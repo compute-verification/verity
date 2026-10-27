@@ -4,21 +4,23 @@
     python tools/verity/lean/merge.py --lean BASE OURS THEIRS [PATH]   the same for a `.lean` file (`lean-imports`)
     python tools/verity/lean/merge.py --lakefile BASE OURS THEIRS [PATH]   the same for a `lakefile.toml` (`lakefile-lists`)
     python tools/verity/lean/merge.py --install [REPO]         register the drivers in the repository's git config, once per clone
-    python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
+    python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions, and drop
+                                                               the readers an older record lists
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
 a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the dependencies, and the policy's own
 sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
-guarantees that read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as
-sets, and its digest is recomputed from the merged definitions (`audit.module_digest`). A side written before guarantees
-were called that (`pins`) is read under today's names (`audit.as_guarantees`).
+guarantees that read one module both change, the module's definitions merge the same way, and its digest is recomputed
+from the merged definitions (`audit.module_digest`). A side written before guarantees were called that (`pins`) is read
+under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers (`audit.READER_KEYS`)
+is read without them, so a branch from before the lock dropped them merges with one from after.
 
 What the build determines never refuses: the records `check.py --update` writes from it and a train's Lean check
 (`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
-it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
-Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, readers as sets
-less those the merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a
+it), each `reads` group (which definitions the guarantees read, and each one's hash) and an assumption's `digest`.
+Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, a group left
+without definitions dropped) or ours' value (a
 hash or a record both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
 refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry, a dependency's revision, a policy
@@ -193,12 +195,12 @@ def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str])
 
 def core(group):
     """What a `reads` entry says, its digest (which it determines) aside."""
-    return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
+    return None if group is None else A.definitions(group)
 
 
 def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str]) -> dict:
-    """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
-    side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
+    """One module's `reads` entry, both sides having changed it: definitions entry by entry.  A definition one side no
+    longer reads while the other still reads it stays, with the other side's hash: the record does not say which
     guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  A
     hash both sides changed differently is ours' (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
@@ -212,8 +214,7 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
             defs[d] = v
     if len({len(h) for h in defs.values() if isinstance(h, str)}) > 1:
         candidate.append(f"reads[{m}] (32-bit and SHA-256 hashes mixed)")
-    xp, yp, zp = set(x.get("guarantees", [])), set(y.get("guarantees", [])), set(z.get("guarantees", []))
-    return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
+    return {"definitions": defs}
 
 
 def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
@@ -231,10 +232,10 @@ def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> di
             candidate.append(f"reads[{m}]")
         else:
             g = group(m, x or {}, y, z, why, candidate)
-        if g is not None:
-            defs = A.definitions(g)
-            out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items())),
-                      "guarantees": sorted(g.get("guarantees", []))}
+        if g is not None and (defs := A.definitions(g)):
+            out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items()))}
+        elif g is not None:
+            candidate.append(f"reads[{m}]")
     return out
 
 
@@ -300,14 +301,6 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             v = one(k, o, a, b, why)
         if v is not MISSING:
             out[k] = v
-    kept = set(out.get("guarantees", {}))
-    for m, g in list(out.get("reads", {}).items()):
-        if extra := sorted(set(g["guarantees"]) - kept):
-            g["guarantees"] = [r for r in g["guarantees"] if r in kept]
-            candidate.append(f"reads[{m}].guarantees[{', '.join(extra)}]")
-        if not g["guarantees"] or not g["definitions"]:
-            del out["reads"][m]
-            candidate.append(f"reads[{m}]")
     return out, why
 
 
@@ -560,8 +553,12 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
 
 
 def load(path: Path) -> dict:
+    """The record at ``path`` under today's names, its `reads` groups without the readers an older record lists."""
     text = path.read_text()
-    return A.as_guarantees(json.loads(text)) if text.strip() else {}
+    doc = A.as_guarantees(json.loads(text)) if text.strip() else {}
+    for m in A.with_readers(doc):
+        doc["reads"][m] = {k: v for k, v in doc["reads"][m].items() if k not in A.READER_KEYS}
+    return doc
 
 
 def install(repo: Path) -> None:
@@ -579,21 +576,22 @@ def install(repo: Path) -> None:
 
 
 def normalize(path: Path) -> int:
-    """Recompute each `reads` digest of the record at ``path`` from its definitions; the number that changed."""
+    """Recompute each `reads` digest of the record at ``path`` from its definitions, and drop the readers an older record
+    lists (`load`); the number of groups that changed."""
+    before = A.as_guarantees(json.loads(path.read_text())).get("reads", {})
     doc = load(path)
-    n = 0
     for g in doc.get("reads", {}).values():
-        if g.get("digest") != (d := A.module_digest(A.definitions(g))):
-            g["digest"], n = d, n + 1
+        g["digest"] = A.module_digest(A.definitions(g))
     path.write_text(A.text(doc))
-    return n
+    return sum(before.get(m) != g for m, g in doc.get("reads", {}).items())
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="merge.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("files", nargs="*", type=Path, help="BASE OURS THEIRS [PATH], as git passes them; with --normalize, records")
     ap.add_argument("--install", nargs="?", const=Path.cwd(), type=Path, metavar="REPO", help="register the driver in REPO")
-    ap.add_argument("--normalize", action="store_true", help="recompute the `reads` digests of each record named")
+    ap.add_argument("--normalize", action="store_true", help="recompute the `reads` digests of each record named, and drop "
+                    "the readers an older one lists")
     ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
@@ -603,7 +601,7 @@ def main(argv: list[str]) -> int:
         return 0
     if a.normalize:
         for p in a.files:
-            print(f"merge.py: {p}: {normalize(p)} digests recomputed")
+            print(f"merge.py: {p}: {normalize(p)} `reads` groups rewritten")
         return 0
     if len(a.files) not in (3, 4):
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")

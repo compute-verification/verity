@@ -306,8 +306,8 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     """The audit's failures about the guarantees on the tree's build of ``pkg`` (`check.py`'s `facts_of` and `judge`, without
     the kernel replay): a guarantee missing, no longer a theorem or with no record, using an axiom the policy does not allow or
     assuming an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry
-    that no longer lists the modules the guarantees read, the guarantees that read them or their definitions' digest, or a
-    named assumption whose record no longer matches the definition the guarantees read. A spec's
+    that no longer lists the modules the guarantees read or their definitions' digest, or a named assumption whose record
+    no longer matches the definition the guarantees read. A spec's
     guarantees are read from the builds of the packages its `proved_in` names (`audit.proved`), built before it (`missed`).
     Raises RuntimeError when `Facts.lean` cannot read a build."""
     policy = AUDIT.load(tree / pkg)
