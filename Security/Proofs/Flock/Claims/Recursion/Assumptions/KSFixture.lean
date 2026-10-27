@@ -10,7 +10,7 @@ statement is false. What makes it false is built here by hand, at the level the 
 (`Flock.Readable.relation`: the inner statement's tables as one R1CS system, `Flock.Readable.sysOf`): a row of the first
 table whose A side is zero, so its bit is `0` in every block, while one of the table's fixed bits sets that bit to `1` in
 block `0` (`rowView`, `rowView₀`). That is the shape a gate `w ⊕ w` claimed to output `1` lowers to: its row's A side
-`e_w + e_w` vanishes over 𝔽₂. The inner statement's scope is stated as the checks `PlainIn` reads (`plainView`). What
+`e_w + e_w` vanishes over 𝔽₂. The inner statement's scope is stated as the checks `PlainIn` reads (`setupView`). What
 the kernel can't build is the reading: the deployed reader reads a statement only through `jsonOf`, whose
 `Lean.Json.Parser.anyCore` is a `partial def` the kernel can't unfold, and only where every V\* part's circuit is V\*'s
 byte for byte (`RecDeploy.partsVStar`). So the named assumption `DeployedParses x i₀` says only that the deployed readers
@@ -38,7 +38,7 @@ def rowView₀ : Bool × Bool × Bool × Option Bool := (true, true, true, some 
 
 /-- **The checks `FlockDeploy.PlainIn` reads of a plain setup**: one to 200 tables, at most two link points, and each
 table at `22 ≤ m ≤ 35`, `k_log ≤ 27`, at most 1026 regions and at most 64 link points (`InRangeWide`). -/
-def plainView (t : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) : Bool :=
+def setupView (t : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) : Bool :=
   decide (0 < t.2.2.size) && decide (t.2.2.size ≤ 200) && decide (t.2.1.points ≤ 2) &&
     t.2.2.toList.all fun st => decide (22 ≤ st.m) && decide (st.m ≤ 35) && decide (st.c.kLog ≤ 27) &&
       decide (st.regions.size ≤ 1026) && decide (t.2.1.mPts ≤ 64)
@@ -57,7 +57,7 @@ docstring is to name its art id and run id when they do. -/
 def DeployedParses (x : Msg) (i₀ : ℕ) : Prop :=
   (parse x).map (fun s => (s.form.holo, s.form.sparse)) = some (false, none) ∧
   (_root_.Flock.Readable.parseBytes (FlockDeploy.readOf false) (xIOf x)).bind (rowView i₀) = some rowView₀ ∧
-  (FlockDeploy.setupOf false (xIOf x)).map plainView = some true
+  (FlockDeploy.setupOf false (xIOf x)).map setupView = some true
 
 /-- **The V\* parts are in scope at the run's coin-server record**: each part `j < nS x`, staged at the transcript
 `tr`, is in the parts' scope (`PartIn`), there are at most `2^16` parts and at most `2^56` inner setup inputs.

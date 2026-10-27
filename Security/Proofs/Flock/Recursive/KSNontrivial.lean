@@ -444,7 +444,7 @@ theorem notR_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i�
       exact absurd (hrow0.trans h5) (by decide)
 
 /-- **The fixture's inner statement is in the plain scope**: Flock's setup of it passes `PlainIn`'s checks
-(`plainView`). -/
+(`setupView`). -/
 theorem plainIn_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i₀) :
     ∃ s spec sts, FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts := by
   have h3 := h.2.2
@@ -453,8 +453,8 @@ theorem plainIn_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x
   | some t =>
     obtain ⟨s, spec, sts⟩ := t
     rw [hs] at h3
-    have hv : RecDeploy.plainView (s, spec, sts) = true := Option.some.inj h3
-    simp only [RecDeploy.plainView, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, and_assoc] at hv
+    have hv : RecDeploy.setupView (s, spec, sts) = true := Option.some.inj h3
+    simp only [RecDeploy.setupView, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, and_assoc] at hv
     obtain ⟨h1, h2, hp, ht⟩ := hv
     refine ⟨s, spec, sts, ⟨hs, h1, h2, hp, fun st hst => ?_⟩⟩
     obtain ⟨a, b, c, d, e⟩ := ht st hst
