@@ -207,10 +207,8 @@ theorem sampledKSLiveV2_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2Z)
       have hB : prob (fun o => StrictCR.IsColl H512 (pk o)) G τ = ENNReal.ofReal (BR.Pr Claims.Sampling.sha512Msg) := by
         rw [← heq, ENNReal.ofReal_toReal hfin']
       exact hle.trans hB.le
-    have hnr : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = fun _ => False :=
-      funext fun c => propext ⟨fun h => h.1 hoff, False.elim⟩
-    rw [hnr, rowsPrZC_noReads, add_zero]
-    exact (prob_mono hsub G τ).trans ((prob_or_le _ _ G τ).trans (add_le_add (hXr.trans le_rfl) hreg))
+    exact (prob_mono hsub G τ).trans (((prob_or_le _ _ G τ).trans (add_le_add (hXr.trans le_rfl) hreg)).trans
+      (add_le_add le_self_add le_rfl))
   -- every registered read is on the registrant's leaf
   have hno : ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript, ¬ rd.Off o.1 := fun o h => hoff (hoffc _ _ h)
   have hVi := hV n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd wr dg
@@ -234,9 +232,14 @@ theorem sampledKSLiveV2_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2Z)
     rwa [hv] at hrel
   have hon : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = rd.isRead :=
     funext fun c => propext ⟨And.right, fun h => ⟨hoff, h⟩⟩
-  rw [hon]
-  exact (prob_mono hsub G τ).trans (hVi.trans le_self_add)
+  have hR : rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+        (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ (reg σ) (cont σ) =
+      rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo k ρ (reg σ) (cont σ) :=
+    congrArg (fun r : vb.Pos → Prop => rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb r wo k ρ
+      (reg σ) (cont σ)) hon
+  exact (prob_mono hsub G τ).trans (hVi.trans (le_self_add.trans (add_le_add (add_le_add le_rfl hR.ge) le_rfl)))
 
+open Classical in
 /-- **`SampledKSLiveV2` with its file preconditions read off acceptance**: `SampledKSLiveV2`'s bound on the event that
 `verify --zk --registered F` accepts the transcript and the files (`Bridge.LiveAcceptsKSR`: their ports row/v1, row/v2
 or row-seg/v1 rows of distinct names, and no two registered roots, each framed at its port's schema, one root under
@@ -443,8 +446,13 @@ theorem sampledKSLiveV2_le_pub :
   by_cases hoff : rd.Off (reg σ)
   · have hnr : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = fun _ => False :=
       funext fun c => propext ⟨fun h => h.1 hoff, False.elim⟩
-    rw [hnr, rowsPrZC_noReads, add_zero]
-    exact (add_le_add hbase hBR).trans (hfin x hx0 (by linarith))
+    have hR0 : rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+          (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ (reg σ) (cont σ) = 0 :=
+      (congrArg (fun r : vb.Pos → Prop => rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb r wo k ρ
+        (reg σ) (cont σ)) hnr).trans
+        (rowsPrZC_noReads execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb wo k ρ (reg σ) (cont σ))
+    exact (add_le_add ((add_le_add le_rfl hR0.le).trans_eq (add_zero _)) le_rfl).trans
+      ((add_le_add hbase hBR).trans (hfin x hx0 (by linarith)))
   have hon : ∀ c, rd.isRead c → vb.com (wo c) = vb.cs (reg σ) c := by
     intro c hc
     have hl : (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub)).regLeaf (reg σ) c =
@@ -475,7 +483,12 @@ theorem sampledKSLiveV2_le_pub :
             hfamR c]) (by positivity)
   have hiso : (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) = rd.isRead :=
     funext fun c => propext ⟨And.right, fun h => ⟨hoff, h⟩⟩
-  rw [hiso]
+  have hR : rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+        (fun c : vb.Pos => ¬ rd.Off (reg σ) ∧ rd.isRead c) wo k ρ (reg σ) (cont σ) =
+      rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo k ρ (reg σ) (cont σ) :=
+    congrArg (fun r : vb.Pos → Prop => rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb r wo k ρ
+      (reg σ) (cont σ)) hiso
+  refine le_trans (add_le_add (add_le_add le_rfl hR.le) le_rfl) ?_
   have hy1 : 0 ≤ (Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ) :=
     div_nonneg (mul_nonneg (Nat.cast_nonneg _) (add_nonneg hx0 hkR)) h1ρ.le
   have hsum : ENNReal.ofReal ((Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ)) + ENNReal.ofReal x =
