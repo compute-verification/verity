@@ -1,18 +1,15 @@
-"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1).
+"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1), probe.py on an sm_120a GPU:
 
-    research run --on vy-5090 --project verity --campaign r21-silicon --tool tc_probe_fp4 --source <worktree> \
-        --send autoproof/probes/results/probe3_1783788526.json -- \
-        python benchmarks/tc_probe_fp4/probe.py --instruction nvf4 --out $RESEARCH_RUN_DIR --sass-check --sweep --n-random 4096 \
-            --replay-autoproof $RESEARCH_RUN_DIR/inputs/probe3_1783788526.json
+    python benchmarks/tc_probe_fp4/probe.py --instruction nvf4 --out DIR --sass-check --sweep --n-random 4096 \
+        --replay-autoproof FILE
 
 Key params follow probe.py's argparse; `--out` and `--procs` never enter the derivation.  Replay files are content-resolved.
 
 `tc_price_fp4` is the W1 price microbenchmark beside it (w1_price.py); `--out`, `--expect-uuid` and
 `--max-seconds` are guards and paths, not part of the answer:
 
-    research run --on vy-nebius-2 --project verity --campaign pouw --tool tc_price_fp4 --source . --cwd source -- \
-        gpu-lease 1 -- uv run --no-project --with numpy python benchmarks/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR \
-            --expect-uuid GPU-...,GPU-... --locked-mhz 2100
+    uv run --no-project --with numpy python benchmarks/tc_probe_fp4/w1_price.py --out DIR --expect-uuid GPU-...,GPU-... \
+        --locked-mhz 2100
 
 `tc_rates_fp4` is F1 (f1_rates.py): its CPU steps (``build``, ``collect``) run as research runs, its timed families as fill jobs
 (``benchmarks.tc_probe_fp4.tool:TC_RATES_FP4``; paths, ``--jobs`` and guards are not part of the answer).  `tc_lut_fp4` is F3
