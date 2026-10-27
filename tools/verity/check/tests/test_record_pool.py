@@ -70,7 +70,7 @@ def test_a_pooled_deferred_record_is_a_post_landing_run_of_those_steps(launched)
     (["--on", CPU1, "--pool", "nope"], "nope: no such pool; the pools are "),
     (["--pool", "research"], f"needs --on MACHINE, the one machine whose pool it waits in (`--on {CPU1} --pool research`)"),
     (["--on", "auto", "--pool", "research"], "needs --on MACHINE"),
-    ([f"--on", f"{CPU1},vy-nebius-cpu-5", "--pool", "research"], "needs --on MACHINE"),
+    (["--on", f"{CPU1},vy-nebius-cpu-5", "--pool", "research"], "needs --on MACHINE"),
     (["--on", CPU1, "--pool", "research", "--priority"], "takes no --priority"),
 ])
 def test_a_pool_that_cannot_be_taken_so_is_refused_before_anything_launches(launched, capsys, argv, why):

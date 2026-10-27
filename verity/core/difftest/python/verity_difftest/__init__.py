@@ -166,14 +166,14 @@ class Server:
         reply = reply[:-1]
         try:
             msg = json.loads(reply)
-            ok = isinstance(msg, dict) and canonical(msg) == reply
-        except (ValueError, TypeError):
-            ok = False
-        if not ok:
+            why = "" if isinstance(msg, dict) and canonical(msg) == reply else "not canonical"
+        except (ValueError, TypeError) as e:
+            why = f"{type(e).__name__}: {e}"
+        if why:
             proc.kill()
             self._dead()
-            raise ProtocolError(f"{self.argv[0]} answered {line} with a line that is not one canonical JSON object "
-                                f"(stdout is the protocol's: write anything else to stderr): {reply[:500]}")
+            raise ProtocolError(f"{self.argv[0]} answered {line} with a line that is not one canonical JSON object ({why}; "
+                                f"stdout is the protocol's: write anything else to stderr): {reply[:500]}")
         return msg
 
     def call(self, fn: str, value: Any) -> Outcome:

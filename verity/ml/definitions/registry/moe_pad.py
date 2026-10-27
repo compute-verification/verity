@@ -1,11 +1,9 @@
-"""[R17-42 / MOE-PAD, lane moe (implementation owner), pad (Padded_v1 semantic owner), revb (review)] The PADDED fixed-slot MoE block --
-Daniel's decision "standardize on padding first" (`out/gen/r17/PADDING-DECISION.md` s3) under EXPLICIT ENABLEMENT (R17-43 / R17-45;
-LIFTING-SPEC v0.6 A9 + A12, pad's B7 as landed 56dcefe87) as Definitions on pad's lifted registry (`verity/ml/definitions/registry/lifted.py`: the
-`D + bot` encoding, `Lifted[<id>]_v2` = every lifted computed gate takes its owner's ENABLE as its LAST operand, the CLOSED specified
-class `LSelect / LIsActive / LBot / LGatherRow / LStepLive / LFixedSelect / LEnable`).  Nothing here edits a frozen Definition and
-nothing new is asked of the specified class.
+"""The PADDED fixed-slot MoE block, padding first, under EXPLICIT ENABLEMENT, as Definitions on the lifted registry
+(`verity/ml/definitions/registry/lifted.py`: the `D + bot` encoding, `Lifted[<id>]_v2` = every lifted computed gate takes its
+owner's ENABLE as its LAST operand, the CLOSED specified class `LSelect / LIsActive / LBot / LGatherRow / LStepLive /
+LFixedSelect / LEnable`).  Nothing here edits a frozen Definition and nothing new is asked of the specified class.
 
-The construction, per token and MoE layer (s3 / A12), with E expert slots FIXED before any route is known, `a` the block's own enable
+The construction, per token and MoE layer, with E expert slots FIXED before any route is known, `a` the block's own enable
 (the enable of the call that owns the block: the row's continuation bit `run_t` in a decode Program, the root's constant 1 at a root):
 
     logits = Lifted[Gemm{K=H,N=E}]_v2(x, W_g, a)                     the router logits (x @ W_g^T), a lifted GEMM owned by the block
@@ -53,8 +51,8 @@ from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16, F32
 
 SEMANTIC_ID = "moe/PaddedFixedSlots@v1"
-LABEL = "padded-fixed-slots"          # R17-42: the baseline representation; MOE-01 rows stay "MOE-01 indexed-read (alternative)"
-STAGE = 2                             # PADDING-DECISION s7: Stage 2 = the complete small padded MoE (E=4, top-1 and top-2)
+LABEL = "padded-fixed-slots"          # the baseline representation; MOE-01 rows stay "MOE-01 indexed-read (alternative)"
+STAGE = 2                             # Stage 2: the complete small padded MoE (E=4, top-1 and top-2)
 
 
 def V(w: int) -> Value:
@@ -103,7 +101,7 @@ def MoeExpertBody(B, S, x, g, w13, w2):
 
 
 def fixed_select(E: int, w: int = 16):
-    """The `FixedSelect` RELATION over the E computed slot outputs (MOE-PAD-SPEC s2): pad's `LFixedSelect<E>x<w>_v1` (G2 -- an Active
+    """The `FixedSelect` RELATION over the E computed slot outputs: the lifted registry's `LFixedSelect<E>x<w>_v1` (G2 -- an Active
     out-of-range route id is `INV_w` NAMED, never a default slot; `r = bot -> bot`; in range -> `z_r` bit for bit including bot).  This is
     the v1 member = the relation at enable 1, what a verifier evaluates a committed `(r, z_0..z_{E-1}, u)` against; the GATE the block
     emits is its enabled form `fixed_select_enabled` (B7: the block's enable is the last operand)."""
@@ -155,8 +153,8 @@ def _lifted_core(B, S, x, logits, w13, w2, a):
     E slots with their enables `a_e`, the routed weights produced inside the slots, the bodies, the combine and the sum.  ONE emission
     shared by `LMoeBlock_v1` (which owns the router GEMM, `logits = Gemm(x, W_g)`) and `LMoeBlockL_v1` (which takes the logits as an
     input: the frontend's construction, route A (3), where the router GEMM is the layer's own `Gemm_v1{K=H,N=E}` call over `mlp.gate`
-    and the fused block starts at `_moe_C.topk_softmax`) -- the same nodes in the same order, so `LMoeBlock_v1`'s digest is what Stage 2
-    signed (revb S-r17b-S2 (2): 1dd831feee7ac882 at E=4, K=2)."""
+    and the fused block starts at `_moe_C.topk_softmax`) -- the same nodes in the same order, so `LMoeBlock_v1`'s digest stays
+    1dd831feee7ac882 at E=4, K=2."""
     E, TOPK, H, I = S.E, S.TOPK, S.H, S.I
     r = B.call(L.lift_def(bind(moe.MoeRouterTopK, E=E, TOPK=TOPK, VPT=S.VPT)), logits, a, name="router/topk")
     alpha, ids = r[0], r[1]
@@ -189,7 +187,7 @@ def _lifted_core(B, S, x, logits, w13, w2, a):
 @composite("LMoeFfn", 1, ["E", "TOPK", "VPT", "H", "I"],
            lambda S: (block_signature(S)[0], Array(S.H, V(16))), conformance="protocol-defined")
 def LMoeFfn(B, S, x, wg, w13, w2, a):
-    """The block as a layer would call it: `y` only (the assignment record stays inside the callee's nodes, addressable as VUs); the
+    """The block as a layer would call it: `y` only (the assignment record stays inside the callee's nodes, addressable as proof blocks); the
     caller's enable is its last operand, as for every lifted callee."""
     return B.call(bind(LMoeBlock, E=S.E, TOPK=S.TOPK, VPT=S.VPT, H=S.H, I=S.I), x, wg, w13, w2, a, name="moe")[0]
 
@@ -228,23 +226,23 @@ def _fixed_core(B, S, x, logits, w13, w2):
     return B.call(bind(moe.MoeSum, TOPK=TOPK, H=H), array_of(us), name="moe_sum")
 
 
-# Route A (2) (coord R17-45 GO; pad's hook M-1083, `lifted.register_hand_lift` b79e9623d): `LMoeFfn_v1` IS the padded-v1 lift of the twin --
+# Route A (2) (`lifted.register_hand_lift`): `LMoeFfn_v1` IS the padded-v1 lift of the twin --
 # `lift_def(bind(MoeFfnFixed, ...))` on the registry path AND on the descriptor-decoded path (GP-01 request_component / codec.decode_program:
 # the Build path) yields `bind(LMoeFfn, **same bindings)` in place of the node replay `Lifted[MoeFfnFixed_v1]_v2` (which would be an all-Active
 # Program).  Checked by name at registration (same statics, composites, one lift per id, before any replay lift of the id) and per binding
-# (the lift's signature == the twin's lifted params + ('enable', Value<2>) last).  The body is this module's (MOE-PAD-SPEC s3/A12).
+# (the lift's signature == the twin's lifted params + ('enable', Value<2>) last).  The body is this module's.
 HAND_LIFT = L.register_hand_lift(MoeFfnFixed, LMoeFfn)
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Route A (3) (coord R17-45 (a); moe M-1066 (2a)/(2b)): the FRONTEND's unit -- the block from the router LOGITS.  In vLLM's OLMoE the router
+# Route A (3): the FRONTEND's unit -- the block from the router LOGITS.  In vLLM's OLMoE the router
 # GEMM is the layer's own `mlp.gate` linear (`Gemm_v1{K=H,N=E}`, bound by the base GEMM rule; its output `router_logits` is a boundary value
 # of the record) and the fused block `vllm.moe_forward(hidden_states, router_logits)` starts at `_moe_C.topk_softmax`.  One resolution
 # per dispatcher root (resolver / frontend alike) means the block's Definition takes the logits as an INPUT rather than recomputing them:
 # `MoeFfnFixedL_v1(x, logits, w13, w2)` is `MoeFfnFixed_v1` minus its router GEMM (the same `_fixed_core`, node for node), and its lift
 # of record is the hand-authored `LMoeFfnL_v1` = `LMoeBlockL_v1[0]` (the same `_lifted_core` as `LMoeBlock_v1`: the E slots with their
 # enables, the routed weights produced inside the slots, the fixed-select combine, the registered sum).  `LMoeBlock_v1` / `LMoeFfn_v1` /
-# `MoeFfnFixed_v1` stay registered unchanged (Stage 2 / route A (1)(2) as signed) as the router-owning form of the same block.
+# `MoeFfnFixed_v1` stay registered unchanged (Stage 2, route A (1)(2)) as the router-owning form of the same block.
 # ---------------------------------------------------------------------------------------------------------
 
 

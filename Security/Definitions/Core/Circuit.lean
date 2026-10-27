@@ -15,7 +15,7 @@ For a set `S` of gates, in the notation of the NCI draft:
 * `into S`: in(S), the gates outside `S` with a wire into `S`;
 * `exits S`: out(S), the gates of `S` that a gate outside `S` reads, and the output gates in `S`.
 
-A transcript is one run's data, a value for every gate. `eval a` is the honest transcript on the inputs `a`, and
+A trace is one run's data, a value for every gate. `eval a` is the honest trace on the inputs `a`, and
 `run fix` evaluates with the gates that `fix` names held at the values it gives (how a unit is recomputed,
 `Partition.localEval`).
 
@@ -76,7 +76,7 @@ def run (fix : (g : Fin C.N) → Option (BitVec (C.w g))) (g : Fin C.N) : BitVec
 termination_by g.val
 decreasing_by all_goals assumption
 
-/-- The circuit's evaluation on the inputs `a`: the honest transcript. Only `a`'s values at input gates are read. -/
+/-- The circuit's evaluation on the inputs `a`: the honest trace. Only `a`'s values at input gates are read. -/
 def eval (a : C.Transcript) : C.Transcript :=
   C.run fun g => if C.isInput g then some (a g) else none
 
