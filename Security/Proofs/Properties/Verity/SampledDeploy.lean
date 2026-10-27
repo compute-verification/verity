@@ -6,21 +6,25 @@ import Proofs.Core.Game.Tape
 /-!
 # Sampled proofs' target at the deployment, with no hypothesis on the strategy
 
-`Vocab.SampledProofsSoundL` doesn't hold at every vocabulary: at `delta = 0`, `loss = 0`, `crBound = 1` and a forger
+`Vocab.SampledProofsSound` doesn't hold at every vocabulary: at `delta = 0`, `loss = 0`, `crBound = 1` and a forger
 that never succeeds the error is `0`, and an extractor that returns a wrong transcript fails the claim at an honest play that passes. It holds at a
 vocabulary whose sampled proofs' fields are the deployment's, C-Flock's live session at the committed files' parse
 (`SampledDeploy`). `sampledProofsSound'` is the target there, at every `θ`, `F`, `c` and strategy, with no hypothesis
 on the strategy.
 
 `SampledDeploy` holds, for files that parse (`Vocab.parsed`), the session's setting at the parse (`A`, with its named
-assumptions A3 and `RecordCustodyZKJ`), the session's strategy the play induces (`τOf`) and the play's collision event (`Brk`), at a fixed LMS forger `Fg`;
-the facts relating them that no lemma gives yet, each its owner's:
+assumptions A3 and `RecordCustodyZKJ`), the session's strategy the play induces (`τOf`) and what the play's collision
+is read off (`col`, ONE-4's `findBreak` at a `.collision` witness); the facts relating them that no lemma gives yet,
+each its owner's:
 
-* `accept_le`: outside the collision and `Fg`'s forgery, the verdict at most as likely as the session's acceptance (ONE-3t's
+* `accept_le`: outside the collision (`ColEvent col`) and the vocabulary's forgery (`Vocab.Forges .sampled`), the
+  verdict at most as likely as the session's acceptance (ONE-3t's
   `acc_of_accepts` and a decode of `ComponentAccepts`; ONE-4's coupling of the device's releases to the session's
   coins and `DrawnByDevice`);
-* `break_le`: the collision at the finder's loss (ONE-4's `findBreak` at a `.collision` witness, through the
-  vocabulary's finder); the forgery is `Fg`'s own term (`Vocab.forges`), never reduced to a collision;
+* `finder_ge`: the vocabulary's sampled finder outputs a collision at least as often as the replay finder of `col`
+  (`Vocab.replayFinder`), so `break_le` follows (`break_le_of`) at the additive loss (`loss_ge`: `x ≤ loss x`, which
+  every deployment's `loss` has by ruling, stated here once until `Vocab` carries it); the forgery is the vocabulary's
+  own term (`Vocab.forges`), never reduced to a collision;
 * `unbound_le`: the unbound units at most the session's faulty ones (`LiveAt.faultyE`; `place`'s openings bridge,
   ONE-7);
 * `cr`: the vocabulary's finder premise gives C-Flock's (C-Flock's finders as one `Claims.Finder`, ONE19);
@@ -100,7 +104,8 @@ theorem prob_colEvent_eq (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strate
 
 /-- **`break_le` from the vocabulary's finder.** Where the vocabulary's sampled-proofs finder at `σ` outputs a collision
 at least as often as the replay finder of `col` (`hF`; the vocabulary's finder is that finder, or a combined finder
-that runs it), and the loss is at least its argument (`hloss`, the additive form), the collision event `col` reads off
+that runs it), and the loss is at least its argument (`hloss`: the collision term is additive by ruling, never
+`loss = 0`; `SampledDeploy.loss_ge` until `Vocab` carries it), the collision event `col` reads off
 the play is at most the loss at the finder: `SampledIn.break_le` at `Brk := ColEvent col`. -/
 theorem break_le_of (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ)
@@ -214,10 +219,10 @@ theorem unbound_le_of_extract {V : Vocab d α} (kd : ByteArray → ℕ) (desc : 
 
 /-- **Sampled proofs at the deployment.** At files that parse to `r` (`Vocab.parsed`), every `θ`, `c` and strategy
 `σ`: C-Flock's live session at the parse (`A`, `K₀ = ⌊ε n⌋ + 1`, its cost `t'` the strategy's), the session's
-strategy the play induces (`τOf`), the play's collision event (`Brk`) at the forger `Fg`, and the facts relating them (`accept_le`, `break_le`,
-`unbound_le`, `cr`), each its owner's to prove; the deployment's constants; and what the product publishes about
+strategy the play induces (`τOf`), what the play's collision is read off (`col`), and the facts relating them
+(`accept_le`, `finder_ge`, `unbound_le`, `cr`), each its owner's to prove; the additive loss (`loss_ge`); the deployment's constants; and what the product publishes about
 sampled proofs (`ε_nonneg`, `delta_ge`, `delta_top`). -/
-structure SampledDeploy (V : Vocab d α) (Fg : LmsForger) where
+structure SampledDeploy (V : Vocab d α) where
   kd : ByteArray → ℕ
   desc : ByteArray → Claims.Msg
   q : ByteArray → Claims.Sampling.Query
@@ -225,14 +230,15 @@ structure SampledDeploy (V : Vocab d α) (Fg : LmsForger) where
     Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ)
   τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G
-  Brk : ByteArray → ByteArray → ByteArray → Outcome → Prop
+  col : ByteArray → ByteArray → ByteArray → Outcome → Option (Claims.Msg × Claims.Msg)
   accept_le : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
-    Game.prob (fun o => V.Verdict .sampled o ∧ ¬ Brk θ F c o ∧ ¬ Fg.Forges θ o) (V.game θ F c) σ ≤
+    Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (col θ F c) o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
       FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
         (A θ F c σ r hr).G (τOf θ F c σ r hr)
-  break_le : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
-    Game.prob (Brk θ F c) (V.game θ F c) σ ≤ V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ)
+  finder_ge : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+    (V.replayFinder θ F c σ (col θ F c) (V.cost θ F c σ)).Pr sha512Msg ≤ (V.finder .sampled θ F c σ).Pr sha512Msg
+  loss_ge : ∀ θ x, x ≤ V.loss .sampled θ x
   unbound_le : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
     (hr : V.parsed F = some r), V.Registered θ F →
     (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤
@@ -256,11 +262,11 @@ structure SampledDeploy (V : Vocab d α) (Fg : LmsForger) where
 
 namespace SampledDeploy
 
-variable {V : Vocab d α} {Fg : LmsForger}
+variable {V : Vocab d α}
 
 /-- **The coupling at every strategy**, at registered files that parse. -/
-noncomputable def sampledIn (Dp : SampledDeploy V Fg) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
-    (r : Flock.Bridge.Parsed) (hr : V.parsed F = some r) (hreg : V.Registered θ F) : SampledIn V Fg θ F c σ where
+noncomputable def sampledIn (Dp : SampledDeploy V) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (r : Flock.Bridge.Parsed) (hr : V.parsed F = some r) (hreg : V.Registered θ F) : SampledIn V θ F c σ where
   n := r.n
   D := r.D
   hU := r.hU
@@ -274,9 +280,9 @@ noncomputable def sampledIn (Dp : SampledDeploy V Fg) (θ F c : ByteArray) (σ :
     show Flock.Bridge.unitsOfFile _ _ _ _ = r.n
     exact Flock.Bridge.unitsOfFile_eq hr
   hε := Flock.Guarantees.LiveAt.sound_honest (n := r.n) _ (mul_nonneg (Dp.ε_nonneg θ) (Nat.cast_nonneg _))
-  Brk := Dp.Brk θ F c
+  Brk := ColEvent (Dp.col θ F c)
   accept_le := Dp.accept_le θ F c σ r hr hreg
-  break_le := Dp.break_le θ F c σ
+  break_le := break_le_of V θ F c σ (Dp.col θ F c) (V.cost θ F c σ) (Dp.finder_ge θ F c σ) (Dp.loss_ge θ)
   unbound_le := Dp.unbound_le θ F c σ r hr hreg
   cr := Dp.cr θ F c σ r hr hreg
   delta_le := by
@@ -292,15 +298,14 @@ noncomputable def sampledIn (Dp : SampledDeploy V Fg) (θ F c : ByteArray) (σ :
 
 end SampledDeploy
 
-/-- **Sampled proofs' target at the deployment** (`Vocab.SampledProofsSoundL`, ONE-8), with no hypothesis on the
-strategy: at every vocabulary whose sampled proofs' fields are the deployment's at the LMS forger `Fg`
-(`SampledDeploy`), at every `θ`, `F`, `c` and strategy, sampled proofs' verdict accepts while more than an `ε` share of
-the units are unbound in the extractor's transcript with probability at most `Vocab.errorL .sampled`: `Vocab.error
-.sampled` (`δ` and the collision finder's loss) plus `Fg`'s success probability (`euf-cma/lms-sha512-n64`). -/
-theorem sampledProofsSound' (V : Vocab d α) (Fg : LmsForger) (Dp : SampledDeploy V Fg) : V.SampledProofsSoundL Fg :=
-    fun θ F c σ => by
+/-- **Sampled proofs' target at the deployment** (`Vocab.SampledProofsSound`, ONE-8), with no hypothesis on the
+strategy: at every vocabulary whose sampled proofs' fields are the deployment's (`SampledDeploy`), at every `θ`, `F`,
+`c` and strategy, sampled proofs' verdict accepts while more than an `ε` share of the units are unbound in the
+extractor's transcript with probability at most `Vocab.error .sampled`: `δ`, the collision finder's loss, and the LMS
+forger's success probability (`euf-cma/lms-sha512-n64`). -/
+theorem sampledProofsSound' (V : Vocab d α) (Dp : SampledDeploy V) : V.SampledProofsSound := fun θ F c σ => by
   show Game.prob (fun o => V.Verdict .sampled o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ ≤
-    V.errorL Fg .sampled θ F c σ
+    V.error .sampled θ F c σ
   by_cases hreg : V.Registered θ F
   · cases hr : V.parsed F with
     | some r => exact (Dp.sampledIn θ F c σ r hr hreg).le_error
@@ -321,6 +326,6 @@ theorem sampledProofsSound' (V : Vocab d α) (Fg : LmsForger) (Dp : SampledDeplo
       refine (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ).trans ?_
       rw [Game.prob_false]
       exact zero_le
-  · exact (prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ h => hreg h.1.1) σ).trans_le zero_le
+  · exact (prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F c _ (fun _ _ _ h => hreg h.1.1) σ).trans_le zero_le
 
 end Verity
