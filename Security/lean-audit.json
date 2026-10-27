@@ -14456,9 +14456,9 @@
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
   },
   "Definitions.Accounting.Guarantees.JointBlocks": {
-   "digest": "e20a8b898619a36d3f269089d18212bec683737e37bd87e176f025d8ccc341ee",
+   "digest": "8a401de14e3313d7b96e662e42c21d9e03c5dd5c3847500b15d1966642dd2acb",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocks": "5821543be7c4950777feb80573f5762d9c9ab740ac878155676591eb79d06ae4",
+    "Accounting.Guarantees.JointHorizonBlocks": "3f602ab83998cca3d2d48fe170f1009dc793f61728c88fede4a0be7306d4af2a",
     "Accounting.Guarantees.JointHorizonBlocksA": "c1f730bea4fe4aed554f0272d955127720cfa2a88f0333840a833a258fdfefb6",
     "Accounting.Guarantees.JointHorizonBlocksLegs": "977fc500292ef7b2e29f3b344209f12e2d27dcb936c31439ae6a2e3f2885be7a"
    },
@@ -14490,9 +14490,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
   "Definitions.Accounting.Guarantees.JointLive": {
-   "digest": "14f0fd4dc88508a8459c3def01cd0ff3978cad9593e7a53a97df877cca90cc45",
+   "digest": "5633948e8f942dccd260dd5ffcf9053e8a3fca7526775f0b14b887cdcd952cfc",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocksLive": "719eb4d0880c8bc0bd3c6e08b08ac8ac9817b9bf684f69717f9c020b24e8ebec",
+    "Accounting.Guarantees.JointHorizonBlocksLive": "b8ece9843f3244d37f73c6a028e23ec8def21c7d4d80a39af9d56497bdc6353c",
     "Accounting.Guarantees.JointHorizonLive": "07533021ad9c6eeb83b92132ac74d5fc3b6c6aa181454fe96c3e1f2afe4d9aad",
     "Accounting.Guarantees.JointPeriodLive": "b81df86955608dceb3e2ade59608407fd005cb87d6f716d204d2d2e0a7c5f973"
    },
@@ -15476,7 +15476,7 @@
    ]
   },
   "Definitions.Accounting.JointBlocks": {
-   "digest": "d6ba4d7b6474ca99c9be8cea8d973f0a33094fb0b576e38f26338dfd4dac2f90",
+   "digest": "382a62e02a29054a2f3adf5677d7503a199dad03c22c994adca01e17277a96f6",
    "definitions": {
     "Accounting.BlockWipe": "4e6b624aca50d5cff6db7896b72d66070634fbf8de4531d52df732eac4d9e169",
     "Accounting.BlockWipe.Survives": "7e7951f83601cdf8272926110b873c1c2f9257f27bab24c34ad6a134d14052d9",
@@ -15485,7 +15485,7 @@
     "Accounting.BlockWipe.kept": "d7e77a8fd6b794955d6ee0dabf9c2b179738207e63cb4b3ad86c2c8222059a2b",
     "Accounting.BlockWipe.unfilled": "05684390801f0e6ed1fa5be094a30b94bc8f83b1734a8fd118797e7a7082b059",
     "Accounting.BlocksRun": "16915e0510ba25751abe6c9a97dd81faaa05512e0064c8e4c9f0bd8f2ef54546",
-    "Accounting.BlocksRun.MemoryTerm": "805258ae6ba9189d21a9747e580ac86b067335e28b36a57690e5228885e53d18",
+    "Accounting.BlocksRun.MemoryTerm": "a8084e70df754d343cf59b0c203c3bd78b75c95db19fbd8a7baae05a41ea4d9f",
     "Accounting.BlocksRun.block": "00a1317756a2bc7d26a6efcc365a07ed3cde9c0d57463587ad4401bb5ede1b25",
     "Accounting.BlocksRun.chal": "238f15926a3630ddd179f35d34aa8a63ce40c324aa63961bde6d40708b2d6e9c",
     "Accounting.BlocksRun.readDeadline": "11fe0caa14f2c41264fcbbdccd31a36535516799d0639b26ca67461fae632579",
@@ -15547,10 +15547,10 @@
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksDeployed"]
   },
   "Definitions.Accounting.JointLive": {
-   "digest": "f4f31e61abf47d69d2850170607eb5c285e9516f1a307a39b33f629293eb5a83",
+   "digest": "7924c756c0901b5fab040b1705c72e855f0d15f0a527ee83ac0fde61af73510f",
    "definitions": {
     "Accounting.BlocksLive": "1bc948949878195e0176b541d7c22aa5bbe1adc9619b02f6686be3c0cab94be4",
-    "Accounting.BlocksLive.MemoryTerm": "af0a5b89fd45a59f4a65d1213dc454c197ecf067325834383ee062720dead4c4",
+    "Accounting.BlocksLive.MemoryTerm": "878aa9492cdc7559a6435bf7bb569cc5b6cf975db51536916baa036d51b8b49b",
     "Accounting.BlocksLive.block": "831f7ffc4b01bccb5da15cfb98754aa37ec417d25d68522cda96bb9df7ef8318",
     "Accounting.BlocksLive.chal": "b6cc3413d0bc5900a464536d6010c9360789e042657827bb01dcca32a9b36530",
     "Accounting.BlocksLive.readDeadline": "eea17761ab5ab4272561953e145c7c1322bac85d3902bd4ba3c3d425118c1e43",
@@ -39961,11 +39961,11 @@
    ]
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": {
-   "digest": "2192cb57b4fd45bc75a3f19796d8df85db090f8f3226f5286bd38d3ef51fc7c6",
+   "digest": "ca6610889c227162509adde337691008c79b7f496e35b4f64b0fd1a3bf6e6137",
    "definitions": {
     "Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock": "501accf17823eb948e174affa0931c55deadb1cb1560c1453be4e15ab8eabebb",
     "Accounting.Guarantees.Bridge.JointHorizonBlocksAOfIntegrityBlock": "e45c3e3663083f84e7eee9f03eefafcba8845cc4f3c6f492948cdb06880abdb3",
-    "Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock": "bc658dab2da6e26fb02d80934d11d7a42e34335b219b4b8ba251a122d71236b5",
+    "Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock": "f4d1d906b88c1d47a85d6377290b3d3ea7570842baf2315259f51f36f17058a1",
     "Accounting.RealizesIntegrityOfIntegrityBlock": "6051c0820cf8b0d2c2e18fbad171ee327e368239a79dfb1de8e067b1ca4d1999",
     "Accounting.RealizesIntegrityOfIntegrityBlock.strat": "5e434fec2984fb4bb1c5dff1e7ed6d890b61cc9387c770669916c101b3e93dd0"
    },
@@ -39987,9 +39987,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod"]
   },
   "Proofs.Accounting.JointBridge.Guarantees.JointHorizonBlocksDeployed": {
-   "digest": "6faab49dbfa260830af1755e8bf3e666766227695ce94e1465876619946fc8ab",
+   "digest": "df6a8315f64d0f6d4690b2d5a5c1f3dce98da0766cdf4d8ed9ffe10a4527bdf1",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocksDeployed": "e95c361deadc35e71d88e98052aab2b29e13905faffd95818b665d3034ee8786",
+    "Accounting.Guarantees.JointHorizonBlocksDeployed": "cce9332c94fbf14f7b0a11d5a725baf44ab1111eadf3fa23449004a4622d5ad0",
     "Accounting.Guarantees.JointHorizonBlocksDeployedA": "c5906ee49d6bb985439b17967b9bd77e6b34d11adc4d6792fee174925ff3c52b"
    },
    "guarantees": [
