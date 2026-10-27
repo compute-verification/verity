@@ -197,7 +197,7 @@ class Placement:
         that reach anything crossing out, both at the census's grain, which can only over-count), and the credit of the
         block's work that depends on it, gate by gate within the Calls it reaches (`logical.reach`; none past the
         explicit limit)."""
-        dc, program = self.datacenter, self.program
+        dc = self.datacenter
         readers: dict[int, set[int]] = {}
         for v in self.values:
             readers.setdefault(v.node, set()).update(v.reads)
