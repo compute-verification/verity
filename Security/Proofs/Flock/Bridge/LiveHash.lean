@@ -414,8 +414,14 @@ theorem soundFH (q : Claims.Sampling.Query) (ε : ℝ) (hε : (K₀ : ℝ) - 1 �
     prob (fun o => LiveAcceptsZK A.I o ∧ ¬ A.HoldsF q ε (A.adapt τ)) A.GH τ ≤ A.boundH τ := by
   unfold boundH
   split_ifs with hCR
-  · refine (hash_le A.L A.dg (planZHJ A.dj A.y₀) A.N A.wr A.wrH
-      (fun t => AcceptsZK A.I t ∧ ¬ A.HoldsF q ε (A.adapt τ)) (fun _ _ _ h => canonWrH_spec h) τ).trans
+  · have hw : ∀ S R (o : OutH (planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length (mPtsOf D.unroll.g (kd / nTab A.I))),
+        AcceptsZK A.I (A.wrH S R o) ∧ ¬ A.HoldsF q ε (A.adapt τ) →
+          pointsHash o.2.2.2.1 = o.1 ∧ (AcceptsZK A.I (A.wr S R o.raw) ∧ ¬ A.HoldsF q ε (A.adapt τ)) :=
+      fun S R o h => canonWrH_spec (I := A.I) (dj := A.dj)
+        (Jf := fun S R => (planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length) (mPts := mPtsOf D.unroll.g (kd / nTab A.I))
+        (S := S) (R := R) (o := o) h
+    refine (hash_le A.L A.dg (planZHJ A.dj A.y₀) A.N A.wr A.wrH
+      (fun t => AcceptsZK A.I t ∧ ¬ A.HoldsF q ε (A.adapt τ)) hw τ).trans
       (add_le_add ?_ (coll_le_of_CR hCR.2))
     have h := A.soundF q ε hε (A.adapt τ)
     rw [LiveAt.bound, if_pos hCR.1] at h

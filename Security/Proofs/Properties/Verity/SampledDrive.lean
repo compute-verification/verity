@@ -1,4 +1,5 @@
 import Proofs.Properties.Verity.SampledRecs
+import Proofs.Properties.Verity.SampledCanonDraw
 
 /-!
 # The reduction at a live session, from what the play's releases read back to
