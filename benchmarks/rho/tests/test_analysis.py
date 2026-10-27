@@ -6,6 +6,7 @@ import pytest
 from rho import analysis, figures
 from rho.analysis import LO, crossing
 from rho.params import Param, Registry
+from rho.scenario import build
 
 REG = Registry.load()
 NAMES = REG.names("scenario")
@@ -191,3 +192,33 @@ def test_run_prints_the_comparator_beside_rho_and_flags_a_vacuous_lower_end(tmp_
     assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
     assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
+
+
+def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
+    """NET-92 at W63 (`onsite-w63`): 90.4 kbit/s a server over a 32-bucket link-window, intake 0.028 at the reference
+    policy, labelled the honest-δ form with a faulty ingress unit's 209,964 bits excluded, line rate beside it; the
+    reference itself at `intake · α Φ`, 3.23 Mbit/s."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "onsite-w63",
+                                      "--scenario", "reference-remote-h200"])
+    run.main()
+    text = capsys.readouterr().out
+    assert ("**Certified ingress:** 9.04e+04 bit/s into a location, intake 0.028 × α Φ: 1 × each server's declared "
+            "inputs, r_in = 9.04e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
+            "form's public parameters, the honest-δ form of draft:NET-92's bound (a faulty ingress unit's 2.1e+05 bits "
+            "are excluded until every ingress unit is drawn)") in text
+    assert "line rate, 4.8e+12 bit/s, is its upper end until NET-92's PR 5" in text and text.count("Certified") == 1
+    record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]
+    assert record["reference-remote-h200"]["certified"] is None
+    certified = record["onsite-w63"]["certified"]
+    assert certified["r_in"] == pytest.approx(90_387.5) and certified["window_buckets"] == 32
+    assert certified["faulty_unit_bits"] == 209_964
+    reference = run.certified(build(REG, "reference-onsite-h200"))
+    assert not reference["declared"] and reference["intake"] == 1
+    assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "
+                                              "`intake · α Φ`, a server's ingress only its declared inputs "
+                                              "(draft:NET-92); plus 1.86e+03 bit/s of timing and side channels.")
