@@ -1,4 +1,4 @@
-// libv31.so for HIGHUTIL: V31-GPU's v31.cu (benchmarks/pouw/accel_v31, built with its V31_LIB binding) and two functions more,
+// libv31.so for the highutil period: accel_v31's v31.cu (benchmarks/pouw/accel_v31, built with its V31_LIB binding) and two functions more,
 // which the period's GPU driver calls instead of v31_set_b, v31_root and v31_levels. Those wait on the host (for the
 // shared compute stream, or for a call's commit) and copy through pageable memory; the period changes weights every call
 // (step g reads transformer block g mod NB) and keeps every call's tree, so those waits would drain the device's queue

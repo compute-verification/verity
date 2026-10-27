@@ -237,8 +237,8 @@ def z_only(com: dict) -> dict:
 
 
 def unrooted(com: dict) -> dict:
-    """``com`` as a prover that registers its per-window values with no window root states it (main's form before
-    PRF-127): every entry's domain the registered domain of its value with no window bound."""
+    """``com`` as a prover that registers its per-window values with no window root states it (the form
+    before window roots): every entry's domain the registered domain of its value with no window bound."""
     return dict(com, registered=[dict(e, domain=G.domain(com["program_sha512"], e["value"], e["words"],
                                                          e["leaves"]).domain_id.hex()) for e in com["registered"]])
 

@@ -2,7 +2,7 @@
 Definitions.
 
 The edited GEMM serves Y = A B'^T from P = A' B'^T (A' = A + U W^T, U in {±1..±64} with period 32 along k; B' = B + F, F ±1,
-or under decision 29's dither B' = B + d, d in {0, 1}) on 128 x 128 tiles of 512 threads (fgemm.cu's mainloop at warps
+or under the dither B' = B + d, d in {0, 1}) on 128 x 128 tiles of 512 threads (fgemm.cu's mainloop at warps
 32 x 32). Thread ``ctid`` (warp w = ctid / 32, lane l, wm = w / 4, wn = w % 4, g = l >> 2, q = l & 3) holds 32 accumulator
 words: entry 4 t + e (t = 4 mi + ni, mi < 2, ni < 4, e < 4) at row wm 32 + g + 8 r and column wn 32 + 2 q + 8 ni + (e & 1),
 with r = 2 mi + (e >> 1) its row slot and c = 2 ni + (e & 1) its column slot. After each 32-step segment j (k = 32 j ..
@@ -21,17 +21,17 @@ The fold is a parameter (``FOLD``, `FOLDS`):
   z = mix32(y + 0x9E3779B9) (NW = KS / S windows). Chain 4 (t % 2) + e absorbs entry 4 t + e at position t:
   u = y ^ p ^ kx_t, y = u a_t + z, z = rotl(u, r_t) + y (mod 2^32, a_t odd, fgemm.cu's lane-0 keys); R = xor_i (y_i ^
   rotl(z_i, 16)).
-- ``xin`` (P2-FF r9's XOR-in with rotations (13, 19), note:20261016T1117Z-draft-fullfloor-s-r9; provisional): state y (8
+- ``xin`` (the r9 XOR-in with rotations (13, 19); provisional): state y (8
   chains, duo's y keys), chain t absorbing entries 4 t .. 4 t + 3 as d0 .. d3: y = (rotl(y, 13) ^ d0) a0_t + d1, then
   y = (rotl(y, 19) ^ d2) a1_t + d3, the multipliers odd and outside Lambda8 (`key_ok`); R = xor_t y_t.
 
-Operands are committed as decision 46's tile leaves: R = 64 rows x 32 values of an operand (row block i / 64, segment j).
+Operands are committed as tile leaves: R = 64 rows x 32 values of an operand (row block i / 64, segment j).
 The thread's 4 rows of A at segment j are rows o + 8 r of A's leaf, o = 32 (wm % 2) + g (16 offsets); its 8 rows of B are
 rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 
     PouwI8Add_v1     (a, u: Value<8>) -> Value<8>                  a + u mod 2^8 (A' from A and U)
     PouwI8Pm1_v1     (b: Value<8>, f: Value<1>) -> Value<8>        b + 1 - 2 f mod 2^8 (B' from B and F's sign bit)
-    PouwI8AddBit_v1  (b: Value<8>, d: Value<1>) -> Value<8>        b + d mod 2^8 (B' from B and 's dither bit)
+    PouwI8AddBit_v1  (b: Value<8>, d: Value<1>) -> Value<8>        b + d mod 2^8 (B' from B and the dither bit)
     PouwSegDot_v1    (acc: Value<32>, a, b: Array<32, Value<8>>) -> Value<32>      acc + sum_k a_k b_k mod 2^32, int8 a and b
     PouwSel8_v1      (s: Value<1>, w: Value<8>) -> Value<8>        w if s else 0
     PouwXor8_v1      (x, y: Value<8>) -> Value<8>                  x ^ y
@@ -61,7 +61,7 @@ and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the 
 through a row of known content: so a proof says the thread's committed window word is that of the committed operands'
 noised product, segment j included.
 
-    PouwSegCheckDither_v2{S, FOLD}   the same with decision 29's dither on the served side: B' = B + d (`PouwI8AddBit_v2`),
+    PouwSegCheckDither_v2{S, FOLD}   the same with the dither on the served side: B' = B + d (`PouwI8AddBit_v2`),
                                      d in {0, 1} the coin bit ``f`` carries (the served X = floor(x / s) + b)
 """
 from __future__ import annotations
@@ -331,7 +331,7 @@ def PouwI8Pm1Word(b: int, f: int) -> int:
 
 @primitive("PouwI8AddBit", 1, [("b", V8), ("d", V1)], V8, conformance="protocol-defined")
 def PouwI8AddBitWord(b: int, d: int) -> int:
-    """B'_lk = B_lk + d_lk mod 2^8, d decision 29's dither bit."""
+    """B'_lk = B_lk + d_lk mod 2^8, d the dither bit."""
     return (b + (d & 1)) & 0xFF
 
 
@@ -569,7 +569,7 @@ def PouwSegCheck(B, S, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first):
 
 @composite("PouwSegCheckDither", 2, ["S", "FOLD"], _check_signature, conformance="protocol-defined")
 def PouwSegCheckDither(B, S, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first):
-    """`PouwSegCheck_v2` with the served side under decision 29's dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
+    """`PouwSegCheck_v2` with the served side under the dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
     return _seg_check_body(B, S, PouwI8AddBit, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first)
 
 

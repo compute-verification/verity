@@ -1,5 +1,5 @@
-"""FPX-G1H: FP8-g1's and W4A8-g1's committed values through H1's own transcript construction (co32c-u16, decision 82,
-the RTX PRO 6000's record).
+"""FP8-g1's and W4A8-g1's committed values through H1's own transcript construction (co32c-u16, the RTX PRO 6000's
+record).
 
 g1 serves each operand as its nearest level R plus a fair coin, centred: (R_x + b - 1/2)(R_w + c - 1/2), b and c H1's
 own coins (its activation dither and weight coin). It is credited at H1's ε when the one int8 GEMM of R_x + b and
