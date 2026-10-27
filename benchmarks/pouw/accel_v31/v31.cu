@@ -1457,13 +1457,16 @@ struct ServedRow {
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
 };
 
-// hash_after_block, giving up (false) when stop() holds at a 16-block boundary
+// hash_after_block's blocks b0 .. of the row (x: the chaining value after the first b0), until stop() holds at a 4-block
+// boundary: the blocks done, nblk when x is the digest
+struct NoStop {
+  DEV bool operator()() const { return false; }
+};
 template <class Src, class Stop>
-DEV bool hash_after_block_or(const u64* cv, const Src& src, u32 lb, u64* x, bool pf, const Stop& stop) {
-  cpy8(x, cv);
+DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop& stop) {
   const u32 nblk = (lb + 17 + 127) / 128;
-  for (u32 b = 0; b < nblk; ++b) {
-    if (b % 16 == 15 && stop()) return false;
+  for (u32 b = b0; b < nblk; ++b) {
+    if (b > b0 && b % 4 == 0 && stop()) return b;
     if (pf && 128 * (b + 1) < lb) src.pf(128 * (b + 1));
     u64 W[16];
 #pragma unroll
@@ -1488,11 +1491,13 @@ DEV bool hash_after_block_or(const u64* cv, const Src& src, u32 lb, u64* x, bool
     if (b == nblk - 1) W[15] = (u64)(128 + lb) * 8;
     sha::compress(x, W);
   }
-  return true;
+  return nblk;
 }
-// RP 4's hasher (wg_proto.cuh's H) on a served call's O rows: row j of commit tile ct is leaf ct lpt + wrows + j, its
-// digest to xd[pos] and its flag to the launch's epoch; FusedRow reads it back in the leaf phase, and hashes whatever
-// carries another epoch (rows the hash warps dropped, the words rows, a forged copy)
+// RP 4's hasher (wg_proto.cuh's H) on a served call's O rows: row j of commit tile ct is leaf ct lpt + wrows + j. Its
+// chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the blocks hashed (all of them, or as many as the hash
+// warp did before the consumers were done); FusedRow takes the leaf phase on from there, and hashes from the first block
+// whatever carries another epoch (the words rows, a forged copy)
+constexpr u32 FUSED_EPOCHS = 1u << 22;
 struct FusedLeaves {
   ServedRow row;
   u64* xd;
@@ -1502,19 +1507,28 @@ struct FusedLeaves {
   template <class Stop> DEV void operator()(unsigned long long ct, unsigned j, const Stop& stop) const {
     const u64 pos = ct * row.lpt + row.wrows + j;
     u64 x[8];
-    if (!hash_after_block_or(C.mid_P, row.template src<true>(pos), row.row, x, row.pf != 0, stop)) return;
+    cpy8(x, C.mid_P);
+    const u32 b = hash_blocks(x, row.template src<true>(pos), row.row, 0, row.pf != 0, stop);
+    if (!b) return;
     st8(xd + 8 * pos, x);
-    flag[pos] = epoch;
+    flag[pos] = epoch << 10 | b;
   }
 };
-template <class R> struct FusedRow {
-  R row;
+struct FusedRow {
+  ServedRow row;
   const u64* xd;
   const u32* flag;
   u32 epoch;
   DEV void digest(u64 pos, u64* x) const {
-    if (__ldg(flag + pos) == epoch) ld8(xd + 8 * pos, x);
-    else row.digest(pos, x);
+    const u32 f = __ldg(flag + pos);
+    u32 b = 0;
+    if (f >> 10 == epoch) {
+      ld8(xd + 8 * pos, x);
+      b = f & 1023;
+    } else {
+      cpy8(x, C.mid_P);
+    }
+    hash_blocks(x, row.src(pos), row.row, b, row.pf != 0, NoStop{});
   }
 };
 
@@ -1811,10 +1825,13 @@ __global__ void ne_kernel(const int* a, const int* b, size_t n, unsigned long lo
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) c += a[i] != b[i];
   if (c) atomicAdd(out, c);
 }
-__global__ void eq_count_kernel(const u32* a, size_t n, u32 v, unsigned long long* out) {
-  unsigned long long c = 0;
-  for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) c += a[i] == v;
+// FusedLeaves' flags of epoch e: out[0] the rows hashed whole (nblk blocks), out[1] the blocks hashed
+__global__ void fused_count_kernel(const u32* a, size_t n, u32 e, u32 nblk, unsigned long long* out) {
+  unsigned long long c = 0, nb = 0;
+  for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x)
+    if (a[i] >> 10 == e) { c += (a[i] & 1023) == nblk; nb += a[i] & 1023; }
   if (c) atomicAdd(out, c);
+  if (nb) atomicAdd(out + 1, nb);
 }
 
 template <class T> static T* dalloc(size_t n) {
@@ -1897,7 +1914,7 @@ static void set_carveout(int pct) {
                       (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>,
                       (const void*)leaf_small<LtRow, 0>, (const void*)leaf_persist<LtRow>,  (const void*)fill_a_kernel,
                       (const void*)fill_b_kernel,      (const void*)leaf_small<ServedRow, 0>, (const void*)leaf_persist<ServedRow>,
-                      (const void*)serve_rows_kernel,  (const void*)leaf_persist<FusedRow<ServedRow>>};
+                      (const void*)serve_rows_kernel,  (const void*)leaf_persist<FusedRow>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
 }
 
@@ -2510,6 +2527,16 @@ struct Fill {
     return FusedLeaves{servedrow(b), xd[b], xf[b], xep[b], (u32)(65536 / row)};
   }
 #endif
+  // a call's FusedLeaves epoch: it wraps below FUSED_EPOCHS, and clears both copies' flags then (a cleared flag only
+  // makes the leaf phase hash that row from its first block)
+  u32 epoch(cudaStream_t st) {
+    if (++xctr == FUSED_EPOCHS) {
+      xctr = 1;
+      for (int c = 0; c < 2; c++)
+        if (xf[c]) CK(cudaMemsetAsync(xf[c], 0, 4 * (size_t)leaves, st));
+    }
+    return xctr;
+  }
   void gemm(cudaStream_t st, int b) {
     if (ltw) { lt_run(lt, X, W, D[b], st); return; }
 #ifdef V31_WG
@@ -2517,7 +2544,7 @@ struct Fill {
       wgp::Args g = wa_plain;
       g.O = D[b];
       if (kn.rp == 4) {
-        xep[b] = ++xctr;
+        xep[b] = epoch(st);
         const FusedLeaves h = fused_leaves(b);
         wg_run(st, g, &h);
       } else {
@@ -2544,7 +2571,7 @@ struct Fill {
   void leaves_nodes(int b, cudaStream_t st) {
     if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
     else if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
-    else if (o && xd[b]) pl.leaves_nodes(cm[b], FusedRow<ServedRow>{servedrow(b), xd[b], xf[b], xep[b]}, kn.ccta, st);
+    else if (o && xd[b]) pl.leaves_nodes(cm[b], FusedRow{servedrow(b), xd[b], xf[b], xep[b]}, kn.ccta, st);
     else if (o) pl.leaves_nodes(cm[b], servedrow(b), kn.ccta, st);
     else pl.leaves_nodes(cm[b], rowsrc(b), kn.ccta, st);
   }
@@ -2611,7 +2638,7 @@ struct Fill {
         forge_kernel<<<(tiles + stride - 1) / stride, 256, 0, s0>>>(nullptr, D[b], Wn, 0, stride, tiles_n, n, 0xF0F0u);
       else
         forge_kernel<<<(tiles + stride - 1) / stride, 256, 0, s0>>>(words[b], nullptr, Wn, s0f, stride, tiles_n, n, 0xF0F0u);
-      xep[b] = ++xctr;   // RP 4's digests are of the rows before the forge: the leaf phase hashes them again
+      xep[b] = epoch(s0);   // RP 4's digests are of the rows before the forge: the leaf phase hashes them again
     }
     CK(cudaEventRecord(ev_comp[b], s0));
     if (kn.sched == 1) pend = b;
@@ -2736,7 +2763,7 @@ static void kernel_attrs(FILE* f) {
                       {"wg_256_r3", (const void*)wgp::gemm_r3<256>}, {"wg_128_r3", (const void*)wgp::gemm_r3<128>},
                       {"wg_256_r4", (const void*)wgp::gemm_r4<256, FusedLeaves>},
                       {"wg_128_r4", (const void*)wgp::gemm_r4<128, FusedLeaves>},
-                      {"leaf_persist_fused", (const void*)leaf_persist<FusedRow<ServedRow>>}};
+                      {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>}};
   for (const KAttr& w : wk) {
     cudaFuncAttributes a;
     CK(cudaFuncGetAttributes(&a, w.fn));
@@ -3235,16 +3262,19 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     f.ready(f.calls - 2);
     f.ready(f.calls - 1);
     CK(cudaGetLastError());
-    // RP 4: the leaves whose row the GEMM's hash warps hashed, of the last overlapped call
-    long long fused = -1;
+    // RP 4: the leaves whose row the GEMM's hash warps hashed whole, and the SHA-512 blocks they hashed, of the last
+    // overlapped call
+    long long fused = -1, fused_blocks = -1;
+    const u32 nblk = (row + 17 + 127) / 128;
     if (f.xf[bl]) {
-      unsigned long long* ne = dalloc<unsigned long long>(1);
-      unsigned long long h = 0;
-      CK(cudaMemset(ne, 0, 8));
-      eq_count_kernel<<<4 * f.nsm, 256>>>(f.xf[bl], f.leaves, f.xep[bl], ne);
-      CK(cudaMemcpy(&h, ne, 8, cudaMemcpyDeviceToHost));
+      unsigned long long* ne = dalloc<unsigned long long>(2);
+      unsigned long long h[2] = {0, 0};
+      CK(cudaMemset(ne, 0, 16));
+      fused_count_kernel<<<4 * f.nsm, 256>>>(f.xf[bl], f.leaves, f.xep[bl], nblk, ne);
+      CK(cudaMemcpy(h, ne, 16, cudaMemcpyDeviceToHost));
       cudaFree(ne);
-      fused = (long long)h;
+      fused = (long long)h[0];
+      fused_blocks = (long long)h[1];
     }
     fill_samples(f, bl, out + "/samples/" + name + "-ovl", pfile, sd, A, (u32)rng());
     std::vector<double> med(arms.size()), mhz(arms.size());
@@ -3272,12 +3302,13 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, \"arms\": {",
+           "\"hall\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, "
+           "\"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), fused,
-           f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull);
+           f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     const double l = at("lt");

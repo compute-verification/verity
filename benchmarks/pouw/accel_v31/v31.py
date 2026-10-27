@@ -951,7 +951,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
 
     print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
           "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
-          "commit ms | wgl ms | gamma ovl_w / wgl | O rows in the GEMM |")
+          "commit ms | wgl ms | gamma ovl_w / wgl | O hashed in the GEMM: rows / blocks |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
@@ -959,8 +959,11 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
                    + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
                    + (" hall" if r.get("hall") else ""))
-        fused = (f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%" if (r.get("fused_leaves") or -1) >= 0 and r.get("o_leaves")
-                 else "-")
+        fused = "-"
+        if (r.get("fused_leaves") or -1) >= 0 and r.get("o_leaves"):
+            fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
+            if (r.get("fused_blocks") or -1) >= 0 and r.get("row_blocks"):
+                fused += f" / {100 * r['fused_blocks'] / (r['o_leaves'] * r['row_blocks']):.1f}%"
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
