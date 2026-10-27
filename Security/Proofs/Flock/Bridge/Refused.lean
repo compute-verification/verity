@@ -1,4 +1,4 @@
-import Proofs.Flock.Bridge.Canon
+import Proofs.Flock.Bridge.Rows
 import Flock.PortRoots
 
 /-!
@@ -20,7 +20,7 @@ refuses the registration (`SampledProofs.Run.run`,
 * `rowsOk_of_scopeOkH`, `rootsColl_none_of_collides_false`, `popMatches_of_popOk`: the checks give V2's hypotheses. The
   roots check is computed at the public file's population, so the game's `n` is identified with it (`pub.n = n`).
 * `SampledKSLiveV3`: `SampledKSLiveV2` with its event `LiveAcceptsKS ∧ RunPopOk` in place of `LiveAcceptsZK` and
-  without the three hypotheses. `sampledKSLiveV3_of` derives it from `SampledKSLiveV2`: files that pass give V2's
+  without the three hypotheses, its claims' values at the registrant's rows as V2's. `sampledKSLiveV3_of` derives it from `SampledKSLiveV2`: files that pass give V2's
   hypotheses, and at files that fail the event is empty.
 -/
 
@@ -68,7 +68,7 @@ namespace Flock.Guarantees
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
-  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
@@ -80,7 +80,8 @@ the public file's population), the
 sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
 give the game's `n` units in order), and the claims relation fails. It has none of V2's hypotheses `RowsOk`,
 `dupName = none`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).
-Its knowledge and link terms are V2's, in the additive form. `SampledKSLiveV2` implies it (`sampledKSLiveV3_of`). -/
+Its claims' values are V2's, at the registrant's rows (`rd`), and its knowledge, link and rows terms are V2's, in the
+additive form. `SampledKSLiveV2` implies it (`sampledKSLiveV3_of`). -/
 def SampledKSLiveV3 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -94,6 +95,10 @@ def SampledKSLiveV3 : Prop :=
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    -- the registrant's opening of the session's registered reads
+    (rd : FlockSoundness.Registered.ReadsX
+      (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
+      (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -112,12 +117,13 @@ def SampledKSLiveV3 : Prop :=
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let wo : vb.Pos → vb.Opening := fun p => ((p, rd.wv p, rd.ws p) : vb.Opening)
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => Discharge.ZkHidden.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
     -- the deployed commitment's layout: the game's rows, read off the circuit file
@@ -130,24 +136,29 @@ def SampledKSLiveV3 : Prop :=
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
     -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
+    -- the claims' values: the registrant's row's bit at a registered read, and the evaluation on the extracted
+    -- plurality's inputs at every other wire
+    let vreg : Fin Cc.N → Bool := fun g =>
+      if rd.isRead (vb.pos g) then vb.bit (vb.val (wo (vb.pos g))) g else Cc.eval Xr g
     prob (fun o => (Bridge.LiveAcceptsKS I o ∧ Bridge.RunPopOk desc qr n) ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+          (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots vreg))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgPrZ execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω *
             (linkFinderPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) p k Rw M +
-              1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ))
+              1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ)) +
+        rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo k ρ (reg σ) (cont σ)
 
 /-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at files that pass the verifiers' checks they give V2's hypotheses
 (`Bridge.rowsOk_of_scopeOkH`, `Flock.PortRoots.check_ok`, `Bridge.rootsColl_none_of_collides_false` at `pub.n = n`,
 `Bridge.popMatches_of_popOk`)
 and V3's event is inside V2's; at files that fail, V3's event is empty. -/
 theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope hn desc qr kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
-    hCust k Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ q L P vb σ Xr δ Cc rows roots Cd κ
+  intro n Reg I ht D hD hU pub hpub hpt hscope hn desc qr kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hA3 hTags
+    hCust k Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ q L P vb wo σ Xr δ Cc rows roots Cd κ vreg
   by_cases hc : Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
       Bridge.RunPopOk desc qr n
   · obtain ⟨hck, p, hp, hpo⟩ := hc
@@ -157,7 +168,7 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
       exact Bridge.rootsColl_none_of_collides_false hcoll
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
       (h n Reg I ht D hD hU pub hpub hpt hscope (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr
-        (Bridge.popMatches_of_popOk hp hpo) kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM
+        (Bridge.popMatches_of_popOk hp hpo) kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM
         ρ hρ hr K₀ hK₀ τ q)
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨ho.1.1.2, ho.1.2⟩) _ τ).trans
       ((prob_false _ τ).le.trans zero_le)

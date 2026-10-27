@@ -14,11 +14,13 @@ the registrant's rows has one that opens a registered read to another row.
 * `analysisZCRowsC`, `zc_knowledgeSound_rowsC`, `zk_rowsLinkSoundPr_c`: the analysis, and its terms, `ksAvgZC` and
   `linkPrZC + rowsPrZC`, the finders' collision probabilities (`zk_rowsLinkSoundPr`), with no hash premise;
 * `zk_flock_countPr_rowsC`: the count curve (`Audit.extraction_audit_count`) at it.
+* `rowsFinderPrZC`, `ideal_rows_le_prZC`, `rowsPrZC_le_pr`: the rows term at the rows finders' collision probabilities,
+  at openings `wo` whose commitments at the registered reads are the registered ones (as `rowsPrZC_le` is under A2).
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Audit ZkSession
+open Game Model Accounting Extract Audit ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
@@ -142,5 +144,89 @@ theorem zk_flock_countPr_rowsC (hlow : LoweringSoundZK A P planZ tab decode) (ho
       (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj)
     (zc_knowledgeSound_rowsC A Hs P planZ tab vb canon isRead wo _ _ hlow hown hcan hj)
     (zk_rowsLinkSoundPr_c A Hs P planZ tab vb canon isRead wo hlow hown hcan hRw hM hρ hr hj) K σ
+
+section RowsFinder
+
+variable (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
+
+open Classical in
+/-- **The rows finder's collision probability at `c`**: the probability that the finder that plays the trial at `c`
+once and outputs `rowsOutZC` outputs a collision of `Hc` (`0` at a commit string no draw reads, which has no trial). -/
+noncomputable def rowsFinderPrZC (c : vb.Pos) (k Rw : ℕ) : ℝ :=
+  if _ : Nonempty (ΩcZ A P planZ tab vb L c) then
+    (prob (fun e => ∃ x y, rowsOutZC A Hs P planZ tab vb R τ wo c e = some (x, y) ∧ x ≠ y ∧ Hc x = Hc y)
+      (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)).toReal
+  else 0
+
+theorem rowsFinderPrZC_nonneg (c : vb.Pos) (k Rw : ℕ) : 0 ≤ rowsFinderPrZC A Hs P planZ tab vb wo R τ c k Rw := by
+  unfold rowsFinderPrZC
+  split_ifs
+  · exact ENNReal.toReal_nonneg
+  · exact le_rfl
+
+/-- **The trial's rows mass at `c`** at its finder's collision probability, where the registrant's commitment at `c` is
+the registered one: a value the trial reads at `c` other than the registrant's comes with an opening of `c`'s
+registered commitment (`opOfVZC_spec`), so the binding's extractor collides on it and the registrant's. -/
+theorem trial_rows_le_prZC (k Rw : ℕ) (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)]
+    (hon : vb.com (wo c) = vb.cs R c) :
+    expect (trialValZC planZ R (psiRowsZC A Hs P planZ tab vb isRead wo R τ c))
+        (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤
+      rowsFinderPrZC A Hs P planZ tab vb wo R τ c k Rw := by
+  classical
+  rw [show trialValZC planZ R (psiRowsZC A Hs P planZ tab vb isRead wo R τ c) =
+      ind (fun e => isRead c ∧ ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e, v ≠ vb.val (wo c)) from
+    funext fun e => trialVal_psiRowsZC A Hs P planZ tab vb isRead wo R τ c e, ← prob_toReal]
+  have hsub : prob (fun e => isRead c ∧ ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e, v ≠ vb.val (wo c))
+        (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤
+      prob (fun e => ∃ x y, rowsOutZC A Hs P planZ tab vb R τ wo c e = some (x, y) ∧ x ≠ y ∧ Hc x = Hc y)
+        (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) := by
+    refine prob_mono (fun e he => ?_) _ _
+    obtain ⟨-, hex⟩ := he
+    show ∃ x y, rowsOutZC A Hs P planZ tab vb R τ wo c e = some (x, y) ∧ x ≠ y ∧ Hc x = Hc y
+    unfold rowsOutZC
+    rw [dite_eq_left_of_eq_true (eq_true hex)]
+    obtain ⟨h1, hne'⟩ := Classical.choose_spec hex
+    have s1 := opOfVZC_spec A Hs P planZ tab vb R τ h1
+    exact ⟨_, _, rfl, vb.collide_spec _ _ (s1.1.trans hon.symm) (by rw [s1.2]; exact hne')⟩
+  have hfin : prob (fun e => ∃ x y, rowsOutZC A Hs P planZ tab vb R τ wo c e = some (x, y) ∧ x ≠ y ∧ Hc x = Hc y)
+      (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≠ ⊤ :=
+    ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+  unfold rowsFinderPrZC
+  rw [dif_pos hne]
+  exact ENNReal.toReal_mono hfin hsub
+
+/-- **The ideal rows mass at `c`** at the rows finder's collision probability (`ideal_le_trialZC` at
+`rowsFinderPrZC`), where the registrant's commitment at `c`, if it is a registered read, is the registered one. -/
+theorem ideal_rows_le_prZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (hon : isRead c → vb.com (wo c) = vb.cs R c) :
+    (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
+        expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+          (psiRowsZC A Hs P planZ tab vb isRead wo R τ c ω)) / Fintype.card L.Ω ≤
+      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+        (rowsFinderPrZC A Hs P planZ tab vb wo R τ c k Rw + k / (Real.exp 1 * Rw)) := by
+  classical
+  refine ideal_le_trialZC A Hs P planZ tab vb R τ k Rw hRw c _
+    (psiRows_nonnegZC A Hs P planZ tab vb isRead wo R τ c) (psiRows_le_oneZC A Hs P planZ tab vb isRead wo R τ c)
+    (fun ω hω => funext fun bs => ?_) (rowsFinderPrZC_nonneg A Hs P planZ tab vb wo R τ c k Rw) (fun hne => ?_)
+  · simp [psiRowsZC, readsAt_eq_emptyZC A Hs P planZ tab vb R τ hω bs]
+  · by_cases hrc : isRead c
+    · exact trial_rows_le_prZC A Hs P planZ tab vb isRead wo R τ k Rw c (hon hrc)
+    · have h0 : trialValZC planZ R (psiRowsZC A Hs P planZ tab vb isRead wo R τ c) = fun _ => 0 :=
+        funext fun e => by rw [trialVal_psiRowsZC]; simp [ind, hrc]
+      rw [h0, expect_const]
+      exact rowsFinderPrZC_nonneg A Hs P planZ tab vb wo R τ c k Rw
+
+/-- **The rows term at the rows finders' collision probabilities**: where the registrant's commitments at the
+registered reads are the registered ones, `rowsPrZC` is at most `Σ_c π c·(Pr[rows finder at c] + k/(eR_w))/(1 − ρ)`. -/
+theorem rowsPrZC_le_pr {k Rw : ℕ} (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1)
+    (hon : ∀ c, isRead c → vb.com (wo c) = vb.cs R c) :
+    rowsPrZC A Hs P planZ tab vb isRead wo k ρ R τ ≤
+      ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+        (rowsFinderPrZC A Hs P planZ tab vb wo R τ c k Rw + k / (Real.exp 1 * Rw))) / (1 - ρ)) := by
+  have hρ1 : 0 < 1 - ρ := by linarith
+  unfold rowsPrZC
+  exact ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ =>
+    ideal_rows_le_prZC A Hs P planZ tab vb isRead wo R τ k Rw hRw c (hon c)) hρ1.le)
+
+end RowsFinder
 
 end FlockSoundness.Discharge.ZkLink
