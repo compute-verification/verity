@@ -252,6 +252,7 @@
  },
  "meaning": [
   "Definitions.Flock.Circuit",
+  "VStar.Sha",
   "Definitions.Flock.Lowering",
   "Properties.Flock.Circuit.Keys",
   "Properties.Flock.Circuit.Rows",
