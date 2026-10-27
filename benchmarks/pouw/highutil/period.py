@@ -384,6 +384,9 @@ class Coins:
         self.main = R.main_lines(main)
         self.peer, self.key_record, self.gate_key = peer, key_record, gate_key
 
+    def connect(self, address: str, secret: str):
+        return self.A5.connect_when_listening(address, bytes.fromhex(secret))
+
     def session(self):
         if self.how == "local":
             return self.A5.Local(Path(tempfile.mkdtemp(prefix="highutil-challenger-")), self.main)
@@ -455,7 +458,7 @@ class Period:
         session = self.coins.session()
         t_s = time.monotonic()
         address, secret, _ = session.open(reg_digest.hex(), [["seeds", plan.blocks], ["check", plan.blocks]], 30, SCHEME)
-        client = self.coins.A5.connect_when_listening(address, bytes.fromhex(secret))
+        client = self.coins.connect(address, secret)
         t_open = time.monotonic() - t_s
         openings, blocks, all_picks, roots_of, seeds_of = [], [], [], {}, {}
         per_block_q = plan.q // plan.blocks
@@ -606,6 +609,55 @@ def cmd_run(a: argparse.Namespace) -> int:
     return 0 if honest and all(r["accepted"] for r in honest) and all(not r["accepted"] for r in neg) else 1
 
 
+def cmd_diag(a: argparse.Namespace) -> int:
+    """One protocol step on the GPU with seeds and salt keys of its own (no coins), then two tiles of each layer's call
+    against v31.py's reference: the GPU's A (regenerated) against `act_rows`, its words and O against the tile's values,
+    and its leaves against the reference's leaves under the call's salt key."""
+    cfg, out = Path(a.cfg), Path(a.out)
+    prep = json.loads((cfg / "prep.json").read_text())
+    configure(prep)
+    row, NL = prep["row"], len(LAYERS)
+    actkey = int.from_bytes(os.urandom(8), "big")
+    work = Path(tempfile.mkdtemp(prefix="highutil-diag-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
+    drv = Driver(a.hu, cfg, row, 1, actkey, out / "hu-diag.log")
+    rec = [os.urandom(384) for _ in range(NL)]
+    (work / "seeds").write_bytes(b"".join(rec))
+    drv.block(0, 0, 1, "proto", "none", work / "seeds", work / "roots")
+    rng = np.random.default_rng(a.seed)
+    rep = []
+    for li, (name, n, k) in enumerate(LAYERS):
+        sh = shape(n, k, row)
+        tl = v31.Shape(TILE, TILE, k, LP, T, row)
+        B = np.fromfile(cfg / f"B-{name}.bin", dtype=np.int8).reshape(n, k)
+        for tile in (0, int(rng.integers(sh.tiles))):
+            d = work / f"{name}-{tile}"
+            drv.p.stdin.write(f"dump {li} {tile} {d}\n")
+            drv._line("dumped")
+            tm, tn = divmod(tile, n // TILE)
+            ia, ja = range(tm * TILE, tm * TILE + TILE), range(tn * TILE, tn * TILE + TILE)
+            A = act_rows(actkey, li, ia, k)
+            seeds, ks = v31.seeds_from(rec[li][:320]), rec[li][320:]
+            c = v31.Coins.rows(sh, seeds, ia, ja)
+            f = v31.form(tl, A, B[tn * TILE:(tn + 1) * TILE], c)
+            v = v31.values(tl, f)
+            words, obuf = v31.words_buffer(tl, v.T), v31.o_buffer(v.O)
+            dom = sh.domain()
+            g = (d / "leaves.bin").read_bytes()
+            bad = sum(row_leaf(dom, tile * sh.lpt + j, v31.leaf_h(v31.row_bytes(tl, words, obuf, j),
+                                                                  v31.cref.prf_salt(ks, tile * sh.lpt + j)), V2)
+                      != g[64 * j:64 * j + 64] for j in range(sh.lpt))
+            rep.append({"layer": name, "tile": tile, "A_equal": (d / "A.bin").read_bytes() == A.tobytes(),
+                        "words_equal": (d / "words.bin").read_bytes() == words, "O_equal": (d / "O.bin").read_bytes() == obuf,
+                        "leaves": sh.lpt, "leaves_bad": bad})
+            print(json.dumps(rep[-1]), flush=True)
+    drv.close()
+    shutil.rmtree(work, ignore_errors=True)
+    ok = all(r["A_equal"] and r["words_equal"] and r["O_equal"] and not r["leaves_bad"] for r in rep)
+    (out / "diag.json").write_text(json.dumps({"exact": ok, "tiles": rep}, indent=1))
+    print(f"diag: {'exact' if ok else 'DIFFERS'}", flush=True)
+    return 0 if ok else 1
+
+
 def summarize(results: list[dict], plan: Plan) -> dict:
     honest = [r for r in results if r["arm"] == "proto" and r["cheat"] == "none"]
     plain = [r for r in results if r["arm"] == "plain"]
@@ -667,6 +719,12 @@ def main(argv: list[str]) -> int:
     p.add_argument("--tag", default="hu")
     p.add_argument("--workers", type=int, default=0)
     p.set_defaults(fn=cmd_run)
+    p = sub.add_parser("diag")
+    p.add_argument("cfg")
+    p.add_argument("hu")
+    p.add_argument("out")
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(fn=cmd_diag)
     a = ap.parse_args(argv)
     return a.fn(a)
 

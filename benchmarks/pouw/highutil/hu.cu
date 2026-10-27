@@ -51,6 +51,17 @@ __global__ void act_kernel(int8_t* A, u64 total, u64 key, u64 call) {
   *reinterpret_cast<int4*>(A + e0) = *reinterpret_cast<const int4*>(v);
 }
 
+// a tree node as the device holds it (8 u64 words) to its digest's 64 bytes
+static void put_node(FILE* f, const uint8_t* p) {
+  uint8_t out[64];
+  for (int w = 0; w < 8; w++) {
+    u64 v;
+    memcpy(&v, p + 8 * w, 8);
+    sha::put_be64(out + 8 * w, v);
+  }
+  fwrite(out, 1, 64, f);
+}
+
 static Consts consts_with(const Consts& base, const uint8_t* ks) {
   Consts c = base;
   words_of(ks, c.ks, 8);
@@ -71,6 +82,8 @@ struct Layer {
   uint8_t* host = nullptr;   // pinned: RMAX calls' levels
   Dom* dom = nullptr;        // pinned: the layer's CD[0]
   u64 a_call = ~0ull;        // the call whose A the layer's buffer holds (or is being generated)
+  u64 last_call = 0;         // the layer's last protocol call, and its step in its block
+  int last_step = 0;
   cudaEvent_t ev_read, ev_gen, ev_cm, ev_cp;
 };
 
@@ -173,13 +186,40 @@ int main(int argc, char** argv) {
         const u64 width = l->c.cm.width;
         u64 off = 0, pos = r[2];
         for (int d = 0; d < l->depth; d++) {
-          fwrite(lv + 64 * (off + (pos ^ 1)), 1, 64, f);
+          put_node(f, lv + 64 * (off + (pos ^ 1)));
           off += width >> d;
           pos >>= 1;
         }
       }
       fclose(f);
       printf("paths %lld %zu\n", blk, np);
+      fflush(stdout);
+      continue;
+    }
+    if (cmd == "dump") {   // dump LAYER TILE DIR: the layer's last call's tile (A regenerated, words, O, leaves)
+      int li, tile;
+      std::string dir;
+      in >> li >> tile >> dir;
+      Layer* l = L[li];
+      Ctx& c = l->c;
+      const int b = (c.ovl - 1) & 1, tm = tile / c.tiles_n, tn = tile % c.tiles_n;
+      CK(cudaDeviceSynchronize());
+      int8_t* a = dalloc<int8_t>((size_t)l->m * l->k);
+      act_kernel<<<(unsigned)(((u64)l->m * l->k / 16 + 255) / 256), 256, 0, s0>>>(a, (u64)l->m * l->k, actkey, l->last_call);
+      gk::Dump d(dir);
+      d.bytes("A", a + (size_t)tm * TILE * l->k, (size_t)TILE * l->k, s0);
+      d.bytes("words", c.words[b] + (size_t)tile * c.S * TILE * TILE, (size_t)c.S * 32768, s0);
+      std::vector<int> o((size_t)TILE * TILE);
+      for (int r = 0; r < TILE; r++)
+        CK(cudaMemcpy(o.data() + (size_t)r * TILE, c.O[b] + (size_t)(tm * TILE + r) * c.n + tn * TILE, TILE * 4, cudaMemcpyDeviceToHost));
+      FILE* f = fopen((dir + "/O.bin").c_str(), "wb");
+      fwrite(o.data(), 4, o.size(), f);
+      fclose(f);
+      f = fopen((dir + "/leaves.bin").c_str(), "wb");
+      for (int x = 0; x < c.lpt; x++) put_node(f, l->host + l->lvb * l->last_step + 64 * ((size_t)tile * c.lpt + x));
+      fclose(f);
+      CK(cudaFree(a));
+      printf("dumped %d %d call %llu\n", li, tile, (unsigned long long)l->last_call);
       fflush(stdout);
       continue;
     }
@@ -224,6 +264,8 @@ int main(int argc, char** argv) {
           CK(cudaEventRecord(c.ev_comp[b], s0));
           CK(cudaEventRecord(l->ev_read, s0));
           c.commit_ovl(b);
+          l->last_call = call;
+          l->last_step = s;
           CK(cudaEventRecord(l->ev_cm, s1));
           CK(cudaStreamWaitEvent(cs, l->ev_cm));
           CK(cudaMemcpyAsync(l->host + l->lvb * s, c.cm.levels, l->lvb, cudaMemcpyDeviceToHost, cs));
@@ -252,7 +294,7 @@ int main(int argc, char** argv) {
     if (proto) {
       FILE* f = fopen(rootsf.c_str(), "wb");
       for (int s = 0; s < R; s++)
-        for (Layer* l : L) fwrite(l->host + l->lvb * s + l->lvb - 64, 1, 64, f);
+        for (Layer* l : L) put_node(f, l->host + l->lvb * s + l->lvb - 64);
       fclose(f);
     }
     std::sort(mhz.begin(), mhz.end());

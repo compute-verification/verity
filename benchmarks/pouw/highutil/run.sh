@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # HIGHUTIL on one leased GPU of vy-nebius-1 (RTX PRO 6000, sm_120), cwd = the source tree's root under `research run`:
-# the build and the config (weights, params) outside the lease, then period.py's interleaved protocol and plain periods
-# and the negative one under it, and the machine model's θ beside them.
+# the build and the config (weights, params) outside the lease, then under it period.py's diag (one step's tiles
+# against v31.py's reference) and its interleaved protocol and plain periods and the negative one, and the machine
+# model's θ beside them.
 #
 #   research run --on vy-nebius-1 --project verity --campaign cmp-159 --source . --cwd source \
 #     --env GPU_LEASE_WHO=compute-accounting-highutil --send main.txt [--send challenger-key.json] -- \
@@ -51,6 +52,8 @@ $LEASE bash -c '
   nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 500 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
   smi=$!
+  $PY $D/period.py diag "$W/cfg" "$W/hu" "$O" > "$O/diag.log" 2>&1
+  echo "diag rc $?" >> "$O/rc.txt"
   # shellcheck disable=SC2086
   $PY $D/period.py run "$W/cfg" "$W/hu" "$O" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks "$BLOCKS" --steps "$STEPS" \
     --q "$Q" --periods "$PERIODS" --negative "$NEGATIVE" > "$O/period.log" 2>&1
