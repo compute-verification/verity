@@ -831,24 +831,32 @@ def select(j):
 
 
 def slots(j):
-    """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
-    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
-    gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
-    (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    blocks are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
+    """`Slots.select`: the claims' partition over the select piece's program and query, one class, and its draw's
+    checked proof blocks. The strata are `partition.strata`'s, each unit a replay unit: its gates
+    (`partition.unit_gates`), then a one-gate block per input row it owns, in gate order. A unit owns a gate of the root's
+    input nodes (`program.is_input`) when it is the least unit one of whose gates has it as an operand; an input no unit
+    reads is in no slot. A replay unit's slot is its index in that order, and the checked proof blocks are every
+    `(slot, index)` of each unit the draw proves (`draw.proved`), in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
     gates = P.unit_gates(program, j["query"])
-    pop = [[{"pus": [list(gates[u])], "unit": u} for lo, hi in rs for u in range(lo, hi)]
-           for _t, rs in P.strata(program, j["query"])]
     body = program.root.body
-    inputs = [{"pus": [[g, g + 1]], "unit": None} for k, node in enumerate(body.nodes) if is_input(node.fn)
-              for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
-    classes = [pop, [inputs] if inputs else []]
+    inputs = {g for k, node in enumerate(body.nodes) if is_input(node.fn)
+              for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)}
+    owner = {}
+    for u, (lo, hi) in enumerate(gates):
+        for h in range(lo, hi):
+            for g in program.circuit.gate(h).operands:
+                if g in inputs:
+                    owner.setdefault(g, u)
+    owned = {u: [[g, g + 1] for g in sorted(inputs) if owner.get(g) == u] for u in range(len(gates))}
+    pop = [[{"pus": [list(gates[u]), *owned[u]], "unit": u} for lo, hi in rs for u in range(lo, hi)]
+           for _t, rs in P.strata(program, j["query"])]
     proved = set(DR.proved(out["draw"]))
-    rus = [r for c in classes for s in c for r in s]
-    return {"checked": [[v, 0] for v, r in enumerate(rus) if r["unit"] is None or r["unit"] in proved], "classes": classes}
+    rus = [r for s in pop for r in s]
+    return {"checked": [[v, i] for v, r in enumerate(rus) if r["unit"] in proved for i in range(len(r["pus"]))],
+            "classes": [pop]}
 
 
 def bound(j):
@@ -3031,22 +3039,51 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
-    the input class's are every gate of the program once; and the checked proof blocks are the drawn units' slots and
-    every input slot, in slot order."""
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; there is no input class, and
+    each input row is a one-gate block of the first unit that reads it, so the replay units' gates are every gate of the
+    program once; and the checked proof blocks are every block of the drawn units' slots, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
     case = {"closure": None, "program": desc, "query": query, "rule": {"law": "subset:4", "rule": "law"},
             "source": hashlib.shake_256(b"slots").hexdigest(400), "work_table": None}
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
+    assert len(out["classes"]) == 1
     assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
-    rus = [r for c in out["classes"] for s in c for r in s]
+    rus = [r for s in out["classes"][0] for r in s]
+    circuit = PROGRAMS[PO.program_sha512(desc)].circuit
     gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
-    assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
+    assert gates == list(range(circuit.size))
+    for r in rus:
+        for lo, hi in r["pus"][1:]:
+            assert hi == lo + 1 and is_input(circuit.gate(lo).prim)
+            assert min(u for u, s in enumerate(P.unit_gates(PROGRAMS[PO.program_sha512(desc)], query))
+                       if any(lo in circuit.gate(h).operands for h in range(*s))) == r["unit"]
     units = [r["unit"] for r in rus]
-    drawn = [units.index(u) for u in select(case)["draw"]["units"]]
-    assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
+    drawn = sorted(units.index(u) for u in select(case)["draw"]["units"])
+    assert out["checked"] == [[v, i] for v in drawn for i in range(len(rus[v]["pus"]))]
+
+
+UNREAD = Program(bind(CompositeDefinition(
+    "CoreSampledProofsUnread", 0, (), lambda S: ((("p0", Array(2, Value(8))), ("p1", Value(8))), SHARED.signature()[1]),
+    lambda B, S, x, y: B.call(SHARED, x), register=False)))
+
+
+def test_an_input_row_folds_into_its_first_reader(pieces):
+    """An input row two units read is a block of the first one's slot only, and an input no unit reads is in no slot:
+    under `Q_call` at `X = 8`, `SHARED`'s first two XORs are units 0 and 1 and both read `x[1]`, which unit 0 holds with `x[0]`;
+    the root's second parameter, which nothing reads, is in no slot. The draw checks every block of a drawn slot."""
+    PROGRAMS[PO.program_sha512(UNREAD)] = UNREAD
+    desc = json.loads(D.canonical(codec.encode_program(UNREAD)))
+    case = {"closure": None, "program": desc, "query": _json(PO.call_query(8)), "rule": {"rule": "all"},
+            "source": hashlib.shake_256(b"fold").hexdigest(400), "work_table": None}
+    out = slots(copy.deepcopy(case))
+    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
+    rus = [r for s in out["classes"][0] for r in s]
+    assert [(r["unit"], r["pus"][1:]) for r in rus] == [(0, [[0, 1], [1, 2]]), (1, []), (2, [])]
+    assert 2 not in {g for r in rus for lo, hi in r["pus"] for g in range(lo, hi)}
+    assert is_input(UNREAD.circuit.gate(2).prim) and any(1 in UNREAD.circuit.gate(h).operands for h in range(*rus[1]["pus"][0]))
+    assert out["checked"] == [[v, i] for v, r in enumerate(rus) for i in range(len(r["pus"]))]
 
 
 def test_the_call_queries_cut_call_by_call(pieces):
