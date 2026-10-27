@@ -25,7 +25,7 @@ on that buffer.
 - `full.py`: the whole store a step: every tensor of the 52 layers and the head staged one at a
   time from the store's segment files (each held to its SHA-512), the last timed decode of each held to the weights
   manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
-  KS8-SIMPLE (`int_mm.linear`) against the twin. `check.py --sample N` checks N blocks of every tensor of the store
+  `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
 - `sketch.py`: the remote bandwidth audit's receipts beside the decode (Demo B's bandwidth leg; the interface is
   `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
@@ -44,7 +44,5 @@ on that buffer.
   with the run) or a development store. `full.sh` runs `full.py` on the demo card over memory-accounting's finished
   store in place, read only. Each script's header gives its command line.
 
-KP2-DEC (#4453, f254735dd2) staged a layer with its own kernel and measured it beside this path: its `decode_p2v1` arm
-is the same libp2v1 decode plus a payload copy. This directory uses that library unchanged and none of KP2-DEC's kernels.
-Both GEMMs are KS8-SIMPLE's `int_mm.linear` (#4472; `benchmarks/torch_gpu/s8_linear/int_mm.py`, the exact W8A8
-linear's int_mm backend): `layer.py`'s with its eager epilogue, `full.py`'s with its fused one.
+The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, the
+exact W8A8 linear's int_mm backend): `layer.py`'s with its eager epilogue, `full.py`'s with its fused one.

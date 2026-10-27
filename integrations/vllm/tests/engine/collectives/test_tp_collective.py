@@ -1,5 +1,5 @@
-"""Lane tp2 (window 2026-09-17): the quarantine `AllReduceSumBf16{N,R}` definition and the collective linkage tool
-(`tests.engine.collectives.collective_link`) on the ov-tp2 evidence shards (`tests/fixtures/tp2/`, see its README)."""
+"""The quarantine `AllReduceSumBf16{N,R}` definition and the collective linkage tool
+(`tests.engine.collectives.collective_link`) on the TP2 evidence shards (`tests/fixtures/tp2/`, see its README)."""
 
 from __future__ import annotations
 

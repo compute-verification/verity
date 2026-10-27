@@ -154,8 +154,8 @@ def segments_of(tensors: list[L.Tensor], bps: int, ranges: list[range] | None = 
     return out
 
 
-FULL_CHALLENGE = hashlib.sha512(b"verity/kernels-kstage/bw-full/challenge/v0").hexdigest()[:64]
-FULL_PREVIOUS = hashlib.sha512(b"verity/kernels-kstage/bw-full/previous/v0").hexdigest()
+FULL_CHALLENGE = hashlib.sha512(b"verity/p2-stage/bw-full/challenge/v0").hexdigest()[:64]
+FULL_PREVIOUS = hashlib.sha512(b"verity/p2-stage/bw-full/previous/v0").hexdigest()
 
 
 class Audit:
