@@ -70,7 +70,8 @@ research msg read --thread <ts>                                                #
 - **An ask to one handle is also an issue** in its Linear team: `ask` prints `linear: <ID> <url>`, the issue holds the
   whole brief, and the Slack root and doorbell carry its first line and link, so put the ask itself in that first line.
   The conversation stays in the thread. `close` moves the issue to done (`--declined`: canceled). If Linear fails, the
-  whole ask goes out on Slack.
+  whole ask goes out on Slack. `--parent ISSUE` files it under the deliverable it serves, on that one's project and milestone;
+  `--title TEXT` names it.
 - **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
   Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
   the unanswered; take a linked ask on its issue.
@@ -78,6 +79,8 @@ research msg read --thread <ts>                                                #
   `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner. Taking an issue out of the backlog
   is the sign it was seen; Done is the owner's move (merging a PR doesn't close it). Comment with `research msg linear
   comment ISSUE 'TEXT' --as ME`, which rings the team's handle and the names it starts with; other comments ring no one.
+  A lane's worker, which holds no handle, comments with `--worker NAME` (as LANE/NAME, ringing no one), and `linear edit
+  ISSUE --title|--due|--file|--parent` changes an issue through the app (the Linear MCP connector acts as Daniel).
 - **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 - **Retract** a post sent by mistake: `research msg retract --as NAME --ts TS [--thread ROOT] [--why W]` (needs
   `SLACK_BOT_TOKEN`; the doorbells it rang keep their copy).
