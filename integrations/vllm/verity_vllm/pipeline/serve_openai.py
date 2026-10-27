@@ -720,10 +720,10 @@ def main(opts: Options) -> int:
     served = opts.served_model_name or opts.model
     order = rows = None
     if opts.admit == "release-order":
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine.handle import model_runner
         from verity_vllm.engine.step_trace import scheduler_of
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
-        rows = keep_scheduler_rows(get_model_runner(llm.vllm), scheduler_of(engine))
+        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler_of(engine))
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
     http = HttpThread(server, opts.host, opts.port)

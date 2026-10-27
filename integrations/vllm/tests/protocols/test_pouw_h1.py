@@ -451,7 +451,7 @@ def test_the_window_connects_on_the_port_the_gate_answers():
 
 def _vllm_with(runner):
     """A stand-in for the built ``vllm.LLM``: its in-process engine core down to the model runner
-    (`engine_profile.get_model_runner`)."""
+    (`engine.handle.model_runner`)."""
     worker = SimpleNamespace(worker=SimpleNamespace(model_runner=runner))
     core = SimpleNamespace(engine_core=SimpleNamespace(model_executor=SimpleNamespace(driver_worker=worker)))
     return SimpleNamespace(llm_engine=SimpleNamespace(engine_core=core))
