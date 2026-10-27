@@ -39,6 +39,9 @@ class Profile:
     #: `β_x`: fresh bits a block pays per counted activation it uses, at a rate that survives replay (the draft's
     #: Proposition 3; measured on exact blocks)
     beta_x: float | None = None
+    #: `d`: values in a token's activation where it enters a layer (the residual stream), so a token's entry into a
+    #: block is `β_x d` bits (`HeldRate`'s `βe`)
+    residual_width: float | None = None
 
     # The keyed token structure (`Keyed`)
     #: `d`: legs of a token's accumulation chain
@@ -107,6 +110,8 @@ class Profile:
     beta_x_marginal: float | None = None
     #: bits per partial sum a tile hands on
     psum_bits: float | None = None
+    #: `β_g`: bits per value of the exit gradient a block doing Dgrad receives (an achievable code)
+    beta_g: float | None = None
     #: bits of state one token's computation carries between blocks (`U_token`, `benchmarks/nci`): its updated weights
     #: and, inside an optimizer step, the gradient accumulators a block hands on
     token_state_bits: float | None = None
