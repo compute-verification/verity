@@ -180,7 +180,7 @@ theorem readX_partVStar {x : Claims.Msg} {r : XR} (h : readX x = some r) :
       rw [hc] at hall
       simp only [Bool.and_eq_true] at hall
       obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, -⟩, -⟩ := hall
-      refine ⟨f, r.w.parts[s], c, rfl, List.getElem?_eq_getElem hs', hc, ?_, ?_, ?_⟩
+      refine ⟨f, r.w.parts[s], c, hf, List.getElem?_eq_getElem hs', hc, ?_, ?_, ?_⟩
       · revert h1; cases RecVStar.checkFile vs[s] f r.w.parts[s].base.circuit r.shape.holo <;>
           simp [Except.isOk, Except.toBool]
       · revert h2; cases RecVStar.checkParsed vs[s] c <;> simp [Except.isOk, Except.toBool]
