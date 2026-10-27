@@ -258,3 +258,6 @@ def write_build(out: str, program: Any, named: Named) -> str:
     with open(os.path.join(out, "result.json"), "w") as f:
         json.dump(res, f, indent=1, sort_keys=True)
     return digest
+
+
+__all__ = ["Named", "write_build"]
