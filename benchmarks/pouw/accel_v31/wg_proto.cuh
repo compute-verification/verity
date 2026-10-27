@@ -104,8 +104,9 @@ template <int NA> WGD void acc_fence(int32_t* d) {
 #pragma unroll
   for (int i = 0; i < NA; i++) asm volatile("" : "+r"(d[i])::"memory");
 }
-// bounds the loads an unrolled epilogue hoists (all 64 of a 128 x 256 tile's dO pairs would spill beside 128 accumulators)
-WGD void ld_fence() { asm volatile("" ::: "memory"); }
+// bounds the loads an unrolled epilogue hoists (all 64 of a 128 x 256 tile's dO pairs would spill beside 128 accumulators):
+// ptxas moves no load above a warp barrier, and an empty asm reaches only NVVM
+WGD void ld_fence() { __syncwarp(); }
 
 // the tail's k-tiles in Horner order: digit e of block b (0 for blocks 0 and 1, then Z's digits, then Y's), the top digit
 // D = max(dz, dy) - 1 first; step i < TT is k-tile kt of P's columns, and `end` says the step closes its digit's group
@@ -219,11 +220,14 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   uint32_t ph = 0;
   int32_t d[NA];
   uint32_t cp[CM == 0 ? NA / 2 : 1];
-  uint32_t* cslot = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) : nullptr;
+  uint32_t* const cs = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) + tid : nullptr;   // the thread's tau words
+  const bool segs = proto && !(p.diag & 1);
+  const int kpl = p.L / BK;
   for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
     int tm, tn;
     raster(t, tiles_m, tiles_n, p.group, tm, tn);
-    int pend = -1;   // the stage whose release waits on its MMAs
+    int pend = -1;            // the stage whose release waits on its MMAs
+    int segk = 0, segn = 0;   // the main k-tiles into the open segment, and the segments stored
     for (int i = 0; i < steps; i++) {
       mbar_wait_warp(bars + 8 * s, ph);
       const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
@@ -246,9 +250,9 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
         if (ev == TAIL_X128) scale = 128;
         else if (ev == TAIL_XM128) scale = -128;
         else capture = ev == TAIL_CAPTURE;
-      } else if (proto && !(p.diag & 1)) {
-        const int kt = i - TT;
-        if (((kt + 1) * BK) % p.L == 0 || kt + 1 == KT) seg = ((kt + 1) * BK + p.L - 1) / p.L;
+      } else if (segs && (++segk == kpl || i + 1 == steps)) {
+        seg = ++segn;
+        segk = 0;
       }
       if (!scale && !capture && !seg) continue;
       WGP_WAIT(0);
@@ -263,25 +267,28 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
         for (int j = 0; j < NA / 2; j++) {
           const uint32_t w = __byte_perm((uint32_t)d[2 * j], (uint32_t)d[2 * j + 1], 0x5410);
           if constexpr (CM == 0) cp[j] = w;
-          else cslot[(size_t)j * (NWG * 128) + tid] = w;
+          else cs[j * (NWG * 128)] = w;
         }
       } else {
         // T_s: the low halves of acc - tau, a pair of columns a 32-bit store, into the 128 x 128 word tiles the tile covers
-        const size_t S = (size_t)p.S;
+        // (S segments apart). Column 8 j + cq is word tile j / 16's column 8 (j % 16) + cq, so every address is one of two
+        // bases plus a constant (cq is even, so the halving distributes).
+        uint32_t* const w0 = reinterpret_cast<uint32_t*>(p.words) +
+                             ((((size_t)tm * (N / TW) + (size_t)tn * (BN / TW)) * p.S + (seg - 1)) * (TW * TW) +
+                              (size_t)rloc * TW + cq) / 2;
+        uint32_t* const w1 = w0 + (size_t)p.S * (TW * TW / 2);
 #pragma unroll
         for (int j = 0; j < NA / 4; j++) {
-          const int c = 8 * j + cq, sub = c / TW, cc = c % TW;
-          const size_t wt = (size_t)tm * (N / TW) + (size_t)tn * (BN / TW) + sub;
-          uint32_t* w = reinterpret_cast<uint32_t*>(p.words + (wt * S + (size_t)(seg - 1)) * (TW * TW));
+          uint32_t* const w = j < TW / 8 ? w0 : w1;
 #pragma unroll
           for (int h = 0; h < 2; h++) {
             uint32_t c2 = 0;
             if (TT) {
               if constexpr (CM == 0) c2 = cp[2 * j + h];
-              else c2 = cslot[(size_t)(2 * j + h) * (NWG * 128) + tid];
+              else c2 = cs[(2 * j + h) * (NWG * 128)];
             }
             const uint32_t lo = (uint32_t)d[4 * j + 2 * h] - c2, hi = (uint32_t)d[4 * j + 2 * h + 1] - (c2 >> 16);
-            w[((rloc + 8 * h) * TW + cc) >> 1] = __byte_perm(lo, hi, 0x5410);
+            w[(8 * h * TW + 8 * (j % (TW / 8))) / 2] = __byte_perm(lo, hi, 0x5410);
           }
           if (j % 8 == 7) ld_fence();
         }
@@ -293,31 +300,35 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
     if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
 
     const int row = tm * TM + rloc, col0 = tn * BN + cq;
+    // every address below is a base plus a constant (row and col0 are even)
     if (p.mode == 2) {
       const float r0 = p.sa[row], r1 = p.sa[row + 8];
-      uint32_t* y0 = reinterpret_cast<uint32_t*>(p.O) + ((size_t)row * N) / 2;
-      uint32_t* y1 = reinterpret_cast<uint32_t*>(p.O) + ((size_t)(row + 8) * N) / 2;
+      uint32_t* const y0 = reinterpret_cast<uint32_t*>(p.O) + ((size_t)row * N + col0) / 2;
+      uint32_t* const y1 = y0 + (size_t)4 * N;
+      const float* const sw = p.sw + col0;
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
-        const int col = col0 + 8 * j;
-        const float2 c = *reinterpret_cast<const float2*>(p.sw + col);
-        y0[col / 2] = bf16_pair(d[4 * j], d[4 * j + 1], r0, c.x, c.y);
-        y1[col / 2] = bf16_pair(d[4 * j + 2], d[4 * j + 3], r1, c.x, c.y);
+        const float2 c = *reinterpret_cast<const float2*>(sw + 8 * j);
+        y0[4 * j] = bf16_pair(d[4 * j], d[4 * j + 1], r0, c.x, c.y);
+        y1[4 * j] = bf16_pair(d[4 * j + 2], d[4 * j + 3], r1, c.x, c.y);
       }
       continue;
     }
     const bool add = proto && !(p.diag & 4);
+    int* const o0 = p.O + (size_t)row * N + col0;
+    int* const o1 = o0 + (size_t)8 * N;
+    const int* const e0p = p.dO + (size_t)row * N + col0;
+    const int* const e1p = e0p + (size_t)8 * N;
 #pragma unroll
     for (int j = 0; j < NA / 4; j++) {
-      const size_t q0 = (size_t)row * N + col0 + 8 * j, q1 = q0 + (size_t)8 * N;
       int2 lo = make_int2(d[4 * j], d[4 * j + 1]), hi = make_int2(d[4 * j + 2], d[4 * j + 3]);
       if (add) {
-        const int2 e0 = __ldg(reinterpret_cast<const int2*>(p.dO + q0)), e1 = __ldg(reinterpret_cast<const int2*>(p.dO + q1));
+        const int2 e0 = __ldg(reinterpret_cast<const int2*>(e0p + 8 * j)), e1 = __ldg(reinterpret_cast<const int2*>(e1p + 8 * j));
         lo.x = (int)((uint32_t)lo.x + ((uint32_t)e0.x << 8)); lo.y = (int)((uint32_t)lo.y + ((uint32_t)e0.y << 8));
         hi.x = (int)((uint32_t)hi.x + ((uint32_t)e1.x << 8)); hi.y = (int)((uint32_t)hi.y + ((uint32_t)e1.y << 8));
       }
-      *reinterpret_cast<int2*>(p.O + q0) = lo;
-      *reinterpret_cast<int2*>(p.O + q1) = hi;
+      *reinterpret_cast<int2*>(o0 + 8 * j) = lo;
+      *reinterpret_cast<int2*>(o1 + 8 * j) = hi;
       if (j % 8 == 7) ld_fence();
     }
   }
