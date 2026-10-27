@@ -2,11 +2,12 @@
 [tool.verity.tests]
 # Test-only: PoUW's Lean FP8 vector generator (lean/scripts/fp8atom_vectors.py, which test_lean_package.py runs)
 # reads the HOPPER wgmma model replays and the RTX 4090 captures. The schemes import the catalog, whose Definitions register
-# their kernels (verity.ml.kernels) lazily. test_pouw_pearl_c4 checks Pearl-C4's device-run replay, a benchmark's. The
+# their kernels (verity.ml.kernels) lazily. test_pouw_pearl_c4 checks Pearl-C4's device-run replay, a benchmark's, which
+# reads its variables through that benchmark's registry (benchmarks/pouw/settings.py). The
 # schemes' end-to-end tests and the epoch-coin vectors run the clear audit and the work law, a reference tool's.
 inputs = ["verity", "Security", "verity/core/protocols/pouw/PROTOCOL.md", "verity/ml/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json", "verity/ml/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
           "verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/ml/circuits", "verity/ml/kernels",
-          "benchmarks/pouw/pearl_c4", "benchmarks/pouw/clear",
+          "benchmarks/pouw/pearl_c4", "benchmarks/pouw/settings.py", "tools/config/verity_config", "benchmarks/pouw/clear",
           "benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml", "benchmarks/hash/dither/h1u.cu"]
 parallel = true
 

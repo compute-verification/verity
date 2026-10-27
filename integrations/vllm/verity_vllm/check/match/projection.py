@@ -24,9 +24,9 @@ class Projection(PX.CachedKv, C.Prog):
         self.digest = f"{oracle.digest}#{label}"
         self.nodes = oracle.nodes
         self.inputs = oracle.inputs
-        # [R15 stoch] the request's OWN seed parameter canonicalises as ("SEED", ..) (the derived Program's `seed`); another request's is xreq
+        # the request's OWN seed parameter canonicalises as ("SEED", ..) (the derived Program's `seed`); another request's is xreq
         self.seed_nodes = {seed_node} if seed_node is not None else set()
-        # [R17 D90] the request's OWN `peers_<i>` node canonicalises as ("PEER", k, ..) (the rank Program's `peers_<k>`); another request's is
+        # the request's OWN `peers_<i>` node canonicalises as ("PEER", k, ..) (the rank Program's `peers_<k>`); another request's is
         # xreq.  `peer_fields` keeps only this request's node so `Prog._src`'s peer branch never answers for a foreign one.
         self.peer_node = peer_node
         self.peer_fields = {peer_node: oracle.peer_fields[peer_node]} if peer_node is not None and peer_node in getattr(oracle, "peer_fields", {}) else {}
@@ -46,8 +46,8 @@ class Projection(PX.CachedKv, C.Prog):
         self.inst = [oracle.inst[i] for i in inst_idx]
         self.weight_fields = {}
         self.tok_node = tok_node
-        # [R16 global, F-fp8-GM1] the shared weights = a SET of Input nodes (one per leaf field of a mixed-width Record; one node for a
-        # homogeneous one).  An int keeps the pre-R16 call form (`n_input_nodes - 1`) meaning the same single node.
+        # the shared weights = a SET of Input nodes (one per leaf field of a mixed-width Record; one node for a
+        # homogeneous one).  An int keeps the older call form (`n_input_nodes - 1`) meaning the same single node.
         self.weights_nodes = frozenset(weights_node) if isinstance(weights_node, (set, frozenset, list, tuple)) else frozenset({weights_node})
         self.weights_node = weights_node if isinstance(weights_node, int) else (min(self.weights_nodes) if self.weights_nodes else None)
         self.k2i = {r["k"]: i for i, r in enumerate(self.inst)}
@@ -55,11 +55,11 @@ class Projection(PX.CachedKv, C.Prog):
         self.oracle_wmap = getattr(oracle, "oracle_wmap", None)
         self._wlos = getattr(oracle, "_wlos", None)
         self.oracle_wmap_overlaps = getattr(oracle, "oracle_wmap_overlaps", None)
-        self.compact = getattr(oracle, "compact", False)   # [R17 mfast] the oracle's operand representation (runs | progressions)
-        # [R16 global, F-fp8-GM1] Record-global offset of each weights Input node's first leaf (compare.load_oracle): without it every
+        self.compact = getattr(oracle, "compact", False)   # the oracle's operand representation (runs | progressions)
+        # Record-global offset of each weights Input node's first leaf (compare.load_oracle): without it every
         # multi-node weight read would be located at offset 0 of the field map -- the wrong field (or `W?`) -- on the projection side only
         self.input_base = getattr(oracle, "input_base", {})
-        # [R16 stoch/global, COORD M-0169 (4)] the fold's bound top-p split constants (compare.Prog._bind_splits): select node -> S; the
+        # the fold's bound top-p split constants (compare.Prog._bind_splits): select node -> S; the
         # request's e-th select canonicalises its splits operand as ("SPLITS", e, e+1) against the Program's `splits` input entry e
         self.splits_values = getattr(oracle, "splits_values", {})
         self.splits_nodes = getattr(oracle, "splits_nodes", set())
@@ -83,7 +83,7 @@ class Projection(PX.CachedKv, C.Prog):
                 if idx in self.splits_nodes:
                     return ("SPLITS", lo, hi)
                 if idx == self.peer_node:
-                    return self._peer_src(idx, lo, hi)     # [R17 D90] the request's own received-collective peer input
+                    return self._peer_src(idx, lo, hi)     # the request's own received-collective peer input
                 if idx in self.witness_fields:
                     return ("WIT", self.witness_fields[idx], lo, hi)
                 if idx not in self.weights_nodes:
@@ -118,7 +118,7 @@ class Projection(PX.CachedKv, C.Prog):
                     if idx0 in self.splits_nodes:
                         return [("SPLITS", (lo0, hi0), (dL, dH), c)]
                     if idx0 == self.peer_node:
-                        return self._peer_srcP(p, unfold)     # [R17 D90] the request's own received-collective peer input
+                        return self._peer_srcP(p, unfold)     # the request's own received-collective peer input
                     if idx0 in self.witness_fields:
                         return [("WIT", self.witness_fields[idx0], (lo0, hi0), (dL, dH), c)]
                     if idx0 not in self.weights_nodes:

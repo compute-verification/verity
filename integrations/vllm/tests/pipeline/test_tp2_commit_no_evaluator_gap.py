@@ -1,15 +1,13 @@
-"""Red-team repro (circuits W6, claim 2), kept as a regression test: a TP Commit must not pass with families no gate evaluates.
+"""A TP Commit must not pass with families no gate evaluates.
 
-The witness-conditioned match oracle rested the faithfulness of every exempt tensor on the in-run checks: the sampled replay against the
+The witness-conditioned match oracle rests the faithfulness of every exempt tensor on the in-run checks: the sampled replay against the
 committed schedule, linkage, collectives and tokens.  The sampled replay evaluates only families with a registered evaluator, and the
-dense verdict fails a family without one unless a complete form (B) covers it (`c2_rules._complete_replay_population_gap`, COORD
-M-0721 (1)).  The TP verdict (`pipeline.tp.c2.replay_gates`) had no such rule.  DeepSeek-V4-Pro's TP8 Commit r20261018-023527-3dc1
-passed with its oracle comparing 2 of 5920 tensors per rank (5918 exempt) while its replay population held 10 families: the router
-(MoeRouterSqrtSoftplus_v1 x133168, MoeRouterHash_v1 x6888), the routed experts' SiluMulClamp_v1 (x980392), FlashMLA, the norms and the
-mHC were `unreplayable` with "no registered evaluator" and no other pass evaluating them.  A Commit that routed a token to other
-experts, and ran them, passed every replayed row (the align and the Marlin GEMMs read the committed ids) and every other gate.  The TP
-verdict now applies the dense rule per rank (`no_evaluator_gate`), and each waiver it allows is declared and tested here: a collective
-family the cross-rank pass evaluates, while that pass runs, and a selector whose every committed sampled id the Match record confirms.
+dense verdict fails a family without one unless a complete form (B) covers it (`c2_rules._complete_replay_population_gap`).  Without
+that rule, a TP Commit whose oracle compares 2 of 5920 tensors per rank passes with the router, the routed experts' SiluMulClamp_v1,
+FlashMLA, the norms and the mHC `unreplayable`, so a Commit that routes a token to other experts, and runs them, passes every replayed
+row (the align and the Marlin GEMMs read the committed ids) and every other gate.  The TP verdict applies the dense rule per rank
+(`no_evaluator_gate`), and each waiver it allows is declared and tested here: a collective family the cross-rank pass evaluates, while
+that pass runs, and a selector whose every committed sampled id the Match record confirms.
 
 No engine, no torch: the gates are pure functions of the record."""
 from __future__ import annotations
@@ -20,7 +18,7 @@ from verity_vllm.pipeline.tp.c2 import TP_FORM_B_SCOPE, c2_and_pin_gates
 from verity_vllm.program.frontend.collective_kinds import cross_rank_families
 
 XF8 = cross_rank_families(8)
-#: r20261018-023527-3dc1 rank 0's unreplayable families with no evaluator and no `evaluated_by` (rows over 8 ranks), a selection
+#: a DeepSeek-V4-Pro TP8 Commit's rank-0 unreplayable families with no evaluator and no `evaluated_by` (rows over 8 ranks), a selection
 NO_EVALUATOR = {"MoeRouterSqrtSoftplus_v1": 133168, "MoeRouterHash_v1": 6888, "SiluMulClamp_v1": 980392, "FlashMlaPrefill_v1": 124928,
                 "FlashMlaDecode_v1": 15128, "TritonBlockRMSNorm_v1": 280112, "MhcPostPreTf32_v1": 247808}
 #: its replay population (rows over 8 ranks)

@@ -2,12 +2,12 @@ import Proofs.Flock.Claims.ZK.SessionLean
 import Proofs.Flock.Claims.ZK.FrameOwn
 
 /-!
-# The release at the session loop's own frames (Stage B)
+# The release at the session loop's own frames
 
 `LeanRelease.ProgReads` and `LeanRelease.ProgChecks` take the transport's frame state (`prog`) as given: the state Rust's
 requests leave the compiled frame in. The session loop drives each rep's frame itself, on one schedule of requests
 (`Flock.Firewall.Drive.reqs`), so its state is a Lean function. This file defines it from the decoded coins alone, at
-placeholder draws, and the release whose transport state it is (`note:20261022T0001Z-report-zkfin-stageb`):
+placeholder draws, and the release whose transport state it is:
 
 * `Loop.placeholder`: a rep stream's frame at zero draws, its table at a zero level 0 of the statement's shape, and zero
   salts for levels ≥ 1, none of them the tape's.
