@@ -368,18 +368,22 @@ noncomputable def errZC (c : vb.Pos) (k Rw : ℕ) (x : vb.Val) : ℝ :=
       (rdTZC A Hs P planZ tab vb R τ c) x
   else 0
 
+omit [Fintype K] in
 theorem errZC_nonneg (c : vb.Pos) (k Rw : ℕ) (x : vb.Val) : 0 ≤ errZC A Hs P planZ tab vb R τ c k Rw x := by
   unfold errZC
   split_ifs
   · exact errAt_nonneg _ _ _ x
   · exact le_rfl
 
+omit [Fintype K] in
 theorem errZC_of (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ) (x : vb.Val) :
     errZC A Hs P planZ tab vb R τ c k Rw x =
       errAt (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
         (rdTZC A Hs P planZ tab vb R τ c) x := by
   unfold errZC
-  exact dif_pos hne
+  split_ifs with h
+  · rfl
+  · exact absurd hne h
 
 open Classical in
 /-- **The link event's trace at commit string `c` against the value `x`**: the extraction from the reruns `bs` reads a
@@ -387,14 +391,17 @@ value other than `x` there. -/
 noncomputable def psiAtZC (x : vb.Val) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
   if ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ x then 1 else 0
 
+omit [Fintype K] in
 theorem psiAt_nonnegZC (x : vb.Val) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) :
     0 ≤ psiAtZC A Hs P planZ tab vb R τ x c ω bs := by
   unfold psiAtZC; split_ifs <;> norm_num
 
+omit [Fintype K] in
 theorem psiAt_le_oneZC (x : vb.Val) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) :
     psiAtZC A Hs P planZ tab vb R τ x c ω bs ≤ 1 := by
   unfold psiAtZC; split_ifs <;> norm_num
 
+omit [Fintype K] in
 theorem trialVal_psiAtZC (x : vb.Val) (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     trialValZC planZ R (psiAtZC A Hs P planZ tab vb R τ x c) e =
       ind (fun e => ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e, v ≠ x) e := by
@@ -458,8 +465,9 @@ theorem errZC_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : v
   · rw [errZC_of]
     exact trial_err_leZC A Hs P planZ tab vb R τ k Rw M hM ht c (hCR hne)
   · unfold errZC
-    rw [dif_neg hne]
-    positivity
+    split_ifs with h
+    · exact absurd h hne
+    · positivity
 
 /-- **The ideal link mass at `c` against the value `x`**: the audit extractor's reading of `c` other than `x`,
 jointly with acceptance and averaged over the draw, is at most `π c` times the binding error there plus `k/(eRw)` for
