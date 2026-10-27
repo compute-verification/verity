@@ -48,9 +48,10 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
-  builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
-  through C-Flock's prover and the Lean verifier.
+- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
+  (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
+- `examples/`: one directory per example: its workload, its placement and the commands that serve and audit it
+  (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -61,7 +62,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
-  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs (`research run --on auto` runs them on a node).
+  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs.
   - `move`: layout moves.
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
@@ -98,8 +99,8 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
-check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
-`verity --help` lists the rest.
+check, `verity check tests|lean|circuits` runs only those parts, and `verity bench|example NAME` runs
+`benchmarks/<NAME>/`'s or `examples/<NAME>/`'s runner. `verity --help` lists the rest.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
@@ -203,13 +204,14 @@ the standing rulings stated nowhere else.
   - on a draw, the drawn units' openings, to the prover behind the firewall.
 
   What the circuit means, and how it was built, is the integration's; that it computes what is served is completeness
-  (above). Any serving stack plugs in the same way without changing `verity/`, and `integrations/vllm/` is the only one
-  so far. Nothing under `verity/` imports an integration (the import rules, above), and the serving notions `verity/`
-  still holds (the certifier's advice format, vLLM's scheduler, among them) move out to the integration.
+  (above). Any serving stack plugs in the same way without changing `verity/`. Nothing under `verity/` imports an
+  integration (the import rules, above), and the serving notions `verity/` still holds (the certifier's advice format,
+  vLLM's scheduler, among them) move out to the integration.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size (from
+  all compute: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks one. The
+  datacenter's size (from
   `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
   parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
   compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
@@ -309,14 +311,14 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
-  --by ci`). A failure of a step that passed on the last verified `main` reverts the one PR it implicates (`git revert -m
-  1`), bisecting among several, and its owner relands with the fix; anything else reverts nothing and goes to ci. Citations
-  and tables read only commits whose after-landing run passed.
+  --by ci`). A red suite's culprit, the landing since its last pass its failure touches, is rung and reverted (`git
+  revert -m 1`) 60 min later unless a fix is marked; `main` 3 h unverified rings @ci and @top hourly (drive.py).
+  Citations and tables read only commits whose after-landing run passed.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`
-  (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject run elsewhere only withdraws the mark,
-  for drive's next tick to rebuild `next`.
+  (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject, on the pod or off it, only withdraws
+  the mark, for drive's next tick to rebuild `next`.
 - `land = "check"`, drive's default, lands trains on their own check instead (`research.drive`'s docstring).
 
 ## Lean
@@ -465,7 +467,7 @@ Never print a secret's value.
   `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
 - **Open work** (an ask that outlives its thread, what a handoff hands over) is an issue in the owning handle's Linear
   team (the using-slack skill).
-- **Architecture decisions** and Daniel's decisions log go in Notion, which the admin keeps.
+- **Architecture decisions** and Daniel's decisions log go in Notion.
 
 ## Lanes (worker agents)
 
@@ -474,9 +476,9 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 Each coordinator (a handle's holder, which its inbox route records: `research msg handles`) is a plain Cursor cloud agent on the
 one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
-quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
-Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
-(`infra/cursor/README.md`).
+quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work. It owns
+consolidation (Daniel, 26 Oct): work, records and notation converge, not multiply. Coordinators are launched, handed
+over and archived as `infra/cursor/README.md` says.
 
 - **Reread the rules every night.** At the start of each night, reread this file and the rulings in
   `.agents/skills/friction/SKILL.md` and `.agents/skills/lean-proofs/SKILL.md`: rules change during the day, and a lane

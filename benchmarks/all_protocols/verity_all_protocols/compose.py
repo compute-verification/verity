@@ -109,6 +109,7 @@ PORTS = {
     "NetworkCheck.Period.protocol": ("certifier", "verity/certifier/v0"),
     "PousCheck.RunProtocol.protocol": ("pous", "verity/pous/p2/v4/run"),
     "RemoteAudit.Protocol.protocol": ("bandwidth", "verity/remote-bandwidth/v0"),
+    "MemoryChallenger.WipeProtocol.protocol": ("wipe", "verity/wipe/v0"),
 }
 #: A stub's case with no statement yet (`Core.Example.protocol`: none of its one unit drawn), so it is undecided: a stub
 #: never accepts or rejects for the protocol it stands for. Its 32-byte root is its own digest.

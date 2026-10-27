@@ -8,11 +8,12 @@
    "imports": [
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
+    "MemoryChallenger.WipeProtocol",
+    "NciCheck.Protocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Protocol",
     "RemoteAudit.Protocol",
-    "SampledProofs.OneStage",
     "SampledProofs.OneStageZk",
     "VStarRecursive.Sampled"
    ],

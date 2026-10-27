@@ -9,7 +9,6 @@
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
     "PouwCheck.Protocol",
-    "SampledProofs.OneStage",
     "SampledProofs.OneStageZk",
     "VStarRecursive.Sampled"
    ],
