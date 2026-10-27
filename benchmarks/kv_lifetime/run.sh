@@ -2,8 +2,7 @@
 # KV page lifetimes under a ShareGPT chat workload on one vLLM engine (serve.py), then their analysis (analyze.py).
 # cwd = the source tree; outputs in $RESEARCH_RUN_DIR/out. ARGS go to serve.py, WARMUP (default 120 s) to analyze.py.
 #
-#   research run --queue --project verity --source . --cwd source --gpus 1 --preemptible --max-min 60 --mem-gb 64 \
-#     --declared-output 'out/*' --env ARGS='--workload single --phases 8:1500' -- bash benchmarks/kv_lifetime/run.sh
+#   RESEARCH_RUN_DIR=DIR ARGS='--workload single --phases 8:1500' bash benchmarks/kv_lifetime/run.sh
 #
 # The dataset is ShareGPT_V3_unfiltered_cleaned_split.json (anon8231489123/ShareGPT_Vicuna_unfiltered), fetched into
 # the node's Hugging Face cache once.

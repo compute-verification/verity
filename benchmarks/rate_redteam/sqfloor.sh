@@ -3,8 +3,7 @@
 # 2048) in the codec lanes' column form, a row form and one level of Karatsuba, gated against Python, with the SASS
 # opcode mix and ncu's pipe counts. Results in $RESEARCH_RUN_DIR/out, per width.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
-#     --declared-output 'out/*' --env GPU_LEASE_WHO=ra-rate-redteam -- taskset -c 48-95 bash benchmarks/rate_redteam/sqfloor.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-rate-redteam taskset -c 48-95 bash benchmarks/rate_redteam/sqfloor.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 export PATH=/usr/local/cuda-13.0/bin:$PATH
