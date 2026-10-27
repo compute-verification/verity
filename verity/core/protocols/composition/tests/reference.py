@@ -1,6 +1,6 @@
-"""The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule of
-onsite and remote over their components' statements, over the harness's framing of the core interface
-(`verity_difftest.protocol.answer`, as `Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
+"""The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
+of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
+`Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
 mirror over the certifier's certificates and one-stage's answers,
 `verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit
