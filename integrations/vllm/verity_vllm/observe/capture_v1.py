@@ -45,7 +45,7 @@ from typing import Any, BinaryIO
 
 import numpy as np
 
-from verity_vllm.program import dtypes
+from verity.ml.definitions import dtypes
 from verity_vllm.commit import hashing, identity
 
 RU_INDEX_SCHEMA = "verity-vllm/ru-index/v1"

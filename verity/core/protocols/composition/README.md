@@ -4,10 +4,12 @@ Three Lake packages, each on C-Flock's verifier and the core interface (`../inte
 their ported components' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
-  `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
-  stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
+  `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);
+  `registered id R s components`, the same after a registration check `R`, on the registration the component `s`
+  commits to (`Registered.lean`); the stub components
+  (`Stubs.lean`); and the `#guard`s that pin both rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space, bandwidth and
-  communication.
+  communication, after NCI's registration check.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): integrity and work.
 
 The rule and the formats are written once, over any list of components, and the two products are values
@@ -36,10 +38,35 @@ component's `answer` on its case, then decides, reject first:
 On acceptance the product makes public each component's public outputs and keeps each one's profile, both as JSON objects
 keyed by the component's id. On rejection or undecided nothing is public.
 
+### A registration check
+
+Onsite checks the registration before composing, in its commit phase: `registered "verity/onsite/v0"
+NciCheck.Protocol.protocol SampledProofs.OneStage.protocol.id components`. NCI's check of record is a registration
+check, not a component (Daniel's ruling: onsite has six subprotocols, and NCI is none of them), and the registration it
+checks is the one sampled proofs' one-stage audit commits to: one registration digest in both. Its formats are the
+product's with the registration's beside the components':
+
+| input | format |
+| --- | --- |
+| params | `{"components":[...],"registration":{"id":ID,"params":PARAMS}}` |
+| commitment | the product's 64 bytes, then the registration's digest; its own digest |
+| evidence | `{"components":[...],"registration":{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS}}` |
+
+It rejects when the registration isn't the registration check's or carries other params, when the registration check
+doesn't accept it, or when the commitment doesn't end in its digest, whatever the components answer. When the cases fit
+it rejects too when the committing component's case (the first under the id `s`) doesn't commit to that digest, again
+whatever the components answer (`mismatch`: `registration: R checked D, s committed D'`, `D'` hex or `no digest`).
+Otherwise it answers as the product of the components does under the commitment's first 64 bytes, and the registration
+adds nothing to what is public or kept.
+
 `Properties.Composition` (`Security/Properties/Composition.lean`, proved in `Security/Proofs/Properties/Composition.lean`)
 states the accept row against this code. `answerAccepts` covers every `Core.Protocol`: what `answer` accepts decodes,
 and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
-component accepts its own case, and the commitment is `bind` of the components' digests.
+component accepts its own case, and the commitment is `bind` of the components' digests. `acceptRegistration` covers
+`Core.Composition.checkRegistered`: what it accepts, the registration check accepted on the registration's case, the
+commitment ends in the registration's digest, a case of the committing component's commits to that digest, and the
+rest is what `acceptMeans` concludes. At onsite, NCI accepted the registration sampled proofs' one-stage audit commits
+to.
 
 ## Components
 
@@ -56,8 +83,9 @@ replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with 
 a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
-own difftest or its period hook. Every component of both products is ported; NCI and the trial's reconciling are not
-components yet.
+own difftest or its period hook. Every component of both products is ported. Onsite's registration check is NCI's
+(`NciCheck.Protocol.protocol`, `nci_check`, `../network/nci/lean`, `verity/nci/v1`: the declaration's isolation units
+each read at most `α` novel bits per gate); the trial's reconciling is not a component yet.
 
 ## The difftest
 
@@ -67,14 +95,17 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage difftest's `answer`, `one_stage` behind
 the protocol's decoders; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
-certificates and one-stage's answers, on small signed periods from its `build`), which that component's own difftest
-holds its Lean to; for space and bandwidth, their Python verifiers' answers on small periods of their hooks
+certificates and one-stage's answers, on small signed periods from its `build`; for onsite's registration check, the
+NCI protocol's difftest's `reference`, `nci_reference.check_baseline` behind the protocol's decoders), which that
+component's own difftest holds its Lean to; for space and bandwidth, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
 `remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
 verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
 Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
-composition's inputs or the case itself are often broken. The port follows top's rule where the
+(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), onsite's
+registration is on the registration record and log sampled proofs' case commits to three times in four (an honest
+declaration with its θ and provenance dropped) and on NCI's own otherwise, and the composition's inputs, onsite's
+registration or the case itself are often broken. The port follows top's rule where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 
 - **Reject dominates.** In the trial a missing statement leaves the product with no verdict even when another component's

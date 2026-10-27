@@ -24,7 +24,7 @@ from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import taps
-from verity_vllm.program.registry import marlin_moe as MM
+from verity.ml.definitions.registry import marlin_moe as MM
 from verity_vllm.query.manifest.bind import Binder, source_ports
 
 
@@ -428,7 +428,7 @@ def test_a_call_routed_otherwise_runs_its_own_schedule_and_is_counted(monkeypatc
 def test_the_rank_worker_arms_the_replay_once_before_the_committer_installs(monkeypatch, tmp_path) -> None:
     """`tp2_commit_install` arms the rank's align source with the capture's schedule before its committer installs: once, at the
     warm-up's install, and the record's install reuses it.  A Commit without a capture arms nothing."""
-    from verity_vllm.engine import rank_worker as RW
+    from verity_vllm.pipeline.tp import rank_worker as RW
 
     _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
     events: list = []

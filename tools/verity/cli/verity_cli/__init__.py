@@ -5,6 +5,7 @@
     verity check --remote [ARGS]    the check recorded as an Attempt, on a free pod unless --on POD names one
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
+    verity example NAME [ARGS]      examples/NAME's command (run.py or run.sh): its workload on its placement
     verity lean try FILE [--on NODE] [--pool P] [--as LANE]
                                     elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
                                     print Lean's output: the edit loop (default vy-nebius-cpu-1, pool research)
@@ -38,17 +39,19 @@ def _check(args: list[str]) -> int:
     return _run([sys.executable, str(HERE / "check" / "check.py"), *args])
 
 
-def _bench(args: list[str]) -> int:
-    names = sorted(p.name for p in (ROOT / "benchmarks").iterdir() if p.is_dir() and not p.name.startswith((".", "_")))
+def _runner(top: str, command: str, args: list[str]) -> int:
+    """Run ``top/NAME``'s run.py or run.sh with the rest of ``args``."""
+    here = ROOT / top
+    names = sorted(p.name for p in here.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))) if here.is_dir() else []
     if args:
         args = [args[0].replace("-", "_"), *args[1:]]
     if not args or args[0] not in names:
-        raise SystemExit("verity bench NAME [ARGS] (a - in NAME is a _): NAME is one of " + ", ".join(names))
-    d = ROOT / "benchmarks" / args[0]
+        raise SystemExit(f"verity {command} NAME [ARGS] (a - in NAME is a _): NAME is one of " + (", ".join(names) or "none"))
+    d = here / args[0]
     for runner, argv in (("run.py", [sys.executable]), ("run.sh", ["bash"])):
         if (d / runner).exists():
             return _run([*argv, str(d / runner), *args[1:]])
-    raise SystemExit(f"benchmarks/{args[0]} has no run.py or run.sh: run its tool through `research run`")
+    raise SystemExit(f"{top}/{args[0]} has no run.py or run.sh: run its tool through `research run`")
 
 
 def _git(*argv: str, env: dict | None = None, cwd: Path = ROOT) -> str:
@@ -120,7 +123,9 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] == "check":
         return _check(args[1:])
     if args[0] == "bench":
-        return _bench(args[1:])
+        return _runner("benchmarks", "bench", args[1:])
+    if args[0] == "example":
+        return _runner("examples", "example", args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
     raise SystemExit(f"verity: no command {args[0]!r}\\n{__doc__}")

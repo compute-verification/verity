@@ -153,22 +153,6 @@ theorem sum_pow_succ_le {ι : Type} (s : Finset ι) (f : ι → ℕ) (k : ℕ) :
     _ = (∑ j ∈ s, f j) ^ k * ∑ i ∈ s, f i := by rw [Finset.mul_sum]
     _ = (∑ i ∈ s, f i) ^ (k + 1) := by rw [pow_succ]
 
-/-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
-`g/m` (restating `DeployedSketch.lean`'s private lemma). -/
-private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
-    (hα : Fintype.card α ≠ 0) (hm : m ≠ 0)
-    (h : (Finset.univ.filter P).card * m ≤ g * Fintype.card α) :
-    pr P ≤ (g : ℝ≥0∞) / m := by
-  unfold pr
-  rw [ENNReal.div_le_iff (by exact_mod_cast hα) (ENNReal.natCast_ne_top _)]
-  rw [show (g : ℝ≥0∞) / m * Fintype.card α =
-      ((g : ℝ≥0∞) * Fintype.card α) / m by
-        simp only [ENNReal.div_eq_inv_mul]
-        ac_rfl]
-  rw [ENNReal.le_div_iff_mul_le (Or.inl (by exact_mod_cast hm)) (Or.inl (ENNReal.natCast_ne_top _))]
-  rw [Finset.filter_congr_decidable]
-  exact_mod_cast h
-
 namespace Device
 
 /-- **One tuple of query indices, counted against the data where they exist.** The data on which a run made correct
@@ -348,10 +332,10 @@ theorem pr_badK_family_le {C k : ℕ}
     rw [hgdef]
     exact Accounting.SecurityProofs.SketchRankFiber ks m r σ hr
   have hcard := card_badK_family_le (k := k) A sketch σ O g qtot hfib hq
-  have hbound := pr_le_div_of_card_mul_le
+  have hbound := Bandwidth.pr_le_of_card
     (fun D : Data N m ρ Sector =>
       ∃ c, ∃ ι : Fin (k + 1) → Fin q, BadK (A c) sketch σ (O c) D fun i => (ι i : ℕ))
-    ((g * qtot) ^ (k + 1)) (Fintype.card (Fin (k + 1) → Sector)) Fintype.card_ne_zero Fintype.card_ne_zero hcard
+    (Fintype.card (Fin (k + 1) → Sector)) ((g * qtot) ^ (k + 1)) Fintype.card_ne_zero hcard
   refine hbound.trans (le_of_eq ?_)
   have hXc : (Fintype.card Sector : ℝ≥0∞) = 2 ^ 256 := by
     norm_num [Sector]

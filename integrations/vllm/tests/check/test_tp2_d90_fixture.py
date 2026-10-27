@@ -39,7 +39,7 @@ from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat, runs
-from verity_vllm.program.registry import b1, b1_tp2
+from verity.ml.definitions.registry import b1, b1_tp2
 from verity_vllm.pipeline import cli
 from verity.ml.circuits.types import Array, Record, Value
 

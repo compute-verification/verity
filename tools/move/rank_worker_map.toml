@@ -1,0 +1,47 @@
+# The TP rank worker extension up from `engine/` to `pipeline/tp/`: what
+# `tools/move/layout.py --map tools/move/rank_worker_map.toml` moves and rewrites.
+#
+# `TP2CaptureWorkerExtension` is what `pipeline/tp/{capture,commit,match}.py` hand vLLM as `worker_extension_cls`, and those
+# stages and `pipeline/tp/import_path.py` are its only importers: nothing in `engine/` imports it. Its methods run the stages'
+# work in each rank (the capture, the Commit and its binding, the sampled replay, the cross-rank dump, the census), so every one
+# of its imports of acquire, check, commit, observe, pipeline and properties pointed up from `engine`. Beside its callers it
+# points down. The whole module moves; nothing is split, edited or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"integrations/vllm/verity_vllm/engine/rank_worker.py" = "integrations/vllm/verity_vllm/pipeline/tp/rank_worker.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[split]
+
+[rewrite]
+# defs_map.toml's: records of what was, and files whose bytes a digest pins, are never rewritten.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "benchmarks/network_e2e/tests/data/**",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json"]
+
+[aliases]
+"engine.rank_worker" = "pipeline.tp.rank_worker"
+
+[modules]
+"verity_vllm.engine.rank_worker" = "verity_vllm.pipeline.tp.rank_worker"

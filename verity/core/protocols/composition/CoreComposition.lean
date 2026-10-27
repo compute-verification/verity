@@ -1,4 +1,5 @@
 import CoreComposition.Product
+import CoreComposition.Registered
 import CoreComposition.Stubs
 import CoreComposition.Cases
 import CoreComposition.Guards

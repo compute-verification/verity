@@ -133,9 +133,11 @@ Keys and access:
 
 Landing:
 
-- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the whole
-  check before a landing. A PR that changes a `lean-audit.json` lock keeps its Lean check first, and reviewers are agents ci
-  staffs, never the PR's owner. Drive does it with `land = "review"` (AGENTS.md "Checking and merging").
+- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the
+  whole check before a landing. A PR that changes a `lean-audit.json` lock, or Lean that runs as code (outside
+  `Security/`), keeps its Lean check first; Lean proofs alone land on the verdict and are checked after landing, a
+  failure reverting them (25 Oct 11:19 PM PDT). Reviewers are agents ci staffs, never the PR's owner. Drive does it with
+  `land = "review"` (AGENTS.md "Checking and merging").
 - (25 Oct 09:40Z, delegated to the vLLM coordinator) The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
   cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
@@ -145,6 +147,9 @@ Landing:
 
 Protocols and claims:
 
+- (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
+  under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  ties them by a premise or trusts them separately.
 - (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - (8 Oct) A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
@@ -157,6 +162,8 @@ Protocols and claims:
   trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
 - (17 Oct) No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
   bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
+  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; since 26 Oct the bound rests on `SquaringFloor` and
+  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
 - (12 Oct) Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity

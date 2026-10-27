@@ -4,7 +4,7 @@ when its manifest names the tap's family (`pipeline.row_records.applicable_taps`
 the manifest names them: the blockwise FP8 GEMM's scale products (`scale_products_source`) and the exact-int8 quantizers' results
 (`int8_source`, which claims its call boundaries from the call-boundary source); the single-rank Commit only.  One entry point
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
-`for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
+`for_ranks(...)` to `pipeline.tp.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
 attaches the route source (`route_source`) when a capture map describes its model, and beside it the attention sources
 (`attention_source`, which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and `dsv4_attention_source`,
@@ -32,7 +32,7 @@ from verity_vllm.acquire.sources import (attention_source, call_boundary_source,
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
-from verity_vllm.program.registry.topp_geometry import splits_for_v1
+from verity.ml.definitions.registry.topp_geometry import splits_for_v1
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
@@ -109,7 +109,7 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     source (`attention_source`, `dsv4_attention_source`) when a capture map that binds through it describes the manifest's model at its
     ranks (`route_source.manifest_map`: every rank attaches it, `attach_rank`), the MoE align source when the manifest names the
     align Definitions, and the MoE block source when the manifest names a call boundary it claims and no `moe_block_stream` plane (every
-    rank attaches it, binding at the block's Calls: `engine.rank_worker`, `moe_source.at_calls`); on any number of ranks, the
+    rank attaches it, binding at the block's Calls: `pipeline.tp.rank_worker`, `moe_source.at_calls`); on any number of ranks, the
     narrowed-rows source when the manifest names narrowed rows."""
     ids = (manifest or {}).get("identities") or []
     fams = {r.get("family") for r in ids}
