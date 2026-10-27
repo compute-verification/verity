@@ -29,6 +29,12 @@
                                                             refuses when no machine's slots can be read; with no slot free on
                                                             any, twins: the check on each machine it can run on (`twins`),
                                                             the first to take a slot runs; exit 75 when none ran: rerun
+    uv run python tools/verity/check/check.py --record --on M --pool NAME [--deferred STEP,...]
+                                                            the same in a slot of M's NAME pool (`research run --pool`'s pools,
+                                                            e.g. `--on vy-nebius-cpu-1 --pool research`, any lane's), not its
+                                                            merge-check slots, which on the CPU nodes take train checks alone:
+                                                            a lane's own recorded check.  Launch it from a checkout, never inside
+                                                            a `research run`, where --record is refused with the command to run
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -309,6 +315,9 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
 #: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
 AUTO = ("vy-nebius-2",)
+#: where a lane's own recorded check goes when it names no machine (`nested_record`): a pool any lane takes, one of
+#: research.auto's SPILL
+LANE_POOL = ("vy-nebius-cpu-1", "research")
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
@@ -893,6 +902,34 @@ def landable(base: str) -> bool:
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == head
 
 
+def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
+    """The `research run` options that put a `--record --on MACHINE --pool NAME` check in a slot of MACHINE's NAME pool, the
+    pool `research run --pool NAME` takes (`slot_only.POOLS`), rather than its merge-check slots, which on the CPU nodes are
+    only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
+    not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
+    commit.  ValueError when the pool can't be taken so."""
+    if pool is None:
+        return []
+    from research.pods.nebius import slot_only
+
+    if pool not in slot_only.POOLS:
+        raise ValueError(f"{pool}: no such pool; the pools are {', '.join(sorted(slot_only.POOLS))}")
+    if not on or on == "auto" or "," in on:
+        raise ValueError(f"{pool} needs --on MACHINE, the one machine whose pool it waits in (`--on {LANE_POOL[0]} --pool "
+                         f"{LANE_POOL[1]}`); --on auto and lists choose among merge-check slots")
+    if priority:
+        raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
+    return ["--env", f"CHECK_SLOTS={slot_only.POOLS[pool]}"]
+
+
+def nested_record(argv: list[str]) -> str:
+    """The command that records ``argv``'s check from outside a `research run`: `record` launches a `research run` of its own,
+    so inside one it is refused with this.  With no --on, on `LANE_POOL`, any lane's pool."""
+    where = [] if "--on" in argv else ["--on", LANE_POOL[0], *([] if "--pool" in argv else ["--pool", LANE_POOL[1]])]
+    return shlex.join(["uv", "run", "python", "tools/verity/check/check.py", "--record", *where,
+                       *(a for a in argv if a != "--record")])
+
+
 def record(argv: list[str]) -> int:
     """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the
     pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
@@ -902,14 +939,17 @@ def record(argv: list[str]) -> int:
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
-    gathered verdicts and no upstream build or Lean dependencies."""
-    on = base = None
+    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
+    machine's NAME pool instead of its merge-check slots (`pool_env`)."""
+    on = base = pool = None
     agreement = priority = False
     rest = []
     it = iter(argv)
     for x in it:
         if x == "--on":
             on = next(it)
+        elif x == "--pool":
+            pool = next(it)
         elif x == "--base":
             base = next(it)
         elif x == "--agreement":
@@ -918,6 +958,11 @@ def record(argv: list[str]) -> int:
             priority = True
         else:
             rest.append(x)
+    try:
+        pooled = pool_env(pool, on, priority)
+    except ValueError as e:
+        print(f"check: --pool {e}", file=sys.stderr)
+        return 2
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
@@ -965,7 +1010,7 @@ def record(argv: list[str]) -> int:
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake
     # (CI-170, 25 Oct: Flock/RecSparse.olean missing), so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p))]
+           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p)), *pooled]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -2058,8 +2103,10 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--plan"]:
         return _load("plan").main(argv[1:], sys.modules[__name__])
     if "--record" in argv:
-        if os.environ.get("RESEARCH_RUN_ID"):
-            print("check: --record inside a recorded run", file=sys.stderr)
+        if rid := os.environ.get("RESEARCH_RUN_ID"):
+            print(f"check: --record inside a recorded run ({rid}): it launches its own `research run`, which places the check "
+                  f"and records it as an Attempt of the clean commit, so launch it from your checkout instead, outside `research "
+                  f"run` (the launch is light; an agent VM runs it): `{nested_record(argv)}`", file=sys.stderr)
             return 2
         return record([a for a in argv if a != "--record"])
     if os.environ.get("RESEARCH_RUN_ID") and os.environ.get("VERITY_SKIP_STORE") == "1":

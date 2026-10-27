@@ -105,7 +105,8 @@ check, `verity check tests|lean|circuits` runs only those parts, and `verity ben
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check; --record: an Attempt
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check
+uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research [--deferred STEP,...]  # from your checkout, not inside `research run`: the check (or those steps) recorded as an Attempt, in a slot of that lane pool
 research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
@@ -267,7 +268,10 @@ multi-core CPU pod. It covers:
   run sends the upstream build then.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
+unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit; launch it from a
+checkout, never inside a `research run` (where it is refused with the command that works), and give a lane's own check
+`--on MACHINE --pool NAME`, a slot of that machine's `research run --pool` pool, since the CPU nodes' check slots take train
+checks only.
 
 Landing (Daniel, 24 Oct 06:05Z): PRs land on an eyeball review, and the full check runs after landing. A part's verdict is
 reused only while a hash of its declared inputs (the read guard enforces them), the base image and the code that decides it (a

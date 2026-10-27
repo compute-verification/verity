@@ -774,7 +774,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         pools = lane_pools(SLOTS)
         where = ("a lane check takes a lane pool here: " + ", or ".join(
             f"`CHECK_SLOTS={p} python3 tools/verity/check/slot.py --by LANE -- CMD...`" for p in pools)
-            + " (`research run --pool NAME` sends one by its directory's name, for the pools `research run --help` names)"
+            + " (`research run --pool NAME` sends one by its directory's name, and `check.py --record --on MACHINE --pool NAME` a "
+              "recorded check, for the pools `research run --help` names)"
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
                  f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
