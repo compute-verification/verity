@@ -272,6 +272,7 @@
   "PouwCheck.Pass",
   "PouwCheck.WindowSalt",
   "PouwCheck.Credit",
+  "PouwCheck.Period",
   "PouwCheck.Chunks",
   "PouwCheck.Opening",
   "Definitions.Pouw.PearlC.Sha512",
