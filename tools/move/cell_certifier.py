@@ -94,7 +94,12 @@ CLASS = [(_B + r"Warden" + _E, "CellCertifier")]
 _SERVE = [(r'(?<=")warden-serve(?=[: -])', "cell-certifier-serve"), (r'(?<=")warden-publisher"', 'cell-certifier-publisher"')]
 BOUND = {"benchmarks/network_e2e/traces/corpus.py":
          [(r"network_certifier import warden" + _E, "network_certifier import cell_certifier as warden")],
+         "benchmarks/network_traces/tests/test_wipe_egress.py":
+         [(r"network_certifier\.warden import WardenParams" + _E,
+           "network_certifier.cell_certifier import CellCertifierParams as WardenParams")],
          f"{NT}/warden_serve.py": _SERVE, f"{NT}/cell_certifier_serve.py": _SERVE}
+#: Names a file keeps (by `BOUND`'s alias) while a queued change edits the lines that use them.
+HELD = {"benchmarks/network_traces/tests/test_wipe_egress.py": {"CellCertifierParams"}}
 PROSE = [
     (r"(?<![\w-])warden-serve\b", "cell-certifier-serve"), (r"(?<![\w-])warden-zk\b", "cell-certifier-zk"),
     (r"(?<![\w-])warden-form\b", "cell-certifier-form"), (r"(?<![\w-])warden-signed\b", "cell-certifier-signed"),
@@ -112,7 +117,8 @@ TICKED = [(r"`warden`", "`cell_certifier`"), (r"`warden_rows`", "`cell_certifier
           *((rf"`warden\.{n}" + _E, f"`cell_certifier.{n}") for n in ("cells", "Shim", "audit", "cell", "read_cell"))]
 
 EXCLUDE = ["archive/**", "tools/move/**", "**/CHANGELOG.md", ".agents/skills/friction/SKILL.md", "**/lean-audit.json",
-           "**/*.lean", "**/*.patch", "uv.lock", "**/*.lock", "**/TRUSTED.sha256", "**/lake-manifest.json"]
+           "**/*.lean", "**/*.patch", "uv.lock", "**/*.lock", "**/TRUSTED.sha256", "**/lake-manifest.json",
+           "tools/research/src/research/store/moves.json"]
 MOVES_JSON = "tools/research/src/research/store/moves.json"
 
 
@@ -138,6 +144,7 @@ def rules(table: list[tuple[str, str]]):
 
 _NAMES, _CLASS, _PROSE, _TICKED = rules(NAMES), rules(CLASS), rules(PROSE), rules(TICKED)
 _BOUND = {p: rules(t) for p, t in BOUND.items()}
+_HELD = {p: rules([r for r in NAMES if r[1] not in held]) for p, held in HELD.items()}
 
 
 def prose(text: str, counts: Counter) -> str:
@@ -239,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         if "arden" not in old:
             continue
         new = _BOUND[p](old, counts) if p in _BOUND else old
-        new = _NAMES(new, counts)
+        new = _HELD.get(p, _NAMES)(new, counts)
         if p.endswith(".py"):
             new = _CLASS(new, counts)
         if p in MOVED and p.endswith(".py"):
