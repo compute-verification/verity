@@ -396,8 +396,8 @@ theorem fold_climb (d : Domain) (path : Array ByteArray) : ∀ (k s : Nat) (st :
     simp only [climbRec, climbStep, Array.getElem_toList, getElem!_pos path s (by omega)]
 
 theorem climb_eq (d : Domain) (pos : Nat) (schema : String) (v : ByteArray) (path : Array ByteArray) :
-    climb d pos schema v path = climbRec d 0 pos (d.leaf pos pos schema v) path.toList := by
-  unfold climb
+    FrameV3Sha512.climb d pos schema v path = climbRec d 0 pos (d.leaf pos pos schema v) path.toList := by
+  unfold FrameV3Sha512.climb
   simp only [Id.run, Std.Legacy.Range.forIn'_eq_forIn'_range']
   rw [forIn'_yield (climbStep d path)]
   · have hs : [:path.size].size = path.size := by simp [Std.Legacy.Range.size]
@@ -633,10 +633,12 @@ theorem finds {L : List ByteArray} (h : ∃ x ∈ L, ∃ y ∈ L, x ≠ y ∧ Sh
   have hl : ∀ q ∈ L.map (fun x => (x.data.toList, (Sha512.hash x).data.toList)), sha512 q.1 = q.2 := by
     intro q hq
     obtain ⟨z, -, rfl⟩ := List.mem_map.1 hq
+    dsimp only
     exact sha512_bs z
-  let f := fun x : ByteArray => (x.data.toList, (Sha512.hash x).data.toList)
-  have hs := findColl_isSome _ ⟨f x, List.mem_map_of_mem (f := f) hx, f y, List.mem_map_of_mem (f := f) hy,
-    fun e => hne (bs_inj e), by simp only [f, heq]⟩
+  have hs := findColl_isSome (L.map fun x => (x.data.toList, (Sha512.hash x).data.toList))
+    ⟨(x.data.toList, (Sha512.hash x).data.toList), List.mem_map.2 ⟨x, hx, rfl⟩,
+      (y.data.toList, (Sha512.hash y).data.toList), List.mem_map.2 ⟨y, hy, rfl⟩,
+      fun e => hne (bs_inj e), by dsimp only; rw [heq]⟩
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
   exact ⟨u, v, huv, Claims.findColl_spec sha512 _ hl u v huv⟩
 
@@ -892,7 +894,7 @@ theorem root_one (v : ByteArray) :
 /-- A one-record period's record opens at position 0 with no siblings. -/
 theorem opening_one (v : ByteArray) :
     verifyOpening (Attest.periodDomain 1) (Attest.root #[v]) 1 0 v Attest.PERIOD_SCHEMA #[] = true := by
-  have hc : climb (Attest.periodDomain 1) 0 Attest.PERIOD_SCHEMA v #[] =
+  have hc : FrameV3Sha512.climb (Attest.periodDomain 1) 0 Attest.PERIOD_SCHEMA v #[] =
       (Attest.periodDomain 1).leaf 0 0 Attest.PERIOD_SCHEMA v := by
     rw [climb_eq]
     rfl
