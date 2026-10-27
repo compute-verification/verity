@@ -951,7 +951,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
 
     print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
           "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
-          "commit ms | wgl ms | gamma ovl_w / wgl | O hashed in the GEMM: rows / blocks |")
+          "commit ms | wgl ms | gamma ovl_w / wgl | O hashed in the GEMM: rows / chunks |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]

@@ -469,7 +469,8 @@ DEV void cp_async16(uint32_t dst, const void* src) {
 DEV void cp_async_wait_all() { asm volatile("cp.async.wait_all;" ::: "memory"); }
 
 // w_X B~^T added into the 128 x CW tile of dO at (i0, j0), after its X w_W^T is stored (rare: A's wraps): thread (row r,
-// group g) over the tile's 32-column blocks g, g + G, ... (G = blockDim / 128), from B~^T's row k of each wrap (k, s);
+// group g) over the tile's columns 32 g .. 32 g + 31, then 32 (g + G) .., ... (G = blockDim / 128), from B~^T's row k of
+// each wrap (k, s);
 // ST: stored rather than added (V31_WRAP 6, whose GEMM takes X w_W^T itself), zeros where a row has no wrap
 template <int CW, bool ST = false>
 DEV void wrap_a_side(const WrapArgs& a, size_t i0, size_t j0) {
@@ -1457,8 +1458,8 @@ struct ServedRow {
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
 };
 
-// hash_after_block's blocks b0 .. of the row (x: the chaining value after the first b0), at most budget of them, until
-// stop() holds before a block past the first: the blocks done, nblk when x is the digest
+// hash_after_block's SHA-512 chunks b0 .. of the row (x: the chaining value after the first b0), at most budget of them,
+// until stop() holds before a chunk past the first: the chunks done, nblk when x is the digest
 struct NoStop {
   DEV bool operator()() const { return false; }
 };
@@ -1495,9 +1496,9 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
   return end;
 }
 // RP 4's hasher (wg_proto.cuh's H) on a served call's O rows: row j of commit tile ct is leaf ct lpt + wrows + j. Its
-// chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the blocks hashed (all of them, or as many as the hash
-// warp did before the consumers were done); FusedRow takes the leaf phase on from there, and hashes from the first block
-// whatever carries another epoch (the words rows, a forged copy). A visit hashes at most budget blocks on from the row's
+// chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the SHA-512 chunks hashed (all of them, or as many as the
+// hash warp did before the consumers were done); FusedRow takes the leaf phase on from there, and hashes from the first
+// chunk whatever carries another epoch (the words rows, a forged copy). A visit hashes at most budget chunks on from the row's
 // own flag (chunk, V31_HCHUNK: the hash warps' visits a row, 0 a row whole in one)
 constexpr u32 FUSED_EPOCHS = 1u << 22;
 struct FusedLeaves {
@@ -1839,7 +1840,7 @@ __global__ void ne_kernel(const int* a, const int* b, size_t n, unsigned long lo
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) c += a[i] != b[i];
   if (c) atomicAdd(out, c);
 }
-// FusedLeaves' flags of epoch e: out[0] the rows hashed whole (nblk blocks), out[1] the blocks hashed
+// FusedLeaves' flags of epoch e: out[0] the rows hashed whole (nblk chunks), out[1] the chunks hashed
 __global__ void fused_count_kernel(const u32* a, size_t n, u32 e, u32 nblk, unsigned long long* out) {
   unsigned long long c = 0, nb = 0;
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x)
@@ -1907,7 +1908,7 @@ static std::string env_str(const char* name, const char* dflt) {
 // commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_r3; CM 1; the wgl arm keeps RP 0). A served Fill's V31_GEMM 1: its
 // D = a' b'^T on the plain wg GEMM (static schedule), V31_RP 4 hashing the O rows in the GEMM's producer warpgroup
 // (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
-// C > 0: the hash warps' passes over the posted rows, C blocks of each a visit, in place of each row whole in turn;
+// C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
 // V31_WGW 0: the words segments on gemm_kernel<true> rather than the wg protocol GEMM).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
@@ -2555,7 +2556,7 @@ struct Fill {
   }
 #endif
   // a call's FusedLeaves epoch: it wraps below FUSED_EPOCHS, and clears both copies' flags then (a cleared flag only
-  // makes the leaf phase hash that row from its first block)
+  // makes the leaf phase hash that row from its first chunk)
   u32 epoch(cudaStream_t st) {
     if (++xctr == FUSED_EPOCHS) {
       xctr = 1;
@@ -3298,7 +3299,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     f.ready(f.calls - 2);
     f.ready(f.calls - 1);
     CK(cudaGetLastError());
-    // RP 4: the leaves whose row the GEMM's hash warps hashed whole, and the SHA-512 blocks they hashed, of the last
+    // RP 4: the leaves whose row the GEMM's hash warps hashed whole, and the SHA-512 chunks they hashed, of the last
     // overlapped call
     long long fused = -1, fused_blocks = -1;
     const u32 nblk = (row + 17 + 127) / 128;
