@@ -3,6 +3,8 @@
     run.py eval --model M --set c4|wikitext2 --ctx 2048|8192|32768 --out DIR [--gpus N] [--seeds 0,1,2]
                 [--device cuda|cpu [--threads T]] [--data DIR] [--plugin FILE.py]... SPEC...
                                                                             on a GPU (or CPU) node: one results.json
+    run.py trace (eval's flags) --window W                                  one window, each stream's per-token distance
+                                                                            from bf16 after every layer (trace.npz)
     run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
                                                                             (job.sh), the datasets sent with it; with
                   [--on NODE] [--mem-gb G]                                  --device cpu on a CPU node (cpu_job.sh)
@@ -258,6 +260,49 @@ def cmd_shard(task_path: str) -> int:
     return 0
 
 
+def cmd_trace(a) -> int:
+    """One window through the engine on one device, every stream traced: after each layer, each token's distance from
+    the bf16 reference over the reference's norm (`dist`, layers x streams x T) and its largest |activation| (`amax`,
+    layers x (reference, streams) x T), and every scored token's NLL (`trace.npz`). Each arm's stream runs window by
+    window with coins drawn per window id, so it is the full run's bit for bit; the reference runs as a batch of one
+    rather than of REF_BATCH, so its last bits may differ. A diagnostic, not a perplexity."""
+    import numpy as np
+    import torch
+
+    import engine
+    load_plugins(a.plugin)
+    seeds = parse_seeds(a.seeds)
+    arms = arms_for(a.spec)
+    check_ctx(a.model, a.ctx)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    ids, cal, wrec = build_windows(a.model, a.set, a.ctx, Path(a.data), any(x.needs_calib for x in arms))
+    if not 0 <= a.window < len(ids):
+        raise SystemExit(f"--window is one of 0..{len(ids) - 1}")
+    names, dist, amax = [], [], []
+
+    def trace(li, ref, streams):
+        names[:] = list(streams)
+        r = ref[0].float().flatten(1)
+        hs = [h[0].float().flatten(1) for h in streams.values()]
+        dist.append(torch.stack([(h - r).norm(dim=-1) / r.norm(dim=-1).clamp(min=1e-30) for h in hs]).cpu())
+        amax.append(torch.stack([x.abs().amax(-1) for x in [r, *hs]]).cpu())
+
+    t0 = time.time()
+    with cpu_kernels(a.device):
+        r = engine.evaluate(snapshot(a.model), ids[[a.window]], [a.window], arms, seeds, cal, device=a.device,
+                            log=lambda s: print(s, flush=True), hf_check=False, trace=trace)
+    np.savez_compressed(out / "trace.npz", streams=np.array(names), dist=torch.stack(dist).numpy(),
+                        amax=torch.stack(amax).numpy(), **{k.replace("/", "|"): v[0] for k, v in r["nll"].items()})
+    res = {"model": a.model, "set": a.set, "ctx": a.ctx, "window": a.window, "window_digest": wrec["sha256"],
+           "seeds": list(seeds), "seconds": round(time.time() - t0, 1), "gates": r["gates"],
+           "passed": all(g["failed"] == 0 for g in r["gates"].values()),
+           "window_nll": {k: float(v.mean(dtype=np.float64)) for k, v in r["nll"].items()}}
+    (out / "trace.json").write_text(json.dumps(res, indent=1))
+    print(json.dumps(res["window_nll"], indent=1))
+    return 0 if res["passed"] else 1
+
+
 def submit_command(a, data: Path) -> list[str]:
     """The `research run` that runs this eval on vy-nebius-2 under a gpu-lease of the model's GPUs, from the
     checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in
@@ -415,6 +460,9 @@ def main(argv: list[str]) -> int:
             q.add_argument("--data", default=str(DATA))
 
     run_flags(sub.add_parser("eval"), True)
+    q = sub.add_parser("trace")
+    run_flags(q, True)
+    q.add_argument("--window", type=int, required=True, help="the window (its index in the set's list)")
     q = sub.add_parser("submit")
     run_flags(q, False)
     q.add_argument("--data", default=str(LOCAL_DATA), help="where the datasets are staged to be sent")
@@ -443,8 +491,8 @@ def main(argv: list[str]) -> int:
     q.add_argument("--data", default=str(DATA))
     sub.add_parser("selftest")
     a = p.parse_args(argv)
-    return {"eval": cmd_eval, "submit": cmd_submit, "report": cmd_report, "baseline": cmd_baseline, "steps": cmd_steps,
-            "specs": cmd_specs, "tables": cmd_tables, "windows": cmd_windows, "setup": cmd_setup,
+    return {"eval": cmd_eval, "trace": cmd_trace, "submit": cmd_submit, "report": cmd_report, "baseline": cmd_baseline,
+            "steps": cmd_steps, "specs": cmd_specs, "tables": cmd_tables, "windows": cmd_windows, "setup": cmd_setup,
             "selftest": cmd_selftest}[a.cmd](a)
 
 

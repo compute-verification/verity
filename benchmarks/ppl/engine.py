@@ -26,9 +26,10 @@ def stream_key(arm, seed: int) -> str:
 
 
 def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list, seeds, calib_ids: np.ndarray | None,
-             device="cuda", log=print, hf_check: bool = True) -> dict:
+             device="cuda", log=print, hf_check: bool = True, trace=None) -> dict:
     """NLL of every scored token of the windows `ids` (n x T, global ids `window_ids`) under the bf16 reference and
-    each (arm, seed); the gates' log; per-layer divergence from the reference."""
+    each (arm, seed); the gates' log; per-layer divergence from the reference. `trace(li, ref, streams)` sees every
+    layer's outputs."""
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     cfg = Config.read(snapshot)
@@ -125,6 +126,8 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                     attn_err[k][1] += run.attn_err[1]
                 d = (h.float() - new_ref.float()).norm()
                 diverge[k].append(float(d / new_ref.float().norm().clamp(min=1e-30)))
+            if trace is not None:
+                trace(li, new_ref, streams)
             ref = new_ref
             run = None  # the last Run holds the layer and its int8 cache (V4: 40 GB) into the next layer's reference
             del layer, cache, calib

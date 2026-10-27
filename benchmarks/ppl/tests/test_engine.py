@@ -1,4 +1,5 @@
 import gc
+import json
 import math
 import types
 import weakref
@@ -251,6 +252,31 @@ def test_a_layer_is_freed_before_the_next_is_built(llama, ids, calib, monkeypatc
     monkeypatch.setattr(engine, "make_layer", make)
     evaluate(llama, ids[:1], ["int8-all"], calib=calib)
     assert len(alive) == M.Config.read(llama).layers and not any(any(a) for a in alive), alive
+
+
+def test_a_trace_is_its_window_of_the_run(llama, ids, calib, monkeypatch, tmp_path):
+    """`run.py trace --window W` runs window W alone: each arm's NLL is the full run's for W bit for bit, and every
+    layer's per-token distance and largest activation are recorded for the reference and each stream."""
+    arms = ["adopted-bd-lm-pv"]
+    whole = evaluate(llama, ids[:4], run.arms_for(arms), seeds=(0, 1), calib=calib)
+    monkeypatch.setattr(run, "build_windows", lambda *a: (ids[:4], calib, {"sha256": "x"}))
+    monkeypatch.setattr(run, "snapshot", lambda model: llama)
+    assert run.main(["trace", "--model", "llama-3.1-8b", "--set", "c4", "--ctx", "2048", "--device", "cpu",
+                     "--seeds", "0,1", "--out", str(tmp_path), "--window", "2", *arms]) == 0
+    t = np.load(tmp_path / "trace.npz")
+    streams = [k for k in whole["nll"] if k != "bf16/s0"]
+    L, T = M.Config.read(llama).layers, ids.shape[1]
+    assert list(t["streams"]) == streams and len(streams) == 4
+    assert t["dist"].shape == (L, 4, T) and t["amax"].shape == (L, 5, T)
+    assert (t["dist"][-1].mean(-1) > 0).all() and (t["amax"] > 0).all()
+    for k in streams:
+        assert np.array_equal(t[k.replace("/", "|")], whole["nll"][k][2]), k
+    np.testing.assert_allclose(t["bf16|s0"], whole["nll"]["bf16/s0"][2], rtol=1e-3)
+    res = json.loads((tmp_path / "trace.json").read_text())
+    assert res["window"] == 2 and res["passed"] and set(res["window_nll"]) == set(whole["nll"])
+    with pytest.raises(SystemExit, match="--window"):
+        run.main(["trace", "--model", "llama-3.1-8b", "--set", "c4", "--ctx", "2048", "--device", "cpu",
+                  "--out", str(tmp_path), "--window", "4", *arms])
 
 
 def test_the_readme_plugin_example_runs(llama, ids, monkeypatch, tmp_path):
