@@ -260,15 +260,15 @@ def _ref(params: P2Params) -> reference.Params:
 
 def decode_block(params: P2Params, prefix: bytes, i: int, block: bytes) -> bytes:
     """Block `i`'s payload, `params.payload_bytes` bytes: `reference.decode` under `reference.keys_after(prefix, …)`."""
-    ref, nb, pb = _ref(params), params.block_bytes, params.payload_bytes
+    nb, pb = params.block_bytes, params.payload_bytes
     if len(block) != nb:
         raise ValueError(f"block {i} is {len(block)} bytes, not {nb}")
     c = int.from_bytes(block, "big")
-    if c >= ref.p:
+    if c >= params.p:
         raise ValueError(f"block {i} is not below p: not a codeword (flag bit 2)")
     s, v = divmod(i, params.blocks_per_segment)
-    k, t, _ = reference.keys_after(prefix, ref, s, v)
-    m = reference.decode(ref, c, k, t)
+    k, t, _ = reference.keys_after(prefix, params, s, v)
+    m = reference.decode(params, c, k, t)
     if m >> (8 * pb):
         raise ValueError(f"block {i} decodes to more than {8 * pb} bits: not a codeword (flag bit 2)")
     return m.to_bytes(pb, "big")
@@ -1065,11 +1065,10 @@ def _encode_segment(args: tuple[P2Params, bytes, int, bytes]) -> list[bytes]:
 
 
 def _encode_block(args: tuple[P2Params, bytes, int, bytes]) -> bytes:
-    """One block at any index, by the spec's reference encoder (two roots by Python's `pow`, seconds)."""
+    """One block at any index, by the spec's reference encoder (two roots in Python, seconds)."""
     params, prefix, i, m = args
-    ref = _ref(params)
-    k, t, _ = reference.keys_after(prefix, ref, *divmod(i, params.blocks_per_segment))
-    return reference.encode(ref, int.from_bytes(m, "big"), k, t).to_bytes(params.block_bytes, "big")
+    k, t, _ = reference.keys_after(prefix, params, *divmod(i, params.blocks_per_segment))
+    return reference.encode(params, int.from_bytes(m, "big"), k, t).to_bytes(params.block_bytes, "big")
 
 
 def _sha(data: bytes) -> str:
@@ -1149,7 +1148,7 @@ def _spots(real: Store, salt: bytes) -> list[dict]:
     """Blocks of the real store under the toy's salt: W's first, layer 0's qkv's last (268 bytes used), layer 51's
     down_proj's first, the head's last (36 used) and W's last (all padding, at v = 65,535)."""
     params = real.params
-    prefix, ref, pb = expand_prefix(params, salt), _ref(params), params.payload_bytes
+    prefix, pb = expand_prefix(params, salt), params.payload_bytes
     qkv, down, head = real.layer(0)[0], real.layer(real.shape.layers - 1)[3], real.layer(real.shape.layers)[0]
     picks = [("w-first", qkv, qkv.first_block), ("qkv0-last", qkv, qkv.first_block + qkv.blocks - 1),
              ("down51-first", down, down.first_block), ("head-last", head, head.first_block + head.blocks - 1),
@@ -1158,7 +1157,7 @@ def _spots(real: Store, salt: bytes) -> list[dict]:
     for name, t, i in picks:
         used = 0 if t is None else min(pb, t.offset + t.size - pb * i)
         s, v = divmod(i, params.blocks_per_segment)
-        k, tw, attempt = reference.keys_after(prefix, ref, s, v)
+        k, tw, attempt = reference.keys_after(prefix, params, s, v)
         out.append({"id": name, "i": i, "s": s, "v": v, "tensor": None if t is None else t.name, "used": used,
                     "K_sha512": _sha(k.to_bytes(nb, "big")), "t_sha512": _sha(tw.to_bytes(nb, "big")),
                     "t_attempt": attempt, "m_sha512": _sha(spot_payload(i, used, pb))})

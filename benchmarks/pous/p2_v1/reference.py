@@ -1,18 +1,24 @@
 """P2 v4 on the CPU, as `verity/core/protocols/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
-(`vectors.py`) are built on.
+(`vectors.py`) are built on. Its maps and key streams are the registered scheme's
+(`verity.core.protocols.pous.schemes.p2`, held to `PousCheck.P2` by its difftest), under the spec's names and with the
+spec's refusals of non-canonical inputs; what is the spec's own here is its setup framing, `Params` with its refusals
+(which `PousCheck.Wire` mirrors), the verification tree and the audit's derivations.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
 W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
 `verity.ml.randomness` is the spec's derivation (`frame`, `derive`) and
-`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
-`powmod` when it is installed). It is pinned by `vectors.json` beside it (`VECTORS_SHA512`, the hash in the spec's §7).
+`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. It is pinned by `vectors.json` beside it
+(`VECTORS_SHA512`, the hash in the spec's §7).
 
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
   and the store's shape (blocks per segment, segments).
-- `setup_salt`, `expand_prefix`, `stream`, `keys`: §4's post-commitment salt and per-block `K` and `t` (counter-mode SHA-512
-  over a prefix of whole 128-byte blocks; `t` is rejection-sampled below `p`).
-- `d`, `rho`, `sigma`, `encode`, `decode`: §3's maps, `E_j(m) = ρ(σ_K(ρ(m + t)))` and `D_j(c) = d(σ_K(d(c))) − t`.
+- `setup_salt`, `expand_prefix`: §4's post-commitment salt and the spec's key prefix, which frames the model commitment and
+  a 32-byte salt where the registered scheme's frames its 24-byte salt alone.
+- `stream`, `keys`, `keys_after`: §4's per-block `K` and `t` after a prefix (`schemes.p2.stream` and `sha512_keys_indexed`:
+  counter-mode SHA-512 over a prefix of whole 128-byte blocks; `t` is rejection-sampled below `p`).
+- `d`, `rho`, `sigma`, `encode`, `decode`: §3's maps on `schemes.p2`'s field, `E_j(m) = ρ(σ_K(ρ(m + t)))` and
+  `D_j(c) = d(σ_K(d(c))) − t`. They and the keys read only `w`, `c0` and `p`, so they take a `schemes.p2.P2Params` too.
 - `manifest`, `w_commitment`, `row_digest`, `leaf`, `node`, `root`, `epoch_id`, `audit_key`, `round_key`: the setup
   commitment, the RFC 6962 verification tree over 0x00-tagged leaves of each block's `sha512/row/v2` digest, and the
   audit's challenge derivation (mode 0 and mode 1).
@@ -23,6 +29,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity.core.protocols.pous.schemes import p2 as P2
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 from verity.ml.randomness import Key, derive, frame
@@ -35,33 +42,24 @@ AUDIT_VECTORS_SHA512 = "5f8ed7f279ccd2f2d5bb60607fb5d7bec82bf982ac85da268f76cb8f
 NEGATIVE_VECTORS = HERE / "audit-negative-vectors.json"
 NEGATIVE_VECTORS_SHA512 = "f57340a0965628051bd0c938c4c7e2db5a7133982ae1a523a1221a3fbb273bfbcb1ebc1d29680b61b47f86d45e7c98aa4a5ac6311545c19c78728d857596a687"
 """The spec's §7 pins: `vectors.py` writes the three files and rewrites these."""
-PROTOCOL = "p2/v4"
+PROTOCOL = P2.PROTOCOL_ID
 SETUP_DOMAIN = "verity/pous/p2-setup/v4"
 AUDIT_ID_DOMAIN = "verity/pous/p2-audit-id/v4"
 CHALLENGE_DOMAIN = "verity/pous/p2-audit-challenge/v4"
 ROUND_DOMAIN = "verity/pous/p2-audit-round/v4"
-KEYS_TAG = b"verity/pous/p2/keys/v4\0"
+KEYS_TAG = P2.KEYS_TAG
 EPOCH_TAG = b"verity/pous/p2/epoch/v4\0"
 TAGGED_SHA512 = b"verity/tagged-sha512/v1\0"
 W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v2"
 DIGEST_BYTES = 64
 SALT_BYTES = 32
-K_AUDIT = 105
+K_AUDIT = P2.CERT_K
 """The deployment audit's challenges (spec §5, F6)."""
-DELTA_NS = 500_000
-MAX_RTT_ALLOWANCE_NS = 354_000
+DELTA_NS = P2.DELTA_NS
+MAX_RTT_ALLOWANCE_NS = P2.RTT_ALLOWANCE_CAP_NS
 """Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, so
 that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
-(`verity.core.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
-
-try:
-    import gmpy2
-
-    def _powmod(x: int, e: int, m: int) -> int:
-        return int(gmpy2.powmod(x, e, m))
-except ImportError:
-    def _powmod(x: int, e: int, m: int) -> int:
-        return pow(x, e, m)
+(v1 permitted 1 ms)."""
 
 
 @dataclass(frozen=True)
@@ -124,15 +122,7 @@ def expand_prefix(salt: bytes, params: Params, model: bytes) -> bytes:
     return body + bytes(-len(body) % 128)
 
 
-def stream(base: bytes, purpose: bytes, nbytes: int) -> bytes:
-    """The first `nbytes` of `SHA512(base ‖ purpose ‖ u32be 0) ‖ SHA512(base ‖ purpose ‖ u32be 1) ‖ …`."""
-    head = hashlib.sha512(base + purpose)
-    out = bytearray()
-    for i in range(-(-nbytes // DIGEST_BYTES)):
-        h = head.copy()
-        h.update(i.to_bytes(4, "big"))
-        out += h.digest()
-    return bytes(out[:nbytes])
+stream = P2.stream
 
 
 def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
@@ -140,56 +130,38 @@ def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) ->
     return keys_after(expand_prefix(salt, params, model), params, segment, block)
 
 
-def keys_after(prefix: bytes, params: Params, segment: int, block: int) -> tuple[int, int, int]:
+def keys_after(prefix: bytes, params: Params | P2.P2Params, segment: int, block: int) -> tuple[int, int, int]:
     """`keys` after any framing's `prefix`: the spec's (`expand_prefix`), or the registered scheme's, whose prefix frames
     the protocol's 24-byte salt and no model commitment (`verity...schemes.p2.expand_prefix`)."""
-    n = params.width_bytes
-    base = prefix + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
-    k = int.from_bytes(stream(base, b"K", n), "big")
-    attempt = 0
-    while True:
-        candidate = int.from_bytes(stream(base, b"t", (attempt + 1) * n)[attempt * n:], "big")
-        if candidate < params.p:
-            return k, candidate, attempt
-        attempt += 1
+    return P2.sha512_keys_indexed(params, prefix, segment, block)
 
 
-def d(params: Params, z: int) -> int:
+def d(params: Params | P2.P2Params, z: int) -> int:
     if not 0 <= z < params.p:
         raise ValueError("d's input is not canonical")
-    square = z * z % params.p
-    return square if z % 2 == 0 else (-square) % params.p
+    return P2._field(params).sq(z)
 
 
-def rho(params: Params, y: int) -> int:
-    """`d⁻¹`: one exponentiation by `(p + 1) / 4`, then the parity-canonical member."""
+def rho(params: Params | P2.P2Params, y: int) -> int:
+    """`d⁻¹`: the parity-canonical root of ±y."""
     if not 0 <= y < params.p:
         raise ValueError("ρ's input is not canonical")
-    if y == 0:
-        return 0
-    s = _powmod(y, (params.p + 1) // 4, params.p)
-    square = s * s % params.p
-    if square == y:
-        return s if s % 2 == 0 else params.p - s
-    if square == (-y) % params.p:
-        return s if s % 2 else params.p - s
-    raise ArithmeticError("p is not a prime congruent to 3 mod 4")
+    return P2._field(params).rho(y)
 
 
-def sigma(params: Params, r: int, k: int) -> int:
+def sigma(params: Params | P2.P2Params, r: int, k: int) -> int:
     if not 0 <= r < params.p or not 0 <= k < 1 << params.w:
         raise ValueError("σ's inputs are not canonical")
-    x = r ^ k
-    return x if x < params.p else r
+    return P2._field(params).sigma(r, k)
 
 
-def encode(params: Params, m: int, k: int, t: int) -> int:
+def encode(params: Params | P2.P2Params, m: int, k: int, t: int) -> int:
     if not 0 <= m < params.p or not 0 <= t < params.p:
         raise ValueError("the payload and the tweak are canonical")
     return rho(params, sigma(params, rho(params, (m + t) % params.p), k))
 
 
-def decode(params: Params, c: int, k: int, t: int) -> int:
+def decode(params: Params | P2.P2Params, c: int, k: int, t: int) -> int:
     if not 0 <= c < params.p:
         raise ValueError("the codeword is not canonical")
     return (d(params, sigma(params, d(params, c), k)) - t) % params.p

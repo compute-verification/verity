@@ -613,7 +613,9 @@ Audit wire vectors:
 
 ## 8. Conformance of the repository
 
-`benchmarks/pous/p2_v1/reference.py` is this specification (§§3–4 and the derivations), `wire.py` is
+`benchmarks/pous/p2_v1/reference.py` is this specification (§§3–4 and the derivations): its maps and key streams are
+the registered scheme's code (`schemes.p2`'s field and `sha512_keys_indexed`) under this specification's names and
+refusals, and its setup framing, tree and derivations are its own. `wire.py` is
 `p2-audit-wire/v4` and its reference verifier, and `memory_challenger.py` audits with v4's leaves and mode-0 derivation
 over the harness's own responder wire, not these frames. The registered scheme `p2-16448/v4`
 (`verity.core.protocols.pous.schemes.p2`) follows the maps, the values, the profile, the tweak rejection, k and
@@ -708,7 +710,7 @@ grounds (its §4).
   1 ms. The certificate's own edge, an RTT of 354,028 ns, is 28 ns past the cap, under the µs the cap is stated in.
 - The margin at the cap is 1,708,058.35 ÷ 854,000 = **2.0001×**; one µs more would leave 1.998×.
 - The implementation: `verity.core.protocols.pous.schemes.p2.ROOT_CALL_NS = 854_029` and
-  `RTT_ALLOWANCE_CAP_NS = 354_000`, and `benchmarks/pous/p2_v1/reference.py`'s `MAX_RTT_ALLOWANCE_NS = 354_000`.
+  `RTT_ALLOWANCE_CAP_NS = 354_000`, which `benchmarks/pous/p2_v1/reference.py`'s `MAX_RTT_ALLOWANCE_NS` is.
 
 **What the cap rests on.**
 - **The floor is a model, not a measurement.** No kernel reaches it: the best measured kernel is 3.38× slower
