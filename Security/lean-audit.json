@@ -19053,7 +19053,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
@@ -19149,7 +19148,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
@@ -19473,7 +19471,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
@@ -22219,7 +22216,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsSlots",
@@ -22299,7 +22295,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
@@ -22441,7 +22436,7 @@
    "definitions": {
     "Nci.Assumptions.ReferenceLayered": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
    },
-   "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
+   "guarantees": ["Nci.SecurityProofs.ReferenceThreaded"]
   },
   "Definitions.Nci.Assumptions.Ldl": {
    "digest": "b8f07c106255f52731a8f34ff1eb09359980259b8dc298a85845e35e882db025",
@@ -22501,7 +22496,6 @@
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.LayeredTraining",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -22753,7 +22747,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
@@ -23003,17 +22996,15 @@
    ]
   },
   "Definitions.Nci.Guarantees.Layered": {
-   "digest": "d4e6bece94d61575652dac307887a13e8f0e37bd7193e35fc138e91295126bf7",
+   "digest": "679ecef73eee70cbec30117c332570aeffe6d26d0b47a9525d296bdf1cf07569",
    "definitions": {
     "Nci.Guarantees.LayeredTraining": "a1736df61eaf2f9a3652ebb8def1a1f96492eb35f2023f1beac10773c43aad41",
     "Nci.Guarantees.ReferenceThreaded": "9384d85cfae9a2f425d2e9620bd2455c8d5d9c30601124d4fe283c74c0124124",
-    "Nci.Guarantees.ReferenceTraining": "69c0bdfeee3d028816ef95dc3f4f7611d9827e846fffae168131a12575082483",
     "Nci.Guarantees.ThreadedOfLayered": "d8b16a2a29b38b05cc9448e33f0b5231a66261706be4dbc1e0011d915566f05e"
    },
    "guarantees": [
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
    ]
   },
@@ -23153,7 +23144,6 @@
    "guarantees": [
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
    ]
   },
@@ -23343,7 +23333,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
