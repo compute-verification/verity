@@ -112,7 +112,10 @@ def test_each_composite_refuses_the_k_its_word_definition_refuses(defn, k, rest)
         with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K={K} is not a multiple of the "
                                                        f"{k}-wide step")):
             bind(defn, K=K, **rest)
-    if defn in (BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate, BG.ScaledMmS8CoordinateRows, BG.ScaledMmS8ResidualCoordinateRows):
+    if defn in (BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate, BG.ScaledMmS8CoordinateRows):
+        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K=131072 is at or past 131072")):
+            bind(defn, K=1 << 17, **rest)
+    if defn is BG.ScaledMmS8ResidualCoordinateRows:
         with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K=131072 is at or past 131072")):
             bind(defn, K=1 << 17, **rest)
 
