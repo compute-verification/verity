@@ -54,17 +54,19 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **Status.** On an ask or alert, the owner `pickup`s (👀), `reply`s only when the asker must act or decide, and
   `close`s (✅ with `--link` to a PR, file or `art:` id, or ❌ with `--declined WHY`), which posts the status line. On an
   announcement each addressed handle posts one status line (`close`), no reaction, ringing no one but a decline, which
-  rings the announcer; `roster --thread T` reads them and exits 0 when all are done. Alerts in `#agent-alerts` take the
-  same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
-- **An ask to one handle is also an issue** in its Linear team, holding the whole brief, done-condition and pointers
-  (AGENTS.md "Where writing goes"): `ask` (`--file BRIEF.md` for a brief) prints `linear: <ID> <url>`, and the Slack root
-  and doorbell carry its first line and link, so put the ask itself in that first line. The conversation stays in the
-  thread. `close` moves the issue to done (`--declined`: canceled); if Linear fails, the whole ask goes out on Slack.
-  Done is the owner's move (merging a PR doesn't close it). `research msg linear comment ISSUE 'TEXT' --as ME` rings the
-  team's handle and the names it starts with; other comments ring no one.
-- **Answered is the ask's record**: its issue out of Backlog or commented on by someone other than the asker, a Daniel
-  card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists the
-  unanswered; take a linked ask on its issue.
+  rings the announcer; `roster --thread T` reads them and exits 0 when all are done.
+- **An ask to one handle is also an issue** in its Linear team (AGENTS.md "Where writing goes"): `ask` prints
+  `linear: <ID> <url>`, and the Slack root and doorbell carry its first line and link, so put the ask itself there.
+  The conversation stays in the thread. `close` moves the issue to done (`--declined`: canceled). If Linear fails, the
+  whole ask goes out on Slack.
+- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
+  Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
+  the unanswered; take a linked ask on its issue.
+- **Work items are Linear-first.** The brief, done-condition and pointers go in the issue, filed into the owner's team;
+  `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner. Taking an issue out of the backlog
+  is the sign it was seen; Done is the owner's move (merging a PR doesn't close it). Comment with `research msg linear
+  comment ISSUE 'TEXT' --as ME`, which rings the team's handle and the names it starts with; other comments ring no one.
+- **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 - **Retract** a post sent by mistake with `research msg retract --as NAME --ts TS` (needs `SLACK_BOT_TOKEN`; the doorbells
   it rang keep their copy).
 - **Announcing.** `--verify CMD` marks a required action and names the command that shows it took; an announcement that
