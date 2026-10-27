@@ -309,7 +309,7 @@ def _jacobi(a: int, n: int) -> int:
 
 # ---- the codec's encode from exact products and unbudgeted primitives ---------------------------------------------------
 
-#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which run r20261015-084000-06d8 also reproduced bit for bit
+#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which the validating run also reproduced bit for bit
 #: (`verity.ml.circuits.silicon.integer`'s docstring); its column sums here are at most 128 * 255^2 < 2^23, so every
 #: chain is in range from C = 0 and passes a static operand-range and reduction-length check.
 IMMA_U8 = IntegerMma(name="blackwell_sm120_u8u8_m16n8k32", arch="sm_120", dtype="u8", b_dtype="u8", operand_bits=8,

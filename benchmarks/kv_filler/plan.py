@@ -1,4 +1,4 @@
-"""The filler a pass reads: a `filler_plan` for ra-vllm-hooks' `verity_vllm.protocols.remote_bandwidth.Store` (`Store(filler_plan=...)`).
+"""The filler a pass reads: a `filler_plan` for `verity_vllm.protocols.remote_bandwidth.Store` (`Store(filler_plan=...)`).
 
 Each pass reads up to `budget(j)` bytes of idle registered blocks after the weights and the live KV: the KV regions'
 `store.idle_blocks(region)` (free pages, and allocated pages' blocks no write has reached) and every filler region
