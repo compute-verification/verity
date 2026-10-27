@@ -1,5 +1,5 @@
 """W for the frozen step's windows (`serve_frozen`): how many of a block's units can be wrong in an accepted audit, per block and
-pooled over a week, a month and a year, each at δ = 1% and 1e-6 (Daniel's ruling: both, the pooled form beside each block's).
+pooled over a week, a month and a year, each at δ = 1% and 1e-6, the pooled form beside each block's.
 
     python -m verity_torch_loop.frozen_w --serve SERVE.json --law subset:K [--block-min 20] [--delta 0.01 --delta 1e-6]
 

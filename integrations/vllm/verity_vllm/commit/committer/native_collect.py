@@ -48,8 +48,7 @@ Stress / negative-test knobs (never in headline runs; recorded when used):
 
 from __future__ import annotations
 
-import os
-import sys
+import hashlib
 import threading
 import time
 from typing import Any
@@ -62,6 +61,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
                                                          _HostRanges, _HostWindows, outside, retain_exclude_families)
+from verity_vllm.commit.committer.native_ext import ext
 from verity_vllm.commit.committer.native_hidden import NativeHiddenM1Source, NativeHiddenM1SourceFA3
 from verity_vllm.commit.committer.native_host import (
     GPU_CHUNK_BYTES,
@@ -76,11 +76,8 @@ from verity_vllm.commit.committer.topp_splits import (SPLITS_IDENTITY, TOPP_SPLI
                                                       uninstall_split_kernel_proxies)
 from verity_vllm.commit.native_ranges import level_sizes
 
-_EXT = None
-HERE = os.path.dirname(os.path.abspath(__file__))
 
-
-def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
+def plan_key_of(sched: Any, ntok: int, nreq: int, targets: bytes = b"") -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.
 
     [F-fp8-PLANKEY] The key used to be (ntok << 16) | nreq.  That is not the layout: the FA3 hidden M1 export
@@ -96,6 +93,13 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
     tensor is not bound -- v1 leaf headers bind the step length M only, and the plan is a sequence of (name, bytes) in hook order.
     Between the warm-up (learn) run and the record run of the same declared, batch-invariant, greedy workload the schedule is identical,
     so every record step hits the plan its warm-up twin learned; the plan cache holds one entry per distinct step (<= steps x pairs).
+
+    Some planes follow the engine step, not the geometry: the int8 source's Int8RowQuant_v1 sites and the call-boundary bodies are
+    the manifest's, per engine step, and a served window restarts its steps at 0.  A bench manifest of 32 engine steps stages the
+    quantizers' (x_q, s_a) at window steps 0..31 and none after, so a lone request after its batch-mates finish meets the same
+    geometry at window step 25 in one window and 64 in the next, and stages different bytes.  `targets`, the digest of the names
+    those sources commit at the step (`NativeCollectCommitter.step_targets`), is hashed in with the geometry; with none (b"") the key
+    is the geometry's alone.
     Returns (key, mode): mode "geometry" when the scheduler output exposes the per-request fields (vLLM V1 `SchedulerOutput`:
     scheduled_new_reqs[].num_computed_tokens, scheduled_cached_reqs.{req_ids,num_computed_tokens}, num_scheduled_tokens{}), else
     "counts" = the old key -- recorded on the run (`bounded_staging.plan_key_mode`) so a record never hides which one it used."""
@@ -111,40 +115,11 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
         if len(geo) != nreq or sum(g[1] for g in geo) != ntok:
             raise ValueError(f"scheduler output geometry {len(geo)} reqs / {sum(g[1] for g in geo)} tok != ({nreq}, {ntok})")
         geo.sort()
-        import hashlib
-        h = hashlib.blake2b(repr((int(ntok), int(nreq), geo)).encode(), digest_size=8).digest()
+        what = (int(ntok), int(nreq), geo, bytes(targets)) if targets else (int(ntok), int(nreq), geo)
+        h = hashlib.blake2b(repr(what).encode(), digest_size=8).digest()
         return int.from_bytes(h, "little") & 0x7FFF_FFFF_FFFF_FFFF, "geometry"
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return (int(ntok) << 16) | (int(nreq) & 0xFFFF), "counts"
-
-
-def build_source_digest() -> str:
-    """The source-set digest of THIS tree's collector (native_jit.source_set_digest with the toolchain versions) -- the key of its JIT dir."""
-    from verity_vllm.commit.committer import native_jit
-
-    return native_jit.source_set_digest(torch_version=str(torch.__version__), cuda_version=str(torch.version.cuda))
-
-
-def ext(build_dir: str | None = None, verbose: bool = False):
-    """JIT-build the C++ collector (pybind11 + cudart + .cu kernels) once per process.  `NATIVE_COLLECT_BUILD` (or `build_dir`) names the
-    PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- torch's
-    mtime test is never the arbiter of staleness (record_v5/ship.sh preserves source mtimes; a pod-wide dir warmed by another tree's build
-    was adopted by the r17-int-3 ship on cp-big).  Without a parent, torch's default cache dir is used, keyed the same way.  Concurrent jobs
-    on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
-    global _EXT
-    if _EXT is None:
-        from verity_vllm.commit.committer import native_jit
-
-        _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
-                                               parent=build_dir or settings.NATIVE_COLLECT_BUILD or None,
-                                               cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS, verbose=verbose)
-        missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, "native_collect.cpp"))
-        if missing:
-            _EXT = None
-            raise RuntimeError(f"native collector .so in {bd} does not expose {missing} bound by {HERE}/native_collect.cpp -- a stale build "
-                               f"(source digest {digest[:12]}); remove the directory and rebuild")
-        print(f"[jit] native collector source digest {digest[:12]} -> {bd}", file=sys.stderr, flush=True)
-    return _EXT
 
 
 # the first two zero-window overwriters and their flush leaves (GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES): `flush_points`
@@ -306,7 +281,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self._nc.enable_gather(65536)
             # thread blocks per staged descriptor in the gather kernel (R10 default 4; 32 = R10's labelled-extra Llama geometry, the R11 default).
             # Size-adaptive, it is only a cap, 1024: a 256 MB prefill window holds a handful of descriptors, and at 32 blocks each the copy
-            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step, r20261017-205629-7b49 vs r20261017-205439-5d0c)
+            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step)
             blocks = settings.NATIVE_GATHER_BLOCKS
             self._nc.blocks_per_desc = blocks if blocks is not None else 1024 if self.auto_blocks else 32 if self.native_hooks else 4
             # R11 candidate B: size-adaptive blocks per window (cap = blocks_per_desc; ceil(max staged bytes / auto_bytes_per_block) otherwise)
@@ -396,7 +371,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             # sized by every request's KV length, so two decode steps with the same (ntok, nreq) differ in bytes (B8 mixed 1024/128 steps
             # 35 and 80: 78,892,288 vs 87,297,280 -- the bounded record run failed closed by name, 01:28Z).  The key binds the per-request
             # geometry (num_computed_tokens, num_scheduled_tokens) as a multiset; on the unbounded windowed path a miss still self-heals.
-            me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq))
+            # It binds too the names the step-keyed sources commit at the step about to begin (`step_targets`), which follow the window step.
+            me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq), me.step_targets(me._step_index))
             me._plan_shape = (int(ntok), int(nreq))
             if me.bounded and me._plan_key_mode != "geometry":
                 # fail closed at the FIRST step, not mid-run: without the per-request geometry a hit-plan step can meet another layout
@@ -738,6 +714,18 @@ class NativeCollectCommitter(NativeHostCommitter):
             rows.append((str(rid), lo, lo + k))
             lo += k
         self.step_rows[step] = rows
+
+    def step_targets(self, step: int) -> bytes:
+        """The digest of the sorted (name, count)s the sources that commit by engine step (`targets_at`) commit at `step`, b"" for none:
+        part of its plan key.  Kept per step while the sources are the same: H1's int8 source names every linear at every step."""
+        srcs = tuple(src for src in self.sources if hasattr(src, "targets_at"))
+        if getattr(self, "_targets_of", None) != srcs:
+            self._targets_of, self._targets_memo = srcs, {}
+        sig = self._targets_memo.get(int(step))
+        if sig is None:
+            names = sorted(kv for src in srcs for kv in src.targets_at(step).items())
+            sig = self._targets_memo[int(step)] = hashlib.blake2b(repr(names).encode(), digest_size=16).digest() if names else b""
+        return sig
 
     def _begin_step(self) -> None:
         job = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
@@ -1694,7 +1682,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._win_hfirst_steps = 0
         self._win_leaf_folds = 0
         self._win_relayouts = 0
-        self._oar_deferred = []         # picks the in-run stages could not open from host (excluded families) -> openings_after_release
+        self._oar_deferred = []         # picks the in-run phases could not open from host (excluded families) -> openings_after_release
         for src in self.sources:
             fn = getattr(src, "begin_run", None)
             if fn is not None:

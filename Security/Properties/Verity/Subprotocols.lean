@@ -1,7 +1,7 @@
 import Properties.Verity.Game
 
 /-!
-# Each subprotocol's bound at its compiled component (ONE-18)
+# Each subprotocol's bound at its compiled component
 
 `Vocab.ComponentBound a` is what subprotocol `a`'s owner proves of its compiled component in the causal game: the
 probability that `a`'s component accepts its own case in what the prover sent while `a`'s claim fails is at most `a`'s

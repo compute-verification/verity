@@ -1,4 +1,4 @@
-"""VLLM-18 on one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
+"""On one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
 to end on the CPU: the linears against `benchmarks/ppl/steps.py`, the attention against compute accounting's LUT softmax
 (`benchmarks/pouw/edited_gemm/fattn_ref.py`, `apv_ref.py`).
 

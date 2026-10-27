@@ -9,7 +9,7 @@ import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 
 /-!
-# PoUW's, PoUS's, the bandwidth audit's and the network certifier's targets from their period guarantees (ONE-18)
+# PoUW's, PoUS's, the bandwidth audit's and the network certifier's targets from their period guarantees
 
 `Verity.soundness_of_subprotocols` takes each subprotocol's target in the causal game (`Vocab.PouwSound`, `PousSound`,
 `BandwidthAuditSound`, `NetworkCertifierSound`). Each follows from its component-level bound (`Vocab.ComponentBound`,
@@ -20,14 +20,14 @@ holds, the deployment's honest prover meets `ComponentBound`'s event and the tar
 `pouwSound_of_nontrivial` and its siblings (the target fails for a verifier that accepts everything, at a strategy on
 whose every play the claim fails and whose error is below one, so its finder meets `FinderCR`).
 
-`ComponentBound a` comes from a per-period guarantee of the coins model (`Accounting.PeriodRun.Sound`, LEAN-52's
+`ComponentBound a` comes from a per-period guarantee of the coins model (`Accounting.PeriodRun.Sound`, the
 bridges `Accounting.SecurityProofs.Bridge.*`) through a coupling (`Vocab.Coupling`) at each `θ F c σ`:
 
 * **The coins.** A period run whose coins are in bijection with the device's rounds' coins
   (`Subprotocol.CoinsOf (V.rounds θ)`): every event of the game has the probability over the run's coins of the outcome
   they lead to (`Vocab.prob_eq_pr`, from `Subprotocol.prob_play`), so a bound over the coins is one in the game.
 * **The world.** The run's claim for `a` at the coupling's price implies the game's at that outcome (`world`, the world
-  each play realizes: ONE-10, ONE-11, ONE-12, ONE-16).
+  each play realizes).
 * **The verdict at the code** (`Coupling.verdict`): `a`'s component accepts, every release its check read is in the
   device's log, and the coupling's break (`brk`) is absent. The rest of the event, a release missing from the log or a
   break, is the finder's: where it meets `FinderCR`, its probability is at most `a`'s collision term
@@ -36,16 +36,15 @@ bridges `Accounting.SecurityProofs.Bridge.*`) through a coupling (`Vocab.Couplin
 `Coupling.bound` gives `ComponentBound`'s event at most `a`'s error from the run at the verdict at the code
 (`Coupling.atCode`) meeting a guarantee within `a`'s published `δ`, and `componentBound_of_coupling` collects it over
 `θ F c σ`. The guarantee at `atCode` comes from the bridge and one refinement hypothesis, what the verdict at the code
-means for the bridge's verdict (`Subprotocol.pouw_atCode`, `pous_atCode`, `poub_atCode`, `network_atCode`). The
-refinements are the owners' pieces of note:proofs/20261026T0332Z-report-onethm; until they are proved they are
-hypotheses, each a named `Prop` in the shape its owner is to prove:
+means for the bridge's verdict (`Subprotocol.pouw_atCode`, `pous_atCode`, `poub_atCode`, `network_atCode`). Until the
+refinements are proved of the code they are hypotheses, each a named `Prop`:
 
-| subprotocol | bridge | refinement (owner) |
+| subprotocol | bridge | refinement |
 | --- | --- | --- |
-| PoUW | `WorkOfCreditedWords` | `PouwRefines` (ONE-16, compute-accounting) |
-| PoUS | `SpaceOfPeriodHeld` | `PousAccepts` (ONE-10, memory-accounting); `PousNoBreak` by construction (`Coupling.pousNoBreak`) |
-| bandwidth audit | `BandwidthOfAuditPerRunPeriod` | `PoubRefines` (ONE-11, memory-accounting) |
-| network certifier | `CommOfPeriodLeakAccepted` | `NetworkWindowLe` (ONE-12, network-accounting) |
+| PoUW | `WorkOfCreditedWords` | `PouwRefines` |
+| PoUS | `SpaceOfPeriodHeld` | `PousAccepts`; `PousNoBreak` by construction (`Coupling.pousNoBreak`) |
+| bandwidth audit | `BandwidthOfAuditPerRunPeriod` | `PoubRefines` |
+| network certifier | `CommOfPeriodLeakAccepted` | `NetworkWindowLe` |
 
 Two shapes of bridge:
 
@@ -174,7 +173,7 @@ theorem sound_atCode_of_imp {r : PeriodRun d α C Ω} {A : Audit → ((i : I) �
 
 /-! ## Work -/
 
-/-- **ONE-16's refinement (CMP-145): PoUW's compiled component accepts only where the source game does.** At every
+/-- **PoUW's refinement: its compiled component accepts only where the source game does.** At every
 value `ξ` of the period's coins where PoUW's verdict `A .pouw` holds (at the code, `Vocab.Coupling.verdict`: `PouwCheck.protocol`
 accepts its case in what the prover sent, every release it read is logged, and the coupling's break is absent), the source game the
 realization names (`acc`; for H1's checked credit, the play's acceptance) accepts at PoUW's coins there. -/
@@ -200,7 +199,7 @@ theorem pouw_atCode {r : PeriodRun d α C Ω} {c : Certificates} {p : Price} {m 
 
 /-! ## Bandwidth -/
 
-/-- **ONE-11's refinement (MEM-93): the bandwidth component accepts only where the bandwidth audit's game does.** At
+/-- **The bandwidth audit's refinement: its component accepts only where the bandwidth audit's game does.** At
 every value `ξ` of the period's coins where the bandwidth verdict `A .poub` holds (at the code, `Vocab.Coupling.verdict`:
 onsite's bandwidth component, `RemoteAudit.Protocol.protocol`, accepts its case, its releases are logged, and the
 coupling's break is absent), the game the realization names accepts its device at PoUB's coins there (the store, the oracle at the fresh
@@ -237,7 +236,7 @@ def PousAtCode {r : PeriodRun d α C Ω} {ΩW ΩQ ΩS : Type} {run : Run d α Ω
     (R : RealizesSpaceOfPeriodHeld r run verdict) (A : Audit → ((i : I) → Ω i) → Prop) (V : ΩW × ΩQ × ΩS → Prop) : Prop :=
   ∀ ξ, A .pous ξ → V ((R.other ξ).1, (R.other ξ).2, R.coins (ξ (r.own .pous)))
 
-/-- **ONE-10's refinement (MEM-93): PoUS's compiled component accepts only what the verifier's whole decision
+/-- **PoUS's refinement: its compiled component accepts only what the verifier's whole decision
 accepts.** Where PoUS's verdict `A .pous` holds at `ξ` (at the code, `Vocab.Coupling.verdict`:
 `PousCheck.RunProtocol.protocol` accepts its case in what the prover sent, every release it read is logged, and the
 coupling's break is absent), the audit `P` the
@@ -297,7 +296,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
   {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ}
   {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ} {Dj n : ℕ}
 
-/-- **ONE-12's refinement (NET-82): the network certifier's per-window bound at its compiled component.** At every
+/-- **The network certifier's refinement: the network certifier's per-window bound at its compiled component.** At every
 window `i` and every value `ξ` of the other coins, the probability over the network audit's own coins that
 its verdict `A .network` holds (at the code, `Vocab.Coupling.verdict`: `NetworkCheck.Period.protocol` accepts its case
 in what the prover sent, its releases are logged, and the coupling's break is absent) while window `i` fails its good event
@@ -380,16 +379,16 @@ theorem sound_of (a : Audit) (h : V.ComponentBound a) : V.Target a := fun θ F c
     (q := fun o => ComponentAccepts a o.sent ∧ ¬ V.Holds θ F c σ a o)
     (fun _ ⟨⟨_, _, hc⟩, hh⟩ => ⟨hc, hh⟩) _ σ) (h θ F c σ)
 
-/-- **PoUW's target from its component-level bound** (ONE-16's). -/
+/-- **PoUW's target from its component-level bound** -/
 theorem pouwSound_of (h : V.ComponentBound .pouw) : V.PouwSound := V.sound_of .pouw h
 
-/-- **PoUS's target from its component-level bound** (ONE-10's). -/
+/-- **PoUS's target from its component-level bound** -/
 theorem pousSound_of (h : V.ComponentBound .pous) : V.PousSound := V.sound_of .pous h
 
-/-- **The bandwidth audit's target from its component-level bound** (ONE-11's). -/
+/-- **The bandwidth audit's target from its component-level bound** -/
 theorem poubSound_of (h : V.ComponentBound .poub) : V.BandwidthAuditSound := V.sound_of .poub h
 
-/-- **The network certifier's target from its component-level bound** (ONE-12's). -/
+/-- **The network certifier's target from its component-level bound** -/
 theorem networkSound_of (h : V.ComponentBound .network) : V.NetworkCertifierSound := V.sound_of .network h
 
 /-- **At the honest deployment**: at registered files, where subprotocol `a`'s honest lemma holds, the deployment's

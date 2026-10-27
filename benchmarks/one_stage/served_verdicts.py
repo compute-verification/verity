@@ -1,5 +1,5 @@
-"""The Wed 28 run's verdicts on one served window (`served_verdicts.sh`): the window it audits, the subprotocols after
-sampled proofs, and the one record of every verdict (CMP-153's block record).
+"""The verdicts on one served window (`served_verdicts.sh`): the window it audits, the subprotocols after
+sampled proofs, and the one record of every verdict (the block record).
 
     served_verdicts.py window SERVE_DIR [--slots N] [--window K]
     served_verdicts.py gate [--gate CMD] [--lane vllm] [--main FILE]
@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (ROOT / "benchmarks" / "all_protocols", ROOT / "benchmarks" / "e2e_demo"):
+for _p in (ROOT / "benchmarks" / "all_protocols", ROOT / "examples" / "h200" / "interfaces"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

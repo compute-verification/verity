@@ -87,7 +87,7 @@ from dataclasses import dataclass
 from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import compiler_form as CF
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
 from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import program_loaders as PL
@@ -350,7 +350,7 @@ class Options:
     oracle: str = option("--oracle", help="Match dir: program.json + instances.jsonl + capture/log.jsonl.gz")
     global_program: str | None = option("--global-program", default=None, help="cb-a/global-program/v1 JSON; omit to assemble the mock from --workload + --component")
     gprog: str | None = option("--gprog", default=None, help="lane gprog's workload_program.json (GP-01) -> converted with from_gprog")
-    workload: str | None = option("--workload", default=None, help="workload manifest (for the mock global Program)")
+    workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (for the mock global Program)")
     component: list[str] = option("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
     log: str | None = option("--log", default=None)
     tokens: str | None = option("--tokens", default=None)
