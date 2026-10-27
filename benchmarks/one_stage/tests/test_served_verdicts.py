@@ -3,16 +3,20 @@ the window it audits holds the most requests and none carried across windows; a 
 with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
 composes to reject with no block record. PoUW's development piece checks the window's gate session and credits nothing,
-and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
+and the gate is refused while the lane has a period open. The period the served windows join opens, through infra's own
+gate, on the Program serve-openai declared and the circuit files built for it, as core's credit reads them, and is
+refused on files of anything else. `served_verdicts.sh`'s window circuits gate on every class of
 CLASSES, and the class of record's count after them gates nothing."""
 from __future__ import annotations
 
 import io
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tarfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import jsonschema
@@ -269,3 +273,99 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")
+
+
+DIGEST = "5e" * 64
+
+
+def _auditor():
+    """Infra's gate, ``benchmarks/live_challenger/auditor.py``, as a module of its own."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "benchmarks" / "live_challenger" / "auditor.py")
+    module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
+    spec.loader.exec_module(module)
+    return module
+
+
+def _declared(tmp_path: Path, files: dict | None = None, live=(32, 2)) -> tuple[Path, Path, dict]:
+    """A serve dir whose serve-openai declared a window Program of digest `DIGEST` at T 32, S 2 (serve.json and
+    ``h1/window-program.meta.json``, its layout `served.declared_layout`'s over two linears at K 32 and 64), and a
+    circuit-files directory for it whose manifest holds `files` (default the live file and k32's, not k64's)."""
+    from verity_vllm.protocols.pouw.h1 import served as SV
+    d, c = tmp_path / "serve", tmp_path / "circuits"
+    (d / "h1").mkdir(parents=True)
+    c.mkdir()
+    layout = SV.declared_layout([(64, 32), (32, 64)], {0: "up", 1: "down"}, 32, 2)
+    (d / "serve.json").write_text(json.dumps({"protocols": {"program": DIGEST, "rows": 32, "steps": 2,
+                                                            "weights_root": "77" * 64}}))
+    (d / S.H1_META).write_text(json.dumps({"program_digest": DIGEST, "rows": 32, "steps": 2, "layout": layout}))
+    files = {"live": "11" * 64, "k32": "22" * 64} if files is None else files
+    (c / S.CIRCUITS_MANIFEST).write_text(json.dumps({"program": DIGEST, "live_bind": {"T": live[0], "S": live[1]},
+                                                     "files": files}))
+    return d, c, layout
+
+
+def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credit_reads_them(tmp_path, monkeypatch):
+    """``period open``, through infra's own gate (`auditor.gate` and `auditor.period`, as lane vllm's key): its open
+    commits the Program digest serve-openai wrote, its T, the draw K, the fixed length and the circuit files, each read
+    back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
+    It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
+    from verity.core.protocols.pouw import credit as CR
+    from verity.ml.crypto import lms
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+    A = _auditor()
+    (tmp_path / "var" / "sessions").mkdir(parents=True)
+    (tmp_path / "peers").write_text("vy-dc-h200 research@10.0.0.2\n")
+    (tmp_path / "pins.jsonl").write_text(A.pin_line("c" * 40, "d" * 40, "2026-10-27T09:00:00Z") + "\n")
+    host = A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
+    signer = A.key_signer(host, lms.Params(64, 4, 5), workers=1)
+    now = datetime(2026, 10, 27, 19, 0, tzinfo=timezone.utc)
+    hooks = dict(now=now, token="ab12", own=lambda d: None, start=lambda s: None, active=lambda s: False,
+                 secret=bytes(32), ready=lambda s: None,
+                 period=lambda args: A.period(host, args, signer=signer, pinned="c" * 40, now=now, active=lambda s: False))
+    sent = []
+
+    def gate_out(gate: str, *words: str) -> bytes:
+        sent.append(words)
+        rc, out = A.gate(["--ssh", shlex.join(words), "--key", "vllm"], host, **hooks)
+        if rc:
+            raise RuntimeError(f"the gate refused {words[0]} (exit {rc}): {out.decode()}")
+        return out
+
+    monkeypatch.setattr(S, "_gate_out", gate_out)
+    d, c, layout = _declared(tmp_path)
+    doc = S.period_open(d, GATE, "served-r1", c, slots=4, max_tokens=8)
+    assert doc["missing"] == [64] and doc["weights"] == [] and doc["draw_k"] == PHC.draw_k(layout)
+    assert "--weights-root" not in sent[0] and "--model" not in sent[0]
+    ledger = (host.root / "windows.jsonl").read_text().splitlines()
+    assert CR.committed_k(ledger, "served-r1") == (PHC.draw_k(layout), None)
+    assert CR.committed_rows(ledger, "served-r1") == (32, None)
+    assert CR.committed_files(ledger, "served-r1") == ({"live": "11" * 64, "k32": "22" * 64}, None)
+    assert CR.committed_length(ledger, "served-r1") == ([8] * 4, None)
+    assert json.loads(ledger[-1])["body"]["circuit"] == DIGEST
+    assert json.loads((d / S.PERIOD).read_text())["open"]["body"]["period"] == "served-r1"
+    argv, _ = S.period_open_argv(d, "served-r2", c, slots=4, max_tokens=8, draw_k=3, model="LLAMA32_1B_INT8")
+    assert argv[argv.index("--draw-k") + 1] == "3" and argv[argv.index("--model") + 1] == "LLAMA32_1B_INT8"
+    S.period_close(d, GATE)
+    kinds = [json.loads(x)["kind"] for x in (host.root / "windows.jsonl").read_text().splitlines()]
+    assert kinds[-1] == "period-close" and json.loads((d / S.PERIOD).read_text())["close"]["body"]["windows"] == []
+
+
+@pytest.mark.parametrize("case", ["other program", "other live T,S", "no live", "no meta", "no manifest"])
+def test_a_period_open_is_refused_on_files_that_are_not_the_served_programs(tmp_path, case):
+    """Circuit files of another Program, a live file for another T or S, none for the live template, a serve dir with no
+    declared Program, or no circuit files: refused before anything is sent, naming the build to run."""
+    d, c, _ = _declared(tmp_path, files={"k32": "22" * 64} if case == "no live" else None,
+                        live=(64, 2) if case == "other live T,S" else (32, 2))
+    if case == "other program":
+        m = json.loads((c / S.CIRCUITS_MANIFEST).read_text())
+        (c / S.CIRCUITS_MANIFEST).write_text(json.dumps({**m, "program": "6f" * 64}))
+    if case == "no meta":
+        (d / S.H1_META).unlink()
+    if case == "no manifest":
+        (c / S.CIRCUITS_MANIFEST).unlink()
+    why = {"other program": "not the served", "other live T,S": "not the window's 32, 2", "no live": "not the window's",
+           "no meta": "has no declared window Program", "no manifest": "no circuit files at"}[case]
+    with pytest.raises(ValueError, match=why):
+        S.period_open_argv(d, "p", c, slots=4, max_tokens=8)

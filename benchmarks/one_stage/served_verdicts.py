@@ -3,6 +3,9 @@ sampled proofs, and the one record of every verdict (the block record).
 
     served_verdicts.py window SERVE_DIR [--slots N] [--window K]
     served_verdicts.py gate [--gate CMD] [--lane vllm] [--main FILE]
+    served_verdicts.py period open SERVE_DIR --name P --circuits DIR --slots N --max-tokens N [--gate CMD] [--draw-k K]
+                                 [--model M]
+    served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
@@ -23,6 +26,18 @@ development run's, and it credits nothing.
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
 with ``--main``, whether that pin is on the verifier's first-parent line of main (a session pinned off it is refused).
+
+``period open``: the period the served windows join, opened once serve-openai listens and before its first window
+reserves (a window opens at its first engine step): its circuit is the Program digest serve-openai declared and wrote
+(serve.json's ``protocols.program``, ``h1/window-program.meta.json``), its rows and rounds the server's T and S, and its
+circuit files those of ``--circuits`` (``pouw_h1_circuits --program SERVE_DIR/h1 --out DIR --live T,S``'s manifest),
+held to that digest, T and S (`period_open_argv`). The live template's file is required. A stratum whose ``k<K>`` file
+isn't built yet is left out and named: core's credit refuses a drawn statement at that K (``circuit``), nothing else.
+Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its draw K ``--draw-k``, else
+`pouw_h1_challenger.draw_k` over the declared layout; its weights the auditor's registration of ``--model`` under the
+digest, else none (the gate refuses a root its registry lacks, and serve-openai's own is a local key's, so core's credit
+then refuses the window at its weights). The open's answer goes
+to ``SERVE_DIR/period.json``. ``period close`` closes that period and adds its answer there.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
 (``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
@@ -90,6 +105,12 @@ DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under
            "the window in a period whose open commits its draw K, rows and weights")
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
 H1_CALLS = "h1/w{k}/pouw-h1-calls.json"
+#: serve-openai's declared window Program's meta under the serve dir (`serve_h1.PROGRAM_META`)
+H1_META = "h1/window-program.meta.json"
+#: `pouw_h1_circuits`' manifest in its ``--out``
+CIRCUITS_MANIFEST = "circuit-files.json"
+#: the period this serve dir's windows joined, its open's and close's answers (``period``)
+PERIOD = "period.json"
 
 
 def _lines(path: Path) -> list[dict[str, Any]]:
@@ -210,6 +231,77 @@ def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, st
             f"{len(ledger)} entries; pinned {str(pin.get('commit'))[:12]} (main {str(pin.get('main'))[:12]}, "
             f"{pin.get('pinned_utc')}){where}")
     return period is None, line
+
+
+def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, max_tokens: int,
+                     draw_k: int | None = None, model: str | None = None) -> tuple[list[str], dict[str, Any]]:
+    """The gate's ``period-open`` of period `name` for serve-openai's run `serve_dir` (``period open``, module docstring)
+    and what it commits: ``{circuit, rows, steps, draw_k, circuit_files, missing, length, weights}``, ``missing`` the
+    strata with no ``k<K>`` file yet. ValueError naming what to build or rerun when the serve dir or `circuits` doesn't
+    hold the period's Program, T and S."""
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+    proto = json.loads((serve_dir / "serve.json").read_text()).get("protocols") or {}
+    try:
+        meta = json.loads((serve_dir / H1_META).read_text())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{serve_dir} has no declared window Program ({H1_META}, {type(e).__name__}): serve it with "
+                         "--protocols pouw:eps1-sm120-h1fx1 from a tree whose serve_h1 writes it") from None
+    circuit, rows, steps = meta["program_digest"], int(meta["rows"]), int(meta["steps"])
+    if proto.get("program") != circuit:
+        raise ValueError(f"serve.json's Program {str(proto.get('program'))[:16]}... is not {H1_META}'s {circuit[:16]}...")
+    redo = (f"build them with python -m tests.protocols.pouw_h1_circuits --program {serve_dir / 'h1'} --out {circuits} "
+            f"--live {rows},{steps}")
+    try:
+        doc = json.loads((circuits / CIRCUITS_MANIFEST).read_text())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"no circuit files at {circuits} ({type(e).__name__}): {redo}") from None
+    if doc.get("program") != circuit:
+        raise ValueError(f"{circuits}'s circuit files are Program {str(doc.get('program'))[:16]}...'s, not the served "
+                         f"{circuit[:16]}...: {redo}")
+    lb, files = doc.get("live_bind") or {}, dict(doc.get("files") or {})
+    if (lb.get("T"), lb.get("S")) != (rows, steps) or "live" not in files:
+        raise ValueError(f"{circuits}'s live circuit file is for T = {lb.get('T')}, S = {lb.get('S')}, not the window's "
+                         f"{rows}, {steps}: {redo}")
+    strata = sorted({int(k) for _n, k, _w in meta["layout"]["linears"]})
+    missing = [k for k in strata if f"k{k}" not in files]
+    k = PHC.draw_k(meta["layout"]) if draw_k is None else int(draw_k)
+    length = {"max_tokens": [int(max_tokens)] * int(slots), "stop": "fixed"}
+    weights = ["--model", model] if model else []
+    compact = {"sort_keys": True, "separators": (",", ":")}
+    argv = ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
+            *weights, "--circuit-files", json.dumps(files, **compact), "--length", json.dumps(length, **compact)]
+    return argv, {"circuit": circuit, "rows": rows, "steps": steps, "draw_k": k, "circuit_files": files,
+                  "missing": missing, "length": length, "weights": weights}
+
+
+def _gate_json(gate: str, argv: Sequence[str]) -> dict[str, Any]:
+    """The gate's JSON answer to `argv`; RuntimeError naming what it said when it refuses."""
+    raw = _gate_out(gate, *argv)
+    try:
+        answer = json.loads(raw)
+    except ValueError:
+        answer = None
+    if not isinstance(answer, dict) or "refused" in answer:
+        raise RuntimeError(f"the gate refused {argv[0]}: {raw.decode(errors='replace').strip()[-600:]}")
+    return answer
+
+
+def period_open(serve_dir: Path, gate: str, name: str, circuits: Path, **kw: Any) -> dict[str, Any]:
+    """``period open`` (module docstring): the open sent, its answer and what it committed, written to
+    ``serve_dir/PERIOD``."""
+    argv, doc = period_open_argv(serve_dir, name, circuits, **kw)
+    doc = {"name": name, **doc, "open": _gate_json(gate, argv)}
+    (serve_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return doc
+
+
+def period_close(serve_dir: Path, gate: str) -> dict[str, Any]:
+    """``period close``: the period `period_open` opened for `serve_dir` closed, its answer added to ``PERIOD``."""
+    doc = json.loads((serve_dir / PERIOD).read_text())
+    doc["close"] = _gate_json(gate, ["period-close", "--name", doc["name"]])
+    (serve_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return doc
 
 
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
@@ -373,6 +465,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
     g.add_argument("--lane", default="vllm")
     g.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
+    pe = sub.add_parser("period")
+    pe.add_argument("verb", choices=("open", "close"))
+    pe.add_argument("serve_dir", type=Path)
+    pe.add_argument("--gate", default=os.environ.get("H1_GATE"))
+    pe.add_argument("--name")
+    pe.add_argument("--circuits", type=Path)
+    pe.add_argument("--slots", type=int)
+    pe.add_argument("--max-tokens", type=int)
+    pe.add_argument("--draw-k", type=int)
+    pe.add_argument("--model")
     o = sub.add_parser("pouw")
     o.add_argument("serve_dir", type=Path)
     o.add_argument("window", type=int)
@@ -409,6 +511,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             ok, line = False, f"GATE refused: {type(e).__name__}: {e}"[:800]
         print(line, flush=True)
         return 0 if ok else 1
+    if a.cmd == "period":
+        try:
+            if not a.gate:
+                raise ValueError("no gate command (--gate, H1_GATE)")
+            if a.verb == "close":
+                doc = period_close(a.serve_dir, a.gate)
+                print(f"PERIOD closed {doc['name']}: {json.dumps(doc['close'], sort_keys=True)[:600]}", flush=True)
+                return 0
+            if not (a.name and a.circuits and a.slots and a.max_tokens):
+                raise ValueError("period open needs --name, --circuits, --slots and --max-tokens")
+            doc = period_open(a.serve_dir, a.gate, a.name, a.circuits, slots=a.slots, max_tokens=a.max_tokens,
+                              draw_k=a.draw_k, model=a.model)
+        except (OSError, RuntimeError, ValueError, KeyError) as e:
+            print(f"PERIOD refused: {type(e).__name__}: {e}"[:1200], flush=True)
+            return 1
+        print(f"PERIOD opened {doc['name']}: circuit {doc['circuit'][:16]}..., T {doc['rows']}, S {doc['steps']}, draw K "
+              f"{doc['draw_k']}, weights {' '.join(doc['weights']) or 'none'}, files {sorted(doc['circuit_files'])}"
+              + (f" (no k<K> file yet for K = {doc['missing']}: a drawn statement there is refused)" if doc["missing"]
+                 else ""), flush=True)
+        return 0
     if a.cmd == "pouw":
         doc = pouw(a.serve_dir, a.window, a.out, gate=a.gate, key=a.key_sha512, main=a.main,
                    check=lambda *x: check_challenger(*x, python=a.python))

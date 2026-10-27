@@ -43,7 +43,13 @@
 # vy-challenger-1, once `served_verdicts.py gate` finds no period of the lane open (a reserve would join it). PoUW's piece
 # (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session, ledger and
 # pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line from MAIN_SHA. That key is a
-# development key, so the run is a development run and credits nothing. The COINS line says which.
+# development key, so the run is a development run and credits nothing. The COINS line says which. With H1_CIRCUITS too
+# (a `pouw_h1_circuits --program D/h1 --out DIR --live H1_T,WINDOW_STEPS` directory; the declared Program is the same
+# for every serve of the model at T and S, so one build serves every run), once the endpoint listens and before the
+# requests, `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on the Program digest
+# serve-openai wrote, its draw K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration
+# (default none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS; every window joins it, and
+# `period close` closes it once they're sealed. The PERIOD lines say what it committed.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
@@ -174,6 +180,14 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
   weights
+  local period=0
+  if [ -n "${H1_GATE:-}" ] && [ -n "${H1_CIRCUITS:-}" ]; then  # before the first window reserves, at its first engine step
+    # shellcheck disable=SC2086
+    say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period open "$D" --gate "$H1_GATE" \
+      --name "${H1_PERIOD:-served-${RESEARCH_RUN_ID:-local}}" --circuits "$H1_CIRCUITS" --slots "$SLOTS" \
+      --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
+    [ -f "$D/period.json" ] && period=1
+  fi
   release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
   "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" --prompt-range "$PROMPTS" \
     --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
@@ -187,6 +201,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   say "SERVE stopped (exit $?): $c window(s) closed, $s sealed"
+  [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
   [ "$rc" = 0 ] && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
 
