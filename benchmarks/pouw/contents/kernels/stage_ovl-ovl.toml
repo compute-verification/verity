@@ -1,4 +1,0 @@
-order = 90
-tool = "Their overlap in prefill, with the committer's small path, and the edited arms (EGEMM's GEMM with windowed receipts)"
-files = "`stage_ovl/ovl.cu`, `eg.cu`, `eg.h`, `eref.py`, `report.py`, `run.sh`"
-includes = "`stage_cost/stage.cu`, `commit_gpu/commit_gpu.cuh`, `edited_gemm/egemm.cu`"
