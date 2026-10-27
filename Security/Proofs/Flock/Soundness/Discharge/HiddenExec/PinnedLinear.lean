@@ -87,10 +87,13 @@ theorem pinned_word {c : Circuit} (h : HmOut.checkPinned c = .ok ()) {o : ℕ} (
           rcases hro : HmOut.outRow c o with ⟨n, r⟩
           rw [hro] at hf
           dsimp only at hf
-          simp only [Bool.or_eq_true, not_or, Bool.not_eq_true, Bool.not_eq_eq_eq_not, Bool.not_false,
-            List.any_eq_false, List.mem_range, Bool.and_eq_true, decide_eq_true_eq, bne_iff_ne, ne_eq] at hf
-          obtain ⟨⟨⟨⟨hn, hsha⟩, hhm⟩, hs⟩, hrow⟩ := hf
-          exact ⟨hn, hsha, hhm, hs, hrow⟩
+          rw [Bool.or_eq_false_iff, Bool.not_eq_eq_eq_not, Bool.not_false] at hf
+          obtain ⟨hA, hrow⟩ := hf
+          simp only [Bool.and_eq_true, decide_eq_true_eq, bne_iff_ne, ne_eq] at hA
+          obtain ⟨⟨⟨hn, hsha⟩, hhm⟩, hs⟩ := hA
+          refine ⟨hn, hsha, hhm, hs, fun t ht => ?_⟩
+          have := List.any_eq_false.1 hrow t (List.mem_range.2 ht)
+          simpa using this
 
 /-- **Every pinned bit of a statement `HmOut.checkPinned` accepts is a linear row**, at an untyped circuit whose nets
 `Net.ofRows` or `Lookup.build` built (`ParseFacts.nets`). -/
