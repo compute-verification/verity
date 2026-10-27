@@ -73,7 +73,7 @@ noncomputable def creditGates (Λ δs : ℝ) (n live : ℕ) : ℝ :=
 variable {ι α : Type} [Fintype α] {d : Device ι} {V : Vocab d α} (R : Reading V)
 
 /-- The size of the period's live gates in the registered file's circuit. -/
-def Reading.liveSize (θ : ByteArray) : ℕ := (V.circuitOf (V.registered θ)).size (R.live θ)
+noncomputable def Reading.liveSize (θ : ByteArray) : ℕ := (V.circuitOf (V.registered θ)).size (R.live θ)
 
 /-- **The verdict at the code** (ONE-18's `Coupling.verdict`): PoUW's component accepts its own case, every release its
 check read is in the device's log, and there is no break. -/
