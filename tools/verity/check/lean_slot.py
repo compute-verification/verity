@@ -140,9 +140,14 @@ def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
             "pools": pool_docs(parse(SLOTS.read_text()), SLOTS.parent, now, proc) if SLOTS.exists() else None}
 
 
+def check_slot() -> str:
+    """The check slot this request runs in (slot.py sets CHECK_SLOT in its command's environment), or ""."""
+    return os.environ.get("CHECK_SLOT") or ""
+
+
 def asker(by: str | None = None) -> dict:
     """slot.py's asker, naming who asked as the module docstring says."""
-    if not by and not (by := os.environ.get("RESEARCH_LANE")) and (name := os.environ.get("CHECK_SLOT")):
+    if not by and not (by := os.environ.get("RESEARCH_LANE")) and (name := check_slot()):
         by = SLOT._read(SLOT.SLOTS.parent / f"check-{name}.who").get("by")
     return SLOT.asker(by)
 
@@ -167,7 +172,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
             got = None if ahead else take(d, name, n)
             if got:
                 break
-            if waiting is None and (waiting := os.environ.get("CHECK_SLOT") or ""):
+            if waiting is None and (waiting := check_slot()):
                 SLOT.mark_waiting(waiting, True)
             why = f"{ahead} Lean audit(s) ahead in line" if ahead else f"all {n} Lean audit slot(s) of pool {name} are taken"
             lines = status(pools, d, now(), only=name, before=ticket.name)
