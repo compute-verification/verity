@@ -3576,18 +3576,21 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
              "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
              "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
-        return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if v is not None},
+        return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if params.get(k, v) is not None},
                 "record": rec}
 
     def verdict(a: dict) -> str:
         return D.replay(ONE_STAGE, _json(_case(a)), server)[0]
+
+    def accepts(a: dict) -> None:
+        assert verdict(a) == "accept", answer(_json(_case(a)))["reason"]
 
     for seed in range(3):
         rng = random.Random(f"one-stage-coins/{seed}")
         d = Drawn(rng, before=True, after=after, reads=reads)
         coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
         draw = drawn_from(d.read)
-        assert verdict(audit_of(d, draw, coins)) == "accept"
+        accepts(audit_of(d, draw, coins))
         other = next(x for x in (drawn_from(rng.randbytes(4 * len(d.read) + 256)) for _ in range(64)) if x["units"] != draw["units"])
         stranger = Drawn(rng, before=True, after=after, reads=reads)
         elsewhere = Drawn(rng, reads=reads)
@@ -3604,7 +3607,7 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
         assert [verdict(a) for a in rejected] == ["reject"] * len(rejected)
         refused = audit_of(d, draw, coins, window_root=None)
         assert answer(_json(_case(refused)))["reason"].startswith("params:") and verdict(refused) == "reject"
-        assert verdict(audit_of(d, draw, None, challenger=None)) == "accept"
+        accepts(audit_of(d, draw, None, challenger=None))
 
 
 def test_the_run_refuses_a_count_that_varies(pieces):

@@ -431,7 +431,7 @@ theorem oneStage_reads (p : SampledProofs.OneStage.Params) (c : SampledProofs.On
   | error r => simp [hr, Except.mapError, Functor.map, Except.map] at hξ
   | ok raw =>
     simp [hr, Except.mapError, Functor.map, Except.map] at hξ
-    exact ⟨raw, hr, hξ⟩
+    exact ⟨raw, rfl, by first | exact hξ | exact hξ.symm⟩
 
 /-- **One-stage reads its coins through the challenger's reader** (`OneStage.live`), wherever its parameters name a
 challenger and a window. -/
