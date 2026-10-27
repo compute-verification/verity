@@ -24,6 +24,13 @@ theorem outDelta_snd {c : Circuit} (ht : c.typed = none) (pin : ℕ) :
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw : Option Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
 
+/-- The unit's input groups fit its input words, of any `Layout`: its logical net's (`built_spec`), which has the unit's
+input groups and words (`UnitAt`). -/
+theorem unit_groups_fit (L : Layout st) : ∀ g ∈ st.c.unit.inGroups.toList,
+    g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ st.c.unit.inWords := by
+  have h := (built_spec L.unit_built).2.2.2.2.1
+  rwa [L.unit_at.groups, L.unit_at.in_eq] at h
+
 /-- **An untyped hidden-output statement accepted at public inputs has the layout the placement reads**, on the
 committed circuit: its flat twin's is `layout_of`'s for a flat file, `layout_of_tmpl`'s for a templated one
 (`hidden_layoutC`). -/
@@ -59,7 +66,7 @@ theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tab
     cases he : pi.ports.isEmpty
     · by_contra hk
       have hq : HmIn.publicCol st.c pi a = true := by simpa [keepCol, he] using hk
-      obtain ⟨k, hk', jj, -, t, -, hq1, hlt, -⟩ := publicCol_at s.ports he C L.unit_built hq
+      obtain ⟨k, hk', jj, -, t, -, hq1, hlt, -⟩ := publicCol_at s.ports he C (unit_groups_fit L) hq
       rw [hq1] at hab
       exact L.constPairs_not_below L.unit_mem L.unit_kind hk' (lt_of_lt_of_le hlt L.unit_in) b hab
     · exact keepCol_noPorts he _
@@ -72,6 +79,7 @@ theorem hidden_layoutP (ht : tags.typed = false) (s : SpecP tags cf pf coins tab
     unit_kind := L.unit_kind
     unit_count := L.unit_count
     unit_built := L.unit_built
+    unit_at := L.unit_at
     unit_lookup := L.unit_lookup
     unit_in := L.unit_in
     unit_const := L.unit_const

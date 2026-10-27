@@ -197,7 +197,7 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
         x % (st.c.unit.inWords * WORD))
     · rfl
     · exfalso
-      obtain ⟨k, -, jj, hjj, t, ht, hq1, hlt, hl⟩ := Hidden.publicCol_at hp he C L.unit_built hq
+      obtain ⟨k, -, jj, hjj, t, ht, hq1, hlt, hl⟩ := Hidden.publicCol_at hp he C (Hidden.unit_groups_fit L) hq
       have hpos : 0 < st.c.unit.inWords * WORD :=
         Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
       have hW : st.c.unit.inWords * WORD ≤ 2 ^ st.c.unitRange.slotLog := by
@@ -209,7 +209,7 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
       have hmem : x % (st.c.unit.inWords * WORD) ∈ portBits st.c.unit.inGroups := by
         rw [e2, ← hj1]; exact port_mem hjs (by rw [hj2]; exact ht)
       have hpo : portOf (portCols st.c.unit.inGroups) (x % (st.c.unit.inWords * WORD)) = jj := by
-        rw [e2, ← hj1]; exact portOf_eq (portBits_nodup L.unit_built) hjs (by rw [hj2]; exact ht)
+        rw [e2, ← hj1]; exact portOf_eq (Aliased.unit_nodup L) hjs (by rw [hj2]; exact ht)
       have hpl : pubLeaf st.c pi x = (pi.leaves.getD (x / (st.c.unit.inWords * WORD)) #[]).getD jj (-1) := by
         unfold pubLeaf
         rw [ite_eq_left ⟨hmem, by rw [hpo]; exact hjj⟩, hpo]
@@ -256,7 +256,7 @@ theorem pub_block (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLo
   have hx'' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
     rw [← hn]; exact hx
   have hk := Aliased.stack_copy_lt L hg hx''
-  obtain ⟨p, -, t, ht, hxm, hq, hkey⟩ := pubLeaf_at C (portBits_nodup L.unit_built) hpub
+  obtain ⟨p, -, t, ht, hxm, hq, hkey⟩ := pubLeaf_at C (Aliased.unit_nodup L) hpub
   have hplace := place_val L regs hg x hx
   have haddr : inAddr st.c (g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) p t =
       (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
