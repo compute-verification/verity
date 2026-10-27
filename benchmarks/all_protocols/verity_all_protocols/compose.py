@@ -46,8 +46,7 @@ OUT_BITS = 16
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: K's jitter term, the periods' own at their jitter bound (1, so 0 bits): J (`NetTiming.JitterBounded`) assumes it,
-#: though NET-7's probe found the client's offsets tell a prover-chosen write phase apart at that bound
-#: (`note:network-accounting/20261027T0813Z-finding-jitter-j`)
+#: and the certifier doesn't meet J at that bound: an offset the prover chooses within a bucket reaches the client
 JITTER = "assumed (J)"
 
 

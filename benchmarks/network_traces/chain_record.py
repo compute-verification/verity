@@ -121,8 +121,8 @@ WARDEN_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
-#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, though NET-7's probe found the client's
-#: offsets tell a prover-chosen write phase apart at D_j = 1 (`note:network-accounting/20261027T0813Z-finding-jitter-j`)
+#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, and the certifier doesn't meet J there:
+#: an offset the prover chooses within a bucket reaches the client
 JITTER = "assumed (J)"
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -562,8 +562,8 @@ def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     counts it: the faulty units paid once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of
     its compute audits (a stratified audit's least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits, and the cells')
     + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability
-    ``δ + Σ_i (e_i + e'_i)``. #4367 is conditional on its per-window inputs, so this K is cited as conditional, and its
-    jitter term as `JITTER` (``jitter_term``)."""
+    ``δ + Σ_i (e_i + e'_i)``. `HorizonLeakAccepted` is conditional on its per-window inputs, so this K is cited as
+    conditional, and its jitter term as `JITTER` (``jitter_term``)."""
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)
@@ -694,10 +694,10 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "a claim, with lean and Daniel",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
                 "and the server can't move an admission (not met today)",
+                f"the jitter term is 0 at D_j = 1, {JITTER}, which the certifier doesn't meet: an offset the prover "
+                "chooses within a bucket reaches the client",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                f"the jitter term is 0 at D_j = 1, {JITTER}: NET-7's probe found the client's offsets tell a "
-                "prover-chosen write phase apart at D_j = 1 (note:network-accounting/20261027T0813Z-finding-jitter-j)",
                 "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
 
 
