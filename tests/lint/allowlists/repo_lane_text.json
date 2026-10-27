@@ -339,7 +339,6 @@
     {"file": "benchmarks/numerical/python/verity_numerical/bench/unit_costs_menu.py", "count": 5},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/unit_costs_prover.py", "count": 1},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/views.py", "count": 20},
-    {"file": "benchmarks/numerical/python/verity_numerical/reference/leaf_v2.py", "count": 2},
     {"file": "benchmarks/numerical/tests/bench/test_bench_contract.py", "count": 2},
     {"file": "benchmarks/numerical/tests/bench/test_cell.py", "count": 1},
     {"file": "benchmarks/numerical/tests/bench/test_census_data.py", "count": 2},
