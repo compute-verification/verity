@@ -43,6 +43,18 @@ theorem SpareCapacityAtDeadline : Pouw.Guarantees.SpareCapacityAtDeadline := by
     (WorkBetweenSaltAndDeadline Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU A run td hclock (C * (td - run.ts) - Y)
       (by linarith) q hq hb t εs hεs)
 
+theorem WorkBetweenSaltAndDeadlinePerCoin : Pouw.Guarantees.WorkBetweenSaltAndDeadlinePerCoin := by
+  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hQ hγ₀ hΩ hW hTT U hU A A' run td hA' t εs hεs
+  refine le_trans (pr_mono fun x hx => ?_) (EndToEndPerCoin Q R S CM P D γ₀ Ωmax ε hQ hγ₀ hΩ hW hTT U hU A' t εs hεs)
+  obtain ⟨⟨htr, hacc⟩, hlt, hc⟩ := hx
+  rw [(hA' x.1 x.2.1).1 htr]
+  exact ⟨hacc, lt_of_le_of_lt (hA' x.1 x.2.1).2 hlt, hc⟩
+
+theorem SpareCapacityAtDeadlinePerCoin : Pouw.Guarantees.SpareCapacityAtDeadlinePerCoin := by
+  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hQ hγ₀ hΩ hW hTT U hU A A' run td hA' C Y hB t εs hεs
+  refine le_trans (pr_mono fun x hx => ⟨hx.1, by linarith [hx.2.1, hB x.1 x.2.1], hx.2.2⟩)
+    (WorkBetweenSaltAndDeadlinePerCoin Q R S CM P D γ₀ Ωmax ε hQ hγ₀ hΩ hW hTT U hU A A' run td hA' t εs hεs)
+
 theorem PearlCSampledByDeadline : Pouw.Guarantees.PearlCSampledByDeadline := by
   intro Q R S _ _ _ _ CM P TR D γ η hG U hU A run td hclock T hT q hq hB w κ hκ hw t εs hεs
   obtain ⟨A', hpre, hA'⟩ := hclock

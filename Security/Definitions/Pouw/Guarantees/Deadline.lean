@@ -1,5 +1,6 @@
 import Definitions.Pouw.Assumptions.Pinned
 import Definitions.Pouw.Assumptions.Deadline
+import Definitions.Pouw.Guarantees.PerCoin
 import Definitions.Pouw.Assumptions.PearlC.Deadline
 import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
@@ -20,6 +21,9 @@ timed run and verifier's rule, and time meets the cost model through one named a
   (`Adversary.BoundedBy`), and the clock.
 * `SpareCapacityAtDeadline`: remote's exhaustion. A declared fleet that can spend `C·(td − ts)` in the window has at most
   `C·(td − ts) − (1 − γ)(1 − ε_s)·W` of it to spare for undeclared work, except with the same probability.
+* `WorkBetweenSaltAndDeadlinePerCoin`, `SpareCapacityAtDeadlinePerCoin`: the two above from `TTPerCoin`, with no budget
+  and no oracle cap. They hold for any program outputting the adversary's transcript by the deadline within the run's
+  spending (the honest clock's), and its finder's collision is outside the event.
 * `PearlCSampledByDeadline` and its instances: the same in Pearl-C's game, from `GγSampled`, and at v1 under rev1 on
   sm_120 at the cap 1/1,000 (FP32 at 8.376, the honest cast at 8.72) on the four layouts its sampled γ is pinned at.
   The instances are stated at W1: their cost model is `W1.w1Priced (W1Device.sm120Loop sha fetch) salt`, and their
@@ -74,6 +78,54 @@ def SpareCapacityAtDeadline : Prop :=
           AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
           C * (td - run.ts) - (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout < Y)
         ≤ (1 - εs) ^ t + ε q U.layout.N
+
+/-- **Work between the salt and the deadline, per coin** (`TTPerCoin`, F3). There is no budget `T` and no oracle cap `q`.
+For every in-domain workload, adversary `A`, timed run and deadline `td`, take any program `A'` that outputs `A`'s
+transcript wherever it is received by `td`, at a cost within the run's spending between the salt's release `ts` and `td`
+(the program `Assumptions.HonestClock` provides). The audit with `t` work-weighted samples accepts a transcript received
+by `td` while the run spent less than `(1 − γ)(1 − ε_s)·W` in that window and `A'`'s finder finds no collision, with
+probability at most `(1 − ε_s)^t + ε(A'.queries U, N)`, `γ = 1 − (1 − γ₀)/Ω_max`. -/
+def WorkBetweenSaltAndDeadlinePerCoin : Prop :=
+  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ)
+    (hQ : CM.Queries),
+    γ₀ < 1 → 0 < Ωmax →
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
+      (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
+    Assumptions.TTPerCoin CM P D γ₀ ε →
+    ∀ U : Workload, U.InDomain D → ∀ (A A' : Adversary CM) (run : TimedRun Q R S) (td : ℝ),
+    (∀ (H : Q → R) (s : S), (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s) ∧
+      CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td) →
+    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+      pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
+          AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          run.spentIn x.1 x.2.1 run.ts td < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout ∧
+          ¬ Collides x.1 (finderQueries hQ A' U x.1 x.2.1))
+        ≤ (1 - εs) ^ t + ε (A'.queries U) U.layout.N
+
+/-- **Remote's exhaustion per coin: the spare capacity at the deadline** (`TTPerCoin`, F3). With `A'` as in
+`WorkBetweenSaltAndDeadlinePerCoin`, if the run's spending in the window and undeclared work `Y` together fit in a declared
+fleet's `C·(td − ts)` on every oracle and salt, then an accepted transcript received by `td` leaves
+`C·(td − ts) − (1 − γ)(1 − ε_s)·W < Y` while `A'`'s finder finds no collision with probability at most
+`(1 − ε_s)^t + ε(A'.queries U, N)`. -/
+def SpareCapacityAtDeadlinePerCoin : Prop :=
+  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ)
+    (hQ : CM.Queries),
+    γ₀ < 1 → 0 < Ωmax →
+    (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
+      (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
+    Assumptions.TTPerCoin CM P D γ₀ ε →
+    ∀ U : Workload, U.InDomain D → ∀ (A A' : Adversary CM) (run : TimedRun Q R S) (td : ℝ),
+    (∀ (H : Q → R) (s : S), (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s) ∧
+      CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td) →
+    ∀ C Y : ℝ, (∀ (H : Q → R) (s : S), run.spentIn H s run.ts td + Y ≤ C * (td - run.ts)) →
+    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+      pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
+          AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          C * (td - run.ts) - (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout < Y ∧
+          ¬ Collides x.1 (finderQueries hQ A' U x.1 x.2.1))
+        ≤ (1 - εs) ^ t + ε (A'.queries U) U.layout.N
 
 /-- **Pearl-C's sampled audit by the deadline.** `GγSampled` and an honest clock give, for every in-domain workload,
 adversary, timed run and deadline `td`, every run spending at most `T` after the salt's release and by `td` with at most
