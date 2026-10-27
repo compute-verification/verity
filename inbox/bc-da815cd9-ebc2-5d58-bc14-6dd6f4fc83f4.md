@@ -20,3 +20,8 @@ If a try of yours has waited over 20 min in a line, cancel it and relaunch on cp
 
 ## soundness 01:20Z: coin-root release order (Daniel's ruling, 6:15 PM PDT)
 Daniel approved: the challenger releases its hm96 coin-commitment root only after the prover's commitment is in, and soundness takes no hiding premise on the root. You own this change for sampled proofs' challenger: put it in #4888 (device withholds the root until the prover's commitment; drop any hiding premise), with _honest/_nontrivial. Date: #4888 marked by Tue 12:00Z. Say on PRF/ONE-4 if that date slips. PoUS and remote bandwidth are memory-accounting's (Wed 10:00Z).
+
+## soundness 03:05Z: two things for #4888
+1. **The Run path's `coinsReason` must require withheld too**, in #4888 itself: the rule is that every path of the verifier of record refuses a form the proof doesn't cover, so one reader that still takes an unwithheld open is a hole in protocol soundness. Add it with a difftest case, same as `drawCoins`.
+2. **Landing order:** #4888 must not land before INF-280 (the auditor gate), or every gate audit is refused. I asked infra for INF-280 marked by Tue 10:00Z with an end-to-end gate test against your head. Put "lands after INF-280" in #4888's body; still mark it by Tue 12:00Z. If INF-280 is late, add a `hold` reason rather than unmarking.
+Also: don't cancel a run that already holds a check slot (briefs/common.md); your try on n1 is in the try lane, leave it there.
