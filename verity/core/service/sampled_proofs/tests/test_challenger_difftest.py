@@ -1903,6 +1903,10 @@ ROUNDS = D.Port(PIECES, "challenger_rounds", rounds, _cases(rounds_case, ROUNDS_
 
 pieces = D.server_fixture(COMMITMENT)
 
+#: the cases besides `honest` a piece accepts: `unordered` is `draw-late`'s log under an order that asks nothing, so it
+#: shows the order is what refuses `draw-late`
+ACCEPTED = {"challenger_rounds": ("unordered",)}
+
 RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_case, OPENING_NAMES, 300),
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
         (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
@@ -1915,8 +1919,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
 def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
-    """Each piece agrees on drawn cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
-    refusal) and each mutation refused."""
+    """Each piece agrees on drawn cases and on every mutation over a few seeds, the honest ones (and `ACCEPTED`'s)
+    accepted (no reason, no refusal) and each other mutation refused."""
     stats = D.run(port, examples=examples, server=pieces)
     outcomes = Counter()
     for name in names:
@@ -1924,5 +1928,5 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             kind, text = D.replay(port, make(random.Random(f"{name}/{seed}"), name), pieces)
             clean = kind == "output" and '"refused"' not in text and '"reason":"' not in text
             outcomes[name, clean] += 1
-            assert clean == (name == "honest"), (port.fn, name, seed, kind, text)
+            assert clean == (name == "honest" or name in ACCEPTED.get(port.fn, ())), (port.fn, name, seed, kind, text)
     print(f"{port.fn}: {stats}; swept {sum(outcomes.values())}")
