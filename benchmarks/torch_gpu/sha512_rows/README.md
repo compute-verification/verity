@@ -114,7 +114,18 @@ per SM-clock.
   compressions a second, with both sides' SASS pipe mix; `hashcat_forms` times our compression in hashcat's shapes
   (constant IV, zero words, only two digest words read) to attribute the difference, and at each CTA size in whole
   waves (HASH-24).
-- `tests/`: the host twin always, every variant on a CUDA device.
+- `lowreg.cuh`, `lowreg.cu`, `lowreg_check.py`: the compression's rounds split so that the chaining value or the schedule
+  can live in shared memory (`rounds`, and `rounds2`, two chains interleaved), for a hash warpgroup that shares its SM's
+  registers with MMA warpgroups; `lowreg rates` is SHA-512's rate against the register cap at 1, 2 and 4 warpgroups an
+  SM, gated by `lowreg_check.py` against hashlib (HASH-41).
+- `beside.cu`, `beside.sh`, `beside_check.py`, `beside_summary.py`: hash warpgroups beside the exact s8 linear's MMA
+  warpgroups in one CTA, rebalanced by setmaxnreg, hashing the finished O tiles from shared memory: the GEMM's span beside
+  a busy hash against alone, the hash's rate beside the GEMM against alone, the pipelined handoff against wgmma.linear's
+  shape, each role's registers, Nsight Compute's per-pipe shares, and the served commit's call modelled from them. One
+  lease, gates before timing (HASH-41).
+- `beside_probe.cu`, `beside_probe.sh`: which CTA shapes and register splits ptxas builds (C7602: m64n256k32 needs a
+  154-register launch).
+- `tests/`: the host twin always, every variant on a CUDA device; beside's gate and summary on synthetic outputs.
 
 ```bash
 research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
