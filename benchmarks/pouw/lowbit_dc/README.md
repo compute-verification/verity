@@ -1,7 +1,7 @@
 # lowbit_dc: Dither's FP8 and FP4 routes on datacenter GPUs
 
 Dither for FP4 and FP8 on datacenter GPUs, in place of B300. Two questions on B200 (sm_100a, tcgen05) and H200 (sm_90a, wgmma), with sm_120's
-answers in `../fp_exact/`, `../fp4_nobits/` and `../emu8/`:
+answers in `../emu8/`:
 
 - Are the FP8 and FP4 tensor kinds exact integer arithmetic, on which grids, and from which accumulator start
   (`fpx.cu`)?

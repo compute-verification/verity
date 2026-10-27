@@ -255,7 +255,7 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   binary while their `Consts` agree (one Ks, key and row size).
 
 `COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
-to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in stage_ovl's schedule (its cg arms), dumps
+to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). A consumer that runs it can dump
 chunk 0's commitments, and `reference.py verify` checks them.
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between

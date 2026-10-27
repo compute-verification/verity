@@ -63,7 +63,7 @@ def label(n: int) -> dict:
 
 
 def domain(n: int, tree: str | None = None) -> CommitmentDomain:
-    """The operand domain of n leaves; with ``tree``, its label also names the tree (stage_ovl's receipts: ``R-<stage>``)."""
+    """The operand domain of n leaves; with ``tree``, its label also names the tree (a stage's receipts: ``R-<stage>``)."""
     lab = label(n) if tree is None else {**label(n), "tree": tree}
     return CommitmentDomain(identity_digest_sha512(BINDING_TAG, lab), OWNER, RangeIndexedDomain(0, n), hash="sha512")
 
@@ -333,9 +333,9 @@ def cases(kind: str) -> list[tuple]:
 
 
 def verify_dump(work: str, openings: int = 64) -> dict:
-    """A committed tile operand dumped by a consumer (stage_ovl's ovl.cu): ``work`` holds params.bin (derived salts),
+    """A committed tile operand dumped by a consumer: ``work`` holds params.bin (derived salts),
     operand.bin (m x k int8), levels.bin (every level, leaves first, as ``check`` writes them) and dump.json (m, k, r).
-    With ``row_bytes`` in dump.json (stage_ovl's receipts), operand.bin is the rows themselves, row_bytes each, in the
+    With ``row_bytes`` in dump.json (a stage's receipts), operand.bin is the rows themselves, row_bytes each, in the
     domain whose label names dump.json's ``tree``. Every level must equal the reference's, so the root and every opening
     path are its; sampled openings go through the reference verifier, and a changed leaf digest fails."""
 

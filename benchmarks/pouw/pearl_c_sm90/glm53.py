@@ -1,5 +1,6 @@
-"""GLM-5.3 (zai-org/GLM-5.3 at `glm53_scales.REVISION`) under Pearl-C on the H200 (``pearl-c-h100-v1-h3``): its linears as one
-TP8 rank serves them, each with the sm_90a kernels' domain verdict, and γ at the H100 record.
+"""GLM-5.3 (zai-org/GLM-5.3 at aca966e4e02791568aa6a4ced368624b3d897f42) under Pearl-C on the H200
+(``pearl-c-h100-v1-h3``): its linears as one TP8 rank serves them, each with the sm_90a kernels' domain verdict, and γ
+at the H100 record.
 
 The linears are the pinned vLLM's (integrations/vllm's ``manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json``: each tap's
 output shape and program), from the checkpoint's config (`CONFIG`).  Every FP8 linear is a 128 x 128 block-scaled weight, served
