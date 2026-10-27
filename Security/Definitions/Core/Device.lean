@@ -10,7 +10,7 @@ what it holds, what flows into it, what it computes, and when.
 * **State.** On-chip state of at most `chip` bits (S_chip: registers, shared memory, caches) and device memory of at
   most `mem` bits (M).
 * **Ingress.** Bits reach the chip from device memory at most `bw` per tick (BW), and over each side channel `i : ι` at
-  most `cap i` per tick: PCIe from NVMe and the network (there is no host RAM, Daniel's ruling of 3 Oct).
+  most `cap i` per tick: PCIe from NVMe and the network (there is no host RAM).
 * **Ops.** Each op class (`OpClass`) runs at most `rate o` times per tick: tensor-core multiply-adds (`rate .tc` is F),
   CUDA-core ops and oracle queries.
 * **Time.** A tick is the device's unit of time, and a window is `len` consecutive ticks from `start`, so its duration
