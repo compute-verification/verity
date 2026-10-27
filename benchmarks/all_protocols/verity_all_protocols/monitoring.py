@@ -30,12 +30,12 @@ The other resource rows pool as their statements do, from the run's own answers 
 * **Bandwidth** (`bandwidth`): no window short except with probability ``T · eps`` (#4413's note on #4360), not ``eps``.
 * **Communication** (`communication`): the network certifier's leak in bits as its period check itemizes it, pooled as
   ``NetTiming.Guarantees.HorizonLeakAccepted`` (network's #4367) counts it: each window's own terms (free inputs, jitter,
-  schedules, cells) every window, and the faulty units paid once, ``⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))`` bits over the
+  schedules, cells) every window, and the faulty proof blocks paid once, ``⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))`` bits over the
   period's ``N`` units, instead of each window's faulty terms every window. #4367 is conditional on its per-window inputs
   ``hesc`` and ``hleak``, not yet discharged, so it is not the deployed system's bound until they are.
 
 Beside the resource rows, the report's ``communication`` (`compose.communication`) is the network certifier's K per
-machine over the same periods and δs: one machine's windows pooled with the faulty units paid for once (#4367,
+machine over the same periods and δs: one machine's windows pooled with the faulty proof blocks paid for once (#4367,
 conditional), the deployment's machines joined by a union bound (not in Lean), and each accepted window's own K beside
 it, where the communication resource row pools every machine's windows as one sequence.
 """
@@ -77,7 +77,7 @@ RESOURCE_STATEMENTS = {
 }
 #: the network certifier's period check, whose public itemizes K (`NetworkCheck.Period`)
 CERTIFIER = "verity/certifier/v0"
-#: a proof unit's outputs are at most 16 bits, so a faulty unit hides at most that many
+#: a proof block's outputs are at most 16 bits, so a faulty proof block hides at most that many
 UNIT_BITS = 16
 
 
@@ -242,7 +242,7 @@ def bandwidth(rows: Sequence[Mapping[str, Any]], dep: Mapping[str, Any]) -> dict
 
 def leak_terms(public: Mapping[str, Any]) -> dict[str, Any]:
     """An accepted certifier period's K as its public itemizes it: what every window pays (each audit's free inputs and
-    jitter, the cells and the schedules), what its faulty units cost in that window (each audit's ``faulty_sets`` and
+    jitter, the cells and the schedules), what its faulty proof blocks cost in that window (each audit's ``faulty_sets`` and
     ``faulty_bits``), and its audits' units and draws."""
     audits = public.get("audits") or []
     return {"K": int(public["K"]), "every_window": sum(int(a["free"]) + int(a["jitter"]) for a in audits)
@@ -254,7 +254,7 @@ def leak_terms(public: Mapping[str, Any]) -> dict[str, Any]:
 
 def communication(rows: Sequence[Mapping[str, Any]], dep: Mapping[str, Any]) -> dict[str, Any]:
     """The certifier's leak over each monitoring period (module docstring): pooled, every window's own terms every window
-    and the faulty units once (#4367); beside it, each window's whole K every window."""
+    and the faulty proof blocks once (#4367); beside it, each window's whole K every window."""
     got, observed = _accepted(rows)
     got = [r for r in got if r.get("protocol") == CERTIFIER]
     if not got:

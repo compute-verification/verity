@@ -101,6 +101,9 @@ note, its newest push and the first heads read, so a fresh deploy judges nobody 
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
 worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more,
 as **no_step**, rung to @top: on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one.
+Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
+stream event, since no_step advises stopping and archiving it: on 26 Oct at 21:05Z it said so of compute-accounting's and
+network-accounting's coordinators, each working in Slack within two minutes, with no note or push for 6 h.
 Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
 
 When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
@@ -183,7 +186,7 @@ UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a
 WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
-AGENTS_PAGE = 50            # GET /v1/agents page size: 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
+AGENTS_PAGE = 25            # GET /v1/agents page size (50 503s every call since 16:25Z, 26 Oct; 25 answers): 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
 SWEEP_READS_S = 12 * 60     # a sweep's reads stop after this long (a sweep takes ~6 min; with reads near their 60 s timeout, one
 #                             took 24 min, 26 Oct, and the cloud watch alerts after 20 min without a finished sweep)
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
@@ -1376,10 +1379,11 @@ class Watch:
             n = s["rings"] if s else 0
             coord = agent in self.coords
             if n >= SILENT_RINGS:
-                if s and not s.get("no_step") and t - last >= NO_STEP_S:
+                still = max(last, k.get("acted") or last)
+                if s and not s.get("no_step") and t - still >= NO_STEP_S:
                     s["no_step"] = True
                     changed = True
-                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(last), hours=int((t - last) // 3600),
+                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(still), hours=int((t - still) // 3600),
                                 lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top")
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
@@ -1837,16 +1841,22 @@ class Watch:
         for a in agents:
             if a["id"] in coords and a.get("status") == "ACTIVE":
                 active[a["id"]] = since = self.active.get(a["id"], t)
+                judge = judges.get(a["id"]) or {}
+                with self.lock:
+                    r = self.runs.get(judge.get("id") or "")
+                acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
+                                         r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
                 known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
-                                  "run": (judges.get(a["id"]) or {}).get("id") or a.get("latestRunId") or "", "since": since,
-                                  "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a))}
+                                  "run": judge.get("id") or a.get("latestRunId") or "", "since": since,
+                                  "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
         if active != self.active:
             self.active = active
             self.save()
         for agent, w in self.workers.items():
             if w.get("status") == "ACTIVE" and not w.get("gone") and w.get("since") is not None:
                 known[agent] = {"name": str(w.get("name") or ""), "handle": w.get("handle"), "lane": w.get("lane") or "",
-                                "run": "", "since": w["since"], "branches": list(w.get("branches") or [])}
+                                "run": "", "since": w["since"], "branches": list(w.get("branches") or []),
+                                "acted": w.get("updated")}
         self.read_heads(t)
         self.watch_silence(known, t)
         self.run_ends(coords, t)

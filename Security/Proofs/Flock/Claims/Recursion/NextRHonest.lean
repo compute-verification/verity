@@ -229,17 +229,6 @@ theorem getD_map_skel : ∀ (L : List (List Frame)) (j : ℕ),
   | _ :: _, 0 => by simp
   | _ :: L, j + 1 => by simpa using getD_map_skel L j
 
-/-- **A round's rows fix the values it absorbs**, at their count: the padded row (`padRow`) holds them first. -/
-theorem RowsAt.vals_eq {s : RecVStar.SchedRound} {rs : List ByteArray} {vs vs' : List F128} (h : RowsAt s rs vs)
-    (h' : RowsAt s rs vs') (hl : vs.length = vs'.length) : vs = vs' := by
-  cases hb : s.2.2.2
-  · rw [h.2.2 hb, h'.2.2 hb]
-  · have e := h.2.1.symm.trans h'.2.1
-    rw [ite_eq_left hb, ite_eq_left hb] at e
-    have e' : padRow (colBytes vs) = padRow (colBytes vs') := by
-      simpa using congrArg Array.toList (ByteArray.mk.inj (List.cons.inj e).1)
-    exact colBytes_inj (padRow_inj e' (by rw [Frame.colBytes_length, Frame.colBytes_length, hl]))
-
 /-- **Two fits of one rep's rows with one skeleton have one rep's frames.** -/
 theorem fits_frames {c : RepCtx} {rows : List (List ByteArray)} {p p' : Flock.Proof} {T T' : F128}
     (h : FitsRep c rows p T) (h' : FitsRep c rows p' T')

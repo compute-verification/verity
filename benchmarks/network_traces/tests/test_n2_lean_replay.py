@@ -3,13 +3,15 @@
 rows committed as C-Flock's public file holds them, the findings a stand-in for the verifier's own Lean run) and decided
 by `LinkWindows.outcome`, with the files `n2_zk.member` writes. The replay finds the Lean and the Python agreeing with
 each other and with each recorded outcome on every window, honest and tampered, and every control rejected by both; an
-outcome recorded with another verdict is caught."""
+outcome recorded with another verdict is caught. A warden run's N2, as `chain_record.sh` keeps it on the warden path,
+replays on the warden link rebuilt from the warden run's kept deployment.json, with its own controls."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -110,6 +112,53 @@ def test_the_replay_finds_lean_and_python_agreeing_with_the_record(recorded, tmp
     assert total | {"ok": None} == {"runs": 1, "windows": n, "agree": n, "as_recorded": n, "assumed": 0,
                                     "controls": n * len(rp.CONTROLS), "controls_passed": n * len(rp.CONTROLS),
                                     "accepted": n - 1, "rejected": 1, "ok": None} and total["ok"]
+
+
+@pytest.fixture(scope="module")
+def recorded_warden(tmp_path_factory):
+    """A warden run's N2 as `chain_record.sh` keeps it: the synthetic warden run (`test_scan_zk.published`) proved by the
+    stand-in under `out/n2/`, the summary naming the warden run at a scratch path that is gone, and the warden run's
+    public deployment.json under `out/gates/g1/out/`."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from test_scan_zk import published
+
+    d = tmp_path_factory.mktemp("warden")
+    warden = published(d / "warden")
+    run = d / "run"
+    members = {"honest": n2.link_windows(warden, warden=True),
+               "tampered": n2.link_windows(warden, edit=n2.one_count, warden=True)}
+    lw = members["honest"].lw
+    with pytest.MonkeyPatch.context() as mp:
+        summary = {"run": str(d / "gone"), "warden_run": members["honest"].plan["warden_run"],
+                   "link": {"name": lw.link, "unit": lw.unit.id, "program": lw.partition["program"],
+                            "partition": P.digest(lw.partition), "gates": [g.id for g in lw.gates()]},
+                   "members": {k: _member(k, rd, run / "out" / "n2", mp) for k, rd in members.items()}}
+    (run / "out" / "n2" / "summary.json").write_text(json.dumps(summary))
+    (run / "out" / "gates" / "g1" / "out").mkdir(parents=True)
+    shutil.copyfile(warden / "deployment.json", run / "out" / "gates" / "g1" / "out" / "deployment.json")
+    return run
+
+
+def test_a_warden_runs_n2_replays_on_the_warden_link_with_its_own_controls(recorded_warden, tmp_path):
+    """The link is the warden's, read off the kept deployment.json; the Lean decides (``by: lean``) and agrees with the
+    Python and the record on every window; a sync off Σ_sync changes neither verdict (``unread``) and the link under
+    another warden digest is rejected by both (``digest``), beside the other controls."""
+    out = rp.replay_run(recorded_warden, tmp_path)
+    assert out["warden"] == {"run": "00" * 32, "dir": "out/gates/g1"}
+    honest, tampered = out["members"]["honest"], out["members"]["tampered"]
+    assert honest["ok"] and tampered["ok"], out
+    assert len(honest["windows"]) >= 2 and set(honest["accepted"]) == {1}
+    assert tampered["accepted"][0] == 0 and set(tampered["accepted"][1:]) == {1}
+    for m in (honest, tampered):
+        assert m["structure"] == {"program": True, "partition": True, "gates": True, "kind": "warden", "by": "lean"}
+        for w in m["windows"]:
+            assert w["agree"] and w["as_recorded"] and w["registration"]
+            assert set(w["controls"]) == set(rp.WARDEN_CONTROLS)
+            for name, c in w["controls"].items():
+                kept = name == "unread" and w["python"]["accepted"]
+                assert c["passed"] and c["python"] == c["lean"] == kept, (name, c)
+    with pytest.raises(FileNotFoundError, match="no deployment.json of warden run"):
+        rp.warden_dir(recorded_warden, {"warden_run": "11" * 32, "run": str(tmp_path / "gone")})
 
 
 def test_a_runs_pin_names_a_size_class_the_tree_leaves_unpinned_and_never_replaces_one():
