@@ -458,14 +458,6 @@
     {"file": "verity/ml/flock/verifier/ci.py", "count": 2},
     {"file": "verity/ml/flock/verifier/qword_program_agree.py", "count": 1},
     {"file": "verity/ml/flock/verifier/transcript_check.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/bench.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/blake3_cuda.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/frame_v3.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/merkle.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/poseidon2_cuda.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/sha256_cuda.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/tests/test_frame_v3.py", "count": 1},
-    {"file": "verity/ml/kernels/hash_gpu/tests/test_hash_gpu.py", "count": 1},
     {"file": "verity/ml/randomness/tests/test_randomness.py", "count": 1}
   ]
 }
