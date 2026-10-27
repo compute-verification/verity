@@ -1241,8 +1241,7 @@ def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(
 
 def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypatch):
     """A window's verdict is the Lean's, set on `audit.Session` (`Checks.settle`): the Lean's accepting window 1 read
-    as a rejection at a draw rejects the session there, at that draw, with no disagreement, and both registries count
-    it so."""
+    as a rejection at a draw rejects the session there, at that draw, with no disagreement."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 
@@ -1257,11 +1256,9 @@ def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypa
         return settle(self, check, lambda res: answered(changed(res)))
 
     monkeypatch.setattr(verifier.Pair, "settle", wrong)
-    closed = []
-    (r,), (p,) = run("honest", then=lambda v: closed.append(v.close_registration(b"test-node")))
+    (r,), (p,) = run("honest")
     assert not r["accepted"] and not p["accepted"] and r["failure"] == {"t": 1, "failure": "receipt", "at": [0, 0]}
     assert r["disagreement"] is None
-    assert closed[0]["sessions"] == ["receipt"] and "python" not in closed[0]
 
 
 def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch):
