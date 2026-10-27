@@ -1,7 +1,8 @@
 import Flock.RecVStar
 import Flock.RecCoins
 import Flock.Firewall
-import Proofs.Flock.Recursive.Holo
+import Definitions.Flock.Recursive.Holo
+import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.ExecClass
 import Definitions.Flock.HoloCompiled

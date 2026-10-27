@@ -1,5 +1,5 @@
 """The frozen architecture's decode step on the CPU (CMP-96): an MQA decoder of any `weights.Shape` (the H200's frozen shape, or a
-tiny instance of it), every operation a proof unit in circuits' forms (CMP-92's plan, section 1b), and every unit's inputs and
+tiny instance of it), every operation a proof block in circuits' forms (CMP-92's plan, section 1b), and every unit's inputs and
 outputs recorded, so `replay` has a step to draw from before the GPU driver commits one.
 
 It computes in torch, the way a kernel computes: f32 tensors with one IEEE rounding an operation, every reduction a loop in

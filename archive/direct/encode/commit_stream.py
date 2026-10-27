@@ -34,7 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "ml" / "kernels"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
 
 from hash_gpu import merkle, sha256_cuda
 
