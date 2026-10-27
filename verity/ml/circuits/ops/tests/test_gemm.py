@@ -271,6 +271,38 @@ def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated
     assert bits(bind(G.ScaledMmS8Coordinate, K=65536, **G.GEMM_SM90_S8)) == [2 * UNIT_CLASS_MAX, 32, 2 * UNIT_CLASS_MAX, 32]
 
 
+@pytest.mark.parametrize("K,R", [(128, 1), (128, 2), (128, 4), pytest.param(16384, 2, marks=pytest.mark.slow),
+                                 pytest.param(65536, 8, marks=pytest.mark.slow)])
+def test_the_residual_coordinate_is_the_unfused_coordinate_then_residual_add(K, R) -> None:
+    """`ScaledMmS8ResidualCoordinateRows_v1{K, R}` is the chain it fuses: `ScaledMmS8CoordinateRows_v1{K, R}`'s word, then
+    `Bf16AddRow_v1{N = 1}` of the residual stream's word r and it. At K = 128 for R = 1, 2 and 4, and at the frozen shape's
+    two projections back to the width, wo (K = 16,384, R = 2) and wdown (K = 65,536, R = 8); r random, every special word
+    (signed zeros, subnormals, the largest finites, infinities, NaNs) and the coordinate's own word negated (the exact +0)."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.ops import rows as RO
+
+    rng = np.random.default_rng(35 + K + R)
+    n = 1000 if K == 128 else 32
+    x, w = (rng.integers(0, 256, (n, K), dtype=np.uint8) for _ in range(2))
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
+    sw = (np.abs(rng.standard_normal(n)) * 0.02 / 127).astype(np.float32).view(np.uint32)
+    ports = [*np.split(x, R, axis=1), sx, *np.split(w, R, axis=1), sw]
+    y = E.evaluate_batch(bind(G.ScaledMmS8CoordinateRows, K=K, R=R, **G.GEMM_SM90_S8), *ports, kernel="reference")
+    y = y.reshape(n).astype(np.uint16)
+    special = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0,
+                        0x7F81, 0xFFFF], np.uint16)
+    s = len(special)
+    r = rng.integers(0, 1 << 16, n, dtype=np.uint32).astype(np.uint16)
+    r[:s], r[s:2 * s] = special, y[s:2 * s] ^ np.uint16(0x8000)
+    want = E.evaluate_batch(bind(RO.Bf16AddRow, N=1), r[:, None], y[:, None], kernel="reference").reshape(n)
+    got = E.evaluate_batch(bind(G.ScaledMmS8ResidualCoordinateRows, K=K, R=R, **G.GEMM_SM90_S8), *ports, r, kernel="reference")
+    assert np.array_equal(got.reshape(n).astype(np.uint16), want.astype(np.uint16))
+    finite = (y[s:2 * s] & 0x7F80) != 0x7F80
+    assert finite.any() and (want[s:2 * s][finite] == 0).all()
+
+
 def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_every_padded_k() -> None:
     """`GemmCoordinatePad_v1{T, K}` is `GemmCoordinate_v2{K}` on x and W's row with words T to K - 1 bf16 +0, and the same word at
     every K >= T: a k16 step on +0 products changes only a -0 accumulator (to +0) and a NaN's payload (`F2fpBf16` returns one
@@ -422,8 +454,9 @@ def test_the_padded_row_split_and_pv_forms_refuse_t_r_and_d_outside_their_range(
             with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
                 bind(pv, T=T, K=32, D=64, **G.GEMM_HOPPER)
     for R in (0, 3, 256):
-        with pytest.raises(ValueError, match=re.escape(f"R={R} does not divide K=128")):
-            bind(G.ScaledMmS8CoordinateRows, K=128, R=R, **G.GEMM_SM90_S8)
+        for rows in (G.ScaledMmS8CoordinateRows, G.ScaledMmS8ResidualCoordinateRows):
+            with pytest.raises(ValueError, match=re.escape(f"R={R} does not divide K=128")):
+                bind(rows, K=128, R=R, **G.GEMM_SM90_S8)
     for D in (0, -64):
         for pv in (G.PvRow, G.PvRowPad):
             with pytest.raises(ValueError, match=re.escape(f"D={D} is not a head width")):
@@ -439,7 +472,8 @@ FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE
             (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
             (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
             (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8}),
-            (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
+            (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8}),
+            (G.ScaledMmS8ResidualCoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
 S8_FAMILIES = FAMILIES[9:]
 
 
