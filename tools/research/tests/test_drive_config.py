@@ -149,9 +149,23 @@ def test_without_config_drive_takes_its_flags_as_before(world, driven, monkeypat
     assert drive(world, "--on", "m1", "--rules", str(rules), "--regenerate-locks", "--first", "5") == 0
     assert driven[-1] == {"first": (5,), "nonlean_first": None, "on": "m1", "regenerate_locks": True,
                           "after_landing_no_cache": False, "max_lean_checks": 2, "stale_days": 0, "stale_close_days": 0, "stale_keep": ()}
-    with pytest.raises(SystemExit):
-        drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "4")
     assert "flags from" not in capsys.readouterr().out
+
+
+def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven, monkeypatch, capsys):
+    """Drive's own args on the control pod pass `--max-running 10`: refusing it would stop drive the moment #5070 lands."""
+    rules = world.tmp / "rules.toml"
+    rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
+    monkeypatch.chdir(world.dev)
+    assert drive(world, "--on", "m1", "--rules", str(rules)) == 0
+    plain = driven[-1]
+    assert "ignored" not in capsys.readouterr().out
+    assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10", "--train-size", "4") == 0
+    assert driven[-1] == plain
+    assert ("research queue drive: --max-running and --train-size ignored: train landing was deleted (#5070); drop them from "
+            "drive's args") in capsys.readouterr().out
+    assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10") == 0
+    assert driven[-1] == plain and "drive: --max-running ignored: " in capsys.readouterr().out
 
 
 def test_config_refusals_name_the_fix(world, driven, monkeypatch, capsys):

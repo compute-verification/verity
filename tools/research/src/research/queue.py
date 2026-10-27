@@ -3436,6 +3436,8 @@ def main(argv: list[str]) -> int:
                                                         "needs)")
     ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
                     help="drive: run the after-landing check reusing no pass (check.py --no-cache)")
+    for old in ("--max-running", "--train-size"):
+        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted, #5070)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
     ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and everything above it, on `next`")
     ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
@@ -3562,6 +3564,9 @@ def main(argv: list[str]) -> int:
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
         lock = _lock(a.workdir)  # noqa: F841
+        if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
+            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
+                  "drive's args")
         flags = DriveFlags().override(a)
         if a.config:
             if not a.config_from_tree:
