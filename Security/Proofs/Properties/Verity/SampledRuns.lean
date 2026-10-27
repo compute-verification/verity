@@ -1342,8 +1342,8 @@ end
 
 /-- **`SampledDeploy.accept_le` at the readers `readersAt`**: `accept_le_of_canon` with the releases' split into blocks
 proved (`runs_at`), where the challenger device runs v2's uses, the forger is the one on the records sent, every release
-is 512 bits, and `SizesAt` holds at each session; the pairs a collision reads are the play's requests with the round
-requests sent (`pairsAt`). -/
+is 512 bits, `SizesAt` holds at each session, and the inputs are the statement's (`inputsAt_of_statement`); the pairs
+a collision reads are the play's requests with the round requests sent (`pairsAt`). -/
 theorem accept_le_of_runs {V : Vocab d α} (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
@@ -1351,8 +1351,10 @@ theorem accept_le_of_runs {V : Vocab d α} (kd : ByteArray → ℕ) (desc : Byte
     (h512 : ∀ θ, ∀ k ∈ V.rounds θ, k = 512) (R₀ : ∀ θ F c σ r hr, (A θ F c σ r hr).Reg)
     (hSz : ∀ θ F c σ r hr,
       SizesAt V (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr))
-    (hIn : ∀ θ F c σ r hr,
-      InputsAt V (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr).I)
+    (hSt : ∀ θ F c σ r hr, ∀ o, V.Verdict .sampled o →
+      ¬ (ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o) → ∀ p c' e pub prof, SampledCase o.sent p c' e →
+      _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
+      Properties.SampledProofs.OneStageZk.StatementInputs p c' o.sent.blobs (A θ F c σ r hr).I)
     (hDraw : ∀ θ F c σ r hr,
       DrawsAt V θ F c (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o)
         (readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ)))
@@ -1364,11 +1366,13 @@ theorem accept_le_of_runs {V : Vocab d α} (kd : ByteArray → ℕ) (desc : Byte
       Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (V.colAt recsAt pairsAt θ) o ∧ ¬ V.Forges .sampled θ o)
           (V.game θ F c) σ ≤
         FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o) (A θ F c σ r hr).GH
-          (drive V θ F c σ _ (readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ)) (hIn θ F c σ r hr)
+          (drive V θ F c σ _ (readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ))
+            (inputsAt_of_statement (hSt θ F c σ r hr))
             (runs_at (θ := θ) (F := F) (c := c) V hR hf (h512 θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
             (hDraw θ F c σ r hr) (hLink θ F c σ r hr)).τ :=
   accept_le_of_canon kd desc A pairsAt (fun θ F c σ r hr => readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ))
-    hIn (fun θ F c σ r hr => runs_at (θ := θ) (F := F) (c := c) V hR hf (h512 θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
+    (fun θ F c σ r hr => inputsAt_of_statement (hSt θ F c σ r hr))
+    (fun θ F c σ r hr => runs_at (θ := θ) (F := F) (c := c) V hR hf (h512 θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
     hDraw hLink
 
 end Verity.Canon
