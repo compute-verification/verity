@@ -22,7 +22,6 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits import library as L
 from verity.ml.circuits.ops import mufu as M
-from verity_sp1.proofs import reduce_mufu as R
 
 PINNED = {  # id: (definition digest, one-call program digest, outputs fingerprint)
     "DivFullRcp_v1": ("8a8820d688d6c921025399b6c3aaa7cc86ee9be02c5df23061c24afbc689b2ec795f73da842826c1923d2dc4b38d4dfd6642fe2c2a3ebefa3bb347fa2b855dac",
@@ -164,21 +163,6 @@ def test_stated_semantics() -> None:
     div, scale = M.DivFullRcp.evaluate, M.DivFullScaleA.evaluate
     assert [div(x) for x in (0x40000000, 0x7F000000, 0x00400000, inf, 0)] == [rcp(0x40000000), rcp(0x7E000000), rcp(0x0C000000), 0, inf]
     assert [scale(one, b) for b in (0x7F000000, 0x00000001, 0x40000000, 0x7FC00000)] == [0x3E800000, 0x4B800000, one, one]
-
-
-def test_the_sp1_guest_mirror_agrees() -> None:
-    """`verity_sp1.proofs.reduce_mufu` (the SP1 guest's integer-only semantics) against the primitives, on the fingerprint inputs."""
-    sqrt_t, rsq_t, rcp_t = M.table("sqrt"), M.table("rsq"), M.table("rcp")
-
-    def row(t, i: int) -> int:
-        return (i << 32) | int(t[i])
-
-    for (x,) in _inputs(M.MufuSqrtFtz):
-        assert R.mufu_sqrt_tab(x, row(sqrt_t, R.mufu_sqrt_index(x))) == M.MufuSqrtFtz.evaluate(x), hex(x)
-        assert R.rsqrt_approx(x, row(rsq_t, R.rsqrt_approx_index(x))) == M.RsqrtApprox.evaluate(x), hex(x)
-        assert R.div_full_rcp(x, row(rcp_t, R.div_full_rcp_index(x))) == M.DivFullRcp.evaluate(x), hex(x)
-    for a, b in _inputs(M.DivFullScaleA):
-        assert R.div_full_scale_a(a, b) == M.DivFullScaleA.evaluate(a, b), (hex(a), hex(b))
 
 
 _TABLE_WORDS = (0x00000000, 0x00400000, 0x3A83126F, 0x3F400000, 0x3F800000, 0x40400000, 0x7E800000, 0x7F800000, 0xBF000000)

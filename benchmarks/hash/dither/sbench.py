@@ -219,11 +219,14 @@ import sys
 import time
 from pathlib import Path
 
+from verity_config.settings import of
+
+settings = of(__file__)
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 B_ENV = "SBENCH_B"
-B = int(os.environ.get(B_ENV) or 32)
+B = settings.get(B_ENV)
 TPOT = f"tpot_b{B}_ms"
 N1, N2 = 32, 160
 SAT_REQS, SAT_TOKENS, MAX_SEQS, MAX_TOKENS_STEP = 768, 256, 256, 1024
@@ -253,7 +256,7 @@ PF_CHECK_WORKERS = 32
 
 
 def prefill() -> bool:
-    return os.environ.get(PREFILL_ENV) == "1"
+    return settings.get(PREFILL_ENV)
 
 
 def prefill_prompts(tok, n: int, t: int) -> list[dict]:
@@ -292,7 +295,7 @@ def engine_args(gpu_mem: float, own_batch: bool = False) -> dict:
     # FlashInfer's autotune off, as `engine.build` sets it for the int8-exact engine (it tunes no kernel these engines run)
     # vLLM refuses max_num_seqs above max_num_batched_tokens; every arm of a run gets the same cap, but a stock arm under
     # --stock-own-batch, which keeps vLLM's own max_num_seqs and max_num_batched_tokens
-    t = int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP))
+    t = MAX_TOKENS_STEP if settings.SBENCH_T is None else settings.SBENCH_T
     a = {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
          "gpu_memory_utilization": gpu_mem,
          "enable_prefix_caching": False, "max_model_len": max(2048, t + 64) if prefill() else 2048, "seed": 0,
@@ -306,7 +309,7 @@ OWN_BATCH_ENV = "SBENCH_STOCK_OWN_BATCH"
 
 
 def stock_args(gpu_mem: float) -> dict:
-    return engine_args(gpu_mem, own_batch=os.environ.get(OWN_BATCH_ENV) == "1")
+    return engine_args(gpu_mem, own_batch=settings.get(OWN_BATCH_ENV))
 
 
 def scheduler_of(llm) -> dict | None:
@@ -368,15 +371,15 @@ def env_of(name: str, value: str | None):
 
 
 def kc_b() -> None:
-    if not os.environ.get("HB_H1U_KC_B"):
+    if not settings.HB_H1U_KC_B:
         raise ValueError("an ARM-kcb arm needs $HB_H1U_KC_B, a second h1u_kc build")
-    os.environ["HB_H1U_KC"] = os.environ["HB_H1U_KC_B"]
+    os.environ["HB_H1U_KC"] = settings.HB_H1U_KC_B
 
 
 def mm_cfg() -> None:
-    if not os.environ.get("SBENCH_MM_CFG"):
+    if not settings.SBENCH_MM_CFG:
         raise ValueError("an ARM-mmc arm needs $SBENCH_MM_CFG, a $DITHER_MM_CFG text (dmmsweep.py's best.json)")
-    os.environ["DITHER_MM_CFG"] = os.environ["SBENCH_MM_CFG"]
+    os.environ["DITHER_MM_CFG"] = settings.SBENCH_MM_CFG
 
 
 # ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
@@ -397,7 +400,7 @@ def smq_mm_cfg() -> None:
     """An ARM-mmq arm's $DITHER_MM_CFG, MM_CFGS' at its SMQ, once its suffixes and SBENCH_ARM_ENV have set that."""
     if not MMQ["on"]:
         return
-    q, _, rest = os.environ.get("DITHER_SO_UNITS_SMQ", "").partition("/")
+    q, _, rest = (settings.DITHER_SO_UNITS_SMQ or "").partition("/")
     smq = f"{q}/{rest.partition('/')[0] or 8}" if q and q != "0" else "every SM"
     if smq not in MM_CFGS:
         raise ValueError(f"an ARM-mmq arm has no MM_CFGS entry at its SMQ ({smq}): tune one with dmmsweep.py --block Q/D "
@@ -470,7 +473,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         target = TargetProfile.from_device().with_overrides(int8_exact="all")
         ns = argparse.Namespace(checkpoints=str(vllm_dir / "manifests" / "checkpoints.json"), role="LLAMA31_8B_INT8",
                                 base_role="LLAMA31_8B", repo="verity-int8/Llama-3.1-8B-INT8",
-                                hf_home=os.environ.get("HF_HOME"), by="kernels", at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+                                hf_home=settings.HF_HOME, by="kernels", at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
         entry, _ = G.pin(ns)
         ckpts = G.scratch_checkpoints(ns.checkpoints, entry, scratch)
         a = engine_args(gpu_mem)
@@ -487,7 +490,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             return llm
         a = engine_args(gpu_mem)
         if arm != "exact":
-            DF.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1f=os.environ["DITHER_H1F"], gate=True,
+            DF.patch(t=a["max_num_batched_tokens"], h1c=settings.need("DITHER_H1C"), h1f=settings.need("DITHER_H1F"), gate=True,
                      rc="side" if arm == "dither-side" else "fused")
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         if arm != "exact":
@@ -509,14 +512,14 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         if arm == "dither-1s-percall0":
             os.environ[DO.PERCALL_ENV] = "0"
         if arm == "dither-1s-percall-rtt":
-            os.environ[DO.PERCALL_ENV] = os.environ["DITHER_PERCALL_WAITS"]
+            os.environ[DO.PERCALL_ENV] = settings.need("DITHER_PERCALL_WAITS")
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         a = engine_args(gpu_mem)
-        credit = os.environ["DITHER_CREDIT_GATE"] if arm == "dither-1s-credit" else None
+        credit = settings.need("DITHER_CREDIT_GATE") if arm == "dither-1s-credit" else None
         if credit:
             a["enforce_eager"] = True
-        DO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], gate=True,
+        DO.patch(t=a["max_num_batched_tokens"], h1c=settings.need("DITHER_H1C"), h1o=settings.need("DITHER_H1O"), gate=True,
                  credit=credit)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
@@ -529,19 +532,19 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         import dither_one as DO
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
-        h1u = os.environ.get("HB_H1U")
+        h1u = settings.HB_H1U
         unit, z, ao, pt, ls = DITHER_A[arm]
         unit = unit or ("kh" if h1u else "h1r")
         if unit in DA.KONE:
-            h1u = os.environ["HB_H1U_KSPLIT" if unit == "hbk" else
-                             "HB_H1U_KC" if arm.startswith("dither-a-hbc") else "HB_H1U_KRONLY"]
-        h1c = os.environ["DITHER_H1C"]
+            h1u = settings.need("HB_H1U_KSPLIT" if unit == "hbk" else
+                                "HB_H1U_KC" if arm.startswith("dither-a-hbc") else "HB_H1U_KRONLY")
+        h1c = settings.need("DITHER_H1C")
         if arm.startswith("dither-a-hbc"):
-            h1c = os.environ.get("DITHER_H1C_KC", h1c)
-            if DA.ZY1_ENV + "_KC" in os.environ:
-                os.environ[DA.ZY1_ENV] = os.environ[DA.ZY1_ENV + "_KC"]
+            h1c = settings.DITHER_H1C_KC or h1c
+            if settings.raw(DA.ZY1_ENV + "_KC") is not None:
+                os.environ[DA.ZY1_ENV] = settings.raw(DA.ZY1_ENV + "_KC")
         a = engine_args(gpu_mem)
-        DA.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=os.environ["DITHER_H1O"], unit=unit,
+        DA.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=settings.need("DITHER_H1O"), unit=unit,
                  h1u=h1u, z=z, ao=ao, pt=pt, ls=ls)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
@@ -559,11 +562,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         unit, ao, pt, depth, ov, serve_prio, we, spill = DITHER_SO[arm]
         a = engine_args(gpu_mem)
         # hbc: hbr's call from HB_H1U_KC's build, with DITHER_H1C_KC's libh1c.so and DITHER_ZY1_KC where set (as dither-a-hbc)
-        h1c = os.environ.get("DITHER_H1C_KC", os.environ["DITHER_H1C"]) if unit == "hbc" else os.environ["DITHER_H1C"]
-        if unit == "hbc" and "DITHER_ZY1_KC" in os.environ:
-            os.environ["DITHER_ZY1"] = os.environ["DITHER_ZY1_KC"]
-        SO.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=os.environ["DITHER_H1O"], unit="hbr" if unit == "hbc" else unit,
-                 h1u=os.environ[{"hbk": "HB_H1U_KSPLIT", "hbr": "HB_H1U_KRONLY", "hbc": "HB_H1U_KC"}[unit]], ao=ao, pt=pt,
+        h1c = (settings.DITHER_H1C_KC or settings.need("DITHER_H1C")) if unit == "hbc" else settings.need("DITHER_H1C")
+        if unit == "hbc" and settings.raw("DITHER_ZY1_KC") is not None:
+            os.environ["DITHER_ZY1"] = settings.raw("DITHER_ZY1_KC")
+        SO.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=settings.need("DITHER_H1O"), unit="hbr" if unit == "hbc" else unit,
+                 h1u=settings.need({"hbk": "HB_H1U_KSPLIT", "hbr": "HB_H1U_KRONLY", "hbc": "HB_H1U_KC"}[unit]), ao=ao, pt=pt,
                  depth=depth, ov=ov, serve_prio=serve_prio, window_end=we, spill=spill)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
@@ -621,8 +624,8 @@ SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
 def pick_of(arm: str) -> str | None:
-    only = [p for p in (os.environ.get(PICK_ARMS_ENV) or "").split(",") if p]
-    return (os.environ.get(PICK_ENV) or None) if not only or arm.startswith(tuple(only)) else None
+    only = settings.get(PICK_ARMS_ENV)
+    return settings.get(PICK_ENV) if not only or arm.startswith(tuple(only)) else None
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 # {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}: each dither arm's window its own
 # challenger session off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
@@ -640,11 +643,11 @@ GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each di
 
 def wait_time_at() -> dict | None:
     """$SBENCH_TIME_AT's wait before the reps: until that UTC time when it is at most TIME_AT_MAX_MIN minutes ahead."""
-    at = os.environ.get(TIME_AT_ENV)
+    at = settings.get(TIME_AT_ENV)
     if not at:
         return None
     import datetime as dt
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     h, m = (int(x) for x in at.split(":"))
     wait = (now.replace(hour=h, minute=m, second=0, microsecond=0) - now).total_seconds()
     if wait < -43200:
@@ -652,7 +655,7 @@ def wait_time_at() -> dict | None:
     waited = wait if 0 < wait <= 60 * TIME_AT_MAX_MIN else 0.0
     time.sleep(waited)
     return {"at": at, "ahead_s": round(wait, 1), "waited_s": round(waited, 1),
-            "reps_start_utc": dt.datetime.now(dt.timezone.utc).strftime("%H:%M:%SZ")}
+            "reps_start_utc": dt.datetime.now(dt.UTC).strftime("%H:%M:%SZ")}
 
 
 def close_coins() -> None:
@@ -679,12 +682,12 @@ def fill_end(llm, gen) -> dict:
         n = win.steps_left()
         gen(["Count to ten."], n - 8 if n > 16 else 1)
     return {"fill_steps": win.s - s0, "fill_s": round(time.perf_counter() - t0, 1),
-            "end": mod.end_checks(win, os.environ[mod.LIB_ENV]), "stats": llm.dither_stats()}
+            "end": mod.end_checks(win, settings.need(mod.LIB_ENV)), "stats": llm.dither_stats()}
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
-    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
-    at = json.loads(os.environ.get(CHALLENGERS_ENV) or "{}").get(arm)
+    settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    at = (settings.get(CHALLENGERS_ENV) or {}).get(arm)
     if at:
         os.environ["POUW_CHALLENGER"], os.environ["POUW_CHALLENGER_SESSION"] = at["address"], at["session"]
         if at.get("secret_file"):
@@ -693,7 +696,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             os.environ["POUW_CHALLENGER_COMMITMENT"] = at["commitment"]
         if at.get("rounds"):
             os.environ["DITHER_ROUNDS"] = str(at["rounds"])
-    arm_env = json.loads(os.environ.get(ARM_ENV_ENV) or "{}").get(arm) or {}
+    arm_env = (settings.get(ARM_ENV_ENV) or {}).get(arm) or {}
     os.environ.update(arm_env)
     import torch
     from vllm import SamplingParams
@@ -710,16 +713,16 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         conn.send({"error": f"{type(e).__name__}: {e}"})
         return
     conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
-               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm),
+               "disabled": settings.VLLM_DISABLED_KERNELS, "scheduler": scheduler_of(llm),
                "arm_env": arm_env or None})
     ps = prompts(B)
     pf = prefill()
-    pp = prefill_prompts(llm.get_tokenizer(), max(PF[1], PF_GATE_REQS, 64), int(os.environ["SBENCH_T"])) if pf else None
+    pp = prefill_prompts(llm.get_tokenizer(), max(PF[1], PF_GATE_REQS, 64), settings.need("SBENCH_T")) if pf else None
     if pf and base_arm(arm) in DITHER_SO:
         import dither_a as DA
         import dither_so as SO
         os.environ[SO.CAP_HOST_ENV] = "1"
-        os.environ.setdefault(DA.CHECK_WORKERS_ENV, str(PF_CHECK_WORKERS))
+        settings.setdefault(DA.CHECK_WORKERS_ENV, str(PF_CHECK_WORKERS))
     last: dict = {}
 
     def gen(reqs: list, n: int):
@@ -784,12 +787,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     win.arm(B)
                     win.price_y = True
                 elif pf:
-                    win.arm(int(os.environ["SBENCH_T"]), PF_CAPTURES)
+                    win.arm(settings.need("SBENCH_T"), PF_CAPTURES)
                 else:
                     win.arm(B)
                 if we and not pf:
                     win.arm_end("end_gate")
-            prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
+            prof = settings.DITHER_NSYS == "1" and win is not None
             if prof:
                 torch.cuda.synchronize()
                 torch.cuda.profiler.start()
@@ -811,11 +814,11 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 if mod is DF:
                     win.price_y = False
                     with torch.inference_mode():
-                        res["check"] = DF.check(win, os.environ["DITHER_H1F"], "gate")
-                        res["control"] = DF.check(win, os.environ["DITHER_H1F"], "control")
+                        res["check"] = DF.check(win, settings.need("DITHER_H1F"), "gate")
+                        res["control"] = DF.check(win, settings.need("DITHER_H1F"), "control")
                     res["verdict"] = DF.gate_verdict(res["check"], res["control"])
                 else:
-                    lib = os.environ[mod.LIB_ENV]
+                    lib = settings.need(mod.LIB_ENV)
                     names = PF_CAPTURES if pf else win.captures
                     with torch.inference_mode():
                         caps = {n: mod.check(win, lib, n) for n in names}
@@ -841,12 +844,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 res["tokens"] = [list(o.outputs[0].token_ids) for o in outs]
             conn.send(res)
         elif cmd["op"] == "prof":
-            prof = os.environ.get("DITHER_NSYS") in ("1", "prof")
+            prof = settings.DITHER_NSYS in ("1", "prof")
             torch.cuda.synchronize()
             if prof:
                 torch.cuda.profiler.start()
             counts = PF if pf else PROF_N
-            reqs = int(os.environ.get("SBENCH_PROF_REQS", B))
+            reqs = B if settings.SBENCH_PROF_REQS is None else settings.SBENCH_PROF_REQS
             res = {"prof_n": list(counts), "profiled": prof, "prefill": pf, "prof_requests": reqs}
             for n in counts:
                 if prof:
@@ -969,7 +972,7 @@ def main() -> int:
                          "beside its block (`dbw.beside_s`)")
     ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle session's passes, in seconds")
     a = ap.parse_args()
-    if a.bw_passes and not (os.environ.get("BW_LIB") and os.environ.get("BW_KV")):
+    if a.bw_passes and not (settings.BW_LIB and settings.BW_KV):
         ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")
     if a.bw_passes and a.serial:
         ap.error("--bw-passes runs beside every arm at once, which --serial never brings up")
@@ -998,9 +1001,13 @@ def main() -> int:
     missing = sorted({REF_OF[x] for x in arms if x in TOKENS_ONLY and REF_OF[x] not in arms})
     if a.gate and missing:
         ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
-    smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
+    smq_sweep = list(settings.get(SMQ_SWEEP_ENV))
     if not all(re.fullmatch(r"0|\d+(/\d+(/\d+)?)?", v) for v in smq_sweep):
-        ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q, q/den or q/den/cap")
+        ap.error(f"${SMQ_SWEEP_ENV}={settings.raw(SMQ_SWEEP_ENV)}: comma-separated q, q/den or q/den/cap")
+    for arm, env in (settings.get(ARM_ENV_ENV) or {}).items():
+        if bad := settings.unknown(env):
+            ap.error(f"${ARM_ENV_ENV}'s {arm} sets {', '.join(bad)}, which nothing reads: fix the name, or declare it in "
+                     f"{settings.path}")
     sweep_key = "tokens_per_s" if a.ops == "sat" else TPOT
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
@@ -1145,11 +1152,11 @@ def main() -> int:
             for i, pargs in enumerate(a.bw_prover_args or [""]):
                 doc = {"i": i, "prover_args": pargs, "plan": dbw.plan(a.reps), "blocks": [], "sessions": {}}
                 bw_sides.append(doc)
-                side = dbw.Side(out / f"bw{i}", plan=doc["plan"], gib=a.bw_passes, py=os.environ.get("BW_PY", sys.executable),
-                                lib=os.environ["BW_LIB"], kv=os.environ["BW_KV"], lean_exe=os.environ.get("BW_LEAN_EXE"),
-                                prover_cpus=os.environ.get("BW_PROVER_CPUS") or aff,
-                                verifier_cpus=os.environ.get("BW_VERIFIER_CPUS"),
-                                side_args=shlex.split(os.environ.get("BW_SIDE_ARGS", "")), prover_args=shlex.split(pargs))
+                side = dbw.Side(out / f"bw{i}", plan=doc["plan"], gib=a.bw_passes, py=settings.BW_PY or sys.executable,
+                                lib=settings.need("BW_LIB"), kv=settings.need("BW_KV"), lean_exe=settings.BW_LEAN_EXE,
+                                prover_cpus=settings.BW_PROVER_CPUS or aff,
+                                verifier_cpus=settings.BW_VERIFIER_CPUS,
+                                side_args=shlex.split(settings.BW_SIDE_ARGS or ""), prover_args=shlex.split(pargs))
                 dither = [x for x in arms if x.startswith("dither")] or arms
                 try:
                     doc["ready"], cal = dbw.registered(side, lambda: block(i * a.reps, "cal", i, only=dither))
@@ -1202,11 +1209,11 @@ def main() -> int:
     (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
     if not arms:
         return rc
-    summary = {"arms": arms, "info": info, "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
+    summary = {"arms": arms, "info": info, "numa": settings.DITHER_NUMA_RECORD,
                "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
-               "pick": os.environ.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},
+               "pick": settings.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
                               "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}

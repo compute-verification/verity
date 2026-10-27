@@ -13,8 +13,11 @@ attention isn't the class Program's one-row decode's, though at as few keys as o
 
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`). Every other unit holds its Definition's
 function of the window's values:
-- a position's `TokenFeed_v1` its token and the slot it carries (`io_shell.feed_reference`), the first position's
-  `SlotRow_v1` the slot's row opened, and each token select's `SlotMask_v1` the token or `io_shell.EMPTY`;
+- a slot's `ScanSlots_v1` every lane's row and head of the scan state row at its anchor (`io_shell.slots_reference`; its
+  lane's row is the slot's, `scan_slots`), a position's `TokenFeed_v1` its token and the slot it carries
+  (`io_shell.feed_reference`), the first position's `SlotRow_v1` the slot's row opened, each token select's `SlotMask_v1`
+  the token or `io_shell.EMPTY` and its `OutCollect_v1` that collected on from the lane's head
+  (`io_shell.collect_reference`), and the last position's `SlotEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's chunks the first maximum above -inf of their logits and its index (`chunk_best`), and its ``x0``
   unit ``logits[0]``;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
@@ -24,8 +27,11 @@ function of the window's values:
   range, and the earlier Calls' running state;
 - each `AllGather_v1` the concatenation of its parts, read through the circuit's wires once their writers hold them.
 
-`Rows.record` gives a `Window` each template's units in runs of one step and one source (`SOURCES`: served, computed, or
-evaluated by its Definition), every input by reference but an opening's ports.
+`Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
+or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
+fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
+node's value came from (`SOURCES`) are the scan state's and the rows' own, committed hiding, and the labels show none of
+them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`).
 """
 from __future__ import annotations
 
@@ -36,6 +42,7 @@ from typing import Any
 
 import numpy as np
 
+from verity.core.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -48,20 +55,25 @@ from verity.ml.windows import interface as IF
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
+from . import scan_state as SS
 from . import window_weights as WW
 from .window_builder import WEIGHTS
-from .window_circuit import SLOT_ROWS, Lowered, WindowClass, _spans
+from .window_circuit import Lowered, WindowClass, _spans
 
-#: a unit's source, its runs' label: its node's served value, the class Program's value at a node the engine didn't compute,
-#: or its Definition's function of the window's values
+#: a unit's source: its node's served value, the class Program's value at a node the engine didn't compute, or its
+#: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
+#: (`Rows.source`) and never a label
 SOURCES = ("served", "computed", "evaluated")
 SERVED, COMPUTED, EVALUATED = range(3)
+#: a unit's form, its runs' label beside its step and slot: a unit a node's lowering filled (`_Program.outs`) or one its
+#: Definition fills; the lowering fixes it
+FORMS = ("node", "evaluated")
 
 #: a weight's elements [lo, hi) in its leaves' unsigned width: ``weights(label, lo, hi)``
 Weights = Callable[[str, int, int], np.ndarray]
-#: the salt nonce of window 0's slot rows under the committer's key, each next window's the next: above every weight
-#: parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
-SLOT_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
+#: the salt nonce of window 0's stand-in scan state under the committer's key (`standin_state`), each next window's the
+#: next: above every weight parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
+STATE_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
 
 
 def positions(fn: Any) -> list[int]:
@@ -131,8 +143,9 @@ def _pinned(family: str) -> str | None:
 
 
 class Slot:
-    """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its `SLOT_ROW` row
-    (occupancy, prompt length, ids), ``weights`` the weights record's fields and ``served`` its request's served values,
+    """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its lane's `SlotRow_v1`
+    row of the scan state row at its anchor (occupancy, prompt length, ids; `scan_slots`), ``weights`` the weights record's
+    fields and ``served`` its request's served values,
     None for an empty slot. Each node's value (its return fields) and source, each position's token and, below the class's
     prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
@@ -373,15 +386,19 @@ class Served:
 class Rows:
     """Every unit's output rows of ``lowered``'s circuit (module docstring) as u16 words by template and output, with each
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
-    registered values by parameter (`window_weights.weight_values` with their rows kept, and `slot_rows_value`), of which
-    an embedding read opens its table's (its ``rows``, ``salts`` and ``path``). Refused unless every unit's every row is
-    filled once."""
+    registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
+    `scan_state.SCAN_STATE`, with its rows: the network certifier's, a row a bucket of the window), of which an embedding
+    read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v1` reads the scan state's row at
+    its anchor. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
         if len(slots) != len(lowered.programs):
             raise ValueError(f"{len(slots)} slots' values for {len(lowered.programs)} class Programs")
         c = self.circuit = lowered.circuit
         self.lowered = lowered
+        if getattr(registered.get(SS.SCAN_STATE), "rows", None) is None:
+            raise ValueError(f"give the scan state's registered value, {SS.SCAN_STATE}, with its rows")
+        self.state = registered[SS.SCAN_STATE].rows
         tables = {t.name: t.param for t in (c.registered.tables if c.registered else ())}
         self.tables: dict[str, Any] = {}
         for o in c.registered.openings if c.registered else ():
@@ -395,6 +412,7 @@ class Rows:
         self.outs = {t: [np.zeros((n[t], w), dtype=np.uint16) for _, w in lay.outs] for t, lay in self.lays.items()}
         self.held = {t: np.zeros((n[t], len(lay.outs)), dtype=bool) for t, lay in self.lays.items()}
         self.source = {t: np.full(n[t], EVALUATED, dtype=np.int8) for t in self.lays}
+        self.node = {t: np.zeros(n[t], dtype=bool) for t in self.lays}
         ports = {(o.reader, p) for o in (c.registered.openings if c.registered else ()) for p in o.ports}
         self.inputs = {t: {p: np.zeros((n[t], w), dtype=np.uint16) for p, w in lay.rows if (t, p) in ports}
                        for t, lay in self.lays.items()}
@@ -418,6 +436,7 @@ class Rows:
             w = _words(S.values[j])
             for lo, hi, r in pieces:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
+                self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
         for p, (j, (feed, row)) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
@@ -433,6 +452,7 @@ class Rows:
             if feed is not None:
                 self._put(*feed, "o0", _i32([t]), EVALUATED)
                 self._put(*feed, "o1", _i32(S.carried[p]), EVALUATED)
+        masked = []
         for j, (chunks, x0, mask) in P.selects.items():
             logits = S.operand(nodes[j].args[0])
             if logits.dtype.itemsize != 2:
@@ -447,9 +467,31 @@ class Rows:
             if lo != len(logits):
                 raise ValueError(f"node {j}: chunks of {lo} logits, not its {len(logits)}")
             self._put(*x0, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
-            self._put(*mask, "o0", _i32([IO.mask_reference(S.row[0], int(S.values[j][0][0]))]), EVALUATED)
+            masked.append(IO.mask_reference(S.row[0], int(S.values[j][0][0])))
+            self._put(*mask, "o0", _i32(masked[-1:]), EVALUATED)
+        self._scan(P, S, masked)
         for j, (plan, calls) in P.heads.items():
             self._heads(nodes[j], plan, calls, S)
+
+    def _scan(self, P: Any, S: Slot, masked: Sequence[int]) -> None:
+        """The slot's scan units: its `ScanSlots_v1` every lane's row and head of the scan state row at its anchor (its
+        lane's row the slot's, refused by name where it isn't), each position's `OutCollect_v1` its masked select collected
+        on from the lane's head, and its `SlotEntry_v1` its entry of the scan's Programs' row."""
+        lanes = _lanes(P, self.state)
+        tid, u = P.scan_unit
+        for k, (row, head) in enumerate(lanes):
+            self._put(tid, u, f"o{2 * k}", _i32(row), EVALUATED)
+            self._put(tid, u, f"o{2 * k + 1}", _i32(head), EVALUATED)
+        row, a = lanes[P.lane]
+        if row != S.row:
+            raise ValueError(f"{P.name}: its slot's row isn't lane {P.lane}'s of the scan state row at bucket {P.anchor}")
+        KO = P.cls.outputs
+        for p, ((ctid, cu), tok) in enumerate(zip(P.collects, masked, strict=True)):
+            a = IO.collect_reference(a, tok, KO, p == 0)
+            self._put(ctid, cu, "o0", _i32(a), EVALUATED)
+        e = P.entry.bindings
+        entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
+        self._put(*P.entry_unit, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's
@@ -506,26 +548,34 @@ class Rows:
             if pending and not progress:
                 raise ValueError(f"gathers {sorted(pending)}: parts whose writers no node or gather fills")
 
-    def steps(self, tid: str) -> np.ndarray:
-        """Each unit of ``tid``'s step (its lowering's label)."""
+    def _span(self, tid: str, k: int) -> np.ndarray:
         out = np.full(self.n[tid], -1, dtype=np.int64)
-        for at, count, _slot, step in self.lowered.spans.get(tid, ()):
-            out[at:at + count] = step
+        for span in self.lowered.spans.get(tid, ()):
+            out[span[0]:span[0] + span[1]] = span[k]
         return out
 
+    def steps(self, tid: str) -> np.ndarray:
+        """Each unit of ``tid``'s step (its lowering's label)."""
+        return self._span(tid, 3)
+
+    def slots(self, tid: str) -> np.ndarray:
+        """Each unit of ``tid``'s slot (its lowering's), -1 for a unit of no slot's."""
+        return self._span(tid, 2)
+
     def record(self, win: IF.Window) -> None:
-        """Every unit into ``win``, template by template in unit order, in runs of one step and one source, each labelled
-        ``{"step", "source"}``: each input by reference but an opening's ports, each port in its element width."""
+        """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
+        labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
+        in its element width."""
         for tid, fn in self.fns.items():
-            lay, steps, src = self.lays[tid], self.steps(tid), self.source[tid]
-            key = steps * len(SOURCES) + src
-            ends = [0, *(np.flatnonzero(np.diff(key)) + 1).tolist(), self.n[tid]]
+            lay, steps, slots, node = self.lays[tid], self.steps(tid), self.slots(tid), self.node[tid]
+            cut = (np.diff(steps) != 0) | (np.diff(slots) != 0) | (np.diff(node) != 0)
+            ends = [0, *(np.flatnonzero(cut) + 1).tolist(), self.n[tid]]
             ins_w, outs_w = lay.widths[:len(lay.rows)], lay.widths[len(lay.rows):]
             for a, b in zip(ends, ends[1:]):
                 ins = [None if p not in self.inputs[tid] else _elements(self.inputs[tid][p][a:b], w)
                        for (p, _), w in zip(lay.rows, ins_w)]
                 outs = [_elements(o[a:b], w) for o, w in zip(self.outs[tid], outs_w)]
-                win.record(fn, ins, outs, {"step": int(steps[a]), "source": SOURCES[int(src[a])]})
+                win.record(fn, ins, outs, {"step": int(steps[a]), "slot": int(slots[a]), "form": FORMS[0 if node[a] else 1]})
 
 
 def _elements(words: np.ndarray, width: int) -> np.ndarray:
@@ -533,16 +583,40 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def slot_rows_value(program: str, slot_rows: Sequence[Sequence[int]], key: bytes, index: int, *,
-                    window: str) -> G.Registered:
-    """`SLOT_ROWS`: the slots' rows (``row/v2``), a per-window value under the window's root ``window``, committed under
-    the committer's secret ``key`` at salt nonce `SLOT_NONCE` plus the window's ``index``, which no other value under
-    ``key`` takes."""
+def _lanes(P: Any, state: Sequence[Any]) -> list[tuple[list[int], list[int]]]:
+    """`io_shell.ScanSlots_v1` of ``state``'s row at class Program ``P``'s anchor: every lane's row and head."""
+    b = P.scan.bindings
+    row = np.asarray(state[P.anchor], dtype=np.uint16).reshape(-1)
+    return IO.slots_reference(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
+
+
+def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], list[int]]]:
+    """Each class Program's slot as the scan state's rows ``state`` (`scan_state.SCAN_STATE`'s, a row a bucket of the
+    window) give it, in slot order: its lane's row (occupancy, prompt length, ids; a `Slot`'s ``row``) and head (prompt
+    length, ``max_tokens``) of the row at its anchor."""
+    return [_lanes(P, state)[P.lane] for P in lowered.programs]
+
+
+def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
+                  window: str) -> G.Registered:
+    """`scan_state.SCAN_STATE` where no scan ran: the rows (``row/v2``, a row a bucket of the window) that give slot k its
+    row (occupancy, prompt length, ids) and ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every
+    other field zero, committed under the committer's secret ``key`` at salt nonce `STATE_NONCE` plus the window's
+    ``index``, a per-window value under the window's root ``window``. No verifier pins its root at a scan's, so the audit
+    counts its reads free."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
-    return H1R.commit(program, SLOT_ROWS, np.concatenate([_i32(r) for r in slot_rows]), key, SLOT_NONCE + index,
-                      keep_rows=True, window=window)
+    scan = cls.scan
+    states = [IS.empty(scan) for _ in range(cls.buckets)]
+    for k, (row, max_tokens) in enumerate(slots):
+        s = states[cls.anchor(k)].slots[cls.lane(k)]
+        s.occ, s.fields, s.max_tokens = int(row[0]), int(row[1]), int(max_tokens)
+        for p, v in enumerate(row[2:]):
+            s.ids[IS.position(scan, p)] = int(v)
+    bits = np.array([IS.encode(scan, st) for st in states], dtype=np.uint16).reshape(len(states), -1, 16)
+    words = (bits << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
+    return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
 
 
-__all__ = ["COMPUTED", "EVALUATED", "Rows", "SERVED", "SLOT_NONCE", "SOURCES", "Served", "Slot", "positions",
-           "slot_rows_value"]
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served", "Slot", "positions",
+           "scan_slots", "standin_state"]

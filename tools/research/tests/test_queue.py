@@ -217,6 +217,22 @@ def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(worl
     assert [m.pr for m in q.sync()[0]] == [1, 2]
 
 
+def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
+    """GitHub can list an open PR before it makes refs/pull/N/head (27 Oct: #5290, and every drive tick from 13:14Z ended rc=1,
+    since one missing ref failed the whole fetch): that PR waits, and the rest of the queue syncs."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, two := world.change({"b.txt": "two\n"}))
+    _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1]
+    assert entries[2].state == "waiting" and "no pull ref" in entries[2].why
+    assert any("#2's pull ref can't be fetched" in line for line in world.logs)
+
+    _git(world.origin, "update-ref", "refs/pull/2/head", two)
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+
 def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
     """12 Oct: a flaky test on `main` failed 8577 and its fix (#1858) sat behind the next train; `--first` restacks `next` so the
     next train starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
@@ -2014,13 +2030,14 @@ def _lock(**entries: str) -> str:
 
 
 def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, path: str = "slot",
-               files: dict[str, str] | None = None, steps: list | None = None) -> str:
+               files: dict[str, str] | None = None, steps: list | None = None, at: float | None = None) -> str:
     """A run of ``commit`` that another machine published to the store's remote, as `research run` does: a records run
-    (`lean_changed.py --records PKG`, result `lean-fast/v1`) with ``files`` as its run files, or with ``steps`` a check."""
+    (`lean_changed.py --records PKG`, result `lean-fast/v1`) with ``files`` as its run files, or with ``steps`` a check; ``at``
+    its start (its id's time), else now."""
     from research.runs import new_run_id
 
     node = LocalStore(world.tmp / "node", config_path=world.tmp / "store.toml")
-    rid, outputs = new_run_id(), {}
+    rid, outputs = new_run_id(at), {}
     if files is not None:
         tree = world.tmp / "run-files" / rid
         for rel, text in files.items():
@@ -2162,6 +2179,75 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     h2 = world.change({LOCK: rec}, base=h1)
     assert _mark(world, 1, h2) == 0
     assert f"{h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where pkg passed" in world.logs[-1]
+
+
+def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_for_it_and_one_that_differs_or_cant_be_read_doesnt(
+        world, capsys):
+    """CI-207: a PR that carries another PR's Lean change re-ran records at its own head, 1-2 h of queue on a full node, though the
+    package's inputs were byte-identical to a head where it passed.  A pass at any commit whose files of the package and the
+    packages it requires by path, their tests and docs aside (CI-216), and whose toolchain and checker (CI-210:
+    `tools/verity/lean/`, `tools/verity/check/common.py`) are the head's vouches for it; a commit this clone lacks is fetched, and
+    one that can't be read vouches for nothing."""
+    world.with_store_remote()
+    _move_main(world, {"pkg/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../lib", "name": "lib"}]}),
+                       "lib/lakefile.toml": 'name = "lib"\n', "lib/L.lean": "def l := 1\n", "lean-toolchain": "v1\n",
+                       "lib/tests/T.lean": "def t := 1\n", "lib/README.md": "lib\n", "pkg/test/x.txt": "x\n",
+                       "tools/verity/lean/check.py": "# the checker\n", "tools/verity/check/common.py": "# its helpers\n"})
+    other = world.tmp / "other"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(other))
+    (other / LOCK).write_text(_lock(A="2"))
+    (other / "c.txt").write_text("the other PR's\n")
+    _git(other, "commit", "-q", "-am", "the other PR's Lean change")
+    c = _git(other, "rev-parse", "HEAD")
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()})
+
+    h = world.change({LOCK: _lock(A="2"), "a.txt": "carries it\n"})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1                                     # c is on no remote: nothing vouches
+    err = capsys.readouterr().err
+    assert "1 of 1 commit(s) with runs can't be read here or from" in err and "--records pkg --update" in err
+    _git(other, "push", "-q", "origin", f"{c}:refs/dev/other")
+    assert _mark(world, 1, h) == 0
+    assert f"research queue: records gate: pkg: a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+    for n, files in ((6, {"lib/tests/T.lean": "def t := 2\n"}), (7, {"lib/README.md": "lib, said again\n", "lib/READMEs.txt": "x\n"}),
+                     (8, {"pkg/test/x.txt": "y\n", "pkg/NOTES.md": "notes\n"})):        # tests and docs: no records run reads them
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 0
+        assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+    for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"lean-toolchain": "v2\n"}),
+                     (9, {"lib/lakefile.toml": 'name = "lib"\ndefaultTargets = ["L"]\n'}), (10, {"lib/tests.lean": "def t := 1\n"}),
+                     (4, {"tools/verity/lean/check.py": "# the checker, changed\n"}),
+                     (5, {"tools/verity/check/common.py": "# its helpers, changed\n"})):
+        capsys.readouterr()
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
+        assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
+
+
+def test_the_same_inputs_search_reads_every_candidate_to_its_bound_newest_first_splitting_a_fetch_the_remote_refuses(world, capsys):
+    """CI-216: the search fetched 64 commits at most, so on 27 Oct it refused #4797, #5006 and #4983 on carried locks with
+    '237 commit(s) with runs can't be read here'.  It fetches every candidate up to `RECORDS_FETCH`, in chunks, and a chunk the
+    remote refuses for one commit it doesn't serve is split until that commit stands alone; the rest are read."""
+    from research.queue import RECORDS_FETCH
+
+    world.with_store_remote()
+    other = world.tmp / "other"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(other))
+    (other / LOCK).write_text(_lock(A="2"))
+    _git(other, "commit", "-q", "-am", "the carried change")
+    c = _git(other, "rev-parse", "HEAD")
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()}, at=int(_git(other, "log", "-1", "--format=%ct", c)) - 60)   # older than the rest
+    for i in range(70):                                                  # newer runs, of commits whose inputs differ
+        (other / LOCK).write_text(_lock(A=str(10 + i)))
+        _git(other, "commit", "-q", "-am", f"another change {i}")
+        _published(world, _git(other, "rev-parse", "HEAD"))
+    _git(other, "push", "-q", "origin", "HEAD:refs/dev/other")
+    _published(world, "ab" * 20)                                         # the newest: on no remote
+
+    h = world.change({LOCK: _lock(A="2")})
+    capsys.readouterr()
+    assert RECORDS_FETCH > 72 and _mark(world, 1, h) == 0
+    assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
 
 #: `tools/verity/lean/merge.py` as the gate runs it on a lock both sides changed: ours, with each entry theirs changed

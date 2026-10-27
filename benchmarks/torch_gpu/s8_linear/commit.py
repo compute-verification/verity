@@ -1,13 +1,13 @@
-"""Serve-time commitment at the large model's batch: one layer's unit outputs, each token row one hm96-sha512 hiding leaf in a
+"""Serve-time commitment at the large model's batch: one layer's op outputs, each token row one hm96-sha512 hiding leaf in a
 frame-v3-sha512 row table, hashed by the vLLM commit path's GPU row tables (`verity_vllm.commit.row_tables_device.step_roots`,
 on its side stream), against the layer's exact linears at the same M on one GPU, and a whole decode step's tables in one call.
 
-The unit sets of a model (`fixture.MODELS`), per token row of one layer (the kernels hash a row's bytes, then a 4-byte word):
+The table sets of a model (`fixture.MODELS`), per token row of one layer (the kernels hash a row's bytes, then a 4-byte word):
     quantize   the served commit's tables (`commit.row_tables`): the four quantizers' s8 codes, each with its f32 token scale
-    fused      compute-accounting's fused cuts: the quantizers, every linear's bf16 output, attention's output and its
+    fused      the fused cuts: the quantizers, every linear's bf16 output, attention's output and its
                probabilities (heads x context), the two residual adds
     every      every op's output: fused's, the two RMSNorms', the ReLU's and attention's scores
-A bf16 row is hashed as its bytes with a zero word: this measures the throughput of those bytes, not a unit's row format.
+A bf16 row is hashed as its bytes with a zero word: this measures the throughput of those bytes, not the served row format.
 
 Per model, set and M:
     check      at M in --check-ms, the device's roots equal the CPU twin's (`host_step`) for one layer, and at the smallest
@@ -20,12 +20,12 @@ Per model, set and M:
     overlap    the serving order: a layer's tables hash while the next layer's linears run. Replays of the linears hide
                `step_roots`' host work; from their end the commit and one more replay run together: their joint time against
                the replay alone, and the gap before that replay starts; on the committer's side stream (default priority)
-               and, as overlap_hi, on a stream of the highest priority (commit_gpu: the GEMM's queued blocks go first
+               and, as overlap_hi, on a stream of the highest priority (commit_gpu: the GEMM's queued CTAs go first
                otherwise)
     profile    each of the four kernels' device time (`row_table.cu`: k_segments, the 1 KiB segments' digests a thread
-               each; k_rows, a row's hm96 leaf a thread; k_trees, a table's tree a block; k_step), from the CUDA profiler
-    sha        SHA-512 compressions, ESTIMATED from commit_gpu's counts for row-seg/v1 (a segment's blocks and its padding
-               block, the outer hash over the segments' digests, ~8 fixed a leaf, the salt being ChaCha20's), over the
+               each; k_rows, a row's hm96 leaf a thread; k_trees, a table's tree a CTA; k_step), from the CUDA profiler
+    sha        SHA-512 compressions, ESTIMATED from commit_gpu's counts for row-seg/v1 (a segment's chunks and its padding
+               chunk, the outer hash over the segments' digests, ~8 fixed a leaf, the salt being ChaCha20's), over the
                kernels' time, against the card's integer-issue ceiling of 7.37 G/s (benchmarks/pouw/commit_gpu/README.md)
 The commit, linears and overlap items alternate rep by rep (order rotated), the SM clock read around each.
 
@@ -37,7 +37,7 @@ overstates the commit's share of a whole step. The whole step (the model's layer
     by_slot              the same rows slot-major, one table a sequence slot (its every op of every layer as rows) as one
                          subtree each, EMULATED with the kernels as they are: a table takes one row width, so every row has
                          the layer's mean width (value bytes equal to within rounding)
-    need_gbs             the whole step's value bytes over compute-accounting's estimated step time (`STEP_S`), beside their
+    need_gbs             the whole step's value bytes over the estimated step time (`STEP_S`), beside their
                          figures for mha8k: 134 GB/s every op, 93 fused
 
     python commit.py --out OUT [--models mqa16k,mha8k] [--ms 64,256,1023,4096] [--sets quantize,fused,every] [--reps 15]
@@ -67,10 +67,10 @@ from verity_vllm.commit import row_tables_device as D  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 CTX, KEY = bytes(range(64)), bytes(range(100, 132))
-SETS = FX.UNIT_SETS
-#: compute-accounting's estimated decode step (s): mha8k 22:20Z (195 ms), mqa16k 22:40Z (1.44 s)
+SETS = FX.TABLE_SETS
+#: the estimated decode step (s): mha8k 195 ms, mqa16k 1.44 s
 STEP_S = {"mha8k": 0.195, "mqa16k": 1.44}
-#: compute-accounting's committed-value rates for mha8k (GB/s): every op, fused cuts
+#: the estimated committed-value rates for mha8k (GB/s): every op, fused cuts
 NEED_MHA8K_GBS = {"every": 134.0, "fused": 93.0}
 SHA_CEILING_G = 7.37
 KERNELS = ("k_segments", "k_rows", "k_trees", "k_step")
@@ -89,11 +89,11 @@ def est_compressions(widths: list[int], m: int) -> tuple[int, int]:
 class Tables:
     """Tables of M rows each, (op, bytes a row, a scale word), codes random, a quantizer's scales random, other words zero."""
 
-    def __init__(self, units: list[tuple[str, int, bool]], m: int, seed: int, ids=None):
+    def __init__(self, tables: list[tuple[str, int, bool]], m: int, seed: int, ids=None):
         g = torch.Generator(device="cuda").manual_seed(seed)
         self.ids = ids or [(f"r{i}", 0) for i in range(m)]
         self.tabs = {}
-        for op, k, scaled in units:
+        for op, k, scaled in tables:
             c = torch.randint(-128, 128, (m, k), generator=g, dtype=torch.int16, device="cuda").to(torch.int8)
             s = torch.rand(m, generator=g, device="cuda") * 2.0**-7 if scaled else torch.zeros(m, device="cuda")
             self.tabs[op] = (c, s.to(torch.float32).contiguous())
@@ -112,13 +112,13 @@ def tiny_check() -> dict:
     md = FX.Model("tiny", 64, 2, (("qkv", 192, 64, "attn"), ("o", 64, 64, "o"), ("up", 256, 64, "mlp"),
                                   ("down", 64, 256, "down")), 2, 32, 5, 13)
     doc = {}
-    for unit_set in SETS:
-        lay = Tables(FX.units(md, unit_set), 13, seed=5)
+    for table_set in SETS:
+        lay = Tables(FX.tables(md, table_set), 13, seed=5)
         outs = {**lay.outputs("model.layers.0."), **lay.outputs("model.layers.1.")}
         dev = D.step_roots(CTX, 2**33 + 7, outs, KEY).result()
         host = host_copy(outs)
         twin = D.host_step(CTX, 2**33 + 7, host, KEY)
-        doc[unit_set] = {"tables": len(outs), "device_is_twin": dev == twin,
+        doc[table_set] = {"tables": len(outs), "device_is_twin": dev == twin,
                          "twin_is_reference": twin == RTB.step_roots(CTX, 2**33 + 7, host, KEY)}
     return doc
 
@@ -243,14 +243,14 @@ def timed_calls(outputs: dict, step: int, reps: int) -> dict:
             "commit_ms_all": [round(v / 1e3, 3) for v in kern], "host_ms_all": [round(v / 1e3, 3) for v in host]}
 
 
-def measure(md: FX.Model, unit_set: str, m: int, a, clock, step: int) -> dict:
-    units = FX.units(md, unit_set)
-    widths = [k for _, k, _ in units]
-    lay = Tables(units, m, seed=md.d + m)
+def measure(md: FX.Model, table_set: str, m: int, a, clock, step: int) -> dict:
+    tables = FX.tables(md, table_set)
+    widths = [k for _, k, _ in tables]
+    lay = Tables(tables, m, seed=md.d + m)
     outs = lay.outputs("model.layers.0.")
     lin = Linears(md, m)
-    row = {"model": md.name, "set": unit_set, "m": m, "tables": len(outs), "value_bytes": lay.value_bytes,
-           "row_bytes": {op: k + 4 for op, k, _ in units}, "linear_gate": lin.gate}
+    row = {"model": md.name, "set": table_set, "m": m, "tables": len(outs), "value_bytes": lay.value_bytes,
+           "row_bytes": {op: k + 4 for op, k, _ in tables}, "linear_gate": lin.gate}
     if not lin.ok:
         row["failed"] = "a linear's words differ from the reference"
         return row
@@ -299,17 +299,17 @@ def measure(md: FX.Model, unit_set: str, m: int, a, clock, step: int) -> dict:
     torch.cuda.empty_cache()
     if a.whole:
         small = m == min(a.check_ms)
-        row["whole_measured"] = whole(lay, units, md, m, a, step + 1, small)
-        row["by_slot"] = by_slot(units, md, m, a, step + 2, small)
+        row["whole_measured"] = whole(lay, tables, md, m, a, step + 1, small)
+        row["by_slot"] = by_slot(tables, md, m, a, step + 2, small)
         vb = row["whole_measured"]["value_bytes"]
         row["need_gbs"] = {"step_s": STEP_S.get(md.name), "gbs": vb / STEP_S[md.name] / 1e9 if md.name in STEP_S else None,
-                           "compute_accounting_mha8k": NEED_MHA8K_GBS.get(unit_set) if md.name == "mha8k" else None}
+                           "compute_accounting_mha8k": NEED_MHA8K_GBS.get(table_set) if md.name == "mha8k" else None}
     return row
 
 
-def whole(lay: Tables, units, md: FX.Model, m: int, a, step: int, check: bool) -> dict:
+def whole(lay: Tables, tables, md: FX.Model, m: int, a, step: int, check: bool) -> dict:
     copies = max(1, min(md.layers, int(a.whole_gb * 2**30 // lay.value_bytes)))
-    bufs = [lay] + [Tables(units, m, seed=7919 * (i + 1) + m) for i in range(copies - 1)]
+    bufs = [lay] + [Tables(tables, m, seed=7919 * (i + 1) + m) for i in range(copies - 1)]
     outs = {}
     for layer in range(md.layers):
         outs.update(bufs[layer % copies].outputs(f"model.layers.{layer}."))
@@ -320,15 +320,15 @@ def whole(lay: Tables, units, md: FX.Model, m: int, a, step: int, check: bool) -
     doc.update(timed_calls(outs, step, a.whole_reps))
     doc["commit_gbs"] = doc["value_bytes"] / doc["commit_ms"] / 1e6
     doc["kernels_us"] = profile(outs, step)
-    doc["sha"] = sha([k for _, k, _ in units], m * md.layers, doc["kernels_us"], doc["commit_ms"] * 1e3)
+    doc["sha"] = sha([k for _, k, _ in tables], m * md.layers, doc["kernels_us"], doc["commit_ms"] * 1e3)
     del bufs, outs
     torch.cuda.empty_cache()
     return doc
 
 
-def by_slot(units, md: FX.Model, m: int, a, step: int, check: bool) -> dict:
-    rows = len(units) * md.layers
-    k = 2 * math.ceil(sum(k for _, k, _ in units) / len(units) / 2)
+def by_slot(tables, md: FX.Model, m: int, a, step: int, check: bool) -> dict:
+    rows = len(tables) * md.layers
+    k = 2 * math.ceil(sum(k for _, k, _ in tables) / len(tables) / 2)
     ids = [(f"u{j}", 0) for j in range(rows)]
     per_slot = rows * (k + 4)
     copies = max(1, min(m, int(a.whole_gb * 2**30 // per_slot)))
@@ -372,10 +372,10 @@ def main() -> int:
     failed = [s for s, v in meta["tiny"].items() if not (v["device_is_twin"] and v["twin_is_reference"])]
     rows, step = [], 1
     for md in map(FX.model, a.models.split(",")):
-        for unit_set in a.sets.split(","):
+        for table_set in a.sets.split(","):
             for m in ms:
                 t0 = time.time()
-                row = measure(md, unit_set, m, a, clock, step)
+                row = measure(md, table_set, m, a, clock, step)
                 step += 3
                 row["s"] = round(time.time() - t0, 1)
                 rows.append(row)
@@ -384,7 +384,7 @@ def main() -> int:
                 bad = ("failed" in row or row.get("check_layer") is False or not row.get("roots_stable", True)
                        or row.get("whole_measured", {}).get("check") is False or row.get("by_slot", {}).get("check") is False)
                 if bad:
-                    failed.append(f"{md.name}:{unit_set}:m{m}")
+                    failed.append(f"{md.name}:{table_set}:m{m}")
                 print(json.dumps({k: row.get(k) for k in ("model", "set", "m", "value_bytes", "commit_gbs", "share",
                                                           "overlap_slowdown", "overlap_hi_slowdown", "s")}
                                  | {"us": {k: round(v, 1) for k, v in row.get("us", {}).items()},
