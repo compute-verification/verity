@@ -17,7 +17,7 @@ written as a quoted mention ("leg"); the table's rows name them too.
 what replaced it (`GLOSSARY.md`, Older names). "Slack", "residual" and "faithful" stay out of it, since those words keep
 other senses (a tick's slack, the Slack app; the residual stream, the covert residual; a byte-faithful replica); "dark"
 alone is in it, since no maintained doc uses the word in another sense. "IU" and "NCI" match in capitals only, so a
-path (`benchmarks/nci`) or a Lean name (`Nci`, `NciCheck`) is no match even outside backticks.
+path (`benchmarks/nci`) or a Lean name (`InferenceOnly`, `NciCheck`) is no match even outside backticks.
 """
 from __future__ import annotations
 
@@ -234,7 +234,7 @@ def test_the_doc_scan_reads_each_form():
                 "blocks; novel information, novel reads and novel bits. The compute dampener, a dampener, training\n"
                 "efficiency, pretraining efficiency and a hardware multiple; the monitored residual, unmonitored\n"
                 "compute, credited work and faithfulness.\n"
-                "Not `NciCheck`, `benchmarks/nci`, nci, Nci.Complies, the novel basis, faithful, faithfully, the\n"
+                "Not `NciCheck`, `benchmarks/nci`, nci, InferenceOnly.Complies, the novel basis, faithful, faithfully, the\n"
                 "residual stream, the covert residual, the monitoring period, the work the table credits, fresh input\n"
                 'or registered information; "NCI" quoted.\n',
         "h.md": "The remote bandwidth audit, two remote\nbandwidth audits and a Remote-Bandwidth audit.\n"

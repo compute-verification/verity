@@ -192,7 +192,7 @@ STATUS = [
      "weight columns."),
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
      "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
-    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
+    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as InferenceOnly.Guarantees.DampenerRemote states it "
      "(#3646). PoUW's deficit epsilon_W = 0.744% (CircuitCredit, draft #2638) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
      "times the floor; run r20261017-123922-e558 has no published outputs), the clock 0 (PoUW credits the card "
@@ -313,7 +313,7 @@ def audited_residual(p: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``Nci.Guarantees.DampenerRemote``'s bounds,
+    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``InferenceOnly.Guarantees.DampenerRemote``'s bounds,
     ``residualShare W C + εW * W / C + ε``: the audited residual r-hat = 1 - W_cert/C, PoUW's deficit on the certified
     work (a certificate that isn't wrong may credit up to eps_W of its work without its running, so what was certified
     and run is (1 - eps_W) W_cert), and the share whose certificates may be wrong."""

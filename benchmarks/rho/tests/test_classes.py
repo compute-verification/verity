@@ -192,7 +192,7 @@ def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
     assert premise_status(CLASSES["fanout"].cites, K) == "supported"
     assert premise_status(CLASSES["fanout-read"].cites, K) == "contested"
     assert premise_status(CLASSES["fanout"].cites, WINDOW.inputs) == "contested"
-    assert premise_status(("Nci.Guarantees.CoveringBound",), K) == "supported"
+    assert premise_status(("InferenceOnly.Guarantees.CoveringBound",), K) == "supported"
     for arg in CLASSES.values():
         s = [STANDINGS.index(premise_status(arg.cites, 10 ** e)) for e in range(4, 13)]
         assert s == sorted(s), arg.name

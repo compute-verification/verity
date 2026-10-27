@@ -131,7 +131,7 @@ free gates at a structure whose `s_×` is above 1, with the structure's `evidenc
 
 The package, its command and its outputs (`benchmarks/rho`, `verity bench rho`, `rho.md`, `rho.json`) and the
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` all name the overhead;
-`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. Lean's `Nci.Guarantees.DampenerRemote` is an
+`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. Lean's `InferenceOnly.Guarantees.DampenerRemote` is an
 older statement of the remote composition's overhead, and `tiers.py`'s `dampener` an older calculator of it, which the
 next code change folds in here. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
 

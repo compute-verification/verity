@@ -1,17 +1,17 @@
 import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Reads
+import Proofs.InferenceOnly.Reads
 
 /-!
 # The runtime corollary
 
 At a `t'` at or before `t` by which the developer holds `P`'s outputs at fixed positions in every run, the run's windows
 divide its region over `[0, t')` into `n ⌈t'/ω⌉` isolation blocks of at most `Γ` gates, each reading at most `K`
-(`Windows`), so B5 (`Nci.SecurityProofs.UpdatedMatMulReads`) gives `G f(K) ≤ n ⌈t'/ω⌉ K`, and `⌈t'/ω⌉ ω ≤ t' + ω`.
+(`Windows`), so B5 (`InferenceOnly.SecurityProofs.UpdatedMatMulReads`) gives `G f(K) ≤ n ⌈t'/ω⌉ K`, and `⌈t'/ω⌉ ω ≤ t' + ω`.
 -/
 
 namespace Accounting.SecurityProofs.Actual
 
-open Verity Nci Finset
+open Verity InferenceOnly Finset
 
 theorem exists_le_of_runtime_le {L : Type*} {P : Circuit} (S : P.Transcript → Accounting.Actual.Run L)
     {X : Finset L} {t : ℕ} (h : Accounting.Actual.runtime S X ≤ t) :
@@ -36,7 +36,7 @@ theorem Runtime : Guarantees.Actual.Runtime := by
     obtain ⟨⟨i, k⟩, rfl⟩ := finProdFinEquiv.surjective u
     obtain ⟨-, hs, hr⟩ := hQ i k
     exact ⟨hs.trans (hcap i).1, (Nat.cast_le.2 hr).trans (hcap i).2⟩
-  have hB5 := Nci.SecurityProofs.UpdatedMatMulReads Γ K b_w b_a _ c d _ Q hw ha hd hunit hAI hPS
+  have hB5 := InferenceOnly.SecurityProofs.UpdatedMatMulReads Γ K b_w b_a _ c d _ Q hw ha hd hunit hAI hPS
   have hsum : ∑ u, (novelReads ((S v).A.declaration (univ.biUnion X) t' θ hθ) (Q.gates u) : ℝ) ≤ (n * m : ℕ) * K :=
     calc _ ≤ ∑ _u : Fin (n * m), K := sum_le_sum fun u _ => (hunit u).2
       _ = _ := by simp

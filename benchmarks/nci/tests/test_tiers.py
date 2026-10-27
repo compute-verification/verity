@@ -55,7 +55,7 @@ def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
 
 
 def test_the_residual_charges_pouws_deficit_on_the_certified_work():
-    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Nci.Guarantees.DampenerRemote`'s bounds: a certificate
+    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `InferenceOnly.Guarantees.DampenerRemote`'s bounds: a certificate
     that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
     the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
     p = T.DEFAULTS | {"residual": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
@@ -267,8 +267,8 @@ def test_the_recipe_multiplier_scales_only_the_constrained_terms():
 
 
 def test_reference_layered_at_kimi_k2():
-    """The falsification test of the conjecture `Nci.Assumptions.ReferenceLayered`: the parameters it states are Kimi
-    K2's shapes' in Dot16 steps, and tiers.py's (d, e) is what `Nci.SecurityProofs.ReferenceThreaded` derives from them
+    """The falsification test of the conjecture `InferenceOnly.Assumptions.ReferenceLayered`: the parameters it states are Kimi
+    K2's shapes' in Dot16 steps, and tiers.py's (d, e) is what `InferenceOnly.SecurityProofs.ReferenceThreaded` derives from them
     at S = K. A keyed reference circuit written as the declarations are computes each matrix-product entry, forward and
     backward, as a chain of Dot16 steps; its roots are each chain's steps after the first, whose legs are the previous
     accumulator and the step's 16 activations, so every inner dimension is a whole number of steps, at least two. A
@@ -295,11 +295,11 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
-    nci = ROOT / "Security" / "Definitions" / "Nci"
+    nci = ROOT / "Security" / "Definitions" / "InferenceOnly"
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * 16))" in (nci / "Assumptions/Layered.lean").read_text()
     stated = (nci / "Guarantees/Layered.lean").read_text()
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
     assert f"T.bound (α * Γ) b_w {d0 - E} {e + E * e_lk} *" in stated
     entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
-    assert entry["Nci.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}
+    assert entry["InferenceOnly.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}

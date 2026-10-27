@@ -163,7 +163,7 @@ class HeldLayers:
     """Every block holds whole layers (`held_layers`): it computes their activations from each token's entry (`β_x d`
     bits, the replay-consistent coder's rate) and their forward and Dgrad products, Dgrad from the token's exit gradient
     (`β_g d` bits), with the layers' updates at `layer_bits` (`b_w` a parameter, `Shard`'s convention). It is what
-    breaks `ActivationRate` at the serving block (`Nci.Ldl.SecurityProofs.Witness.activationRate_recompute` is it in
+    breaks `ActivationRate` at the serving block (`InferenceOnly.Ldl.SecurityProofs.Witness.activationRate_recompute` is it in
     miniature). Its count is the held layers' own products, not converted: Dgrad needs the exit gradient, so it doesn't
     run at the forward's rate, and the first layers' cheaper blocks aren't credited."""
 

@@ -9,9 +9,9 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the policies they are evaluated under (`calibrations.json`);
 - the board: one training method in one configuration per row, with an overhead bracket (`rows.json`, `slowdown.py`).
 
-Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
-(`Security/Definitions/Nci/Guarantees/Contained.lean`).
+Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `InferenceOnly.SecurityProofs.ThreadedTraining`
+(`Security/Definitions/InferenceOnly/Guarantees/Threads.lean`) and `InferenceOnly.SecurityProofs.ContainedTraining`
+(`Security/Definitions/InferenceOnly/Guarantees/Contained.lean`).
 
 The overhead lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one overhead calculator.
 `tiers.py`'s `dampener` is an older calculator of the remote composition's overhead, which the next code change folds
@@ -146,7 +146,7 @@ of new state per block can reach. What it throttles is moving the base model's f
 
 For each row under each calibration of its model, `slowdown.py` computes a bracket:
 
-- `lower` is the proven bound, `Nci.SecurityProofs.ThreadedTraining`:
+- `lower` is the proven bound, `InferenceOnly.SecurityProofs.ThreadedTraining`:
   \(\text{overhead} \ge \kappa\, b_a / (2\alpha\Lambda_T)\) with \(\alpha = K/\Gamma\) and the thread term
   \(\Lambda_T = \max(e,\ cK/(4 d\, b_w))\) (not the Notation's Λ). It holds under the row's rates and the theorem's
   assumptions. `rates` caps the inputs where a row's own numbers make an
@@ -162,7 +162,7 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the partial-sum law, `Nci.SecurityProofs.ContainedTraining`:
+- `chain` is the partial-sum law, `InferenceOnly.SecurityProofs.ContainedTraining`:
   \(\text{overhead} \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
   with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumptions are that
   one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\), in support form. A

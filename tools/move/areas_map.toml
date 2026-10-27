@@ -5,7 +5,7 @@
 # proofs (`Proofs/Properties/`) together, and `Population` becomes `SampledProofs`, the sampled proofs service's name.
 # - `Properties.{CertifierDevice,CertifierNetwork,NetworkCertifier,NetworkRecords}` become
 #   `Properties.NetworkCertifier.{Device,DeviceOutput,Check,Records}`;
-# - `Properties.NciDesc` becomes `Properties.Nci.Desc`, `Properties.Identity` `Properties.Hash.Identity`,
+# - `Properties.InferenceOnlyDesc` becomes `Properties.InferenceOnly.Desc`, `Properties.Identity` `Properties.Hash.Identity`,
 #   `Properties.Evaluate` `Properties.Core.Evaluate`, `Properties.RemoteAudit` `Properties.Accounting.Remote`;
 # - `Definitions.Population` and `Proofs.Population` become `Definitions.SampledProofs` and `Proofs.SampledProofs`.
 # Module names only: declarations and namespaces keep their names, so no guarantee changes. Six statement modules share
@@ -18,7 +18,7 @@
 "Properties/CertifierNetwork" = "Properties/NetworkCertifier/DeviceOutput"
 "Properties/NetworkCertifier" = "Properties/NetworkCertifier/Check"
 "Properties/NetworkRecords" = "Properties/NetworkCertifier/Records"
-"Properties/NciDesc" = "Properties/Nci/Desc"
+"Properties/InferenceOnlyDesc" = "Properties/InferenceOnly/Desc"
 "Properties/Identity" = "Properties/Hash/Identity"
 "Properties/Evaluate" = "Properties/Core/Evaluate"
 "Properties/RemoteAudit" = "Properties/Accounting/Remote"
@@ -26,7 +26,7 @@
 "Properties.CertifierNetwork" = "Properties.NetworkCertifier.DeviceOutput"
 "Properties.NetworkCertifier" = "Properties.NetworkCertifier.Check"
 "Properties.NetworkRecords" = "Properties.NetworkCertifier.Records"
-"Properties.NciDesc" = "Properties.Nci.Desc"
+"Properties.InferenceOnlyDesc" = "Properties.InferenceOnly.Desc"
 "Properties.Identity" = "Properties.Hash.Identity"
 "Properties.Evaluate" = "Properties.Core.Evaluate"
 "Properties.RemoteAudit" = "Properties.Accounting.Remote"
