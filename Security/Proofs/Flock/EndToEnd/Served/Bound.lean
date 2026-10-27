@@ -73,7 +73,6 @@ theorem JointServed_honest : Flock.Guarantees.JointServed_honest := by
 theorem JointServed_nontrivial : Flock.Guarantees.JointServed_nontrivial := by
   intro w Ωc _ _ Lc coins δ ands bits τ acc hacc hW herr hle
   have h1 := (prob_mono (p := fun _ => True) (fun o _ => ⟨hacc o, hW⟩) _ _).trans hle
-  rw [prob_true] at h1
-  exact absurd (lt_of_le_of_lt h1 herr) (lt_irrefl _)
+  exact absurd (lt_of_le_of_lt ((prob_true _ _).symm.le.trans h1) herr) (lt_irrefl _)
 
 end Flock.SecurityProofs
