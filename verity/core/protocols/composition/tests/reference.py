@@ -1,13 +1,15 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
+`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
 mirror over the certifier's certificates and one-stage's answers,
-`verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit
-(`verity/sampled-proofs/one-stage/v1`) `one_stage` behind the protocol's decoders, its difftest's `answer`
+`verity/core/protocols/network/tests/test_network_period_protocol.py`), the inference-only policy's difftest's
+`reference` (`verity/inference-only/v0`, the check of record's Python, `nci_reference.check_baseline`, behind the
+protocol's decoders, `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs'
+one-stage audit (`verity/sampled-proofs/one-stage/v1`) `one_stage` behind the protocol's decoders, its difftest's `answer`
 (`verity/core/service/sampled_proofs/tests/test_difftest.py`), and for space (`verity/pous/p2/v4/run`) and bandwidth
 (`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
-`periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
+`periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
 
 The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
 `cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
@@ -73,6 +75,9 @@ POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
+#: The inference-only policy's difftest: `reference` is the check of record's Python (`check_baseline`) behind the
+#: protocol's decoders, and `drawn` draws a declaration's case with one change.
+INFERENCE = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -119,6 +124,7 @@ class Recorded:
 
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
@@ -227,6 +233,6 @@ class Product:
         return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
-REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids.
+REMOTE = Product("verity/remote/v0", (INFERENCE_ONLY, POUW, SAMPLED_PROOFS))
+ONSITE = Product("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))

@@ -8,7 +8,7 @@ The cases are θ's provenance difftest's declarations (`baseline_difftest_vector
 into the protocol's params, commitment and evidence, then at most one change (`MUTATIONS`): the division made to fail
 (`gamma` 0, so every inference block is over its gate budget), the run's record repeated in the log, and malformed
 params, commitments and evidence. Onsite's and remote's difftest (`verity/core/protocols/composition/tests/`) draws the
-subprotocol's cases from `case_of` and answers them with `reference`."""
+subprotocol's cases from `drawn` and answers them with `reference`."""
 
 from __future__ import annotations
 
@@ -109,10 +109,12 @@ MUTATIONS = list(EXPECT)
 SEEDS = 240
 
 
+@lru_cache(maxsize=None)
 def split(seed: int) -> dict | None:
     """Declaration `seed` as the protocol's parts: params, the run's own record and the evidence, with the code the
     provenance difftest built it for (`None` when it isn't broken); `None` when its trusted input names no run of its
-    log (a broken `trusted`, which the protocol, rebuilding the trusted input, can't carry)."""
+    log (a broken `trusted`, which the protocol, rebuilding the trusted input, can't carry). Shared: a caller copies
+    before it changes a part."""
     v = vectors.case(seed)
     inst, tr = v["case"]["instance"], v["case"]["trusted"]
     log = tr.get("log") if isinstance(tr, dict) else None
@@ -220,7 +222,7 @@ def counted(case) -> dict:
     return out
 
 
-PORT = D.ProtocolPort("inference-only", counted, cases(), package=LEAN)
+PORT = D.ProtocolPort("inference-only", counted, cases(), package=LEAN, of_record="lean")
 server = D.server_fixture(PORT)
 
 

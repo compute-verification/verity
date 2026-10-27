@@ -1,8 +1,9 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
-core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
-fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the
-network certifier's period `build`; space's and bandwidth's from the small periods of their hooks, `periods.py`), then
+core interface and the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be undecided
+or fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the
+network certifier's period `build`, the inference-only policy's `drawn`, which is never undecided; space's and
+bandwidth's from the small periods of their hooks, `periods.py`), then
 often breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other
 params, a wrong or short commitment, non-canonical or malformed evidence) or the case itself (a field missing or not hex,
 not an object), and every field of the outcome but its reason must agree exactly: the components' certified quantities
@@ -47,6 +48,9 @@ NP = R.PERIOD
 PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case")
                 for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
 
+#: The inference-only policy's changes by the verdict they aim at: none, or one that rejects. It is never undecided.
+INFERENCE_CASES = {v: tuple(m for m, (x, _) in R.INFERENCE.EXPECT.items() if x == v) for v in (R.ACCEPT, R.REJECT)}
+
 #: A recorded component's kinds of case (`periods.build`), accepted ones first and thrice.
 KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", "broken-params", "broken-evidence"]
 
@@ -55,6 +59,8 @@ def kinds(C) -> list[str]:
     """The kinds of case `component_case` may aim `C` at when it is free to."""
     if isinstance(C, R.Recorded):
         return [k for k in KINDS if k in C.cases]
+    if C is R.INFERENCE_ONLY:
+        return list(INFERENCE_CASES)
     return [R.ACCEPT, R.REJECT, R.UNDECIDED]
 
 
@@ -71,6 +77,8 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
     elif C is R.CERTIFIER:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
+    elif C is R.INFERENCE_ONLY:
+        case = draw(R.INFERENCE.drawn(draw(st.sampled_from(INFERENCE_CASES[kind]))))
     else:
         case = OS._case(draw(ONE_STAGE_CASES[kind]))
     root = bytes.fromhex(case["commitment"])
@@ -89,9 +97,10 @@ MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-
 
 @st.composite
 def composite(draw, product: R.Product) -> dict:
-    """One case of `product`: its components' cases (one time in six every one aimed at acceptance, one in six every one
-    but one that is aimed at undecided, so that a product of five reaches its binding breaks and its undecided verdict,
-    and each at any verdict otherwise), then at most one break of the composition's own inputs."""
+    """One case of `product`: its subprotocols' cases (one time in six every one aimed at acceptance, one in six the same
+    but for one of those that can be undecided, aimed at undecided, so that a product of six reaches its binding breaks
+    and its undecided verdict, and each at any verdict otherwise), then at most one break of the composition's own
+    inputs."""
     mode = draw(st.integers(0, 5))
     pending = draw(st.sampled_from([j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]))
     aims = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
