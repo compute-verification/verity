@@ -61,7 +61,7 @@ set -euo pipefail
 uv sync -q --all-packages --extra torch-cpu
 ST=/workspace/research/lanes/compute-accounting/h200-weights/$(basename "$RESEARCH_RUN_DIR")
 mkdir -p "${ST%/*}"
-PYTHONPATH=examples/h200:integrations/torch_loop uv run --no-sync python -m e2e_h200.weights_commit commit --shape h200 \
+PYTHONPATH=examples/h200 uv run --no-sync python -m e2e_h200.weights_commit commit --shape h200 \
   --seed demo --program "$PROGRAM" --state "$ST" --workers "$(nproc)" --out "$OUT/registration.json" | tee "$OUT/summary.json"
 uv run --no-sync research keep "$ST" --owner @compute-accounting --expires 30d --priority high \
   --why "the H200 weights registration state and its 0600 OS-salt witness (prover-private), for the opens" || echo "keep failed" >&2') ;;
