@@ -495,9 +495,8 @@ Its gaps:
 
 - The `circuit-check` command can't find these Definitions. It discovers sidecars only under its `PACKAGES`, and
   `workload` is not an installed package, so there is no sidecar and no pin.
-- The window isn't lowered to C-Flock whole. A whole lowering would carry the SHA-512 compression that circuit-check
-  records as not fitting in 64 GiB (`checks.UNLOWERED`), which it doesn't apply to a Definition that calls the
-  compression.
+- The window isn't lowered to C-Flock whole: its SHA-512 compressions put it far over circuit-check's whole-Definition
+  AND budget (`checks.Options.lower_max_ands`).
 - The window isn't partitioned: it is over the partition budget of 4M gates.
 - Only the demo's format is checked. The simulator's and the lab's formats are checked only against the reference, by
   the tests and the evaluations.

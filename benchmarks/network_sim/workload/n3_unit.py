@@ -1955,8 +1955,8 @@ def _lab(args) -> dict:
 
 def _circuit_check(args) -> dict:
     """circuit-check's checks on the demo's window and its SHA-free parts (with `--parts`, the parts alone), with the
-    CLI's options and pins. The window's C-Flock lowering is its parts' (`lower_whole=False`): lowered whole it would
-    carry the SHA-512 compression that `checks.UNLOWERED` records as not fitting in 64 GiB. The unit is a Program of its
+    CLI's options and pins. The window's C-Flock lowering is its parts' (`lower_whole=False`): its SHA-512 compressions put
+    it far over the whole-Definition AND budget (`checks.Options.lower_max_ands`). The unit is a Program of its
     own, never a served Program's Call, so the partition invariant doesn't apply (`as_call=False`)."""
     from circuit_check import checks as CK
 
