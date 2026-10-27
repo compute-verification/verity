@@ -105,7 +105,7 @@ theorem seqRounds_ret {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (
     have ih := seqRounds_ret f g step hstep (j + 1) is s
     have hs : ((step j s i).run f).2 = s := by simp [hstep, Prog.run]
     refine ⟨?_, fun e he => ?_⟩
-    · simp only [seqRounds, List.map_cons, hs, ih.1, hstep, Prog.run]
+    · simp only [seqRounds, List.map_cons, ih.1, hstep, Prog.run]
     · simp only [seqRounds, List.mem_cons, hs] at he
       rcases he with rfl | he
       · exact ⟨rfl, i, hstep j s i⟩
