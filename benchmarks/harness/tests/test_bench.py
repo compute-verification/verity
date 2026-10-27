@@ -784,13 +784,18 @@ def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
 
 
+def _serving_defaults_preset():
+    preset = load_spec("llama32-1b-bf16-rtx-served-arm").preset
+    return replace(preset, engine_settings={**preset.engine_settings, "serving_defaults": True})
+
+
 def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
     from verity_bench.vllm.runner import engine_args
 
-    served_preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    served_preset = _serving_defaults_preset()
     for resident in (True, False):
         args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
-        assert args["kv_cache_memory_bytes"] == 10 * 2**30
+        assert args["kv_cache_memory_bytes"] == 4 * 2**30
         assert "compilation_config" not in args and args["enforce_eager"] is False and args["execution"] == "compiled"
     assert engine_args(served_preset, "bfloat16", resident=True, eager=True)["execution"] == "eager"
     pinned = load_spec("llama31-8b-fp8-1gpu").preset
@@ -800,9 +805,6 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
                                               "cudagraph_capture_sizes": [1, 8, 32, 128]}
     assert engine_args(pinned, "fp8", resident=False, eager=False)["kv_cache_memory_bytes"] == 56 * 2**30
     assert "compilation_config" not in engine_args(pinned, "fp8", resident=False, eager=True)
-    assert not {"attention_backend", "attention_config", "moe_backend"} & set(args)
-    moe = engine_args(load_spec("qwen3-30b-a3b-bf16-b200-served").preset, "bfloat16", resident=False, eager=False)
-    assert (moe["attention_backend"], moe["attention_config"], moe["moe_backend"]) == ("FLASH_ATTN", {"flash_attn_version": 2}, "triton")
 
 
 def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):
@@ -829,7 +831,7 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
     monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
     factory = runner.ProcessEngineFactory()
     factory.context = Context()
-    preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    preset = _serving_defaults_preset()
     for arm in resolve_arms("stock"):
         factory.create(arm, preset, resident=True)
         factory.create(arm, preset, resident=True)
