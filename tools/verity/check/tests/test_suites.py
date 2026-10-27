@@ -431,8 +431,8 @@ def _shipped(tmp_path: Path) -> tuple[Path, Path, str, str]:
 
 
 def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_the_fix(tmp_path, monkeypatch, capsys):
-    """proofs, 25 Oct (NCILIVE, WIRES): the pre-mark `--changed origin/main` in a shipped tree with no origin/main exited 128 in
-    `git diff` and ran no suite, ~50 min each. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
+    """The pre-mark `--changed origin/main` in a shipped tree with no origin/main would exit 128 in `git diff` and run no
+    suite. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
     clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
     bare, tree, main, head = _shipped(tmp_path)
     S = _suites(monkeypatch, tree)
@@ -1749,8 +1749,8 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
 
 
 def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
-    """17 Oct, cpu-2 (note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent): circuit_check's 53 workers and flock's 30
-    ran side by side, each sized to all of --mem-gb, and reached 800 GB together."""
+    """Two parallel suites side by side, each sized to all of --mem-gb, would together reach twice it (circuit_check's 53
+    workers and flock's 30 reached 800 GB)."""
     S = _suites(monkeypatch, tmp_path)
     assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
     flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)

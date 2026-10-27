@@ -1,5 +1,5 @@
-"""`tools/agent-guard/boot.sh` puts the shell hook on a VM whose branch predates it: cloud agents read project hooks only, and
-on 10 Oct top's and ci's VMs ran no hook because their branches (5 Oct) had no `.cursor/hooks.json`."""
+"""`tools/agent-guard/boot.sh` puts the shell hook on a VM whose branch predates it: cloud agents read project hooks only, so
+a VM on a branch without `.cursor/hooks.json` would run no hook."""
 import json
 import os
 import shutil

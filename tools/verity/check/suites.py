@@ -1825,8 +1825,8 @@ def worker_gb(s: Suite) -> float:
 def wide_gb(mem_gb: float | None, serial: int) -> float | None:
     """The GB the parallel suites share: ``mem_gb`` less `TEST_PROCESS_GB` for each of the ``serial`` processes that run the
     one-process suites beside them. Parallel suites that overlap draw their workers' GB from it in turn, so two side by side can't
-    each size to the whole (17 Oct, note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent: circuit_check's 53 workers and
-    flock's 30, each sized to all of --mem-gb, reached 800 GB together on cpu-2)."""
+    each size to the whole (circuit_check's 53 workers and flock's 30, each sized to all of --mem-gb, reached 800 GB
+    together)."""
     return None if mem_gb is None else max(0.0, mem_gb - serial * TEST_PROCESS_GB)
 
 

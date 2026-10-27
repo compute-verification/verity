@@ -1,5 +1,5 @@
 """`.cursor/hooks.json`'s Task hook keeps a coordinator from waiting on a local worker in the foreground, which holds its turn
-(and so every Slack, Linear and timer event) until the worker ends (proofs' rule 1, 18 Oct)."""
+(and so every Slack, Linear and timer event) until the worker ends."""
 import json
 import os
 import subprocess
