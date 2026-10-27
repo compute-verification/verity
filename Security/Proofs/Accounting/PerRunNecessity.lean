@@ -1,5 +1,4 @@
 import Proofs.Accounting.PerRunPouw
-import Proofs.Pouw.Game
 
 /-!
 # TT's budget form does not give PoUW's per-run guarantee
