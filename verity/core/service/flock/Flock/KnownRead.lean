@@ -19,6 +19,7 @@ depend on the same bits of it.
 import Flock.RegKnown
 import Flock.RecResiduals
 import Flock.ProvedScope
+import Flock.TmplReads
 
 namespace Flock
 namespace KnownRead
@@ -101,14 +102,13 @@ def namesOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArra
         if c.ports.any (·.name == name) then pure ()
         else throw s!"registered reads: known port {name}: the circuit has no port {name}, so its known content binds nothing"
 
-/-- **Every bit of every known port is read or returned**: each port of the circuit that the `--registered` file names
-at known content is a `sha512/row/v2` row without segments of each known row's words, and has each bit of its
-`16 · words`-bit row read by a computed row of the unit at some copy (`bitRead`), at an input row (`HmOut.nIn`), or
-returned by some copy (`bitOut`), at an output row. -/
-def readsOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
+/-- **Every bit of every known port is read or returned**, the input columns read taken from `rd`: each port of the
+circuit that the `--registered` file names at known content is a `sha512/row/v2` row without segments of each known row's
+words, and has each bit of its `16 · words`-bit row read by a computed row of the unit at some copy (`bitRead`), at an
+input row (`HmOut.nIn`), or returned by some copy (`bitOut`), at an output row. -/
+def readsOkAt (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) (rd : Array Bool) : V Unit :=
   let mask := ProvedScope.portMask c.unit.inGroups (c.unit.inWords * WORD)
   let pc := portCols c.unit.inGroups
-  let rd := RecResiduals.readIns c.unit
   let st := starts c
   let cs := cands c (c.ports.foldl (· + ·.words) 0)
   let co := outCands c
@@ -130,6 +130,29 @@ def readsOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArra
             throw s!"registered reads: known port {name}: no copy of the unit returns bit {k} of its row, so its known content binds nothing there"
           | none => pure ()
       else pure ()
+
+/-- The input columns a templated unit's description says a computed row surely reads (`Tmpl.readsSure`), where the
+circuit's unit is its template's net (by pointer, else compared) of at most `2^32` rows (`ProvedScope`'s bound); `none`
+elsewhere. -/
+def sureReads (c : Circuit) : Option (Array Bool) :=
+  match c.tmpl with
+  | some tu =>
+    if decide (c.unit.unitLog ≤ 32) &&
+        withPtrEq c.unit tu.net (fun _ => decide (c.unit = tu.net)) (fun h => by simp [h]) then
+      some tu.t.readsSure
+    else none
+  | none => none
+
+/-- **Every bit of every known port is read or returned** (`readsOkAt`): at the input columns a templated unit's
+description surely reads (`sureReads`), so its rows are not built, else, and where those don't cover every known bit, at
+the input columns its computed rows read (`RecResiduals.readIns`). -/
+def readsOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
+  match sureReads c with
+  | some rd =>
+    match readsOkAt c known rd with
+    | .ok () => pure ()
+    | .error _ => readsOkAt c known (RecResiduals.readIns c.unit)
+  | none => readsOkAt c known (RecResiduals.readIns c.unit)
 
 /-- **The known content binds the circuit's rows** (PROTOCOL.md §16.10): each known value names one port of the
 circuit (`namesOk`), and every bit of every known port is read or returned (`readsOk`). -/

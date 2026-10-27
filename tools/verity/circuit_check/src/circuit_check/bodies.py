@@ -1,4 +1,4 @@
-"""A composite's IR evaluation and its non-constant gates, body by body.
+"""A composite's evaluation and its non-constant gates, body by body.
 
 The reference (`verity.ml.circuits.evaluation.evaluate`) walks a composite's standalone call gate by gate
 (`verity.ml.circuits.evaluate.evaluate_region`), and finds each gate and each of its operands from the root

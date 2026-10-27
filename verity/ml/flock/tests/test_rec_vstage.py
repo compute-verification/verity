@@ -277,6 +277,26 @@ def test_the_shared_rows_register_each_levels_tops_as_the_level_and_its_rec_cap_
         S.shared_rows([p0], (), [l2, staged("cap/L2x", {"top": e("rec-top-L2", "ef", range(128))})])
 
 
+def test_the_staged_shared_rows_are_one_file_with_acc0_from_the_first_level_without_the_algebra(tmp_path):
+    """`staged_shared_rows`: the algebra's parts' and the levels' rows under a staging `v`, and without the algebra the
+    first level's `acc` as `acc0`, the one file every part is verified against."""
+    from verity_flock import rec_cap as RC
+
+    def e(value, root="aa", reads=(0,)):
+        return {"value": value, "root": root, "leaves": 128, "words": 64, "word_bits": 16, "domain": "dd", "reads": list(reads)}
+
+    def staged(name, ports):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+
+    staged("v/L0", {"out": e(RC.TOP_VALUE, reads=(3,)), "acc": e(O.ACC_VALUE, "bb", (2,))})
+    staged("v/L1", {"out": e("rec-top-L1", "ee"), "acc": e(O.ACC_VALUE, "cc", (4,))})
+    assert S.staged_shared_rows(tmp_path / "v")["ports"] == {
+        RC.TOP_VALUE: e(RC.TOP_VALUE, reads=(3,)), "rec-top-L1": e("rec-top-L1", "ee"), "acc0": e(O.ACC_VALUE, "bb", (2,))}
+    staged("v/alg/p0", {"acc0": e(O.ACC_VALUE, "ab"), "v": e("rec-v")})
+    assert S.staged_shared_rows(tmp_path / "v")["ports"]["acc0"] == e(O.ACC_VALUE, "ab")
+
+
 @pytest.mark.slow
 def test_the_forged_message_changes_one_bit_of_the_provers_row_alone(tmp_path):
     """`forge_row` on a two-instance statement's ``inst.bin``: one bit of the named row moves, its header, its other rows, its

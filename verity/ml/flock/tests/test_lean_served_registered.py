@@ -5,7 +5,7 @@ served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circui
 v2 or a segmented row). The verifier writes its own `--registered` file from the tree as the service holds it
 (`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` accepts the session
 on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the tree's root changed, or a bit row's port with its words or width changed.
-Under `--zk --ks-form` only the row/v2 session is accepted (`Flock.PortRoots`).
+`--zk` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots`), which all three sessions are in.
 A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
 and refused with the root changed and without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
@@ -14,6 +14,7 @@ reach."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import shutil
 import subprocess
@@ -33,9 +34,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b",
-    G.SCHEMA_V2: "art:eedab8e57d1f9c380472fe263ab38d00dc8ec68f1a7e94b035de01d0cb2416db",
-    G.SCHEMA_SEG: "art:d42ad7aedb6b15f351dcddd65fd51ab0e0f91afbbfa48451d192d87273b926e6",
+    G.SCHEMA: "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5",
+    G.SCHEMA_V2: "art:2425aa5eff7e781331bda47d22e1fcd7eb813cbd7e64e39965d851b6f843b0cd",
+    G.SCHEMA_SEG: "art:1a17e14138bb6ab7412ad3ee01c62e49c9f84c666ca0fd9848c2688d6311f403",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified draw of `PLAIN_K`
 #: (stage/draw.json), and session/ a plain session (no --zk, OS coins) drawn by it; vectors/ is vectors.json's live set
@@ -96,6 +97,15 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
 
 
+def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):
+    """`live.json`'s ``public_file_sha512`` is the SHA-512 of ``stage/pub-32.bin``, the file `verify --public` reads. Its
+    ``public_sha512`` is Σ's public digest, over the drawn statement's header, which no file holds."""
+    _, fx = fx
+    live = json.loads((fx / "live.json").read_text())
+    assert live.get("public_file_sha512") == hashlib.sha512((fx / "stage" / "pub-32.bin").read_bytes()).hexdigest()
+    assert live["public_sha512"] != live["public_file_sha512"]
+
+
 def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tmp_path):
     """A bit row is exactly `words * word_bits` bits: `register_served` refuses a tree whose words or width are not the
     parameter's rows, and `flock-verify` refuses the session on a file whose `cs` port names 63 or 65 16-bit words, or 64
@@ -121,22 +131,19 @@ def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tm
         assert bad["accepted"] is False and f"not {SR.VALUE}'s registered {want}" in bad["why"], (name, bad)
 
 
-def test_ks_form_accepts_row_v2_files_and_refuses_v1_and_segmented_rows(fx, tmp_path):
-    """`--zk --ks-form` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots.checkOf`): the session whose
-    rows are all unsegmented `row/v2` rows is accepted as under `--zk`, and the same session at a `row/v1` circuit or one
-    whose `cs` is a `row-seg/v1` row is refused for its rows, though `--zk` alone accepts both. `--ks-form` without `--zk`
-    is a usage error."""
+def test_ks_form_is_the_default_under_zk_and_accepts_every_row_format(fx, tmp_path):
+    """`--zk` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots.checkOf`), which every served row
+    format is in: the session at a `row/v1` circuit, at `row/v2` rows and with `cs` a `row-seg/v1` row is accepted, and
+    `--ks-form`, the check's old flag, gives the same verdict. `--ks-form` without `--zk` is a usage error."""
     import served_registered as SR
 
-    schema, fx = fx
+    _, fx = fx
     program, query = SR.program()
     tree = ServedTree(**json.loads((fx / "stage" / "served.json").read_text()))
     reg = register_served(program, query, [tree]).write(tmp_path / "registered.json")
     v = _verify(fx, reg, ("--zk", "--ks-form"))
-    if schema == G.SCHEMA_V2:
-        assert v["accepted"] is True, v
-    else:
-        assert v["accepted"] is False and "not an unsegmented sha512/row/v2 row" in v["why"], v
+    assert v["accepted"] is True, v
+    assert v == _verify(fx, reg), v
     p = subprocess.run([str(BIN), "verify", "--ks-form", "--statement", STATEMENT, "--circuit", str(fx / "stage" / "circuit.txt"),
                         "--public", str(fx / "stage" / "pub-32.bin"), "--session", str(fx / "session")],
                        capture_output=True, text=True, check=False)

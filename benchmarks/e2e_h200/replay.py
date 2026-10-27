@@ -1,8 +1,8 @@
-"""The CPU replay of the H200 demo's drawn units (CMP-96): given a step's drawn units, each with its opened input rows and its
+"""The CPU replay of the H200 demo's drawn units: given a step's drawn units, each with its opened input rows and its
 committed output rows, recompute every unit's outputs on the CPU and compare them bit for bit with the GPU's.
 
 **Templates.** One replay function per template of the frozen shape (MQA decoder, width 16,384, 52 layers, 256 query heads of
-64, one KV head, MLP 65,536, byte vocabulary, context 32), in circuits' forms (CMP-92's plan, section 1b), each at any binding
+64, one KV head, MLP 65,536, byte vocabulary, context 32), in circuits' forms (their plan's row semantics), each at any binding
 of its statics, so a tiny instance of the architecture replays through the same functions. Each `Template` is one of:
 
 * ``definition``: main's Definition, evaluated by the circuits evaluator (`evaluation.evaluate_batch`, which takes its
@@ -21,9 +21,9 @@ of its statics, so a tiny instance of the architecture replays through the same 
 | ``F32SumPart_v1{G, HALF}`` | s: f32[G] -> half of sum_g s_g | pending |
 | ``RmsNormRecip_v1{N, G, EPS, HALF}`` | s: f32[G] -> half of rs = RN(1/RN(sqrt(RN(RN(sum/N) + eps)))) | pending |
 | ``RmsNormOut_v1`` | (x: bf16, rs: f32, w: bf16) -> bf16(RN(w * bf16(RN(x * rs)))) | pending |
-| ``RowAbsMax_v1{N, RELU}`` | x: bf16[N] -> max abs (relu'd first under RELU) | pending (#4433) |
-| ``QuantS8Pair_v1{RELU}`` | (x: bf16[2], amax: bf16) -> s8[2] | pending (#4433) |
-| ``QuantS8Scale_v1{HALF}`` | amax: bf16 -> half of RN(amax/127) (1 when amax is not > 0) | pending (#4433) |
+| ``RowAbsMax_v1{N, RELU}`` | x: bf16[N] -> max abs (relu'd first under RELU) | pending |
+| ``QuantS8Pair_v1{RELU}`` | (x: bf16[2], amax: bf16) -> s8[2] | pending |
+| ``QuantS8Scale_v1{HALF}`` | amax: bf16 -> half of RN(amax/127) (1 when amax is not > 0) | pending |
 | ``S8AccumulatorPart_v1{K, HALF}`` | (x, wrow: s8[K]) -> half of the exact s32 dot | pending |
 | ``S32SumPart_v1{P, HALF}`` | parts: s32[P] -> half of their sum mod 2^32 | pending |
 | ``ScaledMmS8Epilogue_v1{P}`` | (parts: s32[P], sx, sw: f32) -> bf16(RN(RN(f32(sum) * sx) * sw)) | pending |
@@ -43,12 +43,12 @@ s32, a scale, rs, a softmax reciprocal) is one 32-bit input word of its readers 
 
 **Bundles.** `replay` takes a step's drawn units as ``{"units": [{"unit", "template", "inputs": {param: words},
 "outputs": words}, ...]}`` (words as unsigned integers of each parameter's width, in its row-major order), groups them by
-template, evaluates each group in one batch and reports every unit whose outputs differ. IFACE-B's bundle (CMP-95 item 5) maps
+template, evaluates each group in one batch and reports every unit whose outputs differ. The drawn-unit bundle maps
 onto it in `units_of`.
 
 **The draw** (`draw`): the units of a step to replay, from live coins (a key holder's bytes, never a commitment) through
 `verity.ml.randomness`, as core's draw object (`one_stage.draw`): ``uniform:K`` (a K-subset of all units), ``stratified:K``
-(core's per-template sizes, `draw.stratum_k`) or an explicit plan ``{template: k}`` (proofs' stratified plan, PRF-166).
+(core's per-template sizes, `draw.stratum_k`) or an explicit plan ``{template: k}`` (proofs' stratified plan).
 """
 from __future__ import annotations
 
@@ -259,13 +259,13 @@ def _template(name: str) -> Callable[[Callable[..., Template]], Callable[..., Te
 
 def _quant_def(attr: str, **statics: Any) -> Callable[[], Any]:
     def get() -> Any:
-        from verity.ml.circuits.ops import quant  # circuits' CIR-100 (#4433), once on main
+        from verity.ml.circuits.ops import quant  # circuits' quantizer Definitions, once on main
         return bind(getattr(quant, attr), **statics)
     return get
 
 
 def _circuits_def(attr: str, **statics: Any) -> Callable[[], Any]:
-    """A circuits Definition in `verity.ml.circuits.ops` once some module there exports ``attr`` (CMP-92 batches 1-3)."""
+    """A circuits Definition in `verity.ml.circuits.ops` once some module there exports ``attr``."""
     def get() -> Any:
         import importlib
         for mod in ("verity.ml.circuits.ops.rmsnorm", "verity.ml.circuits.ops.softmax", "verity.ml.circuits.ops.argmax",

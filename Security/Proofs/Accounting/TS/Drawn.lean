@@ -3,11 +3,9 @@ import Proofs.Accounting.TS.Fork
 /-!
 # (I8) for a sampled window
 
-Stated after RT-I8 (note:20261018T0728Z-draft-rt-i8, decisions 114 and 119) and RT-COMPOSE r2's R2-B1
-(note:20261018T1200Z-draft-rt-compose-r2: good reads the run's modes), with E1(c) per unit (`UnitFixed`) as decided
-(ASK-17 = A). `DrawnRightOff` and `DrawnBindingOfFork` don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the
-share's side of `Covers`: a share that charges each unit the run didn't pay for its late cone's weight covers every unit
-that isn't good.
+A unit's `Good` reads the run's modes, and E1(c) is per unit (`UnitFixed`). `DrawnRightOff` and `DrawnBindingOfFork`
+don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the share's side of `Covers`: a share that charges each unit the
+run didn't pay for its late cone's weight covers every unit that isn't good.
 
 `DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some drawn unit's proof is unsound", which
 the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens its unit's committed values (not

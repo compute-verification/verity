@@ -1,15 +1,16 @@
 """`wipe_period` and `wipe_party`: one wipe in one process, on an injected clock, and the memory challenger's side and
 the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryChallenger.WipeProtocol`,
 difftested in `verity/core/devices/memory_challenger/lean/tests/test_wipe_protocol.py`): an honest segment certified at
-⌈M/19⌉ + E, its bound vacuous when the egress is uncounted, a prover keeping more than f·M of foreign content and a late
-read rejected, a session the prover left undecided. The leg runs whole against a challenger side on a host of its own
-(`wipe_side.py`), its record naming what the bound doesn't cover (the links leaving the node, the undeclared tiers, an
-uncounted egress) and the session's window, and the bound's numeric step holds at the reads it is stated for."""
+`StreamedWipeMeetsReads`' threshold at the challenger's `k` (11,709,069 + E bits at `k = 2152`, `r = 24`), its bound
+vacuous when the egress is uncounted, a prover keeping one label past it and a late read rejected, a session the prover
+left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
+is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound. The leg runs
+whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
+(the links leaving the node, the undeclared tiers, an uncounted egress), the reads and the session's window."""
 
 from __future__ import annotations
 
 import json
-import math
 import os
 import socket
 import sys
@@ -46,12 +47,19 @@ def _run(params: sw.WipeParams = SMALL, secret: bytes = b"wipe period", **kw) ->
                  protocol=TEST_ID, clock=kw.pop("clock", Clock()), coin_secret=b"coins", **kw)
 
 
-def test_an_honest_segment_is_certified_at_f_m() -> None:
+SEGMENT_2152 = 11_709_069
+"""`512·(⌈2^19/24⌉ − 1) + 2^19 + 11 + 130`: one segment's threshold at `k = 2152`, `r = 24`."""
+
+
+def test_an_honest_segment_is_certified_at_its_reads() -> None:
     w = _run(W.params_for(), egress_bits=3 * sw.EGRESS_UNIT_BITS - 5)
     assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS}
     assert w.answer["public"] == {"certified": True, "egress_mib": 3, "eps": f"1/{2 ** 128}",
-                                  "foreign_bits": -(-M // 19) + 3 * sw.EGRESS_UNIT_BITS, "memory_bits": M}
+                                  "foreign_bits": SEGMENT_2152 + 3 * sw.EGRESS_UNIT_BITS, "k": W.READS,
+                                  "memory_bits": M, "r": 24}
     assert w.answer["profile"]["gaps"] == [] and w.answer["profile"]["tiers"] == [[W.TIER, 1 << 25]]
+    assert w.answer["profile"]["certificate"] == {"eps": f"1/{2 ** 128}", "max_reads": W.MAX_READS, "outside_bits": 0,
+                                                  "r": 24, "reads": W.READS}
     evidence = json.loads(bytes.fromhex(w.case["evidence"]))
     assert evidence["signed"]["ended"] == sw.COMPLETE and w.case["params"]["server"] == b"n0".hex()
 
@@ -60,18 +68,55 @@ def test_an_uncounted_egress_bounds_nothing() -> None:
     w = _run(W.params_for())
     assert w.verdict == "accept"
     assert w.answer["public"] == {"certified": False, "egress_mib": sw.EGRESS_MAX_UNITS, "eps": "0", "foreign_bits": M,
-                                  "memory_bits": M}
+                                  "k": W.READS, "memory_bits": M, "r": 24}
     assert w.answer["profile"]["gaps"] == [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
                                            f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
 
 
-def test_a_prover_keeping_more_than_f_m_is_rejected() -> None:
-    """A prover holding ⌈N/19⌉ + 1 labels' worth of prior content in place of labels misses a read with probability
-    at least `1 − (18/19)^2152`, past `1 − 2^-128`; on these coins it misses one."""
-    w = _run(W.params_for(), egress_bits=0, prover=W.keeping(W.SEGMENT_LABELS // 19 + 1))
+def test_a_prover_keeping_one_label_past_the_threshold_is_rejected() -> None:
+    """A prover holding `f` labels' worth of prior content in place of labels, one label past the published threshold,
+    misses a read with probability `1 − (1 − f/N)^2152`, past `1 − 2^-128`; on these coins it misses one."""
+    p = W.params_for()
+    f = W.foreign_labels("fM", p)
+    assert f == SEGMENT_2152 // sw.LABEL_BITS + 1 and (W.SEGMENT_LABELS - f) ** W.READS << 128 < W.SEGMENT_LABELS ** W.READS
+    w = _run(p, egress_bits=0, prover=W.keeping(f))
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG, w.answer
     assert "wrong answers" in w.answer["reason"] and w.answer["public"] is None
-    assert (18 / 19) ** W.READS < 2.0 ** -128
+
+
+def test_the_certificate_at_the_challengers_reads() -> None:
+    """`ratio(k)` is the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`, and `certify` publishes the threshold at it: one
+    segment at `k = 2152` and at `k = 5231`, and `StreamedWipeMeets141GB5`'s H200 (its fill and 2.3 GB of driver reserve
+    declared, `R = 18.4·10^9` bits) at its `39,721,768,854` bits; past `MAX_READS` the certificate is vacuous."""
+    assert [W.ratio(k) for k in (1, 90, 91, 2151, 2152, 5230, 5231, 74_000)] == [1, 1, 1, 24, 24, 58, 59, 828]
+    for k in (1, 91, 400, 2152, 5231, 10_000, W.MAX_READS):
+        r = W.ratio(k)
+        assert (r - 1) ** k << 129 <= r ** k and r ** k << 129 > (r + 1) ** k, k
+    assert (W.certify(W.params_for(), 0)["foreign_bits"], W.certify(W.params_for(k=5231), 0)["foreign_bits"]) == (
+        SEGMENT_2152, 5_074_062)
+    h200 = sw.WipeParams(2_203_125_000, 5231, 1, W.LIMIT_NS, (("gpu-hbm", 143_300_000_000),))
+    assert h200.outside_bits == 18_400_000_000
+    assert W.certify(h200, 2) == {"certified": True, "egress_mib": 2, "eps": f"1/{2 ** 128}",
+                                  "foreign_bits": 39_721_768_854 + 2 * sw.EGRESS_UNIT_BITS, "k": 5231,
+                                  "memory_bits": 1_146_400_000_000, "r": 59}
+    past = W.params_for(k=W.MAX_READS + 1)
+    assert W.certify(past, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M,
+                                  "k": W.MAX_READS + 1, "memory_bits": M, "r": 0}
+    assert W.gaps(past, 0) == [f"k = {W.MAX_READS + 1}: the certificate is computed for at most {W.MAX_READS} reads"]
+
+
+def test_the_challenger_chooses_the_reads(tmp_path) -> None:
+    """The request carries the fill, the deadline and the tiers; `k` is the challenger's (`--reads`), and a request
+    naming it is refused."""
+    request = WP.request_of("n0", W.params_for(k=5231))
+    assert set(request) == WP.REQUEST_KEYS and WP.params_of(request).k == W.READS
+    assert WP.params_of(request, 5231) == W.params_for(k=5231)
+    with pytest.raises(ValueError, match="the challenger chooses the reads"):
+        WP.params_of(request | {"k": 9})
+    assert W.config({"wipe": {"reads": 5231}})["reads"] == 5231
+    for bad in (0, "5231", 1 << 32):
+        with pytest.raises(ValueError, match="reads null or 1 to 2"):
+            W.config({"wipe": {"reads": bad}})
 
 
 def test_a_late_read_is_rejected() -> None:
@@ -117,7 +162,7 @@ def _split(params: sw.WipeParams, prover: sw.Prover, signer, stop_after: int | N
 @pytest.mark.parametrize("how", ["honest", "foreign", "left"])
 def test_the_split_wipe(how: str) -> None:
     signer = ts.TestSigner(b"challenger host " + how.encode(), 1)
-    prover = W.Keeping(SMALL, SMALL.labels // 19 + 1) if how == "foreign" else sw.Prover(SMALL)
+    prover = W.Keeping(SMALL, W.foreign_labels("fM", SMALL)) if how == "foreign" else sw.Prover(SMALL)
     c, answered = _split(SMALL, prover, signer, stop_after=3 if how == "left" else None)
     a = W.answer(b"n0", c.commitment.session, (signer.public_key,), c.commitment, c.signed, ts.SCHEMES, TEST_ID)
     want = {"honest": "accept", "foreign": "reject", "left": "undecided"}[how]
@@ -181,8 +226,8 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     record = json.loads((out / "wipe.json").read_text())
     assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
-    assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "links": [CONTROL], "memory_bits": M,
-                                         "segments": W.SEGMENTS, "tier": W.TIER}
+    assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "k": W.READS, "links": [CONTROL], "memory_bits": M,
+                                         "outside_bits": 0, "segments": W.SEGMENTS, "tier": W.TIER}
     control, challenger = record["placement"]["links"]
     assert control == WP.link("control", "n0", "outside", CONTROL["via"])
     assert challenger["name"] == "challenger" and challenger["ends"] == ["n0", "auditor"]
@@ -190,17 +235,29 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert challenger["via"].startswith("127.0.0.1:") and challenger["counted_by"] is None
     assert answer["profile"]["placement"] == record["placement"]
     dram = [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "host-dram"]
-    assert len(dram) == 1 and dram[0]["what"] == "the host's DRAM outside the fill" and dram[0]["bytes"] > 0
+    assert len(dram) == 1 and dram[0]["what"] == "the host's DRAM outside the declared tier" and dram[0]["bytes"] > 0
     window = {"t0": "2026-10-27T08:00:00.123456Z", "t1": "2026-10-27T08:03:03.000001Z"}
     assert {k: record["report"]["window"][k] for k in window} == window
     assert record["window"]["challenger"] == record["report"]["window"] and set(record["window"]["prover"]) == {
         "clock", "t0", "t1"}
     gaps = record["uncertified"]
     assert not any(g.startswith("key custody") for g in gaps) and gaps[0].startswith("egress: signed UNCOUNTED")
-    assert any(g.startswith("tier host-dram: the host's DRAM outside the fill (") for g in gaps)
+    assert any(g.startswith("tier host-dram: the host's DRAM outside the declared tier (") for g in gaps)
     assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
     s = W.summary(record)
-    assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps
+    assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps and s["k"] == W.READS
+
+
+def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:
+    """`wipe.reads` starts a challenger on this node with `--reads`; one on its own host chooses its own (here
+    `wipe_side.py`'s default), and the leg refuses a session at another count."""
+    period = _side(tmp_path, monkeypatch, {"reads": 5231})
+    extras, of = [], WP.Party.of
+    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): extras.append(extra) or of(
+        doc, node, d, extra)))
+    with pytest.raises(RuntimeError, match="ran 2152 reads, not period.json's wipe.reads 5231"):
+        W.leg(period, "n0", tmp_path / "out")
+    assert extras == [("--reads", "5231")]
 
 
 def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, monkeypatch) -> None:
@@ -212,8 +269,10 @@ def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, 
 def test_what_the_bound_does_not_cover() -> None:
     """The memory outside the declared tier, a placement off its own host, and a counted link left out."""
     gpu = W.undeclared("gpu-hbm", 100, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
-    assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "NVIDIA H200's memory outside the fill"}
+    assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "NVIDIA H200's memory outside the declared tier"}
     assert gpu[1]["tier"] == "host-dram" and gpu[1]["what"] == "the host's DRAM"
+    whole = W.undeclared("gpu-hbm", 1000, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
+    assert [u["tier"] for u in whole if u["tier"] == "gpu-hbm"] == []
     host = W.undeclared("host-dram", 100)
     assert host[0]["tier"] == "host-dram" and host[0]["bytes"] == gpu[1]["bytes"] - 100
     counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier (NET-78)")
@@ -221,8 +280,8 @@ def test_what_the_bound_does_not_cover() -> None:
                          undeclared=gpu[:1])
     gaps = W.uncertified(where, None)
     assert gaps[0] == f"key custody: {where[WP.PREMISE]}" and len(gaps) == 3
-    assert gaps[1] == ("tier gpu-hbm: NVIDIA H200's memory outside the fill (900 bytes) is undeclared: the fill doesn't "
-                       "cover it and M doesn't count it")
+    assert gaps[1] == ("tier gpu-hbm: NVIDIA H200's memory outside the declared tier (900 bytes) is undeclared: the fill "
+                       "doesn't cover it and M doesn't count it")
     assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network certifier, so what leaves on it is "
                        "outside E")
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
@@ -253,7 +312,7 @@ def test_the_config_and_the_device_fit() -> None:
         with pytest.raises(ValueError, match="wipe.links: each is"):
             W.config({"wipe": {"links": [bad]}})
     p = W.params_for()
-    assert W.foreign_labels("fM", p) == W.SEGMENT_LABELS // 19 + 1
+    assert W.foreign_labels("fM", p) == SEGMENT_2152 // sw.LABEL_BITS + 1
     assert W.foreign_labels(100, p) == 2 and W.foreign_labels(0, p) == 0 and W.foreign_labels(1 << 40, p) == p.labels
 
     class Free(WS.Cuda):
@@ -264,16 +323,18 @@ def test_the_config_and_the_device_fit() -> None:
             return self.free_bytes, 0
 
     c = W.config({"wipe": {"store": "cuda", "reserve_bytes": 1 << 20}})
-    assert W.segments_of(c, Free(5 * W.LEAST_FILL_BYTES + 100)) == 4
+    assert W.segments_of(c, Free(5 * W.SEGMENT_BYTES + 100)) == 4
     assert W.segments_of(c | {"segments": 9}, Free(0)) == 9 and W.segments_of(W.CONFIG, WS.HostMemory()) == W.SEGMENTS
     with pytest.raises(RuntimeError, match="less than one segment"):
-        W.segments_of(c, Free(W.LEAST_FILL_BYTES))
+        W.segments_of(c, Free(W.SEGMENT_BYTES))
 
 
-@pytest.mark.parametrize("labels", [16, 1000, 1 << 19, 3 << 20, 1 << 30, 1_610_612_736, 1 << 50])
-def test_the_bound_is_within_f_m_at_2152_reads(labels: int) -> None:
-    """The streamed wipe's own bound (`retained_bits`, Pous.Guarantees.StreamedWipe before its PRF term) at k = 2152
-    and δ = 2^-128, egress 0, is at most ⌈M/19⌉ from 16 labels up: the numeric step `EXPERIMENTAL` names."""
-    m = labels * sw.LABEL_BITS
-    q, _ = sw.retained_bits(labels, W.READS, m, 0, -128)
-    assert q <= math.ceil(m / 19), (labels, q, m / 19)
+@pytest.mark.parametrize("k", [W.READS, 5231])
+@pytest.mark.parametrize("labels", [1, 16, 1000, 1 << 19, 3 << 20, 1 << 30, 2_203_125_000, 1 << 50])
+def test_the_threshold_is_past_the_streamed_wipes_own_bound(labels: int, k: int) -> None:
+    """The streamed wipe's own bound (`retained_bits`, `Pous.Guarantees.StreamedWipe` before its PRF term, its best
+    `g` and exact count) at `δ = 2^-128`, egress 0 and a GiB outside the fill, is at most the threshold `certify`
+    publishes (`StreamedWipeMeetsReads`', its `g = n − ⌈n/r⌉` and crude count), at every fill."""
+    p = sw.WipeParams(labels, k, 1, W.LIMIT_NS, (("gpu", labels * sw.LABEL_BYTES + (1 << 30)),))
+    q, _ = sw.retained_bits(labels, k, W.memory_bits(p), 0, -128)
+    assert q <= W.certify(p, 0)["foreign_bits"] < W.memory_bits(p), (labels, k, q)

@@ -1,4 +1,4 @@
-"""`GemmCoordinate_v2{K, DOT}` through the IR oracle on 30 authenticated RTX 4090 GEMM coordinates.
+"""`GemmCoordinate_v2{K, DOT}` through the oracle on 30 authenticated RTX 4090 GEMM coordinates.
 
 Ported from veritor ``verity.ir/tests/test_composition.py`` §3 (`test_gemm_on_ampere_captured_coordinates`), with the
 numpy fixture loading replaced by `array('H')`.  The recorded cross-architecture numbers (Hopper step on the same operands:
@@ -41,7 +41,7 @@ def _standalone(spec):
 
 
 def _ev(spec, *arrays) -> tuple[int, ...]:
-    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the IR oracle."""
+    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the oracle."""
     prog, call = _standalone(spec)
     return evaluate_call(prog.circuit, call, [int(v) for a in arrays for v in a])
 
@@ -94,8 +94,8 @@ def test_gemm_on_ampere_captured_coordinates() -> None:
 
 
 def test_ir_evaluation_is_the_direct_chain() -> None:
-    """The oracle's answer for `GemmCoordinate_v2` is literally K/16 `tc_dot_total` steps then `cvt.rn.bf16.f32`: the IR
-    adds structure, not semantics.  Also fixes the verification-unit shape the proof work targets."""
+    """The oracle's answer for `GemmCoordinate_v2` is literally K/16 `tc_dot_total` steps then `cvt.rn.bf16.f32`: the Program
+    adds structure, not semantics.  Also fixes the proof-block shape the proofs target."""
     for f, x, w, out in list(_gemm_fixtures())[:4]:
         K = f["K"]
         acc = 0
@@ -110,7 +110,7 @@ def test_ir_evaluation_is_the_direct_chain() -> None:
 
 
 def test_gemm_coordinate_circuit_shape() -> None:
-    """One proof unit = K/16 step gates + one cast gate (+ the zero constant): the shape the census counts over."""
+    """One proof block = K/16 step gates + one cast gate (+ the zero constant): the shape the census counts over."""
     prog, call = _standalone(bind(G.GemmCoordinate, K=1536, DOT=P.AmpereBF16TcDot16))
     circ = prog.circuit
     ids: dict[str, int] = {}
@@ -172,7 +172,7 @@ def test_sm120_coordinates_are_the_direct_chain() -> None:
 
 
 def test_sm120_coordinate_circuit_shapes() -> None:
-    """One proof unit = K/k step gates + one cast gate (+ the zero constant), each step reading the previous accumulator."""
+    """One proof block = K/k step gates + one cast gate (+ the zero constant), each step reading the previous accumulator."""
     for coord, binding, K, k, width in ((G.GemmCoordinateE4m3, G.GEMM_SM120_E4M3, 256, 32, 1 + 2 * 32),
                                         (G.GemmCoordinateNvf4, G.GEMM_SM120_NVF4, 256, 64, 1 + 2 * 64 + 2 * 4),
                                         (G.GemmCoordinateMxf4, G.GEMM_SM120_MXF4, 256, 64, 1 + 2 * 64 + 2 * 2)):

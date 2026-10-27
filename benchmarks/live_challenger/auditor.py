@@ -45,7 +45,8 @@ first coin.
   refused unless S is reserved, not yet opened, unexpired, the opener's own (its reserve's `by` or `for`) and its
   period still open, and R is no open's root yet (v1's `commit` and one-step v2 opens included): one session a root,
   ever. `admit` appends the `open` entry, which binds S (`session`), R (`window.root`) and the reserve (`reserve`, its
-  `seq`), carries the reserve's request, names its opener (`opened_by`) and takes a port, before `serve.py` starts, so
+  `seq`), carries the reserve's request, names its opener (`opened_by`) and takes a port of its peer's certifier coin
+  link (the coins' path below), before `serve.py` starts, so
   before its first coin. A reserve not opened by its expiry is its period's refused window. Its `host` is the string the
   challenger's own record signs (`<host>.<session>`), which ties `record.json` to it. A window's time is the auditor's,
   never the requester's: its entries' `seq` and times. `serve.py` gets the root (`--root`: a salt opens only after it)
@@ -60,6 +61,18 @@ first coin.
   release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
   many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
+- **The coins' path**: the device that runs a server's network certifier produces its live coins. `serve.py` listens
+  on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's certifier
+  coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, infra's, within 7811..7899), which
+  carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
+  such line is refused. The certifier on this host owns that link and counts it: it re-clocks the stream and exempts
+  only frames that open against the session's committed coin root. The hop from the certifier to the server crosses
+  the prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on
+  the premises `CoinsConfidential` (the stream reaches the certifier only on auditor hosts, here this one) and
+  `OneClock` (one clock for both, this host's), stated in `verity/core/protocols/sampled_proofs/README.md`.
+
+  `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
+  (`run.sh`), and it refuses a window's session (`--root`).
 - **A period** is a lane's span of windows between two signed entries, `period-open` and `period-close` (session null),
   which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
   LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
@@ -302,9 +315,9 @@ WARDEN_TOKENS = (16, 256)
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
 #: `scan_zk.py prove --warden-run` takes, as `warden_serve.py`'s flags
-SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "21", "--lanes", "4",
+SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
                  "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
-                 "--egress-cells", "65")
+                 "--egress-cells", "65", "--every", "16")
 #: the scan's schedule by flag, which `--window-per-group` sizes a group's link-windows on (`scan_group_windows`)
 SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
 #: a scan rehearsal's `--prompts`, read off the gate's stdin: at most `WARDEN_PROMPTS_BYTES` of JSON, an array of
@@ -339,8 +352,7 @@ READ_ONLY = "-"
 HOST_ACCOUNTS = ("root", "vy-admin", "research", "auditor")
 SECRET = "secret"
 OPEN_REQUEST = "open.json"
-OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "tunnel.log",
-             "serve.log")
+OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "serve.log")
 
 
 class Refused(Exception):
@@ -355,6 +367,11 @@ class Host:
     peers: Path = Path("/etc/vy/peers")
     name: str = "vy-challenger-1"
     pins: Path = Path("/opt/vy-challenger/pins.jsonl")
+
+    @property
+    def coin_ports(self) -> Path:
+        """Each peer's certifier coin link (`coin_ports`), beside the peers file: /etc/vy/coin-ports."""
+        return self.peers.with_name("coin-ports")
 
     @property
     def ledger(self) -> Path:
@@ -748,6 +765,25 @@ def peers(host: Host) -> list[str]:
     return [n for n in names if n != host.name]
 
 
+def coin_ports(host: Host, peer: str) -> range:
+    """The ports of `peer`'s certifier coin link: its line `PEER LO-HI` (or `PEER PORT`) of /etc/vy/coin-ports
+    (`Host.coin_ports`), ports within `PORTS` of this host's loopback that the link carries to the same ports of the
+    peer's loopback; or Refused, since a window's coins reach its peer through that link alone (`CoinsConfidential`)."""
+    try:
+        lines = host.coin_ports.read_text().splitlines()
+    except FileNotFoundError:
+        lines = []
+    for line in lines:
+        words = line.split()
+        if words[:1] == [peer] and len(words) == 2 and (m := re.fullmatch(r"(\d{1,5})(?:-(\d{1,5}))?", words[1])):
+            lo, hi = int(m[1]), int(m[2] or m[1])
+            if PORTS.start <= lo <= hi < PORTS.stop:
+                return range(lo, hi + 1)
+    raise Refused(f"--peer {peer!r} has no certifier coin link: a window's coins reach its peer only through the link of "
+                  f"the certifier on this host, never ssh -R (CoinsConfidential); infra lists its ports as "
+                  f"`{peer} LO-HI`, within {PORTS.start}..{PORTS.stop - 1}, in {host.coin_ports}")
+
+
 def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
     """A reserve's request; `--for LANE` (vy-admin's alone: a development window reserved for a lane without its own key)
     names the window's prover."""
@@ -770,6 +806,7 @@ def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
         refuse(e)
     if a.peer not in peers(host):
         raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+    coin_ports(host, a.peer)
     if not SCHEME.fullmatch(a.scheme):
         raise Refused(f"--scheme {a.scheme!r}: [a-z0-9/._-], up to 128")
     try:
@@ -813,13 +850,13 @@ def parse_open(argv: list[str]) -> tuple[str, str]:
     return a.session, a.root
 
 
-def free_port(lines: list[bytes], active: Callable[[str], bool]) -> int:
+def free_port(lines: list[bytes], active: Callable[[str], bool], ports: range = PORTS) -> int:
     busy = {s["open"]["body"]["port"] for sid, s in sessions_of(lines).items()
             if "open" in s and "end" not in s and active(sid)}
-    for port in PORTS:
+    for port in ports:
         if port not in busy:
             return port
-    raise Refused(f"every port of {PORTS.start}..{PORTS.stop - 1} has a live session")
+    raise Refused(f"every port of {ports.start}..{ports.stop - 1} has a live session")
 
 
 def period_holding(lines: list[bytes], session: str) -> tuple[str, dict] | None:
@@ -1579,8 +1616,9 @@ def reserve(host: Host, session: str, *, signer, pinned: str, now: datetime) -> 
 
 
 def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
-    """The window's `open` entry, binding the reserved session and its root, carrying its reserve's request and a port no
-    live session holds; or Refused (`open_refusal`, read under the ledger's lock)."""
+    """The window's `open` entry, binding the reserved session and its root, carrying its reserve's request and a port of
+    its peer's certifier coin link (`coin_ports`) no live session holds; or Refused (`open_refusal`, read under the
+    ledger's lock)."""
     req = request_of(host, session, OPEN_REQUEST)
     I, sign, key_sha512 = signer
 
@@ -1594,7 +1632,7 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
         return {"window": {"root": req["root"]}, "reserve": r["seq"],
                 **{k: r["body"][k] for k in RESERVED if k in r["body"]}, "opened_by": req["by"], "pinned": pinned,
                 "pins": seal, "key_sha512": key_sha512, "host": r["body"]["host"],
-                "port": free_port(lines, active), "secret_sha512": req["secret_sha512"], "started_utc": utc(now)}
+                "port": free_port(lines, active, coin_ports(host, r["body"]["peer"])), "secret_sha512": req["secret_sha512"], "started_utc": utc(now)}
     return append(host, "open", session, body_of, I, sign)
 
 
@@ -1660,10 +1698,12 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
 
 
 def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
+    """serve.py for the session: it listens on this host's 127.0.0.1 at the open's port, which its peer's certifier coin
+    link carries to the peer (no `--peer`: serve.py opens no tunnel of its own)."""
     return [sys.executable, "-I", str(tree / "benchmarks" / "live_challenger" / "serve.py"),
             "--out", str(host.sessions / session / "out"), "--port", str(open_body["port"]), "--scheme", open_body["scheme"],
-            "--families", json.dumps(open_body["families"]), "--epoch", str(open_body["epoch"]), "--peer", open_body["peer"],
-            "--peers", str(host.peers), "--key", str(host.key), "--host", open_body["host"],
+            "--families", json.dumps(open_body["families"]), "--epoch", str(open_body["epoch"]),
+            "--key", str(host.key), "--host", open_body["host"],
             "--root", open_body["window"]["root"], "--secret-file", str(host.sessions / session / SECRET),
             "--session", session, "--sign-lock", str(host.root / "sign.lock")]
 
