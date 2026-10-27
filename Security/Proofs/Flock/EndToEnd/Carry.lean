@@ -575,8 +575,6 @@ theorem record_ofServer (S : ServerBlocks) (s : Strategy S.game) (t : ℕ) :
   have hw : (ofServer S).wrongSet s t τ = (S.W t).wrongSet τ := by
     unfold CarriedBlocks.wrongSet SamplingBlock.wrongSet
     congr 1
-    funext g
-    unfold XlayerZC XplurZC
   unfold CarriedBlocks.record SamplingBlock.record
   rw [hw]
   rfl
