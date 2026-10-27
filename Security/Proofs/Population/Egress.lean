@@ -5,23 +5,23 @@ import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Finset.Powerset
 
 /-!
-# Non-exfiltration: what the egress can show with at most `m` wrong units
+# Non-exfiltration: what the egress can show with at most `m` faulty proof blocks
 
 The egress slots `O` are what leaves; the secret slots `X` are inputs the egress must not reveal beyond what the
-wrong units write. The count is over every assignment that holds the public inputs, the secrets free, and whose wrong
-units lie in `B` (or number at most `m`): the prover's whole freedom, whatever it knows.
+faulty proof blocks write. The count is over every assignment that holds the public inputs, the secrets free, and whose
+faulty proof blocks lie in `B` (or number at most `m`): the prover's whole freedom, whatever it knows.
 
-* `eq_on_up`, **the egress is a function of the wrong units' writes**: in a covered acyclic population whose secret
-  slots lie outside the egress's upstream cone, two such assignments that agree on what `B` writes agree on everything
-  upstream of the egress, the egress included. With `X = ∅` this is robust determinacy, read on the cone.
+* `eq_on_up`, **the egress is a function of the faulty proof blocks' writes**: in a covered acyclic population whose
+  secret slots lie outside the egress's upstream cone, two such assignments that agree on what `B` writes agree on
+  everything upstream of the egress, the egress included. With `X = ∅` this is robust determinacy, read on the cone.
 * `card_egress_le`: so at the wrong set `B` the egress takes at most `|V| ^ |writes B|` values, over all secrets.
-* `card_egressAt_le`: with at most `m` wrong units, each writing at most `w` slots, at most
+* `card_egressAt_le`: with at most `m` faulty proof blocks, each writing at most `w` slots, at most
   `(∑_{j ≤ m} C(|U|, j)) · |V| ^ (m w)` values: `m w log₂|V|` bits of value, plus the location term, the choice of which
   units are wrong.
 * `flags_egressAt`, **the location term is needed**: `n` checked units that each write one bit, honestly `false`,
-  show `n + 1` egress values with one wrong unit, more than `2 ^ (m w) = 2` once `n ≥ 2`.
+  show `n + 1` egress values with one faulty proof block, more than `2 ^ (m w) = 2` once `n ≥ 2`.
 * `loop_egress`, **acyclicity is needed**: one unit that copies `k` slots onto themselves (single assignment, one
-  cycle) shows `2 ^ k` egress values with no wrong unit at all.
+  cycle) shows `2 ^ k` egress values with no faulty proof block at all.
 -/
 
 namespace Population.Dataflow
@@ -36,7 +36,8 @@ theorem mem_up_of_feeds {O : Finset S} {r t : S} (h : P.Feeds r t) (ht : t ∈ P
   obtain ⟨o, ho, hto⟩ := ht
   exact ⟨o, ho, Relation.ReflTransGen.head h hto⟩
 
-/-- **The egress is a function of the wrong units' writes**, when the secrets lie outside the egress's upstream cone. -/
+/-- **The egress is a function of the faulty proof blocks' writes**, when the secrets lie outside the egress's upstream
+cone. -/
 theorem eq_on_up [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {a : S → V}
     {X O : Finset S} {B : Finset U} (hX : ∀ s ∈ X, s ∉ P.up O) {σ τ : S → V} (hσa : P.Holds a X σ)
     (hτa : P.Holds a X τ) (hσ : P.wrong f σ ⊆ B) (hτ : P.wrong f τ ⊆ B)
@@ -96,7 +97,7 @@ theorem card_egress_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic)
     _ ≤ Fintype.card (P.writesOf B → V) := Fintype.card_le_of_injective g hg
     _ = Fintype.card V ^ (P.writesOf B).card := by rw [Fintype.card_fun, Fintype.card_coe]
 
-/-- **The capacity with at most `m` wrong units**: `m w log₂|V|` bits of value and the location term. -/
+/-- **The capacity with at most `m` faulty proof blocks**: `m w log₂|V|` bits of value and the location term. -/
 theorem card_egressAt_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [Nonempty V] (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O) (m w : ℕ)
     (hw : ∀ u, (P.writes u).card ≤ w) :
@@ -150,7 +151,7 @@ theorem flags_checked (n : ℕ) : (flags n).Checked := by
     obtain ⟨s, -, hs⟩ := hb.1
     simp [flags] at hs
 
-/-- With one wrong unit (writing one bit) a checked population shows `n + 1` egress values. -/
+/-- With one faulty proof block (writing one bit) a checked population shows `n + 1` egress values. -/
 theorem flags_egressAt (n : ℕ) :
     n + 1 ≤ ((flags n).egressAt (flagsFns n) (fun _ => false) ∅ univ 1).card := by
   classical
@@ -201,7 +202,7 @@ theorem loop_singleAssignment (k : ℕ) : (loop k).SingleAssignment :=
 theorem loop_not_acyclic {k : ℕ} (hk : 0 < k) : ¬ (loop k).Acyclic :=
   fun h => h () (.single ⟨⟨0, hk⟩, mem_univ _, mem_univ _⟩)
 
-/-- With no wrong unit at all, the loop shows every one of the `2 ^ k` egress values. -/
+/-- With no faulty proof block at all, the loop shows every one of the `2 ^ k` egress values. -/
 theorem loop_egress (k : ℕ) : 2 ^ k ≤ ((loop k).egress (loopFns k) (fun _ => false) ∅ univ ∅).card := by
   classical
   have hmem : ∀ σ : Fin k → Bool, (fun o : ↥(univ : Finset (Fin k)) => σ o) ∈
