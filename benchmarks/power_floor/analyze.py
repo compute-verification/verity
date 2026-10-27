@@ -149,6 +149,7 @@ MODES = {0: "zeros", 1: "uniform", 2: "uniform, toggling", 3: "sparse 1/8", 4: "
          6: "weight-like N(0,37)", 7: "constant 1", 8: "ternary", 9: "unsigned [0,3]", 10: "unsigned [0,15]",
          11: "unsigned [0,127]"}
 ALL_MODES = tuple(MODES)
+HIDDEN_SCALES = (0.3, 0.45, 0.6, 0.8, 0.9, 1.0)
 
 
 def entropy_table(en: dict) -> list[dict]:
@@ -331,8 +332,10 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
     # board at f, all times MARGIN. C(f) = R_h + the hidden work the LP fits beside it at f; C = max over f.
     # A card whose tensor pipe never reaches f_max (the H200 holds about 1825 MHz under it) is also priced at f_max with
     # its top point's energies, which understates them there.
+    # With `s`, the hidden work is priced instead at s times the certified work's floors at f: s is an operand class's
+    # energy a MAC against uniform's (entropy_table), so s 1 is a floor at real-data entropy and s 0.3 the zero operands.
     rnd_zero = floors(en, ALL_MODES)
-    two = {}
+    two, scaled = {}, {}
     pts = [(k, r) for k, r in en["lgc"].items() if k.endswith(f"-{mma}-1") and "e" in r and "tensor" in rnd_run]
     if pts:
         k, r = max(pts, key=lambda kr: kr[1]["mhz"])
@@ -352,17 +355,18 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
                                     hidden_rates_only=capacity(card, None, 0.0, fixed=honest_use, fmax=f)["mac_per_s"],
                                     certified_w=MARGIN * r["p_sleep_here"] + sum(
                                         e1.get(kk, 0.0) * v for kk, v in honest_use.items()) * 1e-12)
+        for s in HIDDEN_SCALES:
+            h = capacity(card, {kk: s * v for kk, v in e1.items()}, MARGIN * r["p_sleep_here"], fixed=honest_use, fmax=f,
+                         e_fixed=e1)
+            scaled.setdefault(s, {})[round(r["mhz"])] = honest_mac_s + h["mac_per_s"]
     if two:
         best = max(two.values(), key=lambda v: v["capacity"])
         out["two_class"] = dict(margin=MARGIN, points=two, capacity=best["capacity"],
                                 eps=1 - honest_mac_s / best["capacity"])
-    # where the premise starts to pay: floors at s times the random-operand energies, P0 the idle board
-    rnd = floors(en, (1,))
-    out["by_scale"] = {}
-    for s in (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2):
-        cap = capacity(card, {k: v * s for k, v in rnd.items()}, en.get("p_idle") or 0.0)
-        out["by_scale"][s] = dict(capacity=cap["mac_per_s"], eps=1 - honest_mac_s / cap["mac_per_s"],
-                                  pub_vs_tensor=tensor_only / cap["mac_per_s"])
+    out["hidden_scaled"] = {}
+    for s, pts_s in scaled.items():
+        mhz, cap = max(pts_s.items(), key=lambda kv: kv[1])
+        out["hidden_scaled"][s] = dict(capacity=cap, mhz=mhz, eps=1 - honest_mac_s / cap, points=pts_s)
     return out
 
 
@@ -477,8 +481,10 @@ def print_run(res: dict) -> None:
                   f"{tc['margin']}): C {tc['capacity']:.3e} ε {tc['eps']:.3f}; " + ", ".join(
                       f"{f} MHz hidden {v['hidden']:.3e} of {v['hidden_rates_only']:.3e} (certified {v['certified_w']:.0f} W)"
                       for f, v in sorted(tc["points"].items())))
-        print("   floors at s × random-operand energy, P0 idle: " + "; ".join(
-            f"s {s}: ε {v['eps']:.3f} (pub {v['pub_vs_tensor']:.3f})" for s, v in ep["by_scale"].items()))
+        if ep.get("hidden_scaled"):
+            print(f"   two classes, the hidden work at s × the certified work's floors, × {MARGIN}: " + "; ".join(
+                f"s {s}: ε {v['eps']:.3f} (C {v['capacity']:.3e} at {v['mhz']} MHz)"
+                for s, v in ep["hidden_scaled"].items()))
 
 
 if __name__ == "__main__":
