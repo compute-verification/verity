@@ -10,7 +10,7 @@ import Definitions.Pous.Model.Invertible
 
 The definitions the concrete-`H` P3 pins read (`Pous.Guarantees.P3ConcreteMeets64`, `P3ConcreteMeets14GB`,
 `P3ConcreteMeets64D12`), copied verbatim from the proofs' sources. Each source namespace `PousX` becomes `Pous.X` (the
-`Pous.Dense` precedent), so these copies never clash with the lanes' own files, and a graded submission, with the
+`Pous.Dense` precedent), so these copies never clash with the sources' own files, and a graded submission, with the
 same renaming, states and proves the pins about these constants:
 - `Pous.Sponge` (`lean/submissions/sponge-dense/SpongeDense.lean`, §§2, 7 and 9): the overwrite chain `H` on `Π₂`, the
   two-permutation model `p3ChainModel` (a tweakable `P` of labels, one independent uniform permutation per tweak, and
@@ -91,7 +91,7 @@ abbrev P3COmega (n wc : ℕ) : Type :=
 
 /-- `P3COmega` is finite. The source declares this, and `instNonemptyP3COmega`, as global instances at this point of
 `SpongeDense`. Here they are a definition and a theorem under the same names, local instances for `p3ChainModel` only:
-as imported global instances they would be tried, before the lanes' own instances, on every product type of this
+as imported global instances they would be tried, before the sources' own instances, on every product type of this
 shape, and on `SpongeDense`'s `P3SOmega` that unification exceeds the recursion limit. -/
 @[instance_reducible]
 noncomputable def instFintypeP3COmega (n wc : ℕ) : Fintype (P3COmega n wc) := Fintype.ofFinite _
