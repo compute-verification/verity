@@ -47,9 +47,9 @@ leaf's and the payload's salts (192 bytes each) and their paths, each padded wit
 
 Check 1 is the unit's shape: every port has its fixed size, and the public row is the verifier's. The verdict word is bit 0
 the four checks' AND (accepted) and bits 1-4 each check's failure in that order (`VERDICT`), bits 5-15 zero, within the 16-bit
-size class, the least public one; `verdict` reads it as §6's names, None for accepted or the first check that failed. A field's name is kv/v0's
-(p512 = 2^512 - 569, p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and the tests' binding with a short block
-(``BYTES`` below 4,096), the same circuit on small words, never deployed.
+size class, the least public one; `verdict` reads it as `VERDICT`'s names, None for accepted or the first check that
+failed. A field's name is kv/v0's (p512 = 2^512 - 569, p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and
+the tests' binding with a short block (``BYTES`` below 4,096), the same circuit on small words, never deployed.
 
 **The plan link.** The plan row is the one witness row the verifier holds outside the unit: a row's commitment is
 hm96-sha512/row/v2, so under the salt of another commitment of the same words it has that commitment's ``b || c``, and the
@@ -125,7 +125,8 @@ SALT_BYTES = 192
 PER_LEAF = 16
 #: a read's position is a u32 (uint 1 ... 4 bytes)
 POSITION_BYTES = 4
-#: the verdict word's bits 1 ... 4: each check's failure, in the order §6 checks them (`audit.FAILURES`' names)
+#: the verdict word's bits 1 ... 4: each check's failure, in the order `RemoteAudit.checkOpening` checks them
+#: (`audit.FAILURES`' names)
 VERDICT = ("receipt-path", "codec", "payload-path", "receipt")
 #: a carry-save tree commits a form longer than this; a ripple carry, one longer than CARRY
 LIMIT, CARRY = 6, 4
@@ -654,11 +655,11 @@ def _opening_body(B, S, *colls):
 BlockOpeningCheck = CompositeDefinition(
     "BlockOpeningCheck", 1, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "P", "DR", "DP", "DV"), _opening_signature,
     _opening_body, conformance="exact-model-tested",
-    doc="A drawn receipt's opening (remote_bandwidth §6 checks 1-3 and 5): the receipt leaf on its path to the pass's root "
-        "and plan[pos] = j (receipt-path); every word of block below p and decoding to payload under the codec key at j, with "
-        "b_j(c_a) of the payload's own digest and coin if bound (codec); the payload on its path to the payload root or its "
-        "append's and, if bound, to the value commitment (payload-path); the block's sketch receipt the leaf's entry pos & 15 "
-        "(receipt). Returns bit 0 accepted, bits 1-4 each check's failure")
+    doc="A drawn receipt's opening (`RemoteAudit.checkOpening`'s checks 1-3 and 5): the receipt leaf on its path to the "
+        "pass's root and plan[pos] = j (receipt-path); every word of block below p and decoding to payload under the codec "
+        "key at j, with b_j(c_a) of the payload's own digest and coin if bound (codec); the payload on its path to the "
+        "payload root or its append's and, if bound, to the value commitment (payload-path); the block's sketch receipt the "
+        "leaf's entry pos & 15 (receipt). Returns bit 0 accepted, bits 1-4 each check's failure")
 
 
 # --- references --------------------------------------------------------------------------------------------------------------

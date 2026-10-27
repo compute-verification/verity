@@ -18,9 +18,9 @@ per opening.
   the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean `verify --zk --partition --program`.
 * **What the verifier opens.** Of each unit its public rows (``pub`` and ``signs``, which it derives itself:
   `opening.public`) and its verdict row ``o0``, under the salts the prover sends for those three rows. It holds the
-  unit's plan row by ``b || c`` to its own copy of the pass's plan: v0's plans are in the clear (§8, "What the plan
-  shows"), so the prover sends the plan row's salt with the plan. It decides the window on the verdicts
-  (`opening.Session.decide`).
+  unit's plan row by ``b || c`` to its own copy of the pass's plan: v0's plans are in the clear (the remote audit's
+  README, "Not in Lean yet"), so the prover sends the plan row's salt with the plan. It decides the window on the
+  verdicts (`opening.Session.decide`).
 * **Rounds.** ``honest``, and ``tampered``: the same session (the same coins, so the same draws), the store's block at the
   first draw replaced by other bytes before the passes (a prover that lost the block and receipts what it holds in its
   place). Its unit's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on one

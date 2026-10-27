@@ -49,15 +49,16 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
   it the wrong units the draw allows can carry (`uncertified`), its δ added to the ledger's error.
 * **Check 3.** The session draws ``--samples`` receipts a window, and nothing is opened: each draw goes through the
-  remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
-  and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
-  at the drawn position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
-  registration's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
-  unit binds the block's payload row to, and the block's sketch receipt the leaf's entry. The units are proved as a
-  second statement (`check3_audit`: every unit drawn, --zk, Lean). The verifier sees the units' roots, its own public
-  rows (the codec seed, the block, the coin, the pass's prefix and signs, the roots with their domains, ranks and depths)
-  and each unit's verdict, and holds the one other row, the plan row, to the canonical plan row by ``b || c``. The
-  negatives' sessions decide check 3 by the unit's reference (`opening.reference`).
+  remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, the Lean
+  `RemoteAudit.checkOpening`'s checks 1-3 and 5 as one unit): the receipt leaf on its path to the pass's receipt root
+  and the step's plan row holding the block at the drawn position, the block decoding to its payload under b_j(c_a), the
+  payload on its path to its append's root (the registration's payload root for a registered block) and to the canonical
+  payload commitment at the row the memory-map unit binds the block's payload row to, and the block's sketch receipt the
+  leaf's entry. The units are proved as a second statement (`check3_audit`: every unit drawn, --zk, Lean). The verifier
+  sees the units' roots, its own public rows (the codec seed, the block, the coin, the pass's prefix and signs, the
+  roots with their domains, ranks and depths) and each unit's verdict, and holds the one other row, the plan row, to the
+  canonical plan row by ``b || c``. The negatives' sessions decide check 3 by the unit's reference
+  (`opening.reference`).
 """
 from __future__ import annotations
 

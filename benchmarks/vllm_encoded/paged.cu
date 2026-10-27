@@ -16,9 +16,9 @@
 // the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still plaintext,
 // which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it wrote each
 // slot; pg_encode encodes listed plaintext slots in place under their bound offsets b_j(c_a) and clears their flags.
-// A token-layer kept past the lifetime cap L is re-keyed in its slot (§4: appended again at a fresh index j' under a fresh
-// coin): pg_rekey decodes listed slots under their old offsets and encodes them under their new ones b_j'(c_a') in place,
-// then writes the new offsets over the old.
+// A token-layer kept past the lifetime cap L is re-keyed in its slot (appended again at a fresh index j' under a fresh
+// coin): pg_rekey decodes listed slots under their old offsets and encodes them under their new ones b_j'(c_a') in
+// place, then writes the new offsets over the old.
 //
 // pg_attn is kv.cu's warp-specialized tensor-core form (attn_mma_ws_kernel) over pages: MDW decoder warps, a lane a
 // word of every tile, load the tile's words of one KV head from the pages (the block table), decode them (encoded) or
