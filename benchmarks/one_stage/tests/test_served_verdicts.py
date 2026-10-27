@@ -72,7 +72,7 @@ def test_a_subprotocol_with_no_piece_is_named_missing_with_its_issue(tmp_path, c
     assert [g["verdict"] for g in got.values()] == ["missing"] * 4
     assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING the bandwidth audit", "MISSING PoUS",
                                                        "MISSING the network certifier"]
-    assert all(issue in "\n".join(lines) for issue in ("VLLM-33 G1", "VLLM-33 G2", "MEM-94", "NET-83", "INF-263"))
+    assert all(p[3] in line and p[4] in line for p, line in zip(S.PIECES.values(), lines, strict=True))
     assert not (tmp_path / "pieces").exists()
 
 
@@ -101,9 +101,8 @@ def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
     assert BR.check(rec) == {}
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
     assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
-    assert line["missing"] == {"PoUW": "VLLM-33 G1", "the bandwidth audit": "VLLM-33 G2", "PoUS": "MEM-94",
-                               "the network certifier": "NET-83", "the wipe": None}
-    assert report["protocols"]["work"] == {"verdict": "missing", "owner": "vllm-serve-arms", "issue": "VLLM-33 G1",
+    assert line["missing"] == {**{p[0]: p[3] for p in S.PIECES.values()}, "the wipe": None}
+    assert report["protocols"]["work"] == {"verdict": "missing", "owner": S.PIECES["work"][2], "issue": S.PIECES["work"][3],
                                            "why": S.PIECES["work"][4]}
 
 

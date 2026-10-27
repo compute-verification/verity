@@ -59,27 +59,17 @@ for _p in (ROOT / "benchmarks" / "all_protocols", ROOT / "examples" / "h200" / "
         sys.path.insert(0, str(_p))
 
 #: each subprotocol after sampled proofs, by its runner name: (its name, its component, its piece's owner, the issue its piece
-#: is, what the piece does), in the chain's order
+#: is, what the piece does), in the chain's order, from `served_pieces.json`
 PIECES: dict[str, tuple[str, str, str, str, str]] = {
-    "work": ("PoUW", "pouw", "vllm-serve-arms", "VLLM-33 G1",
-             ("H1 on the served window: with H1_GATE its coins are vy-challenger-1's (--challenger-gate, a development run "
-              "that credits nothing until the lane's own Cursor secret), else in-process")),
-    "bandwidth": ("the bandwidth audit", "bandwidth", "vllm-serve-arms", "VLLM-33 G2",
-                  ("the remote bandwidth audit of the served window, against the bandwidth verifier on vy-auditor-2 at "
-                   "10.96.0.36:7952 (INF-263, due Tue 27 Oct 18:00Z)")),
-    "space": ("PoUS", "pous", "memory-accounting", "MEM-94",
-              ("which weights PoUS covers for the served vLLM window, and a PoUS path over vLLM's weights (the vLLM "
-               "adapter refuses int8 today)")),
-    "communication": ("the network certifier", "certifier", "network-accounting", "NET-83",
-                      "the network certifier in front of serve-openai (Llama-3.2-1B int8, ASK-122's slots)"),
-}
+    k: (p["name"], p["component"], p["owner"], p["issue"], p["what"])
+    for k, p in json.loads((Path(__file__).with_name("served_pieces.json")).read_text()).items()}
 #: the record's subprotocol outside this chain
 WIPE = ("the wipe", "wipe", "memory-accounting", None, "no step of this chain runs the wipe")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
-DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under the lane's development key (TOP-84), and "
+DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under the lane's development key, and "
            "a window counts for credit only under the lane's own Cursor secret; core's credit also needs "
            "the window in a period whose open commits its draw K, rows and weights")
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir

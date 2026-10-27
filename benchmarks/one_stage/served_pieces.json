@@ -1,0 +1,18 @@
+{
+  "work": {
+    "name": "PoUW", "component": "pouw", "owner": "vllm-serve-arms", "issue": "VLLM-33 G1",
+    "what": "H1 on the served window: with H1_GATE its coins are vy-challenger-1's (--challenger-gate, a development run that credits nothing until the lane's own Cursor secret), else in-process"
+  },
+  "bandwidth": {
+    "name": "the bandwidth audit", "component": "bandwidth", "owner": "vllm-serve-arms", "issue": "VLLM-33 G2",
+    "what": "the remote bandwidth audit of the served window, against the bandwidth verifier on vy-auditor-2 at 10.96.0.36:7952 (INF-263)"
+  },
+  "space": {
+    "name": "PoUS", "component": "pous", "owner": "memory-accounting", "issue": "MEM-94",
+    "what": "which weights PoUS covers for the served vLLM window, and a PoUS path over vLLM's weights (the vLLM adapter refuses int8 today)"
+  },
+  "communication": {
+    "name": "the network certifier", "component": "certifier", "owner": "network-accounting", "issue": "NET-83",
+    "what": "the network certifier in front of serve-openai (Llama-3.2-1B int8, ASK-122's slots)"
+  }
+}

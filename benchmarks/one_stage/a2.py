@@ -1,4 +1,4 @@
-"""One-stage audit, run A2: A1 with the serving commit taken from serving itself. vllm-serving-commit commits #101's RoPE
+"""One-stage audit, run A2: A1 with the serving commit taken from serving itself. vllm-serving-commit commits the Llama-3.2-1B row's RoPE
 heads at serving time in the circuit prover's row format and hands over the registration, the verifier's public file,
 the prover's file and the unit index; nothing else changes.
 
@@ -11,7 +11,7 @@ the prover's file and the unit index; nothing else changes.
 * **The verifier's own copies.** It builds the population program and the partition itself, recomputes every served
   domain (`registration.window_domain`) from the record's program, partition and `window.run`, composes the bound circuit
   itself and holds the public file's pin and bindings to it. N is taken from the registration (the served index); the
-  verifier doesn't yet derive it from #101's program, and the audit record says so.
+  verifier doesn't yet derive it from the row's program, and the audit record says so.
 * **`--unbind`.** After checking serving's files as received (R1-R6, the pin, the bindings), the session runs on the
   verifier's own re-headered copies for the circuit prover's unbound statement (no `units.classes`, the unbound
   circuit's pin): the leaf layer, every `b || c` and output word, is byte for byte serving's, so the roots are
@@ -151,7 +151,7 @@ def main() -> int:
     summary["session_s"] = round(time.time() - t, 1)
     result = a0.audit_session(rec, receipt, st, header, law, record, live, a.lean, a.lean, out / "session", a.delta)
     result["checks_before_draw"] = checks
-    result["n_from"] = "registration (the served index); the verifier does not yet derive N from #101's program"
+    result["n_from"] = "registration (the served index); the verifier does not yet derive N from the served row's program"
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
 
     neg: dict[str, dict] = {}

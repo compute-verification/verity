@@ -288,10 +288,10 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
                  "roots_are_registered": (live or {}).get("roots") == {r["port"]: r["root"] for r in rec["roots"]}}
     verdicts = {
         "m0-verifier": {"accepted": verifier.get("accepted") is True, "why": verifier.get("why"),
-                        "tool": "flock-circuit serve (M0, PR #83)"},
+                        "tool": "flock-circuit serve (M0)"},
         "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
-                            "tool": "flock-verify draw-test (PR #113 9d0d53df)"},
-        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive (PR #118)"},
+                            "tool": "flock-verify draw-test (9d0d53df)"},
+        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive"},
     }
     if draw is None:
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
@@ -362,8 +362,8 @@ def main() -> int:
     ap.add_argument("--set", required=True)
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks (PR #113)")
-    ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify (PR #118); default --lean")
+    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks")
+    ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify; default --lean")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--delta", type=float, default=0.01)
