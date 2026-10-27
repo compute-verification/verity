@@ -65,6 +65,8 @@ import class_rows as CR  # noqa: E402
 import class_size as CS  # noqa: E402
 
 FIRST, END = "AttnBlockFirst_v1", "AttnHeadEnd_v1"
+#: a first block's families (`class_size.FIRSTS`): v2's body is v1's node for node, so it is priced as v1
+FIRSTS = CS.FIRSTS
 #: a full key block by target: FA3's (sm_90) and FA2's (sm_120)
 BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
 #: prefill is exact against the decode-shaped Definitions at this many keys or fewer
@@ -134,7 +136,7 @@ def unit_ands(lab: str, target: str = "h200") -> int:
             return ROW_QUANT[s["K"]]
         if fam == "Gemm_v2":
             return s["N"] * BF16_COORD[s["K"]]
-        if fam == FIRST and s["D"] == 64:
+        if fam in FIRSTS and s["D"] == 64:
             return FA3_FIRST[s["NVIS"] - 1]
         if fam == "AttnBlock_v4" and s["D"] == 64 and s["NVIS"] == s["BN"]:
             return FA3_FULL[(s["BN"], s["CHECK"])]
@@ -202,7 +204,8 @@ class Heads:
     """The class circuit's attention as `window_circuit` cuts it: S slots of P positions, H heads a position (over the layers),
     R wired rows a key (its key's and its value's rows as their writers hold them), head dim D, key blocks of BN (`BLOCKS`'
     family ``block``), and the rows of a first block, a full block and a head's end (``first``, ``full``, ``end``: `Unit`s of
-    n = 1, a block's ``wired`` and ``wired_bytes`` those beside its keys' and values', R rows and `kv_bytes` a key)."""
+    n = 1, a block's ``wired`` and ``wired_bytes`` those beside its keys' and values', R rows and `kv_bytes` a key). A first
+    block is of family ``first_family`` (`FIRSTS`), its values slices of ``VS`` columns where that is v2."""
     S: int
     P: int
     H: int
@@ -213,6 +216,8 @@ class Heads:
     first: Unit
     full: Unit
     end: Unit
+    first_family: str = FIRST
+    VS: int | None = None
 
     def blocks_at(self, T: int, BN: int) -> tuple[int, int]:
         """(key blocks, the first visited block's keys) of a head over T keys."""
@@ -220,7 +225,7 @@ class Heads:
         return nb, T - (nb - 1) * BN
 
     def first_label(self, nvis: int, BN: int) -> str:
-        return f"{FIRST}{{D={self.D},NVIS={nvis},BN={BN}}}"
+        return f"{self.first_family}{{D={self.D},NVIS={nvis},BN={BN}" + ("}" if self.VS is None else f",VS={self.VS}}}")
 
     def full_label(self, BN: int) -> str:
         """A full block's label, priced at CHECK=false's ANDs wherever the census has CHECK=true (63 ANDs more on the H200)."""
@@ -268,9 +273,10 @@ def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit
     `Heads.units` at the census's BN is exactly the census's attention, each unit's rows and bytes with its count: its first
     blocks, full blocks and head ends, its rows a key read off its first blocks of the two fewest keys."""
     S, P, block = cls["slots"], cls["positions"], BLOCKS[target]
-    firsts = [u for u in units if u.label.startswith(FIRST + "{")]
+    firsts = [u for u in units if u.label.split("{")[0] in FIRSTS]
     ss = [CS.statics(u.label)[1] for u in firsts]
     D, BN = _one([s["D"] for s in ss], "D"), _one([s["BN"] for s in ss], "BN")
+    fam, VS = _one([u.label.split("{")[0] for u in firsts], "family"), _one([s.get("VS") for s in ss], "VS")
     (end,) = [u for u in units if u.label.startswith(END + "{")]
     fulls = [u for u in units if u.label.split("{")[0] in BLOCKS.values()]
     if any(u.label.split("{")[0] != block for u in fulls):
@@ -285,7 +291,7 @@ def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit
     f0 = replace(by_keys[a], label="", n=1, wired=by_keys[a].wired - R * a, wired_bytes=by_keys[a].wired_bytes - kv * a)
     full = (replace(fulls[0], label="", n=1, wired=fulls[0].wired - R * BN, wired_bytes=fulls[0].wired_bytes - kv * BN)
             if fulls else replace(f0, wired=f0.wired + f0.out, wired_bytes=f0.wired_bytes + f0.out_bytes))
-    heads = Heads(S, P, H, R, D, BN, block, f0, full, replace(end, n=1))
+    heads = Heads(S, P, H, R, D, BN, block, f0, full, replace(end, n=1), fam, VS)
 
     def shape(u: Unit) -> tuple:
         return (u.wired, u.registered, u.other, u.out, u.out_bytes, u.x, u.wired_bytes, u.registered_bytes, u.other_bytes)
