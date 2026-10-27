@@ -50,7 +50,7 @@ twin and small listings, wgmma.py's host side and the SASS gate to the kernel's 
 roofline analysis to synthetic curves (CPU).
 
 ~~~text
-research run --on auto --project verity --campaign e2e-demo --source . --cwd source -- \
+research run --on vy-nebius-cpu-1 --pool research --as LANE --project verity --campaign e2e-demo --source . --cwd source -- \
   bash -lc 'uv sync -q --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/s8_linear/build.sh "$OUT/ship"'
 tar -C BUILD_RUN/out/ship -cf /tmp/s8-ship.tar .
 research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
