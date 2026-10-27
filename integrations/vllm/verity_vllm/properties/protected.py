@@ -11,7 +11,7 @@ counts land on the card's top section (`PROTECTED FILES MODIFIED`, `EXISTING PRI
 candidate commit is judged.
 
 Also reports the informational rows: `new_patterns` (pattern names in head's profiles that the base profiles lack) and
-`new_definitions` (definitions added under `verity_vllm/program/registry/quarantine/`).
+`new_definitions` (definitions added under `verity_vllm/program/quarantine/`).
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ import posixpath
 import subprocess
 import sys
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +30,8 @@ from verity_vllm.config import option
 from verity_vllm.properties.record import seal
 
 #: Frozen.  Paths a lane may not touch at all (any diff status).  Every glob and path in this module is relative to the package
-#: root (`integrations/vllm`, `config.ROOT`), as `diff` names them; fnmatch `*` crosses `/`.
+#: root (`integrations/vllm`, `config.ROOT`), as `diff` names them, except a glob in `verity` (`verity/...`), which is named
+#: from the directory `verity` sits in (`_glob`); fnmatch `*` crosses `/`.
 PROTECTED: tuple[str, ...] = (
     # what counts as evidence
     "verity_vllm/check/gates.py", "verity_vllm/pipeline/report.py", "verity_vllm/check/root_policy.py", "verity_vllm/properties/golden.py",
@@ -41,9 +43,9 @@ PROTECTED: tuple[str, ...] = (
     "verity_vllm/observe/observer.py", "verity_vllm/observe/events.py", "verity_vllm/observe/log.py", "verity_vllm/observe/fold/memory.py",
     "verity_vllm/observe/fold/fold.py", "verity_vllm/observe/fold/resolver.py", "verity_vllm/observe/fold/patterns.py", "verity_vllm/engine/vllm_adapter.py",
     # the two base profiles (a lane derives its own profile module from `build_profile`; it does not edit these)
-    "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
-    # existing registered semantics and the IR
-    "verity_vllm/*",
+    "verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
+    # existing registered semantics and the IR, and the Definitions' unit in verity
+    "verity_vllm/*", "verity/ml/definitions/*",
     # frozen decisions / accepted results / the design notes the integrator owns
     "out/capture/decisions.md", "data/logs/*", "verity_vllm/observe/DESIGN.md", "out/gen/RULES.md",
 )
@@ -54,16 +56,25 @@ PROTECTED_EXISTING: tuple[str, ...] = (
 )
 #: Frozen.  Lane-writable exceptions inside otherwise protected trees.
 WRITABLE_EXCEPTIONS: tuple[str, ...] = (
-    "verity_vllm/program/registry/quarantine/*",
+    "verity_vllm/program/quarantine/*",
 )
 #: Existing registered primitive semantics (a change here is `EXISTING PRIMITIVES MODIFIED`).
-PRIMITIVE_PATHS: tuple[str, ...] = ("verity_vllm/program/registry/*",)
+PRIMITIVE_PATHS: tuple[str, ...] = ("verity/ml/definitions/registry/*",)
 #: The checkpoint manifest: appending entries is lane work; changing an existing entry is not.
 MANIFEST = "manifests/checkpoints.json"
 
 
+#: the directory `verity` sits in, from the package root (the repository root, in a checkout)
+_VERITY_HOME = posixpath.relpath(Path(str(resources.files("verity"))).resolve().parent.as_posix(), REPO.resolve().as_posix())
+
+
+def _glob(pattern: str) -> str:
+    """`pattern` as `diff` names the paths it matches: from the package root."""
+    return posixpath.join(_VERITY_HOME, pattern) if pattern.startswith("verity/") else pattern
+
+
 def _match(path: str, patterns: tuple[str, ...]) -> bool:
-    return any(fnmatch.fnmatchcase(path, p.split(":")[0]) for p in patterns)
+    return any(fnmatch.fnmatchcase(path, _glob(p.split(":")[0])) for p in patterns)
 
 
 def _git(*args: str, cwd: Path = REPO) -> str:
@@ -112,13 +123,13 @@ def new_patterns(head_checkout: Path, base_profiles: tuple[str, ...] = ("vllm_d9
     """Pattern names registered by head's profile modules that the base profiles do not have (runs `python` in the head checkout)."""
     code = r'''
 import importlib, json, pkgutil, sys
-import verity_vllm.engine.profiles as P
+import verity_vllm.observe.fold.profiles as P
 base = set(sys.argv[1].split(","))
 names = {}
 for m in pkgutil.iter_modules(P.__path__):
     if m.name.startswith("vllm_") or m.name.startswith("gen_"):
         try:
-            mod = importlib.import_module(f"verity_vllm.engine.profiles.{m.name}")
+            mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{m.name}")
             names[m.name] = sorted({p.name for p in mod.PROFILE.patterns})
         except Exception as e:
             names[m.name] = f"import failed: {type(e).__name__}: {e}"
@@ -144,7 +155,7 @@ def new_definitions(changed: list[tuple[str, str]], head: str, cwd: Path = REPO)
     import re
     out = []
     for st, path in changed:
-        if path.startswith("verity_vllm/program/registry/quarantine/") and path.endswith(".py"):
+        if path.startswith("verity_vllm/program/quarantine/") and path.endswith(".py"):
             try:
                 src = _git("show", f"{head}:./{path}", cwd=cwd)
             except subprocess.CalledProcessError:

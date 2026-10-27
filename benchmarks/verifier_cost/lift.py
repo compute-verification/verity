@@ -1,6 +1,6 @@
 """Serve_v1 on bits, all the way down: the input the benchmark's Boolean leg needs, which `ir="boolean"` can't derive.
 
-`verity_vllm.program.boolean.derived` lifts a derived Program (`Derived[...]`, one flat body of registered Definitions),
+`verity.ml.definitions.boolean.derived` lifts a derived Program (`Derived[...]`, one flat body of registered Definitions),
 each Call to the Boolean version of its Definition, and refuses Serve_v1: Serve_v1 is no derived function, and ten of
 the composites it reaches (Attention_v1, Gemm_v1, Final_v1, …) have no registered Boolean version. `on_bits(fn)` lifts
 every Definition `fn` reaches instead: a Definition with a registered Boolean version becomes that version
@@ -21,7 +21,7 @@ from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.types import Array
-from verity_vllm.program import boolean as BB
+from verity.ml.definitions import boolean as BB
 
 _CONST = re.compile(r"Const(\d+)\[0x([0-9a-f]+)\]")
 

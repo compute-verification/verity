@@ -158,7 +158,7 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
   let some t := String.fromUTF8? b | throw "rec-inner: the inner statement's draw: not UTF-8"
   let d ← (Json.parse t).mapError (s!"rec-inner: the inner statement's draw: not JSON: " ++ ·)
-  let D ← Draw.UnitDraw.ofJson d
+  let D ← Draw.UnitDraw.ofJson (Flock.norm d)
   if D.proved != Array.range st.n then
     throw s!"rec-inner: the inner statement's draw proves {D.proved.size} units, not every one of its files' {st.n} in order"
 

@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
+from verity_vllm import settings
 from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/timeline/v1"
@@ -66,7 +67,7 @@ class Timeline:
 
     @classmethod
     def from_env(cls, proc: str, **defaults: Any) -> "Timeline":
-        return cls(os.environ.get("VERITY_TIMELINE") or None, proc=proc, **defaults)
+        return cls(settings.VERITY_TIMELINE, proc=proc, **defaults)
 
     @property
     def enabled(self) -> bool:

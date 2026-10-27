@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.PearlC.TTOutRev1
+import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!

@@ -1,5 +1,5 @@
-import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # The fragment argument: the counting theorem (staging, nothing pinned)

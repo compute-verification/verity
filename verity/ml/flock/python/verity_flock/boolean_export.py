@@ -395,7 +395,7 @@ def prims() -> dict:
         from verity.ml.circuits.defs import PrimitiveDefinition
 
         mods = ["verity.ml.circuits.ops.prims"]
-        import verity_vllm.program.registry as R
+        import verity.ml.definitions.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}
         for m in mods:
@@ -413,7 +413,7 @@ def _width_prim(pid: str):
     """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
     import re
 
-    from verity_vllm.program.registry import sampling
+    from verity.ml.definitions.registry import sampling
 
     for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
         m = re.fullmatch(pat, pid)
@@ -456,7 +456,7 @@ COUNTER = object()
 
 class Walker:
     """Definitions as trees: children are sub-definitions (``call`` x1, ``batch`` / ``scan`` x n) and primitive leaves; a
-    tensor-core step is the proof unit; another primitive is its ir_lower piece (lowered once per operand signature, constant
+    tensor-core step is the proof block; another primitive is its ir_lower piece (lowered once per operand signature, constant
     operands a Const node gives propagated) or not yet lowered."""
 
     def __init__(self, reg: Registry, store: DefStore, cache: dict):
@@ -759,7 +759,7 @@ class Walker:
             rec["commitment_openings"] = opened
 
 
-# --- commitment marks: the no-recompute partition (verity_vllm.query.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
+# --- commitment marks: the no-recompute partition (verity.ml.definitions.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
 
 X_BITS, W_BITS = 16, 32
 #: constant-operand variants of one primitive lowered per record; further gates use the generic piece (an unrolled scan gives every
@@ -789,7 +789,7 @@ class Commitments:
         from verity.ml.circuits.codec import _spec_id
         from verity.ml.circuits.cut import separable
         from verity.ml.circuits.defs import PrimitiveDefinition
-        from verity_vllm.query import word as WQ
+        import verity.ml.definitions.word as WQ
 
         fid = _spec_id(fn)
         if fid in self.records:
@@ -1188,7 +1188,7 @@ def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict
 
 def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
              spec: str | None = None, member: str | None = None) -> dict:
-    """A leaf template's record: its proof units under the committed cut and its tail (C-Flock's unit lowerings), or its
+    """A leaf template's record: its proof blocks under the committed cut and its tail (C-Flock's unit lowerings), or its
     Definition tree (the walker: attention per T, GEMM coordinates, every other template). ``member``: the Definition one
     instance of the group is (a GEMM's output coordinate) when the Call is a batch of them; the record then counts one."""
     cache = {} if cache is None else cache
@@ -1240,7 +1240,7 @@ def _spine(reg: Registry, sub, base: dict, walker: "Walker", spec: str | None, w
         rec = _walked(base, walker, spec, walked_name)
         rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
                        f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
-                       f"primitive with its piece, none in a proof unit")
+                       f"primitive with its piece, none in a proof block")
         return rec
     low = mod.lowering(sub)
     uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
@@ -1364,9 +1364,9 @@ class _Encoded:
         self.ix: dict[str, dict] = {}
 
     def add(self, fn) -> str:
-        from verity_vllm.pipeline.program_graph import _encoded
+        from verity.ml.definitions.encoding import encode_specialization
 
-        top, defs = _encoded(fn)
+        top, defs = encode_specialization(fn)
         self.ix.update(defs)
         return top
 
@@ -1455,8 +1455,8 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
-    from verity_vllm.pipeline.program_graph import _word_values
-    from verity_vllm.query.word import specialization
+    from verity.ml.definitions.encoding import word_values
+    from verity.ml.definitions.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):
         return {}
@@ -1471,7 +1471,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
             (a,) = g["varying"]
             vals = sorted(int(v) for v in g["varying_calls"])
             bn = g["statics"].get("BN") if a == "T" else None
-            pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
+            pts = word_values(vals, int(bn) if isinstance(bn, int) else None)
             ids = {v: cm.of(specialization(g["definition"], dict(g["statics"], **{a: v}))) for v in pts}
             if "per_call" in q and checks is not None:
                 for end, v in (("min", vals[0]), ("max", vals[-1])):
@@ -1585,9 +1585,9 @@ def main(argv=None) -> int:
                                 "definitions": walker.defs}, separators=(",", ":")))
     (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "nodes": reg.nodes}, separators=(",", ":")))
     module_bytes = write_modules(reg, out / "modules.json.gz")
-    from verity_vllm.query.word import query_id
+    from verity.ml.definitions.word import query_id
     (out / "commitments.json").write_text(json.dumps({"schema": SCHEMA + "/commitments", "query": query_id(X_BITS, W_BITS),
-                                                      "code": f"verity_vllm.query.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
+                                                      "code": f"verity.ml.definitions.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
                                                       "records": cm.records}, separators=(",", ":")))
     nyl: dict[str, dict] = {}
     for t in tpl_cache.values():

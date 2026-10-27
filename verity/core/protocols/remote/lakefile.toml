@@ -1,5 +1,5 @@
 # Remote Verity as one `Core.Protocol` (`verity/remote/v0`): the composition of integrity (sampled proofs) and work
-# (PoUW), each a stub until its port lands. Its executable is the core CLI (`remote id | check | serve`),
+# (PoUW). Its executable is the core CLI (`remote id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
 name = "core_remote"
 defaultTargets = ["CoreRemote", "remote"]
@@ -19,6 +19,15 @@ path = "../interface"
 [[require]]
 name = "core_composition"
 path = "../composition"
+
+# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../service/sampled_proofs"
+
+[[require]]
+name = "pouw_check"
+path = "../pouw/lean/check"
 
 [[lean_lib]]
 name = "CoreRemote"

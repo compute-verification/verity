@@ -1,10 +1,11 @@
 """The torch loop's registered compiler: its schedule, the advice, to its circuit; the command `records_audit.py` runs.
 
-    python -m verity_torch_loop.compile [--law L] [--cap N] --advice FILE --out FILE
+    python -m verity_torch_loop.compile [--law L] [--cap N] [--registered] [--wired] --advice FILE --out FILE
     python -m verity_torch_loop.compile --identity
 
 The advice is the loop's schedule (`schedule_bytes`: its requests' token ids and its decode steps), the run-time choice its
-circuit depends on: one unit per output coordinate of each linear at each request and step. The command writes the circuit
+circuit depends on: one unit per output coordinate of each linear at each request and step (``--wired``: one per linear, and
+one per quantize between two, `loop.TorchLoop`'s ``wired``). The command writes the circuit
 record of a window of that circuit under ``--law`` in members of at most ``--cap`` units, its run fields empty, prints
 ``{"bits": N}`` (the advice's length, which is charged) and exits 0; on advice that is not a schedule it exits `REFUSED`,
 the reason on stderr (the contract is `benchmarks/prove_path/records_audit.py`'s). ``--identity`` prints the name, digest
@@ -65,9 +66,12 @@ def schedule(data: bytes) -> tuple[list[int], int]:
     return doc["requests"], doc["steps"]
 
 
-def circuit_record(requests: list[int], steps: int, law: Any, cap: int) -> dict[str, Any]:
-    """The circuit record the schedule compiles to: the loop's window under ``law`` and ``cap``, its run fields empty."""
-    return IF.Window(L.TorchLoop(L.Model(), requests, steps).circuit(), "", law, cap).circuit_record()
+def circuit_record(requests: list[int], steps: int, law: Any, cap: int, registered: bool = False,
+                   wired: bool = False) -> dict[str, Any]:
+    """The circuit record the schedule compiles to: the loop's window under ``law`` and ``cap``, its run fields empty;
+    ``registered``: the loop's weights read as registered values; ``wired``: the wired circuit (`loop.TorchLoop`)."""
+    loop = L.TorchLoop(L.Model(), requests, steps, registered=registered, wired=wired)
+    return IF.Window(loop.circuit(), "", law, cap).circuit_record()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--table", nargs=argparse.REMAINDER, help="the verifier's table entry for this compiler run as the rest")
     ap.add_argument("--law", default="subset:2")
     ap.add_argument("--cap", type=int, default=8)
+    ap.add_argument("--registered", action="store_true", help="the loop's weights are registered values (`loop.TorchLoop`)")
+    ap.add_argument("--wired", action="store_true", help="the wired circuit (`loop.TorchLoop`)")
     ap.add_argument("--advice")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
@@ -93,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         print(f"verity_torch_loop.compile: {e}", file=sys.stderr)
         return REFUSED
-    Path(a.out).write_bytes(IF.circuit_bytes(circuit_record(requests, steps, D.parse_law(a.law), a.cap)))
+    Path(a.out).write_bytes(IF.circuit_bytes(circuit_record(requests, steps, D.parse_law(a.law), a.cap, a.registered, a.wired)))
     print(json.dumps({"bits": 8 * len(data)}))
     return 0
 

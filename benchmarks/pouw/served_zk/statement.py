@@ -1,5 +1,5 @@
 """A served pass's rows in the ZK statement's format beside the scheme's (-h3's): each decode forward that vLLM replays whole
-(`verity_vllm.protocol_options.pouw_pearl_c_whole`) commits, once after the forward and on the replay's stream (so the next
+(`verity_vllm.protocols.pouw.pearl_c.whole`) commits, once after the forward and on the replay's stream (so the next
 forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves of frame-v3-sha512 trees (hm96_rows.cu,
 `rows_bench.Commit`).  `PearlCDeviceRun.statement` holds it; it runs while ``enabled`` (e2e.py's ``pearlc-zk`` mode).
 

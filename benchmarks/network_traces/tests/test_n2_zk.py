@@ -4,7 +4,8 @@ fails on its counts and its signed digest; the extra run's egress heads fail on 
 their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the prover's,
 in whole u16 words. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's
 own gates. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
-Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
+``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
+(`n2_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -96,4 +97,14 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     kept, held_kept, out = n2.public_pieces(scan, blobs, held, b"g 1 2\n" + bytes(16).hex().encode() + b"\n" + head)
     assert out == sorted(x.hex() for x in every & {bytes(16), head})
     assert set(kept.values()) == every - {bytes(16), head} and len(kept) == len(set(kept.values()))
-    assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} and held_kept
+    tails = {f"{k} @{len(blobs[k]) - len(blobs[k]) % 16}" for k in held if len(blobs[k]) % 16}
+    assert tails and tails <= set(kept)  # a zero-padded tail is scanned for, but no instance file holds it as it is
+    assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
+
+
+def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+    monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
+    argv = ["prove", "--run", "r", "--out", "o", "--dry"]
+    assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
+    with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
+        n2.main([*argv, "--jobs", "2"])

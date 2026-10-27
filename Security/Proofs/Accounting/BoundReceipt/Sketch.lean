@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.BoundSketch
+import Definitions.Accounting.Guarantees.BoundSketch
 
 /-!
 # The deployed bound receipt's sketch: the proofs

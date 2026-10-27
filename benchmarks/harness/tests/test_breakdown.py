@@ -197,3 +197,39 @@ def test_the_breakdown_takes_each_points_newest_passing_run_that_times_every_arm
         (None, None, "no passing run")]
     assert table["skipped"][1]["point"] == "b32-p512-mixed"
     assert "r20261024-020000-0001" in B.render(table)
+
+
+def test_the_served_table_puts_a_records_breakdown_beside_the_protocols_row(tmp_path):
+    """`served_table.BREAKDOWNS` reads the breakdown at each run its record art names, not the newest run, and passes
+    over a record run without the spans arms."""
+
+    from verity_bench import served_table
+
+    producer = Producer(tmp_path)
+    producer.ran("r20261024-020000-0001", B.SPEC, "b8-p512-mixed", _result("b8-p512-mixed", reps=3))
+    producer.ran("r20261024-020000-0002", B.SPEC, "b32-p512-mixed", _result("b32-p512-mixed", arms=(B.PLAIN, B.AUDIT)))
+    producer.ran("r20261024-030000-0003", B.SPEC, "b8-p512-mixed", _result("b8-p512-mixed", span_scale=2.0))
+    record = producer.table({"b8-p512-mixed": "r20261024-020000-0001", "b32-p512-mixed": "r20261024-020000-0002"},
+                            "split")
+    breakdowns = (served_table.Breakdown("PoUS bandwidth audit", (record,)),)
+
+    def never(spec):
+        raise AssertionError("a table of records pulls no catalog")
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=never, protocols=(),
+                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"), live=(),
+                               breakdowns=breakdowns)
+
+    [b8] = table["breakdowns"]
+    assert (b8["protocol"], b8["point"], b8["run"], b8["record"], b8["reps"]) == (
+        "PoUS bandwidth audit", "b8-p512-mixed", "r20261024-020000-0001", record, 3)
+    assert b8["sum"] == pytest.approx(b8["total"]["mean"])
+    assert _rows(b8) == pytest.approx(_rows(B.attribution(_result("b8-p512-mixed", reps=3)["points"][0])))
+    [skipped] = [s for s in table["skipped"] if s["run"] == "r20261024-020000-0002"]
+    assert skipped["why"] == f"no timed {', '.join(B.SPANS_ARMS)} at b32-p512-mixed"
+
+    markdown = served_table.render(table)
+    section = markdown.split("## Where the bandwidth audit's time goes")[1]
+    assert "| row | b8-p512-mixed, ms an output token | share |" in section
+    assert "| decode linear: the weights' codec decode" in section
+    assert "run r20261024-020000-0001" in section and f"(record `{record[:16]}`)" in section

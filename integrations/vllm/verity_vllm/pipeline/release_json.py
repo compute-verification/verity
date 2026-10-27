@@ -1,6 +1,6 @@
 """RELEASE.json of a shipped worker package (schema verity-sweep/release/v1) -- writer, reader and the REL-09 release line.
 
-[R17 rel, exec M-0477 / M-0709 (R16)] The `tree` field names the tree THIS ship installed.  Twice in R16 a pod's RELEASE.json said
+The `tree` field names the tree THIS ship installed.  Twice a pod's RELEASE.json said
 tag r16-int-N but named the pod's shared default tree while the release had been installed as its OWN tree (/workspace/cp/r16-int-2 on
 cp-h100 07:49Z, /workspace/cp/r16-int-3 on cp-r1 10:08Z): a row from the own tree read UNRELEASED by row_pod's REL-09 rule ("pod release
 ... is the tree <default tree>, not this one") and a row from the default tree would have cited the release falsely.  The first time
@@ -45,7 +45,7 @@ def _real(p: str) -> str:
 
 
 def native_collect_build_dir(tree: str) -> str:
-    """[R17 rel] the collector JIT build dir of a tree: one directory per tree (/workspace/cp/nc_build-<name>) so two ships / two trees
+    """The collector JIT build dir of a tree: one directory per tree (/workspace/cp/nc_build-<name>) so two ships / two trees
     never build in one directory."""
     t = _real(tree)
     return f"{DEFAULT_NC_BUILD}-{os.path.basename(t.rstrip('/')) or 'tree'}"
@@ -75,7 +75,7 @@ def parse_artifacts(hg: str, tp: str, nc: str, tp3: str = "") -> dict:
 def release_record(*, tag: str, export: dict, tree: str, cwd: str, artifacts: dict, env: dict, gpu: dict,
                    installed_utc: str | None = None, build_dirs: dict | None = None) -> dict:
     """The RELEASE.json record.  `tree` is the tree the ship installed into (REMOTE_TREE); it must be the directory this runs in --
-    a mismatch is refused, never written (M-0477 class fail-closed)."""
+    a mismatch is refused, never written (fail-closed)."""
     t, c = _real(tree), _real(cwd)
     if t != c:
         raise ValueError(f"release tree {tree} (realpath {t}) is not the installing cwd {cwd} (realpath {c}) -- refusing to write RELEASE.json")
@@ -93,7 +93,7 @@ def release_record(*, tag: str, export: dict, tree: str, cwd: str, artifacts: di
 
 def release_names_tree(rel: dict, tree: str) -> bool:
     """row_pod REL-09: a RELEASE.json applies to a tree only when its `tree` is that tree.  A record without a tree field (the
-    pre-R16 pod-wide form) names no tree."""
+    older pod-wide form) names no tree."""
     if not rel or not rel.get("tree"):
         return False
     return _real(rel["tree"]) == _real(tree)

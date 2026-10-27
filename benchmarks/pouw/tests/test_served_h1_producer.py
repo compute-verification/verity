@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -177,8 +178,8 @@ def _window(producer, shapes, modules, blocks, rows: list[int], steps: int, seed
     ``producer(served)``: the run, each call's served codes by index, each linear's weight codes, each call's receipts as
     the producer returned them, by index (the native commit keeps no rows), and the producer. ``unit``: the window
     Program's tile unit (`Served.unit`), v1's by default."""
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served = SV.Served(blocks=blocks, window=hashlib.sha512(b"window").digest(), unit=unit)
     made, made_by = producer(served), {}
 
@@ -208,8 +209,8 @@ def _registered_receipts(run, made_by, c) -> np.ndarray:
     """Call c's receipt table's words: `receipt_words` of the receipts the producer returned for it, which the registered
     ``receipt@<c>`` is the native commit of (its root, under its nonce and the window's open root)."""
     from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity_vllm.protocol_options import pouw_h1_registered as NR
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw.h1 import registered as NR
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served, rc = run.served, run.served.receipt_table(c.index)
     words, n = SV.receipt_words(made_by[c.index]), HW.call_units(served.program)[c.index][1]
     assert words.shape == served.receipt_shape(c.index) == (n, 2 * HT.Layout(32, 32, c.k).sets * 2)
@@ -225,7 +226,7 @@ def _held_to_reference(run, codes, weights, made_by, units_of):
     checked, live and dead."""
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served, pre, seen = run.served, run.served.program.fn.bindings["PREFIX"], {"live": 0, "dead": 0}
     assert not served.refused, served.refused
     j10r = HW.is_j10r(served.program)
@@ -285,8 +286,8 @@ def test_the_units_kernel_is_h1tile_reference_at_llama_8b_shapes_through_served(
     units = _kernel()
     from verity.core.protocols.pouw.circuit import h1window as HW
     from verity_vllm.engine import int8_exact as E
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
     RC = PR.RC
 
     def zeros(x, s_a, wt, sw):
@@ -523,6 +524,18 @@ def _j10r_kernel():
     if not units.j10r:
         pytest.skip("this h1u.cu build has no J10-R units (kh_units_multi_j10r)")
     return units
+
+
+def test_the_producer_sizes_each_j10r_workspace_through_dither_j10r_ws():
+    """`Units.multi` takes each J10-R call's workspace from dither's `j10r_ws.workspace_bytes` at the call's N, which
+    asks the loaded build (an H1U_JW build's column blocks and W' past its rows) and refuses a size its flags
+    contradict: no served_h1 module calls a build's kh_j10r_*_bytes itself, so an H1U_JW build loaded here isn't sized
+    by its rows."""
+    call = re.compile(r"\bkh_j10r_(?:rows|jw|ws|workspace)_bytes\s*\(")
+    hits = [f"{p.name}:{i}" for p in sorted(SERVED_H1.glob("*.py"))
+            for i, line in enumerate(p.read_text().splitlines(), 1) if call.search(line)]
+    assert hits == []
+    assert Path(PR.WS.__file__) == SERVED_H1.parents[1] / "hash" / "dither" / "j10r_ws.py"
 
 
 def test_the_units_kernels_j10r_receipts_are_h1tile_j10r_reference_at_llama_8b_shapes():

@@ -143,6 +143,9 @@ def test_u8s8_sibling_wraps_the_exact_dot() -> None:
 
 
 @pytest.mark.parametrize("iid, model", [("sm90.wgmma.m64n8k32.s8", HOPPER_SM90_S8_K32), ("sm90.mma.m16n8k32.s8", HOPPER_SM90_S8_K32),
+                                        ("sm90.wgmma.m64n64k32.s8", HOPPER_SM90_S8_K32),
+                                        ("sm90.wgmma.m64n128k32.s8", HOPPER_SM90_S8_K32),
+                                        ("sm90.wgmma.m64n256k32.s8", HOPPER_SM90_S8_K32),
                                         ("sm100.tcgen05.mma.s8", BLACKWELL_SM100_S8_K32),
                                         ("sm100.mma.m16n8k32.s8", BLACKWELL_SM100_S8_K32)])
 def test_the_datacenter_cards_compute_the_sm120_step(iid, model) -> None:

@@ -1,0 +1,113 @@
+# Scenarios over the datacenter layer's locations and regime variants (rho/scenario.py; keys as data/scenarios.toml).
+
+[scenario.onsite-gb200-kimi]
+fleet = "reference-gb200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-gb200-kimi-5gb]
+fleet = "reference-gb200"
+regime = "onsite-5gb"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.remote-gb200-kimi]
+fleet = "reference-gb200"
+regime = "remote"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-gb200-400k-kimi]
+fleet = "reference-gb200-400k"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-h100-kimi]
+fleet = "reference-h100"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-h100-kimi-5gb]
+fleet = "reference-h100"
+regime = "onsite-5gb"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.remote-h100-kimi]
+fleet = "reference-h100"
+regime = "remote"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-b200-kimi]
+fleet = "reference-b200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-h200-kimi-5gb]
+fleet = "reference-h200"
+regime = "onsite-5gb"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-h200-rack4-kimi]
+fleet = "reference-h200-rack4"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-links-h200-kimi]
+fleet = "reference-h200"
+regime = "onsite-links"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.onsite-no-pouw-h200-kimi]
+fleet = "reference-h200"
+regime = "onsite-no-pouw"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.remote-sampled-h200-kimi]
+fleet = "reference-h200"
+regime = "remote-sampled"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.remote-tiers-kimi]
+fleet = "tiers-reference"
+regime = "remote"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]

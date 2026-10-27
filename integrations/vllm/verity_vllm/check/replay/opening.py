@@ -23,7 +23,7 @@ _NPDTYPE = {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}
 
 
 def alias_table(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str, tuple[str, int]]:
-    """[rel M-0367 / reqval] `manifest.op_path_aliases` as ONE table: Program op_path -> (canonical op_path, invocation).  Shared modules
+    """`manifest.op_path_aliases` as ONE table: Program op_path -> (canonical op_path, invocation).  Shared modules
     (vLLM's one RotaryEmbedding instance called by every layer) are addressed by the required manifest at the FIRST layer's path with
     invocation = layer order; the per-layer Program paths are recorded as aliases ('model.layers.7.self_attn.rotary_emb' ->
     ['model.layers.0.self_attn.rotary_emb', 7]).  The population reconciliation (`query_population._key`) and the committed store
@@ -35,7 +35,7 @@ def alias_table(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str,
 
 def resolve_op_path(aliases: dict[str, tuple[str, int]], op_path: str) -> tuple[str, int]:
     """(canonical op_path, invocation) of a Program op_path: its alias entry, else itself at invocation 0 -- EXACTLY (a path with no alias
-    names invocation 0 and nothing else; F-r17b-17: `invocation` is 0 for every non-shared module row)."""
+    names invocation 0 and nothing else; `invocation` is 0 for every non-shared module row)."""
     return aliases.get(op_path, (op_path, 0))
 
 
@@ -46,15 +46,15 @@ def _invocation(e: dict) -> int:
 class CommittedStore:
     """Committed words of a bound identity: (request, ENGINE step, op_path, member, request-local element slice) via the binding map.
 
-    [R16 rev F-r16-08 / M-0077; BRIEF §3 C1 'one UNAMBIGUOUS binding'] every entry of a key is KEPT (not 'first wins'): `words` reads the
+    C1 requires one UNAMBIGUOUS binding, so every entry of a key is KEPT (not 'first wins'): `words` reads the
     ONE entry of the resolved invocation whose element_range covers the slice; two entries of that invocation covering it = an ambiguous
     binding (two buffers under one required identity, the replay could read either) -> (None, 'ambiguous binding: ...'), the VU fails by
     name.
 
-    [rel M-0367 / R17-11] the Program op_path is resolved through the manifest's `op_path_aliases` (`aliases`, the SAME table the
+    The Program op_path is resolved through the manifest's `op_path_aliases` (`aliases`, the SAME table the
     population reconciliation uses) to (canonical path, invocation) and the read is of THAT invocation's entry EXACTLY: a shared module's
     layer-N call reads invocation N of the canonical path; a path with no alias reads invocation 0; an invocation with no entry is
-    'no committed identity' BY NAME.  Invocations are never collapsed to the lowest (the pre-M-0367 store did, so the first evaluator that
+    'no committed identity' BY NAME.  Invocations are never collapsed to the lowest (an earlier store did, so the first evaluator that
     read a shared module's output -- the Attention_v3/v2 row, q = rotary_emb/0 -- missed layers 1..N by name on every record: a wrong or
     missing invocation read fails closed, it never reads a neighbour's words)."""
 
@@ -129,7 +129,7 @@ class CommittedStore:
 def model_weights_provider(model, prefix: str) -> Callable[[str, int, int], np.ndarray | None]:
     """Registered-input reader over the model's parameters AND buffers: Program field `model.model.layers.0.mlp.down_proj.weight` -> the
     implementation's `layers.0.mlp.down_proj.weight` (wrapper prefix stripped), as bf16 words; cached per field.
-    [R17 dense, int-2 canary] the set read here is the set the committed weights root PINS (`register_weights`: `named_parameters()` +
+    The set read here is the set the committed weights root PINS (`register_weights`: `named_parameters()` +
     `named_buffers()`, one qualname per tensor) -- the rotary table `...rotary_emb.cos_sin_cache` is a BUFFER (vLLM registers it
     non-persistent; one shared RotaryEmbedding instance, the Program names it once at layer 0), so a parameters-only reader left every
     RoPE_v1 row unresolved ('registered weight field ... not available to the replay', 300/300 strata on the smollm2 canary).  A

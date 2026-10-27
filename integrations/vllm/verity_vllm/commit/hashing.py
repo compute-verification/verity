@@ -28,7 +28,7 @@ tag                             parts, in order
 
 *Shape text* is ``"[" + ",".join(str(d) for d in shape) + "]"`` with no spaces; a scalar is
 ``"[]"``.  *dtype* is the torch dtype name without the ``torch.`` prefix (``"bfloat16"``), see
-:mod:`verity_vllm.program.dtypes`.  *value* is the exact little-endian device bytes of the tensor in
+:mod:`verity.ml.definitions.dtypes`.  *value* is the exact little-endian device bytes of the tensor in
 C order: BF16 is 2 bytes per element, FP8 1 byte, packed INT4 exactly as stored.  No conversion
 before hashing.
 

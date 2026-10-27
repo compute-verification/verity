@@ -28,13 +28,6 @@ from verity.ml.randomness import derive
 
 ROOT = Path(__file__).resolve().parents[5]
 PKG = ROOT / "verity/core/protocols/pouw/lean/check"
-_spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
-vectors = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(vectors)
-sys.modules["pouw_check_cases"] = vectors
-_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
-openings = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(openings)
 _spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
 rounds_cases = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rounds_cases)
@@ -42,6 +35,14 @@ sys.modules["pouw_rounds_cases"] = rounds_cases
 _spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
 passes = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(passes)
+sys.modules["pouw_pass_cases"] = passes
+_spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
+vectors = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(vectors)
+sys.modules["pouw_check_cases"] = vectors
+_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
+openings = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(openings)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -137,6 +138,20 @@ EXPECT = {
     "noncanonical-record": "commitment: not canonical JSON",
     "noncanonical-answer": "evidence: not canonical JSON", "float-answer": "evidence: canonical JSON: a non-integer number",
     "utf8-record": "commitment: not UTF-8", "honest": None,
+    **{n: f"params: {CC.LIVE_PARAMS}" for n in ("live-missing", "live-null", "live-keys", "live-seeded")},
+    "live-other-key": "salt: the challenger's session is not trusted: ",
+    "live-incomplete": f"salt: {CC.INCOMPLETE}", "live-unreserved": f"salt: {CC.NO_RESERVE}",
+    "live-layout": "salt: the coin commitment's coins are not a Pearl-C salt session's",
+    "salt-missing": f"salt: {CC.NO_WINDOW_SALT}", "salt-type": "evidence: public.salt: not an object",
+    "salt-seeded": f"salt: {CC.SEEDED_SALT}", "salt-keys": f"salt: {CC.WINDOW_SALT_FORM}",
+    "salt-no-w": f"salt: {CC.WINDOW_NO_W}", "salt-two-w": f"salt: {CC.WINDOW_NO_W}",
+    "salt-no-x": f"salt: {CC.WINDOW_NO_X}", "salt-values-form": f"salt: {CC.WINDOW_NO_X}",
+    "salt-x-after": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
+    "salt-epoch": f"salt: {CC.WINDOW_EPOCH}",
+    "salt-other-epoch": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
+    "salt-coins-form": "salt: the salt's coins are malformed: ", "salt-coins": f"salt: {CC.WINDOW_NOT_SIGNED}",
+    "salt-opening": "salt: the salt's coin does not open against", "salt-value": f"salt: {CC.WINDOW_SALT}",
+    "salt-session": f"salt: {CC.WINDOW_SESSION}", "salt-secret": f"salt: {CC.WINDOW_SESSION}",
 }
 
 

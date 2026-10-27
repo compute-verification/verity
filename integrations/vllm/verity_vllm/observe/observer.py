@@ -56,6 +56,8 @@ REENTER_IMPL_PATHS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 _REENTER_IMPL: dict[str, Any] = {}
+#: why each path of an op whose implementation was not found failed (the re-entry note carries it)
+_REENTER_MISSING: dict[str, list[str]] = {}
 _MISSING_IMPL_NOTED: set[str] = set()
 
 
@@ -67,14 +69,16 @@ def reenter_impl(op_base: str) -> Any | None:
     """The Python function registered as the op's real implementation, or None when not found."""
     if op_base in _REENTER_IMPL:
         return _REENTER_IMPL[op_base]
-    fn = None
+    fn, why = None, []
     for mod_name, attr in REENTER_IMPL_PATHS.get(op_base, []):
         try:
             fn = getattr(importlib.import_module(mod_name), attr)
             break
-        except Exception:  # noqa: BLE001
-            continue
+        except Exception as e:  # noqa: BLE001
+            why.append(f"{mod_name}.{attr}: {e!r}"[:200])
     _REENTER_IMPL[op_base] = fn
+    if fn is None:
+        _REENTER_MISSING[op_base] = why
     return fn
 
 
@@ -164,7 +168,7 @@ class Recorder:
             return 0
         try:
             return int(torch.cuda.current_stream().cuda_stream)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             return -1
 
     def module_hint(self) -> str | None:
@@ -207,7 +211,7 @@ class Observer(TorchDispatchMode):
             rec.note("encode error (args)", id=eid, op=name, error=repr(e)[:300])
         try:
             schema = str(func._schema)
-        except Exception:  # noqa: BLE001
+        except AttributeError:
             schema = ""
         rec.counts["dispatch"] += 1
         rec.emit(DispatchEnter(eid, rec.parent(), rec.step, rec.phase, name, schema, enc_args, enc_kwargs,
@@ -220,7 +224,8 @@ class Observer(TorchDispatchMode):
                 impl = reenter_impl(op_base_of(name))
                 if impl is None and op_base_of(name) not in _MISSING_IMPL_NOTED:
                     _MISSING_IMPL_NOTED.add(op_base_of(name))
-                    rec.note("re-entry impl not found; op recorded without children", op=name)
+                    rec.note("re-entry impl not found; op recorded without children", op=name,
+                             tried=_REENTER_MISSING.get(op_base_of(name), []))
             if impl is not None:
                 rec.counts["reentered"] += 1
                 with Observer(rec, reenter=True):
@@ -251,7 +256,7 @@ _UNDEFINED_RETURN_NOTED: set[str] = set()
 
 
 def _defined_tensor_list(rec: Recorder, name: str, out: Any) -> Any:
-    """[R13 hopper] An op whose `Tensor[]` return carries UNDEFINED tensors (vLLM's FA3 `_vllm_fa3_C.fwd` returns `[out, softmax_lse,
+    """An op whose `Tensor[]` return carries UNDEFINED tensors (vLLM's FA3 `_vllm_fa3_C.fwd` returns `[out, softmax_lse,
     out_accum, lse_accum]` with the last two undefined when `num_splits == 1`) surfaces them here as `None`; handing that list back to
     the dispatcher fails its `Tensor[]` cast (`pushPyOutToStack`: "Unable to cast Python instance of type list"), so the op cannot run
     under any TorchDispatchMode.  The recorded outputs (`enc_out`, encoded before this) keep the `None`s; only what is RETURNED to the

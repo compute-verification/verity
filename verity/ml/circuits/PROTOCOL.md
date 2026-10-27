@@ -458,7 +458,7 @@ only for `gate-recomputed` (two members of one Call each computing `x0 + x1`), w
 
 `Q_call` v1 (`partition_object.QUERIES`, `call_query`; the algorithm in `verity.ml.circuits.cut`'s docstring, `cut.evaluate_call`) is a
 query of its own, `{"name": "Q_call", "version": 1, "params": {"X": X}}`, with one parameter: X, an integer in 1..2^16 (32 is the
-agreed value). It reads a Program through §1–§7. A *proof unit* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
+agreed value). It reads a Program through §1–§7. A *proof block* is a set S of gates, with in(S) and out(S) as `verity.ml.circuits.parts`
 defines them, counted in bits at any gate width. The one rule is w_out(S) ≤ X; inputs are unbounded. This section is a delta
 on §8 and §10.
 
@@ -628,7 +628,8 @@ as declared, so a composite over exact steps declares the intervals its operands
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
   `verity/core/protocols/pouw/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a unit's
-  sink return, or in a test named with its reason (`tests/test_seed_ports.py`).
+  sink return, as a padded unit's key count with no coin port beside it (never a seed), or in a test named with its reason
+  (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
   of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
   primitive returns is read more than once, the Program's outputs counting as one read. A primitive returns one value, so

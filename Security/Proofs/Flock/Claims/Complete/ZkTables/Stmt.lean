@@ -9,12 +9,14 @@ import Proofs.Flock.Verifier.Hash
 (`JsonSpec`), from the case's setup alone (`Case.setupTables`: the scope's statements hold no public inputs). So
 `StmtOkJ` holds (`stmtOkJ`), and `completeJS`, `completeAllS` are `completeJO`, `completeAll` without it.
 
-* A session of several tables (`setupTables_spec`) keeps the statement's draw, which is a subset draw (the setup refuses
-  any other law at several tables) whose units are the session's instances; its `Σ` is a SHA-512 digest; and its
-  `Hello` is `helloOf`'s at the tables' names.
+* A session of several tables (`setupTables_spec`) keeps the statement's draw, which is a subset or a stratified draw
+  (the setup refuses any other law at several tables) whose units are the session's instances; its `Σ` is a SHA-512
+  digest; and its `Hello` is `helloOf`'s at the tables' names.
 * A subset draw that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
-  count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); the
-  statement's draw is JSON that `Json.parse` read, so it is well formed.
+  count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a
+  stratified one has exactly `law`, `population`, `units`, `k` and `strata`, so it is printable
+  (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's draw is JSON that
+  `Json.parse` read, so it is well formed.
 * A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
   a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
   printable with the prover's nonce put in (`good_of_same`, `good_insert`).
@@ -279,6 +281,53 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
           (by rw [← Std.TreeMap.Raw.size_toArray hm]; simpa using hc) hcl
         simp at this
 
+set_option maxHeartbeats 4000000 in
+/-- **A stratified draw that decodes has no closure**: an object of exactly `law`, `population`, `units`, `k` and
+`strata`, so it holds no `closure` key. -/
+theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
+    {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : D.closure = #[] := by
+  unfold Draw.UnitDraw.ofJson at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+  all_goals
+    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
+  all_goals
+    try simp only [reduceCtorEq] at hl
+  all_goals
+    obtain ⟨m, rfl⟩ : ∃ m, j = Json.obj m := ⟨_, getObj_ok ‹j.getObj? = _›⟩
+    have hjm := ‹(Json.obj m).getObj? = Except.ok _›
+    simp only [Json.getObj?, pure, Except.pure, Except.ok.injEq] at hjm
+    subst hjm
+    cases hw with
+    | obj hm _ =>
+    have hc := ‹¬ (_ != 5 || _ || _) = true›
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hc
+    have hL : ["law", "population", "units", "k", "strata"].Nodup := by decide
+    have hk : ∀ key ∈ ["law", "population", "units", "k", "strata"], key ∈ m := by
+      simp only [List.mem_cons, List.mem_nil_iff, or_false]
+      rintro key (rfl | rfl | rfl | rfl | rfl)
+      · obtain ⟨v, hv, -⟩ := str_good ‹J.str _ "law" _ = _›
+        exact (mem_of_getObjVal hm hv).1
+      · obtain ⟨v, hv, -⟩ := nat_good ‹J.nat _ "population" _ = _›
+        exact (mem_of_getObjVal hm hv).1
+      · exact (mem_of_getObjVal hm (arr_ok ‹J.arr _ "units" _ = _›)).1
+      · obtain ⟨v, hv, -⟩ := nat_good ‹J.nat _ "k" _ = _›
+        exact (mem_of_getObjVal hm hv).1
+      · exact (mem_of_getObjVal hm ‹(Json.obj _).getObjVal? "strata" = Except.ok (Json.arr _)›).1
+    first
+      | (have hpc := ‹(pure #[] : V (Array ℕ)) = Except.ok _›
+         cases hpc
+         rfl)
+      | exfalso
+        have hcl := (mem_of_getObjVal hm ‹(Json.obj _).getObjVal? "closure" = Except.ok _›).1
+        have := key_mem hm hL hk (by rw [← Std.TreeMap.Raw.size_toArray hm]; simpa using hc.1.1) hcl
+        simp at this
+
 /-! ## The setup of several tables -/
 
 private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitDraw}
@@ -289,7 +338,8 @@ private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitDraw}
   | ok u => rw [hd] at h; cases h; exact ⟨u, rfl, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **The session spec of several tables**: its draw the statement's, a subset draw whose units are its instances, its
+/-- **The session spec of several tables**: its draw the statement's, a subset or a stratified draw whose units are its
+instances, its
 `Σ` a SHA-512 digest, and its `Hello` `helloOf`'s at the tables' names. -/
 theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
     {tables : List (String × ByteArray)} {draw partition : Option Json} {program : Option ByteArray}
@@ -298,8 +348,8 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) (hs : 1 < sts.size) :
     spec.unitDraw = draw ∧ spec.sigma.size = 64 ∧
-      (∀ d, draw = some d → ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ (∃ k, D.law = .subset k) ∧
-        spec.instances = D.units.size) ∧
+      (∀ d, draw = some d → ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧
+        ((∃ k, D.law = .subset k) ∨ ∃ K st, D.law = .stratified K st) ∧ spec.instances = D.units.size) ∧
       Flock.helloOf tags spec.sigma spec.mPts coins (tags.tableNames count) = .ok spec.hello := by
   unfold Stmt.setupTables at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
@@ -335,49 +385,13 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     cases hu <;> first
       | exact absurd ‹some _ = none› (by simp)
       | exact (‹∀ u, some _ = some u → False› _ rfl).elim
-      | (cases ‹some _ = some _›; exact ⟨_, hd, ⟨_, ‹_ = Draw.Law.subset _›⟩, rfl⟩)
+      | (cases ‹some _ = some _›
+         first
+           | exact ⟨_, hd, .inl ⟨_, ‹_ = Draw.Law.subset _›⟩, rfl⟩
+           | exact ⟨_, hd, .inr ⟨_, _, ‹_ = Draw.Law.stratified _ _›⟩, rfl⟩)
 
 /-! ## The statement at a good case of several tables -/
 
-private theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
-    w.draw.mapM (jsonOf "draw") = .ok s.read.draw := by
-  unfold Raw.ins at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first | (cases h; done) | (cases h; assumption)
-
-/-- The statement's draw is JSON that `Json.parse` read. -/
-theorem draw_parse {x : Claims.Msg} {s : Ins} (hs : insOf true x = some s) {d : Json}
-    (hd : s.read.draw = some d) : ∃ t, Json.parse t = .ok d := by
-  unfold insOf at hs
-  obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 hs
-  by_cases hz : w.zk ≠ true
-  · simp [hz] at hw
-  simp only [hz, ↓reduceIte] at hw
-  cases hi : w.ins with
-  | error e => rw [hi] at hw; cases hw
-  | ok s' =>
-    rw [hi] at hw
-    cases hw
-    have h := Raw.ins_draw hi
-    rw [hd] at h
-    cases hb : w.draw with
-    | none => rw [hb] at h; cases h
-    | some b =>
-      rw [hb] at h
-      simp only [Option.mapM_some] at h
-      cases hj : jsonOf "draw" b with
-      | error e => rw [hj] at h; cases h
-      | ok d' =>
-        rw [hj] at h
-        cases h
-        unfold jsonOf at hj
-        split at hj
-        · cases hj
-        · rename_i t _
-          cases hp : Json.parse t with
-          | error e => rw [hp] at hj; cases hj
-          | ok j => rw [hp] at hj; cases hj; exact ⟨t, hp⟩
 
 theorem ofJson_obj {j : Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) : j ≠ Json.null := by
   rintro rfl
@@ -415,7 +429,8 @@ theorem Case.setupTables (c : Case H rel) :
   setupTables_of c.scope c.setup
 
 /-- **What the masked record needs of the statement holds at every good case of several tables** (`StmtAt`), under
-the JSON library's specification: `Σ` is a SHA-512 digest, the session's draw is the statement's, a subset draw that is
+the JSON library's specification: `Σ` is a SHA-512 digest, the session's draw is the statement's, a subset or a
+stratified draw that is
 printable and decodes to the session's instances, and its `Hello` reads back with `coins` an object. -/
 theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
   obtain ⟨hu, hsig, hd, hh⟩ := setupTables_spec c.setupTables hc
@@ -433,9 +448,12 @@ theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : Stmt
   cases hdr : c.s.read.draw with
   | none => trivial
   | some d =>
-    obtain ⟨D, hD, ⟨k, hk⟩, hn⟩ := hd d hdr
-    obtain ⟨t, ht⟩ := draw_parse (setupOf_some c.setup).1 hdr
-    obtain ⟨hgd, hcl⟩ := good_subset (S.parse_wf t d ht) hD hk
+    obtain ⟨D, hD, hlaw, hn⟩ := hd d hdr
+    have hw := (insOf_draw_norm (setupOf_some c.setup).1 hdr).2
+    obtain ⟨hgd, hcl⟩ : Good d ∧ D.closure = #[] := by
+      rcases hlaw with ⟨k, hk⟩ | ⟨K, st, hK⟩
+      · exact good_subset hw hD hk
+      · exact ⟨JsonRT.good_stratified hw hD hK, closure_stratified hw hD hK⟩
     refine ⟨ofJson_obj hD, hgd, D, hD, ?_⟩
     rw [hn]
     simp [Draw.UnitDraw.proved, hcl]

@@ -1,11 +1,11 @@
-"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`; DECISIONS-2 §4 C2; board M-0356 (1), M-0394).
+"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`; DECISIONS-2 §4 C2).
 
 For a sampled VU `V` (one Call of the Program) the check is
 
     F_V( tau(in(V)) ) == tau(out(V))      bit-for-bit,
 
 where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names (the Call's `args`), and `F_V` is the
-registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.program.kernels.derived_rows`,
+registered relation of the Call's Definition evaluated by the registry's own reference (`verity.ml.definitions.numerics.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
 required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
 manifest's Value rule -- the v2 query's population the manifest of record was built from (`required.Population.members_of`) -- and the
@@ -18,9 +18,9 @@ binding map fixed at finalize
         "p" 0 k k+1 -> the declared prompt id k -> committed `input_token_ids` row k of the request's arrival step
         a TokenSelect producer -> committed `sampled_token_ids` of THAT Call's step (the previous step's designated output)
 
-Strata (recorded): (spec incl. shape, request, phase in {prefill, first-decode, mid, last}; `last` = the last EXECUTED step, F-r17b-39) x `per_stratum`, seeded -- distinct
+Strata (recorded): (spec incl. shape, request, phase in {prefill, first-decode, mid, last}; `last` = the last EXECUTED step) x `per_stratum`, seeded -- distinct
 numerical mechanisms x requests x lifetime boundaries.  Not-evaluable Calls are counted by reason (never silently skipped); see NOT_YET.
-Attention_v2/v3 Calls ARE evaluated (R17-11): the query at position T-1 over the T committed K/V Values the Program names by ref -- the
+Attention_v2/v3 Calls ARE evaluated: the query at position T-1 over the T committed K/V Values the Program names by ref -- the
 resolver reads every producer at its own step, so the request's history is committed words, never a cache.
 
 Ordered boundary linkage (the `linkage` check; exhaustive, NOT sampled): every request's committed `input_token_ids` at its arrival step == the DECLARED
@@ -63,13 +63,14 @@ import numpy as np
 
 from verity.ml.randomness import Key
 
+from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
 from verity_vllm.commit.opened import opened_in_children
-from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
@@ -124,7 +125,7 @@ def _plain(x: Any) -> Any:
 
 def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, int, int], np.ndarray | None]) -> None:
     """Read every weight field the sample consumes into the provider's cache in the PARENT (the children must not touch the model) --
-    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd, MAN-07): [exec M-0749, measured on
+    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd, MAN-07): [measured on
     the Qwen2.5 L40S B1 int-5 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
     in a forked child -> AcceleratorError 'CUDA initialization error' -> every BiasAdd stratum 'not evaluated' -> partial -> FAIL closed."""
     seen: set[str] = set()
@@ -166,7 +167,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMS
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     """[rev-cb F-cb-44 second finding; MAN-06g] Build + dlopen every twin library the sample's families need in the PARENT before the fork:
     the children inherit the mapping and never race a first-use JIT build (a sibling used to dlopen the half-written .so -> 'file too
-    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.program.kernels._jit`); this makes the fast path
+    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity.ml.definitions.numerics._jit`); this makes the fast path
     the only path.  Returns {library: path} for the record; a failure here is reported, not fatal (the children fall back to their own
     locked build)."""
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}
@@ -176,16 +177,16 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
         out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
-            from verity_vllm.program.kernels import prims_twins
-            rm, _t = prims_twins._rms()
+            from verity.ml.definitions.numerics import prims_twins
+            rm, _t = prims_twins.rms_twin()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
         except Exception as e:  # noqa: BLE001
             out["rms_triton_model"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
     if "fa2" in need:
         try:
-            from verity_vllm.program.kernels import prims_twins
-            _fa2_model, _tables = prims_twins._fa2()
+            from verity.ml.definitions.numerics import prims_twins
+            _fa2_model, _tables = prims_twins.fa2_twin()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001
             out["fa2_mufu_tables"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
@@ -196,7 +197,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
 #: objects moved to the permanent generation (never traversed by a collection in the children), `gc_collected` = what the pre-fork
 #: collection freed, `gc_freeze` = the policy (env VERITY_REPLAY_FORK_GC_FREEZE=0 opts out for a measurement, never for a record).
 _FORK_STATS: dict[str, Any] = {}
-FORK_GC_FREEZE = os.environ.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no")
+FORK_GC_FREEZE = settings.VERITY_REPLAY_FORK_GC_FREEZE
 CGROUP_MEMORY = ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")
 
 
@@ -267,11 +268,11 @@ def _gib(b: int) -> str:
 def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: list[dict], workers: int) -> list[tuple[dict, dict, float]]:
     """Forked pool over the picked VUs; bounded by a timeout (a child deadlocked on a lock inherited at fork must not hang the Commit).
 
-    [R19 admit, F-r18-admit-1 fix (c): the fork-COW children term] the children inherit the parent's whole C2 heap (the Programs of
+    [the fork-COW children term] the children inherit the parent's whole C2 heap (the Programs of
     every instance + the MatchOracle + the binding index: 43.5 GiB at #60 B8 Mistral, ~75 GB at #23 B64 Llama) copy-on-write.  A
     child evaluates a few VUs, but the FIRST cyclic garbage collection its own allocations trigger traverses EVERY container object
     of the inherited heap and writes each one's gc header -> every page of the parent heap is copied into that child.  That is the
-    R17 #23 datum ("two ForkPoolWorkers at ~72 GB each", F-r17-24 (b)): 72 GB is the parent's C2 heap (programs 39.5 + oracle
+    #23 datum ("two ForkPoolWorkers at ~72 GB each"): 72 GB is the parent's C2 heap (programs 39.5 + oracle
     35.4 GB modelled), not 2.9 x the largest committed tensor -- a VU reads its own rows only (`CommittedStore.words` slices), and the
     hidden-M1 stream the "largest tensor" is has no VU row at all.  `gc.freeze()` before the fork moves every live object into the
     permanent generation, which the children's collections never traverse (they collect only what they allocate after the fork), so a
@@ -387,9 +388,9 @@ def _cublas_facts(env: dict[str, Any]) -> dict[str, Any]:
 
 
 def engine_facts_of_record() -> dict[str, Any]:
-    """[revb M-0083 ASK] the batch-invariant configuration beside the evaluator strings: what the replay's pins were conditioned on;
+    """The batch-invariant configuration beside the evaluator strings: what the replay's pins were conditioned on;
     `cublas`, what the route pin's routes were conditioned on (`_cublas_facts`)."""
-    facts: dict[str, Any] = {k: os.environ.get(k) for k in ("VLLM_BATCH_INVARIANT", *CUBLAS_ENV)}
+    facts: dict[str, Any] = {k: settings.raw(k) for k in ("VLLM_BATCH_INVARIANT", *CUBLAS_ENV)}
     try:
         from vllm.model_executor.determinism import batch_invariant as bi          # type: ignore
         facts["vllm_batch_invariant_mode"] = bool(bi.vllm_is_batch_invariant()) if hasattr(bi, "vllm_is_batch_invariant") else "unavailable: no vllm_is_batch_invariant()"
@@ -564,13 +565,13 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None,
                    cached_prefixes: dict[str, dict] | None = None) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `cached_prefixes`: each warm
-    request's cached rows and their producers (`populate`): its attention reads its cached prefix from what they committed.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
+    request's cached rows and their producers (`populate`): its attention reads its cached prefix from what they committed.  `executed_prefix`: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
-    `manifest` [R17-3]: the row's required-value manifest (Q(P)) -- the population of record the replay's reach is reconciled against,
+    `manifest`: the row's required-value manifest (Q(P)) -- the population of record the replay's reach is reconciled against,
     identity by identity (`population.query_total` / `sampled_strata` / `uncovered_by_name` / `query_checks`); None is recorded as such.
-    `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...}; rev-cb
-    M-0411 O5) -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
+    `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...})
+    -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
     `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
     `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, drawn by `replay_draw` (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the

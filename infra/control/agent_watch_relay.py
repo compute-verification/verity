@@ -7,8 +7,9 @@ cancel, held again within the hour, and a run unreadable for an hour; the first 
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
 the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker alert is never posted unrung: one whose
-lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent agent (ACTIVE 90 min with no note
-and no push) leads with the record's handle and rings it the same way. A `research run` that ended on a node leads with its
+lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent worker (ACTIVE 90 min with no note
+and no push) leads with the record's handle and rings it the same way; a silent coordinator (60 min, its record's owner top)
+rings @top. A `research run` that ended on a node leads with its
 sender's handle (a coordinator's own, a worker's launcher's, for a run whose sender is a lane, the lane's), and its doorbell is
 `research msg ring-run` (INF-140), the one sender of run-end doorbells: `from runs, run R rc N (AGENT): ...`, once per run however
 often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
@@ -76,6 +77,8 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "worker_idle": "went idle at {at}; if it didn't report back, resume it with Task",
        "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task",
        "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
+       "no_step": "has shown nothing (no note, no push, nothing streamed) since {since} ({hours} h) after its two silent rings: "
+                  "stop it and archive it, or resume it",
        "run_ended": "ended rc={rc} after {after} on {node}",
        "stalled": "streamed nothing for {minutes} min since {since}, its agent not moving either (a hung call or a suspended "
                   "VM); the watch {action}",
@@ -86,7 +89,7 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "workers_failed": "stopped within {minutes} min",
        "held_unread": "did nothing itself for {minutes} min since {since} while a worker it waits on streamed, so its "
                       "follow-ups sat unread ({reason}); the watch {action}"}
-TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
+TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
@@ -140,7 +143,7 @@ def rung(rec: dict) -> str | None:
         return UNROUTED
     if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined
         return None
-    if rec.get("kind") in TOP:
+    if rec.get("kind") in TOP or (rec.get("kind") == "silent" and rec.get("owner") == "top"):
         return "top"
     handles = {h["handle"] for h in REG.get("handles") or []}
     owner = RENAMED.get(rec.get("owner"), rec.get("owner"))

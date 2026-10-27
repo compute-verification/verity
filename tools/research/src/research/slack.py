@@ -167,7 +167,8 @@ NOTION_API = "https://api.notion.com/v1"
 NOTION_VERSION = "2026-03-11"                                    # the first version whose pages take Notion-flavored Markdown
 NOTION_HOSTS = ("notion.so", "www.notion.so", "app.notion.com")  # and any *.notion.site
 AREAS = ("Claim or assumption", "Access or keys", "Machines or spend", "Process", "Research direction")   # the database's Area
-PAGE_SECTIONS = ("## The problem", "## Background", "## Options", "## What happens next", "## Sources")
+PAGE_SECTIONS = ("## The problem", "## Background", "## The design the rules want", "## Options", "## What happens next",
+                 "## Sources")
 REPLY_CALLOUT = ('<callout icon="✍️" color="yellow_bg">\n'
                  "\t**Your reply.** Write below this line: a decision, a question or a change. "
                  "Top relays it to the lane, which answers under your text starting with its handle.\n"
@@ -863,6 +864,26 @@ def _footer(tags: tuple[str, ...] = ()) -> str:
     return f"\n\n_{TAG_SEP.join(tags)}_" if tags else ""
 
 
+HEADER_TIME_RE = re.compile(r"^\W{0,4}((?:(?:<[^>\s]+>|[@*_\w().,-]+) ){0,4}?)\*?([01]?\d|2[0-3]):([0-5]\d)Z\*?(?=[:,)]| \(| [-\u2014])")
+DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
+STAMP_SLACK_S = 120                                              # a hand-typed time this close to the send time is left alone
+
+
+def stamp_time(text: str, now: datetime) -> str:
+    """A post whose first line gives a UTC time (`compute-research 13:07Z: ...`) more than STAMP_SLACK_S from when it is
+    sent gets the real time beside it, `13:07Z (sent 13:22Z)`: hand-typed times ran up to 15 min off, which misordered
+    MEM-69's salts (top, 26 Oct).  The typed time stays, since it may name a checkpoint rather than the moment."""
+    m = HEADER_TIME_RE.match(text or "")
+    if not m or any(w.strip("*_,()").lower() in DEADLINE_WORDS for w in m[1].split()):
+        return text                                              # no header time, or a deadline (`... by 20:00Z:`)
+    typed = int(m[2]) * 60 + int(m[3])
+    real = now.astimezone(timezone.utc)
+    off = abs(typed - (real.hour * 60 + real.minute)) % (24 * 60)
+    if min(off, 24 * 60 - off) * 60 <= STAMP_SLACK_S:
+        return text
+    return f"{text[:m.end()]} (sent {real:%H:%M}Z){text[m.end():]}"
+
+
 def plain(text: str) -> str:
     """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes)."""
     text = OLD_FOOTER_RE.sub("", FOOTER_RE.sub("", text or ""))
@@ -893,7 +914,7 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
           route: tuple[dict, Routes | None] | None = None, urgent: bool = False, tags: tuple[str, ...] = ()) -> str:
     """Post, print `<ts> <permalink>`, and with `route` (the registry and the routes) deliver it to whoever it reaches."""
     tags = tuple(tags) + (("urgent",) if urgent and "urgent" not in tags else ())
-    head, *rest = _pieces(slack_dates(text))
+    head, *rest = _pieces(slack_dates(stamp_time(text, _now())))
     text = f"{head}{_footer(tags)}"
     if thread and not api.dry_run:                       # a reply's ts (a doorbell's `reply R`): its thread
         try:
@@ -1076,11 +1097,12 @@ def unrouted_names(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()
     return list(dict.fromkeys(n for n in found if n in handles))
 
 
-def refuse_unrouted(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> None:
+def warn_unrouted(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> None:
+    """Say which names a post mentions past its start, where nothing rings.  It posts anyway: refusing cost re-sends (three
+    for one post, TOP-90 row 30), and the sender learns here that those names weren't woken."""
     if names := unrouted_names(body, reg, author, rung):
-        raise SlackError(f"it names {' '.join('@' + n for n in names)} past its start, where nothing rings: only the names a "
-                         "post starts with wake anyone. Move them to the start (--to, or the leading @names) to ring them, "
-                         "or drop the @ (and don't start a line or sentence with `name:`) to mention them without a doorbell")
+        print(f"note: it names {' '.join('@' + n for n in names)} past its start, so they aren't rung: only the names a post "
+              "starts with wake anyone. To ring them, move them to the start (--to, or the leading @names)", file=sys.stderr)
 
 
 def header_names(text: str, reg: dict) -> list[str]:
@@ -1724,13 +1746,18 @@ def ask_daniel_page(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
+    if isinstance(ns.to, list):
+        if len(ns.to) != 1:
+            raise SlackError(f"--to {' --to '.join(ns.to)}: an ask goes to one owner, filed in its Linear team; for several, "
+                             f"`research msg send --as ME --to {' '.join(ns.to)}` (TOP-90 row 29: a second --to was dropped)")
+        ns.to = ns.to[0]
     if human_entry(reg, ns.to):
         return ask_daniel_page(ns, reg)
     h, owner = acting_as(ns, reg, ns.handle), name_entry(ns, reg, ns.to)
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    refuse_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
+    warn_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
     body = linear_ask(ns, owner, h["handle"], body)
     _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
@@ -1792,7 +1819,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             print(f"{issue} {lin.move(issue, need(ns.value, 'the STATE by name (e.g. In Progress)'))}")
             return 0
         author, text = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender"))["handle"], need(ns.value, "the TEXT")
-        refuse_unrouted(text, reg, author)
+        warn_unrouted(text, reg, author)
         info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
         lin.comment(info["id"], author, text)
         print(f"{issue} commented")
@@ -1880,7 +1907,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError(f"it starts with {ANNOUNCE}, which makes a top-level post an announcement to every handle: send it "
                          "with --kind announce (which checks its pins), or start it with something else")
     if to or kind != "announce":                                     # an announcement with no --to reaches every handle
-        refuse_unrouted(body, reg, h["handle"], tuple(t["handle"] for t in to))
+        warn_unrouted(body, reg, h["handle"], tuple(t["handle"] for t in to))
     if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]} and not own():
         raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its own inbox's holder: name its "
                          "addressee with --to")
@@ -1914,7 +1941,7 @@ def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = acting_as(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
     body = _body(ns)
-    refuse_unrouted(body, reg, h["handle"])
+    warn_unrouted(body, reg, h["handle"])
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent,
           tags=(QUIET,) if ns.quiet else ())                         # a footer tag rides on the first piece of a long post
     return 0
@@ -2118,7 +2145,8 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         thread = f" in {m['thread_ts']}" if m.get("thread_ts") and m.get("thread_ts") != m.get("ts") and not ns.thread else ""
         who = "@" + m["username"] if m.get("username") else poster(m, reg) or m.get("user") or m.get("bot_id") or "?"
         tags = [t for t in tags_of(m.get("text") or "") if t != "ask"]
-        print(f"{m.get('ts')}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''))}")
+        at = datetime.fromtimestamp(float(m["ts"]), timezone.utc).strftime("%H:%M:%SZ") if m.get("ts") else "?"
+        print(f"{m.get('ts')} {at}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''))}")
     return 0
 
 
@@ -3707,10 +3735,33 @@ def permalink(reg: dict, ch: str, ts: str) -> str:
 
 def no_such_card(verb: str, cid: str) -> str:
     """The route answers 404 only for an ID with no card: a pending card's status is 200."""
-    short = " The route takes the whole ID and looks up no prefix." if re.fullmatch(r"[0-9a-f]{4,12}", cid) else ""
-    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID.{short} It is the UUID `ask-daniel` printed first when "
-            "it posted the card, which its mention in the card's thread also ends with (`research msg read --channel ask-daniel "
-            "--thread TS`), not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID. It is the UUID `ask-daniel` printed first when "
+            "it posted the card (or a unique prefix of it), which its mention in the card's thread also ends with (`research msg "
+            "read --channel ask-daniel --thread TS`), not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+
+
+CARD_ID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+CARD_PREFIX_MIN, CARD_LOOKBACK_S = 6, 14 * 86400
+
+
+def card_id(ns: argparse.Namespace, reg: dict, cid: str) -> str:
+    """The card's whole ID from a unique prefix of it (posts show 8 hex; TOP-90 row 31): the first card in #ask-daniel's last
+    CARD_LOOKBACK_S, newest first, whose thread's mention carries an ID starting with it.  A whole ID, or a dry run, is kept."""
+    cid = (cid or "").strip().lower()
+    if CARD_ID_RE.fullmatch(cid) or not re.fullmatch(rf"[0-9a-f-]{{{CARD_PREFIX_MIN},35}}", cid):
+        return cid
+    api = client(ns)
+    if api.dry_run:
+        return cid
+    ch = channel_id(ns, reg, "ask-daniel")
+    for root in api.paged("conversations.history", "messages", channel=ch, oldest=f"{_now().timestamp() - CARD_LOOKBACK_S:.6f}"):
+        if not root.get("reply_count"):
+            continue
+        for m in api.paged("conversations.replies", "messages", channel=ch, ts=root["ts"], limit=3)[1:3]:
+            if found := next((u for u in CARD_ID_RE.findall(m.get("text") or "") if u.startswith(cid)), None):
+                return found
+    raise SlackError(f"ask-daniel: no card in #ask-daniel's last {CARD_LOOKBACK_S // 86400} days has an ID starting {cid}; "
+                     "pass the whole ID `ask-daniel` printed")
 
 
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
@@ -3719,6 +3770,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if ns.verb:
         if not ns.id:
             raise SlackError(f"ask-daniel {ns.verb} needs the card's ID")
+        ns.id = card_id(ns, reg, str(ns.id))
         path = "/" + urllib.parse.quote(str(ns.id), safe="")
         if ns.verb == "resolve":
             if not ns.choice:
@@ -3870,7 +3922,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("ask", "1:1: an issue in the owner's Linear team, tagged in #agent-coordination with its doorbell; to @daniel, "
                    "the ask's page in the Asks for Daniel database and its #ask-daniel card (the card flags, as ask-daniel --page)",
             as_=True, body=True)
-    p.add_argument("--to", required=True, metavar="@OWNER")
+    p.add_argument("--to", required=True, action="append", metavar="@OWNER", help="the one owner (several: `send --to @a @b`)")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     card_flags(p)
     p.set_defaults(verb=None, id=None, link=None, wait=False, every=WAIT_EVERY_S, json=False)

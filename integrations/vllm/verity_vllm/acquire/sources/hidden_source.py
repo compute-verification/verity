@@ -16,7 +16,7 @@ f32; FIN [HB, M, 4], with N = NB * kBlockN.  Rows ≥ seqlen_q / blocks ≥ n_bl
 deterministically (same launch sequence ⇒ same bytes, CMT-2 `xcheck_m1.json`); unvisited words carry the previous launch's content of
 the same geometry — bound but outside the layout (the verifier's queries never address them).
 
-R13 lane fa2 (C-FA2-HDIM, tap layout v8): the layout is arithmetic in the kernel tile (kBlockN, head_dim) -- 128/64 for SmolLM2/Llama,
+Tap layout v8 (C-FA2-HDIM): the layout is arithmetic in the kernel tile (kBlockN, head_dim) -- 128/64 for SmolLM2/Llama,
 64/96 for Phi-3, 64/128 for Qwen2.5/Mistral/OLMoE (num_splits == 1 "align" kernel, `fa2_kblock_n`).  The wrapper declares the tile per
 launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equals the declaration, otherwise it counts the launch in
 `verity_tap_skipped` and writes nothing -- which the wrapper turns into a collector error (X-03: expected != committed -> COMMIT FAIL).
@@ -49,12 +49,12 @@ def fa2_kblock_n(head_dim: int, num_splits: int) -> int:
 
 def fa2_swapped(max_seqlen_q: int, H: int, Hk: int, head_dim: int, window_left: int, window_right: int, dropout_p: float = 0.0,
                 alibi_slopes=None) -> bool:
-    """[R15 capacity] `seqlenq_ngroups_swapped` of the pinned FA2 varlen forward (flash_api.cpp:646): a decode launch (max_seqlen_q == 1)
+    """`seqlenq_ngroups_swapped` of the pinned FA2 varlen forward (flash_api.cpp:646): a decode launch (max_seqlen_q == 1)
     of a GQA model folds the H/Hk query heads of each KV group into the row dimension (rows = groups, heads = Hk) ONLY when no sliding
     window is set (window_left < 0 and window_right < 0), dropout is 0, head_dim % 8 == 0 and there are no alibi slopes.  vLLM passes
     window_size (sliding_window - 1, 0) on the sliding layers of Gemma-2 (every other layer) / Phi-3, so their decode launches run the
-    UN-swapped kernel (b*H slabs of 1 row); the R13 mirror (`max_seqlen_q == 1 and H > Hk`) declared the swapped geometry there and the
-    kernel refused the launch (arm check b*h <= vt.H fails: verity_tap_skipped++ -> 'skipped by the kernel' -> X-03 COMMIT FAIL, never
+    UN-swapped kernel (b*H slabs of 1 row); a mirror of `max_seqlen_q == 1 and H > Hk` alone would declare the swapped geometry there and
+    the kernel would refuse the launch (arm check b*h <= vt.H fails: verity_tap_skipped++ -> 'skipped by the kernel' -> X-03 COMMIT FAIL, never
     a wrong binding).  This mirrors the kernel's own rule so the declared (HB, M) is the launched one."""
     return (int(max_seqlen_q) == 1 and H > Hk and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
             and head_dim % 8 == 0 and alibi_slopes is None)
@@ -68,20 +68,20 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int = 128, D: int = 64, ms: bo
 
 
 def fa2_tap_words_per_seq(h: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
-    """[R18 tap, F-r17-23] Words of the padded M1 tap buffer ONE sequence occupies in a multi-sequence launch: its h slabs x the launch's
+    """Words of the padded M1 tap buffer ONE sequence occupies in a multi-sequence launch: its h slabs x the launch's
     row pitch M (= max_seqlen_q) x the six plane widths -- `mat_total_words(HB, M, NB, BN, D) / HB`.  Independent of the sequence's own
     length (the buffer is pitched to the batch maximum); the STAGED bytes are the compacted rows < seqlen_q only (native_collect.cpp p0b)."""
     return mat_total_words(1, M, NB, BN, D, ms) * h
 
 
 def fa2_tap_buffer_words(b: int, h: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
-    """Padded (whole 64-word chunks) tap buffer of a launch of `b` sequences -- the allocation F-r17-23 named (B64 llama 1024: 6,585,057,280
-    words = 26,340,229,120 B = 24.53 GiB; the exact byte count of the r17_0738 OOM)."""
+    """Padded (whole 64-word chunks) tap buffer of a launch of `b` sequences (B64 llama 1024: 6,585,057,280 words =
+    26,340,229,120 B = 24.53 GiB, an allocation that ran out of device memory; `plan_fa2_tap_groups` bounds it)."""
     return -(-(b * fa2_tap_words_per_seq(h, M, NB, BN, D, ms)) // CHUNK_WORDS) * CHUNK_WORDS
 
 
 def plan_fa2_tap_groups(b: int, words_per_seq: int, cap_words: int) -> list[tuple[int, int]]:
-    """[R18 tap, F-r17-23] Consecutive sequence groups [g0, g1) of a `b`-sequence launch such that every group's padded tap buffer
+    """Consecutive sequence groups [g0, g1) of a `b`-sequence launch such that every group's padded tap buffer
     (g1 - g0) * words_per_seq (rounded to whole chunks) fits `cap_words`; order preserved, every sequence in exactly one group.  A single
     sequence larger than the cap forms its own group (the driver records `cap_exceeded` -- the per-sequence cost h*M*W is the residual bound
     the split cannot lower; it is quadratic in the sequence length, not in the batch).  cap_words <= 0 -> one group (bounded path off)."""
@@ -108,8 +108,8 @@ def tap_ms(src: int) -> bool:
 
 
 def stream_name(k: int, HB: int, M: int, NB: int, BN: int, D: int) -> str:
-    """Identity of launch k's stream in the step layout (the geometry is part of the layout digest).  The hd-64 tile keeps the
-    pre-R13 name so hd-64 roots are unchanged; other tiles carry (kBlockN, head_dim) explicitly."""
+    """Identity of launch k's stream in the step layout (the geometry is part of the layout digest).  The hd-64 tile
+    (`LEGACY_TILE`) keeps its stream's original name so hd-64 roots are unchanged; other tiles carry (kBlockN, head_dim) explicitly."""
     base = f"fa2.m1/L{k}/g{HB}x{M}x{NB}"
     return base if (BN, D) == LEGACY_TILE else f"{base}x{BN}x{D}"
 
@@ -199,8 +199,8 @@ class HiddenM1Source:
             self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            self.c.errors.append(f"fa2 tap skipped count: {e!r}"[:200])
         self.ns.verity_set_tap(0, None, None, 0, 0, 0, 0)
         self.active = False
 
@@ -360,8 +360,8 @@ class HiddenM1SourceFA3(HiddenM1Source):
             self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            self.c.errors.append(f"fa3 tap skipped count: {e!r}"[:200])
         self.ns.verity_set_tap_off()
         self.active = False
 

@@ -24,7 +24,7 @@ def _toy(tmp_path: Path) -> Path:
     from verity.ml.circuits.ops.scalar import I32Add
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.types import Array, Value
-    from verity_vllm.program.registry.prims import gather_bf16
+    from verity.ml.definitions.registry.prims import gather_bf16
 
     def signature(S):
         return (("prompt", Value(32)), ("prefix", Value(16)), ("table", Array(4, Value(16)))), Value(16)
@@ -86,7 +86,7 @@ def test_a_selection_inside_a_composite_names_the_call_its_index_comes_from(tmp_
     from verity.ml.circuits.ops.scalar import I32Add
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.types import Array, Value
-    from verity_vllm.program.registry.prims import gather_bf16
+    from verity.ml.definitions.registry.prims import gather_bf16
 
     inner = bind(CompositeDefinition("PopreadRow", 0, (), lambda S: ((("e", Value(32)), ("w", Array(2, Array(8, Value(16))))),
                                                                       Array(2, Value(16))),
@@ -165,7 +165,7 @@ def test_the_lean_graph_is_the_reference_graph_and_cuts_to_its_units(monkeypatch
     """Expert gathers, FP8 block scales, a router's top-k and a separable body: the lean graph, resolved in forked workers over
     64-gate ranges or in one pass, is `CallGraph`'s, and its units are `evaluate_definition`'s."""
     from verity.ml.circuits.cut import CallGraph, evaluate_definition, separable
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions.call_scope import specialization
     monkeypatch.setattr(PR, "CHUNK_GATES", 64)
     for name, statics in SMALL:
         fn = specialization(name, statics)
@@ -178,8 +178,8 @@ def test_the_lean_graph_is_the_reference_graph_and_cuts_to_its_units(monkeypatch
 def test_units_read_a_cached_rule_by_its_digest_and_log_each_cut(tmp_path):
     """A rule directory's entry is used as it stands (its count is deliberately wrong here), the rest are cut and logged, the
     log serves as a cache, and recutting a cached Definition names the disagreement."""
-    from verity_vllm.query.call_scope import specialization
-    from verity_vllm.query.word import definition_digest
+    from verity.ml.definitions.call_scope import specialization
+    from verity.ml.definitions.word import definition_digest
     lin, router = (specialization(n, s) for n, s in SMALL[1:3])
     rule = {"key": {"digest": definition_digest(lin), "query": [16, 32, 0]}, "rule": {"units_per_call": 999, "violations": []}}
     (tmp_path / "rules" / "ab").mkdir(parents=True)
@@ -286,8 +286,8 @@ def _prefix_form(producers: int, warm: int) -> dict:
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
-    from verity_vllm.program.registry.prims import gather_bf16
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions.registry.prims import gather_bf16
+    from verity.ml.definitions.call_scope import specialization
 
     V, C, K = 4, 2, producers
     I32, BF16, BIT = Value(32), Value(16), Value(1)

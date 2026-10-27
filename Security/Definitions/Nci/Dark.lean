@@ -13,7 +13,7 @@ does, only from the same wires, so a total containment is the special case `S = 
 
 A partial containment says nothing about `d`'s baseline: a dark value may enter `d` as a baseline input, read for free.
 That it doesn't is a premise about the protocol, which decides what `θ` may hold, and not about the circuit:
-`Nci.Assumptions.BaselineRegistered` (`Models/Nci/Assumptions/Baseline.lean`), which every guarantee through a
+`Nci.Assumptions.BaselineRegistered` (`Definitions/Nci/Assumptions/Baseline.lean`), which every guarantee through a
 containment, total or partial, takes as a hypothesis.
 -/
 

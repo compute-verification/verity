@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.DeviceFp4
 /-!
 # TT_OUT-FP4 at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
 
-`TTOutFp4` and `TTOutTileFp4` (`Models.Pouw.Assumptions.PearlC.TTOutFp4`) are stated over any `CostModel`, and which one
+`TTOutFp4` and `TTOutTileFp4` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4`) are stated over any `CostModel`, and which one
 they are believed at (W1 at sm_120's prices, in FP4 units) is prose in `TTOutFp4Sm120`'s docstring. Here that cost model
 is a term, as `TTOutW1` makes it for the FP8 records: TT_OUT's game at `CM := W1.w1Priced dv salt`. Each form is the old
 one's body at that cost model (same protocol, domain, `γ₀ = 1/400` and `εPearlC`); `TTOutFp4W1 … ↔ TTOutFp4

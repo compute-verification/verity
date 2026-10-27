@@ -34,14 +34,14 @@ from verity.core.protocols.pouw.circuit import plan as CPL
 from verity.core.protocols.pouw.circuit import reference as CR
 from verity.core.protocols.pouw.coins import Challenger
 
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import pouw_circuit as RC
-from verity_vllm.protocol_options import pouw
-from verity_vllm.protocol_options import pouw_circuit as PC
-from verity_vllm.protocol_options import pouw_native as PN
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import circuit as PC
+from verity_vllm.protocols.pouw import native as PN
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
@@ -312,7 +312,7 @@ def test_the_rows_native_evaluation_is_the_registered_definition():
     three scales, a row of subnormals and a zero row."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import pouw_rows
+    from verity.ml.definitions.registry import pouw_rows
     rng = np.random.default_rng(1)
     d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)
     for scale in (1e-3, 1.0, 50.0, 1e-39, 0.0):
@@ -473,9 +473,9 @@ def test_an_a_strip_that_is_not_the_quantized_input_is_rejected(world):
 
 @pytest.mark.parametrize("scheme", ["ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"])
 def test_every_other_scheme_stays_refused_beside_sampled_proofs(scheme):
-    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
     assert any("no Definition" in r for r in PO.refusals(ctx))
-    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
     assert PO.refusals(ok) == ()
 
 
@@ -612,7 +612,7 @@ def test_the_start_forward_setting_is_a_non_negative_integer_for_the_circuit_exe
 def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which, request):
     """`transcript_dir`'s call data (`save_calls`) with the weight's rows from the weights of record re-commits every call to its
     live leaf: the data a verifier needs to open the calls off the serving host."""
-    from verity_vllm.protocol_options import pouw_native as PN
+    from verity_vllm.protocols.pouw import native as PN
     w = request.getfixturevalue(which)
     calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: pouw._LayerRows(w.w_up))
     assert [i for i, _s, _c in calls] == [r.index for r in w.records] and {s for _i, s, _c in calls} == {"ncp-v2"}
@@ -622,7 +622,7 @@ def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which
 @pytest.fixture(scope="module")
 def device_world(tmp_path_factory):
     """`world` with the setting ``device: cuda``, the serving kernel's CPU twin (`ncp2_fast.cuh`) standing in for the GPU."""
-    from verity_vllm.protocol_options import pouw_device as PD
+    from verity_vllm.protocols.pouw import device as PD
 
     if PD.compiler() is None and not os.environ.get("VERITY_SUITE_ROOT"):
         pytest.skip("needs a C++ compiler (required under check)")

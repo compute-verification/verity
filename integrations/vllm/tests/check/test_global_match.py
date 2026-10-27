@@ -20,6 +20,9 @@ from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.pipeline import cli
 from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import sampler_geometry as SG
+from verity_vllm.records.global_match import GlobalMatch
+from verity_vllm.records import workload as WL
+from verity_vllm.records.fields import RecordError, UnknownField
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
@@ -215,7 +218,7 @@ def p_attention_tgrouped(node, ctx):
     from tests.observe.test_fold_synthetic import _kv_flat, _slot
     from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     BN = e2e.BN
     if node.op != "vllm.unified_attention_with_output.default" or len(node.children) != 1:
         return None
@@ -346,9 +349,26 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     return new_of[c_old] - n_in, new_of[p_old] - n_in
 
 
+def workload_doc(**fields):
+    """A workload (`records.workload`) with the fields every writer writes, and `fields`."""
+    return {"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
+            "requests": [], **fields}
+
+
+def row_workload(row_id, **sweep):
+    """The workload record of sweep row `row_id` (its `sweep` block also holding `sweep`), as GP-01 reads it."""
+    return WL.Workload.of(workload_doc(sweep={"row_id": row_id, **sweep}), "wl.json")
+
+
+def sampling_block(**fields):
+    """A workload record's greedy sampling block with `fields`, as GP-01's stop rule reads it."""
+    return WL.WorkloadSampling.of({"variant": "greedy", **fields}, "wl.json")
+
+
 def workload(reqs, path):
-    json.dump({"requests": [{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r), "seed": r.get("seed")} for r in reqs],
-               "sampling": {"temperature": 0.0, "variant": "greedy"}, "sweep": {"arrive_steps": [_arr(r) for r in reqs]}}, open(path, "w"))
+    json.dump(workload_doc(requests=[{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r),
+                                      **({"seed": r["seed"]} if r.get("seed") is not None else {})} for r in reqs],
+                           sampling={"temperature": 0.0, "variant": "greedy"}, sweep={"arrive_steps": [_arr(r) for r in reqs]}), open(path, "w"))
     return str(path)
 
 
@@ -402,6 +422,9 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
     assert g7["boundary_probes"] > 0 and g7["boundary_probe_failures"] == 0
     assert res["x09"]["verdict"] == "PASS"
     assert not res["eos_truncated_requests"]
+    written = json.loads(json.dumps(res, default=str))                     # as the CLI writes it
+    rec = GlobalMatch.of(written, "global_match.json")                     # the record the account link reads
+    assert rec.dump() == written and rec.verdict == "PASS" and rec.check("G6").lengths_by_request is not None
 
 
 @pytest.mark.slow
@@ -834,20 +857,23 @@ def test_workload_applicability_refuses_a_row_the_components_do_not_model():
     from verity_vllm.pipeline import global_program as G
     comps = {(256, 31): {"execution": "bi-eager", "numerics_profile": "b1-eager-v3", "gemm_target": "ada"},
              (11, 1): {"execution": "bi-eager", "numerics_profile": "b1-eager-v3", "gemm_target": "ada"}}
-    ok = G.workload_applicability({"sweep": {"row_id": "x__b2__i256__o32__mixed__greedy__bi-eager"}}, comps)
+    ok = G.workload_applicability(row_workload("x__b2__i256__o32__mixed__greedy__bi-eager"), comps)
     assert ok["refusal"] is None and ok["execution"] == "bi-eager" and ok["row_execution"] == "bi-eager"
     assert ok["engine"]["enforce_eager"] is True and ok["engine"]["enable_prefix_caching"] is False
     assert ok["components"]["numerics_profile"] == "b1-eager-v3"
-    bad = G.workload_applicability({"sweep": {"row_id": "x__b2__i256__o32__mixed__greedy__bi-compiled"}}, comps)
+    bad = G.workload_applicability(row_workload("x__b2__i256__o32__mixed__greedy__bi-compiled"), comps)
     assert bad["refusal"] and "'bi-compiled' is not modelled" in bad["refusal"]
-    assert G.execution_of_workload({"execution": "bi-compiled", "sweep": {"row_id": "x__bi-eager"}}) == "bi-compiled"   # the field wins
+    assert G.execution_of_workload(row_workload("x__bi-eager", execution="bi-compiled")) == "bi-compiled"   # the field wins
+    # no writer writes a top-level `execution`: the record refuses it by name, so GP-01 never reads a label beside the sweep's
+    with pytest.raises(UnknownField, match="'execution'"):
+        WL.Workload.of(workload_doc(execution="bi-compiled", sweep={"row_id": "x__bi-eager"}), "wl.json")
     mixed = dict(comps)
     mixed[(11, 1)] = dict(comps[(11, 1)], execution="bi-compiled")
-    assert "different execution profiles" in G.workload_applicability({"sweep": {"row_id": "x__bi-eager"}}, mixed)["refusal"]
-    assert "no execution profile" in G.workload_applicability({"sweep": {"row_id": "x__bi-eager"}}, {k: {} for k in comps})["refusal"]
+    assert "different execution profiles" in G.workload_applicability(row_workload("x__bi-eager"), mixed)["refusal"]
+    assert "no execution profile" in G.workload_applicability(row_workload("x__bi-eager"), {k: {} for k in comps})["refusal"]
     dis = dict(comps)
     dis[(11, 1)] = dict(comps[(11, 1)], gemm_target="hopper")
-    assert "disagree on applicability fields ['gemm_target']" in G.workload_applicability({"sweep": {"row_id": "x__bi-eager"}}, dis)["refusal"]
+    assert "disagree on applicability fields ['gemm_target']" in G.workload_applicability(row_workload("x__bi-eager"), dis)["refusal"]
 
 
 def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_program(tmp_path):
@@ -1128,7 +1154,7 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
            "attention": "splitting op executed outside the CUDA graphs", "program_derivation": "eager module-forward trace"}
     comps = {(256, 31): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"},
              (11, 1): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"}}
-    row = {"sweep": {"row_id": "x__b2__i256__o32__mixed__greedy__bi-compiled"}}
+    row = row_workload("x__b2__i256__o32__mixed__greedy__bi-compiled")
     ok = G.workload_applicability(row, comps)
     assert ok["refusal"] is None and ok["execution"] == "bi-compiled"
     assert ok["engine"]["enforce_eager"] is False and ok["engine"]["enable_prefix_caching"] is False
@@ -1155,9 +1181,9 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     eag = {k: dict(v, engine=dict(v["engine"], enforce_eager=True)) for k, v in comps.items()}
     assert "enforce_eager true" in G.workload_applicability(row, eag)["refusal"]
     # an eager row served by compiled components is still refused (the label rule), and eager components keep GP-01's eager engine block
-    assert "'bi-eager' is not modelled" in G.workload_applicability({"sweep": {"row_id": "x__bi-eager"}}, comps)["refusal"]
+    assert "'bi-eager' is not modelled" in G.workload_applicability(row_workload("x__bi-eager"), comps)["refusal"]
     eager = {k: dict(v, execution="bi-eager", engine={"enforce_eager": True}) for k, v in comps.items()}
-    e = G.workload_applicability({"sweep": {"row_id": "x__bi-eager"}}, eager)
+    e = G.workload_applicability(row_workload("x__bi-eager"), eager)
     assert e["refusal"] is None and e["engine"] == G.MODELLED_ENGINE
 
 
@@ -1273,21 +1299,23 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
     ck.mkdir()
     json.dump({"eos_token_id": 128001}, open(ck / "config.json", "w"))
     json.dump({"eos_token_id": [128001, 128008, 128009]}, open(ck / "generation_config.json", "w"))
-    sr = gp.stop_rule(str(ck), None, {"sampling": {"variant": "greedy"}})
+    sr = gp.stop_rule(str(ck), None, sampling_block())
     assert sr["eos_token_ids"] == [128001, 128008, 128009]
     assert sr["source"] == {"config.json": [128001], "generation_config.json": [128001, 128008, 128009]}
-    sr = gp.stop_rule(str(ck), [7], {"sampling": {"stop_token_ids": [42]}})
+    sr = gp.stop_rule(str(ck), [7], sampling_block(stop_token_ids=[42]))
     assert sr["eos_token_ids"] == [7, 42, 128001, 128008, 128009] and sr["source"]["manifest.sampling.stop_token_ids"] == [42]
-    sr = gp.stop_rule(str(ck), None, {"sampling": {"ignore_eos": True}})
+    sr = gp.stop_rule(str(ck), None, sampling_block(ignore_eos=True))
     assert sr["eos_token_ids"] == [] and sr["ignore_eos"] is True
     # [COORD M-0571 (1)] pinned INTO the manifest: the declaration of record; a checkpoint beside it must agree, else refused by name
-    sr = gp.stop_rule(str(ck), None, {"sampling": {"eos_token_ids": [128009, 128001, 128008]}})
+    sr = gp.stop_rule(str(ck), None, sampling_block(eos_token_ids=[128009, 128001, 128008]))
     assert sr["eos_token_ids"] == [128001, 128008, 128009] and sr["source"]["manifest.sampling.eos_token_ids"] == [128001, 128008, 128009] and not sr.get("refusal")
-    sr = gp.stop_rule(None, None, {"sampling": {"eos_token_ids": [2]}})
+    sr = gp.stop_rule(None, None, sampling_block(eos_token_ids=[2]))
     assert sr["eos_token_ids"] == [2] and sr["source"] == {"manifest.sampling.eos_token_ids": [2]}
-    sr = gp.stop_rule(str(ck), None, {"sampling": {"eos_token_ids": [2]}})
+    sr = gp.stop_rule(str(ck), None, sampling_block(eos_token_ids=[2]))
     assert sr["eos_token_ids"] is None and "manifest sampling.eos_token_ids [2] != the pinned checkpoint's eos_token_id set [128001, 128008, 128009]" in sr["refusal"]
-    sr = gp.stop_rule(None, None, {"sampling": {}})
+    with pytest.raises(RecordError, match=r"'sampling\.eos_token_ids' holds a value that is not an integer"):
+        sampling_block(eos_token_ids=["2"])
+    sr = gp.stop_rule(None, None, sampling_block())
     assert sr["eos_token_ids"] is None and "fails closed" in sr["note"]
     (ck / "generation_config.json").write_text("{not json")
     sr = gp.stop_rule(str(ck), None, None)
@@ -1384,7 +1412,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert res["verdict"] == "PASS", res["reasons"]
 
     def delete(wl):
-        wl["requests"][1]["seed"] = None
+        del wl["requests"][1]["seed"]
     res = gm.check(recomposed(delete), oracle)
     pr = _check(res, "G1")["problems"]
     assert res["verdict"] == "FAIL" and any("no declared seed for r1 but the run header records seed=2097394646" in p for p in pr), pr
@@ -1397,18 +1425,18 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert res["verdict"] == "FAIL"
     assert any("sampling variant='stoch-t0.8-p0.95' but the run header records variant='greedy'" in p for p in pr), pr
     assert any("sampling temperature=0.8 but the run header records temperature=0.0" in p for p in pr), pr
-    lab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95-k20"}})
+    lab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95-k20"}, variants={"stoch-t0.8-p0.95-k20": {}}))
     assert {k: lab[k] for k in ("variant", "temperature", "top_p", "top_k")} == {"variant": "stoch-t0.8-p0.95-k20", "temperature": 0.8, "top_p": 0.95, "top_k": 20}
-    assert "conflict" not in lab
+    assert "conflict" not in lab and lab["sources"] == {"temperature": ["label"], "top_p": ["label"], "top_k": ["label"]}
     # [rev-pm M-0667 TIP N5] the driver consumes variants[variant] (vllm_adapter.load_workload), not the label: the table is the value of
     # record, and label / table / explicit fields / sweep params must agree -- a laundered header (sha recomputed over the edited doc) with
     # variants[v].top_p edited 0.95 -> 0.9 under the label p0.95 is caught by the manifest's OWN disagreement, fail closed, named
-    tab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}})
+    tab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}))
     assert tab["top_p"] == 0.9 and tab["conflict"] == ["top_p: label=0.95, variants_table=0.9"]
-    agree = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
-                                  "sweep": {"sampling_params": {"top_p": 0.95}}})
+    agree = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
+                                              sweep={"sampling_params": {"top_p": 0.95}}))
     assert "conflict" not in agree and agree["sources"]["top_p"] == ["label", "sweep.sampling_params", "variants_table"]
-    assert "not in the manifest's `variants` table" in GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"greedy": {}}})["conflict"][0]
+    assert "not in the manifest's `variants` table" in GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"greedy": {}}))["conflict"][0]
 
     # [rev-pm BLOCKER M-0717 (i)] a per-request variant pin added AFTER the run: the header has no per-request sampling record -> FAIL named
     def pin_r1_greedy(wl):
@@ -1532,7 +1560,7 @@ def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
     assert r1["answer_events"] == 1 and r1["lag_rows"] == 2 and r1["eos_step"] == 0 and r1["eos_verified"] is False and r1["eos_passed_at_event"] == 0
     assert "eos_lag_rows_accepted" not in r1
     # the Commit's executed_prefix_of_record on the same served list: the same refusal, by name, from the same rule
-    from verity_vllm.check import executed_prefix as EP
+    from verity_vllm.commit import executed_prefix as EP
     e = EP.executed_prefix_of_record(["r1"], {"r1": [EOS, 5, EOS]}, caps={"r1": 5}, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and "served past an EOS at index 0" in e["problems"][0] and "F-r17-14" in e["problems"][0]
 
@@ -1659,9 +1687,9 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
 
     # (8) a pre-R17-1 Program (no lag declared): an EOS stop FAILS by name -- the record's attestation is NOT read as the rule (True attested,
     # the lag row present: a ruling-21 reader would have passed it); with every request at its cap the record passes, labelled exercised=false
-    from verity_vllm.pipeline import global_program as G
-    assert G.eos_lag_rows_declared({"async_scheduling": True}) == 1 and G.eos_lag_rows_declared({"async_scheduling": False}) == 0
-    assert G.eos_lag_rows_declared({}) is None and G.eos_lag_rows_declared(None) is None and G.eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
+    from verity_vllm.program.workload import eos_lag_rows_declared
+    assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
+    assert eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None and eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
     gp8, oracle8 = assemble([R0, R1_LAG], tmp_path / "undeclared", lag=None)
     assert gp8["lag"] is None and "lag" not in gp8["stop_rule"] and "async_scheduling" not in gp8["applicability"]["engine"]
     _set_async_scheduling(oracle8, True)
@@ -1809,7 +1837,7 @@ def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_
     """[CIR-87 (1)] The served engine runs every top-p split launch at S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)
     (`engine.topp_pin`); the fold carries the launch's S on every GumbelTopPTokenSelect of the step. GM-01 holds each to the registered
     S of the Program's declared num_SMs, at 8 live rows as at 4 -- and refuses vLLM's own batch-derived S (16 at 8 live on 142 SMs)."""
-    from verity_vllm.program.registry.topp_geometry import registered_splits, splits_for
+    from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for
     assert (registered_splits(142), splits_for(8, 142)) == (32, 16)
     gp = {"applicability": {"components": {"num_sms": 142}}}
     # engine step 0: 8 live requests; step 1: 4 live -- a verified EOS halved the batch; S is 32 at both
@@ -2039,7 +2067,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     """The R15 B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
-    from verity_vllm.program.registry.topp_geometry import splits_for
+    from verity.ml.definitions.registry.topp_geometry import splits_for
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
     d = json.load(open(p))
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]

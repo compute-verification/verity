@@ -20,7 +20,7 @@ import pytest
 import torch
 
 from verity.core.protocols.pouw.coins import Challenger
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart
 from verity_vllm.observe.fold.patterns.pouw import OP, PouwLinear, with_protocols
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, StepContext, resolve_step
@@ -28,7 +28,7 @@ from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.observer import Observer, Recorder
 from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.program.frontend.rules.vllm_bindings import triton_launches as TL
-from verity_vllm.protocol_options import pouw
+from verity_vllm.protocols import pouw
 from tests.program import test_pouw_lowering as LW
 
 M, K, NQ = LW.M, LW.K, LW.NQ
@@ -161,8 +161,8 @@ def test_the_capture_context_leaves_sampled_proofs_out_and_is_none_without_an_ex
 
 
 def test_the_served_y_alone_is_the_commits(linears):
-    from verity_vllm.protocol_options import pouw_circuit as PC
-    from verity_vllm.protocol_options import pouw_native as PN
+    from verity_vllm.protocols.pouw import circuit as PC
+    from verity_vllm.protocols.pouw import native as PN
     rng = np.random.default_rng(2)
     b = rng.integers(-63, 64, (48, 64)).astype(np.int8)
     t = (np.abs(rng.standard_normal(48)).astype(np.float32) * 0.01 + 1e-3).view(np.uint32)
@@ -180,7 +180,7 @@ def test_the_match_capture_installs_its_workloads_target_executors(linears, monk
     monkeypatch.setattr(pouw.verifier, "coins", random.Random(5).randbytes)
 
     from verity_vllm.pipeline import m1_capture
-    wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:vllm-v1"]}, "protocols_config": {"pouw": {}}}
+    wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:rows-sha512"]}, "protocols_config": {"pouw": {}}}
     model, args = Model(), SimpleNamespace(target=None)
     protocols, entries = m1_capture.capture_protocols(wl, args, model)
     try:

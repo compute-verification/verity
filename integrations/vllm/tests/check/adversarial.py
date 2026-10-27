@@ -38,8 +38,8 @@ import numpy as np
 
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll as _Coll, concat
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
 from verity.ml.circuits.types import Array
 
 from verity_vllm.check import operand_provenance as provenance
@@ -150,7 +150,7 @@ def layer_of(hint: str) -> int | None:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# hostile definitions (what a lane can author in ITS OWN module; NOT under verity_vllm/program/registry/quarantine)
+# hostile definitions (what a lane can author in ITS OWN module; NOT under verity_vllm/program/quarantine)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -554,7 +554,7 @@ class M1Record:
         return None
 
     def catalogue(self, layer: int = 7) -> dict[str, Mutation]:
-        from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import make_weight_field
+        from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import make_weight_field
         wf = self.profile.weight_field
         return catalogue(layer=layer, o_hint=f"model.layers.{layer}.self_attn.o_proj", big_hint="logits_processor", ln1_hint="model.layers.0.input_layernorm", alt_hint=f"model.layers.{layer}.input_layernorm",
                          silu_hint=f"model.layers.{layer}.mlp.act_fn", attn_hint=f"model.layers.{layer}.self_attn.attn",

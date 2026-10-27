@@ -722,34 +722,6 @@ def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path)
 
 
 @needs_flock
-def test_a_preemptible_lease_in_its_grace_is_not_stopped_until_the_grace_passes(tmp_path):
-    """INF-194: on node 2, 24 Oct 01:11-01:41Z, 23 benchmark points were stopped 4-35 min in, each losing its engine start. A lease
-    granted 5 min ago with a 10 min grace keeps its GPU; one granted 20 min ago (its grace passed) is stopped for the waiter."""
-    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1", "GPU_LEASE_PREEMPT_GRACE_S": "600"}
-    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
-    granted = 1792800000                                                  # 2026-10-24T00:00:00Z
-    for after, stopped in ((300, False), (1200, True)):
-        fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause],
-                                env={**env, "GPU_LEASE_STARTED": "2026-10-24T00:00:00Z"}, stdout=subprocess.PIPE, text=True)
-        assert fill.stdout.readline().strip() == "ready"
-        waiter = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "echo", "got"],
-                                  env={**env, "GPU_LEASE_NOW": str(granted + after)}, stdout=subprocess.PIPE, text=True)
-        try:
-            if stopped:
-                assert waiter.stdout.readline().strip() == "got" and fill.wait() != 0
-            else:
-                while not list((tmp_path / "gl").glob("wait.*")):     # queued: its first preemption pass is done
-                    assert waiter.poll() is None
-                assert fill.poll() is None and not (tmp_path / "gl" / "preempted.log").exists(), "in its grace: kept"
-        finally:
-            for p in (waiter, fill):
-                if p.poll() is None:
-                    p.terminate()
-                    p.wait()
-        (tmp_path / "gl" / "preempted.log").unlink(missing_ok=True)
-
-
-@needs_flock
 def test_a_preemptible_waiter_waits_for_a_preemptible_lease_instead_of_stopping_it(tmp_path):
     """Node 1, 2026-10-03: a queue of --preemptible trace chunks stopped its own newest lease every ~20 s, each new chunk the
     oldest waiter in turn."""

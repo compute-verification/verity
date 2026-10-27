@@ -10,7 +10,7 @@ global, so FA3's dense prefill and every other caller keep vLLM's arguments.  Ev
 before the model's first forward (a CUDA graph captures the call's arguments).
 Importing this module `arm`\\ s the pin: it is installed when the backend module is imported, and nothing is imported for it, so a
 process that loads this module without serving (a committer, a CPU test) imports no vLLM.  Each tensor-parallel rank imports it
-through `engine.rank_worker` when vLLM mixes the extension into its Worker; the driver (`engine.build.build_engine`) arms it
+through `pipeline.tp.rank_worker` when vLLM mixes the extension into its Worker; the driver (`engine.build.build_engine`) arms it
 before vLLM builds the model (a forked rank inherits the armed finder), and the meta inventory `install`\\ s it outright.
 `num_splits` reads the switch back from the process: `meta_inventory`'s selections, which the capture map's ``target.switches``
 holds.
@@ -20,10 +20,10 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import importlib
-import os
 import sys
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.engine import hooks
 
 ENV = "VERITY_SPARSE_MLA_NUM_SPLITS"
@@ -36,7 +36,7 @@ _PIN: hooks.Patch | None = None
 
 def wanted() -> int | None:
     """The split count `ENV` asks for: `SPLITS` for ``"1"``, None (vLLM's heuristic) when unset or ``"0"``."""
-    v = os.environ.get(ENV, "0").strip()
+    v = settings.get(ENV)
     if v not in ("0", str(SPLITS)):
         raise ValueError(f"{ENV}={v!r}: {SPLITS} pins FA3's sparse MLA to one split, 0 leaves vLLM's heuristic; nothing else is modelled")
     return None if v == "0" else SPLITS

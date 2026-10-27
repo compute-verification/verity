@@ -9,8 +9,8 @@ sides adopt it, how fast can a determined actor still advance frontier capabilit
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
 
 Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Models/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
-(`Security/Models/Nci/Guarantees/Contained.lean`).
+(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
+(`Security/Definitions/Nci/Guarantees/Contained.lean`).
 
 ## Files
 

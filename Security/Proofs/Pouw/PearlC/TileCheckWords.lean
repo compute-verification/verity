@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheck4Words
 import Proofs.Pouw.PearlC.CoreOps
-import Models.Pouw.Guarantees.PearlCTileCheck
+import Definitions.Pouw.Guarantees.PearlCTileCheck
 
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)

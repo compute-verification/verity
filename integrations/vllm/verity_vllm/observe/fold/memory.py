@@ -495,7 +495,7 @@ class MemoryModel:
         if a is None or not a.live:
             self._n_unresolved += 1
             raise Unresolved(view, element_runs(view), "unknown" if a is None else "freed")
-        fast = self._fast_read(a, view) or (self._root_map_read(a, view) if a.root_maps else None)
+        fast = self._one_interval_read(a, view) or (self._root_map_read(a, view) if a.root_maps else None)
         if fast is not None:
             self._n_fast_reads += 1
             return fast
@@ -510,7 +510,7 @@ class MemoryModel:
             raise Unresolved(view, _merge_runs(missing), "+".join(sorted(reasons)))
         return compact_refs(parts)
 
-    def _fast_read(self, a: _Alloc, view: ViewDesc) -> Refs | None:
+    def _one_interval_read(self, a: _Alloc, view: ViewDesc) -> Refs | None:
         """The read when one `Affine` interval covers the whole byte extent of `view` (else None)."""
         lo_b, hi_b = byte_extent(view)
         i = bisect_right(a.starts, lo_b) - 1

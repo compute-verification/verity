@@ -26,14 +26,14 @@ import pytest
 
 from verity_vllm.check.replay import vu_query as vq
 from verity_vllm.observe.fold.fold import FoldResult
-from verity_vllm.program.replay import replayer
+from verity.ml.definitions.replay import replayer
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, array_of, strided_view
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.prims import BF16, I32
-from verity_vllm.program.registry.quarantine.ov_moe.moe import MoeExpertGemm
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry.prims import BF16, I32
+from verity_vllm.program.quarantine.ov_moe.moe import MoeExpertGemm
 from verity.ml.circuits.types import Array
 
 M, S, E, K, N = 4, 2, 4, 16, 8

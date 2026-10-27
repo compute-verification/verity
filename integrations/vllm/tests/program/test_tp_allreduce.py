@@ -22,10 +22,10 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_tp_allreduce as BA
-from verity_vllm.program.registry import tp_allreduce as TA
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_tp_allreduce as BA
+from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 H = 6144
 #: signed zeros, the smallest and largest subnormals, the smallest normals, +-1, the finite maxima, infinities, NaNs

@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import uuid
 from importlib import resources
@@ -44,6 +43,7 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
                                 rows_of_record)
 from verity_vllm.engine import served
@@ -269,7 +269,7 @@ class Tok:
 
 
 def hf_home() -> Path:
-    env = os.environ.get("HF_HOME")
+    env = settings.HF_HOME
     if env:
         return Path(env)
     try:
@@ -393,13 +393,10 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
 def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
     if explicit:
         return explicit
-    try:                                    # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
-        from verity_vllm.engine.engine_profile import CASES
-        for k, v in CASES.items():
-            if v.get("repo") == hf_repo:
-                return k
-    except Exception:  # noqa: BLE001
-        pass
+    from verity_vllm.engine.profiles.cases import CASES
+    for k, v in CASES.items():              # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
+        if v.get("repo") == hf_repo:
+            return k
     try:
         doc = json.loads(CHECKPOINTS.read_text())
     except (OSError, ValueError):

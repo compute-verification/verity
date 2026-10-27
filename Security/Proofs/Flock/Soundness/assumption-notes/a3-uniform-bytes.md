@@ -60,7 +60,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   repeated state is total: two sessions under one pad reveal the XOR of their values.
   - A hardware RNG doesn't close it. From 5.18 the kernel mixes RDSEED in only when it reseeds (`extract_entropy`),
     about once a minute, and a read is the per-CPU key's ChaCha20 stream (`crng_make_state`).
-  - Our Nebius VMs (Linux 6.11 under KVM) expose no VM generation counter: there is no ACPI device for it, and
+  - Our VMs (Linux 6.11 under KVM) expose no VM generation counter: there is no ACPI device for it, and
     `vmgenid`, built as a module, isn't loaded (art:c30daddf7c7fc9e555c7bdb379e65a288388e8234e1f3d46b5479967cf5ddee0).
     There, restoring a VM's memory more than once is outside A3. A boot from a disk image is a fresh kernel, seeded
     anew.

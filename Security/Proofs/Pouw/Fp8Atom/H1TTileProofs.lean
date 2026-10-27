@@ -1,5 +1,5 @@
 import Proofs.Pouw.Fp8Atom.H1TRunningProofs
-import Models.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
+import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
 
 /-!
 # `TTH1T`'s two form checks

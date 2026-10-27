@@ -298,7 +298,7 @@ class ChallengerState:
     file holds is refused, so no two windows over the store share a key.  Before each record the file must be as this
     object left it.  Nothing here rewrites or truncates the file.  A state restored from a snapshot, or copied to another
     directory or host, is past what the directory can see; that the verifier keeps one state directory and never rolls
-    back or forks a state rests on its host (`trusted-nebius-host`), and neither repeats a key while the nonces are
+    back or forks a state rests on its host (`trusted-host`), and neither repeats a key while the nonces are
     fresh (PROTOCOL.md §3)."""
 
     def __init__(self, directory: str | os.PathLike, vk: VerifierKey, *,

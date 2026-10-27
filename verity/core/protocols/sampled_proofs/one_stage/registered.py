@@ -75,6 +75,7 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEM
 from verity.ml.circuits.codec import canonical_json, jcs_domain_error
 from verity.ml.circuits.partition_object import TemplatePartition
 from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import runs as ref_runs
 from verity.ml.circuits.types import Array
 
 from . import partition as P
@@ -206,14 +207,19 @@ def width(program: Program, value: str) -> int:
 
 
 def parameter_gates(program: Program, value: str) -> range:
-    """The root parameter `value`'s Input gates, which are one contiguous interval."""
+    """The root parameter `value`'s Input gates, which are one contiguous interval. Read run by run, never gate by gate: a
+    weight tensor's parameter is ~1e9 gates."""
     names = [name for name, _ in program.fn.signature()[0]]
     if value not in names:
         raise ValueError(f"{value!r} is not a parameter of the program ({names})")
-    gates = [ref[2] for ref in program.input_coll(names.index(value)).refs]
-    if not gates or gates != list(range(gates[0], gates[0] + len(gates))):
+    first = end = None
+    for _space, _idx, lo, hi in ref_runs(program.input_coll(names.index(value)).refs):
+        if end is not None and lo != end:
+            raise ValueError(f"parameter {value!r}: its gates are not one interval")
+        first, end = lo if first is None else first, hi
+    if first is None:
         raise ValueError(f"parameter {value!r}: its gates are not one interval")
-    return range(gates[0], gates[0] + len(gates))
+    return range(first, end)
 
 
 def row_leaves(program: Program, value: str, words: int, schema: str = SCHEMA) -> int:
@@ -369,12 +375,16 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     tp = P.evaluate(program, query)
     if not isinstance(tp, TemplatePartition):
         raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
-    owner: dict[int, tuple[str, int]] = {}
     per_row = {v: row_leaves(program, v, w, (schemas or {}).get(v, SCHEMA)) for v, w in values.items()}
+    spans = []
     for v, w in values.items():
         shape(program, v, w, (schemas or {}).get(v, SCHEMA))
-        for k, gate in enumerate(parameter_gates(program, v)):
-            owner[gate] = (v, k)
+        spans.append((parameter_gates(program, v), v))
+
+    def owner(gate: int) -> tuple[str, int] | None:
+        """The registered value whose leaf `gate` is, and which leaf: parameters' gates are disjoint intervals."""
+        return next(((v, gate - r.start) for r, v in spans if gate in r), None)
+
     template = {k: tid for k, tid, _a, _n in tp.ranges}
     nodes = program.root.body.nodes
     out: dict[str, dict[str, Any]] = {}
@@ -385,7 +395,7 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
         gates, at = tp.inputs(u), 0
         for name, t in nodes[k].fn.signature()[0]:
             s, at = gates[at:at + t.leaves], at + t.leaves
-            hits = [owner.get(g) for g in s]
+            hits = [owner(g) for g in s]
             value, rows = None, {}
             if any(hits):
                 value = hits[0][0] if hits[0] is not None else None

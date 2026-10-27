@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.TS.SharedNoise
+import Definitions.Accounting.Guarantees.TS.SharedNoise
 import Proofs.Accounting.TS.Grind
 
 /-!

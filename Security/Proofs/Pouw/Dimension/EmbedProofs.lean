@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Dimension.Embed
+import Definitions.Pouw.Assumptions.Dimension.Embed
 import Proofs.Pouw.Dimension.OpenPipeProofs
 
 /-!

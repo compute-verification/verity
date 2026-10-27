@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Pinned
+import Definitions.Pouw.Assumptions.Pinned
 import Proofs.Pouw.Prob
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Ring

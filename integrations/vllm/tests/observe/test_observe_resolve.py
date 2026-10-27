@@ -1,4 +1,4 @@
-"""v2 Phase 4b: the value-observation contract (`verity_vllm.observe.contract`) and occurrence resolution (`verity_vllm.correspondence.resolve`) over a
+"""v2 Phase 4b: the value-observation contract (`verity_vllm.observe.contract`) and occurrence resolution (`verity_vllm.check.match.resolve`) over a
 SYNTHETIC record -- pure python, no torch, no GPU.
 
 The record is a two-request batched fold in today's on-disk shape (instances.jsonl v1 rows + capture/log.jsonl.gz RunHeader/StepStart):
@@ -14,7 +14,7 @@ import json
 import pytest
 
 from verity_vllm.observe import contract as OB
-from verity_vllm.correspondence import resolve as RS
+from verity_vllm.check.match import resolve as RS
 from verity_vllm.check.match import batch_decomp as BD
 
 A, B = "req-A", "req-B"
@@ -139,6 +139,15 @@ def test_progression_form_operand_refs_expand_to_distinct_node_ids():
     ob = OB.adapt_row(o, hdr)
     assert ob.reads == (10, 12, 14) and ob.param_reads == (2,)
     assert ob.occurrence.site == "model.layers.0.self_attn.attn"
+
+
+@pytest.mark.parametrize("params,tp,want", [('[["a", "bf16"], ["b", "f32"]]', '{"world": 2}', (["a", "b"], {"world": 2})),
+                                            ('[["a", "bf16"], ["b"]]', '{"world": }', ([], None))])
+def test_a_large_program_json_is_scanned_and_a_cut_window_is_stated_unknown(tmp_path, monkeypatch, params, tp, want):
+    p = tmp_path / "program.json"
+    p.write_text(f'{{"n_input_nodes": 3, "params": {params}, "tp": {tp}, "program": {{}}}}')
+    monkeypatch.setattr(OB.os.path, "getsize", lambda path: 1 << 30)
+    assert OB._program_json_layout(str(p), None) == (3, *want, None)
 
 
 # ------------------------------------------------------------------------------------------------------------------ resolve: the record

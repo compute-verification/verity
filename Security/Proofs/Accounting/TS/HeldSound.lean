@@ -99,9 +99,9 @@ end Accounting.TS.Held
 
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Held in
 theorem Accounting.SecurityProofs.TS.HeldSessionSound : Accounting.Guarantees.TS.HeldSessionSound := by
-  intro ι Ω _ S nπ sess out ok known Cd cls unitOf dec right δ hCR hLaw hk hN hS hok hKn hR hδ hδ0
+  intro ι Ω _ S nπ sess out ok known Cd cls unitOf dec right δ hCR hLaw hk hS hok hKn hR hδ hδ0
   refine ⟨fun _ _ _ h => h.1, fun w i => ?_⟩
-  have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hLaw hk hN hS hok hδ
+  have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hLaw hk hS hok hδ
     hδ0).2.2.2
   have hsub : ∀ x, (heldLayer sess out ok known Cd cls unitOf dec right).Unsound x w i →
       (checkedLayer sess out ok right).Unsound x w i := by

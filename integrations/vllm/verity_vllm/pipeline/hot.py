@@ -48,6 +48,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/hot-commit/v1"
@@ -59,8 +60,8 @@ ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CU
 ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
 WORKLOAD_ENGINE_KEYS = ("case", "model", "engine", "execution")
 RC_HOT_INFRA = 70          # the worker died / refused before running the job (client falls back to cold)
-RELEASING_MARKER = Path(os.environ.get("HOT_RELEASING_MARKER", "/workspace/cp/RELEASING"))     # pod_release.sh holds it while it ships
-RELEASING_STALE_S = float(os.environ.get("RELEASING_STALE_S", "900"))    # pod_release.sh refreshes the marker per step; older = that ship died
+RELEASING_MARKER = Path(settings.HOT_RELEASING_MARKER)     # pod_release.sh holds it while it ships
+RELEASING_STALE_S = settings.RELEASING_STALE_S    # pod_release.sh refreshes the marker per step; older = that ship died
 
 
 def releasing_live() -> bool:
@@ -70,7 +71,7 @@ def releasing_live() -> bool:
         return time.time() - RELEASING_MARKER.stat().st_mtime < RELEASING_STALE_S
     except OSError:
         return False
-RELEASE_JSON = Path(os.environ.get("HOT_RELEASE_JSON", "/workspace/cp/RELEASE.json"))
+RELEASE_JSON = Path(settings.HOT_RELEASE_JSON)
 
 
 def release_json_sig() -> str | None:
@@ -133,7 +134,7 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
     hs = _argval(argv, "--hidden-so")
     if hs:
         paths.append(hs)
-    ncb = os.environ.get("NATIVE_COLLECT_BUILD")
+    ncb = settings.NATIVE_COLLECT_BUILD
     if ncb:
         # [R17 rel M-0803] NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
         # name that one when the digest is computable here, else every .so one level down (plus the flat legacy location)
@@ -145,7 +146,7 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
         except Exception:  # noqa: BLE001 -- no torch / no sources here: fall back to the directory listing
             keyed = []
         paths += keyed or sorted(glob.glob(os.path.join(ncb, "*.so")) + glob.glob(os.path.join(ncb, "*", "*.so")))
-    hgb = os.environ.get("HIDDEN_GPU_BUILD")
+    hgb = settings.HIDDEN_GPU_BUILD
     # the .so lives one level down, in the source-keyed child (native_jit.jit_load); the flat legacy location is listed too
     cands = sorted(glob.glob(os.path.join(hgb, "*.so")) + glob.glob(os.path.join(hgb, "*", "*.so"))) if hgb else sorted(
         glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so"))
@@ -158,7 +159,7 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
 
 
 def env_identity() -> dict[str, str]:
-    return {k: v for k, v in sorted(os.environ.items()) if k.startswith(ENV_PREFIXES) and k not in ENV_PER_JOB}
+    return settings.redact({k: v for k, v in sorted(settings.environ().items()) if k.startswith(ENV_PREFIXES) and k not in ENV_PER_JOB})
 
 
 def engine_identity(argv: list[str]) -> dict[str, Any]:
@@ -176,7 +177,7 @@ def engine_identity(argv: list[str]) -> dict[str, Any]:
 def unsafe_hints(argv: list[str], env: dict[str, str] | None = None) -> list[str]:
     """argv/env-level mirror of commit_delta.hot_unsafe_reasons (which needs the parsed args and torch): the flags that make a job cold.
     The worker's check stays authoritative (a miss here only costs a refused job + cold fallback); a hit here saves starting a worker."""
-    env = os.environ if env is None else env
+    env = settings.environ() if env is None else env
     why = []
     ct = _argval(argv, "--compiled-taps", "off")
     if ct != "off":
@@ -326,13 +327,14 @@ def submit(argv: list[str], *, root: Path, idle_s: float, timeout_s: float | Non
         with open(wdir / "worker.log", "a") as wl:
             wl.write(f"$ {shlex.join(cmd)}  (cwd {os.getcwd()}, by pid {os.getpid()})\n")
             wl.flush()
-            p = subprocess.Popen(cmd, stdout=wl, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=os.getcwd(), env={k: v for k, v in os.environ.items() if k not in ENV_PER_JOB},
+            p = subprocess.Popen(cmd, stdout=wl, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=os.getcwd(), env={k: v for k, v in settings.environ().items() if k not in ENV_PER_JOB},
                                  start_new_session=True)
         log(f"[hot] worker started pid {p.pid}: {reason}")
         tl.event("hot.worker_start", "mark", pid=p.pid, restart_reason=reason)
     job_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}"
+    env = settings.environ()
     job = {"schema": SCHEMA, "id": job_id, "argv": list(argv), "cwd": os.getcwd(), "key": key, "submitted": time.time(),
-           "env": {k: os.environ[k] for k in ENV_PER_JOB if k in os.environ}, "log": str(wdir / f"{job_id}.log")}
+           "env": {k: env[k] for k in ENV_PER_JOB if k in env}, "log": str(wdir / f"{job_id}.log")}
     tmp = wdir / "queue" / f"{job_id}.json.tmp"
     tmp.write_text(json.dumps(job, indent=1) + "\n")
     tmp.rename(wdir / "queue" / f"{job_id}.json")
@@ -392,7 +394,7 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
     tl.event("hot.fallback_cold", "mark", restart_reason=reason)
     log(f"[hot] COLD fallback: fresh commit_delta process ({reason})", flush=True)
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", *argv]
-    env = dict(os.environ, VERITY_HOT_RESTART_REASON=reason)
+    env = dict(settings.environ(), VERITY_HOT_RESTART_REASON=reason)
     env.pop("VERITY_HOT_SUBMIT", None)          # the cold process must not route back through the worker (commit_delta.__main__ hook)
     sys.stdout.flush()
     return subprocess.call(cmd, env=env)
@@ -446,7 +448,7 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
     with contextlib.suppress(OSError):
         (wdir / "exited.json").unlink()
     key_doc = _read_json(wdir / "KEY.json") or {}
-    env0 = {k: v for k, v in os.environ.items() if k not in ENV_PER_JOB}     # per-job keys come from each job, never from the spawning client
+    env0 = {k: v for k, v in settings.environ().items() if k not in ENV_PER_JOB}     # per-job keys come from each job, never from the spawning client
     cwd0 = os.getcwd()
     wlog = open(wdir / "worker.log", "a", buffering=1)
 
@@ -481,8 +483,8 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
     write_state(jobs=0, reuses=0)
     log(f"serving {wdir} (key {str(key_doc.get('key'))[:16]}, reason: {reason}); importing commit_delta")
     t_imp = time.time()
-    import torch  # noqa: E402
-    from verity_vllm.pipeline import cli, commit as cd  # noqa: E402
+    import torch
+    from verity_vllm.pipeline import cli, commit as cd
 
     cd._HOT = {"jobs": 0, "restart_reason": reason}
     rel_sig0 = release_json_sig()

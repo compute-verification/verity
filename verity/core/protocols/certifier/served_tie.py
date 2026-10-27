@@ -482,6 +482,24 @@ def evaluate(st: dict, cases: Sequence[Case]) -> list[int]:
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
 
 
+def _build_route(C, S, xs: list, sw: list) -> list:
+    """`IoTieRoute{W, D}` on C's wires as C-Flock lowers it, each `IoTieSwitch` activation by its builder, the switch bits
+    in `IT.benes`' order: the input column, the upper half's, the lower half's, the output column."""
+    it = iter(sw)
+
+    def column(pairs: list) -> list:
+        return [IT.IoTieSwitch.build(C, S, a, b, [next(it)]) for a, b in pairs]
+
+    def run(v: list) -> list:
+        if len(v) == 2:
+            return column([(v[0], v[1])])[0]
+        first = column(list(zip(v[0::2], v[1::2])))
+        up, down = run([a for a, _ in first]), run([b for _, b in first])
+        return [w for p in column(list(zip(up, down))) for w in p]
+
+    return run(xs)
+
+
 def _count(build, params) -> int:
     C = Circuit(cse=True)
     ins = [C.input(f"p{i}", w) for i, t in enumerate(params) for w in BL.elements(t)]
@@ -498,7 +516,7 @@ def _step_ands(key: tuple) -> int:
     Z = _step_widths(S)
 
     def route(C, *e):
-        return IT._build_route(C, SimpleNamespace(W=Z.V, D=Z.D), *e[:S.R], *[[ZERO] * Z.V] * (Z.M - S.R), e[-1])
+        return _build_route(C, SimpleNamespace(W=Z.V), [*e[:S.R], *[[ZERO] * Z.V] * (Z.M - S.R)], e[-1])
 
     return (_count(lambda C, *e: _build_slots(C, S, *e), [t for _n, t in _sig_slots(S)[0]])
             + _count(route, [Array(Z.V, BIT)] * S.R + [Array(Z.SW, BIT)])

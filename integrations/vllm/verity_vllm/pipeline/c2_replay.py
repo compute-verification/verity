@@ -7,7 +7,7 @@ checkpoint opened against the committed weights root), the weights check and the
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered
-relation (verity_vllm.program.kernels.derived_rows), compare with the COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered
+relation (verity.ml.definitions.numerics.derived_rows), compare with the COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered
 boundary linkage (declared prompt -> input ids; sampled id[s-1] -> input id[s]) over every (engine step, request).  Needs no Match record.
 """
 from __future__ import annotations
@@ -306,11 +306,11 @@ def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str,
 
 
 def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -> tuple[dict[str, Any], Any]:
-    """ONE mechanism for the not-executed class (`check.executed_prefix`): sampled_replay's
+    """ONE mechanism for the not-executed class (`commit.executed_prefix`): sampled_replay's
     `population.not_executed_by_rule`, fed with named record facts (`EPX.executed_prefix_facts`) -- never literals.  On a tree without
     reqval's kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
     evaluated' -> partial, never PASS.  An older signature receives only the arithmetic's facts."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
     _sr_kw: dict[str, Any] = {}
@@ -354,7 +354,7 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
 def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
@@ -453,7 +453,7 @@ def reconcile(s: Site, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr_kw: dict
     """ONE mechanism, reconciled on the record: the Commit's classification of the manifest identities
     (binding coverage) and the population's third bucket must name the same identities -- n_exec per request, count per row family; a
     batch-level / named-input family is outside the population split's reach and is named, not equal."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
 
     row, pair = s.row, s.pair
     if getattr(s.com, "_padding", None):
@@ -532,7 +532,7 @@ def record(s: Site, sr: dict, lk: dict, _art: Path) -> None:
                                     "strata_unevaluated": sr.get("strata_unevaluated"), "seed": _smp.get("seed"), "seed_source": _smp.get("seed_source"),
                                     "unreplayable": sr.get("unreplayable"), "weights": sr.get("weights"), "programs": sr.get("programs"),
                                     "evaluators": sr.get("evaluators"), "artifact": str(_art),
-                                    "reference": "registered relation evaluators (verity_vllm.program.kernels.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
+                                    "reference": "registered relation evaluators (verity.ml.definitions.numerics.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
     components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
                                       "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
                                       "prescribed": lk.get("prescribed"),      # [R16 pin, ruling 36] seed / splits linkage record

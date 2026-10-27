@@ -5,12 +5,12 @@ the bench row's manifest of record."""
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm.check.commit_rules import HIDDEN_CLASS_BY_FA, hidden_classes_required, required_classes_default
 
@@ -50,7 +50,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
         # refused here, before any run (F-hw-08: the FA2 tap under FA3 never fires).
         src_cls = getattr(com, "hidden_source_cls", None)                # R11: native_collect_v2 supplies its C++ FA2 glue
         if args.tap_cap_mb is not None:
-            os.environ["VERITY_FA2_TAP_CAP_MB"] = str(int(args.tap_cap_mb))   # [R18 tap] read by NativeHiddenM1Source at construction
+            settings.put("VERITY_FA2_TAP_CAP_MB", str(int(args.tap_cap_mb)))   # [R18 tap] read by NativeHiddenM1Source at construction
         com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
                                              fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
         print(f"[delta] hidden source attached: {args.hidden_so} -> committer {com.name} ({type(com.sources[-1]).__name__ if getattr(com, 'sources', None) else '?'}, engine FA{fa_version})", flush=True)

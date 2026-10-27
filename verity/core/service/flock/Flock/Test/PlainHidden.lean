@@ -11,7 +11,7 @@ namespace Flock.Test.PlainHidden
 def subsetDraw : Draw.UnitDraw := { law := .subset 2, population := 8, units := #[1, 6] }
 
 def lawWhy (zk : Bool) (tags : Tags) : String :=
-  match ProvedScope.drawLaw zk tags (some subsetDraw.toJson) with
+  match ProvedScope.drawLaw zk tags false (some subsetDraw.toJson) with
   | .error e => e
   | .ok () => ""
 

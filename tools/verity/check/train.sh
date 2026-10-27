@@ -85,7 +85,12 @@ sha=$(git -C "$root" rev-parse --verify "$commit^{commit}" 2>>"$why") || die "$c
 # one fetch and worktree at a time per checkout: two launches racing on the fetch both failed (22:51Z, 9 Oct)
 exec 9> "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train.lock"
 flock 9
-git -C "$root" fetch -q origin 2>>"$why" || die "git fetch origin failed"
+# a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
+for backoff in 5 15 ''; do
+  git -C "$root" fetch -q origin 2>>"$why" && break
+  [ -n "$backoff" ] || die "git fetch origin failed"
+  sleep "$backoff"
+done
 [ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
   || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
 if [ -n "$against" ]; then

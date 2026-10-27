@@ -19,10 +19,10 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.registry import mla as M
-from verity_vllm.program.registry import mla_capture as MC
-from verity_vllm.program.registry import mla_check as MK
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.registry import mla as M
+from verity_vllm.program import mla_capture as MC
+from verity.ml.definitions.registry import mla_check as MK
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16

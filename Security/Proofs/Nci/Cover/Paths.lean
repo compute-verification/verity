@@ -1,4 +1,4 @@
-import Models.Nci.Assumptions.Cover
+import Definitions.Nci.Assumptions.Cover
 
 /-!
 # The cover theorem: paths into a block

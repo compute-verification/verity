@@ -14,12 +14,12 @@ from verity.ml.circuits.codec import decode_program, encode_program
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import topp_split as TS
-from verity_vllm.program.registry import topp_keep_builder as TKB
-from verity_vllm.program.registry import topp_word_gates as TWGates
-from verity_vllm.program.registry import topp_words as TWG
-from verity_vllm.program.registry.prims import BIT, F32
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import topp_split as TS
+from verity.ml.definitions.registry import topp_keep_builder as TKB
+from verity.ml.definitions.registry import topp_word_gates as TWGates
+from verity.ml.definitions.registry import topp_words as TWG
+from verity.ml.definitions.registry.prims import BIT, F32
 
 f32 = np.float32
 #: #169's constructed rows (`test_topp_split_halves`): ordinary logits at V = 3000, S = 16, p = 0.5, the step kernels' partials
@@ -115,7 +115,7 @@ def test_the_codec_round_trips_it(fam, V, S):
 
 @pytest.mark.slow
 def test_q_word_cuts_it_into_word_units():
-    from verity_vllm.query import word as WQ
+    from verity.ml.definitions import word as WQ
 
     r = WQ.unit_rule(bind(TWG.TopPKeepWord, V=300, S=8), 16, 32)
     assert not r["violations"] and r["max_out_bits"] <= 32 and r["units_per_call"] > 1000

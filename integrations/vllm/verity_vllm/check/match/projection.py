@@ -17,7 +17,7 @@ class Projection(PX.CachedKv, C.Prog):
     of its cached prefix: `prefix_reads.CachedKv`)."""
 
     def __init__(self, oracle: C.Prog, label: str, inst_idx: list[int], tok_node: int, weights_node: "int | set[int] | frozenset[int]",
-                 seed_node: int | None = None, peer_node: int | None = None):  # noqa: D107
+                 seed_node: int | None = None, peer_node: int | None = None):
         # no super().__init__: reuse the decoded oracle, never decode twice
         self.label = label
         self._fold = oracle
@@ -96,7 +96,7 @@ class Projection(PX.CachedKv, C.Prog):
         return super()._src(run, unfold)
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """[R17 mfast] `_src` for one run progression `(space, (idx0, lo0, hi0), (dI, dL, dH), count)` (compare.Prog._srcP): the request's
+        """`_src` for one run progression `(space, (idx0, lo0, hi0), (dI, dL, dH), count)` (compare.Prog._srcP): the request's
         own inputs by kind, another request's reads as XREQ counted per RUN, everything else the oracle Prog's mapping.  Uniform only
         when every run of the progression is provably of one kind (one node, or a node range wholly outside this request's instances
         and the inputs); otherwise the record's mapping run by run."""

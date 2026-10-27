@@ -1,4 +1,4 @@
-import Models.Pous.Guarantees
+import Definitions.Pous.Guarantees
 
 /-!
 # PoUS's lemmas, stated
@@ -8,7 +8,7 @@ pebbling and number theory, numeric certificates, the continuous audit's complet
 refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation, and Track A's `M1Meets`, a `Meets` in model M1 that
 is no claim about PoUS's scheme. Each is proved as `Pous.SecurityProofs.X` (`Security/Proofs/Pous.lean`) except
 `A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`, which are open, and `InvExPostFactoTwoLayer`, which is false.
-They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Models/Pous/Guarantees.lean`.
+They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Definitions/Pous/Guarantees.lean`.
 "Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
 
 This module states and proves nothing else, and imports no proof: `grade.sh` grades `KFloor` and `Theorem1ii` (its
@@ -489,7 +489,7 @@ rules: it reveals the next index only after the last round closed, rejects an an
 every answer past `Δ` as a miss, with every rejected or wrong one. `PerAnswer` takes no hypothesis about them, and
 holds at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
 (`Security/Definitions/Pous/Model/Continuous.lean`); `ContinuousAudit`, the frozen statement it gives, is in
-`Security/Models/Pous/Guarantees.lean`.
+`Security/Definitions/Pous/Guarantees.lean`.
 -/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
@@ -611,7 +611,7 @@ def ContinuousTimeAverage : Prop :=
 /-! ## Proved results cited outside the package
 
 The types of seven theorems that the protocol's documents and code cite, written out so that each citation names a
-statement (three more, about schemes, are frozen in `Security/Models/Pous/Guarantees.lean`). Each is proved in
+statement (three more, about schemes, are frozen in `Security/Definitions/Pous/Guarantees.lean`). Each is proved in
 `Pous.SecurityProofs` under its own name, from the theorem its docstring names. -/
 
 open DRG Labelling in
@@ -686,7 +686,7 @@ open ColumnGame in
 def BandTwoWay220_16 : Prop :=
   ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
 
-/-! ## Secure erasure (`Security/Models/Pous/Guarantees/SecureErasure.lean`'s game) -/
+/-! ## Secure erasure (`Security/Definitions/Pous/Guarantees/SecureErasure.lean`'s game) -/
 
 open Pous.Digest in
 /-- **The digest is almost universal.** Two different lists of `R` blocks of `W` words over a finite field `F` have the

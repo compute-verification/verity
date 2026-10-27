@@ -7,7 +7,7 @@ it established and what it found -- ONE document (`<row>/verdict.json`) beside t
 WHY.  The v1 Commit records its decision three times over: `commit/verdict.json` (`commit_pass`, one `first_fail_reason` string: the FIRST
 rule that failed, the others silent), `commit/runs.jsonl` (per instrumented run, every rule's own block under `commit.*`, the check
 names being the field names they grew under -- `weights_pin`, `linkage`, `coverage`, `identity_check`) and `commit_summary.json`, whose
-`pass` degenerated to `rc == 0 and tokens_equal` once `openings` / `coverage` stopped being carried on runs.jsonl (F-r19-int-21).  The
+`pass` degenerated to `rc == 0 and tokens_equal` once `openings` / `coverage` stopped being carried on runs.jsonl.  The
 verdict of record was `commit/verdict.json` + `commit/sampled_replay_p*.json`, read together by whoever knew to.
 
 WHAT.  A `Verdict` = the seven named checks (groups) and the R*/X* rules under them, each a `CheckResult`:
@@ -46,7 +46,7 @@ import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import commit_rules as CR
@@ -54,6 +54,9 @@ from verity_vllm.check.commit_rules import _d, _int
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, OUTCOMES, PASS, CheckResult, worst
 from verity_vllm.check.verdict_names import GROUPS
 from verity_vllm.properties.record import citations
+from verity_vllm.records.build_summary import BuildSummary
+from verity_vllm.records.commit_run import CommitRun
+from verity_vllm.records.fields import RecordError
 # Imported from here by modules open PRs edit (pipeline/commit.py, cpu_replay.py, replay_bundle.py, tp/commit.py and three tests); they
 # move to commit_pass after those land.
 from verity_vllm.check.commit_pass import _after_release_verdict, _c1_verdict, commit_verdict  # noqa: F401
@@ -237,15 +240,14 @@ def group_checks(rules: list[CheckResult]) -> list[CheckResult]:
 CORRESPONDENCE_WRAPPER = "step"
 
 
-def correspondence_of_build(build_summary: dict | None, *, result_jsons: Mapping[str, dict] | None = None) -> tuple[str | None, str, dict[str, str]]:
-    """(correspondence_digest, source, {wrapper: digest}) from the Build's own record: `build_summary.json` (row_pod.sh's build.summary
-    lifts `result.json:program.correspondence_digest` per wrapper), else the wrappers' `result.json` directly.  A Build made with the
-    v1 frontend records none -> (None, "absent", {}): never a stand-in hash (the row's global_match.json digest is an INPUT, `inputs`)."""
-    digests: dict[str, str] = {}
+def correspondence_of_build(build_summary: BuildSummary | Mapping[str, Any] | None, *, result_jsons: Mapping[str, dict] | None = None
+                            ) -> tuple[str | None, str, dict[str, str]]:
+    """(correspondence_digest, source, {wrapper: digest}) from the Build's own record: `build_summary.json` (`records.build_summary`;
+    its writer lifts `result.json:program.correspondence_digest` per wrapper), else the wrappers' `result.json` directly.  A Build made
+    with the v1 frontend records none -> (None, "absent", {}): never a stand-in hash (the row's global_match.json digest is an INPUT,
+    `inputs`)."""
+    digests = {} if build_summary is None else BuildSummary.of(build_summary, "build_summary.json").correspondence_digests()
     source = "absent"
-    for w, v in (build_summary or {}).items():
-        if isinstance(v, dict) and v.get("correspondence_digest"):
-            digests[w] = str(v["correspondence_digest"])
     if digests:
         source = "build_summary.json"
     else:
@@ -270,16 +272,13 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     runs' own collector record (runs.jsonl commit.binding.collector: variant, retention, window_mb, window_slots, arena_mb, layout, gpu_tree),
     `collector_variant` / `retention` ('windowed' iff window_mb > 0 else 'whole-block'; retention from the record, else --retain in cmd),
     `engine_settings` = --engine-arg k=v pairs + --max-num-seqs / --openings / --pairs / --open-after-release / --required-manifest /
-    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  [P5] this is what `commit_summary.json` used to carry (F-r19-int-21: that file is no longer
+    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  [P5] this is what `commit_summary.json` used to carry (that file is no longer
     written; the harness keeps a reader for old records); verdict.json `execution` is the record."""
     d = Path(row_dir)
     out: dict = {}
     s = json.load(open(d / "commit" / "summary.json")) if (d / "commit" / "summary.json").is_file() else {}
-    runs: list[dict] = []
-    if (d / "commit" / "runs.jsonl").is_file():
-        with open(d / "commit" / "runs.jsonl") as f:
-            runs = [json.loads(ln) for ln in f if ln.strip()]
-    trt = [r for r in runs if not (r.get("arm") == "control" or r.get("committer") in (None, "control"))]
+    runs = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
+    trt = [r for r in runs if not (r.arm == "control" or r.committer in (None, "control"))]
     cmd = None
     if (d / "commit.log").is_file():
         first = open(d / "commit.log", encoding="utf-8", errors="replace").readline().strip()
@@ -287,12 +286,7 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
             cmd = first[2:]
     out["cmd"] = cmd
     out["committer"] = s.get("committer")
-    coll = None
-    for r in trt:
-        b = (r.get("commit") or {}).get("binding") if isinstance(r.get("commit"), dict) else None
-        if isinstance(b, dict) and isinstance(b.get("collector"), dict):
-            coll = b["collector"]
-            break
+    coll = next((r.commit.collector for r in trt if r.commit is not None and r.commit.collector is not None), None)
     out["collector"] = coll
     if coll is not None:
         out["collector_variant"] = "windowed" if int(coll.get("window_mb") or 0) > 0 else "whole-block"
@@ -309,14 +303,13 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
         for k, v in re.findall(r"--engine-arg\s+([A-Za-z_]+)=([^\s]+)", cmd):
             try:
                 es[k] = json.loads(v)
-            except Exception:  # noqa: BLE001
+            except ValueError:
                 es[k] = v
         for flag, key in (("--max-num-seqs", "max_num_seqs"), ("--openings", "openings"), ("--pairs", "pairs")):
             m = re.search(flag + r"\s+(\d+)", cmd)
             if m:
                 es[key] = int(m.group(1))
-        es["open_after_release"] = "--open-after-release" in cmd or any(
-            isinstance(r.get("commit"), dict) and r["commit"].get("openings_after_release") is not None for r in trt)
+        es["open_after_release"] = "--open-after-release" in cmd or any(r.commit is not None and r.commit.openings_after_release is not None for r in trt)
         es["required_manifest"] = bool(re.search(r"--required-manifest\s+\S+", cmd))
         m = re.search(r"--expect-root\s+([0-9a-f]{64})", cmd)
         if m:
@@ -325,10 +318,11 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     return out
 
 
-def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = None, manifest_verify: dict | None = None, file_digests: dict[str, str] | None = None,
-          row: str | None = None, min_openings: int | None = None, declaration: dict | None = None, rc: int | None = None,
-          build_summary: dict | None = None, build_results: Mapping[str, dict] | None = None, execution: dict | None = None) -> Verdict:
-    """The Verdict from the Commit's own documents: `rows` = runs.jsonl entries (control + instrumented), `verdict_doc` = commit/verdict.json,
+def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | None, *, summary: dict | None = None, manifest_verify: dict | None = None,
+          file_digests: dict[str, str] | None = None, row: str | None = None, min_openings: int | None = None, declaration: dict | None = None,
+          rc: int | None = None, build_summary: BuildSummary | None = None, build_results: Mapping[str, dict] | None = None, execution: dict | None = None) -> Verdict:
+    """The Verdict from the Commit's own documents: `rows` = runs.jsonl entries (control + instrumented; `records.commit_run`, a parsed
+    line is read as one), `verdict_doc` = commit/verdict.json,
     `manifest_verify` = commit/manifest_verify.json, `execution` = `execution_of_record(row_dir)` (the Commit's own configuration record);
     `summary` = a pre-P5 record's commit_summary.json (old rows only: its execution fields stand in for `execution`, its `rc` for a missing `rc`).
     `declaration` defaults to the run's own `commit.classes`.  `build_summary` (build_summary.json) / `build_results` ({wrapper: result.json})
@@ -344,9 +338,10 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
     program_digest = rm.get("program_digest")
     manifest_digest = rm.get("manifest_digest")
     query_id = _d(rm.get("query")).get("query_id")
-    treatment = [r for r in rows if r.get("arm") != "control" and r.get("committer") not in (None, "control") and isinstance(r.get("commit"), dict)]
+    runs = [CommitRun.of(r, f"runs.jsonl[{i}]") for i, r in enumerate(rows)]
+    treatment = [r for r in runs if r.arm != "control" and r.committer not in (None, "control") and r.commit is not None]
     if not treatment:
-        treatment = [r for r in rows if r.get("arm") not in (None, "control") and isinstance(r.get("commit"), dict)]
+        treatment = [r for r in runs if r.arm != "control" and r.commit is not None]
     if min_openings is None:
         es = _d(execution.get("engine_settings"))
         min_openings = min(64, _int(es.get("openings"), 64)) if es.get("openings") is not None else 64
@@ -357,21 +352,19 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
     recorded: list[tuple[int | None, bool | None, str | None]] = []
     mismatches = []
     for r in treatment:
-        c = r["commit"]
+        c = r.commit
         if not program_digest:
-            ctx["program_digest"] = _d(c.get("binding")).get("program_digest") or _d(c.get("weights_pin")).get("program_digest")
+            ctx["program_digest"] = c.binding_program_digest or c.weights_pin_program_digest
         if not manifest_digest:
-            ctx["manifest_digest"] = _d(c.get("coverage")).get("manifest_digest")
+            ctx["manifest_digest"] = c.coverage_manifest_digest
         decl = declaration
-        if decl is None and isinstance(c.get("classes"), dict):
-            decl = {"classes": [{"class": k, **_d(v)} for k, v in c["classes"].items()]}
-        checks = run_checks(c, r.get("tokens_equal_ref", r.get("tokens_equal")), min_openings=min_openings, declaration=decl, required_classes=required_classes, ctx=ctx)
-        pair = r.get("pair")
-        per_run.append((pair, checks))
-        rec = c.get("commit_pass")
-        recorded.append((pair, rec, c.get("commit_fail_reason")))
-        if rec is not None and (run_outcome(checks) == PASS) != bool(rec):
-            mismatches.append({"pair": pair, "recorded_commit_pass": bool(rec), "reconstructed": run_outcome(checks), "recorded_reason": c.get("commit_fail_reason"),
+        if decl is None and c.classes is not None:
+            decl = {"classes": [{"class": k, **_d(v)} for k, v in c.classes.items()]}
+        checks = run_checks(dict(c.entry), r.tokens_equal, min_openings=min_openings, declaration=decl, required_classes=required_classes, ctx=ctx)
+        per_run.append((r.pair, checks))
+        recorded.append((r.pair, c.commit_pass, c.commit_fail_reason))
+        if c.commit_pass is not None and (run_outcome(checks) == PASS) != c.commit_pass:
+            mismatches.append({"pair": r.pair, "recorded_commit_pass": c.commit_pass, "reconstructed": run_outcome(checks), "recorded_reason": c.commit_fail_reason,
                                "reconstructed_failing": [x.name for x in checks if x.outcome in (FAIL, INSUFFICIENT)]})
     rules = aggregate_runs(per_run)
     groups = group_checks(rules)
@@ -391,7 +384,8 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
         notes.append(f"commit_delta exited rc={rc_v}: the stage did not close although every graded rule passed (crash / timeout / verify)")
     commit_pass = vd.get("commit_pass")
     if commit_pass is None and treatment:
-        commit_pass = all(bool(r["commit"].get("commit_pass")) for r in treatment) if all(r["commit"].get("commit_pass") is not None for r in treatment) else None
+        passes = [r.commit.commit_pass for r in treatment]
+        commit_pass = all(passes) if None not in passes else None
     if commit_pass is not None and treatment and (outcome == PASS) != bool(commit_pass) and not (rc_v is not None and _int(rc_v) != 0):
         notes.append(f"RECONSTRUCTION MISMATCH: recorded commit_pass={commit_pass} but the rule-by-rule outcome is {outcome}; the recorded decision stands")
         outcome = PASS if commit_pass else (FAIL if outcome == PASS else outcome)
@@ -406,18 +400,18 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
     if vd.get("compilation") is not None:
         execution["compilation"] = vd.get("compilation")
     if treatment:
-        execution["rules_version"] = treatment[0]["commit"].get("rules_version")
+        execution["rules_version"] = treatment[0].commit.rules_version
     compat = {"commit_pass": commit_pass, "first_fail_reason": vd.get("first_fail_reason"), "runs_failed": vd.get("runs_failed"),
               "rc": rc_v, "commit_summary_pass": sums.get("pass") if summary else None,
               "commit_summary_deprecated": "F-r19-int-21 / P5: commit_summary.json is no longer written (its pass was rc == 0 and tokens_equal); this verdict is the record",
               "per_run": [{"pair": p, "commit_pass": rec, "commit_fail_reason": why} for p, rec, why in recorded],
               "negatives": vd.get("negatives"), "reconstruction_mismatch": mismatches or None, "only_arm": vd.get("only_arm")}
-    runs_ = {"instrumented": len(treatment), "failed": sum(1 for _, rec, _ in recorded if rec is False), "control": sum(1 for r in rows if r.get("arm") == "control"),
+    runs_ = {"instrumented": len(treatment), "failed": sum(1 for _, rec, _ in recorded if rec is False), "control": sum(1 for r in runs if r.arm == "control"),
              "not_pass_by_reconstruction": sum(1 for _, ch in per_run if run_outcome(ch) != PASS), "pairs": [p for p, _ in per_run]}
     cdig, csrc, cdigs = correspondence_of_build(build_summary, result_jsons=build_results)
     return Verdict(checks=groups + rules, outcome=outcome, program_digest=ctx.get("program_digest"), manifest_digest=ctx.get("manifest_digest"), query_id=query_id,
                    correspondence_digest=cdig, correspondence_digest_source=csrc, correspondence_digests=cdigs,
-                   row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [r["commit"].get("run_root") for r in treatment]) if x)),
+                   row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [r.commit.run_root for r in treatment]) if x)),
                    runs=runs_, inputs=dict(file_digests or {}), execution=execution, compat=compat, notes=notes)
 
 
@@ -432,36 +426,46 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
     `rc` = commit_delta's exit code when the caller (row_pod.sh) knows it; `stage_ok` = a stage decision made OUTSIDE this verdict (pre-P5
     rows: the commit_summary word), recorded under `compat.stage_ok` and compared (a disagreement is a note, never a changed decision).
     Since P5 the verdict's `outcome` IS the Commit stage's decision (row_pod.sh reads it back).  Every `<row>/properties/*.json` is cited
-    under `properties` by digest; a record that does not hold, or whose digest does not recompute, is a note, never a changed decision."""
+    under `properties` by digest; a record that does not hold, or whose digest does not recompute, is a note, never a changed decision.
+    A `build_summary.json` its record (`records.build_summary`) refuses is a note too, and the wrappers' own `result.json` give the
+    correspondence digest."""
     d = Path(row_dir)
     digests: dict[str, str] = {}
     for rel in RECORD_FILES + tuple(sorted(os.path.relpath(p, d) for p in glob.glob(str(d / "commit" / "sampled_replay_p*.json")))):
         p = d / rel
         if p.is_file():
             digests[rel] = _sha256(p)
-    rows: list[dict] = []
-    if (d / "commit" / "runs.jsonl").is_file():
-        with open(d / "commit" / "runs.jsonl") as f:
-            rows = [json.loads(line) for line in f if line.strip()]
+    rows = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
     vd = json.load(open(d / "commit" / "verdict.json")) if (d / "commit" / "verdict.json").is_file() else None
     summ = json.load(open(d / "commit_summary.json")) if (d / "commit_summary.json").is_file() else None
     mv = json.load(open(d / "commit" / "manifest_verify.json")) if (d / "commit" / "manifest_verify.json").is_file() else None
-    bs = json.load(open(d / "build_summary.json")) if (d / "build_summary.json").is_file() else None
+    bs: BuildSummary | None = None
+    refused = None
+    if (d / "build_summary.json").is_file():
+        try:
+            bs = BuildSummary.load(d / "build_summary.json")
+        except RecordError as e:
+            refused = f"build_summary.json not read ({e}): the Build's correspondence digest is read from its wrappers' result.json"
     results: dict[str, dict] = {}
+    unreadable: list[str] = []
     if bs is None:                                    # no build.summary on the row: the wrappers' own result.json (build_step/, build_request*/)
         for p in sorted(glob.glob(str(d / "build_*" / "result.json"))):
             w = os.path.basename(os.path.dirname(p))
             try:
                 results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(open(p))
-            except (OSError, ValueError):
-                continue
+            except (OSError, ValueError) as e:
+                unreadable.append(f"{os.path.relpath(p, d)} ({e!r:.200})")
     v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results,
               execution=execution_of_record(d))
+    if refused:
+        v.notes.append(refused)
     missing = [rel for rel in ("commit/verdict.json", "commit/runs.jsonl") if rel not in digests]
     if missing:
         v.notes.append(f"record incomplete: {', '.join(missing)} not on the row (Commit never closed / never ran)")
         if v.outcome == PASS:
             v.outcome = INSUFFICIENT
+    if unreadable:
+        v.notes.append(f"build record unreadable: {'; '.join(unreadable)}; the correspondence digest is read from the other wrappers' records only")
     if (d / "stages.txt").is_file():
         stage = [ln for ln in (d / "stages.txt").read_text().splitlines() if ln.startswith("commit ")]
         if stage:

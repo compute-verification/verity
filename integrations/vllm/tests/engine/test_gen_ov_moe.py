@@ -1,4 +1,4 @@
-"""Lane `ov-moe`: the pair-major MoE definitions (`verity_vllm.program.registry.quarantine.ov_moe.moe`), the `MoEFusedExperts`
+"""Lane `ov-moe`: the pair-major MoE definitions (`verity_vllm.program.quarantine.ov_moe.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
 body as recorded in out/gen/lanes/moe/runs/olmoe_3x1_1req), and — when wave 1's real captures are present in the
 worktree — the end-to-end resolve / fold / VU-population facts quoted in out/gen/lanes/ov-moe/REPORT.md."""
@@ -14,18 +14,18 @@ import numpy as np
 import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
 
-OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
+OV = importlib.import_module("verity_vllm.observe.fold.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.quarantine.ov_moe import moe as Q
 
 C = OV.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
@@ -361,7 +361,7 @@ def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90():
 
 
 def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
-    from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
+    from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
     names = [getattr(p, "name", type(p).__name__) for p in OV.PROFILE.patterns]
     assert names[:2] == ["gemm.matmul_kernel_persistent.tuned", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
     assert OV.PROFILE.accepted is False and OV.PROFILE.notes["case"] == "OLMOE"

@@ -44,7 +44,7 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
     """vLLM's own `EngineArgs.create_engine_config()` for the eager, bf16 profile at `tensor_parallel_size` (no engine, no GPU allocation).
     `attention_backend` is the TargetProfile's knob (`EngineArgs(attention_backend=AttentionBackendEnum[name])`; None = vLLM's
     selector) — the ONLY attention-backend input this vLLM pin reads (env `VLLM_ATTENTION_BACKEND` is not defined in its `envs`).
-    [R13 tp] `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group."""
+    `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group."""
     from vllm.engine.arg_utils import EngineArgs
     if attention_backend is not None:
         from vllm.v1.attention.backends.registry import AttentionBackendEnum
@@ -57,7 +57,7 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
 
 
 class WithPeers(nn.Module):
-    """[R13 tp] A rank's wrapper with its PEER INPUTS: `forward(prompt, *peers)` hands the peers (the other rank's collective partials,
+    """A rank's wrapper with its PEER INPUTS: `forward(prompt, *peers)` hands the peers (the other rank's collective partials,
     in collective call order) to the rank's `CollectiveBus` and runs the inner wrapper; the k-th collective of this forward consumes
     peer k (see `export_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
     (`SeededWithPeers`, `SplitsWithPeers`), and so does a `schedule` witness (`ScheduledWithPeers`); `with_peers` picks the form: the
@@ -130,7 +130,7 @@ def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
 
 
 def probe_collectives(inner: nn.Module, inputs: tuple, vllm_config, num_tokens: int, bus, profile=None) -> list[dict]:
-    """[R13 tp] One probe export of the rank's wrapper with the bus in `probe` mode (graph discarded): records every collective's kind,
+    """One probe export of the rank's wrapper with the bus in `probe` mode (graph discarded): records every collective's kind,
     shape, dtype and call order — the peer-input signature of the Program.  Same mechanism and shims as the real export (the fused CUDA
     ops have fake impls under export's FakeTensorMode, not Meta kernels for a plain meta forward)."""
     from .export_compat import export_compat
@@ -342,11 +342,11 @@ class PaddedGreedyRequest(nn.Module):
 
 
 class StochasticEngineStep(nn.Module):
-    """[R15 stoch] `EngineStep` with the row's STOCHASTIC policy: the last row's logits -> `vllm_iface.gumbel_topp_token_select(logits,
+    """`EngineStep` with the row's STOCHASTIC policy: the last row's logits -> `vllm_iface.gumbel_topp_token_select(logits,
     seed, temperature, top_p, pos, splits)` (vLLM d9105ea80 `Sampler.sample` with temperature + top-p and an explicit per-request seed:
     f32 widening -> `_temperature_kernel` -> `_apply_topp_split` -> `_gumbel_sample_kernel` + argmax).  `seed` (int64 [1]) is a forward
     INPUT (the request's `SamplingParams.seed`: a runtime value of the Program); temperature / top_p are the declared policy (structural
-    inputs, constants of the Program); `pos` = the sampled logits row's position (pos0 + M - 1).  [R16 stoch, coord M-0169] `splits`
+    inputs, constants of the Program); `pos` = the sampled logits row's position (pos0 + M - 1).  `splits`
     (int32 [1]) is a forward INPUT too: the event's split count S = SplitsFor_v1(|live|, num_SMs), a DERIVED value of the workload.
     With `S` given (the registered split count, `topp_geometry.registered_splits`) the forward takes no `splits`."""
 
@@ -369,12 +369,12 @@ class StochasticEngineStep(nn.Module):
 
 
 class StochasticRequest(nn.Module):
-    """[R15 stoch] `GreedyRequest` with the row's STOCHASTIC policy (temperature + top-p, explicit seed): prefill of `LP` tokens, then
+    """`GreedyRequest` with the row's STOCHASTIC policy (temperature + top-p, explicit seed): prefill of `LP` tokens, then
     exactly `T` decode steps, every sampled token `gumbel_topp_token_select(logits, seed, temperature, top_p, pos, splits[s])` with `pos`
     the position of the logits row (LP-1 for the prefill sample, LP-1+k for the k-th sample: vLLM's `positions[logits_indices]`, the
     stream offset of `tl.randint(seed, pos)`).  `seed` is a forward INPUT (one per request; B2/B8 rows have one per component).
 
-    [R16 stoch, coord M-0169 / global M-0189 (1)] `splits` (int32 [T+1]) is the request-owned DERIVED-S INPUT: entry s is the split
+    `splits` (int32 [T+1]) is the request-owned DERIVED-S INPUT: entry s is the split
     count of sampling event s (the prefill sample = event 0), S_t = SplitsFor_v1(|live(t)|, num_SMs) at the engine step t the event runs
     in -- a value of the WORKLOAD (the live set), bound at Match to the split kernels' constexpr and checked against the relation there
     (GM-01 G6 'sampler geometry').  The Program carries no S schedule: the forward reads `splits[s:s+1]` per event (a static view of
@@ -446,7 +446,7 @@ def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
 def registered_policy_splits(sampling: dict) -> int | None:
     """The registered split count S of a stochastic policy: `sampling["splits"]` when it is an int equal to
     `topp_geometry.registered_splits` of the policy's geometry's num_SMs (`build.sampler_geometry`); else None."""
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     S, g = sampling.get("splits"), sampling.get("geometry") or {}
     if isinstance(S, bool) or not isinstance(S, int) or g.get("num_sms") is None:
         return None
@@ -468,12 +468,12 @@ def cached_wrapper(mod: nn.Module, inputs: tuple, model: nn.Module, C: int) -> t
 def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: int = 8, T: int = 4, eos_id: int = 0,
                  sampling: dict | None = None, C: int = 0) -> tuple[nn.Module, tuple]:
     """(module, example inputs on meta) for `kind` in {step, request, padded}; `C` > 0: the request wrapper's `cached_wrapper`.
-    [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; [R15 stoch] `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
-    authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and [R16, coord M-0169] the derived split
+    [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
+    authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and the derived split
     count `splits` (int32, one entry per sampling event: [1] for the step wrapper, [T+1] for the request wrapper) as a third (step /
     request wrappers; padded is greedy-only).  A numeric `splits` is the registered S = SplitsFor_v1(1, num_SMs) the served engine
     pins (`build.sampler_geometry`, `registered_policy_splits`): the wrapper takes no `splits` input.  Any other numeric `splits`
-    (R15's static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
+    (the earlier static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
     if C:
         return cached_wrapper(*make_wrapper(kind, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos_id, sampling=sampling), model, C)
     kind_s = (sampling or {"kind": "greedy"}).get("kind")
@@ -521,17 +521,18 @@ def consulted_facts(vllm_config) -> dict:
     `env_consulted` = variables the builder sets AND the pinned vLLM's `envs` module defines (so vLLM reads them);
     `env_ignored`   = variables set in the process that this vLLM pin does NOT define (e.g. `VLLM_ATTENTION_BACKEND`, dead in d9105ea80)
     — never reported as declared facts. The target facts themselves (capability, SM count, BI switch) live in `target.declared/applied`."""
-    import os
+    from verity_vllm import settings
     facts: dict = {}
     try:
         import vllm.envs as envs
         defined = set(getattr(envs, "environment_variables", {}) or {})
     except Exception:  # noqa: BLE001
         defined = set()
-    facts["env_consulted"] = {k: os.environ.get(k) for k in _ENV_SET_BY_BUILDER if k in defined and k in os.environ}
-    facts["env_ignored"] = {k: {"value": os.environ.get(k), "reason": "not defined in this vLLM pin's `vllm.envs`; never read"}
-                            for k in _ENV_SET_BY_BUILDER if k not in defined and k in os.environ and k.startswith("VLLM_")}
-    facts["env_set_not_vllm"] = {k: os.environ.get(k) for k in _ENV_SET_BY_BUILDER if k not in defined and k in os.environ and not k.startswith("VLLM_")}
+    env = {k: settings.raw(k) for k in _ENV_SET_BY_BUILDER if settings.is_set(k)}
+    facts["env_consulted"] = {k: v for k, v in env.items() if k in defined}
+    facts["env_ignored"] = {k: {"value": v, "reason": "not defined in this vLLM pin's `vllm.envs`; never read"}
+                            for k, v in env.items() if k not in defined and k.startswith("VLLM_")}
+    facts["env_set_not_vllm"] = {k: v for k, v in env.items() if k not in defined and not k.startswith("VLLM_")}
     try:
         facts["model_dtype"] = str(vllm_config.model_config.dtype)
         facts["enforce_eager"] = bool(vllm_config.model_config.enforce_eager)
@@ -710,7 +711,7 @@ def export_facts(op_hist: dict, launch_kernels) -> dict:
 
 
 def mean_dim_override_facts() -> dict | None:
-    """[R15 dense] The installed vLLM's `aten::mean.dim` batch-invariant override, read in-process (never assumed): the Triton
+    """The installed vLLM's `aten::mean.dim` batch-invariant override, read in-process (never assumed): the Triton
     `mean_kernel`'s qualified name and source sha (`JITFunction.src`, the same text the eager capture hashes as `src_sha`), the
     `mean_dim` / `mean_batch_invariant` Python sources' shas (BLOCK_SIZE, the `(M, N, 1)` view, the per-dim reduction order), and
     whether `enable_batch_invariant_mode` registers `aten::mean.dim` at all (grep of its source).  `MeanDimBIRule` checks these against

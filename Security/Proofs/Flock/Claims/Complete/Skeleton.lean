@@ -343,7 +343,7 @@ theorem Run.recordFits {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed �
     o.record.toUTF8.size < 2 ^ 64 :=
   o.ready_parts.2.2.2.2 o.w o.ω o.r o.record o.proofs o.bodies o.ran
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk tags none`. -/
+/-- **A drawn session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem Case.drawn {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw
