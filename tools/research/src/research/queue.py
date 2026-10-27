@@ -896,10 +896,13 @@ class Queue:
 
     def fetch_prs(self, prs: list[PR]) -> tuple[list[PR], dict[int, Entry]]:
         """Fetch ``prs`` and separate any whose API head disagrees with its pull ref, so one GitHub propagation race cannot stop
-        the queue.  Such a PR waits outside ``next`` until a later snapshot agrees rather than admitting an unverified old head."""
+        the queue.  Such a PR waits outside ``next`` until a later snapshot agrees rather than admitting an unverified old head,
+        unless its branch's tip is the API head."""
         fetched = self.fetch(prs)
         consistent, waiting = [], {}
         for p in prs:
+            if fetched.get(p.number) != p.head and p.branch and self._head_from_branch(p):
+                fetched[p.number] = p.head
             if p.number not in fetched:
                 waiting[p.number] = Entry(p, state="waiting", why="GitHub has no pull ref for its head yet; retrying next sync")
                 continue
@@ -911,6 +914,19 @@ class Queue:
             self.log(f"research queue: #{p.number}'s API head {p.head[:12]} and fetched pull ref "
                      f"{fetched[p.number][:12]} disagree; retrying next sync")
         return consistent, waiting
+
+    def _head_from_branch(self, p: PR) -> bool:
+        """Take ``p``'s head from its branch when the branch's tip is the API head: GitHub can leave refs/pull/N/head behind its
+        branch and API head for hours."""
+        ref = f"refs/queue/branch/{p.number}"
+        r = self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{p.branch}:{ref}", ok=None)
+        tip = _git(self.workdir, "rev-parse", "-q", "--verify", ref, check=False).stdout.strip() if not r.returncode else ""
+        _git(self.workdir, "update-ref", "-d", ref, check=False)
+        if tip != p.head:
+            return False
+        _git(self.workdir, "update-ref", f"refs/queue/pr/{p.number}", tip)
+        self.log(f"research queue: #{p.number}'s pull ref isn't at its API head {p.head[:12]}; took the head from its branch")
+        return True
 
     def load_state(self) -> dict:
         try:

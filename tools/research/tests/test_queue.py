@@ -217,6 +217,28 @@ def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(worl
     assert [m.pr for m in q.sync()[0]] == [1, 2]
 
 
+def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_branch_is_at_the_api_head(world):
+    """GitHub can leave a PR's refs/pull/N/head behind its branch and API head for hours, and the PR waited every sync. A
+    branch whose tip is the API head stands in for the pull ref; one at any other commit doesn't."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, old := world.change({"b.txt": "old\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+    new = world.change({"b.txt": "new\n"})
+    _git(world.origin, "update-ref", "refs/heads/feature-2", old)
+    world.gh.prs[2] = PR(2, new, "change 2", "Lane `lane-2`.", branch="feature-2")
+    world.gh.ready.add((2, new))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1] and entries[2].state == "waiting" and "disagree" in entries[2].why
+
+    _git(world.origin, "update-ref", "refs/heads/feature-2", new)
+    members, _ = q.sync()
+    assert [(m.pr, m.head) for m in members] == [(1, world.gh.prs[1].head), (2, new)]
+    assert any("#2's pull ref isn't at its API head" in line for line in world.logs)
+    assert _git(world.origin, "rev-parse", "refs/pull/2/head") == old
+
+
 def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
     """GitHub can list an open PR before it makes refs/pull/N/head (27 Oct: #5290, and every drive tick from 13:14Z ended rc=1,
     since one missing ref failed the whole fetch): that PR waits, and the rest of the queue syncs."""
