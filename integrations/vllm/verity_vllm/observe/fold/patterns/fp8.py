@@ -149,7 +149,7 @@ class CutlassScaledMmFp8Block:
             return unsupported(node, str(e), compute_capability=list(tp.compute_capability))
         # the record must ATTEST the kernel class its FP8 linears carried (`RunHeader.profile.backends.fp8_block_gemm_kernel`, read back
         # from `Fp8LinearMethod.fp8_linear` by the capture engine): `_C.cutlass_scaled_mm` is also reachable from other kernel classes'
-        # fallbacks, and a header without the read-back (a pre-R15 capture) does not say which kernel ran -- refused, never assumed
+        # fallbacks, and a header without the read-back (an older capture) does not say which kernel ran -- refused, never assumed
         kernel = header_fp8_kernel(ctx)
         if kernel != CUTLASS_KERNEL:
             return unsupported(node, "the record does not attest CutlassFp8BlockScaledMMKernel for its FP8 linears (RunHeader.profile."
