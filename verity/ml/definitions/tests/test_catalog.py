@@ -22,6 +22,9 @@ COUNT = 1261
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merges with any other change to the count
 
+COUNT += 7  # `torch_attention`'s training kernels (CIR-117): the softmax, its backward, the eager row and its backward, RoPE, its
+#             backward and repeat_kv's backward
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
