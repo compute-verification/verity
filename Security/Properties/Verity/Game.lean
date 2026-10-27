@@ -287,15 +287,34 @@ def bytesOfBits (l : List Bool) : ByteArray :=
 /-- A line in canonical JSON, as the challenger writes it. -/
 def line (j : Json) : String := (Flock.canon j).toOption.getD ""
 
+/-- The head line of the device's release log: its commitment's root, in canonical JSON as `challenger.py` writes it. -/
+def headLine (root : ByteArray) : String := "{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf root ++ "\"}"
+
+/-- The root line the device writes for coin `i` of family `l`, received at `t` after `root`. -/
+def rootJ (l : String) (i t : Nat) (root : ByteArray) : Json :=
+  Json.mkObj [("event", Json.str "root"), ("index", Lean.toJson i), ("label", Json.str l),
+    ("received_at", Lean.toJson t), ("root", Json.str (Flock.hexOf root))]
+
+/-- The release line the device writes for coin `i` of family `l`, released at `t` after `root`. -/
+def releaseJ (l : String) (i t : Nat) (root : ByteArray) : Json :=
+  Json.mkObj [("after", Json.str (Flock.hexOf root)), ("event", Json.str "release"), ("index", Lean.toJson i),
+    ("label", Json.str l), ("released_at", Lean.toJson t)]
+
 /-- The releases the device serves, in order, each with its family, its index in the family and the root it answered:
-a release whose request names a family of the layout with a coin left; the others it serves nothing for. -/
+a release whose request names a family of the layout with a coin left, and whose two lines fit the reader's cap
+(`MAX_LOG_LINE`; a layout's labels are short names, so the cap holds of every line the deployed device writes); the
+others it serves nothing for. Its `k`th served release writes its root line at time `2k+1` and its release at `2k+2`. -/
 def served (D : PlayDevice) (rs : List Release) : List (String × Nat × ByteArray × Release) :=
   (rs.foldl (fun (acc : List (String × Nat × ByteArray × Release)) r =>
     match requestOf r.answers with
     | none => acc
     | some (l, root) =>
       let i := (acc.filter (·.1 == l)).length
-      if (D.families.find? (·.1 == l)).any (fun f => decide (i < f.2)) then acc ++ [(l, i, root, r)] else acc) [])
+      let k := acc.length
+      if (D.families.find? (·.1 == l)).any (fun f => decide (i < f.2)) &&
+          decide ((line (rootJ l i (D.time (2 * k + 1)) root)).length ≤ MAX_LOG_LINE) &&
+          decide ((line (releaseJ l i (D.time (2 * k + 2)) root)).length ≤ MAX_LOG_LINE)
+      then acc ++ [(l, i, root, r)] else acc) [])
 
 /-- The layout's coin positions, as the commitment numbers them. -/
 def layout (D : PlayDevice) : LiveCommitment := ⟨D.scheme, D.epoch, D.families, .empty⟩
@@ -307,7 +326,7 @@ def base (D : PlayDevice) (rs : List Release) : Properties.Challenger.Session wh
   scheme := D.scheme
   epoch := D.epoch
   families := D.families
-  coins p := ((D.served rs).find? fun (l, i, _, _) => position D.layout l i == some p).elim .empty
+  coins p := ((D.served rs).find? fun (l, i, _, _) => D.layout.position l i == some p).elim .empty
     fun (_, _, _, r) => bytesOfBits r.coins
   salts := D.salts
   log := []
@@ -316,17 +335,13 @@ def base (D : PlayDevice) (rs : List Release) : Properties.Challenger.Session wh
 /-- The release log's lines after its head: for each release served, the root line, then the release line. -/
 def lines (D : PlayDevice) (rs : List Release) : List String :=
   ((D.served rs).zipIdx.map fun ((l, i, root, _), k) =>
-    [line (Json.mkObj [("event", Json.str "root"), ("index", Lean.toJson i), ("label", Json.str l),
-        ("received_at", Lean.toJson (D.time (2 * k + 1))), ("root", Json.str (Flock.hexOf root))]),
-      line (Json.mkObj [("after", Json.str (Flock.hexOf root)), ("event", Json.str "release"), ("index", Lean.toJson i),
-        ("label", Json.str l), ("released_at", Lean.toJson (D.time (2 * k + 2)))])]).flatten
+    [line (rootJ l i (D.time (2 * k + 1)) root), line (releaseJ l i (D.time (2 * k + 2)) root)]).flatten
 
 /-- **The device's session in the play**: its release log is its commitment's head line, then `lines`; its client
 closed it. -/
 def session (D : PlayDevice) (rs : List Release) : Properties.Challenger.Session :=
   let s := D.base rs
-  { s with log := line (Json.mkObj [("event", Json.str "commitment"),
-      ("root", Json.str (Flock.hexOf ((s.commitment.map (·.root)).getD .empty)))]) :: D.lines rs }
+  { s with log := headLine ((s.commitment.map (·.root)).getD .empty) :: D.lines rs }
 
 /-- **The play's device under the key `pk`**: the one session it ran, and the auditor's ledger lines for it. -/
 def device (D : PlayDevice) (pk : ByteArray) (rs : List Release) : Properties.Challenger.Device where
