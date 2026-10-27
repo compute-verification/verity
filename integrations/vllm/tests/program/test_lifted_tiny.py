@@ -1071,7 +1071,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     lnode = next(n for n in ldec.body.nodes if getattr(n.fn, "defn", None) is hand)
     assert lnode.fn.bindings == {"N": 3}
     # evaluate the lifted decoded root: its one PARAM is the enable; the decoded root's own `Input33` node (x) is prescribed gate by gate
-    from verity.ml.circuits.evaluate import evaluate_region
+    from verity.ml.circuits.evaluation import evaluate_region
     from verity.ml.circuits.layout import resolve
     pd = L.as_program(ldec)
     td = {resolve(pd.circuit.root_scope, pd.input_coll(0).refs[0]): 1}
