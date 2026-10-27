@@ -2043,8 +2043,9 @@ struct Ctx {
 
   void setup(int m_, int n_, int k_, int lp_, int t_, int row_, const std::string& params_path, int cap, int want_nb) {
     m = m_; n = n_; k = k_; lp = lp_; t = t_; row = row_;
-    if (m % TILE || n % TILE || k % BK || lp % BK || k % lp || 32768 % row || row % 16) {
-      fprintf(stderr, "shape m %d n %d k %d L' %d ROW %d: m, N, K, L' multiples of 128, L' | K, ROW | 32768\n", m, n, k, lp, row);
+    if (m % TILE || n % TILE || k % BK || lp <= 0 || lp % BK || k % lp || lp > 1024 || row <= 0 || 32768 % row || row % 16) {
+      fprintf(stderr, "shape m %d n %d k %d L' %d ROW %d: m, N, K, L' multiples of 128, L' | K, L' <= 1024 (form_a_kernel's CTA "
+                      "is L' threads), ROW | 32768 and a multiple of 16\n", m, n, k, lp, row);
       exit(2);
     }
     L = t * lp; S = (k + L - 1) / L; NT = k / lp; kb64 = (k + 511) / 512 * 64;
@@ -2056,6 +2057,13 @@ struct Ctx {
     leaves = (u64)tiles * lpt;
     capA = capB = cap;
     CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
+    cudaFuncAttributes fa_at;
+    CK(cudaFuncGetAttributes(&fa_at, (const void*)form_a_kernel));
+    if (lp > fa_at.maxThreadsPerBlock || 64 * lp > fa_at.maxDynamicSharedSizeBytes) {
+      fprintf(stderr, "L' %d: form_a_kernel's CTA (L' threads, 64 L' bytes of shared memory) is past what this device launches "
+                      "it with: %d threads at its registers, %d bytes\n", lp, fa_at.maxThreadsPerBlock, fa_at.maxDynamicSharedSizeBytes);
+      exit(2);
+    }
     pair = gemm_pair(tiles_n);
     items = tiles >> pair;
     grid = std::min(items, nsm);
