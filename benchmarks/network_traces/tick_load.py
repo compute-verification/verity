@@ -34,7 +34,7 @@ the buckets whose next was written in: that bit's 0 writes half a bucket before 
 offset of half a bucket (`certifier_serve.PACED_MS`) just before this bucket's write. It holds timing and the bits,
 none of the run's records, salts or keys.
 
-Run it inside one `research run --on auto --cpus N`, so the hog loads only the run's own cores.
+Run it inside one job of N CPUs, so the hog loads only the job's own cores.
 """
 
 from __future__ import annotations

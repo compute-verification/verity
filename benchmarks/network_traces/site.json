@@ -1,0 +1,9 @@
+{
+  "lane": "network-accounting",
+  "gate": "research@204.12.178.84",
+  "gate_key": "vy-gate-network-accounting",
+  "keep": "/workspace/research/lanes/network-accounting/gate",
+  "peer": "vy-dc-h200-2",
+  "auditor": "vy-nebius-cpu-2",
+  "hand_start": "serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as --hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on h200-2 under its 300 GB disk floor and sends its own smoke and load requests into the records. Its --copy-records-to copies requests.jsonl too, so it points at a private dir on h200-2, and the records art is the four public records copied from there: request_users.jsonl, advice_trace.jsonl, windows.jsonl and serve.json"
+}
