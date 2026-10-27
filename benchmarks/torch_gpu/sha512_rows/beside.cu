@@ -29,6 +29,7 @@
 //                            %globaltimer, compressions, TOPS, the SM clock from NVML)
 //   beside one M N K KERNEL ARM LAUNCHES    one kernel's arm (for Nsight Compute)
 #include <cuda.h>
+#include <cuda_bf16.h>
 #include <cuda_runtime.h>
 #include <nvml.h>
 
