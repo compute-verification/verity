@@ -22,8 +22,9 @@ word), ``wq``, ``wk``, ``wv``, ``softmax`` (heads x 32, the slot's first positio
 rest +0), ``pv``, ``o_amax``, ``o_quant``, ``wo``, ``attn_residual``, ``mlp_sums``, ``mlp_norm``, ``up_amax``, ``up_quant``,
 ``wup``, ``down_amax``, ``down_quant`` (RELU), ``wdown``, ``mlp_residual``; then ``final_sums``, ``final_norm``,
 ``head_amax``, ``head_quant``, ``head`` and ``argmax``; under the committer's ``residual`` fusion (`plan.Map`) there is no
-``wo`` or ``wdown``, their coordinates' words being added straight into the residual, and under its ``norm`` fusion no
-``attn_norm``, ``mlp_norm`` or ``final_norm``, and those quantizers' amax words are every part's, then the row's. The map's units
+``wo`` or ``wdown``, their coordinates' words being added straight into the residual, under its ``norm`` fusion no
+``attn_norm``, ``mlp_norm`` or ``final_norm``, and those quantizers' amax words are every part's, then the row's, and
+under its ``pv`` fusion no ``softmax``. The map's units
 (`plan.Units`) are slices of these rows. RMSNorm sums in chunks and groups (`shape.Forms`), which changes its words from one
 sequential sum wherever a row is more than one chunk. With ``keep=False`` a group's tables are dropped once committed (a
 run of record keeps no step's tables: a drawn slot is opened by replaying its request, `opening`).
@@ -279,9 +280,10 @@ class Driver:
                 sc, pr, att = self.attn(qv.view(m, sh.heads, sh.head_dim), keys, vals, p_c + 1)
                 c0 = self._tick(sec, "attention", a0)
                 del sc
-                soft = self._bf(T["softmax"])[lo:hi].view(m, sh.heads, PV_K)
-                soft.zero_()
-                soft[:, :, :pr.shape[-1]] = pr
+                if "softmax" in T:
+                    soft = self._bf(T["softmax"])[lo:hi].view(m, sh.heads, PV_K)
+                    soft.zero_()
+                    soft[:, :, :pr.shape[-1]] = pr
                 att = att.reshape(m, sh.width)
                 self._bf(T["pv"])[lo:hi] = att
                 q = self._quantize(T, "o", lo, hi, att)

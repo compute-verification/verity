@@ -1,5 +1,4 @@
-"""β(C): the min-cut bound on the stacked share of a circuit's dynamic memory (workstream S4 of
-note:memory-accounting/20261026T0040Z-draft-stacking-safe-properties-program, whose frame this computes).
+"""β(C): the min-cut bound on the stacked share of a circuit's dynamic memory.
 
 A stacker holds S_stack bits of other blocks' encodings in the dynamic memory a circuit writes (KV caches, latents, linear
 attention's states). Take any cut (U, D) of the circuit's graph over a window, with every dynamic-memory write on D's side.
@@ -66,8 +65,8 @@ from typing import Any, Callable, Hashable, Iterable, Mapping, Sequence
 #: |c|: the bits of one encoded word
 WORD_BITS = 1024
 #: E, the nonlinear units one encode of a 1024-bit word costs under SquaringFloor and ChainSum at p1024, k = 3, at ε = 2^-40
-#: and at the carrier threshold 2^-20 (#4622; note:memory-accounting/20261026T0110Z-report-s5-lowerbounds): `share.E_WORD`'s
-#: conjectured rows. No E is proved: counting caps a squaring's bound near its output bits (`FoolingCap`).
+#: and at the carrier threshold 2^-20: `share.E_WORD`'s conjectured rows. No E is proved: counting caps a squaring's bound
+#: near its output bits (`FoolingCap`).
 E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688}
 #: `products_pass.py`'s directory: data products on property/v1's pass
 REDTEAM = Path(__file__).resolve().parents[1] / "property_redteam"

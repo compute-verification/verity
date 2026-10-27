@@ -138,8 +138,7 @@ COMPOSED = ("circuits' compositions r20261025-183214-951f, r20261025-183237-6217
             "(art:65bc8cddf39ec0076f17c19b4e13a74ad26554736b531b43fe6063f778cdcaf3)")
 #: the source of a scan slot unit circuit-check lowered whole, of 3 rows in and out
 ROWS_3 = "circuit-check --no-cache r20261027-045850-de6d; k_log an estimate, not composed: its 3 rows' (rows_k)"
-#: ANDs and k_log a unit at Llama-3.2-1B, each with its source: k_log is CIR-95's table at its cut reads
-#: (note:circuits/20261024T0443Z-report-windows-advice-windows, r20261025-093758-baf3) unless said otherwise
+#: ANDs and k_log a unit at Llama-3.2-1B, each with its source: k_log is the cut reads' table unless said otherwise
 MEASURED: dict[str, tuple[int, int, str]] = {
     "EmbeddingRead_v1{V=128256,H=2048}": (5_392_976, 25, "#4227's table (ANDs and block)"),
     "RMSNormTriton_v5{N=2048}": (9_416_444, 25, "r20261025-072237-b8e3"),
@@ -170,9 +169,9 @@ FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 57
                 16: 1_115_295, 17: 1_231_456, 24: 1_708_199, 32: 2_252_527, 33: 2_368_688, 34: 2_436_657, 36: 2_573_043,
                 40: 2_845_431, 48: 3_389_759, 64: 4_526_991, 80: 5_664_223, 88: 6_257_127, 90: 6_393_065, 92: 6_529_131,
                 96: 6_801_455, 112: 7_938_687, 128: 9_075_919}
-#: its k_log: (the last NVIS at it, k_log), the steps circuits bisected to adjacent NVIS
+#: its k_log: (the last NVIS at it, k_log), its steps bisected to adjacent NVIS
 FIRST_K = ((4, 22), (15, 23), (33, 24), (90, 25), (128, 26))
-#: `TokenFeed_v1{NP}`'s k_log as circuits composed it: (the most NP, k_log), an upper bound below a composed NP
+#: `TokenFeed_v1{NP}`'s k_log as composed: (the most NP, k_log), an upper bound below a composed NP
 FEED_K = ((1024, 23), (2048, 24))
 #: C-Flock's largest block, 2^27 bits (`verity_flock.circuit.K_MAX`)
 K_MAX = 27
@@ -180,7 +179,7 @@ K_MAX = 27
 
 def rows_k(rows: int) -> int:
     """The least k_log of a unit of ``rows`` rows in and out: C-Flock's composer gives each an hm96 slot, the slots rounded up
-    to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every `AllGather_v1{W, 64}` circuits composed
+    to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every `AllGather_v1{W, 64}` composed
     (W 2 to 128) and `{64, 16}` take exactly this at their W + 1 rows (`COMPOSED`), so a gather of 256 parts takes 2^28."""
     return max(22, 19 + (rows - 1).bit_length())
 

@@ -53,10 +53,10 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-#: E, the nonlinear units (#4622's gate model: budgeted units plus data products) an encode of one 1024-bit word costs over 3
-#: rounds of 1,021 squarings: SquaringFloor and ChainSum at ε = 2^-40 and at the carrier threshold 2^-20
-#: (note:memory-accounting/20261026T0110Z-report-s5-lowerbounds), and the cheapest construction found, the seam square at
-#: 16,544 a squaring, which no E exceeds. No E is proved: counting caps a squaring's bound near its output bits (`FoolingCap`).
+#: E, the nonlinear units (the gate model's: budgeted units plus data products) an encode of one 1024-bit word costs over 3
+#: rounds of 1,021 squarings: SquaringFloor and ChainSum at ε = 2^-40 and at the carrier threshold 2^-20, and the
+#: cheapest construction found, the seam square at 16,544 a squaring, which no E exceeds. No E is proved: counting caps a
+#: squaring's bound near its output bits (`FoolingCap`).
 E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688, "best found": 16_544 * 3 * 1021}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
 R_INS = (100_000, 1_000_000)
@@ -69,7 +69,7 @@ COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start", "b_qp")
 ATTENTION_ROW = "Int8LutAttentionRow_v1"
 #: the s8 step's lanes (`stacking.FAMILY`'s k): P V′ reads a row's keys PAD at a time, and Q′K′ᵀ its D
 PAD = 32
-#: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass; note:memory-accounting/20261018T0230Z-report-declared-circuit-g):
+#: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass):
 #: c = caps.total is R_cap over it
 CERTIFIED_B_PER_S = 1.294e13
 #: `Security/Proofs/Accounting/DeclaredCircuit/Witness.lean`'s `bounds_8b` and `bounds_70b`, at the thin-lane prices: c at most
