@@ -45,17 +45,17 @@ vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every comm
 `--fleet`, `--blocks`, `--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
 
 ~~~sh
-python3 benchmarks/network_sim/mockdc.py up       # create the namespaces, then `status`
-python3 benchmarks/network_sim/mockdc.py status   # list them, and check what reaches what, with each round trip
-python3 benchmarks/network_sim/mockdc.py run --out DIR [--salt] [--block b1=late ...]
-python3 benchmarks/network_sim/mockdc.py down     # stop their processes, and delete every na-* namespace and veth
+python3 examples/network_sim/mockdc.py up       # create the namespaces, then `status`
+python3 examples/network_sim/mockdc.py status   # list them, and check what reaches what, with each round trip
+python3 examples/network_sim/mockdc.py run --out DIR [--salt] [--block b1=late ...]
+python3 examples/network_sim/mockdc.py down     # stop their processes, and delete every na-* namespace and veth
 ~~~
 
 As a recorded run, which leaves the lab up:
 
 ~~~sh
 research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
-  bash -c 'M=benchmarks/network_sim/mockdc.py; python3 -B $M down && python3 -B $M up && python3 -B $M run --out "$OUT"'
+  bash -c 'M=examples/network_sim/mockdc.py; python3 -B $M down && python3 -B $M up && python3 -B $M run --out "$OUT"'
 ~~~
 
 ## What a run shows
@@ -244,7 +244,7 @@ prompt passed every check then, v5 on all 68 windows a block
 ## The whole night
 
 `verity bench network_sim --out DIR` runs `run.py`, the night on the lab host in one process tree. `verity` isn't on
-vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. It runs five things in turn:
+vy-nebius-cpu-2's path, so there it is `python3 examples/network_sim/run.py --out DIR`. It runs five things in turn:
 - the accounting layer's demo (`python -m datacenter.demo`, `DIR/demo.txt`);
 - the mock datacenter in five blocks, which take the five strategies, once plain and once with the salt;
 - the fleet (`up --fleet --blocks 2`), twice, with the first four strategies swapped between the sites
@@ -271,7 +271,7 @@ follow the rows. `DIR/summary.json` has the same. The exit status is 1 if a verd
 
 ~~~sh
 research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --timeout 90m -- \
-  bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
+  bash -c 'python3 -B examples/network_sim/run.py --out "$OUT"'
 ~~~
 
 Run `r20261023-075024-27ea` (`out/night`, at 51da0f4cb5) exited 0 with "every verdict is the expected one" in 10.3

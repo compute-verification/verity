@@ -1,6 +1,6 @@
 """The network night on the lab host in one command: `verity bench network_sim --out DIR`.
 
-`verity` isn't on vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. In one
+`verity` isn't on vy-nebius-cpu-2's path, so there it is `python3 examples/network_sim/run.py --out DIR`. In one
 process tree it runs:
 1. the accounting layer's demo, `python -m datacenter.demo` (`DIR/demo.txt`);
 2. the mock datacenter in five blocks (`mockdc.py down`, then `up --blocks 5`), whose blocks take its five strategies,
@@ -25,7 +25,7 @@ fleet's merged ones), and the answers. The verdicts are compared with the expect
 `expected_records` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited nonzero or a proxy tick ran
 past its slack, so the night is its own regression check.
 
-    python3 benchmarks/network_sim/run.py --out DIR [--python PY]
+    python3 examples/network_sim/run.py --out DIR [--python PY]
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """`cache_step_v2`'s CacheStep_v2: the circuit against its specification (`reference`) on random calls at a small size
 class (two copies an entry, so duplicates too), the witnesses it derives (the hit, the evictable count, the threshold
 stamp, the returns), its refusals, and the difftest vectors: slices of two async traces, every call vLLM's pool made
-(`benchmarks/network_e2e/encodings/cache_pool_vectors.py`, which holds the unit to the replay's `_KV`), each with its
+(`examples/network_vllm/encodings/cache_pool_vectors.py`, which holds the unit to the replay's `_KV`), each with its
 refused variants."""
 from __future__ import annotations
 
