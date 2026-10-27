@@ -42,9 +42,11 @@ A registry's prefixes are its own: `Registry.validate_environ` refuses a variabl
 nor lists as read elsewhere, naming it, and `of` runs it when it first loads a registry, so a misspelt or retired knob fails
 the run instead of being ignored.
 
-A file that runs outside the tree (stdlib only, shipped beside the cubin it loads) can't import its registry, so it reads the
-environment itself; the registry still declares each variable it reads and names the file (``standalone``), and
-`Registry.standalone_problems`, which the distribution's suite runs, holds each read to its declaration.
+A ship (files a build copies out of the tree to run on another machine) takes its distribution's ``settings.py`` with it,
+and `of` finds it beside them.  A file that can't import the registry at all (stdlib only, or run under another tree's
+PYTHONPATH) reads the environment itself; the registry still declares each variable it reads and names the file
+(``standalone``), and `Registry.standalone_problems`, which the distribution's suite runs, holds each read to its
+declaration.
 
 Stdlib only.  Outside the vLLM integration the environment is read in the registries (a module named ``settings.py``) and in
 the files ``tests/lint/allowlists/repo_env_reads.json`` still lists, which only shrinks.
@@ -396,7 +398,9 @@ def _loaded(root: Path) -> Registry:
 
 def of(path: str | os.PathLike) -> Registry:
     """The registry of the distribution ``path`` is in: the ``settings.py`` beside the nearest ``pyproject.toml`` above it,
-    loaded once a process (by its path, never by its module name) and checked then (`Registry.validate_environ`)."""
+    or, in a ship (files copied out of the tree with their registry, no ``pyproject.toml`` above them), the ``settings.py``
+    beside ``path``.  Loaded once a process (by its path, never by its module name) and checked then
+    (`Registry.validate_environ`)."""
     here = Path(path).resolve()
     for root in here.parents:
         if (root / "pyproject.toml").is_file():
@@ -404,4 +408,7 @@ def of(path: str | os.PathLike) -> Registry:
                 raise LookupError(f"{here}: its distribution ({root}) has no settings registry: declare its variables in "
                                   f"{root / REGISTRY_FILE} (verity_config.settings), or read the shared ones from SHARED")
             return _loaded(root)
-    raise LookupError(f"{here}: no pyproject.toml above it, so no distribution's settings registry")
+    if (here.parent / REGISTRY_FILE).is_file():
+        return _loaded(here.parent)
+    raise LookupError(f"{here}: no pyproject.toml above it and no {REGISTRY_FILE} beside it, so no settings registry: ship "
+                      f"its distribution's {REGISTRY_FILE} with it")

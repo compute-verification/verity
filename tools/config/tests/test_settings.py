@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from pathlib import Path
 
 import pytest
 from verity_config import settings as ST
@@ -127,6 +128,13 @@ def test_of_loads_the_distributions_registry_by_its_path(tmp_path, monkeypatch) 
         ST.of(d / "x.py")
     monkeypatch.delenv("D_TYPO")
     assert ST.of(d / "x.py").D_N == 1
+    ship = tmp_path / "ship"
+    ship.mkdir()
+    assert not any((p / "pyproject.toml").is_file() for p in ship.parents)
+    with pytest.raises(LookupError, match="no settings.py beside it"):
+        ST.of(ship / "check.py")
+    (ship / "settings.py").write_text((d / "settings.py").read_text())
+    assert ST.of(ship / "check.py").D_N == 1 and Path(ST.of(ship / "bench.py").path) == ship / "settings.py"
 
 
 def test_a_standalone_file_reads_only_declared_variables_at_their_declared_defaults(tmp_path) -> None:
