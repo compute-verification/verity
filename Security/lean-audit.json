@@ -2630,8 +2630,6 @@
   "Flock.SecurityProofs.RecursiveAuditC3": "9b73b88919bb15a1bcfcc8e00e9f5afd9440726ebdcdaa80b26e5136b59e456b",
   "Flock.SecurityProofs.RecursiveRanRegistered": "6e4075cb2bdd1b28dc8fd6c03ab6c6686cc4b6a139f0e1bcb643bd5c305fbc86",
   "Flock.SecurityProofs.RecursiveRanRegisteredExec": "0773fcb0a771cc58de3b22db973c56703f767c3fc2aa08ec46fd6d4634d76373",
-  "Flock.SecurityProofs.RecursiveSound": "0643eccd98a9217e39b6606019c7b5395905ba6f01aef4c2cf5a5d4edf858324",
-  "Flock.SecurityProofs.RecursiveSoundExec": "13f097346041e716e80c50f7c11c89f5122b6bfa22cb0a3b1e9fdc6ff80444af",
   "Flock.SecurityProofs.SampledKSLivePub": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
   "Flock.SecurityProofs.SampledKSLiveStated": "6eb82e74bf701806a374272925b7f3b54c52a8347a519872322043a05dcb8203",
   "Flock.SecurityProofs.SampledKSLiveV2": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
