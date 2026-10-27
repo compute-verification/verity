@@ -419,7 +419,7 @@ prints the table; the groups are:
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for),
+  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for), `run_of_record` (the table record a run or artifact is, by the record's name),
   `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which

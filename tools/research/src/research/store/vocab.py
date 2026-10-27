@@ -69,6 +69,7 @@ STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
 OF_RECORD = "of-record"
+RUN_OF_RECORD = "run_of_record"
 GOAL = "goal"
 ABANDONED = "abandoned"
 REPLAY_SET = "replay_set"
@@ -312,6 +313,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "approach record, the <campaign>/<slug> that replaces it"),
     _k(OF_RECORD, GROUP_RESULT, BOOL, "the lane's word that this run or artifact is the evidence of record for its `goal`; the one it "
        "replaces gets superseded_by"),
+    _k(RUN_OF_RECORD, GROUP_RESULT, TEXT, "on a run or artifact: the table record it belongs to, by the record's name (the served "
+       "table's `Protocol.record`, such as commit); an artifact so labelled names its runs in its `runs` meta; a target's latest "
+       "label wins", pattern=r"[a-z0-9][a-z0-9-]*"),
     _k(GOAL, GROUP_RESULT, TEXT, "the outcome or done-condition the run or artifact is evidence for, as its lane names it (O1-live, O2-proof)"),
     _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
