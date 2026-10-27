@@ -41,8 +41,11 @@ keeps the wipe uncounted otherwise.
 `served_session.py` is the runbook of NET-83's session of record, the network certifier in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
 the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
-vy-dc-h200-2's `serve-openai` on :18782, at the scan's class: prompts of KI = 1,024 ids from a fresh secret seed, and 64
-ids out a request. It runs at a given UTC time when asked. The lane's fetch, with `witness/`, stays in a 0700
+vy-dc-h200-2's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (the
+class's 1,024 reach the warden late, NET-107), each answered greedily with at most 64 ids, ending at the base model's
+EOS id 128001. It runs at a given UTC time when asked. vllm starts the endpoint by hand (serve-openai directly with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, and posts its
+records as an art without `requests.jsonl`, whose prompt ids stay on the served node. The lane's fetch, with `witness/`, stays in a 0700
 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs
 the chain's warden path on the kept fetch, and only from a tree with the record's leak guard. `session --gate local`
 is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins

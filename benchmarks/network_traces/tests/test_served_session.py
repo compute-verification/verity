@@ -1,5 +1,6 @@
-"""served_session: the plan is the gate's scan rehearsal at the scan's class (KI prompt ids in, KO out), which this tree's
-gate accepts, and a request the gate or the class refuses is refused with its reason; a session through a stub gate keeps
+"""served_session: the plan is the gate's scan rehearsal inside the scan's class (PROMPT_IDS prompt ids in, at most KO
+out), which this tree's gate accepts, with the endpoint's sealed flags and vllm's hand start, and a request the gate or
+the class refuses is refused with its reason; a session through a stub gate keeps
 the lane's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
@@ -53,26 +54,32 @@ else:
 
 
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
-    assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO)
+    assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
     a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
-    assert len(ps) == 64 and {len(p) for p in ps} == {SS.KI} and all(0 <= t < SS.VOCAB for p in ps for t in p)
+    assert len(ps) == 64 and {len(p) for p in ps} == {SS.PROMPT_IDS} and all(0 <= t < SS.VOCAB for p in ps for t in p)
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
     data = json.dumps(ps, separators=(",", ":")).encode()
     doc = SS.plan(a, data)
-    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 20 --requests 400 --height 12 "
+    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
-    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.KI} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
-    assert "--port 18782 --protocol ids --id-payload 503 --admit release-order" in doc["endpoint"]
-    assert doc["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
-    assert f"PORT=18782 ADMIT=release-order PROTOCOL=ids MAX_MODEL_LEN={SS.KI + SS.KO}" in doc["hand_start"]
+    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
+    assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
+                                    "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
+    assert doc["runs"]["chain"].endswith("--endpoint ART --eos-ids 128001")
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
+                                                 "--disk-floor-gb 40"))
+    long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
+    long.minutes = a.minutes
+    assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
 
 
 @pytest.mark.parametrize("flags, why", [
-    (["--tokens", "32"], "exactly KO = 64"),
+    (["--tokens", "65"], "1 to KO = 64"),
+    (["--tokens", "0"], "1 to KO = 64"),
     (["--prompt-ids", "1025"], "1 to KI = 1024"),
-    (["--prompts", "200"], "the gate refuses it: --prompts: over 1048576 bytes"),
+    (["--prompts", "200", "--prompt-ids", "1024"], "the gate refuses it: --prompts: over 1048576 bytes"),
     (["--requests", "100000", "--minutes", "60"], "the gate refuses it: --requests '100000'"),
     (["--minutes", "5"], "the gate refuses it: --minutes 5"),
 ])
@@ -96,7 +103,7 @@ def test_a_session_keeps_the_lanes_fetch_apart_and_publishes_the_bundle_less_wit
     assert _session(tmp_path, monkeypatch) == 0
     assert (tmp_path / "request").read_text().endswith("--scan --prompts --tokens 64")
     prompts = (tmp_path / "prompts.json").read_bytes()
-    assert [len(p) for p in json.loads(prompts)] == [SS.KI] * 3
+    assert [len(p) for p in json.loads(prompts)] == [SS.PROMPT_IDS] * 3
     keep, kept = tmp_path / "keep", tmp_path / "keep" / RUN / "fetch.tar.gz"
     assert [p.stat().st_mode & 0o777 for p in (keep, keep / RUN, kept)] == [0o700, 0o700, 0o600]
     assert f"{RUN}/witness/prompts.json" in SS.members(kept.read_bytes())
@@ -107,7 +114,7 @@ def test_a_session_keeps_the_lanes_fetch_apart_and_publishes_the_bundle_less_wit
     doc = json.loads((out / "session.json").read_text())
     assert (doc["run"], doc["rc"], doc["verdict"]["accepted"], doc["windows"], doc["session_s"]) == (RUN, 0, True, 4,
                                                                                                      12.8)
-    assert doc["prompts"] == {"count": 3, "ids": 3 * SS.KI} and doc["keep"] == str(kept)
+    assert doc["prompts"] == {"count": 3, "ids": 3 * SS.PROMPT_IDS} and doc["keep"] == str(kept)
     assert not any(n in p.read_bytes() for p in out.iterdir() for n in SS.needles(json.loads(prompts)))
 
 
