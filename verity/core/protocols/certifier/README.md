@@ -2,9 +2,9 @@
 
 The **network certifier** is the auditor's device on a boundary link of a spatial unit. It shapes each link into a fixed
 grid of buckets and frames, records exactly that grid and one status per sampling block, and once per sampling block
-signs a **network certificate** over a salted digest of the record. The audit holds what the certificates sign to the
-declared Program. The capacity bounds count what a covert sender can move across the boundary through when frames leave,
-once the Program fixes every frame's content and order.
+whose record is complete signs a **network certificate** over a salted digest of the record. The audit holds what the
+certificates sign to the declared Program. The capacity bounds count what a covert sender can move across the boundary
+through when frames leave, once the Program fixes every frame's content and order.
 
 ## Where it is stated
 
@@ -75,7 +75,8 @@ It is pure Python. It imports only the standard library and `verity`. The signat
 The network certifier is auditor-trusted. It runs on a host the prover doesn't control (`trusted-host`), runs the grid
 and signs what it ran:
 
-- Once per sampling block, it signs an LMS network certificate (SHA-512, n = 64) over a salted digest of the record.
+- Once per sampling block whose record is complete, it signs an LMS network certificate (SHA-512, n = 64) over a
+  salted digest of the record. Any other sampling block gets none (`Issuer.refused`) and fails closed (W6).
 - It signs each period's clock sync as a salted clock certificate.
 - With the salt on, it draws the PoUW salt and reveals it on the PoUW period's registration.
 
@@ -102,7 +103,7 @@ assert audit.accepted
 
 - **The audit.** `audit.Audit`, with `check_link`, `check_ingress_link` and `active.check_salts`.
 - **The device's signatures.**
-  - `certificate.Issuer`, with `certify` and `salted_clock`.
+  - `certificate.Issuer`, with `certify`, `salted_clock` and `refused`.
   - `certificate.LmsSigner` and `certificate.LmsKey`.
   - `CertifiedRecord.verify` and `CertifiedClock.verify`.
 - **Through the proof service.**
