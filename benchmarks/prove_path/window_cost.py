@@ -520,6 +520,59 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
     return out, replace(heads, S=slots, P=P), cls
 
 
+def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: int) -> dict:
+    """One slot's output rows at position T under ``levers`` as a `commit_slots` step layout (`slots._layout_json`'s form,
+    for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
+    bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
+    every position as often (`TokenFeed_v1` at its prompt position, `SlotRow_v1` at the first). No lever but ``P``, whose
+    shared rows are another layout (``step.py export --shared``), changes a template's output rows outside attention."""
+    if "P" in levers:
+        raise ValueError("P's shared rows are commit_slots' own layout (step.py export --shared --row-bytes), not this one")
+    S, P, BN = heads.S, heads.P, EXACT_KEYS if "L1" in levers else heads.BN
+    here = []
+    for u in rest:
+        fam, s = CS.statics(u.label)
+        if fam == CS.FEED:
+            k = int(T == 1) if s["FIRST"] else int(1 < T <= s["NP"])
+        elif fam == CS.ROW:
+            k = int(T == 1)
+        else:
+            k, r = divmod(u.n, S * P)
+            if r:
+                raise ValueError(f"{u.n} {u.label} units are not a fixed count at each of {S} × {P} positions")
+        here.append((u, k))
+    nb, nvis = heads.blocks_at(T, BN)
+    group = GROUP if "L3a" in levers else None
+    one = Heads(1, T, heads.H, heads.G, heads.D, BN, heads.block, heads.first, heads.full, heads.end)
+    for u in one.units(BN=BN, group=group, packed="L3b" in levers):
+        fam, s = CS.statics(u.label)
+        if fam == FIRST:
+            k = heads.H if s["NVIS"] == nvis else 0
+        elif fam == heads.block:
+            k = heads.H * (nb - 1)
+        elif fam == END:
+            k = heads.H
+        else:
+            w, part = s["WORLD"], nvis if group is None else nvis % group
+            made = (w == BN and T % BN == 0) or (group is not None and w == group and T % group == 0)
+            k = heads.G if made or (w == part and 1 < part < BN) else 0
+        here.append((u, k))
+    groups = []
+    for u, k in here:
+        if not k or not u.out:
+            continue
+        sizes = [u.out_bytes // u.out + (j < u.out_bytes % u.out) for j in range(u.out)]
+        units, at = [], 0
+        for _ in range(k):
+            unit = []
+            for b in sizes:
+                unit.append([[0, at, b]])
+                at += b
+            units.append(unit)
+        groups.append({"sources": [at], "units": units})
+    return {"name": f"window_cost {S} x {P} at T {T}, levers {','.join(sorted(levers)) or 'none'}", "groups": groups}
+
+
 #: the plan's order, each step stacked on those before it: exactness (no pad pass), the registration, the rows' layout
 PLAN = ("L1", "L2", "L4", "W", "R", "L3a", "L3b", "P")
 
@@ -635,9 +688,21 @@ def main(argv: list[str] | None = None) -> int:
     cpu.add_argument("--measure-cpu", default=None, metavar="SCRATCH", help="measure this host's CPU rates (`measure_cpu`), "
                      "writing its test files into SCRATCH, and price the registration at them")
     cpu.add_argument("--cpu-rates", default=None, metavar="FILE", help="price the registration at an earlier --out's rates")
+    ap.add_argument("--layout", nargs=2, default=None, metavar=("T,T,...", "DIR"), help="write one slot's output rows at "
+                    "each position T as a commit_slots layout, DIR/pos<T>.json (`position_layout`), for step.py time")
+    ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None
+    if a.layout:
+        census = json.loads(Path(a.census).read_text())
+        rest, heads = (project(census, *to, a.target)[:2] if to else
+                       split(units_of(census), census["class"], a.target))
+        levers, d = frozenset(v for v in a.layout_levers.split(",") if v), Path(a.layout[1])
+        d.mkdir(parents=True, exist_ok=True)
+        for T in (int(v) for v in a.layout[0].split(",")):
+            (d / f"pos{T}.json").write_text(json.dumps(position_layout(rest, heads, levers, T)) + "\n")
+        return 0
     rates = (measure_cpu(Path(a.measure_cpu)) if a.measure_cpu else
              json.loads(Path(a.cpu_rates).read_text())["cpu"] if a.cpu_rates else None)
     doc = price(json.loads(Path(a.census).read_text()), a.target, a.served_s, a.step_ms / 1e3, to, rates)

@@ -86,6 +86,19 @@ def test_the_attention_at_blocks_of_4_over_6_positions_is_the_hand_count():
     assert "AllGather_v1{WORLD=3,N=8}" not in grouped
 
 
+@pytest.mark.parametrize("levers", [(), ("L3a",), ("L3b",), ("L3a", "L3b", "W", "R")])
+def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
+    doc = _census(WindowClass(2, 4, 2))
+    rest, heads = W.split(W.units_of(doc), doc["class"], "sm120")
+    us = W.window_units(rest, heads, frozenset(levers))
+    rows = nbytes = 0
+    for T in range(1, heads.P + 1):
+        for g in W.position_layout(rest, heads, frozenset(levers), T)["groups"]:
+            rows += heads.S * sum(len(u) for u in g["units"])
+            nbytes += heads.S * g["sources"][0]
+    assert (rows, nbytes) == (sum(u.n * u.out for u in us), sum(u.n * u.out_bytes for u in us))
+
+
 @pytest.mark.slow
 def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leaves_no_pad_pass():
     """Lowers int8 Llama-3.2-1B's probe for the H200 (about 5 s), as `class_rows.py --llama1b --int8 --probe 1,2,2`."""
