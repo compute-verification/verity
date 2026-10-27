@@ -580,6 +580,12 @@ def test_the_catalog_resolves_a_descriptor_id_to_verity_s_definition():
             I.resolve(bad)
 
 
+def test_a_template_whose_static_is_a_composite_definition_resolves():
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    fn = bind(BG.ScaledMmS8CoordinateRows, K=128, R=2, DOT=BG.GEMM_SM120_S8["DOT"])
+    assert descriptor_id(I.resolve(descriptor_id(fn))) == descriptor_id(fn)
+
+
 def test_the_advice_opens_to_the_root_its_compiler_s_tree_commits():
     c, data = {"name": "compiler", "digest": "cd" * 64}, bytes(range(70))
     reg = I.commit_advice(c, data, [bytes([i]) * 192 for i in range(3)])
