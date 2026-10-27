@@ -38,9 +38,10 @@ the compiled verifier accepts the reference prover's run. V\*'s gate-level compl
 `HonestWitSatisfies`, and the inner prover's openings at the run are `IrShaped` (`Ir` is not fixed in Lean: the
 theorem holds for every inner prover `Ir` with `IrShaped` at the run, the facts of `Ir.rest`, which the deployed
 builder's `rec_vstage`, `rec_vstar` and `verifier_rows` build, that the stager's checks read). These three are
-witnessed outside Lean at the deployed builder: by every V\* part's session of the honest deployed recursive run being
-accepted by the compiled `flock-verify` (pending: r20261026-223243-c2a7; no passing run yet) and
-by CAPLOWER's `IrShaped` and gate-level checks in the deployed V\* difftest (no passing run yet). No collision among a
+witnessed outside Lean at the deployed builder: `HonestRunAccepted` by run r20261026-223243-c2a7, where the compiled
+`flock-verify` accepted every V\* part's session of the honest deployed recursive run, each part on its own (outer tree
+art:d872affc203376ec503fbbc949b6f2ab3d191b866e6a8cbd7c13656a836734c8), and `IrShaped` and `HonestWitSatisfies` by
+CAPLOWER's checks in the deployed V\* difftest (no passing run yet). No collision among a
 part's recorded calls is `NoCollAt`, SHA-512's collision event.
 
 Discharged in Lean: each part's staging setting up (`stagedSetsUp_accepted`, from the run accepting), the stager's
@@ -103,8 +104,16 @@ statement `x` with witness `w` is in the compiled record's relation, parses to `
 verifier accepts the reference prover's run on tape `ω` and coins `r`. A concrete statement can't be evaluated in Lean
 (its circuit is 22 MB and `Json.parse` is not kernel-evaluable), so this is witnessed outside Lean: every V\* part's
 session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
-compiled verdict exists). The pending witness is run r20261026-223243-c2a7 (`benchmarks/recursion_e2e --e2e --cpu`);
-no passing witness run exists yet. -/
+compiled verdict exists).
+
+The witness is run r20261026-223243-c2a7 (`benchmarks/recursion_e2e --e2e --cpu`, K = 64, N = 16, under the firewall,
+at main 4331ec922a). The compiled verifier printed `VERDICT accepted` on each of the 10 V\* parts (L0–L3, alg-p0,
+alg-p1, cap, cap-L1–L3), and the inner session (16 `GemmCoordinate_v2{K=64}` units) was accepted. With a challenge or
+query coin flipped, the parts that read it refused. The outer tree is
+art:d872affc203376ec503fbbc949b6f2ab3d191b866e6a8cbd7c13656a836734c8.
+
+Only Python joins the 10 per-part verdicts, so what the run witnesses is that every part's session accepted, not that
+one compiled verifier accepted the whole outer statement. -/
 def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.Stmt)
     (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin) : Prop :=
@@ -146,10 +155,11 @@ end Premises
 at the deployed brings at `x` under `deployedB` (`bringsAt_deployedB`), V\*'s layout of record `layR elemR` and the
 deployed bound record, where the compiled verifier accepts the reference prover's run (`HonestRunAccepted`), each part
 `s < nS x`'s circuit accepts. `HonestRunAccepted`, `IrShaped` and `HonestWitSatisfies` are witnessed outside Lean at the
-deployed builder: by every V\* part's session of the honest deployed recursive run being accepted by the compiled
-`flock-verify` (composed per part; pending run r20261026-223243-c2a7) and by CAPLOWER's `IrShaped` and gate-level
-checks in the deployed V\* difftest. No passing witness run exists yet; each premise's docstring is to name its run id or
-art id when it passes.
+deployed builder. `HonestRunAccepted`'s witness is run r20261026-223243-c2a7: each of the 10 V\* parts' sessions was
+accepted by the compiled `flock-verify`, and only Python joins those verdicts (outer tree
+art:d872affc203376ec503fbbc949b6f2ab3d191b866e6a8cbd7c13656a836734c8). `IrShaped` and `HonestWitSatisfies` are
+witnessed by CAPLOWER's checks in the deployed V\* difftest, which have no passing run yet; their docstrings are to name
+the run id or art id when one passes.
 
 Besides those it takes no collision among each part's recorded calls (`NoCollAt`, SHA-512's collision event), the
 fitted rows (`RowsFit`) and the tape exception (`hTops`: the reps' tops differ at every level above 0). The stager
