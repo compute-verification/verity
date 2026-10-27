@@ -8,7 +8,7 @@ probability δ, at most so many proof blocks are faulty, a proof block being fau
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs is a subprotocol of both composite protocols. Remote Verity (`verity/remote/v0`,
+Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
 `verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
 (`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
 composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
@@ -28,6 +28,10 @@ rests on these named assumptions:
   draw file is the one `flock-verify draw` printed for the verifier's own draw.
 - `TableCRZ` and `LinkCRZC`: SHA-512's collision resistance (`ecr/sha-512`), for the collision finders the proof builds
   from the prover.
+
+On `main`, both composites' sampled-proofs component is one-stage v1 (`verity/sampled-proofs/one-stage/v1`), which
+takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --zk` produces them, and the link from a
+composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger, which adds two premises about
@@ -140,10 +144,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
     allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
     auditor host runs both, and a window's coins leave it only on the peer's certifier coin link,
-    which the gate refuses to open without (`auditor.coin_ports`). In the Lean it is the Prop
-    `Pouw.Assumptions.CoinsConfidential`: a replica's prover is the same function whatever the other replicas' coins,
-    the form ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` takes as a hypothesis.
-  - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
+    which the gate refuses to open without (`auditor.coin_ports`). No Lean statement names it yet; PoUW's pooled
+    guarantee `Pouw.Guarantees.Dither.FleetSound` is stated for replicas whose coins reach only themselves, the property
+    this premise provides.
+  - `OneClock`, a named premise under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
