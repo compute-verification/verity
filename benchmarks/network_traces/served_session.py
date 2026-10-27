@@ -1,9 +1,11 @@
 """served-session: NET-83's session of record, the network certifier in front of a served model, as `research run` steps
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
 `benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default vy-dc-h200-2's
-`verity-vllm serve-openai` on 127.0.0.1:18782, at the scan's class (`scan_zk.W63`): prompts of exactly KI = 1,024 token
-ids, each request answered with exactly KO = 64. The network chain's run of record (`chain_record.sh`'s warden path) then
-proves the session.
+`verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
+KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the warden
+late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill, NET-107), and each is answered
+greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS id, 128001, after 1 to 5 ids in 15 to 27% of
+requests. The network chain's run of record (`chain_record.sh`'s warden path) then proves the session.
 
     python served_session.py plan [FLAGS]
     python served_session.py session --out DIR [FLAGS] [--gate USER@HOST | --gate local] [--key KEY] [--keep DIR]
@@ -11,8 +13,11 @@ proves the session.
     python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [--draw K]
         [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
-FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 400] [--height 12] [--minutes M]
-       [--prompt-ids 1024] [--tokens 64] [--vocab 128000]
+FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
+       [--prompt-ids 256] [--tokens 64] [--vocab 128000]
+
+``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by vllm's sizing; ``--tokens`` is each request's
+max_tokens, at most KO.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
@@ -39,7 +44,8 @@ FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 400] [--h
   accepted the run, its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's records (``--endpoint``; a dry rehearsal's KEEP/RUN/endpoint by default) and the model's EOS ids
-  (``--eos-ids``), N2's period drawn on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
+  (``--eos-ids``: 128001 for the served model, the stand-in's ``--vocab`` for a dry rehearsal's), N2's period drawn
+  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
   refused unless the tree has the record's leak guard (``leak_guard.py``, #5218), which chain_record.sh runs on its
@@ -52,10 +58,23 @@ fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and it
 session's coins over ssh to that port of P's loopback, where the draw's client connects. The gate key and the warden
 run's witness are the auditor's, so the draw never runs on the served node, which is the prover's: a ``--coin-peer``
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
-node with no line is refused, so until P has one the chain draws on the verifier's coins. ``--main`` is the verifier's
+node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (since 27 Oct, with its /etc/vy/peers entry), and on
+a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's
 copy of main's first-parent history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does;
 ``--challenger-key`` is infra's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run.
 CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
+
+**The endpoint.** vllm starts it by hand on vy-dc-h200-2 (`HAND_START`) at 11:15Z on 28 Oct, ahead of the session's
+``--at``, and it listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl,
+serve.json and `USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line, in
+requests.jsonl's order, vllm's #5303).
+requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this runbook neither fetches
+nor publishes it. The endpoint step's advice (`verity-vllm advice`) needs it, the Commit record, so ``chain`` rebuilds
+it (`endpoint_records`) from `USERS` and the kept warden run's certified I/O (`warden_chain.io`), each request's prompt
+and streamed ids as the warden's cells carry them and its finish (`finish`), in KEEP/RUN/endpoint-rebuilt (0700, outside
+the run dir). chain_record.sh's copy of it is in its scratch, removed on exit, and its leak guard reads the record
+against the warden's witness; the endpoint's trace is then checked against the certified I/O, not the prover's record
+of it. An endpoint that holds requests.jsonl (a dry rehearsal's stand-in's) is read as it is.
 
 The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate directory there):
 
@@ -65,14 +84,14 @@ The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate dir
       --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
       tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
-      --eos-ids 128001,128008,128009 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
+      --eos-ids 128001 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
-(``--coins verifier``, without ``--send`` and ``--challenger-key``, until vy-nebius-cpu-2 has its coin-ports line);
+(``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
 
-and the dry rehearsal, on any CPU node:
+and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
 
-    research run --on vy-nebius-cpu-5 --pool network --source . --project verity --as network-accounting --cwd source \\
-      --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
+    research run --on vy-nebius-cpu-2 --pool network --source . --project verity --as network-accounting --cwd source \\
+      --timeout 45m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
       benchmarks/network_traces/served_session.py session --gate local --vocab 256 --prompts 16 --requests 16 \\
       --height 10 --keep /workspace/research/lanes/network-accounting/dry --out "$OUT"'
 """
@@ -85,6 +104,7 @@ import json
 import os
 import secrets
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -98,8 +118,13 @@ TREE = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "live_challenger"))
 import auditor as A  # noqa: E402
 
-#: the scan's class (`scan_zk.W63`): at most KI prompt ids in, exactly KO ids out a request
+#: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request
 KI, KO = 1024, 64
+#: the session's prompt ids a request, which reach the warden in time (KI's don't: NET-107)
+PROMPT_IDS = 256
+#: the session's requests: what vy-dc-h200-2's free disk seals, within 72 GB even if every request runs all KO ids
+#: (vllm's sizing, r20261027-125522-d460: 636.5 MB a full-length request)
+REQUESTS = 113
 PEER, PORT, GATE, LANE = "vy-dc-h200-2", 18782, "research@204.12.178.84", "network-accounting"
 #: the auditor's side, where the chain runs and the gate's coins for its draw arrive
 AUDITOR = "vy-nebius-cpu-2"
@@ -111,12 +136,23 @@ VOCAB = 128_000
 MARGIN = 3
 LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
-#: the flags the endpoint (vllm's) serves the scan's class with: the warden's id form, in its release order
+#: the flags the endpoint (vllm's) serves the session with: the warden's id form, in its release order, each window sealed
+#: without the attention interiors (about 1 GB a request at 256 ids)
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 --admit release-order " \
-           "--scheme rows-sha512 --seal --max-model-len {ctx}"
-#: vllm's hand start of it, which commits (``--required-manifest ROW/manifest.json``); serve.sh's MAX_MODEL_LEN defaults
-#: to 512, under the class's KI + KO
-HAND_START = "examples/vllm/serve.sh with PORT={port} ADMIT=release-order PROTOCOL=ids MAX_MODEL_LEN={ctx}"
+           "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
+#: serve-openai's default --max-model-len, which the endpoint's flags name only past it
+CONTEXT = 512
+#: vllm's record in its records art (#5303): each engine request's engine_id and its warden user (null for a body that
+#: sent none), a line in requests.jsonl's order: requests.jsonl less its values
+USERS = "request_users.jsonl"
+HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+              "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
+              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
+              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
+              "h200-2 under its 300 GB disk floor "
+              "and sends its own smoke and load requests into the records. Its --copy-records-to copies requests.jsonl "
+              "too, so it points at a private dir on h200-2, and the records art is the four public records copied from "
+              "there: request_users.jsonl, advice_trace.jsonl, windows.jsonl and serve.json")
 
 
 class Refused(Exception):
@@ -151,8 +187,8 @@ def check(a: argparse.Namespace, data: bytes) -> dict:
     """The request as this tree's gate records it, or Refused with the gate's reason or the scan class's."""
     if not 1 <= a.prompt_ids <= KI:
         raise Refused(f"--prompt-ids {a.prompt_ids}: the scan's class takes 1 to KI = {KI} prompt ids a request")
-    if a.tokens != KO:
-        raise Refused(f"--tokens {a.tokens}: the scan's class answers exactly KO = {KO} ids a request")
+    if not 1 <= a.tokens <= KO:
+        raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {KO} ids a request")
     if not 2 <= a.vocab <= 1 << A.WARDEN_PROMPT_ID_BITS:
         raise Refused(f"--vocab {a.vocab}: 2 to 2^{A.WARDEN_PROMPT_ID_BITS}, the scan's ids")
     with tempfile.TemporaryDirectory() as d:
@@ -169,11 +205,12 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
     session = (f"python3 benchmarks/network_traces/served_session.py session --out \"$OUT\" --peer {a.peer} "
                f"--port {a.port} --prompts {a.prompts} --requests {a.requests} --height {a.height} "
                f"--minutes {a.minutes}" + (f" --at {a.at}" if a.at else ""))
+    ctx = a.prompt_ids + a.tokens
     return {"request": shlex.join(words(a)), "minutes": a.minutes,
             "least_minutes": A.warden_minutes(a.requests, a.height),
             "prompts": req["prompts"], "prompts_bytes": len(data),
-            "endpoint": ENDPOINT.format(port=a.port, ctx=a.prompt_ids + a.tokens),
-            "hand_start": HAND_START.format(port=a.port, ctx=a.prompt_ids + a.tokens),
+            "endpoint": ENDPOINT.format(port=a.port) + (f" --max-model-len {ctx}" if ctx > CONTEXT else ""),
+            "hand_start": HAND_START,
             "runs": {
                 "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
@@ -181,7 +218,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                          "--cwd clone --timeout 180m -- env CHECK_SLOTS=/workspace/research/locks/network/slots "
                          "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 "
                          "-- nice -n 19 python3 benchmarks/network_traces/served_session.py chain --run RUN "
-                         "--endpoint ART --eos-ids IDS"}}
+                         "--endpoint ART --eos-ids 128001"}}
 
 
 def keep_dir(keep: Path, out: Path) -> Path:
@@ -374,6 +411,65 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
             "--challenger-key", str(key), "--gate-key", str(a.key)]
 
 
+def certified_io(fetch: Path) -> dict:
+    """The kept warden run's certified I/O (`warden_chain.io`), read in a scratch directory beside the fetch."""
+    sys.path[:0] = [str(TREE), str(HERE)]
+    import warden_chain as WC
+    with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
+        with tarfile.open(fetch, "r:gz") as tar:
+            tar.extractall(d, filter="data")
+        try:
+            return WC.io(next(p for p in Path(d).iterdir() if p.is_dir()))
+        except SystemExit as e:
+            raise Refused(f"{fetch}: {e}") from None
+
+
+def finish(out: list[int], max_tokens: int, eos: set[int]) -> dict:
+    """serve-openai's finish of an answer `out`: the model's EOS when it ends at one or short of its max_tokens, else
+    its length."""
+    stop = (bool(out) and out[-1] in eos) or len(out) < max_tokens
+    return {"reason": "stop" if stop else "length", "stop_reason": None}
+
+
+def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
+    """The endpoint's records as the chain reads them: `src` when it holds requests.jsonl, else `dest` (0700) with
+    `src`'s records (an art: id, a directory or a tarball) and requests.jsonl rebuilt beside its `USERS`."""
+    path = Path(src)
+    if path.is_dir() and any(path.rglob("requests.jsonl")):
+        return src
+    dest.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if src.startswith("art:"):
+        got = subprocess.run(["research", "data", "fetch", src, "--to", str(dest)], capture_output=True, text=True)
+        if got.returncode:
+            raise Refused(f"research data fetch {src} (exit {got.returncode}): {got.stderr.strip()[-300:]}")
+    elif path.is_dir():
+        if path.resolve() != dest.resolve():
+            shutil.copytree(path, dest, dirs_exist_ok=True)
+    elif path.is_file():
+        with tarfile.open(path) as tar:
+            tar.extractall(dest, filter="data")
+    dest.chmod(0o700)
+    ep = next((p.parent for p in dest.rglob("advice_trace.jsonl")), None)
+    if ep is None or not (ep / USERS).is_file():
+        raise Refused(f"--endpoint {src}: no requests.jsonl, and no {USERS} beside an advice_trace.jsonl to rebuild it "
+                      "from: give vllm's records art")
+    io = certified_io(fetch)
+    if not io["accepted"]:
+        raise Refused(f"the kept warden run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
+    by, lines = {r["user"]: r for r in io["records"]}, []
+    for m in map(json.loads, filter(str.strip, (ep / USERS).read_text().splitlines())):
+        if (r := by.pop(m["user"], None)) is None:
+            raise Refused(f"{USERS}: engine request {m['engine_id']}'s user {m['user']!r} is no certified request left "
+                          "(none sent, not the warden's, or an earlier line's)")
+        lines.append(json.dumps({"engine_id": m["engine_id"], "user": m["user"], "prompt_ids": r["prompt"],
+                                 "streamed_ids": r["output"], "finish": finish(r["output"], r["max_tokens"], set(eos))}))
+    rebuilt = ep / "requests.jsonl"
+    rebuilt.write_text("".join(line + "\n" for line in lines))
+    rebuilt.chmod(0o600)
+    print(f"chain: requests.jsonl rebuilt in {ep}: {len(lines)} requests from {USERS} and the certified I/O", flush=True)
+    return str(dest)
+
+
 def chain(a: argparse.Namespace) -> int:
     if not (HERE / "leak_guard.py").is_file():
         raise Refused("this tree has no record leak guard (leak_guard.py, #5218), which chain_record.sh runs on its "
@@ -387,8 +483,6 @@ def chain(a: argparse.Namespace) -> int:
     env = dict(os.environ)
     env.update({"CR_PATH": "warden", "CR_GATES": str(fetch), "CR_MEM_GB": "96", "CR_N2_DRAW": "8",
                 "CR_TIE_WINDOWS": "8"})
-    if endpoint:
-        env.update({"CR_ENDPOINT": endpoint, "CR_EOS_IDS": a.eos_ids})
     for kv in a.set:
         k, eq, v = kv.partition("=")
         if not (eq and k.startswith("CR_")):
@@ -402,6 +496,10 @@ def chain(a: argparse.Namespace) -> int:
         raise Refused(f"{coins}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give paths without it")
     if scan := " ".join(coins):
         env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
+    if endpoint:
+        eos = [int(t) for t in a.eos_ids.split(",")]
+        env.update({"CR_ENDPOINT": endpoint_records(endpoint, a.keep / a.run / "endpoint-rebuilt", fetch, eos),
+                    "CR_EOS_IDS": a.eos_ids})
     return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode
 
 
@@ -413,10 +511,10 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--peer", default=PEER)
         q.add_argument("--port", type=int, default=PORT)
         q.add_argument("--prompts", type=int, default=64)
-        q.add_argument("--requests", type=int, default=400)
+        q.add_argument("--requests", type=int, default=REQUESTS)
         q.add_argument("--height", type=int, default=12)
         q.add_argument("--minutes", type=int)
-        q.add_argument("--prompt-ids", type=int, default=KI)
+        q.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
         q.add_argument("--tokens", type=int, default=KO)
         q.add_argument("--vocab", type=int, default=VOCAB)
         q.add_argument("--at")
@@ -428,7 +526,7 @@ def parser() -> argparse.ArgumentParser:
     q = sub.add_parser("chain")
     q.add_argument("--run", required=True)
     q.add_argument("--keep", type=Path, default=KEEP)
-    q.add_argument("--endpoint")
+    q.add_argument("--endpoint", help=f"the endpoint's records: vllm's art (with {USERS}), a directory or a tarball")
     q.add_argument("--eos-ids")
     q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
