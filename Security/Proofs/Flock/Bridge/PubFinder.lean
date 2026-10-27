@@ -9,16 +9,21 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 built from the prover, `B^τ` (`pubFinder`), outputs a SHA-512 collision. `B^τ` is built from the finders C-Flock's chain
 reads, and no others:
 
-* each table's knowledge finders after each draw (`TableCRZ`'s: the rewinding finders, at cost `qF`, and the
-  self-clash finder, at cost `qS`) and each committed position's link finder (`linkFinderPrZC`'s, at `t'` per run of
-  the prover), each as a `Claims.Finder` on its strategy's coin tape (`Game.tapeFinder`), and the finder that outputs
-  nothing;
-* `B^τ` is their uniform mixture (`Claims.Finder.mix`): it picks one of the `K = card PubIx` uniformly with its own
-  coins and runs it, so each succeeds at most `K` times as often as `B^τ` (`pubFam_le`, from `Claims.Finder.le_mix`).
+* each table's knowledge finders (`TableCRZ`'s: the rewinding finders, at cost `qF`, and the self-clash finder, at cost
+  `qS`), indexed by the table `j < J` (`J = nTab I`) and the finder's slot, not by the draw: slot `s` of table `j`
+  draws the verifier's draw `ω` uniformly with its own coins and runs table `j`'s slot-`s` finder after `ω`
+  (`tabMix`), or outputs nothing where that table has no such slot (`tabAt`);
+* each committed position's link finder (`linkFinderPrZC`'s, at `t'` per run of the prover);
+* the finder that outputs nothing.
 
-`tableCRZ_of_mix`: where every member succeeds with probability at most `p`, each table's finders meet `cr/sha-512`'s
-strict bound at the budget `√(p·2^513)`, whose `q²/2^513` is `p`. `linkFinderPrZC_le_mix`: each link finder's collision
-probability is at most `p`.
+Each is a `Claims.Finder` on its strategy's coin tape (`Game.tapeFinder`). `B^τ` is their uniform mixture
+(`Claims.Finder.mix`): it picks one of the `K = card PubIx` uniformly with its own coins and runs it, so each succeeds
+at most `K` times as often as `B^τ` (`pubFam_le`, from `Claims.Finder.le_mix`). `K` counts no draw: at most `20·J` table
+slots, the committed positions and one.
+
+`tabAvg_of_mix`: where every member succeeds with probability at most `p`, each table slot's finder succeeds with
+probability at most `p` averaged over the draw (`Claims.Finder.mix_Pr`), the averaged premise `Bridge.PubAvg` reads.
+`linkFinderPrZC_le_mix`: each link finder's collision probability is at most `p`.
 -/
 
 namespace Flock.Bridge
@@ -46,20 +51,15 @@ theorem H512_eq_iff (u v : List UInt8) :
 noncomputable def strictComp (Fd : StrictCR.Finder StrictCR.Pair) (q : ℝ) : Claims.Finder :=
   Game.tapeFinder Fd.g Fd.s id (fun _ => ⌈q⌉₊)
 
-/-- **A strict-time finder's premise at a threshold**: where its tape finder outputs a SHA-512 collision with
-probability at most `p ≥ 0`, it meets `cr/sha-512`'s strict bound at the budget `√(p·2^513)`, whose `q²/2^513` is `p`. -/
-theorem strictCR_of_pr (Fd : StrictCR.Finder StrictCR.Pair) (c : ℝ) {p : ℝ} (hp : 0 ≤ p)
-    (hB : (strictComp Fd c).Pr Claims.Sampling.sha512Msg ≤ p) :
-    Fd.CR H512 (Real.sqrt (p * 2 ^ (513 : ℝ))) := by
-  unfold StrictCR.Finder.CR FlockSoundness.Assumptions.SHA512CRStrict
-  intro _
-  unfold strictComp at hB
-  rw [Game.tapeFinder_Pr] at hB
-  have hq : (fun b : StrictCR.Pair => ∃ x y, id b = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) =
-      fun b => ∃ u v, id b = some (u, v) ∧ Claims.Collision Claims.Sampling.sha512Msg u v :=
-    funext fun b => by simp only [Claims.Collision, H512_eq_iff]
-  rw [hq, Real.sq_sqrt (mul_nonneg hp (by positivity)), mul_div_assoc, div_self (by positivity), mul_one]
-  exact hB
+/-- **A strict-time finder succeeds as its tape finder does**: its probability of outputting a collision of `H512` is
+its tape finder's of outputting a SHA-512 collision. -/
+theorem strictComp_Pr (Fd : StrictCR.Finder StrictCR.Pair) (c : ℝ) :
+    (strictComp Fd c).Pr Claims.Sampling.sha512Msg = Fd.ev (Game.ind (StrictCR.IsColl H512)) := by
+  unfold strictComp
+  rw [Game.tapeFinder_Pr, StrictCR.Finder.ev, ← Game.prob_toReal]
+  congr 2
+  funext b
+  simp only [StrictCR.IsColl, Claims.Collision, H512_eq_iff, id]
 
 /-- **A table's knowledge finders**: level `ℓ + 1`'s rewinding finder of rep `r`, the pads' and `τ`'s of rep `r`, level
 0's and the self-clash finder. -/
@@ -132,26 +132,65 @@ noncomputable def linkComp (k Rw M : ℕ) (t' : ℝ) (R : Reg)
     (fun x => ⌈finderCost (rdTZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb R τ c.1)
       (cTZC (planZHJ dj y₀) R t') x⌉₊)
 
-variable (L) in
-/-- **C-Flock's finders at a registration `R`**: every table's knowledge finders after every draw, every link finder,
-and the finder that outputs nothing. -/
-abbrev PubIx (R : Reg) : Type :=
-  Option ((Σ ω : L.Ω, Σ j : Fin (planZHJ dj y₀ (L.draw ω) R).length,
-    TabIx ((planZHJ dj y₀ (L.draw ω) R).get j).sch.levels.length) ⊕ LinkPos dj y₀ P vb L)
+/-- **Slot `s` in a table of `l` rewinding levels**: `s` itself, where the table has it. -/
+def slotAt {m : ℕ} (l : ℕ) : TabIx m → Option (TabIx l)
+  | .inl (r, ℓ) => if h : ℓ.val < l then some (.inl (r, ⟨ℓ.val, h⟩)) else none
+  | .inr x => some (.inr x)
+
+/-- Table `j` of the plan after draw `ω`. -/
+abbrev tabOf (R : Reg) (ω : L.Ω) (j : Fin (nTab I)) : Fin (planZHJ dj y₀ (L.draw ω) R).length :=
+  Fin.cast (planZHJ_length dj y₀ (L.draw ω) R).symm j
+
+/-- **Table `j`'s slot-`s` knowledge finder after draw `ω`**: `tabComp`'s, where table `j` has slot `s` (C-Flock ZK's
+tables have at most 7 rewinding levels), else the finder that outputs nothing. -/
+noncomputable def tabAt (qF qS : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R)
+    (ω : L.Ω) (j : Fin (nTab I)) (s : TabIx 7) : Claims.Finder :=
+  match slotAt ((planZHJ dj y₀ (L.draw ω) R).get (tabOf dj y₀ R ω j)).sch.levels.length s with
+  | some s' => tabComp dj y₀ qF qS R τ ω (tabOf dj y₀ R ω j) s'
+  | none => Claims.Finder.null
+
+theorem tabAt_inl (qF qS : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R)
+    (ω : L.Ω) (j : Fin (nTab I)) (r : Fin 2) (ℓ : Fin 7)
+    (h : ℓ.val < ((planZHJ dj y₀ (L.draw ω) R).get (tabOf dj y₀ R ω j)).sch.levels.length) :
+    tabAt dj y₀ qF qS R τ ω j (.inl (r, ℓ)) =
+      tabComp dj y₀ qF qS R τ ω (tabOf dj y₀ R ω j) (.inl (r, ⟨ℓ.val, h⟩)) := by
+  simp only [tabAt, slotAt, dif_pos h]
+
+theorem tabAt_inr (qF qS : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R)
+    (ω : L.Ω) (j : Fin (nTab I)) (x : Fin 2 ⊕ Fin 2 ⊕ Unit ⊕ Unit) :
+    tabAt dj y₀ qF qS R τ ω j (.inr x) = tabComp dj y₀ qF qS R τ ω (tabOf dj y₀ R ω j) (.inr x) := by
+  simp only [tabAt, slotAt]
+
+/-- **Table `j`'s slot-`s` finder over the draw**: it draws `ω` uniformly with its own coins and runs `tabAt`'s. -/
+noncomputable def tabMix (qF qS : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R)
+    (j : Fin (nTab I)) (s : TabIx 7) : Claims.Finder :=
+  Claims.Finder.mix fun ω : L.Ω => tabAt dj y₀ qF qS R τ ω j s
+
+/-- `tabMix` succeeds with `tabAt`'s probability averaged over the draw (`Claims.Finder.mix_Pr`). -/
+theorem tabMix_Pr (qF qS : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R)
+    (j : Fin (nTab I)) (s : TabIx 7) :
+    (tabMix dj y₀ qF qS R τ j s).Pr Claims.Sampling.sha512Msg =
+      Claims.Ex fun ω : L.Ω => (tabAt dj y₀ qF qS R τ ω j s).Pr Claims.Sampling.sha512Msg :=
+  Claims.Finder.mix_Pr _ _
 
 variable (L) in
-instance instFinitePubIx (R : Reg) : Finite (PubIx dj y₀ P vb L R) := by
+/-- **C-Flock's finders**: each table's knowledge finder slots, every link finder, and the finder that outputs
+nothing. It indexes no draw and no registration. -/
+abbrev PubIx : Type := Option ((Fin (nTab I) × TabIx 7) ⊕ LinkPos dj y₀ P vb L)
+
+variable (L) in
+instance instFinitePubIx : Finite (PubIx dj y₀ P vb L) := by
   classical
   infer_instance
 
 variable (L) in
-noncomputable instance instFintypePubIx (R : Reg) : Fintype (PubIx dj y₀ P vb L R) := Fintype.ofFinite _
+noncomputable instance instFintypePubIx : Fintype (PubIx dj y₀ P vb L) := Fintype.ofFinite _
 
 /-- C-Flock's finders at the prover's continuation `τ`. -/
 noncomputable def pubFam (k Rw M : ℕ) (qF qS t' : ℝ) (R : Reg)
-    (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R) : PubIx dj y₀ P vb L R → Claims.Finder
+    (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R) : PubIx dj y₀ P vb L → Claims.Finder
   | none => Claims.Finder.null
-  | some (.inl ⟨ω, j, i⟩) => tabComp dj y₀ qF qS R τ ω j i
+  | some (.inl (j, s)) => tabMix dj y₀ qF qS R τ j s
   | some (.inr c) => linkComp dj y₀ P vb k Rw M t' R τ c
 
 /-- **`SampledKSLivePub`'s finder `B^τ`**: one of C-Flock's finders at `τ`, picked uniformly with its own coins, run
@@ -163,29 +202,20 @@ noncomputable def pubFinder (k Rw M : ℕ) (qF qS t' : ℝ) (R : Reg)
 /-- **Each of C-Flock's finders succeeds at most `K` times as often as `B^τ`**, `K = card PubIx`
 (`Claims.Finder.le_mix`). -/
 theorem pubFam_le (k Rw M : ℕ) (qF qS t' : ℝ) (R : Reg)
-    (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R) (i : PubIx dj y₀ P vb L R) :
+    (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R) (i : PubIx dj y₀ P vb L) :
     (pubFam dj y₀ P vb k Rw M qF qS t' R τ i).Pr Claims.Sampling.sha512Msg ≤
-      Fintype.card (PubIx dj y₀ P vb L R) *
+      Fintype.card (PubIx dj y₀ P vb L) *
         (pubFinder dj y₀ P vb k Rw M qF qS t' R τ).Pr Claims.Sampling.sha512Msg :=
   Claims.Finder.le_mix _ _ i
 
-/-- **The table finders' premise from the family**: where every member succeeds with probability at most `p ≥ 0`, every
-table's knowledge finders after every draw meet `cr/sha-512`'s strict bound at the budget `√(p·2^513)`. -/
-theorem tableCRZ_of_mix (k Rw M : ℕ) (qF qS t' : ℝ) (R : Reg)
-    (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R) {p : ℝ} (hp : 0 ≤ p)
-    (hfam : ∀ i, (pubFam dj y₀ P vb k Rw M qF qS t' R τ i).Pr Claims.Sampling.sha512Msg ≤ p) (ω : L.Ω)
-    (j : Fin (planZHJ dj y₀ (L.draw ω) R).length) :
-    TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) R) j (zcStrat execArith hs512 (planZHJ dj y₀) (τ ω))
-      (Real.sqrt (p * 2 ^ (513 : ℝ))) (Real.sqrt (p * 2 ^ (513 : ℝ))) := by
-  refine ⟨fun r hr ℓ hℓ => ?_, fun r hr => ?_, fun r hr => ?_, ?_, ?_⟩
-  · have hr' : r < 2 := Finset.mem_range.1 hr
-    obtain ⟨hℓ1, hℓ2⟩ := Finset.mem_Icc.1 hℓ
-    obtain ⟨ℓ', rfl⟩ : ∃ ℓ', ℓ = ℓ' + 1 := ⟨ℓ - 1, by omega⟩
-    exact strictCR_of_pr _ qF hp (hfam (some (.inl ⟨ω, j, .inl (⟨r, hr'⟩, ⟨ℓ', Nat.lt_of_succ_le hℓ2⟩)⟩)))
-  · exact strictCR_of_pr _ qF hp (hfam (some (.inl ⟨ω, j, .inr (.inl ⟨r, Finset.mem_range.1 hr⟩)⟩)))
-  · exact strictCR_of_pr _ qF hp (hfam (some (.inl ⟨ω, j, .inr (.inr (.inl ⟨r, Finset.mem_range.1 hr⟩))⟩)))
-  · exact strictCR_of_pr _ qF hp (hfam (some (.inl ⟨ω, j, .inr (.inr (.inr (.inl ())))⟩)))
-  · exact strictCR_of_pr _ qS hp (hfam (some (.inl ⟨ω, j, .inr (.inr (.inr (.inr ())))⟩)))
+/-- **The table slots' averaged premise from the family**: where every member succeeds with probability at most `p`,
+each table slot's finder succeeds with probability at most `p` averaged over the draw (`tabMix_Pr`). -/
+theorem tabAvg_of_mix (k Rw M : ℕ) (qF qS t' : ℝ) (R : Reg)
+    (τ : Cont L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R) {p : ℝ}
+    (hfam : ∀ i, (pubFam dj y₀ P vb k Rw M qF qS t' R τ i).Pr Claims.Sampling.sha512Msg ≤ p) (j : Fin (nTab I))
+    (s : TabIx 7) :
+    Claims.Ex (fun ω : L.Ω => (tabAt dj y₀ qF qS R τ ω j s).Pr Claims.Sampling.sha512Msg) ≤ p :=
+  (tabMix_Pr dj y₀ qF qS R τ j s).symm.trans_le (hfam (some (.inl (j, s))))
 
 /-- **The link finders from the family**: where every member succeeds with probability at most `p ≥ 0`, each
 committed position's link finder outputs a collision of `H512` with probability at most `p`. -/
