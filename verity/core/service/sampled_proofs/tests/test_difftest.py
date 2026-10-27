@@ -890,10 +890,10 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
-    checked proof units. The population's strata are `partition.strata`'s, each unit a replay unit of one proof unit, its
+    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
     gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
     (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    units are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
+    blocks are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -1902,6 +1902,63 @@ def test_an_accepted_case_is_compared_whole(server):
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         verdict_, line = D.replay(ONE_STAGE, case, server)
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (kind, line)
+
+
+ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)
+server_v2 = D.server_fixture(ONE_STAGE_V2)
+
+
+def _sha(b: bytes) -> str:
+    return hashlib.sha512(b).hexdigest()
+
+
+def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
+    """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
+    on the proofs. An audit v1 accepts on the verdict its evidence hands in is, in v2: refused for naming verdicts;
+    rejected with them replaced by proofs naming no session (no session proved the units the evidence claims), and by
+    the session's own verdict when its files are not a statement's; refused when a file it names is in no blob, or its
+    sessions are not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session."""
+    s = SETUPS[3]
+    law = {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    d = {**DR.derive(s.program, s.query, law, None), "population": s.population, "units": [0, 3]}
+    proved = DR.proved(d)
+    evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": LEAF, "log": [],
+              "partition": P.partition(s.program, s.query), "ports": s.ports, "program": s.desc, "query": s.query,
+              "registered": None, "scheme": SCHEME, "work_table": None}
+    v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+    assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
+    circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
+    blobs = [circuit.hex(), public.hex(), record.hex()]
+    p2 = params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
+    base = {k: v for k, v in evidence.items() if k != "verdicts"}
+
+    def run(e, sessions=(), blobs_=blobs, p=p2):
+        case = {"blobs": list(blobs_), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    def proofs(sessions):
+        return {"public": _sha(public), "sessions": [{"name": n, "record": _sha(record), "reps": {}} for n in sessions]}
+
+    assert run(evidence | {"proofs": proofs([])}) == (
+        "reject", "evidence: the evidence names verdicts: this audit's verdicts are its own run of the verifier on the "
+                  "proofs")
+    assert run(base | {"proofs": proofs([])}) == (
+        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
+    assert run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}) == ("reject", "verdict flock-verify/s did not accept")
+    got = run(base | {"proofs": proofs([])}, blobs_=blobs[1:])
+    assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
+    got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[:2])
+    assert got[0] == "reject" and got[1].startswith("proofs: session s's record: no blob has the SHA-512"), got
+    assert run(base | {"proofs": proofs(["s"]), "sessions": ["t"]}) == (
+        "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
+    got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
+    assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
 
 
 def committed_bits(j):
@@ -3033,7 +3090,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
     slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
-    the input class's are every gate of the program once; and the checked proof units are the drawn units' slots and
+    the input class's are every gate of the program once; and the checked proof blocks are the drawn units' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))

@@ -1,5 +1,5 @@
 """`records.commit_binding`: the Commit block's `binding` as each writer writes it (`pipeline.commit.binding_record` and its error-only
-form, a TP rank's `engine.rank_worker`, `pipeline.serve_seal`) loads as the typed record, its sub-records built by their own writers
+form, a TP rank's `pipeline.tp.rank_worker`, `pipeline.serve_seal`) loads as the typed record, its sub-records built by their own writers
 here (`commit.binding.coverage_check`, `commit.executed_prefix`, `check.executed_prefix.link_to_match_account`); a missing or mistyped
 field is refused by its dotted path, and through `records.commit_run` by the file and line too."""
 from __future__ import annotations

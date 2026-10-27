@@ -6,6 +6,7 @@
 #     --env TZ_MEM_GB=64 -- env CHECK_SLOTS=SLOTS python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/transfer_zk.sh
 # env: TZ_MEM_GB (what job.sh's stages may take, within the slot's)  TZ_UNITS (transfer_zk.py's --units, 8)
+#      TZ_SHAPE (its --shape: tiny, or h200)
 #      TZ_CACHE (the build cache, kept across runs where writable; hidden_zk's by default)  TZ_DRY=1 (the statements
 #      and the host's read of them only)
 # Kept in $OUT/tzk: transfer_zk's summary and logs and everything the verifier received; never a prover's file (inst-*),
@@ -25,9 +26,9 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "tzk: no firewall frame"; exit 7; }
 
-log "tzk: proving, units ${TZ_UNITS:-8}${TZ_DRY:+, dry}"
+log "tzk: proving ${TZ_SHAPE:-tiny}, units ${TZ_UNITS:-8}${TZ_DRY:+, dry}"
 "$PY" benchmarks/network_traces/transfer_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/tzk" \
-  --units "${TZ_UNITS:-8}" ${TZ_DRY:+--dry} 2>&1 | tee -a "$OUT/tzk.log" | cut -c1-4000
+  --units "${TZ_UNITS:-8}" --shape "${TZ_SHAPE:-tiny}" ${TZ_DRY:+--dry} 2>&1 | tee -a "$OUT/tzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/tzk"
 (cd "$W/tzk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'signer-state*' ! -path '*/archive/*' -print0 \

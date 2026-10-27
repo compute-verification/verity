@@ -1,7 +1,9 @@
-"""The Commit in H1's serving engine (ROOTS1, VLLM-73), installed: the committer, the int8 source at each linear H1 records
-and the tap that keeps what the Commit acquired for H1 (`protocol_options.pouw_h1_commit.CommitTap`). Here in ``acquire``
-because it builds the int8 source; `pouw_h1_commit` holds the tap and the values and imports nothing from ``acquire``.
-On a server that commits already (serve-openai's rows-sha512 collector), `tap` puts H1's tap on that Commit instead.
+"""The Commit in H1's serving engine (ROOTS1, VLLM-73), installed: the committer (`committer`, the windowed collector under
+rows-sha512: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the int8 source at each linear H1 records, the
+step-input port that gives each step's input ids, and the tap that keeps what the Commit acquired for H1
+(`protocol_options.pouw_h1_commit.CommitTap`). Here in ``acquire`` because it builds the int8 source; `pouw_h1_commit`
+holds the tap and the values and imports nothing from ``acquire``. On a server that commits already (serve-openai's
+rows-sha512 collector), `tap` puts H1's tap on that Commit instead.
 
 A MoE layer's routed experts (`engine.int8_experts.ExpertSite`, VLLM-80) are no modules: each expert projection's site is
 named as H1 names it (`pouw_h1_hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
@@ -13,7 +15,7 @@ from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
 from verity_vllm.acquire.sources.int8_source import Int8Source
-from verity_vllm.protocols.pouw.h1.commit import CommitTap, Sites, _EveryStep, site
+from verity_vllm.protocols.pouw.h1.commit import SCHEME, CommitTap, Sites, _EveryStep, site
 from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
 
 
@@ -105,58 +107,74 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: 
                          f"{missing[:3]}: its manifest names no Int8RowQuant_v1 site there")
     tap = tap if tap is not None else CommitTap()
     names = set(modules)
-    tap.embed, tap.port = None, PORT_NAMES[0]
+    tap.port = PORT_NAMES[0]
     tap.ops = {op: site(m) for (_e, m), op in src.quant.items() if m in names}
     tap.tap(com)
     return tap
 
 
-def fused_embed(com: Any, model: Any, embed: str) -> Any:
-    """Where vLLM never calls embedding ``embed``, a forward pre-hook on its parent acquiring that forward's input ids as
-    ``<embed>/in``, the name the committer's pre-hook on the embedding would; None where it does call it. A model whose
-    table is whole on the rank (``replicated_embed``: vLLM's DeepseekV32Model, GLM-5.3's, at TP1) gathers it fused with
-    layer 0's norm (`fused_embed_norm`) from the embedding's weight, so the embedding's own pre-hook never runs. The parent
-    is called as ``(input_ids, positions, intermediate_tensors, inputs_embeds)``; with ``inputs_embeds`` it calls the
-    embedding itself, and the committer's pre-hook takes its ids."""
-    parent = model.get_submodule(embed.rpartition(".")[0])
-    if not getattr(parent, "replicated_embed", False):
-        return None
+def committer(engine: Any, run_id: str) -> Any:
+    """H1's committer on ``engine``, its run ``run_id``: the declared Commit's (`pipeline.commit`'s native_collect_v2b, built
+    as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`pouw_h1_commit.SCHEME`). It retains
+    its values nowhere unless VERITY_RETAIN says otherwise: H1 reads them from its tap, and the windowed collector retains
+    none on the device."""
+    from verity_vllm import settings
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-    def pre(module: Any, args: tuple, kwargs: dict) -> None:
-        job = com._cur
-        got = dict(zip(("input_ids", "positions", "intermediate_tensors", "inputs_embeds"), args), **kwargs)
-        ids = got.get("input_ids")
-        if job is None or got.get("inputs_embeds") is not None or got.get("intermediate_tensors") is not None:
-            return
-        try:
-            if hasattr(ids, "shape"):
-                com._acquire(f"{embed}/in", ids, job)
-        except Exception as e:  # noqa: BLE001
-            com.errors.append(f"{embed}/in: {e!r}"[:300])
-
-    return parent.register_forward_pre_hook(pre, with_kwargs=True)
+    settings.setdefault("VERITY_RETAIN", "none")
+    return NativeCollectCommitter(engine, run_id=run_id, arena_bytes=None, wrap=True, gather=True, native_hooks=True,
+                                  auto_blocks=True, native_worker=True, commit_scheme=SCHEME)
 
 
-def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, **committer: Any
+#: what `envelope` reads of the engine's effective config
+ENVELOPE = ("max_num_batched_tokens", "max_num_seqs", "max_model_len")
+
+
+def envelope(engine: Any) -> dict[str, int]:
+    """The workload the committer sizes its staging for (`NativeHostCommitter.size_arena`), from what ``engine`` executes
+    (`engine.build.Engine.effective`, read back from its vLLM config): its batch, its token budget (a step's prompt rows at
+    most, chunked prefill scheduling the rest) and its model length. ValueError when the engine doesn't say."""
+    facts = getattr(engine, "effective", None) or {}
+    if missing := [k for k in ENVELOPE if facts.get(k) is None]:
+        raise ValueError(f"H1's Commit: the engine's effective config gives no {missing}, so its staging can't be sized")
+    tokens = int(facts["max_num_batched_tokens"])
+    return {"batch": int(facts["max_num_seqs"]), "max_prompt": tokens, "max_new": 1, "max_num_batched_tokens": tokens,
+            "max_model_len": int(facts["max_model_len"])}
+
+
+def port_tokens(com: Any, tokens: int) -> int:
+    """The step-input port's T for a token budget of ``tokens``: rounded up to whole chunks of the committer's i64 ids,
+    the only T `served_record.StepInputPort` takes, so H1's T = 64 rows is a port of 512 ids."""
+    from verity_vllm.commit.served_record import StepInputPort
+
+    per = int(com.chunk) // StepInputPort.IB
+    return -(-int(tokens) // per) * per
+
+
+def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, run_id: str = "h1"
            ) -> tuple[Any, Any, CommitTap]:
-    """The Commit on ``engine`` (`engine.build.build_engine`'s, or a rank's, `RankCommit.h1rank_commit`), installed: a
-    `NativeHostCommitter` (``committer`` its keywords), the int8 source (`source`), its `CommitTap` (``tap``, given its
-    ``embed`` here, else a new one) and, on a model that gathers its embedding fused, the hook that acquires the step's
-    ids (`fused_embed`). Returns the committer, the source and the tap; ``committer.close()`` and ``tap.untap()`` remove
-    them."""
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+    """The Commit on ``engine`` (`engine.build.build_engine`'s, or a rank's, `RankCommit.h1rank_commit`), installed: H1's
+    committer (`committer`), refused unless it commits under rows-sha512; the int8 source (`source`); the step-input port,
+    the step's one copy of its input ids (no module's input is acquired beside it), over the engine's token budget
+    (`port_tokens`); the staging and its window ring sized for the engine's workload (`envelope`); and its `CommitTap`
+    (``tap``, else a new one) on the port. Returns the committer, the source and the tap; ``committer.close()`` and
+    ``tap.untap()`` remove them."""
+    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 
-    com = NativeHostCommitter(engine, **committer)
+    work = envelope(engine)
+    com = committer(engine, run_id)
+    if (got := getattr(com, "commit_scheme", None)) != SCHEME:
+        com.close()
+        raise ValueError(f"H1's committer {com.name} commits under {got}, not {SCHEME} (64-byte roots)")
     src = source(com, com.model, layers)
     com.attach_source(src)
+    com.attach_source(StepInputPort(com, port_tokens(com, work["max_num_batched_tokens"])))
+    com.plan_inputs = set()
+    com.enable_windows(com.size_arena(work))
     tap = tap if tap is not None else CommitTap()
-    tap.embed = next((n for n, m in com._modules if com._acquires_input(n, m)), None)
-    if tap.embed is None:
-        raise ValueError("the committer acquires no module's input: no embedding gives the step's token ids")
+    tap.port = PORT_NAMES[0]
     tap.tap(com)
     com.install()
-    if (h := fused_embed(com, com.model, tap.embed)) is not None:
-        com._handles.append(h)
     return com, src, tap
 
 
@@ -166,31 +184,34 @@ class RankCommit(RankExtension):
     (`RankExtension.h1rank_release`)."""
 
     def _h1rank_engine(self, model: Any, cp: Mapping[str, Any]) -> Any:
-        """What the committer reads of an engine (`attach`), on this rank: its model, runner, vLLM config and the
-        checkpoint's pin ``cp`` (repo, revision)."""
-        return SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=self.vllm_config)),  # type: ignore[attr-defined]
-                               runner=self.model_runner, model=model, cp=dict(cp))  # type: ignore[attr-defined]
+        """What the committer reads of an engine (`attach`), on this rank: its model, runner, vLLM config (and of it what
+        `envelope` reads, as `engine.build.Engine.effective` holds it) and the checkpoint's pin ``cp`` (repo, revision)."""
+        vc = self.vllm_config  # type: ignore[attr-defined]
+        effective = {"max_num_batched_tokens": vc.scheduler_config.max_num_batched_tokens,
+                     "max_num_seqs": vc.scheduler_config.max_num_seqs, "max_model_len": vc.model_config.max_model_len}
+        return SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=vc)), runner=self.model_runner,  # type: ignore[attr-defined]
+                               model=model, cp=dict(cp), effective=effective)
 
-    def h1rank_commit(self, cp: Mapping[str, Any] | None = None, **committer: Any) -> dict[str, Any]:
-        """The Commit on this rank (`attach`, ``committer`` the committer's keywords, its ``run_id`` named with the rank's
-        first linear), its tap a `pouw_h1_ranks.RankTap` naming each of the rank's H1 linears as the window does; returns
-        the committer's name and the module whose input ids it acquires. A site the rank's source acquires that the
-        window has no name for (a routed expert's included) is refused: under its rank-local name it would meet no call,
-        or another rank's site of the same name."""
+    def h1rank_commit(self, cp: Mapping[str, Any] | None = None, run_id: str = "h1") -> dict[str, Any]:
+        """The Commit on this rank (`attach`, its run ``run_id`` named with the rank's first linear), its tap a
+        `pouw_h1_ranks.RankTap` naming each of the rank's H1 linears as the window does; returns the committer's name, its
+        scheme and the port it acquires the step's input ids under. A site the rank's source acquires that the window has
+        no name for (a routed expert's included) is refused: under its rank-local name it would meet no call, or another
+        rank's site of the same name."""
         from verity_vllm.protocols import pouw
         st = self._h1rank  # type: ignore[attr-defined]
         run: RankRun = st["run"]
         model, layers = self._h1rank_layers()
         names = {name: run.modules[run.lo + int(i)] for i, name in pouw._named(model, layers).items()}
-        committer["run_id"] = f"{committer.get('run_id', 'h1')}/rank{run.lo}"
-        com, src, tap = attach(self._h1rank_engine(model, cp or {}), layers, tap=RankTap(names=names), **committer)
+        com, src, tap = attach(self._h1rank_engine(model, cp or {}), layers, tap=RankTap(names=names),
+                               run_id=f"{run_id}/rank{run.lo}")
         if unnamed := sorted({*src.modules, *src.experts} - set(names)):
             com.close()
             tap.untap()
             raise ValueError(f"rank [{run.lo}, {run.hi}): the Commit acquires {len(unnamed)} sites the window has no name "
                              f"for, {unnamed[:4]}")
         st["commit"] = (com, tap)
-        return {"lo": run.lo, "committer": com.name, "embed": tap.embed}
+        return {"lo": run.lo, "committer": com.name, "commit_scheme": com.commit_scheme, "port": tap.port}
 
 
-__all__ = ["H1Source", "RankCommit", "attach", "fused_embed", "source", "tap"]
+__all__ = ["ENVELOPE", "H1Source", "RankCommit", "attach", "committer", "envelope", "port_tokens", "source", "tap"]
