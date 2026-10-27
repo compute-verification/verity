@@ -213,7 +213,7 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order and the toy's EOS id:
     every Commit window's advice, those joined across a carry too, is bound to the certified requests, each once, and
     rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running, at 64 only at idle."""
-    sys.path.insert(0, str(HERE.parent / "network_e2e"))
+    sys.path.insert(0, str(HERE.parents[1] / "examples" / "network-vllm"))
     import chain
     from verity_vllm.pipeline import advice as ADV
 

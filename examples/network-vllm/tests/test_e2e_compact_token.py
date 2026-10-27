@@ -31,7 +31,7 @@ e2e = _load("network_e2e", HERE / "e2e.py")
 chain = e2e.chain
 NG = chain.NG
 gate_compact = _load("network_traces_test_certifier_serve",
-                     HERE.parent / "network_traces" / "tests" / "test_certifier_serve.py").gate_compact
+                     HERE.parents[1] / "benchmarks/network_traces/tests/test_certifier_serve.py").gate_compact
 
 
 def _parse(cell: bytes):
