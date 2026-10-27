@@ -401,14 +401,19 @@ _ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
 _CLOSE = ["chain", "ended", "lines", "session", "signature"]
 
 
+def _json(data: str | bytes) -> Any:
+    """`data` parsed, or the `ValueError` saying why it isn't JSON, for the caller to keep the file as it is."""
+    try:
+        return json.loads(data)
+    except ValueError as e:
+        return e
+
+
 def _entry(line: Any) -> dict | None:
     """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
     if type(line) is not str or not line.startswith('{"body":'):
         return None
-    try:
-        e = json.loads(line)
-    except ValueError:
-        return None
+    e = _json(line)
     return e if isinstance(e, dict) and sorted(e) == _ENTRY and e["schema"] in LEDGER_SCHEMAS else None
 
 
@@ -449,22 +454,17 @@ def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
 
 def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
     """`files` (path -> bytes) with every copy of the auditor's ledger cut to the entries its window cites (`cited`). A
-    copy is a `.jsonl` file each of whose lines is a ledger entry (infra's ``windows.jsonl``) or a list of such lines in a
-    `.json` document (`window_salt.Issued.live`'s ``ledger``); the sessions it cites are those of the challenger close
-    records (``{chain, ended, lines, session, signature}``, as `.json` files or inside one) under the copy's directory,
-    its own document included. A copy with no close record beside it is kept whole: nothing cites its entries, so
-    nothing says what a reader of it needs. A document holding a cut copy is written back as
-    `json.dumps(doc, sort_keys=True)`, as ``salt.json`` is written; every other file is kept as it is. Raises
-    `ValueError` naming the file when a copy would keep no entry of a session cited beside it, so the records never hold
-    a ledger cut short of what their window cites. PoUW's verifier reads the whole ledger (every entry, chained from
-    seq 0), so the uncut copy it reads stays on disk."""
-    docs: dict[str, Any] = {}
-    for name, data in files.items():
-        if name.endswith(".json") and b'"session"' in data:
-            try:
-                docs[name] = json.loads(data)
-            except ValueError:
-                pass
+    copy is a `.jsonl` file each of whose lines is a ledger entry (infra's ``windows.jsonl``, ASCII as `ledger_text`
+    writes it) or a list of such lines in a `.json` document (`window_salt.Issued.live`'s ``ledger``); the sessions it
+    cites are those of the challenger close records (``{chain, ended, lines, session, signature}``, as `.json` files or
+    inside one) under the copy's directory, its own document included. A copy with no close record beside it is kept
+    whole: nothing cites its entries, so nothing says what a reader of it needs. A document holding a cut copy is
+    written back as `json.dumps(doc, sort_keys=True)`, as ``salt.json`` is written; every other file is kept as it is.
+    Raises `ValueError` naming the file when a copy would keep no entry of a session cited beside it, so the records
+    never hold a ledger cut short of what their window cites. PoUW's verifier reads the whole ledger (every entry,
+    chained from seq 0), so the uncut copy it reads stays on disk."""
+    parsed = {name: _json(data) for name, data in files.items() if name.endswith(".json") and b'"session"' in data}
+    docs = {name: doc for name, doc in parsed.items() if not isinstance(doc, ValueError)}
     closes: list[tuple[str, str]] = []
 
     def walk(name: str, v: Any) -> None:
@@ -491,11 +491,8 @@ def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
 
     out = dict(files)
     for name, data in files.items():
-        if name.endswith(".jsonl") and b"verity/challenger-auditor/" in data:
-            try:
-                lines = [x for x in data.decode().split("\n") if x]
-            except UnicodeDecodeError:
-                continue
+        if name.endswith(".jsonl") and b"verity/challenger-auditor/" in data and data.isascii():
+            lines = [x for x in data.decode("ascii").split("\n") if x]
             if (entries := _ledger(lines)) is not None and (kept := cut(name, lines, entries)) is not None:
                 out[name] = "".join(x + "\n" for x in kept).encode()
 
