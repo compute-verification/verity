@@ -23,12 +23,12 @@ import pytest
 if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity_vllm.correspondence.capture_identities import _coll_range  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
-from verity.ml.definitions.registry import fp8 as F  # noqa: E402
-from verity.ml.definitions.numerics import fp8_twins  # noqa: E402
-from verity.ml.definitions.registry import prims as P  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity_vllm.correspondence.capture_identities import _coll_range
+from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.definitions.registry import fp8 as F
+from verity.ml.definitions.numerics import fp8_twins
+from verity.ml.definitions.registry import prims as P
 
 DATA = Path(__file__).parent / "data"
 

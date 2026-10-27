@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The Wed 28 run (VLLM-33): one window of Llama-3.2-1B int8 served on an H200 through every subprotocol, each step's own
+# One window of Llama-3.2-1B int8 served on an H200 through every subprotocol, each step's own
 # verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
 #     the H200 int8 row's manifest (ROW/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO). Each closed window is sealed as a
-#     rows-sha512 row dir, and SERVED-SEAL opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
+#     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, committed under salts drawn from the committer's key
 #     $D/private/weights.key, 0600, which no record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
@@ -13,16 +13,16 @@
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
-#     closed window's advice under PROVE-PATH's registered compiler and the weights registration (`--weights-of-record`),
+#     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
-#     --pins` the registration, and PIN's NAME=ROOT if set; #4317 with #4757), its registered and free input bits at those
+#     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 2h), run last, after the record (step 5),
 #     since nothing reads it, whose timeout or refusal is said and never fails the run (unless CLASSES names `record`, which
 #     then gates here instead); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
-#     layer 0's SiluMul_v2 at step 1), not the window circuit's. V3c (VLLM-125) proves the window circuit's own units at
+#     layer 0's SiluMul_v2 at step 1), not the window circuit's. V3c proves the window circuit's own units at
 #     V3C_CLASS (default 4,32,4, which CLASSES must hold): `prove_path.py window-commit` commits the window as that class
 #     circuit's units, the weights it serves under the committer's key, so each served as registered has the registration's
 #     root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the class; then
@@ -33,16 +33,16 @@
 #     made for a piece that didn't run. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
 #     reads what it wrote in the serve dir.
-#  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and CMP-153's block
+#  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
 # PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER, T H1_T 512 and S
-# WINDOW_STEPS 16, the Program build H1 affords while CMP-162 is open), each window's coins from a session of its own on
+# WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a session of its own on
 # vy-challenger-1, once `served_verdicts.py gate` finds no period of the lane open (a reserve would join it). PoUW's piece
 # (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session, ledger and
-# pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line from MAIN_SHA. That key is TOP-84's
+# pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line from MAIN_SHA. That key is a
 # development key, so the run is a development run and credits nothing. The COINS line says which.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).

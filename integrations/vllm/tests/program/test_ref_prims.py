@@ -30,13 +30,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import codec  # noqa: E402
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.definitions.registry import b1  # noqa: E402
-from verity.ml.definitions.registry import prims as P  # noqa: E402
-from verity.ml.definitions.registry import ref_prims as R  # noqa: E402
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.program import Program
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import ref_prims as R
 from verity.ml.definitions.numerics import ref_prims_twins
 
 torch = pytest.importorskip("torch")

@@ -1,5 +1,5 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in C-Flock's statement row leaf
-format (``verity_flock.circuit``'s statement rows, PR #83), with the registration, C-Flock's public and prover files and the
+format (``verity_flock.circuit``'s statement rows), with the registration, C-Flock's public and prover files and the
 labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
@@ -13,11 +13,12 @@ an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
 consecutive chunks, one member per statement (a circuit's spec shape caps its instances), each with its row ports and output
-ports in M0's order.  Each output port is a row too, after the member's input rows: its words zero-padded to whole SHA-512
-blocks, committed under its own salt like an input row (an output is a value: no output word is ever public).  A bit-row member
+ports in the order of C-Flock's circuit prover (``verity_flock.circuit``).  Each output port is a row too, after the member's
+input rows: its words zero-padded to whole SHA-512 blocks, committed under its own salt like an input row (an output is a
+value: no output word is ever public).  A bit-row member
 (C-Flock's ``row_schemas``) commits each row as the bits of its words under its port's schema (``hm96-sha512/row/v2`` or
 ``…/row-seg/v1``), each output row exactly its words.  Per row of ``hm96-sha512/row/v1``
-(``tests/commit/test_serving_rows.py`` pins it to core and to M0's vector):
+(``tests/commit/test_serving_rows.py`` pins it to core and to the circuit prover's vector):
 
   row     the words, u16 little-endian
   inner   ``x = SHA-512(sha512_row_prefix(role 1, 16, n) || row)``                              (``sha512/row/v1``)
@@ -34,9 +35,9 @@ from the registration and the Commit's record (``expected_ports``).  The leaf la
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
 directory ``registration.json``, ``index.json`` (the integration's labels of the units, opaque here, its SHA-512 in the
 window's provenance), per member
-``m<k>-public.bin`` and ``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``m<k>-units.json``
-(its global unit indices), and ``window.json``; ``flock_inputs.flock_input_files`` wraps
-member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
+``m<k>-public.bin`` and ``m<k>-private.bin`` (the circuit prover's public and prover bodies; the private one is prover
+only) and ``m<k>-units.json`` (its global unit indices), and ``window.json``; ``flock_inputs.flock_input_files`` wraps
+member ``k``'s bodies as the circuit prover's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
 
 A window may carry row tables (:class:`RowTable`, ``Window.row_tables``): shared tables of rows several units read, each a tree
 of ``hm96-sha512/row-seg/v1`` leaves, committed in segments, each segment's root given before that segment's live coin: a
@@ -253,9 +254,9 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
 
 @dataclass(frozen=True)
 class Member:
-    """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in M0's
-    order, its instance count and the global index of its first unit.  A template is one member, or consecutive chunks of its
-    units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
+    """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in the
+    circuit prover's order, its instance count and the global index of its first unit.  A template is one member, or
+    consecutive chunks of its units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
     member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, C-Flock's ``row_schemas``), each row the bits
     of its u16 words and each output row exactly its words; else every row is ``hm96-sha512/row/v1``."""
     template: str
@@ -295,13 +296,13 @@ class Member:
 
     @property
     def out_rows(self) -> tuple[tuple[str, int], ...]:
-        """Each output port's row: its words zero-padded to whole SHA-512 blocks (64 words each), as M0's ``out_row``; a bit-row
-        member's, exactly its words."""
+        """Each output port's row: its words zero-padded to whole SHA-512 blocks (64 words each), as the circuit prover's
+        ``out_row``; a bit-row member's, exactly its words."""
         return tuple((p, w if self.schemas else -(-w // 64) * 64) for p, w in self.outs)
 
     @property
     def all_rows(self) -> tuple[tuple[str, int], ...]:
-        """M0's rows: the input rows, then one output row per output port."""
+        """The circuit prover's rows: the input rows, then one output row per output port."""
         return self.rows + self.out_rows
 
     def schema(self, port: str) -> str:
@@ -309,7 +310,7 @@ class Member:
 
     @property
     def row_schemas(self) -> list[list[Any]] | None:
-        """C-Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in M0's order."""
+        """C-Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in the circuit prover's order."""
         return [[self.schema(p), 16 * w] for p, w in self.all_rows] if self.schemas else None
 
     def port(self, name: str) -> str:
@@ -463,10 +464,10 @@ class Committed:
     segment_roots: dict[int, bytes] = field(default_factory=dict)  # per segment: its root (the row-table port's leaf)
 
     def public_body(self, k: int) -> bytes:
-        """Member ``k``'s public body, as M0's ``write()`` lays it out: every instance's ``b || c`` (its input rows, then its
+        """Member ``k``'s public body, as the circuit prover's ``write()`` lays it out: every instance's ``b || c`` (its input rows, then its
         output rows), instance-major; nothing else."""
         m = self.window.members[k]
-        if m.tables:                     # M0's shared-row body: every table row's b || c (port-major), refs (u32, instance-major)
+        if m.tables:                     # the circuit prover's shared-row body: every table row's b || c (port-major), refs (u32, instance-major)
             return b"".join(self.bc[m.port(p)] for p, _ in m.all_rows) + np.ascontiguousarray(self.refs[k]).astype("<u4").tobytes()
         bc = np.concatenate([np.frombuffer(self.bc[m.port(p)], dtype=np.uint8).reshape(m.n, BC_BYTES) for p, _ in m.all_rows], axis=1)
         return bc.tobytes()
@@ -491,7 +492,7 @@ class Committed:
         return np.ascontiguousarray(self.rows[p]).astype("<u2").tobytes() + self.salts[p]
 
     def frame_entry(self, k: int) -> dict[str, Any]:
-        """M0's header ``frame_v3`` entry for member ``k``: its bare port names, as M0's statement reads them."""
+        """The circuit prover's header ``frame_v3`` entry for member ``k``: its bare port names, as its statement reads them."""
         m = self.window.members[k]
         names = [p for p, _ in m.all_rows]
         return {"frame": "frame-v3-sha512", "roots": {p: self.roots[m.port(p)].hex() for p in names},

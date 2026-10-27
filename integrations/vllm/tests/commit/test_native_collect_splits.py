@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
+from verity_vllm.commit.committer import native_collect as NC
 
 
 class _FakeKernel:

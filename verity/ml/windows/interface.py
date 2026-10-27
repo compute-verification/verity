@@ -1,4 +1,4 @@
-"""What an integration hands Verity (Daniel, 24 Oct: integrations are frontends, and Verity is agnostic to them), one window
+"""What an integration hands Verity (integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
 1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
@@ -30,12 +30,12 @@ bit concatenation of its leaves, then one output row ``o<j>`` per return field, 
 port's leaves (one bit each) are read as their `boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
-a5's wiring check holds on the drawn units (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several writers' words
-(RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused until circuits and proofs
-choose its row form, except in the form they chose, WIRES' cut (``cuts``, `SampledProofs.Wires`): a port read from
-several writers is cut ``k`` ways, parameter ``p`` is ``k`` rows ``p#j``, row ``j`` its outer elements
-``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows (`Wire.cut`). A unit that reads one row gathered from
-several writers' outputs reads it through a gather unit (``AllGather_v1``) whose ``parts`` are cut.
+the wiring check holds on the drawn units (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
+writers' words (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused except in one
+form, the wire cut (``cuts``, `SampledProofs.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
+is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
+(`Wire.cut`). A unit that reads one row gathered from several writers' outputs reads it through a gather unit
+(``AllGather_v1``) whose ``parts`` are cut.
 
 The circuit also declares what fills its other inputs (`Registered`, `Ingress`): rows of a registered parameter read at
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
@@ -48,7 +48,7 @@ units read a registered value is a shared-row member, each read port a table of 
 committed under the registered value's salts (core's ``one_stage.registered``), so each row's public string is the
 registered one, and its header names each row's position and path to the value's root; the verifier's ``--registered``
 file of the member comes from the record and the roots it pinned alone (`registered_reads`), and Lean's registered reads
-open each row against them. A table is a registered parameter of its own, every row of it (CMP-164's default); a table
+open each row against them. A table is a registered parameter of its own, every row of it; a table
 read takes a supplied value (`supplied`), one row the verifier fills from its pin of the table's parameter, the root or
 the domain id, under public salts; an opening's verdict reads the table's supplied 1, so a verdict of 0 opens no root,
 and the opening's row, salt and path are its units' own values, which the verdict holds to the pinned root inside the
@@ -361,8 +361,8 @@ def _of(cls: Any, d: Any, fields: Sequence[str], what: str) -> Any:
 @dataclass(frozen=True, init=False)
 class Wire(_Pattern):
     """A wiring pattern (`_Pattern`): each reader row it covers is the ``out`` row of unit ``base + sum(d[k] * step[k])`` of
-    template ``writer``, each index counting its own template's units (WIRES' form, `SampledProofs.Wires`). With no cut it
-    reads the port's one row, #4111's whole-port wire."""
+    template ``writer``, each index counting its own template's units (the wire cut's form, `SampledProofs.Wires`). With no cut
+    it reads the port's one row, a whole-port wire."""
     writer: str
     out: str
     key_fields: ClassVar[tuple[str, ...]] = ("writer", "out")

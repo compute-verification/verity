@@ -434,7 +434,7 @@ def _accepted(law: dict, delta: float = 0.5) -> dict:
 
 
 def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_bounds():
-    """An accepted audit's charge terms (README, "What an accepted plain audit means"): λ_δ is `consumers.location_bits` of the
+    """An accepted audit's charge terms (README, "What an accepted audit means"): λ_δ is `consumers.location_bits` of the
     audit's profile, β_δ its `harm_bound` with each template's units weighing their committed bits (one weight, the most, where
     the law's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
     stratified = {"law": "stratified", "k": 4, "strata": [{"template": "T", "units": [[0, 8]], "k": 4}]}
@@ -908,7 +908,7 @@ def test_a_served_windows_compiler_is_the_servers_whatever_phi_it_compiles_under
 
 def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
                                                                                                          capsys):
-    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does (#5063): a run
+    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}

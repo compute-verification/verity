@@ -253,6 +253,8 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     assert set(WI.check_drawn(moved, publics, everyone)) == set(WI.check(moved, publics))
     assert WI.check_drawn(moved, publics, []) == {}
     assert list(WI.check_drawn(moved, publics, [3])) == [moved[1].key]
+    lacking = [replace(m, wired=(("x", "o1", m.wired[0][2]),)) if m.wired else m for m in win.window.members]
+    assert list(WI.check_drawn(lacking, publics, [3])) == [moved[1].key]
     bad = I.Window(chain(), RUN, LAW, 2)
     x = ins[0].copy()
     x[2, 0] ^= 1
@@ -528,7 +530,7 @@ def registered(n: int = 12, cap: int = 4) -> tuple[I.Window, Held]:
 
 
 def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_inputs():
-    """#4317's record format: the reads in the record's ``registered``, its other fields only when declared, and the free
+    """The record format: the reads in the record's ``registered``, its other fields only when declared, and the free
     input bits counted from the description alone. A pin names its parameter alone: ``w``'s holds no ``w/a@8``, whose
     reads count registered only at its own pin and the window's same root for it."""
     win, _ = registered()
@@ -791,7 +793,7 @@ def embedding_window() -> tuple[I.Window, Table]:
 
 
 def test_a_tables_reads_and_verdicts_take_its_supplied_values():
-    """CMP-164's default as reads, no window built: a table read takes the table's supplied root or domain id and an
+    """A table as registered reads, no window built: a table read takes the table's supplied root or domain id and an
     opening's verdict its supplied 1, each one row for all its units, made from the entry of the table's parameter alone
     under public salts. A table that isn't its parameter's every row, and an ingress, are refused by the committer."""
     c, table = embedding(), Table()
@@ -813,7 +815,7 @@ def test_a_tables_reads_and_verdicts_take_its_supplied_values():
 
 @pytest.mark.slow
 def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
-    """CMP-164's default committed: each table read and verdict a registered read of its supplied value, the opening's row,
+    """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
     salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from
     the record and its pin of the table's parameter alone, which no cheaper test reaches. Slow (about 140 s on one core)
     for the two population Programs of `EmbeddingRead_v1` it builds, the prover's and the verifier's, its Merkle path

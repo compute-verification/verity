@@ -1838,8 +1838,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit"):
-        raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, which has one")
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+        raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
+                         "`place` or `comment`, which have one")
     try:
         brief = Path(ns.file).read_text() if ns.file else None
     except OSError as e:
@@ -1896,9 +1897,14 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             print(f"{issue} unrelated: removed " + "; ".join(lin.unrelate(issue, need(value, "the OTHER issue"))))
             return 0
         if ns.verb == "state":
-            print(f"{issue} {lin.move(issue, need(value, 'the STATE by name (e.g. In Progress)'))}")
+            state = need(value, 'the STATE by name (e.g. In Progress)')
+            print(f"dry-run: would move {issue} to {state}" if ns.dry_run else f"{issue} {lin.move(issue, state)}")
             return 0
         if ns.verb == "place":
+            if ns.dry_run:
+                print(f"dry-run: would place {issue} in {need(value, 'the PROJECT (a prefix of its name)')}"
+                      + (f" / {ns.milestone}" if ns.milestone else ""))
+                return 0
             p = lin.place(issue, need(value, "the PROJECT (a prefix of its name)"), ns.milestone)
             print(f"{issue} placed in {p['project']}" + (f" / {p['milestone']}" if p["milestone"] else ""))
             return 0
@@ -1917,6 +1923,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
                                  "no lane to comment as")
             author = f"{lane}/{ns.worker}"
+        if ns.dry_run:
+            print(f"dry-run: would comment on {issue} as {author}: {text}")
+            return 0
         lin.comment(info["id"], author, text)
         if ns.worker:
             print(f"{issue} commented as {author}")
