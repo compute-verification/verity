@@ -382,7 +382,7 @@ theorem exists_cap_eq_callCap {G : Accel} (Pd : Period G) (h : ∃ r, 0 < G.call
   exact ⟨r', hr', by rw [← he', div_mul_cancel₀ _ hr'.ne']⟩
 
 /-- **Any cap the period's capacity puts on the calls is at least `Period.callCap`**: where `Q` calls use at least a
-resource's capacity (`cap_r ≤ Q callUse_r`, the form the guarantees took before CMP-163), `callCap ≤ Q`. -/
+resource's capacity (`cap_r ≤ Q callUse_r`), `callCap ≤ Q`. -/
 theorem callCap_le_of_cap_le {G : Accel} (Pd : Period G) {Q : ℝ}
     (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) : Pd.callCap ≤ Q := by
   obtain ⟨r, hr, hc⟩ := hcap
