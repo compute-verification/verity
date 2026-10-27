@@ -122,8 +122,8 @@ SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
 #: slot.py's options (its `parse`): which slot a check waits for, and how long, never what it runs
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
-#: or `--cores N`
-CHECK_FLAGS = ("--no-cache", "--keep-going")
+#: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
+CHECK_FLAGS = ("--no-cache", "--circuit-cache", "--keep-going")
 
 
 def invocation(argv, command) -> tuple[str, object]:
