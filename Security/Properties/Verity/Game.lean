@@ -31,14 +31,15 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's on
   commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays
   `play (rounds θ) (sign θ) θ F c`, a `Verity.Game`: in each of the device's rounds the prover sends the bytes (a root,
   a transcript digest) that the round's release answers, and then the device draws and releases that round's coins and
-  signs them (`releases`), so the play's log is the device's signed record; the evidence comes last.
+  signs them (`releases`), so the play's log is the device's signed record; the evidence and the blobs the components
+  fetch by digest come last (`Outcome.sent`: the committed file first, then those blobs).
   A strategy (`Verity.Game.Strategy`) is a function of the coins released so far and never of later ones.
 * **The claims read the committed files (R6).** The circuit, its units and its constants are what the verifier reads
   from the files (`Flock.Bridge.circuitOfFile`, `unitsOfFile`, `partsOfFile` at v2's reading of the blob, `read`), and
   the positions are the files' and the commitment's (`place`), never the prover's world. The params hold the circuit
   file's digest (`programDigest`): a file whose SHA-512 isn't it is refused (`Registered`, conjoined beside onsite's
   acceptance until ONE3P's `Properties.Onsite.SampledProofsRegistered` derives it from v2's). The committed file is the
-  blob onsite reads (`Outcome.sent`).
+  first blob onsite reads, and the blobs sent with the evidence follow it (`Outcome.sent`).
 * **Sampled proofs' claim reads one fixed extractor's transcript (R4′).** The extractor (`extract`, the one
   `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
   The claim is that at most an `ε` share of the file's units are unbound in its transcript (`Accounting.unbound`): wrong in it, or
@@ -49,13 +50,13 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's on
   strategy whose SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`); the LMS forger (`forger a`) is a fixed
   function of the play's outcome, whose output is a forgery (`forgery`, defined here and no field) when it verifies
   under the device's registered LMS key (`key`) and the device's signed log (`Outcome.Signed`) holds no such message.
-  Subprotocol `a`'s error at a strategy (`error`) is, where `B^τ` outputs a SHA-512 collision with probability at
-  most the published `ε_cr` at the strategy's calls (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]` plus the probability that the forger
-  succeeds in the play (`forges`); elsewhere `⊤`. That admits C-Flock's conditional bound (`loss = 0`, F3) and the
-  additive one (`crBound = 1`). Two openings of one position and a second file with the registered digest
-  (`fileFinder`) enter at `B`, a forged device release at the forger, an event of the device's log. The named
-  assumptions are asked only of the finders, each of its own, outside the theorem (Daniel, 26 Oct 6:15 PM PDT):
-  `ecr/sha-512` of `B` and `euf-cma/lms-sha512-n64` of the forger.
+  Subprotocol `a`'s error at a strategy (`error`) is, where `B^τ` outputs a SHA-512 collision with probability at most
+  the published `ε_cr` at the strategy's calls (`FinderCR`, quantitative), its published `δ` at those calls plus its
+  loss at `Pr[B^τ]` plus the probability that the forger succeeds in the play (`forges`); elsewhere `⊤`. That admits
+  C-Flock's conditional bound (`loss = 0`, F3) and the additive one (`crBound = 1`). Two openings of one position and a
+  second file with the registered digest (`fileFinder`) enter at `B`, a forged device release at the forger, an event of
+  the device's log. The named assumptions are asked only of the finders, each of its own, outside the theorem (Daniel,
+  26 Oct 6:15 PM PDT): `ecr/sha-512` of `B` and `euf-cma/lms-sha512-n64` of the forger.
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the claim is its `Holds`.
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict (`Verdict`) is the file check,
   NCI's acceptance of the registration sampled proofs committed to (`RegistrationAccepts`, the conclusion of
@@ -217,25 +218,29 @@ def releases (sign : ByteArray → List Bool → ByteArray × ByteArray) : List 
         ⟨b, List.ofFn x, (sign b (List.ofFn x)).1, (sign b (List.ofFn x)).2⟩ :: log
 
 /-- How a play ends: the parameters, the committed files and the commitment sent first, the device's log, and the
-evidence sent last. -/
+evidence and the blobs sent last (the files the components fetch by digest beside the committed one: v2's circuit and
+public files, each session's record and its rep files, written after the coins). -/
 structure Outcome where
   params : ByteArray
   file : ByteArray
   commitment : ByteArray
   log : List Release
   evidence : ByteArray
+  blobs : Array ByteArray
 
-/-- What the prover sent onsite in the play that ended with `o`; the blob its components read is the committed file. -/
-def Outcome.sent (o : Outcome) : Sent := ⟨o.params, o.commitment, o.evidence, #[o.file]⟩
+/-- What the prover sent onsite in the play that ended with `o`: the committed file first, then the blobs sent last.
+A component fetches a blob by the SHA-512 of its bytes, so a blob the prover adds grants nothing the component does not
+check against its digest. -/
+def Outcome.sent (o : Outcome) : Sent := ⟨o.params, o.commitment, o.evidence, #[o.file] ++ o.blobs⟩
 
 /-- The device signed `m` in the play that ended with `o`: some release of its log signs `m` (ONE-4's
 `Challenger.Signed`, #4985's `Challenger.Signed`, on the game's one device and key). -/
 def Outcome.Signed (o : Outcome) (m : ByteArray) : Prop := ∃ r ∈ o.log, r.message = m
 
 /-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the device's rounds
-`ns`, each release after the bytes it answers and signed by `sign`, then the evidence. -/
+`ns`, each release after the bytes it answers and signed by `sign`, then the evidence and the blobs. -/
 def play (ns : List ℕ) (sign : ByteArray → List Bool → ByteArray × ByteArray) (θ F c : ByteArray) : Game Outcome :=
-  (releases sign ns).bind fun log => .send ByteArray fun e => .ret ⟨θ, F, c, log, e⟩
+  (releases sign ns).bind fun log => .send (ByteArray × Array ByteArray) fun eb => .ret ⟨θ, F, c, log, eb.1, eb.2⟩
 
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
@@ -302,8 +307,8 @@ signed log entries in what the prover sent (ONE-4); the extractor applied to a s
 collision finder (ONE-8 and each target's), with the finder's SHA-512 calls bounded by the strategy's
 (`finder_calls`); each subprotocol's LMS forger on the play's outcome (ONE-4); the committed circuit's gates a play
 computed after their window's coin (ONE-16); the world each play realizes (ONE-10, ONE-11, ONE-12); the deployment's
-honest prover; and the certificates, errors, collision bounds and losses the product publishes, from the parameters and the
-strategy's SHA-512 calls alone (ONE-19).
+honest prover; and the certificates, errors, collision bounds and losses the product publishes, from the parameters
+and the strategy's SHA-512 calls alone (ONE-19).
 
 `cost θ F c σ` is the strategy's SHA-512 calls in one run (ONE8's `t' τ`): `Verity.Game` has no call model of
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
