@@ -58,17 +58,19 @@ findings; but that lint reads no history, so a rename must move the file's entri
 the change doesn't touch is never linted.
 
 Each counted lint's sites are counted the same way, when its base has the lint, loaded from the base and counting as it
-counts: each file the change adds or modifies that the lint reads (a ``*.py`` file, or what its ``holds`` takes) outside its
-``LEFT_OUT`` fails when its count grows, naming the new sites and the lint's fix.  Its direct environment reads (the vLLM coordinator, 27 Oct 01:30Z: configuration in one
+counts: each ``*.py`` file the change adds or modifies outside that lint's ``LEFT_OUT`` fails when its count grows, naming the
+new sites and the lint's fix.  Its direct environment reads (the vLLM coordinator, 27 Oct 01:30Z: configuration in one
 place), unless the file is a settings registry at the change's base (a ``settings.py``, or a file the base's list marks, so a
 mark that comes with the reads it would exempt doesn't count): the fix is the area's settings registry.  Its except handlers
 that swallow what they catch (02:05Z: recorded outcomes): the fix is to re-raise, record the outcome, or narrow the handler.
-Its lane text, in any file it reads: the fix says where the text goes, history to git, work to Linear, rulings to Notion and
-results to the store.
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
 Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
 were linted at their own merges.
+
+A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
+by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
+to git, work to Linear, rulings to Notion, results to the store).
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
