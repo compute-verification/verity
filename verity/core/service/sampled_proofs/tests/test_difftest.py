@@ -3636,7 +3636,7 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
              "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
              "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
-        return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if params.get(k, v) is not None},
+        return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None},
                 "record": rec}
 
     def verdict(a: dict) -> str:
