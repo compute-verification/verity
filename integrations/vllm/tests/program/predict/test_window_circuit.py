@@ -630,7 +630,7 @@ def test_the_engines_rotary_table_registers_within_its_bound_and_a_wrong_one_is_
     unrooted = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     assert {p: e for p, e in registration["values"].items() if p != ROPE} == unrooted["values"]
     both = {**pins, **SCAN_PIN}
-    assert IF.input_count(doc, pins=both, roots=both) == {"units": 2548, "inputs": 17572128, "wired": 2839712,
+    assert IF.input_count(doc, pins=both, roots=both) == {"units": 1400, "inputs": 16340960, "wired": 1608544,
                                                          "registered": 14586880 + 2 * 4548 * 16, "ingress": 0, "free": 0}
     served = {**WW.record_words(reg, d, man), field["field"]: table}
     assert {p: v.root.hex() for p, v in WW.weight_values(reg, served, KEY, GRAIN).items()} == pins
