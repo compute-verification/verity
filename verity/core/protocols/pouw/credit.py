@@ -1,5 +1,5 @@
 """A served window's credited set, its drawn units and their outcome, its A rows, and the period it counts toward, as
-PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). `_window_outcomes` and `_period_outcomes` are the Python
+PoUW's verifier reads them. `_window_outcomes` and `_period_outcomes` are the Python
 reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
 `window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run, which the
 Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`):
@@ -24,7 +24,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   call's ``--registered`` file credit builds from the descriptor and the window's entries (`registered_file`,
   `h1window.table_reads_file`'s, main's per-call tables). A rejected session refuses the window, and so does a
   verifier that can't run. The circuit file's tie to the descriptor's Definitions rests on the auditor's lowering,
-  which built the committed file, until the verifier derives the circuit from the descriptor (PRF-133). The verdict
+  which built the committed file, until the verifier derives the circuit from the descriptor. The verdict
   over the statements is the Lean's (`PouwCheck.Verified.verified`, through `verifier.lean`): it names each statement
   to verify and the inputs (`_asks`: up to the first statement a check before the verifier refuses), this module only
   runs the verifier on them, and the Lean judges the answers (`_lean_verified`).
@@ -134,7 +134,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   which contains it (`domain_of`). The window's request table ``<prefix>requests@0`` (`is_requests`, the live unit's
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's draw's, not credit's.
-* **The window serves its period's fixed length** (`committed_length`, `_length`; Daniel, 19 Oct, ASK-39): correct
+* **The window serves its period's fixed length** (`committed_length`, `_length`): correct
   tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
   public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
   them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
@@ -150,8 +150,8 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
   other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
   ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids and request tables, the window's open root
-  (``window.root``, the root the auditor's ledger opens its session for, which a per-window value's domain binds since
-  PRF-127); round 0's input-ids and request tables, whose roots that open root contains, bind the window's session
+  (``window.root``, the root the auditor's ledger opens its session for, which a per-window value's domain binds);
+  round 0's input-ids and request tables, whose roots that open root contains, bind the window's session
   instead. Each proof was
   verified against that
   descriptor, opened only values the window registers once, each at its registered root, and opened its unit's K's A
@@ -271,7 +271,7 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
-#: the period-open's field holding the rows of record's fixed length (Daniel, 19 Oct, ASK-39): ``{max_tokens, stop}``,
+#: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
 #: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
 #: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
 LENGTH_FIELD = "length"
@@ -1263,7 +1263,7 @@ def domain_of(program: str, window: str, e: dict, session: str | None = None) ->
     `ids_step` 0) and request table (``…/requests@0``, `is_requests`), whose roots the window's open root contains
     (`requests_root`, `_arow`), bind the window's session `session` in that root's place; every other value's rows are
     the window's own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the
-    window's open root (PRF-127)."""
+    window's open root."""
     v, first = e["value"], ids_step(e["value"]) == 0 or is_requests(e["value"])
     return G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
                     None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
@@ -1525,18 +1525,29 @@ def _judged(layout: dict, c: int, reg: dict, got: list[PF.Finding], out: list[di
                                     f"root than the verifier's own {pub['value']} at port {PUB_PORT}: a unit's public "
                                     "row is the window's salt, its position and its call's roots, as credit builds "
                                     "them")
-        ok, opened = reg["ports"][OK_PORT], _finding(f.registered) or ()
-        if [(p, v, root) for p, v, root in opened if p == OK_PORT or v == ok["value"]] != [
-                (OK_PORT, ok["value"], ok["root"])]:
-            return ("registration", f"call {c}'s session {f.session} opened the ok rows at another port, value or root "
-                                    f"than the verifier's own {ok['value']} at port {OK_PORT}, or not at all: a unit's "
-                                    "ok row is the one word 1 under its public ok salt, as credit registers it, so a "
-                                    "unit that computed 0 opens none of it")
+        why = _ok_held(c, f.session, f.registered, reg["ports"][OK_PORT])
+        if why is not None:
+            return why
         for u in f.units:
             if not start <= u < start + sizes[c]:
                 return ("proof", f"call {c}'s session {f.session} proved unit {u}, which is no unit of call {c}: a "
                                  "call's statement proves its own call's units")
             out.append({"unit": u, "verdict": "accept", "program": f.program, "registered": f.registered})
+    return None
+
+
+def _ok_held(c: int, session: Any, registered: Any, ok: dict) -> tuple[str, str] | None:
+    """None when call `c`'s session `session`, whose registered finding is `registered`, opened the window's ok rows
+    once, at port ``o1`` (`OK_PORT`) and at the value and root of `ok` (the ok port of credit's ``--registered`` file,
+    `registered_file`'s); else the refusal (``registration``). The ok rows are the verifier's own, registered under the
+    window's open root, so a session that opened them at another root (rows registered without that root, another
+    window's, or a unit's row 0) or not at all credits nothing. `_judged`'s step for each finding."""
+    if [(p, v, root) for p, v, root in _finding(registered) or () if p == OK_PORT or v == ok["value"]] != [
+            (OK_PORT, ok["value"], ok["root"])]:
+        return ("registration", f"call {c}'s session {session} opened the ok rows at another port, value or root "
+                                f"than the verifier's own {ok['value']} at port {OK_PORT}, or not at all: a unit's "
+                                "ok row is the one word 1 under its public ok salt, as credit registers it, so a "
+                                "unit that computed 0 opens none of it")
     return None
 
 
@@ -2336,7 +2347,7 @@ def passes_distinct(passes: Any) -> tuple[str, str] | None:
     `protocol.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
     (``repeated-call``). The epoch is the manifest's salt, since -h3's row seed binds the salt and the index but no pass,
     so a repeated index under one salt and root_B repeats its seeds, noise and tickets and would be credited twice
-    (CMP-84; `Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
+    (`Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
     ``index``."""
     seen: dict[str, dict[int, int]] = {}
     for p, m in enumerate(passes):
@@ -2373,7 +2384,7 @@ SALT_ONLY, PASS_REFUSED, INDEX = "salt-only", "pass", "index"
 
 def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
                           verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
-    """Pearl-C period `name`'s credit and None, or None and the refusal (CMP-82; LIVESALT2's Pearl-C period rule). A
+    """Pearl-C period `name`'s credit and None, or None and the refusal (the Pearl-C period rule). A
     live Pearl-C pass earns only inside a Pearl-C period, and the period earns only when every clause holds, each
     refused with its own code:
 

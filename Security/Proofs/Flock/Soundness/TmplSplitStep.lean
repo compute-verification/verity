@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplSplitVal
 
 /-!
-# What `walk` reads, against `refVal` (PRF-133, part 3, stage 3)
+# What `walk` reads, against `refVal`
 
 - `refX_eq`, `refS_eq`: `Tab.ref`'s weight for a reference, times nothing more, is the slot weight `refVal` reads at
   `readAt`; `rowLow_e`, `rowLow_e_sum`: a row's low factor times its chunk's high factor is its `E` weight.

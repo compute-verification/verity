@@ -1,4 +1,4 @@
-"""[Daniel R17-39 (c), coord M-0762] ONE deliberately dumb, independent reference fixture for the alias mechanism the committed READER
+"""ONE deliberately dumb, independent reference fixture for the alias mechanism the committed READER
 (opening.CommittedStore / oracle_compare.OpenedReader, entry_read_name) and the ORACLE side (oracle_compare's inverse alias
 table) SHARE.  "Reader and oracle sharing one alias mechanism prevents drift AND lets them share the same bug" -- so this file derives what
 every side must say BY COUNTING (layers x members x steps x requests, invocation k = layer order, ordinal = position in acquisition order),
@@ -13,10 +13,10 @@ Rules it pins (the ruling's words): "different logical producer/version -> never
   * an alias entry that points an invocation at ANOTHER module's path (a different logical producer) is never a match: the oracle has
     no rotary instance there, the invocation is NOT compared, by name;
   * a shared invocation the table does not name is NOT compared (F-moe-r17-06/-07), never compared against layer 0's oracle.
-Version identity (RoPE_v1 vs RoPE_v2 at one path) is the manifest's `spec` per identity (required_manifest / F-r17b-38 tests), not this
+Version identity (RoPE_v1 vs RoPE_v2 at one path) is the manifest's `spec` per identity (required_manifest tests), not this
 fixture's: the binding map carries no spec.
 
-It tests the COMMON MECHANISM on one synthetic record, not every production record (R17-39 (c))."""
+It tests the COMMON MECHANISM on one synthetic record, not every production record."""
 from __future__ import annotations
 
 import gzip

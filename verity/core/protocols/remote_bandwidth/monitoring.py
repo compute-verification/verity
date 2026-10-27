@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over a monitoring period (#4330): a week, a month and a year of every machine of a
+"""The remote bandwidth audit over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
 openings' pooled bound's δ, 2^-40, and S the session's draws).
@@ -28,26 +28,15 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+# The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
+from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_sessions
+
 from . import codec, pooled
 
-PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
-DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10 ** 6))
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose", "pr": 4413,
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 EXCEPT = "each session's coin PRF advantage and coin commitment hiding (named assumptions) over the period's sessions"
-
-
-def short_sessions(t: int, p: Fraction, delta: Fraction) -> tuple[int, Fraction]:
-    """The least M ≥ 1 with C(t, M)·p^M ≤ δ, and that bound; (t + 1, 1) when even M = t isn't within δ."""
-    if not 0 < delta < 1 or not 0 <= p <= 1 or t < 1:
-        raise ValueError(f"δ is in (0, 1), p in [0, 1] and the sessions at least 1, not {delta}, {p}, {t}")
-    term = t * p
-    for m in range(1, t + 1):
-        if term <= delta:
-            return m, term
-        term = term * (t - m) * p / (m + 1)
-    return t + 1, Fraction(1)
 
 
 def _share(x: int, of: int) -> str:
