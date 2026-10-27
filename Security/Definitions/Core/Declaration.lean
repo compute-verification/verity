@@ -11,7 +11,7 @@ deployment, the workload's Program is the one circuit of record.
 Implementation carries over to declarations when it keeps novel information novel: an input gate of `t` outside `t`'s
 baseline is an input gate of `d` outside `d`'s. Containment carries over as it is between the circuits, and says nothing
 about the baselines: that a containment keeps novel information novel is a premise about the protocol's baseline rule
-(`Nci.Assumptions.BaselineRegistered`), which each guarantee that needs it takes for its containment.
+(`InferenceOnly.Assumptions.BaselineRegistered`), which each guarantee that needs it takes for its containment.
 -/
 
 namespace Verity

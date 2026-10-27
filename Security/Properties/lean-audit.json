@@ -8,12 +8,12 @@
   "Properties.Pouw.PeriodJ10R",
   "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
-  "Properties.Nci",
-  "Properties.Nci.Threads",
-  "Properties.Nci.Baseline",
-  "Properties.NciDesc",
-  "Properties.NciDesc.Verdict",
-  "Properties.NciDesc.Cover",
+  "Properties.InferenceOnly",
+  "Properties.InferenceOnly.Threads",
+  "Properties.InferenceOnly.Baseline",
+  "Properties.InferenceOnlyDesc",
+  "Properties.InferenceOnlyDesc.Verdict",
+  "Properties.InferenceOnlyDesc.Cover",
   "Properties.CertifierDevice",
   "Properties.Pous",
   "Properties.NetworkCertifier",
@@ -154,23 +154,23 @@
    "owner": "@memory-accounting",
    "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
-  "Nci.Assumptions.BaselineRegistered": {
+  "InferenceOnly.Assumptions.BaselineRegistered": {
    "owner": "@compute-accounting",
    "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
   },
-  "Nci.Assumptions.WeightsIncompressible": {
+  "InferenceOnly.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   },
-  "Nci.Assumptions.WeightsIncompressibleSlots": {
+  "InferenceOnly.Assumptions.WeightsIncompressibleSlots": {
    "owner": "@lean",
    "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
   },
-  "Nci.Cover.Assumptions.UpdateHardness": {
+  "InferenceOnly.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
    "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
   },
-  "Nci.Cover.MulBlocks.Upstream": {
+  "InferenceOnly.Cover.MulBlocks.Upstream": {
    "owner": "@training",
    "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c"
   },
@@ -275,11 +275,11 @@
   "PouwCommit.Draws",
   "Identity.Sha512",
   "Identity.Tagged",
-  "Properties.Nci",
+  "Properties.InferenceOnly",
   "Definitions.Core",
-  "Definitions.Nci",
-  "Definitions.Nci.Assumptions.Threads",
-  "Definitions.Nci.Assumptions.Baseline",
+  "Definitions.InferenceOnly",
+  "Definitions.InferenceOnly.Assumptions.Threads",
+  "Definitions.InferenceOnly.Assumptions.Baseline",
   "NciCheck.Check",
   "NciCheck.Baseline",
   "NciCheck.Desc",
@@ -328,7 +328,7 @@
   "Definitions.Pouw.Basic",
   "Properties.Composition",
   "CoreComposition",
-  "Properties.NciDesc",
+  "Properties.InferenceOnlyDesc",
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
@@ -345,35 +345,35 @@
    "except": [],
    "why": "the commitments' properties are stated against the port's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Nci": {
+  "Properties.InferenceOnly": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions.Threads",
-    "Definitions.Nci.Assumptions.Baseline",
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions.Threads",
+    "Definitions.InferenceOnly.Assumptions.Baseline",
     "NciCheck.Check",
     "NciCheck.Baseline",
-    "Properties.Nci"
+    "Properties.InferenceOnly"
    ],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
-  "Properties.NciDesc": {
+  "Properties.InferenceOnlyDesc": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions.Baseline",
-    "Definitions.Nci.Assumptions.Cover",
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions.Baseline",
+    "Definitions.InferenceOnly.Assumptions.Cover",
     "NciCheck.Check",
     "NciCheck.Baseline",
     "NciCheck.Desc",
-    "Properties.Nci",
-    "Properties.NciDesc"
+    "Properties.InferenceOnly",
+    "Properties.InferenceOnlyDesc"
    ],
    "except": [],
-   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
+   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.InferenceOnly.Assumptions), never over a proof",
    "sealed": true
   },
   "Properties.CertifierDevice": {

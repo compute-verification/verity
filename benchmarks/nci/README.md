@@ -8,9 +8,9 @@ sides adopt it, how fast can a determined actor still advance frontier capabilit
 - the policies they are evaluated under (`calibrations.json`);
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
 
-Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
-(`Security/Definitions/Nci/Guarantees/Contained.lean`).
+Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `InferenceOnly.SecurityProofs.ThreadedTraining`
+(`Security/Definitions/InferenceOnly/Guarantees/Threads.lean`) and `InferenceOnly.SecurityProofs.ContainedTraining`
+(`Security/Definitions/InferenceOnly/Guarantees/Contained.lean`).
 
 ## Files
 
@@ -136,7 +136,7 @@ of new state per block can reach. What it throttles is moving the base model's f
 
 For each row under each calibration of its model, `slowdown.py` computes a bracket:
 
-- `lower` is the proven bound, `Nci.SecurityProofs.ThreadedTraining`:
+- `lower` is the proven bound, `InferenceOnly.SecurityProofs.ThreadedTraining`:
   \(\rho \ge \kappa\, b_a / (2\alpha\Lambda)\) with \(\alpha = K/\Gamma\) and \(\Lambda = \max(e,\ cK/(4 d\, b_w))\). It
   holds under the row's rates and the theorem's assumptions. `rates` caps the inputs where a row's own numbers make an
   assumption false:
@@ -151,7 +151,7 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the partial-sum law, `Nci.SecurityProofs.ContainedTraining`: \(\rho \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
+- `chain` is the partial-sum law, `InferenceOnly.SecurityProofs.ContainedTraining`: \(\rho \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
   with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumptions are that
   one chain of the reference circuit is incompressible at \(b_w\) and \(b_a\), in support form. A chain charges each
   weight once per layer, so it is one forward path, and a row's `chain` gives that path's share \(\kappa_{\text{chain}}\)

@@ -9,7 +9,7 @@ wholly inside one block. Each is defined for an arbitrary Boolean circuit and a 
 A circuit is a Program in `verity-ir/descriptor/v1` (`verity/ml/circuits/PROTOCOL.md`) in the Boolean profile (§9),
 read through its canonical layout (§6): a `verity.ml.circuits.program.Program`, or `codec.decode_program`'s result. It is
 the format NCI's check reads gate by gate (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`) and
-`Nci.Cover.Circuit` formalizes (`Security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
+`InferenceOnly.Cover.Circuit` formalizes (`Security/Definitions/InferenceOnly/Cover.lean`, `BitView.lean`), and the one the served workloads lower
 to on bits. A word circuit has no per-product gates (one tensor-core step gate computes 16 products), so s_× and
 whole-in-block are defined only on the Boolean lowering; `ops.NotSeparable` refuses a word op.
 
@@ -22,7 +22,7 @@ fan-in is read at. `references.GEMM_PRODUCTS` is the GEMMs' products: each lane 
 `Gemm`, fan-in at each `GemmCoordinate`.
 
 - m(p), product p's subcircuit: the gates of its activation that read lane k's operands and nothing else
-  (`ops.OpShape`). They are disjoint, nonempty and computed, as `Nci.Cover.MulBlocks` requires.
+  (`ops.OpShape`). They are disjoint, nonempty and computed, as `InferenceOnly.Cover.MulBlocks` requires.
 - |𝒥| (`products`), s_× (`s_x`): the products, and the fewest gates in any m(p).
 - a_out: the most counted products any one activation value (a gate) feeds. Constants are counted apart
   (`constant_leaves`).
