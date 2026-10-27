@@ -266,8 +266,8 @@ vllm's reading of bbee's records over 6cd9 (r20261026-040530-d82e and r20261026-
   T = 32 buckets of 100 ms, and egress_cells = 65;
 - its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
-- the scan's registered form at this head, its slot entries (a739 registered a Programs' row a bucket, 143,360 bits
-  a link-window);
+- the scan's registered form at this head, its slot entries (the scan above registered a Programs' row a bucket,
+  143,360 bits a link-window);
 - every unit drawn.
 
 The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T2250Z-finding-warden-form-k):
@@ -291,7 +291,7 @@ reads the Definition's id, not its body, so the stand-in's entries, read bit inc
 slot's Program reads the requests from its own registered `SCAN_STATE`, which nothing ties to the scan's state yet, so
 the check refuses every rows-form period of a link-window, last, by name (`untied`), and the rows form publishes no K
 yet.
-Tied (NET-92: `NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
+Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
 tied audit's inputs; K is unchanged in what it bounds, 9,088 bits a link-window at w63.
