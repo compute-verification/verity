@@ -128,6 +128,29 @@ def test_each_link_holds_only_its_own_bytes_and_a_last_part_closes_its_link():
     assert slow_got == slow_sent
 
 
+def test_a_link_passed_just_before_its_first_bucket_holds_no_release():
+    """Each link is passed just before the bucket that first writes to it, as the warden passes a client's connection
+    when it admits it. Waiting for a link's socket, the pacer may take a message whose arrival its last `poll` also
+    reported, and it then waits for no other: every bucket is released and written, and each link carries its own."""
+
+    async def run():
+        pacer = await Pacer.start()
+        pairs = [_pair() for _ in range(8)]
+        reports = pacer.reports()
+        for key, (link, _) in enumerate(pairs):
+            pacer.add(key, link.fileno())
+            link.close()
+            pacer.hand(key, key / 1000, [(key, bytes([key]) * 100, True)])
+        got = [await anext(reports) for _ in range(2 * len(pairs))]
+        await pacer.close()
+        return got, [_read(peer) for _, peer in pairs]
+
+    got, read = asyncio.run(run())
+    assert sorted((r.t, r.end is None) for r in got) == [(t, end) for t in range(8) for end in (False, True)]
+    assert all(r.written for r in got)
+    assert read == [bytes([key]) * 100 for key in range(8)]
+
+
 def test_a_link_past_the_backlog_is_closed_and_its_parts_are_unwritten():
     """A pacer started with a backlog closes a link that holds more than it unwritten: the bucket that finds it so,
     and the parts it still held, are unwritten, and the other link's are written."""

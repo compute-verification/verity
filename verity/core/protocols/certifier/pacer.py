@@ -304,6 +304,10 @@ def main(argv: list[str]) -> int:
                                     channel = None
                         queue.append(_Bucket(t, due, arrived, parts))
                 elif channel is not None and fd == channel.fileno():
+                    # A key wait above may have taken the message this event announced (and `recv_fds` drops its
+                    # flags, so it can't be told not to wait).
+                    if not select.select([channel], [], [], 0)[0]:
+                        continue
                     if not _receive(channel, links):
                         channel.close()
                         channel = None
