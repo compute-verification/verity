@@ -71,7 +71,7 @@ first coin.
   counted ingress, not a path this side trusts. The challenger side rests on two premises, which no `Security/`
   guarantee reads yet:
   - `CoinsConfidential`: every coin travels from the challenger to the certifier only inside auditor-trusted hosts
-    (`trusted-nebius-host`), here one device, vy-challenger-1, which runs both; no prover-controlled host reads a coin
+    (`trusted-host`), here one device, vy-challenger-1, which runs both; no prover-controlled host reads a coin
     before the certifier admits it at the boundary.
   - `OneClock`: the challenger's release times and the certifier's ingress ticks are read on one clock, this host's.
     Were they two devices, the offset between their clocks would have to stay within 1.03 s (RT-POOL G).

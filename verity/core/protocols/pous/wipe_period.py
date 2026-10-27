@@ -407,7 +407,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
     gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the verifier of
     record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
-    Which host ran each party, whether `trusted-nebius-host`'s premise holds, the memory the prover kept the fill in,
+    Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
     (`placement`, `wipe_party.placement`); `wipe.json` adds the prover's own timings (`prover`: its store, gate, fill

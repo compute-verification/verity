@@ -20,7 +20,7 @@ inference block constrains) and its `delta`, split into the coins' draws and the
   one game per server (or device) per wipe, summed over the horizon.
 * `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. Its δ is 0: the
-  certifier is the auditor's device (`trusted-nebius-host`), and the side channels an assumed cap.
+  certifier is the auditor's device (`trusted-host`), and the side channels an assumed cap.
 * The NCI check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
