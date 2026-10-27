@@ -12,10 +12,9 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
 * **The wipe that opens block `b`** (`BlockWipe`): the memory challenger fills `fill` bits of the device memory with
   labels derived from a fresh seed and runs timed spot reads. Its verdict, and `kept`, the bits of foreign content
   block `b` can read back from what the wipe leaves beyond the committed carried state, are functions of the coins. Its
-  survivor bound at a fraction `f` (`BlockWipe.Survives`) is PoUS's secure-erasure requirement's
-  (`Pous.EraseMeets`, which `Pous.Guarantees.SecureErasureMeetsFamily` proves at `f = 1/19`, `ε = 2^-128`): at most
-  `f · fill + 2λ` bits (`λ = 128`) survive, plus the state the fill leaves out (`BlockWipe.unfilled`, the on-chip
-  state and the device memory the fill doesn't reach).
+  survivor bound at a fraction `f` (`BlockWipe.Survives`), which no proved guarantee gives since the secure-erasure
+  model behind it was refuted and deleted: at most `f · fill + 2λ` bits (`λ = 128`) survive, plus the state the fill
+  leaves out (`BlockWipe.unfilled`, the on-chip state and the device memory the fill doesn't reach).
 * **The memory term of block `b`** (`BlocksRun.MemoryTerm`), PoUS over the weights alone at a share of `0.07`, as
   ruled: at each of the block's PoUS challenge times, the block's undeclared memory, the bits of its `U`
   bits of weights that the capacity account doesn't hold (`BlocksRun.undeclared`), is at most `0.07 · U + S_chip + c`,

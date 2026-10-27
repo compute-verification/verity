@@ -24,8 +24,8 @@ Each hypothesis is to come from its protocol's own statement:
   `ln(1/δ)/q` wrong units with probability at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. It is stated in C-Flock's
   analysis (the proofs tree) over its game of sessions played by one prover, not over this coin space, so the integrity
   leg here is `PeriodRun.Sound` for `.sampled` in each block until a bridge carries it over;
-* the wipe: `Pous.Guarantees.SecureErasureMeetsFamily`, at `f = 1/19` and `ε_wipe = 2^-128` for the band of the
-  fill's size, through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` (neither bridge is stated yet);
+* the wipe: none yet, since the secure-erasure model that was to give it at `f = 1/19` was refuted and deleted; a
+  source reaches it through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` (that bridge is not stated yet);
 * the memory term: weights-only PoUS at a share of `0.07` (ASK-132), at `δ_PoUS`.
 Demo A (Daniel's ruling of 25 Oct) is PoUW, sampled proofs and network accounting only: `JointHorizonBlocksA` is its
 composed theorem, the blocks' per-period guarantees for those three audits with no wipe or memory term, the instance of

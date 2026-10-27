@@ -80,9 +80,10 @@ $$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) +
 `q_b = rate_oracle · T_b` the device's oracle queries over block `b`'s window.
 
 **The wipe and the memory term keep their hypotheses.** Each wipe's survivor bound (`ε_wipe b`) and each block's memory
-term (`δ_PoUS b`) are taken as in `JointHorizonBlocks`: memory accounting's wipe bridge, from
-`Pous.Guarantees.SecureErasureMeetsFamily` through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` to `BlockWipe.Survives`,
-doesn't exist yet, and neither does a bridge from weights-only PoUS to `BlocksRun.MemoryTerm`. Each bridge's own gap
+term (`δ_PoUS b`) are taken as in `JointHorizonBlocks`: memory accounting's wipe bridge, from a proved wipe bound
+(the secure-erasure model's was refuted and deleted) through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` to
+`BlockWipe.Survives`, doesn't exist yet, and neither does a bridge from weights-only PoUS to `BlocksRun.MemoryTerm`.
+Each bridge's own gap
 stays as its realization's field or its source's premise: the program-from-circuit correspondence (M1, `wrong_eq`), the
 words fixed right as device-model work (RT4-LOGIC-6, now the premises `WordCostsMacs` and `HelpWithinCertifier`), PoUS
 at its challenge times only, and the
