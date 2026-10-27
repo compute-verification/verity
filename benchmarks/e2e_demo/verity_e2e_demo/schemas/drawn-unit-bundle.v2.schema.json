@@ -55,12 +55,18 @@
      ]
     },
     "reads": {
-     "description": "an input row made of committed rows (replay_bundle.Read: at the unit's step or an earlier one, its own slot, e.g. attention's K and V rows) and position words (replay_bundle.Position); every word no read covers is zero; slot and registered are then null",
-     "type": "array", "minItems": 1, "items": {"oneOf": [
+     "description": "an input row made of committed rows (replay_bundle.Read: at the unit's step or an earlier one, its own slot, e.g. attention's K and V rows), pieces of registered rows (replay_bundle.RegisteredRead: a norm's gain) and position words (replay_bundle.Position); every word no read covers is zero, every word of a row of no reads (a V row past n); slot and registered are then null",
+     "type": "array", "items": {"oneOf": [
       {"type": "object", "required": ["kind", "at", "words", "start", "row", "salt", "string", "slot"], "additionalProperties": false,
        "properties": {"kind": {"const": "step"}, "at": {"$ref": "#/$defs/nat"}, "words": {"type": "integer", "minimum": 1},
                       "start": {"$ref": "#/$defs/nat"}, "row": {"$ref": "#/$defs/span"}, "salt": {"$ref": "#/$defs/span"},
                       "string": {"type": "string", "pattern": "^[0-9a-f]{256}$"}, "slot": {"$ref": "#/$defs/committed"}}},
+      {"type": "object", "required": ["kind", "at", "words", "start", "value", "position", "row", "salt", "string", "path"],
+       "additionalProperties": false,
+       "properties": {"kind": {"const": "registered"}, "at": {"$ref": "#/$defs/nat"}, "words": {"type": "integer", "minimum": 1},
+                      "start": {"$ref": "#/$defs/nat"}, "value": {"type": "string"}, "position": {"$ref": "#/$defs/nat"},
+                      "row": {"$ref": "#/$defs/span"}, "salt": {"$ref": "#/$defs/span"},
+                      "string": {"type": "string", "pattern": "^[0-9a-f]{256}$"}, "path": {"$ref": "#/$defs/hex"}}},
       {"type": "object", "required": ["kind", "at", "offset"], "additionalProperties": false,
        "properties": {"kind": {"const": "position"}, "at": {"$ref": "#/$defs/nat"}, "offset": {"enum": [0, 1]}}}
      ]}

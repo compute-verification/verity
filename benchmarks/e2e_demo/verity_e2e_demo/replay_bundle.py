@@ -52,8 +52,11 @@ in the payload and holds only public structure, hiding commitments and paths bes
   - ``reads``: a row made of pieces of committed rows (`Read`; `WindowLocate` takes the H200 window writer's), each from
     its unit's own slot and block at its own step or an earlier one (an attention block at step s reads the K and V rows
     of steps 0 .. s): ``{kind: step, at, words, start, row, salt, string, slot}``, its committed row's bytes and salt in
-    the payload, ``slot`` its opening as above (``producer`` optional) against its own step's root; or a position word
-    ``{kind: position, at, offset}``, the unit's step plus ``offset``. Words no piece covers are zero.
+    the payload, ``slot`` its opening as above (``producer`` optional) against its own step's root; a position word
+  ``{kind: position, at, offset}``, the unit's step plus ``offset``; or a piece of a registered row (`RegisteredRead`: a
+  norm's gain, one registered word a row) ``{kind: registered, at, words, start, value, position, row, salt, string,
+  path}``, its row's bytes and salt in the payload and ``path`` its opening against the value's root. Words no piece
+  covers are zero, and a row of no pieces is all zero (a V row past n, which the Definition masks).
 
   With ``registration``, `check` holds every step root the bundle opens against to the one the registration's
   ``window.commitment`` names (`steps_provenance`, every step's root registered before the coin) and fails closed on a
@@ -141,13 +144,26 @@ class Position:
     at: int = 0
 
 
+@dataclass(frozen=True)
+class RegisteredRead:
+    """Words of a port's row read from row ``position`` of registered value ``value``: its bytes ``start .. start + nbytes``
+    (``nbytes`` None: to the row's end) are the port row's words from ``at``. A port of many registered rows (a norm's gain,
+    one word a row) reads each so; a port that is one whole registered row is a registered read (`Reads`)."""
+
+    value: str
+    position: int
+    at: int = 0
+    start: int = 0
+    nbytes: int | None = None
+
+
 Coords = Callable[[Any, int], dict[str, Any]]
 Reads = Callable[[Mapping[str, Any], str, str], "tuple[str, int] | None"]
 #: a unit's port's row in the step commitment: (layout unit, rank, the producer's coordinates or None for the unit's own) for
-#: one whole row at the unit's own step and slot, or the `Read`s and `Position`s it is made of (words no piece covers are
-#: zero: absent K and V rows); None for a registered read
+#: one whole row at the unit's own step and slot, or the `Read`s, `Position`s and `RegisteredRead`s it is made of (words no
+#: piece covers are zero: absent K and V rows, and none at all for a V row past n); None for a registered read
 Locate = Callable[[Mapping[str, Any], str, str],
-                  "tuple[int, int, dict[str, Any] | None] | Sequence[Read | Position] | None"]
+                  "tuple[int, int, dict[str, Any] | None] | Sequence[Read | Position | RegisteredRead] | None"]
 
 
 @dataclass(frozen=True)
@@ -433,13 +449,13 @@ def steps_provenance(commitment: Commitment) -> dict[str, Any]:
                            "slots": com.slots, "blocks": _Steps(com).blocks()}}
 
 
-def _pieces(at: Any) -> list[Read | Position] | None:
-    """A `Locate` answer as its pieces, or None for the one whole row of the legacy 3-tuple."""
+def _pieces(at: Any) -> list[Read | Position | RegisteredRead] | None:
+    """A `Locate` answer as its pieces (none: an all-zero row), or None for the one whole row of the legacy 3-tuple."""
     if isinstance(at, tuple) and len(at) == 3 and all(isinstance(x, int) for x in at[:2]):
         return None
     pieces = list(at)
-    if not pieces or not all(isinstance(x, (Read, Position)) for x in pieces):
-        raise ValueError(f"{at!r}: a whole row (unit, rank, producer), or Reads and Positions")
+    if not all(isinstance(x, (Read, Position, RegisteredRead)) for x in pieces):
+        raise ValueError(f"{at!r}: a whole row (unit, rank, producer), or Reads, Positions and RegisteredReads")
     return pieces
 
 
@@ -566,11 +582,13 @@ def _fill(want: Wants, steps: _Steps, workers: int = 1) -> None:
             o.update(p)
 
 
-def _read_entries(who: str, c: Mapping[str, Any], kind: str, row: bytes, pieces: Sequence[Read | Position], steps: _Steps,
-                  payload: bytearray, opening: Callable[..., dict[str, Any]]) -> list[dict[str, Any]]:
-    """A port row's ``reads``: each step read's committed row and salt appended to ``payload`` and its opening wanted; refused
-    when the row is not the pieces' bytes and zero elsewhere, or a read is outside the unit's slot, after its step, or (for
-    an output) anywhere but its own step."""
+def _read_entries(who: str, c: Mapping[str, Any], kind: str, row: bytes, pieces: Sequence[Read | Position | RegisteredRead],
+                  steps: _Steps, payload: bytearray, opening: Callable[..., dict[str, Any]],
+                  weights: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+    """A port row's ``reads``: each step read's committed row and salt appended to ``payload`` and its opening wanted, each
+    registered piece's row and salt appended with its path (``weights``: the values, `build`'s); refused when the row is
+    not the pieces' bytes and zero elsewhere, or a read is outside the unit's slot, after its step, or (for an output)
+    anywhere but its own step, or an output reads a registered row."""
     layout, words = steps.com.layout, len(row) // 2
     out: list[dict[str, Any]] = []
     covered = np.zeros(words, dtype=bool)
@@ -581,6 +599,27 @@ def _read_entries(who: str, c: Mapping[str, Any], kind: str, row: bytes, pieces:
                 raise ValueError(f"{who}: word {q.at} is not its step + {q.offset}, or a position in an output")
             covered[q.at] = True
             out.append({"kind": "position", "at": q.at, "offset": q.offset})
+            continue
+        if isinstance(q, RegisteredRead):
+            reg = (weights or {}).get(q.value)
+            if kind == "out" or reg is None:
+                raise ValueError(f"{who}: {q} reads a registered value the bundle has no rows of, or is in an output")
+            crow, csalt = bytes(reg.row_bytes(q.position)), bytes(reg.salt(q.position))
+            cs = reg.string(q.position) if hasattr(reg, "string") else reg.bcs[q.position]
+            if string_of(reg.schema, crow, csalt) != cs:
+                raise ValueError(f"{who}: {q.value} row {q.position}'s bytes and salt are not its registered string")
+            n = len(crow) - q.start if q.nbytes is None else q.nbytes
+            nw = n // 2
+            if q.start % 2 or n % 2 or nw < 1 or not (0 <= q.start and q.start + n <= len(crow) and 0 <= q.at
+                                                      and q.at + nw <= words) or covered[q.at:q.at + nw].any():
+                raise ValueError(f"{who}: read {q} is outside its row or the port's, or overlaps another")
+            if row[2 * q.at:2 * (q.at + nw)] != crow[q.start:q.start + n]:
+                raise ValueError(f"{who}: words {q.at}.. are not {q.value} row {q.position}'s")
+            covered[q.at:q.at + nw] = True
+            out.append({"kind": "registered", "at": q.at, "words": nw, "start": q.start, "value": q.value,
+                        "position": q.position, "row": [len(payload), len(crow)], "salt": [len(payload) + len(crow), SALT],
+                        "string": cs.hex(), "path": reg.path(q.position).hex()})
+            payload += crow + csalt
             continue
         if not 0 <= q.step <= c["step"] or q.slot != c["slot"] or (kind == "out" and (q.step != c["step"] or q.producer)):
             raise ValueError(f"{who}: a read is at the unit's own slot, at its step or an earlier one (an output's at its "
@@ -730,7 +769,9 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
                 entry["slot"] = opening(c["block"], c["step"], c["slot"], lu, rank, producer, bc,
                                         f"unit {u} {p}: not the step commitment's row {rank} of unit {lu} (other bytes or salts)")
             else:
-                entry["reads"] = _read_entries(f"unit {u} {p}", c, entry["kind"], row, pieces, steps, payload, opening)
+                entry["reads"] = _read_entries(f"unit {u} {p}", c, entry["kind"], row, pieces, steps, payload, opening,
+                                               weights)
+                used_values |= {q["value"] for q in entry["reads"] if q["kind"] == "registered"}
             rows.append(entry)
         units.append({"unit": u, "coords": c, "template": tpl, "member": {"k": k, "local": i}, "rows": rows})
         mm = members.setdefault(k, {"k": k, "name": m["name"], "template": m["template"], "base": m["base"], "n": m["n"],
@@ -894,15 +935,17 @@ def _check_slot(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, bc: b
     return _check_opening(s, len(row), bc, com)
 
 
-def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payload: bytes, com: tuple[Any, ...] | None
-                 ) -> str | None:
-    """Why a row made of reads (`Read`, `Position`) fails, or None: each step read is its committed row's bytes and salt
-    under its string, opens at the unit's own slot and block at its step or an earlier one (an output's at its own step),
-    where its producer (when named) committed it, against that step's root; its bytes are the row's words from ``at``; a
-    position (an input's) is the unit's step plus its offset; the reads don't overlap; every other word is zero."""
+def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payload: bytes, com: tuple[Any, ...] | None,
+                 registered: Callable[[Mapping[str, Any], bytes, bytes], bool] | None = None) -> str | None:
+    """Why a row made of reads (`Read`, `Position`, `RegisteredRead`) fails, or None: each step read is its committed row's
+    bytes and salt under its string, opens at the unit's own slot and block at its step or an earlier one (an output's at
+    its own step), where its producer (when named) committed it, against that step's root; each registered piece (an
+    input's) is its registered row's bytes and salt under its string, whose path reaches its value's root
+    (``registered(read, row, salt)``); its bytes are the row's words from ``at``; a position (an input's) is the unit's
+    step plus its offset; the reads don't overlap; every other word is zero (every word, for a row of no reads)."""
     c, words, out = unit["coords"], r["words"], r["kind"] == "out"
-    if r["kind"] not in ("in", "out") or not isinstance(r["reads"], list) or not r["reads"]:
-        return "a row made of reads, at least one"
+    if r["kind"] not in ("in", "out") or not isinstance(r["reads"], list):
+        return "a row made of reads"
     covered = np.zeros(words, dtype=bool)
     for j, q in enumerate(r["reads"]):
         at = q.get("at")
@@ -914,8 +957,22 @@ def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payl
                 return f"read {j}: the word is not its step plus its offset, or another read's"
             covered[at] = True
             continue
+        if q.get("kind") == "registered":
+            nw, start = q.get("words"), q.get("start")
+            crow = payload[q["row"][0]:q["row"][0] + q["row"][1]]
+            csalt = payload[q["salt"][0]:q["salt"][0] + q["salt"][1]]
+            if out or registered is None or len(crow) != q["row"][1] or len(csalt) != SALT or not registered(q, crow, csalt):
+                return f"read {j}: its registered row and salt are not its string, its path doesn't reach its value's root, " \
+                       f"or it is in an output"
+            if not (isinstance(nw, int) and isinstance(start, int) and start % 2 == 0 and 0 <= start and nw >= 1
+                    and start + 2 * nw <= len(crow) and at + nw <= words) or covered[at:at + nw].any():
+                return f"read {j}: its bytes are outside its row or the port's, or another read's"
+            if row[2 * at:2 * (at + nw)] != crow[start:start + 2 * nw]:
+                return f"read {j}: the row's words are not its bytes"
+            covered[at:at + nw] = True
+            continue
         if q.get("kind") != "step":
-            return f"read {j}: a step read or a position"
+            return f"read {j}: a step read, a registered piece or a position"
         s, nw, start = q["slot"], q["words"], q["start"]
         crow = payload[q["row"][0]:q["row"][0] + q["row"][1]]
         csalt = payload[q["salt"][0]:q["salt"][0] + q["salt"][1]]
@@ -984,6 +1041,16 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
             bad[f"value:{name}"] = "its domain is not the registered-value rule's over its entry"
     com = _check_commitment(doc, bad, registration)
     members = {m["k"]: m for m in doc["members"]}
+
+    def registered_piece(q: Mapping[str, Any], crow: bytes, csalt: bytes) -> bool:
+        v = values.get(q.get("value"))
+        if v is None or not isinstance(q.get("position"), int):
+            return False
+        schema = v.get("row_schema", REG.SCHEMA)
+        bc = bytes.fromhex(q["string"])
+        d = REG.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", REG.WORD_BITS))
+        return string_of(schema, crow, csalt) == bc and REG.verify_read(d, bytes.fromhex(v["root"]), q["position"], bc,
+                                                                         bytes.fromhex(q["path"]), schema)
     for unit in doc["units"]:
         u = unit["unit"]
         mm = members.get(unit["member"]["k"])
@@ -1015,7 +1082,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
             if sum(r.get(x) is not None for x in ("slot", "registered", "reads")) != 1:
                 bad[key] = "a row opens against the step commitment, a registered value or its reads, exactly one"
             elif r.get("reads") is not None:
-                if (why := _check_reads(r, unit, row, payload, com)) is not None:
+                if (why := _check_reads(r, unit, row, payload, com, registered_piece)) is not None:
                     bad[key] = why
             elif r["registered"] is not None:
                 v = values.get(r["registered"]["value"])
@@ -1131,6 +1198,9 @@ def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], i
         elif r.get("reads") is not None:
             if not all(registered_step(q["slot"]) for q in r["reads"] if q["kind"] == "step"):
                 bad[key] = "a read does not open under the registered step's slot root or a step root the registration names"
+            elif not all(q["value"] in weights and values.get(q["value"]) == weights[q["value"]]
+                         for q in r["reads"] if q["kind"] == "registered"):
+                bad[key] = "a registered piece's value's root is not one the step registration names"
         elif r["registered"] is not None:
             name = r["registered"]["value"]
             if name not in weights or values.get(name) != weights[name]:

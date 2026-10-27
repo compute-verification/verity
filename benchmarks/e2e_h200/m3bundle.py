@@ -9,10 +9,12 @@ tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a on
         --receipt RECEIPT.json --weights OPEN.json --out TREE [--workers W]
 
 * **Which block.** Drawn g is slot ``g // units_per_slot``'s layout unit ``g % units_per_slot`` (`replay_bundle.block_of`),
-  unit ``index`` of its family (`m3draw.families`). A gather's unit is no proof block, and a norm's output block (its gain
-  is 128 registered rows a port) and the embedding (its token is ingress) have no bundle yet: each is a visible failure,
-  written to ``summary.json``, and never redrawn.
-* **weights** (where CMP-160's witness is): every registered row a drawn linear block reads (`window.Window.locate`'s
+  unit ``index`` of its family (`m3draw.families`). A gather's unit is no proof block (the Program has its parts'
+  references and no Definition for it), and an embedding at a prompt position reads ingress: each is a visible failure,
+  written to ``summary.json``, and never redrawn. A norm's gain (one registered word a row) is a port of
+  `RegisteredRead`\\ s, the embedding's token past the prompt the argmax its sequence committed a step before, and a PV
+  block's V row past n a row of no reads (all zero).
+* **weights** (where CMP-160's witness is): every registered row a drawn block reads (`window.Window.locate`'s
   `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes, salt, string and path,
   each checked against the registered root (``REG.verify_read``).
 * **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the drawn
@@ -48,14 +50,16 @@ sys.path[:0] = [str(HERE), str(HERE.parent / "e2e_demo")]
 import kv_reads as KV  # noqa: E402
 import m3draw as M3  # noqa: E402
 from e2e_h200.commit import _slots, layout as commit_layout  # noqa: E402
+from e2e_h200.plan import EPS_KEY  # noqa: E402
 from e2e_h200.shape import PV_K, SHAPES  # noqa: E402
-from e2e_h200.window import Registered, Run, Window  # noqa: E402
+from e2e_h200.window import Registered, Run, Segment, Window  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops.boolean import gemm as BG  # noqa: E402
 from verity.ml.circuits.ops.boolean import quant as BQ  # noqa: E402
 from verity.ml.circuits.ops.boolean import rmsnorm as RN  # noqa: E402
 from verity.ml.circuits.ops.boolean import rows as BR  # noqa: E402
+from verity.ml.circuits.ops.boolean import rowwise as RW  # noqa: E402
 from verity.ml.circuits.ops.boolean import softmax_row as SR  # noqa: E402
 from verity.ml.windows import interface as IF, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
@@ -63,9 +67,9 @@ from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 FORMAT = "verity/e2e-h200/m3-drawn-blocks/v1"
 LOOP = "e2e-h200-m3"
 COINS = "vy-challenger-1's gate session, the step registration's digest its root (m3coin.py)"
-#: the map's templates with no bundle yet: a norm's gain is many registered rows a port, the embedding's token is ingress
-UNBUNDLED = {"RmsNormOutSums_v1": "a norm's output block reads its gain as 128 registered rows in one port",
-             "EmbeddingCoordinate_v1": "the embedding reads its token as ingress, which no commitment holds"}
+#: the map's units with no bundle: a gather is references in the Program (`program.GATHER`), no Definition
+UNBUNDLED = {"AllGather_v1": "a gather is its parts' references in the Program, which has no Definition for it; the "
+                             "shared-row layout (window.shared_layout) has no gather units"}
 
 
 class Visible(Exception):
@@ -74,10 +78,11 @@ class Visible(Exception):
 
 def definition(win: Window, fam: str) -> Any:
     """Family ``fam``'s proof block as the served Program calls it (`program.program`'s binds at the window's shape)."""
-    u = win.family(fam)
-    t, f, sh = u.template, win.f, win.shape
+    t = win.units[fam].template
     if t in UNBUNDLED:
         raise Visible(f"{fam} ({t}): {UNBUNDLED[t]}")
+    u = win.family(fam)
+    f, sh = win.f, win.shape
     if t == "ScaledMmS8CoordinateRows_v1":
         K = win.tables[win.src[u.table] + "_quant"][2].nbytes
         return bind(BG.ScaledMmS8CoordinateRows, K=K, R=K // f.qchunk(K), DOT=BG.GEMM_SM120_S8["DOT"])
@@ -98,6 +103,11 @@ def definition(win: Window, fam: str) -> Any:
     if t == "RmsSumSqChunks_v1":
         n = win.tables[win.src[u.table[:-len("_sums")]]][2].nbytes // 2
         return bind(RN.RmsSumSqChunks, C=f.sums_c(n), K=f.chunk)
+    if t == "RmsNormOutSums_v1":
+        n = sh.width
+        return bind(RN.RmsNormOutSums, C=f.chunk, S=n // f.chunk, G=f.groups(n), N=n, EPS=EPS_KEY)
+    if t == "EmbeddingCoordinate_v1":
+        return bind(RW.EmbeddingCoordinate, V=sh.vocab)
     if t == "Argmax_v2":
         return bind(BR.Argmax, V=sh.vocab)
     raise Visible(f"{fam}: no Definition for {t}")
@@ -136,17 +146,36 @@ def _families(shape: Any) -> list:
     return M3.families(Committer("slots", ctx, key, shape, "cpu", lambda s: bytes(32)), shape)
 
 
-def registered_reads(win: Window, blk: dict, step: int) -> dict[str, tuple[str, int]]:
-    """``{port: (value, row)}`` of a block's registered reads: one whole registered row each."""
-    out = {}
+def registered_reads(win: Window, blk: dict, step: int) -> tuple[dict[str, tuple[str, int]], dict[str, list[RB.RegisteredRead]]]:
+    """A block's registered reads: ``{port: (value, row)}`` of the ports that are one whole registered row, and
+    ``{port: [RegisteredRead]}`` of those made of pieces of registered rows (a norm's gain, one word a row)."""
+    whole, pieces = {}, {}
     for p in win.ports(blk["family"]):
-        pieces = win.locate(step, blk["slot"], blk["family"], blk["index"], p)
-        if any(isinstance(x, Registered) for x in pieces):
-            (x,) = pieces
-            if x.offset or x.nbytes != 2 * win._weights[x.value].words:
-                raise Visible(f"{blk['family']} {p}: {x} is not one whole registered row")
-            out[p] = (x.value, x.row)
-    return out
+        ps = win.locate(step, blk["slot"], blk["family"], blk["index"], p)
+        if not any(isinstance(x, Registered) for x in ps):
+            continue
+        if not all(isinstance(x, Registered) for x in ps):
+            raise Visible(f"{blk['family']} {p}: registered rows and other pieces in one port")
+        if len(ps) == 1 and not ps[0].offset and ps[0].nbytes == 2 * win._weights[ps[0].value].words:
+            whole[p] = (ps[0].value, ps[0].row)
+            continue
+        at, out = 0, []
+        for x in ps:
+            out.append(RB.RegisteredRead(x.value, x.row, at, x.offset, x.nbytes))
+            at += x.nbytes // 2
+        pieces[p] = out
+    return whole, pieces
+
+
+def token_pieces(win: Window, step: int, slot: int, prompt: int) -> tuple[Segment, ...]:
+    """The token a block at ``step`` and ``slot`` embeds, where a commitment holds it: past the prompt (``prompt`` bytes),
+    position p's token is the argmax its sequence committed at position p - 1 (`driver.Driver.run`)."""
+    p = win.position(step, slot)
+    if p < prompt:
+        raise Visible(f"the embedding at position {p} reads the prompt's token, ingress that no commitment holds")
+    t, s = win.history(step, slot)[p - 1]
+    (segs,) = win.outputs(t, s, "argmax", 0)
+    return segs
 
 
 # -- weights (cpu-2) -------------------------------------------------------------------------------------------------------
@@ -163,7 +192,8 @@ def weights_phase(a: argparse.Namespace) -> int:
     for blk in blocks_of(reg, draw, _families(shape)):
         try:
             win.family(blk["family"])
-            for value, pos in registered_reads(win, blk, reg["step"]).values():
+            whole, pieces = registered_reads(win, blk, reg["step"])
+            for value, pos in [*whole.values(), *((q.value, q.position) for ps in pieces.values() for q in ps)]:
                 want.setdefault(value, set()).add(pos)
         except (Visible, ValueError) as e:
             print(f"SKIP {blk['g']}: {e}", flush=True)
@@ -246,7 +276,7 @@ def replay_phase(a: argparse.Namespace) -> int:
     if not rc["ok"]:
         return 5
     t0 = time.perf_counter()
-    st = {"shape": a.shape, "batch": a.batch, "steps": len(results), "context": committer.context,
+    st = {"shape": a.shape, "batch": a.batch, "steps": len(results), "prompt_bytes": a.prompt_bytes, "context": committer.context,
           "layout_digest": committer.describe()["layout_digest"], "root_check": rc, "blocks": blocks,
           "salt_keys": [r.salt_key for r in results], "slot_roots": [tuple(r.slot_roots) for r in results],
           "positions": [np.asarray(r.positions) for r in results],
@@ -286,7 +316,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: 
     if [p for p, _ in tl.rows] != list(win.ports(fam)):
         raise Visible(f"{fam}: the Definition's ports {[p for p, _ in tl.rows]} are not the window's {list(win.ports(fam))}")
     rows_of = lambda t, s: KV.SlotRows(lay, st["sources"][t, s])  # noqa: E731
-    reads = registered_reads(win, blk, step)
+    reads, pieces = registered_reads(win, blk, step)
     wrow = lambda value, r: weights[value].row_bytes(r)  # noqa: E731
 
     def run(t: int, s: int, name: str) -> int:
@@ -297,8 +327,16 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: 
     c = {"block": 0, "step": step, "slot": b, "op": fam, "unit": idx}
     answers, data = {}, {"rows": {}, "outs": {}}
     for p, words in tl.rows:
-        data["rows"][p] = _words(win.assemble(win.locate(step, b, fam, idx, p), rows_of, wrow, run, step, b), words, p)
-        answers[p] = None if p in reads else win.bundle(step, b, fam, idx, p)
+        located = win.locate(step, b, fam, idx, p)
+        if located == (Run("token"),):
+            located = token_pieces(win, step, b, st.get("prompt_bytes", 0))
+            answers[p] = [{"step": x.step, "slot": x.slot, **dict(zip(("unit", "rank"), win.unit_of(x.row))), "at": 0,
+                           "start": x.offset, "nbytes": x.nbytes} for x in located]
+        elif p in pieces:
+            answers[p] = pieces[p]
+        else:
+            answers[p] = None if p in reads else win.bundle(step, b, fam, idx, p)
+        data["rows"][p] = _words(win.assemble(located, rows_of, wrow, run, step, b), words, p)
     outs = win.outputs(step, b, fam, idx)
     if len(outs) != len(tl.outs):
         raise Visible(f"{fam}: {len(outs)} committed outputs, the Definition's {len(tl.outs)}")
@@ -330,7 +368,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: 
         ans = answers[port]
         if ans is None or isinstance(ans, tuple):
             return ans
-        return [RB.Position(**q) if "offset" in q else RB.Read(**q) for q in ans]
+        return [q if not isinstance(q, dict) else RB.Position(**q) if "offset" in q else RB.Read(**q) for q in ans]
 
     doc, pay = RB.build(wdir, [0], commitment=com, locate=locate, binding=binding_of(win.family(fam).template),
                         coords=lambda label, offset: dict(label), reads=lambda cc, t, p: reads.get(p), weights=weights,
@@ -351,7 +389,8 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: 
                       for p, a_ in answers.items()},
             "read_steps": sorted({q["slot"]["step"] for r in doc["units"][0]["rows"] for q in r.get("reads") or ()
                                   if q["kind"] == "step"}),
-            "registered": sorted({f"{v}[{p}]" for v, p in reads.values()}),
+            "registered": sorted({f"{v}[{p}]" for v, p in reads.values()} |
+                                 {f"{q.value}[{q.position}]" for ps in pieces.values() for q in ps}),
             "check": check, "check_step": step_check, "ok": not check and not step_check,
             "refused": {"a flipped row bit": sorted(refused),
                         "another step root": sorted(RB.check_step(doc, pay, other, blk["g"], registration=rec))},
