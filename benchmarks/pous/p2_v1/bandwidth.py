@@ -15,8 +15,8 @@ it is PoUS's, and the decode never reads it). `registration --layout` writes it 
 **The step.** Each pass of the session is one engine step's weight reads: every tensor of the store, in block order, from
 its segment files onto the device (`full.Segments`, kernels' reader) and through kernels' staging decode
 (`stage.decode_matrix`) into a staging buffer, as a forward step reads them. The decode reads each chunk's rows from
-`stage.Store.decode_rows`; `SketchedStore` sketches those same device rows under the pass's seed just before they go to
-the decode kernel (`Sketch.add`: π of each block by an exact int8 matmul against its four offsets' signs, summed into
+`stage.Store.decode_rows`, whose attached sketch (`store.sketch`, `Sketch.read`) sketches those same device rows under
+the pass's seed just before they go to the decode kernel (`Sketch.add`: π of each block by an exact int8 matmul against its four offsets' signs, summed into
 its unit's σ), so the receipts are of the bytes the decode read. Blocks of no tensor up to the plan's last unit (the
 head's last unit's tail) are read and sketched alone, so every unit of the plan is covered. Then y = SHA512(prefix ‖
 u64be g ‖ σ_g) for every unit of the plan on the device (`receipts_of`, a torch SHA-512 after the prefix's midstate; a
@@ -198,8 +198,9 @@ def receipts_of(torch: Any, seed: bytes, sigma: Any, first: int = 0, chunk: int 
 
 class Sketch:
     """One pass's σ of every unit, `units` of them, on `device`: `add(rows, j0)` sketches the device rows of blocks
-    `j0 ..` ([n, 2056] uint8, as stored) into their units' σ, each block's π against its offset's sign columns; `seen`
-    counts each unit's blocks sketched, four when the pass covered it."""
+    `j0 ..` ([n, 2056] uint8, as stored) into their units' σ, each block's π against its offset's sign columns, and
+    `read` is `stage.Store.decode_rows`'s hook to it; `seen` counts each unit's blocks sketched, four when the pass
+    covered it."""
 
     def __init__(self, torch: Any, seed: bytes, rows: int, units: int, device: Any) -> None:
         self.t, self.units, self.rows, self.device = torch, units, rows, device
@@ -243,26 +244,14 @@ class Sketch:
         self.seen.index_add_(0, j // UNIT, t.ones(n, dtype=t.int32, device=self.device))
         self.blocks += n
 
+    def read(self, rows: Any, first: int, j0: int, j1: int) -> None:
+        self.add(rows[j0 - first:j1 - first], j0)
+
     def covered(self, runs: Sequence[tuple[int, int]] | None = None) -> int:
         """The units (of `runs`, or all) of every block sketched exactly once; each is four."""
         if runs is None:
             return int((self.seen == UNIT).sum())
         return sum(int((self.seen[f:f + c] == UNIT).sum()) for f, c in runs)
-
-
-def sketched_store(S: Any):
-    """`stage.Store` whose `decode_rows` sketches each chunk's rows before the decode kernel reads them."""
-
-    class SketchedStore(S.Store):
-        def __init__(self, *args: Any, sketch: Sketch, **kw: Any) -> None:
-            super().__init__(*args, **kw)
-            self.sketch = sketch
-
-        def decode_rows(self, j0: int, j1: int) -> Any:
-            self.sketch.add(self.rows[j0 - self.first:j1 - self.first], j0)
-            return super().decode_rows(j0, j1)
-
-    return SketchedStore
 
 
 class RefDecode:
@@ -486,7 +475,6 @@ class Engine:
             raise ValueError("the layout's store is not the registration's")
         self.store, self.lib, self.chunk, self.readers = store, lib, chunk, readers
         self.registration, self.skip_layer = registration, skip_layer
-        self.Sketched = sketched_store(S)
         self.serve(receipts.Plan.whole(registration.blocks))
 
     def serve(self, plan: receipts.Plan) -> None:
@@ -517,7 +505,8 @@ class Engine:
                         sk.add(rows[j0 - p.blocks.start:j0 - p.blocks.start + self.chunk], j0)
                 else:
                     t = p.tensor
-                    store = self.Sketched(self.lay, rows, t.first_block, self.lib, chunk=self.chunk, sketch=sk)
+                    store = S.Store(self.lay, rows, t.first_block, self.lib, chunk=self.chunk)
+                    store.sketch = sk
                     w = torch.empty(t.n, t.k, dtype=torch.int8, device=self.device)
                     S.decode_matrix(store, t.layer, t.name, w)
                     del w, store

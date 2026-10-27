@@ -17,36 +17,40 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
+# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine import int8_ops  # noqa: E402
-from verity_vllm.protocols.pouw import credit_gate as CG  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import commit as CT  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import records as ZR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw.coins import Challenger
+from verity.core.protocols.sampled_proofs import challenger as LC
+from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity_vllm import protocols as PO
+from verity_vllm.commit.served_record import PORT_NAMES
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_ops
+from verity_vllm.protocols.pouw import credit_gate as CG
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import records as ZR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from tests.protocols import challenger_host as CH  # noqa: E402
+from tests.protocols import challenger_host as CH
 
 K = 64
 #: the window's T
 ROWS = 32
 ENTRY = f"pouw:{PH.SCHEME}"
 ZY = "verity_int8::scaled_mm_zy"
+#: the name the Commit's step-input port acquires a step's input ids under
+PORT = PORT_NAMES[0]
 TODAY = "credit: served-output-not-credited-kernel: q y from verity_int8::scaled_mm, z from aten::_int_mm"
 RECORDS = f"credit: {CG.RECORDS}: q "
 
@@ -280,10 +284,11 @@ def periodic(tmp_path, monkeypatch):
     return make
 
 
-def _commit(tap, x, ids):
-    """The Commit's acquires at the window's one engine step (`pouw_h1_commit.CommitTap.take`): the step's input ids and
-    linear ``q``'s ``row_quant`` of `x`, as the int8 source takes them at its site."""
-    tap.take("embed/in", torch.tensor(ids), 0)
+def _commit(tap, x, ids, n):
+    """The Commit's acquires at the window's one engine step (`pouw_h1_commit.CommitTap.take`): the step's input ids at
+    its step-input port, its first `n` the step's scheduled tokens, and linear ``q``'s ``row_quant`` of `x`, as the int8
+    source takes them at its site."""
+    tap.take(PORT, torch.tensor(ids), 0, n)
     xq, s_a = int8_ops.row_quant(x.reshape(-1, K))
     tap.take(f"{CT.site('q')}/0", xq, 0)
     tap.take(f"{CT.site('q')}/1", s_a, 0)
@@ -298,7 +303,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
     the m scheduled, as a CUDA graph of the engine's capture sizes `graphs` pads it, its padded input ids 0."""
     layer = Linear(n, 1, arm)
     if served is not None:
-        served.tap = CT.CommitTap("embed")
+        served.tap = CT.CommitTap(port=PORT)
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
     if remote:
         coins = {"challenger": AUDITOR, "session": RESERVED, "gate": lambda session, root: GATE["open"](session, root)}
@@ -316,7 +321,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
                                              total_num_scheduled_tokens=m))
         x = (torch.randn(m + pad, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
         if served is not None:
-            _commit(served.tap, x, (list(range(m)) if ids is None else ids) + [0] * pad)
+            _commit(served.tap, x, (list(range(m)) if ids is None else ids) + [0] * pad, m)
         y = layer.quant_method.apply(layer, x)
         run = pouw.h1_run(ENTRY)
         run.close()
