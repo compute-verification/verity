@@ -45,6 +45,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC
 import of_record as OR
+import settings
 
 #: the challenger's checks are of record in Lean (`of_record`), which `lake` builds
 LEAN = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -1496,7 +1497,7 @@ _UNIT_CHECK = re.compile(r"^(open|lean)-u[0-9]+$")
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("SZ_PARITY_E2E"),
+@pytest.mark.skipif(not settings.SZ_PARITY_E2E,
                     reason="SZ_PARITY_E2E unset: the parity needs the flock/Lean builds and a served window on the node")
 def test_fan_out_verdicts_match_the_serial_loop(tmp_path):
     """served_zk/job.sh's parallel fan-out over the drawn units (SZ_JOBS=4) gives the same verdicts as the serial loop
@@ -1508,9 +1509,10 @@ def test_fan_out_verdicts_match_the_serial_loop(tmp_path):
     ($WORK/passes/$SERVED_RUN) and the flock/Lean builds ($HZ_CACHE); it runs the whole pipeline twice over a tiny window
     (ε=1/8, δ=1/2, K'=6), a few minutes each.  The realistic-parameter audits run this fan-out at scale."""
     root = Path(__file__).resolve().parents[3]
+    assert settings.SERVED_RUN, "SZ_PARITY_E2E needs SERVED_RUN, the run whose served window it proves"
     base = {**os.environ, "HZ_JOB": "benchmarks/pouw/served_zk/job.sh", "SZ_EPS": "1/8", "SZ_DELTA": "1/2",
-            "SZ_CALL_LIST": os.environ.get("SZ_CALL_LIST", "77 225"), "SERVED_RUN": os.environ["SERVED_RUN"],
-            "HZ_MEM_GB": os.environ.get("HZ_MEM_GB", "120")}
+            "SZ_CALL_LIST": settings.SZ_CALL_LIST, "SERVED_RUN": settings.SERVED_RUN,
+            "HZ_MEM_GB": settings.HZ_MEM_GB}
     unit, rest = {}, {}
     for jobs in ("1", "4"):
         rundir = tmp_path / f"jobs{jobs}"

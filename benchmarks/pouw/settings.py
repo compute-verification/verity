@@ -107,12 +107,11 @@ SETTINGS: dict[str, Setting] = _declare(
     S("H1_TMPL", str, None, VALUE, "h1_prove's template mode; unset, flat"),
     S("H1L_RC", str, "16x16", VALUE, "h1_lanes/j10r's tile, RxC"),
     # ---- opt-in tests (tests/)
-    S("PARTIALS_LIB", str, None, WHERE, "the built partials library test_partials and test_lane_refs load; unset, they skip"),
-    S("VERITY_POUW_H1_PIN", str, None, WHERE, "the H1 pin file test_h1_pin checks; unset, it skips"),
+    S("VERITY_POUW_H1_PIN", str, None, VALUE, "set: test_h1_pin builds the H1 unit's circuit at K = 64 and holds it to its pin"),
     S("SZ_PARITY_E2E", str, None, VALUE, "1: test_served_zk runs the served parity end to end"),
     S("SERVED_RUN", str, None, WHERE, "the served run test_served_zk's end-to-end parity reads"),
-    S("SZ_CALL_LIST", str, None, VALUE, "the calls test_served_zk's end-to-end parity proves"),
-    S("HZ_MEM_GB", str, None, WHERE, "the memory bound test_served_zk's end-to-end parity holds the prover to"),
+    S("SZ_CALL_LIST", str, "77 225", VALUE, "the calls test_served_zk's end-to-end parity proves"),
+    S("HZ_MEM_GB", str, "120", WHERE, "the memory bound test_served_zk's end-to-end parity holds the prover to"),
 )
 del S
 
