@@ -44,7 +44,7 @@ B0_DIV = FIX / "B0-divergence-20260907T1604Z"
 TC_HOPPER = Path(os.environ.get("VERITY_HP_ARCHIVE", Path.home() / "veritor-artifacts" / "hp")) / "tc-hopper" / "r1"
 
 from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
+from verity.ml.circuits.evaluation import evaluate_call  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
 from verity.ml.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
 from verity_vllm.program.frontend import serve_families
