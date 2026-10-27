@@ -7,12 +7,13 @@
 #   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 240m \
 #     --env GPU_LEASE_WHO=kernels-kstage [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
-#     --send /tmp/p2lib.tar --send WEIGHTS/weights.py --send h200-manifest.json --send store-layout.json \
+#     --send /tmp/p2lib.tar --send examples/h200/e2e_h200/served_weights.py --send h200-manifest.json \
+#     --send store-layout.json \
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
 #     -- bash benchmarks/torch_gpu/p2_stage/session.sh
 #
-# (WEIGHTS: ALLP-IFACE's verity_torch_loop, whose weights.py writes the seeded stream; h200-manifest.json: its manifest
-# with digests, art:6600b3ec….)
+# (served_weights.py: ALLP-IFACE's generator, which writes the seeded stream; h200-manifest.json: its manifest with
+# digests, art:6600b3ec….)
 #
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
@@ -53,15 +54,15 @@ export O D PY S SRC STORE ENC SALT LAYER STEPS LAYOUT MANIFEST PATH=$CUDA/bin:$P
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 
-mkdir -p "$S/lib" "$S/toy" "$S/tl/verity_torch_loop" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
+mkdir -p "$S/lib" "$S/toy" "$S/tl/e2e_h200" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
   && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) && tar -C "$S/toy" -xf "$IN/store-toy.tar" \
   && [ "$(sha512sum < "$LAYOUT" | cut -c1-128)" = "$LAYOUT_SHA512" ] \
   && [ "$(sha256sum < "$MANIFEST" | cut -c1-64)" = "$MANIFEST_SHA256" ]
 step ship $?
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/elf.txt" "$S/lib/MANIFEST.sha256" "$O/"
-cp "$IN/weights.py" "$S/tl/verity_torch_loop/weights.py" && touch "$S/tl/verity_torch_loop/__init__.py"
-(cd "$IN" && sha256sum weights.py h200-manifest.json store-layout.json store-toy.tar) > "$O/inputs.sha256"
+cp "$IN/served_weights.py" "$S/tl/e2e_h200/served_weights.py" && touch "$S/tl/e2e_h200/__init__.py"
+(cd "$IN" && sha256sum served_weights.py h200-manifest.json store-layout.json store-toy.tar) > "$O/inputs.sha256"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
@@ -97,7 +98,7 @@ print(*L.Weights.of(json.load(open(os.environ["MANIFEST"]))).span(int(os.environ
 EOF
 )
 if [ ! -e "$SRC/w.key" ]; then
-  "$PY" -m verity_torch_loop.weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
+  "$PY" -m e2e_h200.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
     --workers "$(nproc)" 2>> "$O/prepare.log" && echo "$SEED $LO $HI" > "$SRC/w.key"
   step prepare $?
 else

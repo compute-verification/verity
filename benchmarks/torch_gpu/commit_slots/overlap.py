@@ -611,7 +611,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="overlapped runs: the forward's host waits for the side stream's reads LAG groups back (Pipelined.host_lag)")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
-    from verity_torch_loop import weights as SW
+    from e2e_h200 import served_weights as SW
     dev = torch.device("cuda")
     shape = SHAPES[a.shape]
     smi = Smi(os.environ.get("GPU_LEASE_UUID") or "0")

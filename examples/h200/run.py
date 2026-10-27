@@ -48,7 +48,7 @@ from e2e_h200.slots import Request, SlotKV, SlotShape  # noqa: E402
 from e2e_h200.store import FileStore, GeneratorStore, Mismatch, P2Store  # noqa: E402
 from e2e_h200.units import Replayer, load_subcircuit  # noqa: E402
 from e2e_h200.weights import Weights  # noqa: E402
-from verity_torch_loop import weights as SW  # noqa: E402
+from e2e_h200 import served_weights as SW  # noqa: E402
 
 #: the weights' registration digest under the test salt key is computed for streams up to this size (about 1 s a MiB)
 DIGEST_BYTES = 1 << 26
