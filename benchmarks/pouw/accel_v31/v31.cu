@@ -1566,6 +1566,9 @@ struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
+  // Fill: copies of a call's values (2 or 3; call c's stay until call c + copies), and lstr 1: each copy's leaf phase on a
+  // stream (and persistent counters) of its own, so the leaf phases of consecutive calls overlap
+  int copies = env_int("V31_COPIES", 2), lstr = env_int("V31_LSTR", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1850,11 +1853,12 @@ struct Ctx {
 // blocks i K / 64 ..) commits T_1 .. T_S; a served call (o; A the caller's activations) commits T_1 .. T_W, W = S - 1, from
 // the protocol GEMM over k < W L, and O = (A + d_A)(B + d_B)^T mod 2^32 from cuBLASLt on serve_rows_kernel's a' and b' (the
 // noise never enters O, so at S = 1 a served call forms no X or W'). Per tile its W (filler: S) words rows, then (served) its
-// O rows (dither.values_buffer at ROW), in a tree under the params file's domain (dither.Shape.domain). Two copies (values
-// and committer): call c's commit runs on s1 beside call c + 1's compute on s0, and call c's values stay until call c + 2
-// is issued. Call c salts leaf pos prf_salt(Ks, off_c + pos) (dither.salts), Ks the params file's, set into C.ks on s1
-// ahead of its salt phase, so every Fill of a process commits on one s1. W' (and b') is formed again only when the
-// weight-side seeds (d_B, U, P) or B change: v3.2 draws them once a period, the run of record once a call.
+// O rows (dither.values_buffer at ROW), in a tree under the params file's domain (dither.Shape.domain). V31_COPIES copies
+// (values and committer, 2 or 3): call c's commit runs on s1 beside call c + 1's compute on s0, and call c's values stay
+// until call c + copies is issued. Call c salts leaf pos prf_salt(Ks, off_c + pos) (dither.salts), Ks the params file's,
+// set into C.ks on s1 ahead of its salt phase, so every Fill of a process salts on one s1; the leaf phase reads no Ks, so
+// V31_LSTR 1 runs it on its copy's own stream. W' (and b') is formed again only when the weight-side seeds (d_B, U, P) or B
+// change: v3.2 draws them once a period, the run of record once a call.
 static void ks_consts(const uint8_t* ks, u64* out) {   // C.ks, then C.ks_m8 (Consts' adjacent fields)
   words_of(ks, out, 8);
   u64 blk[16] = {}, st[8];
@@ -1863,38 +1867,42 @@ static void ks_consts(const uint8_t* ks, u64* out) {   // C.ks, then C.ks_m8 (Co
   sha::rounds_prefix(st, blk, 8, out + 8);
 }
 struct Fill {
+  static constexpr int NBMAX = 3;
   int m = 0, n = 0, k = 0, lp = 0, L = 0, row = 0, S = 0, NT = 0, kb64 = 0, tiles = 0, tiles_n = 0, lpt = 0, grid = 0, nsm = 0;
   int Wn = 0;                         // committed word segments: S - 1 served, S filler
+  int nb = 2;                         // copies (V31_COPIES)
   u64 leaves = 0;
   Seeds seeds{};
   int8_t *A = nullptr, *B = nullptr, *U = nullptr, *V = nullptr, *X = nullptr, *W = nullptr;
   uint8_t *dA = nullptr, *dB = nullptr;
   uint16_t* perm = nullptr;
-  uint16_t* words[2] = {nullptr, nullptr};
-  int* D[2] = {nullptr, nullptr};     // served: cuBLASLt's a' b'^T; V31_LTW at S = 1: its X W'^T in place of words
+  uint16_t* words[NBMAX] = {};
+  int* D[NBMAX] = {};                 // served: cuBLASLt's a' b'^T; V31_LTW at S = 1: its X W'^T in place of words
   uint8_t* vbuf = nullptr;            // testing: a copy's values buffer
   Lt lt{};
   bool ltw = false;
   bool o = false;                     // a served call (set before setup)
   int8_t *Ap = nullptr, *Bp = nullptr;          // served: a' and b' (read by the compute alone)
-  int *ra[2] = {}, *sa[2] = {}, *rb[2] = {}, *sb[2] = {};   // their row sums and shifts, a copy each (its O rows read them)
-  int* bad = nullptr;                 // bad[copy]: a row of A + d_A spans -128 .. 128; bad[2 + copy]: one of B + d_B
-  u64 off[2] = {0, 0};                // copy b's call's salt offset
+  int *ra[NBMAX] = {}, *sa[NBMAX] = {}, *rb[NBMAX] = {}, *sb[NBMAX] = {};   // their row sums and shifts, a copy each
+  int* bad = nullptr;                 // bad[copy]: a row of A + d_A spans -128 .. 128; bad[NBMAX + copy]: one of B + d_B
+  u64 off[NBMAX] = {};                // copy b's call's salt offset
   bool nomem = false;                 // timing only: the leaves hashed from NoMemRow's register bytes (wrong roots)
-  Committer cm[2];
+  Committer cm[NBMAX];
   Maps* maps = nullptr;
-  cudaStream_t s0 = nullptr, s1 = nullptr, so = nullptr;   // compute, commit, openings
+  cudaStream_t s0 = nullptr, s1 = nullptr, so = nullptr;   // compute, commit (salts; leaves too unless lstr), openings
+  cudaStream_t sl[NBMAX] = {};                              // lstr: copy b's leaf phase
   bool own = false;                                         // s0 and s1 are this Fill's
-  cudaEvent_t ev_comp[2], ev_done[2], ev_formed;
+  cudaEvent_t ev_comp[NBMAX], ev_done[NBMAX], ev_salt[NBMAX], ev_formed;
   u32* gctr = nullptr;
   u32 gbase = 0;
-  Lanes pl;
+  Lanes pl;              // the salt phases' persistent counters (and the leaf phases' unless lstr)
+  Lanes pll[NBMAX];      // lstr: copy b's leaf phase's
   Knobs kn;
-  u64 calls = 0;         // calls issued; call c's values are in copy c & 1
+  u64 calls = 0;         // calls issued; call c's values are in copy c % nb
   int pend = -1;         // V31_SCHED 1: the copy whose commit waits for the next call's form
   u64 wseed[3][8] = {};  // the d_B, U and P seeds W' was formed from
   bool wformed = false;
-  u64* ksw[2] = {nullptr, nullptr};   // pinned: Ks as C.ks, C.ks_m8 (a copy each, for the async copy)
+  u64* ksw[NBMAX] = {};  // pinned: Ks as C.ks, C.ks_m8 (a copy each, for the async copy)
   u64* opos = nullptr;                // openings: positions, then rows and paths
   uint8_t* obuf = nullptr;
   int ocap = 0;
@@ -1925,6 +1933,8 @@ struct Fill {
     grid = std::min(tiles, nsm);
     ltw = kn.ltw && S == 1 && !o;
     if (kn.ccta < 0 || kn.ccta > 8) { fprintf(stderr, "V31_CCTA: 0 to 8\n"); exit(2); }
+    if (kn.copies < 2 || kn.copies > NBMAX) { fprintf(stderr, "V31_COPIES: 2 or 3\n"); exit(2); }
+    nb = kn.copies;
     own = !c0;
     if (own) {
       int lo, hi;
@@ -1938,6 +1948,13 @@ struct Fill {
     gctr = dalloc<u32>(1);
     CK(cudaMemset(gctr, 0, 4));
     pl.init(nsm);
+    for (int b = 0; b < nb; b++) {
+      if (!kn.lstr) { sl[b] = s1; continue; }
+      int pr;
+      CK(cudaStreamGetPriority(s1, &pr));
+      CK(cudaStreamCreateWithPriority(&sl[b], cudaStreamNonBlocking, pr));
+      pll[b].init(nsm);
+    }
     const size_t mk = (size_t)m * k, nk = (size_t)n * k;
     A = dalloc<int8_t>(mk); B = dalloc<int8_t>(nk); X = dalloc<int8_t>(mk); W = dalloc<int8_t>(nk);
     U = dalloc<int8_t>((size_t)n * lp); V = dalloc<int8_t>((size_t)m * lp);
@@ -1945,11 +1962,11 @@ struct Fill {
     perm = dalloc<uint16_t>((size_t)NT * lp);
     if (o) {
       Ap = dalloc<int8_t>(mk); Bp = dalloc<int8_t>(nk);
-      for (int b = 0; b < 2; b++) { ra[b] = dalloc<int>(m); sa[b] = dalloc<int>(m); rb[b] = dalloc<int>(n); sb[b] = dalloc<int>(n); }
-      bad = dalloc<int>(4);
-      CK(cudaMemset(bad, 0, 16));
+      for (int b = 0; b < nb; b++) { ra[b] = dalloc<int>(m); sa[b] = dalloc<int>(m); rb[b] = dalloc<int>(n); sb[b] = dalloc<int>(n); }
+      bad = dalloc<int>(2 * NBMAX);
+      CK(cudaMemset(bad, 0, 8 * NBMAX));
     }
-    for (int b = 0; b < 2; b++) {
+    for (int b = 0; b < nb; b++) {
       if (ltw || o) D[b] = dalloc<int>((size_t)m * n);
       if (!ltw && Wn > 0) words[b] = dalloc<uint16_t>((size_t)tiles * Wn * TILE * TILE);
       cm[b].init(params, leaves, (u32)row, false, false, 0, dom, true, 1);
@@ -1962,26 +1979,31 @@ struct Fill {
     CK(cudaFuncSetAttribute(gemm_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, Ring::SMEM));
     if (ltw) lt_setup(lt, m, n, k, X, W, D[0], s0);
     if (o) lt_setup(lt, m, n, k, Ap, Bp, D[0], s0);
-    for (int b = 0; b < 2; b++) {
+    for (int b = 0; b < nb; b++) {
       CK(cudaEventCreateWithFlags(&ev_comp[b], cudaEventDisableTiming));
       CK(cudaEventCreateWithFlags(&ev_done[b], cudaEventDisableTiming));
+      CK(cudaEventCreateWithFlags(&ev_salt[b], cudaEventDisableTiming));
       CK(cudaEventRecord(ev_done[b], s1));
     }
     CK(cudaEventCreateWithFlags(&ev_formed, cudaEventDisableTiming));
   }
   void release() {
     CK(cudaDeviceSynchronize());
-    for (void* p : {(void*)A, (void*)B, (void*)X, (void*)W, (void*)U, (void*)V, (void*)dA, (void*)dB, (void*)perm, (void*)words[0],
-                    (void*)words[1], (void*)D[0], (void*)D[1], (void*)vbuf, (void*)maps, (void*)gctr, (void*)pl.ctl,
-                    (void*)pl.claim, (void*)opos, (void*)obuf, (void*)Ap, (void*)Bp, (void*)ra[0], (void*)sa[0], (void*)rb[0],
-                    (void*)sb[0], (void*)ra[1], (void*)sa[1], (void*)rb[1], (void*)sb[1], (void*)bad})
+    for (void* p : {(void*)A, (void*)B, (void*)X, (void*)W, (void*)U, (void*)V, (void*)dA, (void*)dB, (void*)perm, (void*)vbuf,
+                    (void*)maps, (void*)gctr, (void*)pl.ctl, (void*)pl.claim, (void*)opos, (void*)obuf, (void*)Ap, (void*)Bp,
+                    (void*)bad})
       cudaFree(p);
     if (ltw || o) lt_free(lt);
-    for (int b = 0; b < 2; b++) {
+    for (int b = 0; b < nb; b++) {
+      for (void* p : {(void*)words[b], (void*)D[b], (void*)ra[b], (void*)sa[b], (void*)rb[b], (void*)sb[b], (void*)pll[b].ctl,
+                      (void*)pll[b].claim})
+        cudaFree(p);
       cm[b].release();
       cudaFreeHost(ksw[b]);
       cudaEventDestroy(ev_comp[b]);
       cudaEventDestroy(ev_done[b]);
+      cudaEventDestroy(ev_salt[b]);
+      if (kn.lstr) cudaStreamDestroy(sl[b]);
     }
     cudaEventDestroy(ev_formed);
     cudaStreamDestroy(so);
@@ -2013,19 +2035,20 @@ struct Fill {
       }
     }
   }
-  // copy b's operands. Served: a' (and, when wside, b') with their sums and shifts, else copy b takes the other copy's B
-  // side (the weights and their coins unchanged since); then X (and W') when a words segment is committed
+  // copy b's operands. Served: a' (and, when wside, b') with their sums and shifts, else copy b takes the previous call's
+  // copy's B side (the weights and their coins unchanged since); then X (and W') when a words segment is committed
   void form(cudaStream_t st, const int8_t* a, bool wside, int b) {
     if (o) {
       CK(cudaMemsetAsync(bad + b, 0, 4, st));
       serve_rows_kernel<<<m, 256, 0, st>>>(a, dA, k, kb64, 0, Ap, ra[b], sa[b], bad + b);
       if (wside) {
-        CK(cudaMemsetAsync(bad + 2 + b, 0, 4, st));
-        serve_rows_kernel<<<n, 256, 0, st>>>(B, dB, k, kb64, 1, Bp, rb[b], sb[b], bad + 2 + b);
+        CK(cudaMemsetAsync(bad + NBMAX + b, 0, 4, st));
+        serve_rows_kernel<<<n, 256, 0, st>>>(B, dB, k, kb64, 1, Bp, rb[b], sb[b], bad + NBMAX + b);
       } else {
-        CK(cudaMemcpyAsync(rb[b], rb[b ^ 1], 4 * (size_t)n, cudaMemcpyDeviceToDevice, st));
-        CK(cudaMemcpyAsync(sb[b], sb[b ^ 1], 4 * (size_t)n, cudaMemcpyDeviceToDevice, st));
-        CK(cudaMemcpyAsync(bad + 2 + b, bad + 3 - b, 4, cudaMemcpyDeviceToDevice, st));
+        const int p = (b + nb - 1) % nb;
+        CK(cudaMemcpyAsync(rb[b], rb[p], 4 * (size_t)n, cudaMemcpyDeviceToDevice, st));
+        CK(cudaMemcpyAsync(sb[b], sb[p], 4 * (size_t)n, cudaMemcpyDeviceToDevice, st));
+        CK(cudaMemcpyAsync(bad + NBMAX + b, bad + NBMAX + p, 4, cudaMemcpyDeviceToDevice, st));
       }
     }
     if (!Wn) return;
@@ -2052,12 +2075,13 @@ struct Fill {
     return ServedRow{reinterpret_cast<const uint8_t*>(words[b]), D[b], ra[b], sa[b], rb[b], sb[b], (u64)lpt,
                      (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf};
   }
-  void leaves_nodes(int b, cudaStream_t st) {
-    if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
-    else if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
-    else if (o) pl.leaves_nodes(cm[b], servedrow(b), kn.ccta, st);
-    else pl.leaves_nodes(cm[b], rowsrc(b), kn.ccta, st);
+  void leaves_nodes(int b, cudaStream_t st, Lanes& ln) {
+    if (nomem) ln.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
+    else if (ltw) ln.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
+    else if (o) ln.leaves_nodes(cm[b], servedrow(b), kn.ccta, st);
+    else ln.leaves_nodes(cm[b], rowsrc(b), kn.ccta, st);
   }
+  void leaves_nodes(int b, cudaStream_t st) { leaves_nodes(b, st, pl); }
   // copy b's values poisoned (testing)
   void poison(int b, cudaStream_t st) {
     if (D[b]) gk::poison(D[b], (size_t)m * n * 4, st);
@@ -2069,13 +2093,18 @@ struct Fill {
   void set_ks(int b, cudaStream_t st) {
     CK(cudaMemcpyToSymbolAsync(C, ksw[b], 128, offsetof(Consts, ks), cudaMemcpyHostToDevice, st));
   }
-  // copy b's commit on s1: Ks and its call's salts, then (after its compute) its leaves and levels
+  // copy b's commit: Ks and its call's salts on s1, then (after its compute) its leaves and levels on s1, or (lstr) on
+  // sl[b] after the salts
   void commit_ovl(int b) {
     set_ks(b, s1);
     pl.salts(cm[b], kn.ccta, s1, off[b]);
-    CK(cudaStreamWaitEvent(s1, ev_comp[b]));
-    leaves_nodes(b, s1);
-    CK(cudaEventRecord(ev_done[b], s1));
+    if (kn.lstr) {
+      CK(cudaEventRecord(ev_salt[b], s1));
+      CK(cudaStreamWaitEvent(sl[b], ev_salt[b]));
+    }
+    CK(cudaStreamWaitEvent(sl[b], ev_comp[b]));
+    leaves_nodes(b, sl[b], kn.lstr ? pll[b] : pl);
+    CK(cudaEventRecord(ev_done[b], sl[b]));
   }
   void flush() {
     if (pend >= 0) commit_ovl(pend);
@@ -2083,13 +2112,13 @@ struct Fill {
   }
   // One call on the seeds set, its leaves salted from off (dither.salts(Ks, off): off_c = c leaves for the c-th call of a
   // tree's sequence), A at a (a device pointer to m x K int8, ready on the caller's side; null: the pad, a filler's only).
-  // Waits on the host for call c - 2's commit, whose copy this call takes. wside: form W' (b') again even if its seeds are
+  // Waits on the host for call c - nb's commit, whose copy this call takes. wside: form W' (b') again even if its seeds are
   // unchanged (the per-call weight coins). Returns the copy.
   int issue(u64 off_, const int8_t* a, const Cheat& ch = Cheat{}, bool wside = false) {
     if (o && !a) { fprintf(stderr, "a served call takes the caller's A\n"); exit(2); }
     if ((ch.kind == 2 || ch.kind == 3) && (ch.kind == 3 ? 0 : ch.s0) > Wn) { fprintf(stderr, "forge: S0 above W\n"); exit(2); }
     if ((ch.kind == 3 || (ch.kind == 2 && !ch.s0)) && !D[0]) { fprintf(stderr, "forge of O: a served call's\n"); exit(2); }
-    const int b = (int)(calls & 1);
+    const int b = (int)(calls % nb);
     if (pend == b) flush();
     CK(cudaEventSynchronize(ev_done[b]));
     off[b] = off_;
@@ -2128,10 +2157,10 @@ struct Fill {
     calls++;
     return b;
   }
-  // call c's copy once its commit is done, or -1 when c isn't one of the last two calls
+  // call c's copy once its commit is done, or -1 when c isn't one of the last nb calls
   int ready(u64 c) {
-    if (c >= calls || c + 2 < calls) return -1;
-    const int b = (int)(c & 1);
+    if (c >= calls || c + nb < calls) return -1;
+    const int b = (int)(c % nb);
     if (pend == b) flush();
     CK(cudaEventSynchronize(ev_done[b]));
     return b;
@@ -2621,7 +2650,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     auto ovl = [&f](cudaStream_t s, int r, const int8_t* a, bool wside) {
       for (int i = 0; i < r; i++) f.issue(f.calls * f.leaves, a, Cheat{}, wside);
       f.flush();
-      for (int b = 0; b < 2; b++) CK(cudaStreamWaitEvent(s, f.ev_done[b]));
+      for (int b = 0; b < f.nb; b++) CK(cudaStreamWaitEvent(s, f.ev_done[b]));
     };
     std::vector<gk::Arm> arms = {
         {"lt", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) lt_run(lt, A, f.B, D, s); }},
@@ -2639,7 +2668,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
         {"form_b", [&](cudaStream_t s, int r) {
            const u64 cb = (u64)n * k / 16;
            for (int i = 0; i < r; i++) {
-             if (f.o) serve_rows_kernel<<<n, 256, 0, s>>>(f.B, f.dB, k, f.kb64, 1, f.Bp, f.rb[0], f.sb[0], f.bad + 2);
+             if (f.o) serve_rows_kernel<<<n, 256, 0, s>>>(f.B, f.dB, k, f.kb64, 1, f.Bp, f.rb[0], f.sb[0], f.bad + Fill::NBMAX);
              if (f.Wn) fill_b_kernel<<<(unsigned)((cb + 255) / 256), 256, 0, s>>>(f.B, f.dB, f.U, f.perm, f.W, cb, k, lp, f.kb64);
            }
          }},
@@ -2678,16 +2707,15 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     const gk::Timing tm = gk::timed_items(arms, reps, f.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
-    // the timed schedule's own values: two overlapped calls into poisoned buffers, the last one's tiles to NAME-ovl
-    for (int b = 0; b < 2; b++) {
+    // the timed schedule's own values: nb overlapped calls into poisoned buffers, the last one's tiles to NAME-ovl
+    for (int b = 0; b < f.nb; b++) {
       f.poison(b, f.s0);
       gk::poison(f.cm[b].levels, f.levels_count() * 64, f.s0);
     }
     CK(cudaStreamSynchronize(f.s0));
-    f.issue(f.calls * f.leaves, A);
-    const int bl = f.issue(f.calls * f.leaves, A);
-    f.ready(f.calls - 2);
-    f.ready(f.calls - 1);
+    int bl = -1;
+    for (int i = 0; i < f.nb; i++) bl = f.issue(f.calls * f.leaves, A);
+    for (int i = f.nb; i >= 1; i--) f.ready(f.calls - i);
     CK(cudaGetLastError());
     fill_samples(f, bl, out + "/samples/" + name + "-ovl", pfile, sd, A, (u32)rng());
     std::vector<double> med(arms.size()), mhz(arms.size());
@@ -2746,7 +2774,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
 #ifdef V31_LIB
 // ---------------------------------------------------------------- the per-call binding (v31lib.py over ctypes)
 // One process, one device: every context shares its compute and commit streams (calls run in issue order, each commit beside
-// the next call's compute), a domain slot each (COMMIT_GPU_DOMS of them) and one ROW (commit_gpu's C fixes it). Every
+// the next call's compute; V31_LSTR 1 moves each copy's leaf phase to a stream of its own, the salts staying on the shared
+// one, which alone reads C.ks), a domain slot each (COMMIT_GPU_DOMS of them) and one ROW (commit_gpu's C fixes it). Every
 // function returns 0, or -1 with the reason in v31_error(); a CUDA failure exits the process (commit_gpu's CK). Not
 // thread-safe: one thread drives every context.
 static std::string g_err;
@@ -2808,6 +2837,8 @@ int v31_info(void* h, uint64_t* out) {
   memcpy(out, v, sizeof v);
   return 0;
 }
+// The context's copies (V31_COPIES at v31_create): call c's root, openings and values stay until call c + copies is issued
+int v31_copies(void* h) { return ctx_of(h)->f.nb; }
 
 // The weights (n x k int8, row-major) from host memory, or from device memory when on_device
 int v31_set_b(void* h, const void* B, int on_device) {
@@ -2832,8 +2863,8 @@ int v31_load_a(void* h, const void* A, int on_device, void** dev) {
 // One call: seeds (6 x 64 bytes, dither.STREAMS' order: pad, dA, dB, U, V, P; a served call's pad unused), its salt offset
 // off (its leaf pos salted prf_salt(Ks, off + pos): off_c = c leaves for the c-th call under one Ks), and A (a device
 // pointer to m x k int8, ready on the caller's side; null: the pad, a filler's only). Returns at once with the call's index
-// in *call; the compute and commit run on the device. Waits first for call c - 2's commit, whose copy this call takes (its
-// values can't be opened after). cheat (testing): "none", "skip:TAU" (noise tile TAU of X zeroed), "forge:S0[:FRAC]" (T_S0
+// in *call; the compute and commit run on the device. Waits first for call c - copies' commit, whose copy this call takes
+// (its values can't be opened after). cheat (testing): "none", "skip:TAU" (noise tile TAU of X zeroed), "forge:S0[:FRAC]" (T_S0
 // of every 1/FRAC-th tile overwritten; served, S0 0: O), "forgeO[:FRAC]" (forge:0) or "nodither" (d_A and d_B zero).
 int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, const char* cheat, uint64_t* call) {
   Fill& f = ctx_of(h)->f;
@@ -2857,18 +2888,22 @@ int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, co
 // int8 a' b'^T can't carry it); the call has no root and no openings
 static int refused(const Fill& f, int b, uint64_t c) {
   if (!f.o) return 0;
-  int bd[4];
-  CK(cudaMemcpy(bd, f.bad, 16, cudaMemcpyDeviceToHost));
+  int bd[2 * Fill::NBMAX];
+  CK(cudaMemcpy(bd, f.bad, sizeof bd, cudaMemcpyDeviceToHost));
   if (bd[b]) return fail("call " + std::to_string(c) + ": a row of A + d_A spans -128 .. 128 (served O needs each row in 255 values)");
-  if (bd[2 + b]) return fail("call " + std::to_string(c) + ": a row of B + d_B spans -128 .. 128 (served O needs each row in 255 values)");
+  if (bd[Fill::NBMAX + b])
+    return fail("call " + std::to_string(c) + ": a row of B + d_B spans -128 .. 128 (served O needs each row in 255 values)");
   return 0;
+}
+static int stale(const Fill& f, uint64_t c) {
+  return fail("call " + std::to_string(c) + " isn't one of the last " + std::to_string(f.nb) + " calls");
 }
 
 // Call c's root (64 bytes), once its commit is done
 int v31_root(void* h, uint64_t c, uint8_t* out) {
   Fill& f = ctx_of(h)->f;
   const int b = f.ready(c);
-  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  if (b < 0) return stale(f, c);
   if (refused(f, b, c)) return -1;
   std::vector<u64> r(8);
   CK(cudaMemcpy(r.data(), f.cm[b].levels + 8 * (f.levels_count() - 1), 64, cudaMemcpyDeviceToHost));
@@ -2880,7 +2915,7 @@ int v31_root(void* h, uint64_t c, uint8_t* out) {
 int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, uint8_t* paths) {
   Fill& f = ctx_of(h)->f;
   const int b = f.ready(c);
-  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  if (b < 0) return stale(f, c);
   if (refused(f, b, c)) return -1;
   if (np <= 0) return 0;
   for (int i = 0; i < np; i++)
@@ -2895,14 +2930,14 @@ int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, ui
 int v31_values(void* h, uint64_t c, uint8_t* out) {
   Fill& f = ctx_of(h)->f;
   const int b = f.ready(c);
-  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  if (b < 0) return stale(f, c);
   CK(cudaMemcpy(out, f.values_of(b), (size_t)f.leaves * f.row, cudaMemcpyDeviceToHost));
   return 0;
 }
 int v31_levels(void* h, uint64_t c, uint8_t* out) {
   Fill& f = ctx_of(h)->f;
   const int b = f.ready(c);
-  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  if (b < 0) return stale(f, c);
   std::vector<u64> lv(8 * f.levels_count());
   CK(cudaMemcpy(lv.data(), f.cm[b].levels, lv.size() * 8, cudaMemcpyDeviceToHost));
   for (size_t i = 0; i < lv.size(); i++) sha::put_be64(out + 8 * i, lv[i]);

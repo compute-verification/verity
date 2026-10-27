@@ -72,6 +72,7 @@ class Lib:
             "v31_error": ([], ctypes.c_char_p),
             "v31_create": ([i, i, i, i, i, i, i, ctypes.c_char_p, i], vp),
             "v31_info": ([vp, u64p], i),
+            "v31_copies": ([vp], i),
             "v31_set_b": ([vp, vp, i], i),
             "v31_load_a": ([vp, vp, i, ctypes.POINTER(vp)], i),
             "v31_prove": ([vp, u8p, u64, vp, ctypes.c_char_p, u64p], i),
@@ -110,6 +111,7 @@ class Prover:
         self.h = self.lib.create(m, n, k, lp, L, row, int(served), str(self.params_path).encode(), device)
         if not self.h:
             raise RuntimeError(f"libv31: {self.lib.error().decode()}")
+        self.copies = self.lib.copies(self.h)   # V31_COPIES: a call opens until `copies` later calls are issued
         self.B: np.ndarray | None = None
         self.calls: dict[int, dict] = {}
 
@@ -176,7 +178,7 @@ class Prover:
                                       ctypes.byref(out)))
         assert out.value == c
         self.calls[c] = {"seeds": dict(seeds), "off": off, "pad": a_ptr is None}
-        self.calls.pop(c - 3, None)
+        self.calls.pop(c - self.copies - 1, None)
         return c
 
     def root(self, c: int) -> bytes:
@@ -371,7 +373,7 @@ def gate_pipeline(lib: Lib, q: int, rng: np.random.Generator) -> dict:
             ps[0].root(0)
             out["stale_refused"] = False
         except RuntimeError as e:
-            out["stale_refused"] = "isn't one of the last two calls" in str(e)
+            out["stale_refused"] = f"isn't one of the last {ps[0].copies} calls" in str(e)
         for x, c, seeds in issued[-2:]:
             f, Ax = ps[x].f, ops[x][0]
             picks = v31.fill_picks(f, os.urandom(64), q)
