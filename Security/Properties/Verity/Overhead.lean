@@ -40,8 +40,8 @@ Its premises are named:
   serving-block bound (`Accounting.Guarantees.ServingBlocks.ServingBlockBound`, #4834, which #4869's
   `ServingBlockSum` may fold in), with `q(c_S, k_S)` priced by `Nci.Ldl.Assumptions.ActivationRate` through
   `Nci.Ldl.Guarantees.FanOutBound`'s step;
-* `Phys`, the physical premises on every run: LEAN-70's `Accounting.FixedMachine` and `InitialBudget`, taken as one
-  predicate until LEAN-70 states them;
+* `Phys`, the physical premises on every run: LEAN-70's `Accounting.FixedMachine H S T` and `Accounting.InitialBudget`,
+  taken as one predicate until they reach this base (LEAN-70 states them over #4869);
 * `Overhead.Deployment.DarkShare`, the dark fleet's share: at most `q_D` counted products are materialized outside
   every monitored server-window;
 * `Overhead.Deployment.Materialization`, coverage in materialization form: for every strategy, success with fewer than
