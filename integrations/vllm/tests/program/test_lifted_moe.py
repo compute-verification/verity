@@ -19,8 +19,7 @@ K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for 
     every expert's weight row is in the dataflow of every pair (the wide-fan-in gather), so no per-request Program shape depends on
     who is routed where — the fixed population holds for MoE as for dense.
 
-What it does NOT establish: anything about a real OLMoE record (a real OLMoE step under a larger cap is the `moe` lane's pod time; not
-tonight).
+What it does NOT establish: anything about a real OLMoE record (a real OLMoE step under a larger cap needs a pod).
 """
 from __future__ import annotations
 

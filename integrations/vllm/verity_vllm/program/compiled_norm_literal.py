@@ -27,7 +27,7 @@ from typing import Any
 
 _K: dict[str, Any] | None = None
 _EXEC: dict[str, list[dict[str, Any]]] | None = None
-DEFAULT_CONFIG = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 2048}, "num_warps": 16, "num_stages": 1}   # Inductor's reduction heuristic for size_hints r0_ 2048 (Llama 2048-wide and Qwen 1536-wide rows both; R15 S1-S2.md, R16 loaded_code_objects executed_configs)
+DEFAULT_CONFIG = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 2048}, "num_warps": 16, "num_stages": 1}   # Inductor's reduction heuristic for size_hints r0_ 2048 (Llama 2048-wide and Qwen 1536-wide rows both, as executed_configs() reports)
 
 
 def _build() -> dict[str, Any] | None:
