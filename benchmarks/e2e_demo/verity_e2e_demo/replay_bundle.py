@@ -85,7 +85,11 @@ from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, merkle_de
 from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.ml.commitments.window import window_domain
 from verity.ml.windows import interface as IF, rows as CS
-from verity_e2e_demo import commit_slots as S
+
+COMMIT_SLOTS = Path(__file__).resolve().parents[2] / "torch_gpu" / "commit_slots"
+if str(COMMIT_SLOTS) not in sys.path:
+    sys.path.insert(0, str(COMMIT_SLOTS))
+import slots as S  # noqa: E402
 
 FORMAT = "verity/drawn-unit-bundle/v2"
 COMMITMENT = "verity/commit-slots/v1"
