@@ -1,13 +1,15 @@
 """The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
-prover's process reaches it over the stream (`benchmarks/live_challenger/run.sh` places it as `benchmarks/remote_session`
-places its verifier: `ssh -R PORT` to the prover's machine, whose own 127.0.0.1:PORT the prover connects to).  On its
-host, before the stream opens, `open_session` signs the challenger's record and writes it, the key and the head of the
-release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the session id the auditor
-launched it under; `serve` refuses a session whose record isn't written there, so no coin opens before it.  When the
-session ends, however it ends, the challenger signs its release log and writes the close record, `challenger.json`
-(`close_session`; `challenger`'s "The session's close").
+prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
+vy-challenger-1, that port is one of the prover machine's certifier coin link (`benchmarks/live_challenger/auditor.py`,
+the coins' path; the premises `CoinsConfidential` and `OneClock` are this package's README's); in development
+(`benchmarks/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
+its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
+and the head of the release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the
+session id the auditor launched it under; `serve` refuses a session whose record isn't written there, so no coin opens
+before it.  When the session ends, however it ends, the challenger signs its release log and writes the close record,
+`challenger.json` (`close_session`; `challenger`'s "The session's close").
 
 ~~~text
 frame       u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body empty
@@ -15,7 +17,15 @@ client      {"type": "hello"} (with "secret" when the session has one), then {"t
             per coin, then {"type": "close"}
 challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"} and {"type": "closed"}, each answering
             the client's frame, or {"type": "refused", "reason"}, which ends the session
+withheld    {"type": "layout", "layout"}, {"type": "coin", "coin"} and {"type": "released", "released"}: a withheld
+            session's answers (`open_session(..., withhold=True)`)
 ~~~
+
+**A withheld session** keeps the challenger's commitment on its host until the session closes (`challenger`, "A
+withheld session"): it answers the hello with the layout alone (`{epoch, families, scheme}`), each open with the coin's
+raw bytes alone (`{after, coin, epoch, index, label}`: no salt and no path), and the client's close, once its signed close
+is written, with `{commitment, openings}`, the commitment and every coin it opened, in order, with its salt and path.  The
+client checks those openings then (`RemoteChallenger.close`), each against the coin it was given.
 
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
@@ -31,7 +41,9 @@ nothing.
 `LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
 their frames back to back, then the replies in order, the wire and the release log as the same opens one at a time.  It
 raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
-commitment after `after` (`live_reason`), and refuses every coin after.
+commitment after `after` (`live_reason`), and refuses every coin after.  A client whose session the gate has just opened
+connects with `connect_when_listening`: until the session's tunnel listens, the connection is refused before any hello,
+so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
 bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
@@ -140,17 +152,18 @@ class Session:
     wrote them, which its close signs."""
 
     def __init__(self, challenger: LiveChallenger, key: ChallengerKey, host: str, sign: Callable[[bytes], bytes],
-                 directory: Path, session: str, head: str) -> None:
+                 directory: Path, session: str, head: str, withhold: bool = False) -> None:
         self.challenger, self.key, self.host, self._sign = challenger, key, host, sign
-        self.directory, self.id, self.lines = directory, session, [head]
+        self.directory, self.id, self.lines, self.withhold = directory, session, [head], withhold
         self.close: ChallengerClose | None = None
 
 
 def open_session(challenger: LiveChallenger, key: ChallengerKey, host: str, sign: Callable[[bytes], bytes],
-                 directory: str | os.PathLike, session: str) -> Session:
+                 directory: str | os.PathLike, session: str, withhold: bool = False) -> Session:
     """On the challenger's host `host`, before any coin opens, for session `session` (the id the auditor launched it
     under): sign its record with `sign` (LMS at `key`'s parameters, `LiveChallenger.sign_record`, which signs its close
-    too, at its next leaf) and write the record, `key` and the release log's head to `directory`, each once."""
+    too, at its next leaf) and write the record, `key` and the release log's head to `directory`, each once.  With
+    `withhold`, `serve` releases the commitment, salts and paths only once the session closes (module docstring)."""
     if not Ch._session_id(session):
         raise CoinError(SESSION_ID)
     d = Path(directory)
@@ -159,7 +172,17 @@ def open_session(challenger: LiveChallenger, key: ChallengerKey, host: str, sign
     write_record(d / RECORD, record)
     head = {"event": "commitment", "root": challenger.commitment.root.hex()}
     _write_new(d / RELEASES, head)
-    return Session(challenger, key, host, sign, d, session, _line(head))
+    return Session(challenger, key, host, sign, d, session, _line(head), withhold)
+
+
+def layout_json(c: LiveCommitment) -> dict:
+    """What a withheld session's hello answers: the commitment's layout, without its root."""
+    return {"epoch": c.epoch, "families": [[label, n] for label, n in c.families], "scheme": c.scheme}
+
+
+def coin_json(o: LiveOpening) -> dict:
+    """What a withheld session's open answers: the coin's raw bytes, without its salt and path."""
+    return {"after": o.after.hex(), "coin": o.coin.hex(), "epoch": o.epoch, "index": o.index, "label": o.label}
 
 
 def close_session(session: Session, ended: str | None) -> ChallengerClose:
@@ -264,22 +287,35 @@ def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time
         raise CoinError("the challenger serves a session once, after its record is signed and written (open_session)")
     wire = _Wire(sock)
     records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
+    opened: list[LiveOpening] = []
     try:
         with open(d / RELEASES, "a", encoding="utf-8") as log:
             why = None if greeted else _hello_reason(wire.recv(), secret)
             if why is not None:
                 raise CoinError(why)
-            wire.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
+            if session.withhold:
+                wire.send({"type": "layout", "layout": layout_json(challenger.commitment)})
+            else:
+                wire.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
             while True:
                 head = wire.recv()
                 if head == {"type": "close"}:
                     reason = _closed(session, None)
                     if reason is not None:
                         break
-                    wire.send({"type": "closed"})
+                    if session.withhold:
+                        wire.send({"type": "released", "released": {"commitment": challenger.commitment.to_json(),
+                                                                    "openings": [o.to_json() for o in opened]}})
+                    else:
+                        wire.send({"type": "closed"})
                     _hang_up(sock)
                     return None
-                wire.send({"type": "opening", "opening": _release(head, records, log, session.lines).to_json()})
+                opening = _release(head, records, log, session.lines)
+                opened.append(opening)
+                if session.withhold:
+                    wire.send({"type": "coin", "coin": coin_json(opening)})
+                else:
+                    wire.send({"type": "opening", "opening": opening.to_json()})
     except CoinError as e:
         reason = _closed(session, str(e))
     except OSError as e:
@@ -292,18 +328,55 @@ def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time
     return reason
 
 
+def _layout_of(doc: Any) -> tuple[str, int, tuple[tuple[str, int], ...]]:
+    if not isinstance(doc, dict) or sorted(doc) != ["epoch", "families", "scheme"] or type(doc["families"]) is not list:
+        raise CoinError("a withheld session's layout is {epoch, families, scheme}")
+    families = tuple(tuple(f) if type(f) is list else f for f in doc["families"])
+    why = Ch.layout_problem(doc["scheme"], doc["epoch"], families)
+    if why is not None:
+        raise CoinError(why)
+    return doc["scheme"], doc["epoch"], families
+
+
+def _coin_of(doc: Any) -> LiveOpening:
+    if not isinstance(doc, dict) or sorted(doc) != ["after", "coin", "epoch", "index", "label"]:
+        raise CoinError("a withheld session's coin is {after, coin, epoch, index, label}")
+    after, coin = Ch._hex(doc["after"]), Ch._hex(doc["coin"])
+    if (after is None or coin is None or len(coin) != Ch.COIN_BYTES or type(doc["epoch"]) is not int
+            or type(doc["index"]) is not int or type(doc["label"]) is not str):
+        raise CoinError("a withheld session's coin is {after, coin, epoch, index, label}")
+    return LiveOpening(doc["epoch"], doc["label"], doc["index"], after, coin, b"", ())
+
+
+def _released_of(doc: Any) -> tuple[LiveCommitment, list[LiveOpening]]:
+    if not isinstance(doc, dict) or sorted(doc) != ["commitment", "openings"] or type(doc["openings"]) is not list:
+        raise CoinError("a withheld session's release is {commitment, openings}")
+    return LiveCommitment.from_json(doc["commitment"]), [LiveOpening.from_json(o) for o in doc["openings"]]
+
+
 class RemoteChallenger:
     """The client of a challenger on its own host over the connected stream `sock`: `LiveChallenger`'s `commitment` (the
-    challenger's answer to hello) and `open`.  After a refusal, a broken stream or a bad opening it refuses every coin."""
+    challenger's answer to hello) and `open`.  After a refusal, a broken stream or a bad opening it refuses every coin.
+
+    On a withheld session (`withheld`) the hello answers the layout alone (`families`), `commitment` is None and each
+    opening is the coin's raw bytes, with no salt and no path, until `close`: the challenger then releases its commitment
+    and every coin's full opening, which `close` checks against the coins it was given and keeps (`opened`)."""
 
     def __init__(self, sock: socket.socket, secret: bytes | None = None) -> None:
         self._wire, self._ended = _Wire(sock), None
         hello = {"type": "hello"} if secret is None else {"type": "hello", "secret": bytes(secret).hex()}
-        self.commitment = self._ask(hello, "commitment", LiveCommitment.from_json)
+        got = self._ask(hello, "commitment", LiveCommitment.from_json)
+        self.withheld = not isinstance(got, LiveCommitment)
+        self.commitment: LiveCommitment | None = None if self.withheld else got
+        self._layout = got if self.withheld else (got.scheme, got.epoch, got.families)
+        self._epoch, self.families = self._layout[1], self._layout[2]
+        self._given: list[tuple[str, int, bytes, bytes]] = []
+        self.opened: dict[tuple[str, int], LiveOpening] = {}
 
     @classmethod
     def connect(cls, address: str, secret: bytes | None = None) -> RemoteChallenger:
-        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one."""
+        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one (`connect_when_listening`
+        waits for a session's tunnel to listen)."""
         host, sep, port = address.rpartition(":")
         if not sep or not host or not port.isdigit():
             raise ValueError(f"a challenger's address is HOST:PORT, not {address!r}")
@@ -323,6 +396,10 @@ class RemoteChallenger:
             raise self._end(f"the stream broke ({e})") from e
 
     def _reply(self, kind: str, read: Callable[[Any], Any]) -> Any:
+        """The reply of `kind`, read with `read`; a hello's (`commitment`) may be a withheld session's `layout` instead."""
+        return self._answer({kind: read, **({"layout": _layout_of} if kind == "commitment" else {})})[1]
+
+    def _answer(self, reads: dict[str, Callable[[Any], Any]]) -> tuple[str, Any]:
         try:
             reply = self._wire.recv()
         except CoinError as e:
@@ -331,12 +408,13 @@ class RemoteChallenger:
             raise self._end(f"the stream broke ({e})") from e
         if reply.get("type") == "refused" and sorted(reply) == ["reason", "type"] and type(reply["reason"]) is str:
             raise self._end(f"the challenger refused: {reply['reason']}")
-        if reply.get("type") != kind or sorted(reply) != (["type"] if kind == "closed" else sorted(["type", kind])):
-            raise self._end(f"the challenger did not answer with {kind!r}")
+        kind = reply.get("type")
+        if kind not in reads or sorted(reply) != (["type"] if kind == "closed" else sorted(["type", kind])):
+            raise self._end(f"the challenger did not answer with {' or '.join(map(repr, reads))}")
         if kind == "closed":
-            return None
+            return kind, None
         try:
-            return read(reply[kind])
+            return kind, reads[kind](reply[kind])
         except CoinError as e:
             raise self._end(f"the challenger's {kind} is malformed: {e}") from e
 
@@ -361,20 +439,42 @@ class RemoteChallenger:
                      for label, index, after in asked))
         openings = []
         for label, index, after in asked:
-            opening = self._reply("opening", LiveOpening.from_json)
-            try:
-                why = live_reason(self.commitment, opening, label, index, after)
-            except CoinError as e:
-                why = str(e)
+            if self.withheld:
+                opening = self._reply("coin", _coin_of)
+                why = None if (opening.epoch, opening.label, opening.index, opening.after) == (self._epoch, label, index,
+                                                                                            after) else \
+                    "coin is not the one asked for, opened after what the verifier recorded"
+            else:
+                opening = self._reply("opening", LiveOpening.from_json)
+                try:
+                    why = live_reason(self.commitment, opening, label, index, after)
+                except CoinError as e:
+                    why = str(e)
             if why is not None:
                 raise self._end(f"the challenger's {label} coin {index}: {why}")
             openings.append(opening)
+        self._given += [(o.label, o.index, o.after, o.coin) for o in openings]
         return openings
 
     def close(self) -> None:
-        """End the session: the challenger closes it, and the stream closes."""
-        self._ask({"type": "close"}, "closed", lambda _: None)
+        """End the session: the challenger closes it, and the stream closes.  On a withheld session the challenger then
+        releases its commitment and the coins' full openings: each must be the coin it gave, in order, opening against
+        that commitment after the root it followed, else `close` raises."""
+        if not self.withheld:
+            self._ask({"type": "close"}, "closed", lambda _: None)
+            self._end("the client closed the session")
+            return
+        commitment, openings = self._ask({"type": "close"}, "released", _released_of)
         self._end("the client closed the session")
+        if (commitment.scheme, commitment.epoch, commitment.families) != self._layout:
+            raise CoinError("the challenger's released commitment is not the layout its hello answered")
+        if [(o.label, o.index, o.after, o.coin) for o in openings] != self._given:
+            raise CoinError("the challenger's released openings are not the coins it gave, in order")
+        for o in openings:
+            why = live_reason(commitment, o, o.label, o.index, o.after)
+            if why is not None:
+                raise CoinError(f"the challenger's {o.label} coin {o.index}: {why}")
+        self.commitment, self.opened = commitment, {(o.label, o.index): o for o in openings}
 
     def __enter__(self) -> RemoteChallenger:
         return self
@@ -382,6 +482,30 @@ class RemoteChallenger:
     def __exit__(self, *exc: object) -> None:
         if self._ended is None:
             self.close()
+
+
+#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
+#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
+#: coins' path)
+TUNNEL_WAIT_S = 120
+
+
+def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] | None = None,
+                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
+                           sleep: Callable[[float], None] = time.sleep) -> Any:
+    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
+    coin, so it is tried again every half second for up to `wait_s`, then refused (`CoinError`); any other failure raises
+    at once.  `connect` is `RemoteChallenger.connect` by default, read at the call."""
+    connect = connect or RemoteChallenger.connect
+    deadline = clock() + wait_s
+    while True:
+        try:
+            return connect(address, secret)
+        except ConnectionRefusedError as e:
+            if clock() >= deadline:
+                raise CoinError(f"nothing listened at {address} within {wait_s} s of the session's open (its tunnel never "
+                                "came up); no hello was sent and no coin opened") from e
+            sleep(0.5)
 
 
 def _read(path: Path, what: str) -> str | None:

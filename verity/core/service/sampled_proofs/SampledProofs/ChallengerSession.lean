@@ -56,6 +56,7 @@ The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `clos
 -/
 import SampledProofs.ChallengerRecord
 import SampledProofs.PyJson
+import Flock.JsonParse
 
 namespace SampledProofs.Challenger
 
@@ -184,16 +185,16 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
 characters. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
-  let .ok j := Json.parse line | throw LOG_MALFORMED
+  let .ok j := Flock.JsonParse.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
   pure j
 
-private def pairs : List String → List (String × String)
+def pairs : List String → List (String × String)
   | a :: b :: rest => (a, b) :: pairs rest
   | _ => []
 
-private def isTime (j : Json) : Bool := (nat? j).isSome
+def isTime (j : Json) : Bool := (nat? j).isSome
 
 /-- The roots the challenger received, by family in order. -/
 abbrev Roots := List (String × List ByteArray)
@@ -209,9 +210,9 @@ def releasedRootsOf (c : LiveCommitment) (log : List String) : V Roots := do
   for (a, b) in pairs log.tail do
     let r ← event a
     let s ← event b
-    let ok := keys? r == some #["event", "index", "label", "received_at", "root"] &&
-      keys? s == some #["after", "event", "index", "label", "released_at"] &&
-      getD r "event" == Json.str "root" && getD s "event" == Json.str "release" &&
+    let ok := keysIn? r == some #["event", "index", "label", "received_at", "root"] &&
+      keysIn? s == some #["after", "event", "index", "label", "released_at"] &&
+      strOf? (getD r "event") == some "root" && strOf? (getD s "event") == some "release" &&
       isTime (getD r "received_at") && isTime (getD s "released_at")
     let .str label := getD r "label" | throw LOG_MALFORMED
     let some k := roots.findIdx? (·.1 == label) | throw LOG_MALFORMED
@@ -219,7 +220,7 @@ def releasedRootsOf (c : LiveCommitment) (log : List String) : V Roots := do
     let some bytes := (Flock.unhex root).toOption | throw LOG_MALFORMED
     let n : Int := (roots[k]?.map (·.2.size)).getD 0
     unless ok && int? (getD r "index") == some n && int? (getD s "index") == some n &&
-        getD s "label" == Json.str label && getD s "after" == Json.str root && root.length == 128 do
+        strOf? (getD s "label") == some label && strOf? (getD s "after") == some root && root.length == 128 do
       throw LOG_MALFORMED
     roots := roots.modify k fun (l, rs) => (l, rs.push bytes)
   return roots.toList.map fun (l, rs) => (l, rs.toList)
@@ -238,10 +239,8 @@ def sessionOf (key : ChallengerKey) (record log close : Json) : V (LiveCommitmen
     | .ok c => pure c
     | .error e => throw s!"the challenger's close record is malformed: {e}"
   let m ← closeMessage (key.pub.extract 0 16) r.host r.commitment c.session c.lines c.chain c.ended
-  let ok : Bool := match Lms.Signature.decode key.params c.signature with
-    | .ok sig => (Lms.verify key.params key.pub m sig).toOption == some true
-    | .error _ => false
-  unless ok do throw "the challenger's close record's signature does not verify under the verifier's challenger key"
+  unless verifies key m c.signature do
+    throw "the challenger's close record's signature does not verify under the verifier's challenger key"
   let .arr ls := log | throw LOG_FORM
   let lines ← ls.toList.mapM fun | .str s => pure s | _ => throw LOG_FORM
   unless lines.length == c.lines do
@@ -417,12 +416,6 @@ def ledgerEntry? (line : Json) : Option LedgerEntry := do
     | _, _ => none
   guard (isBodyOf kind (schema == LEDGER_SCHEMA) body)
   pure ⟨e, text, schema, seq, prev, kind, session, sig, body⟩
-
-/-- `verify`'s at LMS over the key's parameters, false for a signature that doesn't decode. -/
-private def verifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
-  match Lms.Signature.decode key.params sig with
-  | .ok s => (Lms.verify key.params key.pub m s).toOption == some true
-  | .error _ => false
 
 /-- A window `verifyLedger` read: its root, its open and the leaf the open was signed at, and its end once read. -/
 structure Win where

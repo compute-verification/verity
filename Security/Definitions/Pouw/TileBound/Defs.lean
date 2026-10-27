@@ -66,7 +66,7 @@ inductive Fmt where
 `r20260930-060338-26b9` and `r20260930-062627-063a`). NVFP4 0.5 (the 2:4-sparse form is 0.25 per nominal MAC, so the
 same 0.5 per nonzero product), FP8 1, int8 1, BF16 2, FP16 2, TF32 4, `dp4a` 4.05 per int8 MAC, FFMA 8.46 (the model's
 value). GPU 4 has since measured the FP32 and F16 CUDA-core multipliers at 8.0–8.15, that is 16.0–16.3 FP4 slots per
-product (draft PR #525, F1). Every pin that reads `price .fp32` holds across that range; FFMA's 16-block closure is a
+product (F1). Every pin that reads `price .fp32` holds across that range; FFMA's 16-block closure is a
 tie there, not a margin: equality at 8.0, 2% at 8.15 (`fp32_closed_upto`). -/
 def price : Fmt → ℚ
   | .fp4 => 1 / 2

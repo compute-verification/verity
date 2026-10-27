@@ -1,9 +1,9 @@
 """The verifier's coins: its own randomness and the one-stage draws it makes from it.
 
 The verifier draws every coin from its own randomness (`OwnRandomness`), with no derivation and no beacon, after the
-prover's commitments are registered.  `draw_first` draws a one-stage law's units as the Lean verifier's
+prover's commitments are registered.  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
 `Flock.Draw.drawWith` does from the same bytes, and `closure_of` widens a work draw by the verifier's closure map.  A
-drawn unit's outcome is final: nothing redraws.
+drawn proof block's outcome is final: nothing redraws.
 
 Each stream `draw_first` reads (one for `subset` and `bernoulli`, one per stratum for `stratified` and `work`) is
 `2 k · width(n) + 64` bytes (`2 n · width(den) + 64` for `bernoulli`), extended by as many again and rerun whenever it
@@ -18,14 +18,15 @@ challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the 
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import (COIN_BYTES, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
-                         live_reason, record_many, trusted_session_of)
+from .challenger import (COIN_BYTES, LOG_FORM, WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord,
+                         Verify, live_reason, record_many, trusted_session_of, withheld_on)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -104,7 +105,7 @@ class OwnRandomness:
     """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
     proof service's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
     system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
-    M0's `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
+    `flock-circuit`'s `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and
     p = 1 read nothing); `subset` is a sparse partial Fisher-Yates."""
 
@@ -159,7 +160,11 @@ class ChallengerCoins:
     index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`,
     and `coins_reason`, which the Lean verifier of record's run checks). It
     refuses a commitment whose coins are opened already, a read before any commitment, and every read after a coin
-    fails: a retry never redraws."""
+    fails: a retry never redraws.
+
+    On a withheld session (`remote.RemoteChallenger.withheld`) a read uses each coin's raw bytes as the challenger gave
+    them, and the segments hold those until the session closes; `settle` then puts in each coin's full opening, checked
+    against the commitment the challenger released at its close."""
 
     def __init__(self, record: LiveRecord) -> None:
         self.record = record
@@ -201,12 +206,32 @@ class ChallengerCoins:
             batch = min(m, MAX_BATCH)
             for o in record_many([(self.record, s.after)] * batch):
                 i = s.start + len(s.openings)
-                why = live_reason(commitment, o, s.label, i, s.after)
+                if commitment is None:
+                    why = None if (o.label, o.index, o.after, len(o.coin)) == (s.label, i, s.after, COIN_BYTES) else \
+                        "coin is not the one asked for, opened after what the verifier recorded"
+                else:
+                    why = live_reason(commitment, o, s.label, i, s.after)
                 if why is not None:
                     raise CoinError(f"the challenger's {s.label} coin {i}: {why}")
                 s.openings.append(o)
                 self._stream += o.coin
             m -= batch
+
+    def settle(self) -> None:
+        """Once a withheld session has closed (`remote.RemoteChallenger.close`): each segment's coins as the full openings
+        the challenger released at its close, each checked against its commitment as the coin read. Nothing to do on a
+        session that released them as it ran."""
+        ch = self.record.challenger
+        if not getattr(ch, "withheld", False):
+            return
+        if ch.commitment is None:
+            raise CoinError("a withheld session's coins are settled once it has closed")
+        for s in self.segments:
+            full = [ch.opened.get((o.label, o.index)) for o in s.openings]
+            for i, (o, f) in enumerate(zip(s.openings, full)):
+                if f is None or f.coin != o.coin or live_reason(ch.commitment, f, s.label, s.start + i, s.after) is not None:
+                    raise CoinError(f"the challenger's {s.label} coin {s.start + i} is not the one it released at its close")
+            s.openings[:] = full
 
 
 class Segment:
@@ -281,7 +306,7 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
     verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
     `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
     released after the same commitment are refused, and a prover with sessions in several windows gets one draw, not
-    the best of them. `service.Stream.outcome` hands the evidence to the Lean verifier of record, whose run refuses a
+    the best of them. The session must be a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome` hands the evidence to the Lean verifier of record, whose run refuses a
     draw from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`)."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
         return COINS_FORM
@@ -290,13 +315,170 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
                                                coins["pins"], coins["main"], coins["session"], verify)
     except CoinError as e:
         return str(e)
+    if not withheld_on(coins["ledger"], window):
+        return WITHHELD
     segment = coins["segment"]
     label = segment.get("label") if isinstance(segment, Mapping) else None
     return read_reason(commitment, segment, after, read, roots.get(label, ()) if type(label) is str else ())
 
 
+DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: the auditor's ledger, the verifier's copy "
+             "of main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger "
+             "session's files")
+
+
+def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
+    """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
+    open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
+    Unlike `coins_reason`'s evidence, this carries no key: the key, the window and the family are the verifier's, so a
+    prover can't sign a ledger of its own. The session must be a withheld one (`withheld_on`): its challenger released
+    no root, salt or path before it closed. One-stage's check reads its draw's coins through it (`OneStage.coinsOf`).
+    Raises `CoinError`."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
+        raise CoinError(DRAW_FORM)
+    commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
+                                           coins["session"], verify)
+    if not withheld_on(coins["ledger"], window):
+        raise CoinError(WITHHELD)
+    segment = coins["segment"]
+    if not (isinstance(segment, Mapping) and segment.get("label") == label):
+        raise CoinError(f"the draw's coins are not the challenger's {label} family's")
+    return challenger_stream(commitment, segment, after, roots.get(label, ()))
+
+
+class Use(NamedTuple):
+    """One read of a family's coins (Lean `Challenger.Use`): its `label`, what they were released after (`after`, 64
+    bytes) and how many coins (`coins`)."""
+
+    label: str
+    after: bytes
+    coins: int
+
+
+def use_roots(uses: Sequence[Use], label: str) -> list[bytes]:
+    """Lean `Use.roots`: the roots family `label`'s coins must be released after, in release order: each use of it in
+    turn, once a coin."""
+    return [u.after for u in uses if u.label == label for _ in range(u.coins)]
+
+
+def exactly_reason(commitment: LiveCommitment, roots: Mapping[str, Sequence[bytes]], uses: Sequence[Use]) -> str | None:
+    """Lean `exactlyReason`: why some family of the commitment's layout shows its coins released after other roots than
+    exactly the uses', coin for coin, in order (`use_roots`); None when none does. So the log holds one release a use:
+    a second release for a use, a release no use reads (a slot the evidence doesn't hold) or a release after another
+    root is refused, not charged."""
+    for label, _ in commitment.families:
+        got, want = list(roots.get(label, ())), use_roots(uses, label)
+        if got != want:
+            return (f"the challenger's log shows family {label}'s coins released after {len(got)} roots, not exactly "
+                    f"the {len(want)} the evidence's uses read, once each in order: a release no use reads, or a use "
+                    "released twice")
+    return None
+
+
+def received_order(log: Sequence[str]) -> list[str]:
+    """Lean `receivedOrder`: the family of each root the release log `log` shows the challenger received, in the log's
+    order (a log `released_roots_of` has read: its head, then a root and its release in turn, every line JSON, so
+    no line is dropped here as Lean's would be)."""
+    rs = [json.loads(line) for line in list(log)[1::2]]
+    return [r["label"] for r in rs if isinstance(r, dict) and type(r.get("label")) is str]
+
+
+def release_order_reason(labels: Sequence[str], order: Sequence[tuple[str, str]]) -> str | None:
+    """Lean `releaseOrderReason`: why the log's order `labels` receives a root of some family `b` before the last of
+    family `a`'s, for a pair `(a, b)` of `order`; None when every pair's releases are in order."""
+    for a, b in order:
+        last = max((i for i, lab in enumerate(labels) if lab == a), default=None)
+        first = next((j for j, lab in enumerate(labels) if lab == b), None)
+        if last is not None and first is not None and first < last:
+            return f"the challenger's log releases family {b}'s coins before the last of family {a}'s, not after"
+    return None
+
+
+RUNS = ("the challenger's log releases another coin of a use's group inside one use's coins, or other coins than the "
+        "uses': each use's coins must be one run among its group's releases")
+
+
+def runs_reason(fuel: int, pending: Sequence[Use], labels: Sequence[str]) -> str | None:
+    """Lean `runsReason`: why the labels `labels` don't release the uses `pending` one run each, walking `labels`: its
+    first label starts that family's first use of `pending`, whose `coins` releases are the next ones, all of that
+    family, and the walk goes on after them without that use; None when the labels and the uses run out together."""
+    pending, labels = list(pending), list(labels)
+    while labels:
+        if fuel == 0:
+            return RUNS
+        fuel -= 1
+        i = next((k for k, u in enumerate(pending) if u.label == labels[0]), None)
+        if i is None:
+            return RUNS
+        n = pending[i].coins
+        if not (n <= len(labels) and all(x == labels[0] for x in labels[:n])):
+            return RUNS
+        pending, labels = pending[:i] + pending[i + 1:], labels[n:]
+    return RUNS if pending else None
+
+
+def runs_why(uses: Sequence[Use], groups: Sequence[Sequence[str]], labels: Sequence[str]) -> str | None:
+    """Lean `runsWhy`: for each group (a list of families), why the log's labels `labels` restricted to the group's
+    families don't release the group's uses of `uses` (those with a coin) one run each (`runs_reason`); None when every
+    group's do."""
+    for g in groups:
+        pending = [u for u in uses if u.label in g and u.coins != 0]
+        why = runs_reason(len(pending) + 1, pending, [x for x in labels if x in g])
+        if why is not None:
+            return why
+    return None
+
+
+ROUNDS_FORM = ("a session's round coins are {ledger, main, pins, segments, session}: the auditor's ledger, the verifier's "
+               "copy of main's first-parent history, the host's pins log, one segment a use (Segment.to_json) and the "
+               "challenger session's files")
+
+
+def round_coins(key: ChallengerKey, window: str, uses: Sequence[Use], order: Sequence[tuple[str, str]],
+                groups: Sequence[Sequence[str]], coins: Any, verify: Verify) -> list[bytes]:
+    """Lean `Challenger.roundCoins`: each use's coins, `draw_coins` under `key`, `window`, the use's family and `after`
+    on its segment (`coins["segments"]`, one a use, in order), `coins` coins of 64 bytes each; the release log of the
+    session the ledger opens on `window` exactly the uses (`exactly_reason`); and, for each pair `(a, b)` of `order`,
+    every release of family `a` before every release of family `b` (`release_order_reason`); and, for each group of
+    `groups`, each of its uses' coins one run among the group's releases (`runs_why`). v2 reads the window's draw and
+    every session's link points and rounds through it, one group a session. Raises `CoinError`."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segments", "session"]:
+        raise CoinError(ROUNDS_FORM)
+    segments = coins["segments"]
+    if type(segments) is not list:
+        raise CoinError(ROUNDS_FORM)
+    if len(segments) != len(uses):
+        raise CoinError(f"{len(segments)} segments for {len(uses)} uses: one segment a use")
+    out = []
+    for u, s in zip(uses, segments):
+        at = {"ledger": coins["ledger"], "main": coins["main"], "pins": coins["pins"], "segment": s,
+              "session": coins["session"]}
+        xi = draw_coins(key, window, u.label, u.after, at, verify)
+        if len(xi) != u.coins * COIN_BYTES:
+            raise CoinError(f"the {u.label} coins after {u.after.hex()[:16]}… are {len(xi) // COIN_BYTES} coins, not the "
+                            f"use's {u.coins}")
+        out.append(xi)
+    commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
+                                           coins["session"], verify)
+    if not withheld_on(coins["ledger"], window):
+        raise CoinError(WITHHELD)
+    why = exactly_reason(commitment, roots, uses)
+    if why is not None:
+        raise CoinError(why)
+    log = coins["session"].get("log") if isinstance(coins["session"], Mapping) else None
+    if type(log) is not list or any(type(x) is not str for x in log):
+        raise CoinError(LOG_FORM)
+    why = release_order_reason(received_order(log), order)
+    if why is not None:
+        raise CoinError(why)
+    why = runs_why(uses, groups, received_order(log))
+    if why is not None:
+        raise CoinError(why)
+    return out
+
+
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
-    """A draw's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every unit in a drawn unit's
+    """A draw's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every proof block in a drawn proof block's
     closure that is not itself drawn, ascending."""
     drawn = set(units)
     return sorted({c for u in units for c in closure.get(u, ()) if c not in drawn})
@@ -304,11 +486,11 @@ def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> li
 
 def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: int,
                closure: Mapping[int, Sequence[int]] | None = None) -> dict[str, Any]:
-    """A draw under a one-stage law: the one-stage draw object over the positions [0, population) (`one_stage.draw`;
-    `check_draw` holds it to the registration and the law), as the Lean verifier's `Flock.Draw.drawWith` draws it from
-    the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the law's NUM/DEN as written), `stratified`
-    and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's units.  With the
-    verifier's closure map (a work law only, as `flock-verify draw --closure`), the draw carries its `closure`
+    """A draw under a one-stage sampling design: the one-stage draw object over the positions [0, population) (`one_stage.draw`;
+    `check_draw` holds it to the registration and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` draws it from
+    the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the sampling design's NUM/DEN as written), `stratified`
+    and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
+    verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the draw carries its `closure`
     (`closure_of`) when that is not empty."""
     problem = _law_problem(law)
     if problem:
@@ -351,5 +533,7 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream",
-           "closure_of", "coins_reason", "draw_first", "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "ROUNDS_FORM", "SEGMENT_FORM", "Segment",
+           "Use", "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "exactly_reason",
+           "release_order_reason", "read_reason", "received_order", "round_coins", "runs_reason", "runs_why",
+           "use_roots"]

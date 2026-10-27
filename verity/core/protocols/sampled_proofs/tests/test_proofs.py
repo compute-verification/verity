@@ -1,11 +1,11 @@
 """The proof service's own run of C-Flock's Lean verifier of record (`one_stage.proofs`), on a pinned `--zk --registered`
-session: a RoPE d64 statement of 32 units, each reading its `cs` row from a registered served tree, proved by C-Flock in
+session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
 one loopback session under a subset draw of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
 verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
-verdict comes from core's own verifier run: the honest session is accepted with its program, registered finding and units
+verdict comes from core's own verifier run: the honest session is accepted with its program, registered finding and proof blocks
 read off that run, a circuit file other than the committed one is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
@@ -30,15 +30,15 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b"
+FIXTURE = "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-CS_ROOT = ("948510d0ecf54caa346f3e026e5c8c88776f0987ebabcc9943df4703cdbcf069"
-           "4444af17eaad24879b0020b5a9cec4360a2c1c285a4f3d6689e3df1bbd12a4e5")
-#: the instances the session's own draw drew, which are the units, the public file's indices being 0..31
-DRAWN = (0, 1, 2, 3, 5, 7, 10, 13, 14, 18, 20, 21, 22, 24, 26, 29)
+CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
+           "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
+#: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
+DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -124,7 +124,7 @@ def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx,
     """The program binds ``cs`` as a run input (`Input16_v1`), registered only by the verifier's own file, so `verify`
     without that file goes on to Lean: the honest public file, which names the ``cs`` read, is refused by
     `Registered.check`; with that name taken out and the shared rows kept, the session is still not accepted. Neither
-    finding proves a unit."""
+    finding proves a proof block."""
     assert not PF.reads_registered((fx / "stage" / "program.json").read_bytes())
     got, why = _verify(fx, fx / "session", public=_unnamed(fx) if unnamed else "pub-32.bin", own=False)
     assert why is None, why
@@ -166,7 +166,7 @@ def _tampered(fx: Path, to: Path, rehash: bool) -> Path:
 def test_tampered_proof_bytes_are_rejected_by_the_verifier_itself(fx, tmp_path, rehash):
     """One bit of the first rep's proof flipped: with the record's proof digest kept the verifier refuses the file the
     record doesn't bind, and with it rewritten to the flipped bytes it refuses the proof itself. Either way the finding is
-    the verifier's reject, with no units proved."""
+    the verifier's reject, with no proof blocks proved."""
     got, why = _verify(fx, _tampered(fx, tmp_path, rehash))
     assert why is None, why
     (f,) = got
@@ -201,9 +201,9 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted, proving the drawn units), a session whose proof bytes were
+    the files as blobs: on the honest session (accepted, proving the drawn proof blocks), a session whose proof bytes were
     tampered with (record kept or rehashed), and the honest session without the verifier's registered file, its finding
-    is `verify`'s, reason and units included."""
+    is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
                          (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
         got, why = _verify(fx, session, own=own)
@@ -223,3 +223,86 @@ def test_the_v2_audit_refuses_a_circuit_no_blob_holds(fx):
     refusal before any session is set up."""
     got, why = _v2(fx, fx / "session", circuit="ab" * 64)
     assert got is None and why.startswith("circuit: no blob has the SHA-512"), why
+
+
+def _record(**over) -> dict:
+    """A session record with what `session_uses` reads: two tables' root_B digests, out of key order, five link points
+    and a stream of two rounds beside one of none."""
+    r = {"link": {"points": [["0" * 32, "1" * 32, "2" * 32], ["3" * 32, "4" * 32]],
+                  "root_b_sha512": {"b": "bb" * 64, "a": "aa" * 64}},
+         "streams": [{"stream": "t/rep0", "rounds": [{"msg_sha512": "01" * 64, "coins": ["5" * 32] * 5},
+                                                     {"msg_sha512": "02" * 64, "coins": ["6" * 32] * 4}]},
+                     {"stream": "u", "rounds": []}]}
+    for path, v in over.items():
+        *ks, last = path.split(".")
+        at = r
+        for k in ks:
+            at = at[int(k)] if isinstance(at, list) else at[k]
+        if isinstance(at, list):
+            at[int(last)] = v
+        else:
+            at[last] = v
+    return r
+
+
+#: records `session_uses` refuses, each by one field (`_record`'s dotted path) or as a whole
+REFUSED = {"points not a list": _record(**{"link.points": {}}), "a point not hex strings": _record(**{"link.points.1": [3]}),
+           "no root_B digests": _record(**{"link.root_b_sha512": []}),
+           "a short root_B digest": _record(**{"link.root_b_sha512.a": "aa" * 63}),
+           "a root_B digest not hex": _record(**{"link.root_b_sha512.a": "zz" * 64}),
+           "streams not a list": _record(streams={}), "a stream unnamed": _record(**{"streams.1.stream": 1}),
+           "rounds not a list": _record(**{"streams.1.rounds": None}),
+           "a stream named as the points' family": _record(**{"streams.1.stream": "session"}),
+           "a round without its digest": _record(**{"streams.0.rounds.0": {"coins": []}}),
+           "a short round digest": _record(**{"streams.0.rounds.1.msg_sha512": "02" * 63}),
+           "an uppercase round digest": _record(**{"streams.0.rounds.1.msg_sha512": "AB" * 64}),
+           "coins not a list": _record(**{"streams.0.rounds.0.coins": "5" * 32}),
+           "a record not an object": [], "not JSON": "{"}
+
+
+def _uses(slot: int, text: str) -> dict:
+    try:
+        return {"uses": [{"after": a.hex(), "coins": n, "label": lab, "want": w} for lab, a, n, w in
+                         PF.session_uses(slot, text)]}
+    except ValueError as refused:
+        return {"refused": str(refused)}
+
+
+def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_digest():
+    """`session_uses` (the prover's side of v2's round-coins check, `OneStageZk.roundsWhy`): the link points after the
+    SHA-512 of the tables' root_B digests in key order, then each round after its own digest, a 64-byte coin for each
+    four F128s, under the session's slot."""
+    pts = ["0" * 32, "1" * 32, "2" * 32, "3" * 32, "4" * 32]
+    assert PF.session_uses(3, json.dumps(_record())) == [
+        ("slot/3/session", hashlib.sha512(b"\xaa" * 64 + b"\xbb" * 64).digest(), 2, pts),
+        ("slot/3/t/rep0", b"\x01" * 64, 2, ["5" * 32] * 5), ("slot/3/t/rep0", b"\x02" * 64, 1, ["6" * 32] * 4)]
+    for name, r in REFUSED.items():
+        assert "refused" in _uses(0, r if isinstance(r, str) else json.dumps(r)), name
+
+
+@lean
+@pytest.mark.slow
+def test_session_uses_is_the_v2_audits_own(tmp_path):
+    """`session_uses` against `sampled-proofs-one-stage-zk uses` (Lean `sessionUses`, which `roundsWhy` reads): the
+    same uses on a well-formed record, and the same refusal, reason included, on each malformed one (a malformed JSON
+    text only refused by both). Slow for the v2 executable's build, which the v2 tests above share."""
+    for name, r in {"well formed": _record(), **REFUSED}.items():
+        text = r if isinstance(r, str) else json.dumps(r)
+        (tmp_path / "record.json").write_text(text)
+        mine, lean_ = _uses(2, text), PF.uses_v2(2, tmp_path / "record.json")
+        if name == "not JSON":
+            assert "refused" in mine and "refused" in lean_, (mine, lean_)
+        else:
+            assert mine == lean_, (name, mine, lean_)
+
+
+@lean
+@pytest.mark.slow
+def test_session_uses_of_the_fixtures_record_is_the_v2_audits_own(fx):
+    """On the pinned session's own record (C-Flock's, not a synthetic one), `session_uses` is Lean's, and every round
+    of it is a use."""
+    rec = fx / "session" / "session.json"
+    mine = _uses(0, rec.read_text())
+    assert mine == PF.uses_v2(0, rec), mine
+    rounds = sum(len(s["rounds"]) for s in json.loads(rec.read_text())["streams"])
+    assert len(mine["uses"]) == 1 + rounds, mine

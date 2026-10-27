@@ -1,6 +1,6 @@
 import Mathlib
+import Definitions.Hash.Basic
 import Definitions.Claims.Hm96
-import Definitions.Claims.Json
 
 /-!
 # Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
@@ -72,9 +72,8 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday`, `ExpectedCR`, hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
-which the soundness proofs read), and the JSON library's specification, `JsonSpec` (`Definitions/Claims/Json.lean`,
-which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
+The named assumptions: `StrictBirthday`, `ExpectedCR` and hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
+which the soundness proofs read). What the claims rest on and no Lean statement can say is `trustedBase`.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Definitions/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here but `Flock.ZK`, and by `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock
@@ -85,12 +84,11 @@ namespace Claims
 
 /-! ## Messages and the hash -/
 
-/-- `Msg = {0,1}^*` in whole bytes, as the deployed SHA-512 reads them: a padding convention for other lengths would
-make collisions that are not SHA-512's. -/
-abbrev Msg := List UInt8
+/-- A message, `Hash.Msg`: whole bytes, as the deployed SHA-512 reads them. -/
+abbrev Msg := Hash.Msg
 
-/-- A collision of `H`. -/
-def Collision (H : Msg → Msg) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
+/-- A collision of `H`, `Hash.Collision`. -/
+abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v
 
 /-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
 draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
@@ -619,7 +617,8 @@ registered reads and `hm96-sha512/v1` leaves (with or without `--zk`); a unit of
 with hidden outputs, the general instance form: the unit repeated, reading any number of committed input groups, and
 any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
-row a `sha512/row/v2` or `sha512/row-seg/v1` row. -/
+row a `sha512/row/v2` or `sha512/row-seg/v1` row; and no output port pinned (META `pinned_outputs`), which both row forms
+(`rowsV1`, `rowsV2OrSeg`) read. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧

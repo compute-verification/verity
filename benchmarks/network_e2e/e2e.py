@@ -124,8 +124,9 @@ CLAIM = {
         "the Lean firewall and held by Lean verify --zk, the verifier opening only each unit's public row and its "
         "verdict row. Late's head checks are not proved: N2 alone refuses it."),
     "not_covered": [
-        "N3 (content): the frames inside the counts, their bytes and their order, are not checked. N3 is a design and "
-        "the simulator's behaviour, not a proof-service unit, so nothing here holds the egress grid to the Program's.",
+        "N3 (content): the frames inside the counts, their bytes and their order, are not checked. N3 is retired, and "
+        "the network certifier's step-indexed scan that supersedes it doesn't run here, so nothing here holds the "
+        "egress grid to the Program's.",
         "The proofs cover each end's head check only: not the certificates' LMS check (NetworkCertificatesCheck, on the "
         "host by design, over public fields and the signed digest), not the audit of each record's status, signature "
         "and declared syncs (on the host, over the opening), and on a served link not NetworkServedCounts_v1, which "
@@ -592,7 +593,9 @@ def alone(summary: dict, d: Path | None) -> dict | None:
 
 def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | None = None) -> dict:
     """Whether negative ``name`` was refused, and by what: N2's network verdict and its link-windows' verdicts of
-    record, the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean).
+    record (a link-window the certifier certified nothing of, `Issuer.refused`, has no verdict of its own, and the
+    network verdict refuses it unregistered), the rehearsal's own check, and where proved, its head checks' proved
+    verdicts (each proof held by Lean).
     Refused only when every one of them that ran refuses it. Where N2 gives no verdict (the advice profile), the check
     refuses it only by its own violation (`OWN_CODE`): a refusal for another reason is not this negative's. A pending
     negative (`PENDING`) is refused by the I/O tie alone (``tie``, its row of `chain.tie`) when its verdict is the one it
@@ -605,11 +608,14 @@ def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | N
         return {"refused": refused, "ran": ran, "by": [_tie_by(tie)] if refused else [], "own_code": None,
                 "check_codes": None if check is None else check.get("codes"), "n2_refused_windows": [],
                 "proved_refused_windows": [], "failed_parts": {}, "proved": False, "proofs_held": None, "tie": tie}
-    n2 = [r["window"] for r in rows if r["n2"] == "refuse"]
+    n2 = sorted({r["window"] for r in rows if r["n2"] == "refuse"} | set(run["network"].get("refused") or ()))
     decided = run["network"]["accepted"] is not None
     own = None if decided else OWN_CODE.get(name)
     check_refused = check is not None and check["verdict"] == "refused"
     by_own = check_refused and own is not None and own in (check.get("codes") or ())
+    issuer = sorted({w for *_, w in run.get("issuer_refused") or ()})
+    if issuer:
+        by.append(f"the certifier (Issuer.refused; link-windows {issuer})")
     if run["network"]["accepted"] is False and n2:
         by.append(f"N2 (network verdict; link-windows {n2})")
     if check_refused and (decided or by_own):

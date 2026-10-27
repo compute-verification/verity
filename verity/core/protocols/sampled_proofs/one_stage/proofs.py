@@ -8,16 +8,16 @@ committed for the circuit file, the program's descriptor, the partition object a
 registered values, the `--registered` file. It refuses
 a circuit file that doesn't hash to the committed digest before anything runs, so each verdict is over the circuit the
 auditor's own lowering built. The circuit file's tie to the program's Definitions rests on that lowering: the verifier
-holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor
-(PRF-133). Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
+holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor.
+Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
 values), and one `Finding` a session, in order:
 whether it was accepted and why not, the program its verdict names (`program_sha512`, the digest of the canonical
 descriptor without annotations, which an accepted verdict must give as the partition object's `program`),
-its registered finding (each port's value and opened root) and the units it proved, the public file's global unit
+its registered finding (each port's value and opened root) and the proof blocks it proved, the public file's global proof block
 indices of the instances its session drew (`unit_draw`), read only off a session the verifier accepted.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
-peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn unit of it an instance.
+peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn proof block of it an instance.
 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
@@ -45,7 +45,7 @@ from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = CORE / "service" / "flock"
 EXE = "flock-verify"
-#: the statement every drawn unit's session proves
+#: the statement every drawn proof block's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
@@ -70,7 +70,7 @@ class Proof:
 @dataclass(frozen=True)
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
-    registered finding (port -> {value, root}) and the global units it proved (none unless accepted)."""
+    registered finding (port -> {value, root}) and the global proof blocks it proved (none unless accepted)."""
 
     session: str
     accepted: bool
@@ -120,7 +120,7 @@ def reads_registered(program: bytes) -> bool:
 
 
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
-    """The global units a session proved: the public file's unit indices (``units.indices``) of the instances its record
+    """The global proof blocks a session proved: the public file's proof block indices (``units.indices``) of the instances its record
     drew (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
     indices = _header(public)["units"]["indices"]
     drawn = json.loads((session / "session.json").read_text())["unit_draw"]["units"]
@@ -131,7 +131,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
-    as N2's, whose unit opens the committed value inside its circuit), on the circuit file the auditor committed as
+    as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
     None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
     committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
@@ -251,6 +251,75 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
                     tuple(v["units"])) for v in got["verdicts"]], None
 
 
+def _hexes(x: Any, what: str) -> list[str]:
+    if type(x) is not list or any(type(s) is not str for s in x):
+        raise ValueError(f"{what} is not a list of hex strings")
+    return list(x)
+
+
+def _unhex(h: str) -> bytes:
+    """Lean `Flock.unhex`, on an even-length string."""
+    if re.fullmatch(r"(?:[0-9a-f]{2})*", h) is None:
+        raise ValueError("not lowercase hex")
+    return bytes.fromhex(h)
+
+
+def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str]]]:
+    """Lean `OneStageZk.sessionUses`: session `slot`'s uses of the challenger's coins as `(label, after, coins, want)`,
+    `want` the record's F128 hex its coins' bytes must begin with: its link points, of family `slot/<slot>/session`
+    after the SHA-512 of its tables' `link.root_b_sha512` digests in key order, then each stream's rounds in the
+    record's order, of family `slot/<slot>/<stream>` after the round's ``msg_sha512``; ceil(n/4) coins of 64 bytes for
+    n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Raises
+    ValueError with Lean's reason."""
+    j = json.loads(record)
+    link = j.get("link") if isinstance(j, dict) else None
+    pts_j = link.get("points") if isinstance(link, dict) else None
+    if type(pts_j) is not list:
+        raise ValueError("record: link.points is not a list")
+    pts = [h for p in pts_j for h in _hexes(p, "a link point")]
+    rbs = link.get("root_b_sha512")
+    if not isinstance(rbs, dict):
+        raise ValueError("record: link.root_b_sha512 is not an object")
+    ds = b""
+    for t in sorted(rbs):
+        d = rbs[t]
+        if type(d) is not str or len(d) != 128:
+            raise ValueError(f"record: link.root_b_sha512.{t} is not 64 bytes of hex")
+        ds += _unhex(d)
+    out = [(f"slot/{slot}/session", hashlib.sha512(ds).digest(), (len(pts) + 3) // 4, pts)]
+    streams = j.get("streams")
+    if type(streams) is not list:
+        raise ValueError("record: streams is not a list")
+    for s in streams:
+        name = s.get("stream") if isinstance(s, dict) else None
+        if type(name) is not str:
+            raise ValueError("record: a stream's name is not a string")
+        if name == "session":
+            raise ValueError("record: a stream is named session, the link points' family")
+        rounds = s.get("rounds")
+        if type(rounds) is not list:
+            raise ValueError(f"record: {name}'s rounds are not a list")
+        for r in rounds:
+            sha = r.get("msg_sha512") if isinstance(r, dict) else None
+            if type(sha) is not str:
+                raise ValueError(f"record: a round of {name} has no msg_sha512")
+            if len(sha) != 128:
+                raise ValueError(f"record: a round of {name}'s msg_sha512 is not 64 bytes of hex")
+            cs = _hexes(r.get("coins"), f"the coins of a round of {name}")
+            out.append((f"slot/{slot}/{name}", _unhex(sha), (len(cs) + 3) // 4, cs))
+    return out
+
+
+def uses_v2(slot: int, record: Path) -> dict:
+    """`session_uses` by the v2 audit's Lean (`sampled-proofs-one-stage-zk uses`): its line, `{"uses": [...]}` or
+    `{"refused": why}`."""
+    p = subprocess.run([str(v2_executable()), "uses", str(slot), str(record)], capture_output=True, text=True)
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} uses answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+
+
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, registered: Mapping[str, Any] | None) -> dict:
     """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
@@ -273,4 +342,5 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "PACKAGE", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2",
-           "executable", "file_sha512", "proved_units", "reads_registered", "v2_executable", "verdicts_v2", "verify"]
+           "executable", "file_sha512", "proved_units", "reads_registered", "session_uses", "uses_v2", "v2_executable",
+           "verdicts_v2", "verify"]

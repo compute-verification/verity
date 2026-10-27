@@ -27,7 +27,7 @@ copy of it. The tape's salts are pairwise distinct as bytes, and so are its pads
 salt or pad the workers saw under one number is not used under another.
 
 Coins go to the workers exactly as the challenger sent them (`Item.coins`), and only after every commitment the schedule
-owes (`State.owed`): in the inner phase each round's coins are live, drawn after its commitments, as `RecursiveSound`'s game
+owes (`State.owed`): in the inner phase each round's coins are live, drawn after its commitments, as `RecursiveKS`'s game
 and `RecursiveZK` draw them. A public input may also declare the challenger's commitments to its coins
 (`PublicInput.coins`): for each stream, one per round, the hm96-sha512 commit string `b ‖ c` (`commitBC`, the commit items'
 commitment) of the round's coin message (`coinMsg`: the stream, the round and the coins) under a salt of the challenger's.
@@ -52,6 +52,7 @@ that relay different coin messages for one committed round give a SHA-512 collis
 -/
 import Flock.Canon
 import Flock.Hm96
+import Flock.JsonParse
 
 namespace Flock.Firewall.Contract
 
@@ -856,7 +857,7 @@ def cmd (args : List String) : IO UInt32 := do
     | none => pure (Except.ok ({} : PublicInput))
     | some f => do
       let text ← IO.FS.readFile f
-      pure (Json.parse text >>= PublicInput.ofJson)
+      pure (JsonParse.parse text >>= PublicInput.ofJson)
   match pub with
   | .error e =>
     IO.println (Json.mkObj [("public", Json.str (pubFile.getD "")), ("error", Json.str e)]).compress
@@ -865,7 +866,7 @@ def cmd (args : List String) : IO UInt32 := do
     let mut rc : UInt32 := 0
     for f in files do
       let text ← IO.FS.readFile f
-      match Json.parse text >>= Transcript.ofJson with
+      match JsonParse.parse text >>= Transcript.ofJson with
       | .ok t =>
         IO.println ((run pub t).toJson.setObjVal! "file" (Json.str f)).compress
       | .error e =>

@@ -24,6 +24,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
@@ -150,19 +151,19 @@ class Host:
     (a new ledger in `tmp_path` unless `ledger`), whose record `open_session` signed with `sign` and wrote to
     `directory` naming the host the ledger opens it on (or `record_host`), serving one session on a loopback port;
     `reason` is how `serve` ended it, and the ledger's end says the session closed when its client closed it (or as
-    `closed` says)."""
+    `closed` says). With `withhold`, the session is a withheld one, and the ledger's open says so."""
 
     def __init__(self, tmp_path, sign, session: str = "s-1", seed: str = "host", ledger: Ledger | None = None,
                  window: dict = WINDOW, closed: bool | None = None, record_host: str | None = None,
-                 secret: bytes | None = None) -> None:
+                 secret: bytes | None = None, withhold: bool = False) -> None:
         self.secret = secret
         self.directory = tmp_path / session
         self.directory.mkdir(parents=True)
         self.ledger, self.closed = ledger or Ledger(tmp_path / "windows.jsonl", sign), closed
-        self.ledger.open(session, window)
+        self.ledger.open(session, window, **({"withheld": True} if withhold else {}))
         self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy(seed))
         self.session = R.open_session(self.challenger, pinned_key(), record_host or f"{HOST}.{session}", sign,
-                                      self.directory, session)
+                                      self.directory, session, withhold=withhold)
         (self.directory / R.HELLOS).write_text("")
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = "127.0.0.1:%d" % self.listener.getsockname()[1]
@@ -494,6 +495,63 @@ def test_open_many_releases_and_logs_the_coins_as_opening_them_one_at_a_time_doe
     events = [json.loads(line)["event"] for line in many.decode().splitlines()]
     assert events == ["commitment"] + ["root", "release"] * 3
     assert C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")).open_many(BATCH) == batched
+
+
+def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_path, signer):
+    """A withheld session (`open_session(..., withhold=True)`) answers the hello with the layout alone and each open with
+    the coin's raw bytes alone: no frame before the close carries the root, a salt or a path. Its close, once signed,
+    releases the commitment and every coin's opening, which open against it after the root each followed. The client
+    (`RemoteChallenger`, `ChallengerCoins`) reads the raw coins as it runs and settles the full openings at the close; a
+    session served without `withhold` answers the hello with the commitment, as before."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, tmp_path, "s-1", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    b.sendall(frame({"type": "hello"}))
+    before = [reply(b)]
+    for label, index, after in BATCH:
+        b.sendall(frame({"type": "open", "label": label, "index": index, "after": after.hex()}))
+        before.append(reply(b))
+    b.sendall(frame({"type": "close"}))
+    released = reply(b)
+    b.close()
+    t.join()
+    a.close()
+    assert before[0] == {"type": "layout", "layout": {"epoch": 0, "families": [list(f) for f in FAMILIES], "scheme": SCHEME}}
+    assert [sorted(x["coin"]) for x in before[1:]] == [["after", "coin", "epoch", "index", "label"]] * len(BATCH)
+    assert not any(ch.commitment.root.hex() in json.dumps(x) for x in before)
+    assert released["type"] == "released" and released["released"]["commitment"] == ch.commitment.to_json()
+    openings = [C.LiveOpening.from_json(o) for o in released["released"]["openings"]]
+    assert [o.coin.hex() for o in openings] == [x["coin"]["coin"] for x in before[1:]]
+    assert all(C.live_reason(ch.commitment, o, label, index, after) is None
+               for o, (label, index, after) in zip(openings, BATCH))
+    assert (tmp_path / R.CLOSE).is_file()
+
+    directory = tmp_path / "client"
+    directory.mkdir()
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, directory, "s-2", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    client = R.RemoteChallenger(b)
+    assert client.withheld and client.commitment is None
+    coins = ChallengerCoins(C.LiveRecord(client, "positions"))
+    coins.commit(root(7))
+    read = coins(100)
+    assert all(o.salt == b"" and o.path == () for o in coins.segments[0].openings)
+    client.close()
+    t.join()
+    a.close()
+    coins.settle()
+    assert client.commitment == ch.commitment
+    assert read == b"".join(o.coin for o in coins.segments[0].openings)[:100]
+    assert all(C.live_reason(ch.commitment, o, "positions", i, root(7)) is None
+               for i, o in enumerate(coins.segments[0].openings))
+    assert coins.record.reason() is None
+    _, got, _ = _served(tmp_path / "plain", signer, lambda c: c.commitment)
+    assert got is not None
 
 
 def _scripted(n: int, answer):
@@ -1179,7 +1237,7 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
 
 
 def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
-    """PRF-126: the period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
+    """The period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
     window only when the descriptor of the circuit its sessions prove hashes to it. vllm's rehearsal shape is credited;
     a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
     isn't bytes, and a window in no period count toward none, each naming the fix."""
@@ -1282,8 +1340,8 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
             C.pin_line(*bad)
 
 
-#: the seven commits the challenger host was pinned to on 20 Oct: #2953's branch commits, which landed through the
-#: queue's merge 1018753ee5, so each is in main's history and none is on its first-parent line
+#: seven commits the challenger host was pinned to: a branch's commits, which landed through the queue's merge `MERGE`,
+#: so each is in main's history and none is on its first-parent line
 BRANCH_PINS = ("5902f9e85d36b0de284dd4de819cad464a801739", "63179aad879e4a38c025746abde7d747b6e73fe3",
                "a655828a4fc022fd6527f64f1c20d30b610f0c18", "aa782259fb3b6d7ffee53fafa63bc571403f6d49",
                "c33bf091a3f12522fd6e6be04046fdb05d06a6f6", "d2ad7bdea69504f6b4ed848207f65a4d37f31a8b",
@@ -1292,7 +1350,7 @@ MERGE = "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
 
 
 def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_line(tmp_path, signer):
-    """CMP-74: `credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
+    """`credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
     A session whose open names `PIN`, main's tip when infra repinned vy-challenger-1 and the one line of the pins log it
     published, sealed in the open, is credited against the auditor's own first-parent list of main. Refused, each with
     its reason and no fallback to `audited_session`: a pin on main's first-parent line the log doesn't record, an absent
@@ -1418,3 +1476,53 @@ def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
 def test_an_address_is_host_and_port(address):
     with pytest.raises(ValueError, match="HOST:PORT"):
         R.RemoteChallenger.connect(address)
+
+
+def _clock_and_sleep():
+    now, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    return (lambda: now[0]), sleep, slept
+
+
+def test_a_session_whose_tunnel_listens_late_is_connected_once_it_listens():
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def connect(address, secret):
+        tries.append((address, secret))
+        if len(tries) < 3:
+            raise ConnectionRefusedError(111, "Connection refused")
+        return "client"
+
+    assert R.connect_when_listening("127.0.0.1:7811", b"s", connect, 120, clock, sleep) == "client"
+    assert tries == [("127.0.0.1:7811", b"s")] * 3 and slept == [0.5, 0.5]
+
+
+def test_a_session_that_never_listens_raises_once_its_wait_is_over():
+    clock, sleep, slept = _clock_and_sleep()
+
+    def refused(address, secret):
+        raise ConnectionRefusedError(111, "Connection refused")
+
+    with pytest.raises(C.CoinError, match="nothing listened"):
+        R.connect_when_listening("127.0.0.1:7811", None, refused, 2, clock, sleep)
+    assert slept == [0.5] * 4
+
+
+@pytest.mark.parametrize("error", [C.CoinError("the challenger refused the hello"), ConnectionResetError(104, "reset"),
+                                   ValueError("a challenger's address is HOST:PORT")])
+def test_any_other_failure_to_connect_raises_at_once(error):
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def failing(address, secret):
+        tries.append(address)
+        raise error
+
+    with pytest.raises(type(error)):
+        R.connect_when_listening("127.0.0.1:7811", None, failing, 120, clock, sleep)
+    assert len(tries) == 1 and slept == []

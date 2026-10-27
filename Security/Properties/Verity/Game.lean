@@ -1,4 +1,5 @@
 import CoreOnsite
+import Properties.Challenger
 import Properties.Composition
 import Properties.Flock.Circuit.CircuitOf
 import Properties.Pous.MemoryChallenger
@@ -18,7 +19,7 @@ then the composition of the subprotocols that decide a period over the blobs the
 | subprotocol | `Audit` | component |
 | --- | --- | --- |
 | sampled proofs | `.sampled` | `SampledProofs.OneStageZk.protocol` (v2) |
-| PoUW | `.pouw` | `PouwCheck.protocol` (compute-accounting's period protocol `PouwCheck.period` once posted) |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (the period's windows credited all or nothing) |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` |
 | the bandwidth audit | `.poub` | `RemoteAudit.Protocol.protocol` |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` |
@@ -29,9 +30,11 @@ The statement's form is the causal game, the committed files, one fixed extracto
 
 * **A causal game.** The prover sends the parameters `θ`, the committed files `F` (one blob) and the
   commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays
-  `play (rounds θ) (sign θ) θ F c`, a `Verity.Game`: in each of the device's rounds the prover sends the bytes (a root,
-  a transcript digest) that the round's release answers, and then the device draws and releases that round's coins and
-  signs them (`releases`), so the play's log is the device's signed record; the evidence and the blobs the components
+  `play (rounds θ) θ F c`, a `Verity.Game`: in each of the device's rounds the prover sends the bytes (a root,
+  a transcript digest) that the round's release answers, and then the device draws and releases that round's coins
+  (`releases`). The device is the challenger device (`Properties.Challenger.Device`): its session's log is defined from
+  the play's releases, and it signs that session's record and close and the auditor's ledger lines for it
+  (`PlayDevice.device`, `Signed`); the evidence and the blobs the components
   fetch by digest come last (`Outcome.sent`: the committed file first, then those blobs).
   A strategy (`Verity.Game.Strategy`) is a function of the coins released so far and never of later ones.
 * **The claims read the committed files.** The circuit, its units and its constants are what the verifier reads
@@ -50,7 +53,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   break in the event. The collision finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the
   strategy whose SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`); the LMS forger (`forger a`) is a fixed
   function of the play's outcome, whose output is a forgery (`forgery`, defined here and no field) when it verifies
-  under the device's registered LMS key (`key`) and the device's signed log (`Outcome.Signed`) holds no such message.
+  under the device's registered LMS key (`registeredKey`) and the play's device never signed the message (`Signed`).
   Subprotocol `a`'s error at a strategy (`error`) is, where `B^τ` outputs a SHA-512 collision with probability at most
   the published `ε_cr` at the strategy's calls (`FinderCR`, quantitative), its published `δ` at those calls plus its
   loss at `Pr[B^τ]` plus the probability that the forger succeeds in the play (`forges`); elsewhere `⊤`. That admits
@@ -78,9 +81,9 @@ reading at `D`, and the onsite name is it at `onsite` by definition. `Verity.Sou
 claims a deployment decides.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the blob), `place`, `programDigest` and
-`registered`, `rounds`, the device's signer and registered key (`sign`, `key`) and `coinsRead`, `extract`, the finders
-and the forgers, `computed`, `world` (the runs PoUS, the bandwidth audit and the network certifier realize), and
-`certOf`, `delta` and `loss` (what the product publishes, functions of the parameters alone).
+`registered`, `rounds`, the device's fixed parameters (`device`) and `coinsRead`, `extract`, the finders and the
+forgers, `computed`, `world` (the runs PoUS, the bandwidth audit and the network certifier realize), and `certOf`,
+`delta` and `loss` (what the product publishes, functions of the parameters alone).
 -/
 
 namespace Verity
@@ -91,7 +94,7 @@ open scoped ENNReal
 /-- The compiled component of onsite that decides `Audit` `a`. -/
 def component : Audit → BlobProtocol
   | .sampled => SampledProofs.OneStageZk.protocol
-  | .pouw => PouwCheck.protocol
+  | .pouw => PouwCheck.Period.protocol
   | .pous => PousCheck.RunProtocol.protocol
   | .poub => RemoteAudit.Protocol.protocol
   | .network => NetworkCheck.Period.protocol
@@ -200,22 +203,19 @@ def RegistrationAcceptsAt (D : Deployment) (s : Sent) : Prop :=
 /-- `RegistrationAcceptsAt` at onsite. -/
 def RegistrationAccepts (s : Sent) : Prop := RegistrationAcceptsAt onsite s
 
-/-- One release of the challenger device: the bytes it answers, the coins it released after them, and what it signed
-for them, the message and its LMS signature under the device's registered key. -/
+/-- One release of the challenger device: the bytes the prover sent it (its request) and the coins it released after
+them. -/
 structure Release where
   answers : ByteArray
   coins : List Bool
-  message : ByteArray
-  signature : ByteArray
 
 /-- **The device's releases, in order**: for a round of `n` coin bits, the prover sends the bytes the release answers,
-then the device draws `n` uniform bits, releases them, and signs them (`sign` maps the bytes answered and the coins to
-the message the device signs and its LMS signature). The output is the device's log, its signed record. -/
-def releases (sign : ByteArray → List Bool → ByteArray × ByteArray) : List ℕ → Game (List Release)
+then the device draws `n` uniform bits and releases them. What the device writes and signs of them is its session's
+(`PlayDevice.device`). -/
+def releases : List ℕ → Game (List Release)
   | [] => .ret []
   | n :: ns => .send ByteArray fun b => .coin (Fin n → Bool) fun x =>
-      (releases sign ns).map fun log =>
-        ⟨b, List.ofFn x, (sign b (List.ofFn x)).1, (sign b (List.ofFn x)).2⟩ :: log
+      (releases ns).map fun log => ⟨b, List.ofFn x⟩ :: log
 
 /-- How a play ends: the parameters, the committed files and the commitment sent first, the device's log, and the
 evidence and the blobs sent last (the files the components fetch by digest beside the committed one: v2's circuit and
@@ -233,14 +233,130 @@ A component fetches a blob by the SHA-512 of its bytes, so a blob the prover add
 check against its digest. -/
 def Outcome.sent (o : Outcome) : Sent := ⟨o.params, o.commitment, o.evidence, #[o.file] ++ o.blobs⟩
 
-/-- The device signed `m` in the play that ended with `o`: some release of its log signs `m` (the challengers'
-`Challenger.Signed`, on the game's one device and key). -/
-def Outcome.Signed (o : Outcome) (m : ByteArray) : Prop := ∃ r ∈ o.log, r.message = m
-
 /-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the device's rounds
-`ns`, each release after the bytes it answers and signed by `sign`, then the evidence and the blobs. -/
-def play (ns : List ℕ) (sign : ByteArray → List Bool → ByteArray × ByteArray) (θ F c : ByteArray) : Game Outcome :=
-  (releases sign ns).bind fun log => .send (ByteArray × Array ByteArray) fun eb => .ret ⟨θ, F, c, log, eb.1, eb.2⟩
+`ns`, each release after the bytes it answers, then the evidence and the blobs. -/
+def play (ns : List ℕ) (θ F c : ByteArray) : Game Outcome :=
+  (releases ns).bind fun log => .send (ByteArray × Array ByteArray) fun eb => .ret ⟨θ, F, c, log, eb.1, eb.2⟩
+
+/-! ## The play's device
+
+The play's device is the challenger device (`Properties.Challenger.Device`), the one description its properties
+(`RoundsByDevice`, `DrawnByDevice`) are stated over. Its fixed parameters at `θ` are a `PlayDevice`; what it writes is
+defined from the play's releases: one session under the key, whose release log is its commitment's head line and, for
+each release whose request it serves, the root line and the release line `challenger.py` writes, and whose coin at each
+position is the bytes of the release that opened it. It signs that session's record and close, and the auditor's
+ledger lines for it (`Challenger.signedBy`). -/
+
+/-- The challenger device's fixed parameters at one `θ`: its session's id, host, coin layout, salts by position and
+the times it writes on its log's lines by line, and the auditor's ledger lines for the session it ran. -/
+structure PlayDevice where
+  id : String
+  host : String
+  scheme : String
+  epoch : Nat
+  families : SampledProofs.Challenger.Families
+  salts : Nat → ByteArray
+  time : Nat → Nat
+  ledger : Properties.Challenger.Session → List Lean.Json
+
+namespace PlayDevice
+
+open Lean (Json)
+open SampledProofs.Challenger
+
+/-- A request's family and its bytes: the label's length in UTF-8 (two bytes, big-endian), the label, then the bytes
+the coin is released after. -/
+def requestParts (b : ByteArray) : Option (String × ByteArray) :=
+  if b.size < 2 then none else
+  let n := (b.get! 0).toNat * 256 + (b.get! 1).toNat
+  if b.size < 2 + n then none else
+  (String.fromUTF8? (b.extract 2 (2 + n))).map fun l => (l, b.extract (2 + n) b.size)
+
+/-- A request's family and the root its coin is released after: the SHA-512 of the bytes it carries. The prover sends
+the bytes (the registration, a session's root_B digests, a round's message) and the device answers on their digest,
+as the proof service's client, which holds the bytes, asks the device. -/
+def requestOf (b : ByteArray) : Option (String × ByteArray) :=
+  (requestParts b).map fun (l, x) => (l, Flock.Sha512.hash x)
+
+/-- A coin's bytes from its released bits, bit `t` bit `t mod 8` of byte `⌊t/8⌋` (`Properties.Challenger.bitsOf`'s
+order). -/
+def bytesOfBits (l : List Bool) : ByteArray :=
+  ⟨((List.range (l.length / 8)).map fun j =>
+    ((List.range 8).foldl (fun (acc : Nat) i => if l.getD (8 * j + i) false then acc + 2 ^ i else acc) 0).toUInt8).toArray⟩
+
+/-- A line in canonical JSON, as the challenger writes it. -/
+def line (j : Json) : String := (Flock.canon j).toOption.getD ""
+
+/-- The head line of the device's release log: its commitment's root, in canonical JSON as `challenger.py` writes it. -/
+def headLine (root : ByteArray) : String := "{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf root ++ "\"}"
+
+/-- The root line the device writes for coin `i` of family `l`, received at `t` after `root`. -/
+def rootJ (l : String) (i t : Nat) (root : ByteArray) : Json :=
+  Json.mkObj [("event", Json.str "root"), ("index", Lean.toJson i), ("label", Json.str l),
+    ("received_at", Lean.toJson t), ("root", Json.str (Flock.hexOf root))]
+
+/-- The release line the device writes for coin `i` of family `l`, released at `t` after `root`. -/
+def releaseJ (l : String) (i t : Nat) (root : ByteArray) : Json :=
+  Json.mkObj [("after", Json.str (Flock.hexOf root)), ("event", Json.str "release"), ("index", Lean.toJson i),
+    ("label", Json.str l), ("released_at", Lean.toJson t)]
+
+/-- The releases the device serves, in order, each with its family, its index in the family and the root it answered:
+a release whose request names a family of the layout with a coin left, and whose two lines fit the reader's cap
+(`MAX_LOG_LINE`; a layout's labels are short names, so the cap holds of every line the deployed device writes); the
+others it serves nothing for. Its `k`th served release writes its root line at time `2k+1` and its release at `2k+2`. -/
+def served (D : PlayDevice) (rs : List Release) : List (String × Nat × ByteArray × Release) :=
+  (rs.foldl (fun (acc : List (String × Nat × ByteArray × Release)) r =>
+    match requestOf r.answers with
+    | none => acc
+    | some (l, root) =>
+      let i := (acc.filter (·.1 == l)).length
+      let k := acc.length
+      if (D.families.find? (·.1 == l)).any (fun f => decide (i < f.2)) &&
+          decide ((line (rootJ l i (D.time (2 * k + 1)) root)).length ≤ MAX_LOG_LINE) &&
+          decide ((line (releaseJ l i (D.time (2 * k + 2)) root)).length ≤ MAX_LOG_LINE)
+      then acc ++ [(l, i, root, r)] else acc) [])
+
+/-- The layout's coin positions, as the commitment numbers them. -/
+def layout (D : PlayDevice) : LiveCommitment := ⟨D.scheme, D.epoch, D.families, .empty⟩
+
+/-- The device's session before its log: its coin at each position the bytes of the release served there. -/
+def base (D : PlayDevice) (rs : List Release) : Properties.Challenger.Session where
+  id := D.id
+  host := D.host
+  scheme := D.scheme
+  epoch := D.epoch
+  families := D.families
+  coins p := ((D.served rs).find? fun (l, i, _, _) => D.layout.position l i == some p).elim .empty
+    fun (_, _, _, r) => bytesOfBits r.coins
+  salts := D.salts
+  log := []
+  ended := none
+
+/-- The release log's lines after its head: for each release served, the root line, then the release line. -/
+def lines (D : PlayDevice) (rs : List Release) : List String :=
+  ((D.served rs).zipIdx.map fun ((l, i, root, _), k) =>
+    [line (rootJ l i (D.time (2 * k + 1)) root), line (releaseJ l i (D.time (2 * k + 2)) root)]).flatten
+
+/-- **The device's session in the play**: its release log is its commitment's head line, then `lines`; its client
+closed it. -/
+def session (D : PlayDevice) (rs : List Release) : Properties.Challenger.Session :=
+  let s := D.base rs
+  { s with log := headLine ((s.commitment.map (·.root)).getD .empty) :: D.lines rs }
+
+/-- **The play's device under the key `pk`**: the one session it ran, and the auditor's ledger lines for it. -/
+def device (D : PlayDevice) (pk : ByteArray) (rs : List Release) : Properties.Challenger.Device where
+  sessions k := if k == pk then [D.session rs] else []
+  ledger k := if k == pk then D.ledger (D.session rs) else []
+
+end PlayDevice
+
+/-- **The device's registered LMS key at `θ`**: the challenger key v2's compiled check reads from the registered
+components' parameters (`Properties.Challenger.keyOfParams`, on the components `Composition.decodeRegisteredParams`
+decodes from `θ`), as LMS's parameters and public key (`Properties.Challenger.lmsKey`). The compiled check's LMS verify
+is `LmsVerifies` at it wherever v2 reads a key (`Properties.Challenger.verifies_registered`). -/
+def registeredKey (θ : ByteArray) : Lms.Params × ByteArray :=
+  Properties.Challenger.lmsKey ((canonicalJson θ >>= Composition.decodeRegisteredParams).toOption.bind
+    fun r => Properties.Challenger.keyOfParams r.2)
 
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
@@ -301,9 +417,9 @@ the window, the device schedule, and what the network certifiers saw (`Accountin
 abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.PeriodWorld d α
 
 /-- **The names the subprotocols define.** v2's reading of the committed blob; the positions from the files and the
-commitment, the circuit file's digest in the parameters and the registered blob; the device's rounds, and the device's
-signer and registered LMS key, and the releases each component's check read, decoded from the device's signed log
-entries in what the prover sent; the extractor applied to a strategy, and each subprotocol's collision finder, with the
+commitment, the circuit file's digest in the parameters and the registered blob; the device's rounds, the device's
+fixed parameters, and the releases each component's check read, decoded from the device's signed
+log in what the prover sent; the extractor applied to a strategy, and each subprotocol's collision finder, with the
 finder's SHA-512 calls bounded by the strategy's (`finder_calls`); each subprotocol's LMS forger on the play's outcome;
 the committed circuit's gates a play computed after their window's coin; the world each play realizes; the deployment's
 honest prover; and the certificates, errors, collision bounds and losses the product publishes, from the parameters and
@@ -317,27 +433,25 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   programDigest : ByteArray → Option Hash.Digest
   registered : ByteArray → ByteArray
   rounds : ByteArray → List ℕ
-  /-- The device's signer at `θ`: the bytes a release answers and its coins to the message the device signs and its
-  LMS signature under `key θ`. -/
-  sign : ByteArray → ByteArray → List Bool → ByteArray × ByteArray
-  /-- The device's registered LMS key at `θ`: its parameters and its public key. -/
-  key : ByteArray → Lms.Params × ByteArray
+  /-- The challenger device's fixed parameters at `θ` (`PlayDevice`): what it writes and signs is defined from the
+  play's releases (`PlayDevice.device`). -/
+  device : ByteArray → PlayDevice
   coinsRead : Audit → Sent → List Release
-  extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → (read F).circuit.Transcript
-  finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Claims.Finder
-  /-- Subprotocol `a`'s LMS forger at `θ`, a fixed function of the play's outcome (whose `log` is the device's signed
-  record). What it must output to succeed is defined, `Vocab.forgery`. -/
+  extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
+  finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
+  /-- Subprotocol `a`'s LMS forger at `θ`, a fixed function of the play's outcome (whose `log` the play's device
+  writes and signs, `Vocab.deviceOf`). What it must output to succeed is defined, `Vocab.forgery`. -/
   forger : Audit → ByteArray → Outcome → Option (ByteArray × ByteArray)
-  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → ℕ
+  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
   callsMul : ByteArray → Audit → ℕ
   callsAdd : ByteArray → Audit → ℕ
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
   finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
-  computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Outcome →
+  computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome →
     Finset (Fin (read F).circuit.N)
-  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Outcome → World d α
-  honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c)
+  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → World d α
+  honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c)
   certOf : ByteArray → Certificates
   crBound : ByteArray → Audit → ℕ → ℝ
   delta : ByteArray → Audit → ℕ → ℝ≥0∞
@@ -348,7 +462,7 @@ namespace Vocab
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- The game after `θ`, `F` and `c`. -/
-def game (θ F c : ByteArray) : Game Outcome := play (V.rounds θ) (V.sign θ) θ F c
+def game (θ F c : ByteArray) : Game Outcome := play (V.rounds θ) θ F c
 
 /-- The committed files' circuit. -/
 noncomputable def circuitOf (F : ByteArray) : Verity.Circuit := (V.read F).circuit
@@ -424,13 +538,22 @@ strategy's `cost` as sampled proofs' `qF`/`qS` are of `t'`. -/
 def FinderCR (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
 
+/-- **The play's device at `θ`**, under its registered key, after the releases of the play that ended with `o`. -/
+def deviceOf (θ : ByteArray) (o : Outcome) : Properties.Challenger.Device :=
+  (V.device θ).device (registeredKey θ).2 o.log
+
+/-- **The device signed `m`** in the play that ended with `o`: `m` is its session's record or close message, or one of
+the auditor's ledger lines for it, under its registered key (`Challenger.Signed` of `deviceOf`). -/
+def Signed (θ : ByteArray) (o : Outcome) (m : ByteArray) : Prop :=
+  Properties.Challenger.Signed (V.deviceOf θ o) (registeredKey θ).2 m
+
 /-- **`sig` is a forgery on `m` at `θ`** in the play that ended with `o`: it verifies under the device's registered
 LMS key at `θ` (the compiled `Lms.verify`, through `MemoryChallenger.Properties.LmsVerifies`), and the device never
-signed `m` in the play (`Outcome.Signed`: no release of its log signs it). The challenger's `Witness.Valid` at
-`.forgery` and the memory challenger's `WipeBreak` on the game's one device and key. It is defined, never a field, so no
-vocabulary can empty the forger's term. -/
+signed `m` in the play (`Signed`). The challenger's `Witness.Valid` at `.forgery` on the play's device
+(`deviceOf`), and the memory challenger's `WipeBreak` on the game's one device and key. It is defined, never a field, so
+no vocabulary can empty the forger's term. -/
 def forgery (θ : ByteArray) (o : Outcome) (m sig : ByteArray) : Prop :=
-  MemoryChallenger.Properties.LmsVerifies (V.key θ).1 (V.key θ).2 m sig ∧ ¬ o.Signed m
+  MemoryChallenger.Properties.LmsVerifies (registeredKey θ).1 (registeredKey θ).2 m sig ∧ ¬ V.Signed θ o m
 
 /-- **Subprotocol `a`'s forger succeeds** on the outcome `o`: it outputs a message and a signature that are a forgery
 at `θ` and `o`. -/

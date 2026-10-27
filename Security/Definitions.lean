@@ -13,13 +13,13 @@ import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads
 import Definitions.Pous.Guarantees.StreamedWipeServer
+import Definitions.Pous.Guarantees.StreamedWipeDisk
+import Definitions.Pous.Guarantees.StreamedWipeInfo
 import Definitions.Pouw
 import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
-import Definitions.NetworkCertifier.AdviceString
-import Definitions.NetworkCertifier.Guarantees.AdviceV1Kraft
-import Definitions.NetworkCertifier.Guarantees.WindowChargeKraft
+import Definitions.NetworkCertifier.WindowCharge
 import Definitions.NetworkCertifier.Warden
 import Definitions.NetworkCertifier.Tap
 import Definitions.NetworkCertifier.RecordRows

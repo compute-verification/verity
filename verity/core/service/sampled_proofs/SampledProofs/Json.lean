@@ -43,6 +43,18 @@ def keys? : Json → Option (Array String)
   | .obj kvs => some (sortStrings (kvs.toArray.map (·.1)))
   | _ => none
 
+/-- An object's keys in its tree's order, which is `<` on strings, so `keys?` on every object a parser builds (a
+well-formed tree) without the sort, which the kernel can't evaluate; `none` for anything that isn't an object. -/
+def keysIn? : Json → Option (Array String)
+  | .obj kvs => some (kvs.toArray.map (·.1))
+  | _ => none
+
+/-- `j` as a string, `none` where it is none. A field is compared with a string through it, never with `Json`'s `==`,
+which is `partial`. -/
+def strOf? : Json → Option String
+  | .str s => some s
+  | _ => none
+
 def field? (j : Json) (k : String) : Option Json := (j.getObjVal? k).toOption
 
 /-- Python's `d.get(k)`: a missing key reads as `null`. -/

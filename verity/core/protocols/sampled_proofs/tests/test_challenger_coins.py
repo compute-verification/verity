@@ -23,7 +23,7 @@ SCHEME = "verity/test/coins/v1"
 FAMILIES = [("other", 2), ("draw", 80)]
 ROOT = bytes([0xab]) * 64
 SUBSET = {"law": "subset", "k": 4}
-#: `draw_first`'s stream for subset:4 over 678 units: 2 k · width(678) + 64 bytes, width 10
+#: `draw_first`'s stream for subset:4 over 678 proof blocks: 2 k · width(678) + 64 bytes, width 10
 NEED = 2 * 4 * 10 + 64
 
 
@@ -210,13 +210,17 @@ def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
             stream, reg = register(coins, COIN_CASES.index(name), None if name == "no-window" else window["root"])
             assert stream.coin_source == "challenger"
             segment = coins.commit(bytes.fromhex(reg.digest))
-            draws[name] = (stream, stream.select(reg), segment.to_json())
+            draws[name] = (stream, stream.select(reg), segment)
         client.close()
+        coins.settle()
+        for name in served:
+            stream, draw, segment = draws[name]
+            draws[name] = (stream, draw, segment.to_json())
         assert host.ended() is None
 
-    host = Host(tmp_path, signer)
+    host = Host(tmp_path, signer, withhold=True)
     serve(host, COIN_CASES[:-1])
-    alt = Host(tmp_path, signer, session="s-2", seed="alt", ledger=host.ledger, window=other)
+    alt = Host(tmp_path, signer, session="s-2", seed="alt", ledger=host.ledger, window=other, withhold=True)
     serve(alt, COIN_CASES[-1:])
     ledger = R.ledger_lines(host.ledger.path)
     files = {name: R.session_files((alt if name == "other-window" else host).directory) for name in COIN_CASES}

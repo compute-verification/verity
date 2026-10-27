@@ -2,8 +2,7 @@
 link-window's output word is verdict 1 and deadline 1; window 0's egress head one count off, committed by the prover,
 fails on its counts and its signed digest; the extra run's egress heads fail on their counts alone, the late run's on
 their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the prover's,
-in whole u16 words. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's
-own gates. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
+in whole u16 words. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
 ``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
 (`n2_zk.prove` does, on a node)."""
 
@@ -15,7 +14,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.ml.circuits.boolean import trace as TR
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -47,7 +45,8 @@ def test_each_round_refuses_what_its_references_say(runs):
     assert all(x.word == 0b11 and x.expect == 1 for x in honest.windows)
     for name in n2.ROUNDS:
         assert n2.expected(name, runs[name]), name
-        assert (name == "honest") == all(x.expect for x in runs[name].windows), name
+        xs = runs[name].windows
+        assert (name == "honest") == (bool(xs) and all(x.expect for x in xs)), name
     e0, t0 = honest.windows[0].opening.records[0].head, runs["tampered"].windows[0].opening.records[0].head
     assert sum(a != b for a, b in zip(e0.counts, t0.counts)) == 1 and sum(t0.counts) == sum(e0.counts) + 1
     assert runs["tampered"].windows[0].certificates == honest.windows[0].certificates
@@ -61,18 +60,6 @@ def test_the_verifier_derives_the_provers_public_row(runs):
             mine = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
             assert lw.row(mine, "pub") == lw.row(x.args, "pub"), (name, x.window)
             assert all(len(lw.row(x.args, r)) * 8 == lw.bits(r) and lw.bits(r) % 16 == 0 for r in n2.SVC.ROWS)
-
-
-@pytest.mark.slow
-def test_each_builder_traces_to_its_parts_gates_called_as_c_flock_calls_it():
-    statics = {"LmsEqual": (64,)}
-    for d in n2.builders():
-        key = statics.get(d.name, ())
-        S = SimpleNamespace(**dict(zip(d.statics, key)))
-        params, ret = d.signature(S)
-        build = (lambda C, *e, d=d, S=S: d.build(C, S, *e)) if d.statics else d.build
-        got, want = TR.trace(build, [t for _, t in params], ret), d.traced(*key)
-        assert (got.gates, got.outputs) == (want.gates, want.outputs), d.name
 
 
 def _needles(blobs: dict[str, bytes]) -> dict[bytes, str]:

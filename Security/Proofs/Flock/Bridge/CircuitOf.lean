@@ -1,6 +1,7 @@
 import Definitions.Core.Boolean
 import Proofs.Core.Circuit
 import Proofs.Flock.Bridge.Count
+import Proofs.Flock.Bridge.Statement
 import Proofs.Flock.Soundness.Discharge.Layout.Outs
 import Properties.Flock.Circuit.CircuitOf
 
@@ -13,7 +14,7 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
 `partsOfFile` (the same at the committed circuit and public files, through `parsedOf`). Here are their lemmas:
 
 * `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
-  (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
+  (`FlockSoundness.Audit.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
   `Verity.Partition.wrong_ofAudit` says the wrong units are the game's, so every statement about the game's wrong units
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
@@ -23,47 +24,30 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
   is correct on its openings (`correct_of_progCorrect`). So `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves fewer than
   `K₀` wrong units (`card_wrong_lt_of_relS`), at every circuit and every witness, with no side condition, and at the
   parsed file's circuit (`card_wrong_partsOf_lt`).
+* The registered files' circuit: `regOf tags cf tables pubF` is what a circuit file and its public file fix (`RegFiles`:
+  the descriptor, its unit's rows built, the public file), `none` where they don't read; `circuitOfReg`, `unitsOfReg`,
+  `partsOfReg` and `transcriptOfReg` are `circuitOf`'s at it, at the public file's population and the circuit's
+  constants (`constsOf`). `regOf_eq` reads it off the parse, and `card_wrong_regOf_lt` is the bridge there.
 * At the committed files: `parsedOf_eq` and `parse_of_parsedOf` relate `parsedOf` to the verifier's parse
   (`Flock.Desc.parse`, `HmOut.loadPublic`), and `ofFile_iff` restates any statement about the committed files' circuit,
   units and partition as one about `circuitOf`, `n` and `partsOf` at the parse.
 -/
 
-namespace Flock.Bridge
-
-open Claims.Sampling
-
-/-! ## A game circuit as core's -/
-
-theorem apply_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) (v : Fin N → Bool) :
-    (coreOp o).apply v = o.apply v := by
-  cases o <;> rfl
-
-/-- A game circuit as a Boolean circuit: the same gates and outputs. -/
-def coreBool (C : FlockSoundness.Audit.Circuit) : Verity.Boolean.Circuit where
-  N := C.N
-  op g := coreOp (C.op g)
-  topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
-  outputs := C.outputs
-
-end Flock.Bridge
-
 namespace Verity
 
-open Flock.Bridge (coreOp coreBool args_coreOp isInput_coreOp apply_coreOp)
+/-! ## A game circuit as core's -/
 
 section OfAudit
 
 variable {C : FlockSoundness.Audit.Circuit}
 
 /-- `Circuit.ofAudit` is the Boolean profile's circuit of the game circuit. -/
-theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircuit := rfl
+theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = C.toCircuit := rfl
 
-theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset :=
-  congrArg List.toFinset (args_coreOp _)
+theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset := rfl
 
 theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
-    (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
-  congrArg BitVec.ofBool (apply_coreOp _ _)
+    (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) := rfl
 
 /-- A transcript of bits as core's. -/
 def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Transcript := fun g => BitVec.ofBool (xs g)
@@ -76,7 +60,7 @@ theorem Partition.mem_committed_ofAudit (g : Fin C.N) :
     g ∈ (Partition.ofAudit P).committed ↔ g ∈ P.committed := by
   classical
   simp only [Partition.committed, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
-    Finset.mem_univ, true_and, isInput_coreOp, args_coreOp, List.mem_toFinset, Partition.ofAudit_unit]
+    Finset.mem_univ, true_and, List.mem_toFinset, Partition.ofAudit_unit]
 
 theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
     (Partition.ofAudit P).localEval (Circuit.ofBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by
@@ -319,6 +303,90 @@ theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (
   exact card_wrong_lt_of_relS _ κ kd K₀ desc q roots H Cm w h
 
 end Parsed
+
+/-! ## The registered files' circuit -/
+
+/-- The game circuit with no gates. -/
+def emptyAudit : FlockSoundness.Audit.Circuit where
+  N := 0
+  op g := g.elim0
+  topo g := g.elim0
+  outputs := ∅
+
+/-- Its partition into no units. -/
+def emptyParts : FlockSoundness.Audit.Partition emptyAudit 0 where
+  unit g := g.elim0
+  input_iff g := g.elim0
+
+/-- **What the registered files fix**: the descriptor the circuit file parses to, its unit's rows built, and the public
+file read against it. -/
+structure RegFiles where
+  D : Flock.Desc
+  hU : FlockSoundness.Built D.unroll.unit
+  pub : Flock.Public
+
+open Classical in
+/-- **What the registered files fix**: the circuit file `cf` (with its `tables`) parsed under `tags`, and the public
+file `pubF` read against it; `none` when either doesn't read or the unit's rows aren't built. -/
+noncomputable def regOf (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pubF : ByteArray) :
+    Option RegFiles :=
+  if h : ∃ r : RegFiles, Flock.Desc.parse tags cf tables = .ok r.D ∧
+      HmOut.loadPublic tags r.D.unroll pubF = .ok r.pub then
+    some h.choose
+  else none
+
+/-- `regOf` is the files' parse, where they read. -/
+theorem regOf_eq {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pubF : ByteArray}
+    {D : Flock.Desc} (hD : Flock.Desc.parse tags cf tables = .ok D) (hU : FlockSoundness.Built D.unroll.unit)
+    {pub : Flock.Public} (hpub : HmOut.loadPublic tags D.unroll pubF = .ok pub) :
+    regOf tags cf tables pubF = some ⟨D, hU, pub⟩ := by
+  have h : ∃ r : RegFiles, Flock.Desc.parse tags cf tables = .ok r.D ∧
+      HmOut.loadPublic tags r.D.unroll pubF = .ok r.pub := ⟨⟨D, hU, pub⟩, hD, hpub⟩
+  rw [regOf, dif_pos h]
+  obtain ⟨h1, h2⟩ := h.choose_spec
+  generalize h.choose = r at h1 h2 ⊢
+  obtain ⟨D', hU', pub'⟩ := r
+  rw [hD] at h1
+  cases h1
+  rw [hpub] at h2
+  cases h2
+  rfl
+
+/-- **The registered circuit** of a `RegFiles`: `circuitOf` at its descriptor and the public file's population. -/
+noncomputable def circuitOfReg : Option RegFiles → Verity.Circuit
+  | some r => circuitOf r.D r.hU r.pub.n
+  | none => .ofAudit emptyAudit
+
+/-- Its number of units: the public file's population. -/
+def unitsOfReg : Option RegFiles → ℕ
+  | some r => r.pub.n
+  | none => 0
+
+/-- Its units, `partsOf`. -/
+noncomputable def partsOfReg : (o : Option RegFiles) → Verity.Partition (circuitOfReg o) (unitsOfReg o)
+  | some r => partsOf r.D r.hU r.pub.n
+  | none => .ofAudit emptyParts
+
+/-- The transcript the opened values `val` give its wires, at the circuit's constants (`constsOf`). -/
+noncomputable def transcriptOfReg : (o : Option RegFiles) → (ℕ → Option Bool) → (circuitOfReg o).Transcript
+  | some r, val => transcriptOf r.D r.hU r.pub.n (constsOf r.D.unroll r.hU r.pub.n) val
+  | none, _ => Verity.Circuit.ofBits (C := emptyAudit) fun g => g.elim0
+
+/-- **The wrong-units bridge at the registered files**: where the circuit file parses to `D` and the public file reads
+as `pub`, a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in the sampling statement of the key program at its
+constants, leaves fewer than `K₀` of the registered circuit's units wrong in the transcript it opens. -/
+theorem card_wrong_regOf_lt {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
+    {pubF : ByteArray} {D : Flock.Desc} (hD : Flock.Desc.parse tags cf tables = .ok D)
+    (hU : FlockSoundness.Built D.unroll.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic tags D.unroll pubF = .ok pub)
+    (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
+    (Cm : Commitment Bool) (w : Wit)
+    (h : RelS H Cm (((pub.n - K₀).choose kd : ℝ) / (pub.n.choose kd : ℝ))
+      (stmtOf (keyPartition D hU pub.n) (constsOf D.unroll hU pub.n) kd desc q roots)
+      (partOf (keyPartition D hU pub.n)) w) :
+    ((partsOfReg (regOf tags cf tables pubF)).wrong (transcriptOfReg (regOf tags cf tables pubF)
+      (w.val H Cm (stmtOf (keyPartition D hU pub.n) (constsOf D.unroll hU pub.n) kd desc q roots)))).card < K₀ := by
+  rw [regOf_eq hD hU hpub]
+  exact card_wrong_partsOf_lt D hU pub.n _ kd K₀ desc q roots H Cm w h
 
 /-! ## The committed files' circuit -/
 
