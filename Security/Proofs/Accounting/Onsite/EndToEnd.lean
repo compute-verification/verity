@@ -1,43 +1,61 @@
+import Definitions.Accounting.Guarantees.Onsite
 import Definitions.Accounting.Guarantees.Onsite.EndToEnd
+import Definitions.Accounting.Guarantees.Overhead
 import Proofs.Accounting.Actual.Dampener
 import Proofs.Accounting.JointLive
 
 /-!
 # The onsite end-to-end overhead guarantee
 
-`OnsiteTimeLowerBound` is `DampenerWindowsCap` at the onsite class's hypotheses, with `M_d = 0` and `M_r = M`,
+`OnsiteTimeLowerBound` is `DampenerWindowsCap` at the onsite class and valid parameters, with `M_r = M` and `M_d = 0`,
 inverted through `⌈t/ω⌉₊ ω ≤ t + ω − 1` (`ceil_div_eq_pred_div`); its size form sums the compute rate over the servers.
-`OnsiteEndToEnd` is the spine's step 1 (`endToEnd_local`) with each of its three terms bounded: the claims' failure by
-`JointPeriodLive`, the class's by the bridge, and a cheap success in the class by coverage, through
-`OnsiteTimeLowerBound`.
+
+`OnsiteEndToEnd` is the spine's step 1 (`Accounting.Guarantees.Overhead.EndToEnd`) with accepting every subprotocol's
+and every wipe's acceptance with no break, the claims every subprotocol's claim and every wipe's survivor bound, the
+class `OnsiteClass` and the cost the horizon `t` against `t_min`. Its four hypotheses are `JointPeriodLive` with the
+wipes' errors, the bridges (`Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass`, at the strategies where
+`IntegrityContains` holds, and the trivial bound `⊤` at the others), `OnsiteTimeLowerBound` and coverage.
+
+`endToEnd_local` and `claimsImplyOnsiteClass_local` prove the overhead core's `EndToEnd` and the bridges'
+`ClaimsImplyOnsiteClass` here. Each is replaced by its own branch's proof when that lands.
 -/
 
 namespace Accounting.SecurityProofs
 
 open Verity Verity.Game Finset
 
-/-- **The spine's step 1, the event decomposition** (note:training-20261027T0134Z-draft-e2e-overhead-proof): at a
-strategy `s`, `Pr[acc ∧ succ ∧ cheap] ≤ Pr[acc ∧ ¬claims] + Pr[acc ∧ claims ∧ ¬cls] + Pr[cls ∧ succ ∧ cheap]`, with
-no independence. A local proof: W-core's generic `EndToEnd` (branch `cursor/overhead-core-4207`) replaces it once it
-lands. -/
-theorem endToEnd_local {O : Type} (G : Game O) (s : Strategy G) (acc claims cls succ cheap : O → Prop) :
-    prob (fun o => acc o ∧ succ o ∧ cheap o) G s ≤
-      prob (fun o => acc o ∧ ¬ claims o) G s + prob (fun o => acc o ∧ claims o ∧ ¬ cls o) G s +
-        prob (fun o => cls o ∧ succ o ∧ cheap o) G s := by
-  calc prob (fun o => acc o ∧ succ o ∧ cheap o) G s
-      ≤ prob (fun o => (acc o ∧ ¬ claims o) ∨ (acc o ∧ claims o ∧ ¬ cls o) ∨ (cls o ∧ succ o ∧ cheap o)) G s :=
+/-- **The spine's step 1, the event decomposition** (`Accounting.Guarantees.Overhead.EndToEnd`). A local proof, until
+the overhead core's lands. -/
+theorem endToEnd_local : Accounting.Guarantees.Overhead.EndToEnd := by
+  intro O G Accept Claims InClass Success M S N sMin δ δb η hA hB hS hη s
+  calc prob (fun o => Accept s o ∧ Success s o ∧ S s o < sMin) G s
+      ≤ prob (fun o => (Accept s o ∧ ¬ Claims s o) ∨ (Claims s o ∧ ¬ InClass s o) ∨
+          (InClass s o ∧ Success s o ∧ M s o < N)) G s :=
         prob_mono (fun o ⟨ha, hs, hc⟩ => by
-          by_cases hcl : claims o
-          · by_cases hk : cls o
-            · exact Or.inr (Or.inr ⟨hk, hs, hc⟩)
-            · exact Or.inr (Or.inl ⟨ha, hcl, hk⟩)
+          by_cases hcl : Claims s o
+          · by_cases hk : InClass s o
+            · refine Or.inr (Or.inr ⟨hk, hs, ?_⟩)
+              by_contra hM
+              exact absurd (hS s o hk (not_lt.1 hM)) (not_le.2 hc)
+            · exact Or.inr (Or.inl ⟨hcl, hk⟩)
           · exact Or.inl ⟨ha, hcl⟩) G s
-    _ ≤ prob (fun o => acc o ∧ ¬ claims o) G s +
-          (prob (fun o => acc o ∧ claims o ∧ ¬ cls o) G s + prob (fun o => cls o ∧ succ o ∧ cheap o) G s) :=
+    _ ≤ prob (fun o => Accept s o ∧ ¬ Claims s o) G s +
+          (prob (fun o => Claims s o ∧ ¬ InClass s o) G s +
+            prob (fun o => InClass s o ∧ Success s o ∧ M s o < N) G s) :=
         (prob_or_le _ _ G s).trans (add_le_add le_rfl (prob_or_le _ _ G s))
-    _ = _ := (add_assoc _ _ _).symm
+    _ ≤ δ s + (δb s + η s) := add_le_add (hA s) (add_le_add (hB s) (hη s))
+    _ = δ s + δb s + η s := (add_assoc _ _ _).symm
 
-namespace Onsite
+/-- **The claims imply the onsite class** (`Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass`): on a run where every
+claim holds and every wipe meets its survivor bound, the device model and the bridges give each of `OnsiteClass`'s
+conjuncts, so the event is empty. A local proof, until the bridges' lands. -/
+theorem claimsImplyOnsiteClass_local : Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass := by
+  intro ι Acc _ d C Cm O r G c p m w f L E _ _ S ℓ Φ ends β link n X θ hθ t ω R F α ref s hC hΦ hL hW hI
+  exact le_antisymm ((prob_mono (fun o ⟨⟨hh, hs⟩, hn⟩ =>
+    hn ⟨hC o, hΦ o, (hL o).1, (hL o).2, hW o hs, hI o (hh .sampled) (hh .pouw)⟩) G s).trans (prob_false G s).le)
+    bot_le
+
+namespace OnsiteTime
 
 variable {L E : Type*}
 
@@ -110,46 +128,64 @@ theorem tMin_le (P : Onsite L E) {t M N : ℕ} (hω : 0 < P.ω) (hba : 0 < P.b_a
       _ = (c : ℝ) * P.ω - P.ω + 1 := by ring
       _ ≤ t := by linarith
 
-end Onsite
+end OnsiteTime
 
 /-- **The onsite time floor** (`Accounting.Guarantees.OnsiteTimeLowerBound`): `DampenerWindowsCap` on the class with
-`M_r = M`, `M_d = 0`, inverted (`Onsite.tMin_le`), and the compute rate summed over the servers
-(`Onsite.region_card_le`). -/
+`M_r = M`, `M_d = 0`, inverted (`OnsiteTime.tMin_le`), and the compute rate summed over the servers
+(`OnsiteTime.region_card_le`). -/
 theorem OnsiteTimeLowerBound : Accounting.Guarantees.OnsiteTimeLowerBound := by
-  intro L E _ _ P A t M N hC hW hN
-  obtain ⟨hω, hX, hca, hcr, ⟨link, hL⟩, hbw, hba, hd, hΓ, hcap, hR, ⟨θ, hθ, hcont⟩, hT, hM⟩ := hC
+  intro L E _ _ P A link θ hθ t M N hV hC hW hM hN
+  obtain ⟨hω, hX, hbw, hba, hd, hΓ, hT⟩ := hV
+  obtain ⟨hca, hcr, hL, hcap, hR, hcont⟩ := hC
   have h := Actual.DampenerWindowsCap A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β link P.n P.X θ hθ t P.ω P.Γ P.R P.F
     P.α P.b_w P.b_a P.c P.T P.d P.e M 0 hω hX hca hcr hL hbw hba hd hΓ hcap hR hcont hT hW (by simpa using hM)
-  refine ⟨Onsite.tMin_le P hω hba hN ?_, Onsite.region_card_le P A t hcr⟩
+  refine ⟨OnsiteTime.tMin_le P hω hba hN ?_, OnsiteTime.region_card_le P A t hcr⟩
   simpa [Onsite.K, Onsite.Λ] using h
 
 /-- **The onsite end-to-end guarantee** (`Accounting.Guarantees.OnsiteEndToEnd`): step 1's decomposition
-(`endToEnd_local`), at `acc` every subprotocol accepting with no break, `claims` every claim holding and `cls` the
-onsite class, whose three terms are at most `∑ δ` (`JointPeriodLive`), `δ_b` (`OnsiteBridge`) and `η`
-(`OnsiteCoverage`, through `OnsiteTimeLowerBound`: in the class, `M ≥ N` puts the horizon at `t_min` or above). -/
+(`endToEnd_local`) at every subprotocol and every wipe accepting with no break, every claim and survivor bound holding
+and the onsite class. Its terms are at most `∑ δ + ∑ ε_wipe` (`JointPeriodLive` and the wipes' bounds, by the union
+bound), `0` (`claimsImplyOnsiteClass_local` at `s`, where `IntegrityContains` holds) and `η` (coverage, with
+`OnsiteTimeLowerBound` putting the horizon at `t_min` or above in the class once `M ≥ N`). -/
 theorem OnsiteEndToEnd : Accounting.Guarantees.OnsiteEndToEnd := by
-  intro ι α _ d C Cm O r G c p δ L E _ _ P A t M success N δb η hδ hB hCov hW s
-  have h1 := endToEnd_local G s (fun o => (∀ a, r.accepts a o) ∧ ¬ r.Break G s o)
-    (fun o => ∀ a, r.Holds c p G s a o) (fun o => P.Class (A s o) (t s o) (M s o)) (success s)
-    (fun o => (t s o : ℝ) < P.tMin N)
-  have hJ : prob (fun o => ((∀ a, r.accepts a o) ∧ ¬ r.Break G s o) ∧ ¬ ∀ a, r.Holds c p G s a o) G s ≤
-      ∑ a, ENNReal.ofReal (δ a) :=
-    (prob_mono (fun o ⟨⟨ha, hb⟩, hh⟩ => by
-      obtain ⟨a, hn⟩ := not_forall.1 hh
-      exact ⟨⟨a, ha a, hn⟩, hb⟩) G s).trans (JointPeriodLive ι α d C Cm O r G c p δ hδ s)
-  have hBr : prob (fun o => ((∀ a, r.accepts a o) ∧ ¬ r.Break G s o) ∧ (∀ a, r.Holds c p G s a o) ∧
-      ¬ P.Class (A s o) (t s o) (M s o)) G s ≤ ENNReal.ofReal δb :=
-    (prob_mono (fun o ⟨⟨ha, hb⟩, hh, hk⟩ => ⟨ha, hh, hb, hk⟩) G s).trans (hB s)
-  have hCv : prob (fun o => P.Class (A s o) (t s o) (M s o) ∧ success s o ∧ (t s o : ℝ) < P.tMin N) G s ≤
-      ENNReal.ofReal η :=
-    (prob_mono (fun o ⟨hk, hs, ht⟩ => ⟨hk, hs, by
-      by_contra hlt
-      exact absurd (OnsiteTimeLowerBound P (A s o) (t s o) (M s o) N hk hW (not_lt.1 hlt)).1 (not_le.2 ht)⟩) G s).trans
-      (hCov s)
-  calc prob (fun o => (∀ a, r.accepts a o) ∧ success s o ∧ (t s o : ℝ) < P.tMin N ∧ ¬ r.Break G s o) G s
-      ≤ prob (fun o => ((∀ a, r.accepts a o) ∧ ¬ r.Break G s o) ∧ success s o ∧ (t s o : ℝ) < P.tMin N) G s :=
-        prob_mono (fun o ⟨ha, hs, ht, hb⟩ => ⟨⟨ha, hb⟩, hs, ht⟩) G s
-    _ ≤ _ := h1
-    _ ≤ ∑ a, ENNReal.ofReal (δ a) + ENNReal.ofReal δb + ENNReal.ofReal η := add_le_add (add_le_add hJ hBr) hCv
+  classical
+  intro ι Acc _ d C Cm O r G c p δ m w f εWipe L E _ _ P S link θ hθ t M success N η hV hWI hM hδ hε hC hΦ hL hWS
+    hCov s hI
+  have h := endToEnd_local O G
+    (fun s o => ((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ ¬ r.Break G s o)
+    (fun s o => (∀ a, r.Holds c p G s a o) ∧ ∀ k, (w k).Survives f o)
+    (fun _ o => OnsiteClass (S o).A P.hw.ℓ P.hw.compute P.hw.ends P.hw.β (link o) P.n P.X (θ o) (hθ o) t P.ω P.R P.F
+      P.α P.c)
+    (fun _ o => success o) (fun _ o => (M o : ℝ)) (fun _ _ => (t : ℝ)) (N : ℝ) (P.tMin N)
+    (fun _ => ∑ a, ENNReal.ofReal (δ a) + ∑ k, ENNReal.ofReal (εWipe k))
+    (fun s' => if Assumptions.IntegrityContains r G s' c p S P.X t θ hθ P.c then 0 else ⊤)
+    (fun _ => ENNReal.ofReal η) ?_ ?_ ?_ ?_ s
+  · beta_reduce at h
+    simp only [hI, ↓reduceIte, add_zero] at h
+    exact (prob_mono (fun o ⟨ha, hs, ht, hb⟩ => ⟨⟨ha, hb⟩, hs, ht⟩) G s).trans h
+  · intro s'
+    calc prob (fun o => (((∀ a, r.accepts a o) ∧ ∀ k, (w k).accepts o) ∧ ¬ r.Break G s' o) ∧
+          ¬ ((∀ a, r.Holds c p G s' a o) ∧ ∀ k, (w k).Survives f o)) G s'
+        ≤ prob (fun o => ((∃ a, r.accepts a o ∧ ¬ r.Holds c p G s' a o) ∧ ¬ r.Break G s' o) ∨
+            ∃ k, (w k).accepts o ∧ ¬ (w k).Survives f o) G s' :=
+          prob_mono (fun o ⟨⟨⟨ha, hw⟩, hb⟩, hn⟩ => by
+            by_cases hh : ∀ a, r.Holds c p G s' a o
+            · obtain ⟨k, hk⟩ := not_forall.1 fun hs => hn ⟨hh, hs⟩
+              exact Or.inr ⟨k, hw k, hk⟩
+            · obtain ⟨a, ha'⟩ := not_forall.1 hh
+              exact Or.inl ⟨⟨a, ha a, ha'⟩, hb⟩) G s'
+      _ ≤ ∑ a, ENNReal.ofReal (δ a) + ∑ k, prob (fun o => (w k).accepts o ∧ ¬ (w k).Survives f o) G s' :=
+          (prob_or_le _ _ G s').trans (add_le_add (JointPeriodLive ι Acc d C Cm O r G c p δ hδ s')
+            (Live.prob_exists_univ_le (fun k o => (w k).accepts o ∧ ¬ (w k).Survives f o) G s'))
+      _ ≤ _ := add_le_add le_rfl (sum_le_sum fun k _ => hε k s')
+  · intro s'
+    split_ifs with hI'
+    · exact (claimsImplyOnsiteClass_local d C Cm O r G c p m w f S P.hw.ℓ P.hw.compute P.hw.ends P.hw.β link P.n P.X
+        θ hθ t P.ω P.R P.F P.α P.c s' hC hΦ hL hWS hI').le
+    · exact le_top
+  · intro _ o hk hNM
+    exact (OnsiteTimeLowerBound P (S o).A (link o) (θ o) (hθ o) t (M o) N hV hk hWI (hM o)
+      (by exact_mod_cast hNM)).1
+  · exact fun s' => (prob_mono (fun o ⟨hk, hs, hlt⟩ => ⟨hk, hs, by exact_mod_cast hlt⟩) G s').trans (hCov s')
 
 end Accounting.SecurityProofs
