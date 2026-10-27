@@ -12,6 +12,7 @@ import pytest
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_seal as ss
+from verity_vllm.records.commit_run import CommitRun
 
 ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2), ("warmup", 5, 6, 0, 1)], 1: [("runner-a", 0, 1, 3, 3)]}
 NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
@@ -59,6 +60,8 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     assert r.run.run_root == rc.run_root and r.ctx["served_window"]["window"] == 5 and r.ctx["code"] == "c0de"
     assert r.programs == {} and r.arrivals == {"alice": 0, "cmpl-2": 0} and r.ctx["tokens"] == {"alice": [7, 9], "cmpl-2": [8]}
     assert sorted(p.name for p in (d / "commit").iterdir()) == ["binding_map_p0.json", "replay_bundle_p0", "runs.jsonl", "verdict.json"]
+    (run,) = CommitRun.load_lines(d / "commit" / "runs.jsonl")
+    assert run.schema is None and run.arm == "instrumented" and run.tokens_equal is None and run.commit.run_root == rc.run_root.hex()
 
 
 #: the Commit of record of the bench row llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager (its ``source``):
@@ -361,6 +364,39 @@ def test_a_sealed_window_whose_record_is_not_its_bundles_is_refused(tmp_path, ta
     tamper(d)
     with pytest.raises(Refused, match=why):
         DR.of_record(s["bundle"], str(d))
+
+
+# ------------------------------------------------------------------------------------------------------- the target φ reads
+
+def test_the_served_target_carries_the_int8_scope_its_layers_ran(monkeypatch):
+    """serve.json's target is the one predict's Build reads the int8 linears from (an exact-int8 checkpoint's Build refuses a
+    target without them): `target_of` writes the scope read back from the served model's layers, none for a bf16 model, and
+    refuses a mixed one."""
+    import sys
+    import types
+
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    vllm = types.ModuleType("vllm")
+    vllm.envs = SimpleNamespace(VLLM_BATCH_INVARIANT=True)
+    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.setitem(sys.modules, "vllm.envs", vllm.envs)
+    h200 = TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=132)
+    monkeypatch.setattr(TargetProfile, "from_device", classmethod(lambda cls, device=0: h200))
+    base = type("LinearMethodBase", (), {})
+    int8 = type("Int8PlainLinearMethod", (base,), {"int8_arm": "plain"})()
+    bf16 = type("UnquantizedLinearMethod", (base,), {})()
+
+    def model(*methods):
+        return SimpleNamespace(modules=lambda: iter([SimpleNamespace(quant_method=m) for m in methods]))
+
+    got = ss.target_of(model(int8, int8))
+    assert got == {"target": h200.with_overrides(int8_exact="linears").to_json(), "execution": "bi-eager"}
+    assert got["target"]["int8_exact"] == "linears" and list(got["target"]["compute_capability"]) == [9, 0]
+    assert ss.target_of(model(bf16)) == ss.target_of() == {"target": h200.to_json(), "execution": "bi-eager"}
+    assert "int8_exact" not in ss.target_of(model(bf16))["target"]
+    with pytest.raises(ValueError, match="int8_exact must be None"):
+        ss.target_of(model(int8, bf16))
 
 
 # ---------------------------------------------------------------------------------------------------------------- the advice's cap

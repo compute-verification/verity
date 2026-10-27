@@ -83,6 +83,31 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
         assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
+def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_cover_the_link(tmp_path):
+    """The auditor host's `load-relay` runs `rehearse` as `warden-rehearse` does, with the load first: the store's
+    stream of the request's shape relayed to the sink tunnels' local ends for its program, the endpoint given the
+    gate's `LOAD_READY_S`; a request without a load passes none. The gate's shapes are `load_relay`'s, and its
+    `load_minutes` cover each shape's weights stream and witness at `LOAD_RATE` and the endpoint's wait: 46 at H200."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    program, sinks = "ab" * 64, [("127.0.0.1", 50001 + i) for i in range(4)]
+    req = {"device": "warden", "requests": 7, "scan": True,
+           "load": {"shape": "tiny", "program": program, "sink_port": 9001, "streams": 4, "minutes": 16}}
+    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", sinks=sinks, store=tmp_path / "store")
+    args = ws.parser().parse_args(argv[2:])
+    assert (args.load_store, args.load_shape, args.load_sinks, args.load_program, args.load_ready_s) == \
+        (tmp_path / "store", "tiny", sinks, program, A.LOAD_READY_S)
+    without = A.warden_command({k: v for k, v in req.items() if k != "load"}, tmp_path, "http://127.0.0.1:40001")
+    assert argv[:len(without)] == without and ws.parser().parse_args(without[2:]).load_store is None
+    assert args.ids and ws._params(args) == ws._params(ws.parser().parse_args(without[2:]))
+    assert set(A.LOAD_SHAPES) == set(ws.lr.SHAPES)
+    for shape in A.LOAD_SHAPES:
+        values = ws.lr.manifest(ws.lr.SHAPES[shape])
+        link = values[-1].offset + values[-1].nbytes + ws.lr.SALT_BYTES * sum(v.leaves for v in values)
+        assert A.load_minutes(shape) * 60 >= link / A.LOAD_RATE + A.LOAD_READY_S > (A.load_minutes(shape) - 1) * 60
+    assert (A.load_minutes("h200"), A.load_minutes("tiny")) == (46, 16)
+
+
 def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_traffic(tmp_path):
     """`warden-rehearse` always passes its temperature and top_p (0 and 1 by default), and `rehearse` puts both on
     every request, so an endpoint's own generation config never applies; the arrivals, prompts, lengths and seeds stay
@@ -237,6 +262,44 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
     assert (ws.group_windows(p, 2), ws.group_windows(p, 64)) == (1, 2)
 
 
+def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
+        tmp_path):
+    """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
+    prompt as it is, with exactly 24 tokens and greedy; on the warden at the scan's schedule, the stand-in, given exactly
+    what the warden sent the server (its release headers on), serves every request and answers the bytes the warden
+    certified, every connection ends within one link-window, and the check accepts the run."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import demo_stub as D
+    import scan_zk as sz
+    from verity.core.protocols.certifier.release import release_of
+    prompts = D.prompts(4)
+    req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
+           "prompts": True, "temperature": 0.0, "top_p": 1.0}
+    (tmp_path / A.PROMPTS).write_bytes(A.warden_prompts(req, json.dumps(prompts).encode()))
+    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    params = ws._params(args)
+    assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
+    traffic = ws.traffic_of(args, D.Shape().name)
+    assert [x["ids"]["prompt"] for x in traffic] == prompts
+    assert {(x["ids"]["max_tokens"], x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(24, 0.0, 1.0)}
+    requests = [ws.id_request(**x["ids"], frame_bytes=params.cell_bytes, offset=0) for x in traffic]
+    responses, servers, out = [D.answer(p) for p in prompts], [], tmp_path / "run"
+    out.mkdir()
+    assert ws.group_windows(params, 24) == 1
+    warden = _run(out, tmp_path / "key", requests, responses, params=params, id_payload=params.payload, servers=servers)
+    assert len(warden.log) == 4 and all(c["failed"] is None and not c["cut"] for c in warden.log)
+    for j, (server, response) in enumerate(zip(servers, responses)):
+        sent = b"".join(data for _, data in server.writes)
+        fields = D.warden_request(sent)
+        assert release_of(sent)[0] == j and fields["user"] == f"user-{j}" and D.refusal(fields) is None
+        assert D.answer(fields["prompt"]) == response
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    assert (result["summary"]["ended"], result["summary"]["windows"]) == (4, 1)
+
+
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     """Over loopback: the request's bytes reach the endpoint, which answers a chunked event stream and closes; the
     response parses to the endpoint's tokens, its finish reason and usage, and a cut response isn't complete."""
@@ -348,18 +411,19 @@ def refusing_commit(*args, **kwargs):
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None) -> Warden:
+         id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
     """A run of the warden at `params` for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
-    its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`), each window
-    committed by `commit`, `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was
-    sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side of each
-    connection, in connect order. Returns the warden."""
+    its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`, which first
+    signs the load's heads `load_heads` when given), each window committed by `commit`, `deployment.json`, and
+    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
+    `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
+    warden."""
     tau = params.bucket_ms / 1000
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
-        ws.cs.load_key(key, 4)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit)
+        ws.cs.load_key(key, 5 if load_heads else 4)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
         hooks, public = {"publish": publisher, "release": publisher.release}, publisher.key
     else:
         signer = ws.cs.signer(key, 4)
@@ -544,6 +608,60 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
 
     with pytest.raises(RuntimeError, match="a refusing commit"):
         _run(runs["refusing"], tmp_path / "refusing-key", requests, responses, commit=refusing_commit, process=True)
+
+
+def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_its_windows(tmp_path):
+    """The gate's load end to end at the tiny shape: the store relayed over four streams to the prover's sink on
+    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the warden's one signer, signs
+    the relay's heads first: `load.json` is under the deployment's key and session, on the key's first leaves, and
+    `check` reads every value's registration at the relay's roots; another session's, values swapped, heads that
+    aren't the relay's and an unsigned load are refused."""
+    import hashlib
+    import subprocess
+
+    store, out = tmp_path / "store", tmp_path / "run"
+    store.mkdir()
+    out.mkdir()
+    lr, program = ws.lr, hashlib.sha512(b"the reading program").hexdigest()
+    lr.write_store(store, lr.TINY)
+    sink = subprocess.Popen([sys.executable, str(HERE / "load_relay.py"), "sink", "--listen", "127.0.0.1:0",
+                             "--weights", str(tmp_path / "weights.bin"), "--witness", str(tmp_path / "witness.bin")],
+                            stdout=subprocess.PIPE, text=True)
+    port = json.loads(sink.stdout.readline())["listening"][1]
+    lr.relay_load(store, lr.TINY, [("127.0.0.1", port)] * 4, program, out)
+    assert json.loads(sink.communicate()[0].splitlines()[-1])["accepted"] and sink.returncode == 0
+    requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
+    _run(out, tmp_path / "key", requests, [_response([" a", " b"]), _response([])], process=True,
+         load_heads=out / "load-heads.json")
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    n = len(lr.manifest(lr.TINY))
+    assert result["summary"]["load"] == {"values": n, "registered": n, "relayed": True}
+    assert ws.table(result).startswith(f"ACCEPTED: load {n}/{n} values registered; 2/2 ended")
+    doc, dep = (json.loads((out / f).read_text()) for f in ("load.json", "deployment.json"))
+    assert (doc["key"], doc["session"]) == (dep["key"], dep["session"]) and doc["session"] == SESSION.hex()
+    leaf = lambda c: int(c["signature"][:8], 16)  # noqa: E731
+    windows = [leaf(json.loads(x)["certificate"]) for x in (out / "certified.jsonl").read_text().splitlines()]
+    assert sorted(leaf(r["certificate"]) for r in doc["values"]) == list(range(n)) and min(windows) >= n
+
+    def problems(name: str, edit) -> list[str]:
+        saved = (out / name).read_text()
+        edit(out / name)
+        try:
+            return ws.check(out)["problems"]
+        finally:
+            (out / name).write_text(saved)
+
+    def rewrite(change):
+        return lambda p: p.write_text(json.dumps(change(json.loads(p.read_text()))))
+
+    assert "load: not signed under the deployment's key and session" in \
+        problems("load.json", rewrite(lambda d: d | {"session": "00" * 32}))
+    swapped = problems("load.json", rewrite(lambda d: d | {"values": [d["values"][1], d["values"][0], *d["values"][2:]]}))
+    assert sum(p.startswith("load tok: ") or p.startswith("load pos: ") for p in swapped) == 2
+    assert "load: its registrations aren't the relay's heads (load-heads.json)" in \
+        problems("load-heads.json", rewrite(lambda d: d | {"roots": {**d["roots"], "tok": "00" * 64}}))
+    assert problems("load.json", lambda p: p.unlink()) == ["load: the relay's heads aren't signed (no load.json)"]
 
 
 def test_reserve_fds_grows_the_descriptor_table_and_leaves_every_descriptor_as_it_was():

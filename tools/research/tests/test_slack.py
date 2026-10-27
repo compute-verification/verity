@@ -32,7 +32,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training"]
+           "console", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
 
 
 class FakeSlack:
@@ -1983,6 +1983,8 @@ The format is new.
 $$
 \\gamma \\le 0.01
 $$
+## The design the rules want
+Option A.
 ## Options
 ### A. Yes (recommended)
 ## Why the lane recommends A
@@ -2030,6 +2032,9 @@ def test_page_checks_the_template_and_the_area_before_anything_is_sent(route, no
     page.write_text(PAGE_MD.replace("## Options\n", ""))
     rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
     assert rc == 2 and "lacks ## Options" in err and "asking-daniel/SKILL.md" in err
+    page.write_text(PAGE_MD.replace("## The design the rules want\n", ""))
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 2 and "lacks ## The design the rules want" in err
     page.write_text(PAGE_MD.replace("## Sources\n- none\n", "").replace("## The problem\n", "## Sources\n- none\n## The problem\n"))
     rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
     assert rc == 2 and "the template's order" in err

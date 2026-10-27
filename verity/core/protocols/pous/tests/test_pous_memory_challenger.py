@@ -327,9 +327,9 @@ def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monke
     signer.sign(SESSION, b"a")
     log.claim(SESSION)
     assert list(tmp.iterdir()) == []
-    assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state.path, log.path))
+    assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state, log.path))
     own = tmp_path_factory.mktemp("own")
-    assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.path.parent.parent == own
+    assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.parent.parent == own
     monkeypatch.setattr(ts, "DIR", None)
     for make in (lambda: ts.TestSigner(b"k", height=1), ts.session_log):
         with pytest.raises(RuntimeError, match="in a directory the caller owns"):
@@ -368,7 +368,7 @@ def deployed_signer(tmp_path) -> mc.LmsSigner:
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, tmp_path / "state")
 
 
 def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):

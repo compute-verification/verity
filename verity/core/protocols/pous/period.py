@@ -35,6 +35,7 @@ still drawn on the node.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -364,25 +365,31 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str
 
 def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> mc.LmsSigner:
     """The memory challenger's key at S1's deployed parameters in `directory`, made there once (its seed from the OS, its
-    tree computed in `workers` processes, all of them by default) and its leaf state kept beside it, so each session
-    signs at a fresh leaf."""
+    tree computed in `workers` processes, all of them by default) with its leaf state beside it, so each session signs at
+    a fresh leaf, and its session log (`sessions`). Windows that run at once share them: the first makes them under the
+    directory's lock (`device.lock`) while the others wait on it, and each window's signer takes the leaf state only to
+    sign (`memory_challenger.LmsSigner`)."""
     d = Path(directory)
     d.mkdir(parents=True, exist_ok=True)
     p, top = lms.DEPLOYED, 2 ** (lms.DEPLOYED.H + 1)
     seed_file, tree_file, state = d / "seed", d / "tree.bin", d / "leaf-state.json"
-    if not seed_file.exists():
-        seed = secrets.token_bytes(p.N)
-        key = lms.keygen(p, seed, (os.cpu_count() or 1) if workers is None else workers)
-        tree_file.write_bytes(b"".join(key.tree[1:]))
-        fd = os.open(seed_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(seed)
-        lms.LeafState.create(state, lms.public_key(key), p.H)
-    else:
-        seed, data = seed_file.read_bytes(), tree_file.read_bytes()
-        tree = (b"", *(data[p.N * r:p.N * (r + 1)] for r in range(top - 1)))
-        key = lms.PrivateKey(p, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, tree)
-    return mc.LmsSigner(key, lms.LeafState(state, lms.public_key(key), p.H))
+    with open(d / "device.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not seed_file.exists():
+            seed = secrets.token_bytes(p.N)
+            key = lms.keygen(p, seed, (os.cpu_count() or 1) if workers is None else workers)
+            tree_file.write_bytes(b"".join(key.tree[1:]))
+            fd = os.open(seed_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(seed)
+            lms.LeafState.create(state, lms.public_key(key), p.H)
+        else:
+            seed, data = seed_file.read_bytes(), tree_file.read_bytes()
+            tree = (b"", *(data[p.N * r:p.N * (r + 1)] for r in range(top - 1)))
+            key = lms.PrivateKey(p, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, tree)
+        if not (d / "sessions").exists():
+            mc.SessionLog.create(d / "sessions")
+    return mc.LmsSigner(key, state)
 
 
 def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",)) -> bytes:

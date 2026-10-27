@@ -23,6 +23,8 @@ peers) are set: then it is a live session's on the auditor host, reserved at ins
 (`window.SALT_FAMILIES`), opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and epoch 0, the
 arm's one install under a fresh hm96 key) and its salt coin opened after it (`_LiveSession`), which the device run checks
 (`pouw_pearl_c_host.epoch_of`); the gate's result names the session (``coins``), and the arm's close ends it complete.
+``PEARLC_CHALLENGER_LANE`` (default ``vllm``) is the lane the gate key is registered for: while that lane's open period
+is H1's the arm refuses before reserving (`pouw_h1_window.period_reason`).
 """
 from __future__ import annotations
 
@@ -65,21 +67,19 @@ class _LiveSession:
     node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through ``ssh -R``. Reserved at
     construction (`commit_coins.Gate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
     `window.SALT_FAMILIES`), opened on salt epoch ``k``'s root over the weights' root once they are committed, its
-    salt coin opened after it (`pouw_h1_window.open_session`), closed with the arm, so it ends complete."""
+    salt coin opened after it (`pouw_h1_window.open_session`), closed with the arm, so it ends complete. Refused before
+    reserving while ``lane``'s open period in the auditor's ledger (``period``) is H1's, and before its open when the
+    reserve joined another period (`pouw_h1_window.reserve_salt`)."""
 
     #: the arm's salt epoch over its weights' root: one install, under a fresh hm96 key
     k = 0
 
-    def __init__(self, gate: str, peer: str, epoch: int) -> None:
-        import json
-
-        from verity.core.protocols.pouw import window as Wd
+    def __init__(self, gate: str, peer: str, epoch: int, lane: str) -> None:
         from verity_vllm.pipeline.commit_coins import Gate
+        from verity_vllm.protocols.pouw.h1 import window as PHW
 
         self.gate = Gate(gate)
-        families = json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":"))
-        self.reserved = self.gate.call("reserve", "--peer", peer, "--scheme", Wd.LIVE_SCHEME, "--families", families,
-                                       "--epoch", str(epoch))
+        self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
         self.client = self.commitment = None
         self.carried: dict[str, Any] = {}
 
@@ -113,6 +113,7 @@ class PearlCArm:
         self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
         self.gate_command = os.environ.get("PEARLC_CHALLENGER_GATE") or None
         self.peer = os.environ.get("PEARLC_CHALLENGER_PEER") or None
+        self.lane = os.environ.get("PEARLC_CHALLENGER_LANE") or "vllm"
         self.run = self.stack = self.weights = self.session = None
         self.coins: dict[str, Any] = {"source": "in-process"}
 
@@ -163,7 +164,7 @@ class PearlCArm:
                                "(this node's name in the challenger host's peers) together")
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
         if self.gate_command is not None:
-            self.session = _LiveSession(self.gate_command, self.peer, self.epoch)
+            self.session = _LiveSession(self.gate_command, self.peer, self.epoch, self.lane)
         salt_key = PPD.new_salt_key(scheme)
         roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
         if self.session is not None:
@@ -274,7 +275,9 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
     keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
-    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_LAG_ENDS=0`` reads each pass's
+    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_WHOLE_SHAPE_JOINS=1`` joins each call's
+    side steps only before the next call of its shape (`whole_shape_joins`; off by default: on the H200 it lost 0.12 ms a
+    step, its side steps slowing the next calls' GEMMs, r20261025-104353-9adc), ``PEARLC_LAG_ENDS=0`` reads each pass's
     commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
     default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).  On pearl_c_sm120 (`RTX_ONLY`)
     the stats stream also prefetches each call's B̃ into L2 (`whole_prefetch_b`, run.py's ``prefetch_b`` in its
@@ -301,6 +304,8 @@ class PearlCWholeArm(PearlCArm):
                             ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
+        if os.environ.get("PEARLC_WHOLE_SHAPE_JOINS") == "1":
+            self.run_options = {**self.run_options, "whole_shape_joins": True}
         if "whole_defer_a" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
         if "lag_ends" not in self.run_options:

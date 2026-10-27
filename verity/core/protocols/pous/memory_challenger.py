@@ -311,16 +311,19 @@ def lms_verify(params: lms.Params) -> Verify:
 
 
 class LmsSigner:
-    """A memory challenger's S1 key (`lms.PrivateKey`) and its leaf state (`lms.LeafState`), which refuses a used or
-    missing leaf; `scheme` is `LMS` at `lms.DEPLOYED`, else a test's own id for other parameters."""
+    """A memory challenger's S1 key (`lms.PrivateKey`) and the path of its leaf state (`lms.LeafState`), which refuses a
+    used or missing leaf; `scheme` is `LMS` at `lms.DEPLOYED`, else a test's own id for other parameters. Each `sign`
+    opens the state only to sign, waiting on its lock while another signer of the key holds it, so concurrent sessions on
+    one key take turns, each signature at a leaf of its own reserved on disk before it is made."""
 
-    def __init__(self, key: lms.PrivateKey, state: lms.LeafState, scheme: str = LMS) -> None:
+    def __init__(self, key: lms.PrivateKey, state: str | os.PathLike, scheme: str = LMS) -> None:
         if (scheme == LMS) != (key.params == lms.DEPLOYED):
             raise ValueError(f"{LMS} is LMS at {lms.DEPLOYED}, not {key.params}")
-        self.key, self.state, self.scheme, self.public_key = key, state, scheme, lms.public_key(key)
+        self.key, self.state, self.scheme, self.public_key = key, Path(state), scheme, lms.public_key(key)
 
     def sign(self, session: bytes, record: bytes) -> bytes:
-        return lms.sign(self.key, self.state, lms.memory_challenger_message(self.key.I, session, record)).encode()
+        with lms.LeafState(self.state, self.public_key, self.key.params.H, wait=True) as state:
+            return lms.sign(self.key, state, lms.memory_challenger_message(self.key.I, session, record)).encode()
 
 
 _SCHEMES: dict[str, Verify] = {LMS: lms_verify(lms.DEPLOYED)}

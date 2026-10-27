@@ -9,7 +9,9 @@ the weights record (vLLM's parameters in module order, then its buffers), one ca
 
 Vocabulary (v1, Llama-family decoders, dense or fused-MoE, under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input
 norm, and the q/k norm: per head, or over all heads), Gemm (target-keyed; the q/k/v projection's bias, when the family's rule gives
-it one, fused as the target's GemmBias where its record says so, else a BiasAdd per row), RoPE (all q rows, then all k rows),
+it one, fused as the target's GemmBias where its record says so, else a BiasAdd per row; on one rank, an exact-int8 checkpoint's
+decoder linears under a target whose `int8_exact` is "linears" are Int8RowQuant per row, then ScaledMmS8 per row, its LM head the
+bf16 Gemm), RoPE (all q rows, then all k rows),
 Attention (target-keyed; one call per query row over the layer's history), RMSNormFusedCuda (post-attention / next-layer / final
 norm), SiluMul, the fused-MoE block in its indexed-read construction (router Gemm, MoeRouterTopK per row, MoeExpertGemm / SiluMul /
 MoeExpertGemmW per (token, slot) pair, MoeSum per row); for Gemma-2, the embedding's normalizer scale, GemmaRMSNorm's unfused (1 +
@@ -39,7 +41,8 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
+from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, launch_rows, launch_seqlen_q, select_token, served_class
+from .domain import check_phi
 from .phi import Phi
 
 BUILDER_ID = "predict-build/derived/v1"
@@ -61,12 +64,6 @@ _FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPE
                "layer_norms", "extra_layer_norms")
 #: the activations of the gated MLP: the `*Mul` kind's role per `hidden_act`
 _ACTS = {"silu": "silu_mul", "gelu_pytorch_tanh": "gelu_tanh_mul"}
-#: the engine environment a Program reads only as `tp_allreduce.settings_of` (above two ranks; two ranks' AllReduce2 is route-free)
-#: or not at all (the transport: `pipeline.build` records NCCL_P2P_DISABLE, never consults it); the target's own are `TargetProfile.env()`
-_ENV_MODELLED = ("VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER", "NCCL_P2P_DISABLE")
-#: the engine args a component Program does not read but through `settings_of` (the scheduler's: a component is one request's)
-_ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched_tokens", "max_num_seqs", "enable_prefix_caching",
-                  "enable_chunked_prefill")
 
 
 @dataclass(frozen=True)
@@ -96,6 +93,7 @@ class ModelShape:
     embed_scale: bool = False
     attn_cap: float | None = None
     final_cap: float | None = None
+    int8: bool = False
 
     @property
     def QKV(self) -> int:
@@ -103,10 +101,10 @@ class ModelShape:
 
     @property
     def nodes_per_row_layer(self) -> int:
-        """About how many root nodes one row adds per layer: 14, plus the q/k/v bias, the q/k RMSNorms, the MoE block's three per pair
-        and Gemma-2's four unfused norm chains' thirty."""
+        """About how many root nodes one row adds per layer: 14, plus the q/k/v bias, the q/k RMSNorms, the MoE block's three per pair,
+        Gemma-2's four unfused norm chains' thirty and the int8 linears' four quantizers."""
         return 14 + self.qkv_bias + {"head": self.NH + self.KVH, "all": 2}.get(self.qk_norm, 0) + (3 * self.TOPK + 2 if self.E else 0) + \
-            30 * self.norm_chain
+            30 * self.norm_chain + 4 * self.int8
 
 
 def model_shape(hf: dict) -> ModelShape:
@@ -117,7 +115,8 @@ def model_shape(hf: dict) -> ModelShape:
     the router's renormalization and Gemma-2's (the embedding normalizer, the (1 + w) norm chain with the two extra MLP norms, the
     attention and final logit soft-caps, the tanh-GELU MLP, `query_pre_attn_scalar` = head_dim): a family with any other (another norm
     variant, LayerNorm, shared experts), a linear bias other than the q/k/v one a family's rule gives, an activation other than SiLU
-    or a family-declared one, a partial rotary width or a rotary scaling without an analytic table raises `Unexpressible`.  A
+    or a family-declared one, a partial rotary width, a rotary scaling without an analytic table, a block-FP8 checkpoint or an
+    exact-int8 one with an int8 LM head or a biased linear raises `Unexpressible` (an exact-int8 checkpoint's linears are `int8`).  A
     sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for the families whose vLLM code hands it to FA2
     (the `dense2` patterns); `build_program` refuses a history longer than it."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
@@ -181,6 +180,11 @@ def model_shape(hf: dict) -> ModelShape:
     caps = [float(fv[k]) if fv.get(k) else None for k in ("attn_logit_softcapping", "final_logit_softcapping")]
     if C.get("FP8_BLOCK"):
         facts.append(f"block-scaled FP8 checkpoint (G={C['FP8_BLOCK']})")
+    int8 = bool(C.get("INT8_EXACT"))
+    if C.get("INT8_LM_HEAD"):
+        facts.append("an int8 LM head (verity-int8-channel127/v2; the token select reads a bf16 head's logits)")
+    if int8 and qkv_bias:
+        facts.append("an int8 linear with a bias (Int8PlainLinearMethod takes none)")
     if analytic.rotary_dim(C) != C["D"]:
         facts.append(f"partial rotary width {analytic.rotary_dim(C)} of head_dim {C['D']}")
     try:
@@ -193,7 +197,7 @@ def model_shape(hf: dict) -> ModelShape:
                       D=int(C["D"]), I=I, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
                       max_pos=int(C["MAX_POS"]), rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None,
                       qk_norm=qk_norm, E=E, TOPK=TOPK, renorm=bool(fv.get("RENORMALIZE")), act=act, norm_chain=norm_chain,
-                      extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_cap=caps[0], final_cap=caps[1])
+                      extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_cap=caps[0], final_cap=caps[1], int8=int8)
 
 
 #: vLLM's `DEFAULT_VOCAB_PADDING_SIZE`: the vocabulary-parallel embedding and LM head pad the vocabulary to a multiple of it
@@ -231,22 +235,30 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     bf = lambda *s: _arr(s, 16)  # noqa: E731
     V = C.V // world
     C = rank_shape(C, world)
+
+    def linear(name: str, N: int, K: int) -> list[tuple[str, Type]]:
+        """A decoder linear's parameters: its bf16 weight, or the exact-int8 checkpoint's s8 weight and f32 row scales
+        (`engine.int8_vllm.Int8PlainLinearMethod`'s `weight` [N, K] and `weight_scale` [N, 1], in that order)."""
+        if not C.int8:
+            return [(name + ".weight", bf(N, K))]
+        return [(name + ".weight", _arr((N, K), 8)), (name + ".weight_scale", _arr((N, 1), 32))]
+
     out: list[tuple[str, Type]] = [("model.embed_tokens.weight", bf(V, C.H))]
     for L in range(C.NL):
         p = f"model.layers.{L}."
-        out.append((p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)))
+        out += linear(p + "self_attn.qkv_proj", C.QKV, C.H)
         if C.qkv_bias:
             out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
         if C.qk_norm == "all":
             out += [(p + "self_attn.q_norm.weight", bf(C.NH * C.D * world)), (p + "self_attn.k_norm.weight", bf(C.KVH * C.D * world))]
-        out.append((p + "self_attn.o_proj.weight", bf(C.H, C.NH * C.D)))
+        out += linear(p + "self_attn.o_proj", C.H, C.NH * C.D)
         if C.qk_norm == "head":
             out += [(p + "self_attn.q_norm.weight", bf(C.D)), (p + "self_attn.k_norm.weight", bf(C.D))]
         if C.E:
             out += [(p + "mlp.gate.weight", bf(C.E, C.H)), (p + "mlp.experts.w13_weight", bf(C.E, 2 * C.I, C.H)),
                     (p + "mlp.experts.w2_weight", bf(C.E, C.H, C.I))]
         else:
-            out += [(p + "mlp.gate_up_proj.weight", bf(2 * C.I, C.H)), (p + "mlp.down_proj.weight", bf(C.H, C.I))]
+            out += linear(p + "mlp.gate_up_proj", 2 * C.I, C.H) + linear(p + "mlp.down_proj", C.H, C.I)
         out += [(p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
         if C.extra_norms:
             out += [(p + "pre_feedforward_layernorm.weight", bf(C.H)), (p + "post_feedforward_layernorm.weight", bf(C.H))]
@@ -268,6 +280,16 @@ class _Specs:
         from verity_vllm.program.frontend import targets as TG
         VS, C = C.V // world, rank_shape(C, world)
         self.C, self.tp, self.TG = C, target, TG
+        parts = target.int8_parts
+        if C.int8 != ("linears" in parts):
+            raise Unexpressible(f"vocabulary cannot express: {'an exact-int8' if C.int8 else 'a bf16'} checkpoint on a target whose "
+                                f"int8_exact is {target.int8_exact!r} (the int8 linears are the checkpoint's and the target's both)")
+        if "attention" in parts:
+            raise Unexpressible(f"vocabulary cannot express: the exact-int8 attention (int8_exact {target.int8_exact!r}: "
+                                "Int8KvQuant_v1 and Int8LutAttentionRow_v1)")
+        if C.int8 and world > 1:
+            raise Unexpressible(f"vocabulary cannot express: the int8 linears at TP{world} (a row-parallel shard's activation scale "
+                                "is its K slice's)")
         self.accepted = TG.uses_accepted_kinds(target)
         self.dot = TG.tensor_core_dot(target)
         if world == 1:
@@ -278,7 +300,7 @@ class _Specs:
             self.all_reduce, self.all_gather = self.kind("all_reduce2", N=C.H), self.kind("all_gather2", N=VS)
         self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS, TARGET=target, M=M)
         self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS, TARGET=target, M=M)
-        self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
+        self.qkv, self.o = self.linear(C.H, C.QKV), self.linear(C.NH * C.D, C.H)
         self.qkv_bias = self.qkv_fused = None
         if C.qkv_bias:
             role = self.gemm_bias_role()
@@ -292,7 +314,7 @@ class _Specs:
                 self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
             )
             self.q_gather, self.k_gather = (self.kind("all_gather2", N=n * C.D) for n in (C.NH, C.KVH)) if world > 1 else (None, None)
-        self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, VS)
+        self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.I), self.linear(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
             self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
@@ -337,6 +359,13 @@ class _Specs:
 
     def gemm(self, K: int, N: int):
         return self.kind("gemm", K=K, N=N) if self.accepted else self.kind("gemm_dot", K=K, N=N, DOT=self.dot)
+
+    def linear(self, K: int, N: int):
+        """A decoder linear's kind: the GEMM, or under the int8 linears (`rules.vllm_bindings.int8`) its quantizer and product,
+        `(Int8RowQuant_v1{K}, ScaledMmS8_v1{K,N,DOT})`."""
+        if not self.C.int8:
+            return self.gemm(K, N)
+        return self.kind("int8_row_quant", K=K), self.kind("int8_scaled_mm", K=K, N=N)
 
     def gemm_bias_role(self) -> tuple[str, dict] | None:
         """The biased linear's one-Call kind as `TritonGemmRule` picks it (the bias add the GEMM's only reader): `GemmBias_v1` under
@@ -400,9 +429,10 @@ class _Model:
         self.embed = W[n]
         n += 1
         self.layers = []
+        lin = (lambda k: [k, k + "_s"]) if C.int8 else (lambda k: [k])
         for _ in range(C.NL):
-            names = ["qkv"] + (["qkv_b"] if C.qkv_bias else []) + (["q_norm", "k_norm"] if C.qk_norm == "all" else []) + ["o"] + \
-                (["q_norm", "k_norm"] if C.qk_norm == "head" else []) + (["gate_w", "w13", "w2"] if C.E else ["gate_up", "down"]) + \
+            names = lin("qkv") + (["qkv_b"] if C.qkv_bias else []) + (["q_norm", "k_norm"] if C.qk_norm == "all" else []) + lin("o") + \
+                (["q_norm", "k_norm"] if C.qk_norm == "head" else []) + (["gate_w", "w13", "w2"] if C.E else lin("gate_up") + lin("down")) + \
                 ["ln1", "ln2"] + (["pre_ff", "post_ff"] if C.extra_norms else [])
             self.layers.append({k: W[n + i] for i, k in enumerate(names)})
             n += len(names)
@@ -414,7 +444,7 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
-        self.cached = 0
+        self.cached, self.ctx = 0, None
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
 
@@ -428,6 +458,19 @@ class _Model:
 
     def call(self, fn, *args) -> Coll:
         return self.B.call(fn, *args)
+
+    def linear(self, fn, xs: list[Coll], lw: dict, key: str) -> list[Coll]:
+        """The linear `fn` (`_Specs.linear`) over the rows `xs` with the layer's weight `lw[key]`: the GEMM a row, or under the int8
+        linears every row's `Int8RowQuant` then every row's `ScaledMmS8` over its codes and scale, the s8 weight and its row scales
+        `lw[key + "_s"]` (`Int8RowQuant[vllm]` then `Int8ScaledMm[vllm]`, one op each over the call's rows)."""
+        if not self.C.int8:
+            p = _ptypes(fn)
+            return [self.call(fn, Coll(p[0], x.refs), Coll(p[1], lw[key].refs)) for x in xs]
+        quant, mm = fn
+        pq, pm = _ptypes(quant), _ptypes(mm)
+        qs = [self.call(quant, Coll(pq[0], x.refs)) for x in xs]
+        return [self.call(mm, Coll(pm[0], q[0].refs), Coll(pm[1], q[1].refs), Coll(pm[2], lw[key].refs), Coll(pm[3], lw[key + "_s"].refs))
+                for q in qs]
 
     def collective(self, fn, own: list[Coll]) -> list[Coll]:
         """`fn` (`AllReduce2` / `AllGather2`) per row over the ranks' rows in rank order (`rules.vllm_bindings.collectives`), or the
@@ -450,7 +493,6 @@ class _Model:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
         S, C, M = self.S, self.C, len(toks)
         pe = _ptypes(S.embedding)
-        pq, po, pgu, pd = _ptypes(S.qkv), _ptypes(S.o), _ptypes(S.gate_up), _ptypes(S.down)
         prq, prk, ps = _ptypes(S.rope_q), _ptypes(S.rope_k), _ptypes(S.silu)
         q_w, k_w, v_w = C.NH * C.D, C.KVH * C.D, C.KVH * C.D
         h = self.collective(S.all_reduce, [self.call(S.embedding, Coll(pe[0], t.refs), Coll(pe[1], self.embed.refs)) for t in toks])
@@ -465,9 +507,10 @@ class _Model:
             if L > 0:
                 x, res = self.rms(d, lw["ln1"], res)
             if S.qkv_fused is not None:
+                pq = _ptypes(S.qkv)
                 qkv = [self.call(S.qkv, Coll(pq[0], x[i].refs), Coll(pq[1], lw["qkv"].refs), Coll(pq[2], lw["qkv_b"].refs)) for i in range(M)]
             else:
-                qkv = [self.call(S.qkv, Coll(pq[0], x[i].refs), Coll(pq[1], lw["qkv"].refs)) for i in range(M)]
+                qkv = self.linear(S.qkv, x, lw, "qkv")
             if S.qkv_bias is not None:
                 pb = _ptypes(S.qkv_bias)
                 qkv = [self.call(S.qkv_bias, Coll(pb[0], qkv[i].refs), Coll(pb[1], lw["qkv_b"].refs)) for i in range(M)]
@@ -487,7 +530,7 @@ class _Model:
             if prefill:
                 self.lp_of[L] = P0 + M
             own_rows = M if prefill else 1
-            launch_sq = own_rows
+            launch_sq = own_rows if self.ctx is None else launch_seqlen_q(self.ctx, own_rows, 0 if prefill else P0 - self.lp_of[L] + 1, S.tp, S.accepted)
             for i in range(M):
                 kh.append(k[i].refs)
                 vh.append(qkv[i].refs.slice(q_w + k_w, q_w + k_w + v_w))
@@ -497,7 +540,7 @@ class _Model:
                 fn = S.attention(P, i if prefill else 0, own_rows, launch_sq)
                 pa = _ptypes(fn)
                 attn.append(self.call(fn, Coll(pa[0], q[i].refs), Coll(pa[1], concat(kh[:P])), Coll(pa[2], concat(vh[:P]))))
-            o = self.collective(S.all_reduce, [self.call(S.o, Coll(po[0], attn[i].refs), Coll(po[1], lw["o"].refs)) for i in range(M)])
+            o = self.collective(S.all_reduce, self.linear(S.o, attn, lw, "o"))
             if C.extra_norms:
                 o, _ = self.rms(o, lw["ln2"])
                 x, res = self.rms(o, lw["pre_ff"], res)
@@ -506,9 +549,9 @@ class _Model:
             if C.E:
                 d = self.collective(S.all_reduce, self.moe(x, lw))
             else:
-                gu = [self.call(S.gate_up, Coll(pgu[0], x[i].refs), Coll(pgu[1], lw["gate_up"].refs)) for i in range(M)]
+                gu = self.linear(S.gate_up, x, lw, "gate_up")
                 a = [self.call(S.silu, Coll(ps[0], gu[i].refs)) for i in range(M)]
-                d = self.collective(S.all_reduce, [self.call(S.down, Coll(pd[0], a[i].refs), Coll(pd[1], lw["down"].refs)) for i in range(M)])
+                d = self.collective(S.all_reduce, self.linear(S.down, a, lw, "down"))
             if C.extra_norms:
                 d, _ = self.rms(d, lw["post_ff"])
         return self.rms(d, self.norm, res)[0]
@@ -582,54 +625,6 @@ class _Model:
                             S.tp, event, pos, policy)
 
 
-def _check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
-    """Refuse φ outside a decoder's domain (worlds, execution, checkpoint dtype) or the samplers the vocabulary has."""
-    worlds, execution, dtype = domain
-    facts = []
-    s = phi.sampling or {}
-    if s.get("kind", "greedy") == "stochastic":
-        if int(s.get("top_k", 0) or 0) != 0 or not s.get("seeded", False):
-            facts.append(f"stochastic sampling with top_k {s.get('top_k')!r}, seeded {s.get('seeded')!r} (seeded top-p only)")
-        if s.get("splits") != "derived" and not isinstance(s.get("splits"), int):
-            facts.append(f"stochastic sampling without a split count (splits {s.get('splits')!r})")
-    elif s.get("kind", "greedy") != "greedy":
-        facts.append(f"sampling {s.get('kind')!r} (greedy or seeded top-p)")
-    world = int((phi.tp or {}).get("world", 1))
-    if world not in worlds:
-        facts.append(f"tensor parallel world {world} ({' and '.join(f'TP{w}' for w in worlds)}, the worlds a Build has traced)")
-    if phi.profile != "b1-eager-v3":
-        facts.append(f"numerics profile {phi.profile!r}")
-    if phi.execution != execution:
-        facts.append(f"execution {phi.execution!r}")
-    if (phi.model or {}).get("dtype", "bfloat16") != dtype:
-        facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({dtype} only)")
-    facts += _engine_facts(phi, world)
-    if facts:
-        raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-
-
-def _engine_facts(phi: Phi, world: int) -> list[str]:
-    """What of φ's engine the Program would not be the prediction of: a target whose execution label is not the row's, an env
-    switch the target sets to another value or none models (`_ENV_MODELLED`), an engine arg the target applies at another value, the
-    eager execution contradicted, another world, or an arg none models (`_ARGS_MODELLED`)."""
-    tp, eng = phi.target_profile(), dict(phi.engine or {})
-    facts = [] if tp.execution_label == phi.execution else [
-        f"a target labelled {tp.execution_label!r} (batch invariant {tp.batch_invariant}) for the {phi.execution!r} row"]
-    target_env = tp.env()
-    for k, v in sorted((eng.pop("env", None) or {}).items()):
-        if k in target_env and str(v) != target_env[k]:
-            facts.append(f"env {k}={v} under a target that sets {target_env[k]!r}")
-        elif k not in target_env and k not in _ENV_MODELLED:
-            facts.append(f"env {k}={v} (the switches modelled: the target's {sorted(target_env)} and {list(_ENV_MODELLED)})")
-    want = {**tp.engine_args(), "enforce_eager": tp.compilation is None, "tensor_parallel_size": world}
-    for k, v in sorted(eng.items()):
-        if k in want and v != want[k]:
-            facts.append(f"engine arg {k}={v!r} where the {phi.execution!r} target applies {want[k]!r}")
-        elif k not in want and k not in _ARGS_MODELLED:
-            facts.append(f"engine arg {k}={v!r} (not modelled)")
-    return facts
-
-
 def decoder(phi: Phi, M: int = 1, history: int = 0):
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
@@ -644,17 +639,20 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
         from .dsv4 import Net
     else:
         Net = _Decoder
-    _check_phi(phi, Net.DOMAIN)
+    check_phi(phi, Net.DOMAIN)
     return Net(phi, M, history)
 
 
 class _Decoder:
     """The dense or fused-MoE Llama-family decoder (`ModelShape`) under the bi-eager profile, on one rank or two."""
 
-    DOMAIN = ((1, 2), "bi-eager", "bfloat16")
+    DOMAIN = ((1, 2), "bi-eager", ("bfloat16", "int8"))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         C = model_shape(phi.hf_config)
+        if (phi.model or {}).get("dtype", "int8" if C.int8 else "bfloat16") != ("int8" if C.int8 else "bfloat16"):
+            raise Unexpressible(f"vocabulary cannot express: checkpoint dtype {phi.model['dtype']!r} for "
+                                f"{'an exact-int8' if C.int8 else 'a bf16'} checkpoint (the row's dtype is its checkpoint's)")
         if C.window is not None and history > C.window:
             raise Unexpressible(f"vocabulary cannot express: a history of {history} keys under the sliding window of {C.window} keys")
         self.world, self.rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))
@@ -764,6 +762,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
             raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
                                 f"requests), whose kernel choices the {net.model_class} decoder reads at its own rows")
         model.launch = _Launch(batch)
+    if wrapper == "request" and isinstance(model, _Model):
+        model.ctx = launch_rows(phi, LP, T, C)
     if C:
         model.open_with(Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, params[n_user - 1][1].leaves)), C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
@@ -780,7 +780,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
-    from verity_vllm.program.replay import replayer
+    from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="predicted: a switched row's, checked by its trace (predict.aot)",
                                register=False)

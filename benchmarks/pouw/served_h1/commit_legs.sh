@@ -5,17 +5,22 @@
 # gate session (--peer) and needs GATE (the lane's forced-command ssh line to vy-challenger-1), CHALLENGER (the window's
 # 127.0.0.1:PORT) and PEER (this node's name in the challenger's /etc/vy/peers). It opens a period at its Commit window
 # (--period, PERIOD, default commit-<UTC>-<leg>: cap 1, its circuit, draw K, T and --length, the --declare's fixed length
-# that core's credit holds the window to), closed once that window's session has ended; it refuses to start while the
+# that core's credit holds the window to, and --circuit-files from CIRCUITS: a pouw_h1_circuits --live 32,4 directory
+# of the declared Program, sent with the run), closed once that window's session has ended; it refuses to start while the
 # key's lane (GATE_LANE, default vllm) has a period open, and saves each live leg's Commit session tree (GATE fetch,
-# $OUT/<leg>/commit-session.tgz) for pouw_h1_gpu.py --check-challenger.
+# $OUT/<leg>/commit-session.tgz) for pouw_h1_gpu.py --check-challenger. The units kernel is built for the node's card
+# (arch.sh: ARCH, 120a or 90a); LEG_ARGS are more pouw_h1_gpu.py flags for every leg (another int8 pin: --base-role
+# LLAMA32_1B --role LLAMA32_1B_INT8 --repo verity-int8/Llama-3.2-1B-INT8) and PY the node's Python (default
+# /workspace/jobs/venv312's; an H200 node's is /workspace/cp/venv312's).
 #
 #   research run --on NODE --project verity --source . --cwd source --mem-gb 128 --timeout 4h --declared-output 'out/*' \
-#     --env LEGS=j10r-live [--env GATE=... --env CHALLENGER=127.0.0.1:7811 --env PEER=NODE] \
+#     --env LEGS=j10r-live [--env GATE=... --env CHALLENGER=127.0.0.1:7811 --env PEER=NODE --env CIRCUITS=DIR] \
 #     -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE \
 #     --run-max 12600 -- bash benchmarks/pouw/served_h1/commit_legs.sh
 set -u
+. "$(dirname "$0")/arch.sh"
 S=$(mktemp -d); trap 'rm -rf "$S" || true' EXIT
-/usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xcompiler -fPIC \
+/usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
   -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-hbc.log" 2>&1 || exit 1
 sha256sum "$S/h1u_hbc.so" | tee "$OUT/builds.txt"
 [ -n "${GATE:-}" ] && $GATE pubkey > "$OUT/gate-pubkey.json"
@@ -32,17 +37,18 @@ for l in open(sys.argv[1]):
 print("[legs] lane", sys.argv[2], "open periods:", json.dumps(o)); sys.exit(1 if o else 0)
 PY
 fi
+[ -n "${CIRCUITS:-}" ] && CIRCUITS=$(realpath "$CIRCUITS")
 cd integrations/vllm
 rc_all=0
 for leg in ${LEGS:-v1}; do
   mkdir -p "$OUT/$leg"
-  extra=()
+  read -r -a extra <<< "${LEG_ARGS:-}"
   case "$leg" in j10r*) extra+=(--j10r) ;; esac
   case "$leg" in *-live) extra+=(--challenger "${CHALLENGER:?}" --gate "${GATE:?}" --peer "${PEER:?}"
-                                 --period "${PERIOD:-commit-$(date -u +%Y%m%dT%H%M%SZ)-$leg}") ;; esac
+                                 --period "${PERIOD:-commit-$(date -u +%Y%m%dT%H%M%SZ)-$leg}" --circuits "${CIRCUITS:?}") ;; esac
   echo "[legs] leg $leg start $(date -u +%FT%TZ)"
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-commit-legs} gpu-lease 1 --wait --max-min 120 --mem-gb 96 -- \
-    env PYTHONPATH="$PWD/../..:$PWD" HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python -m tests.protocols.pouw_h1_gpu \
+    env PYTHONPATH="$PWD/../..:$PWD" HF_HOME=/workspace/hf "${PY:-/workspace/jobs/venv312/bin/python}" -m tests.protocols.pouw_h1_gpu \
     --workload fill --served --commit --negatives --receipts "$S/h1u_hbc.so" "${extra[@]}" --credit \
     --live-dump "$OUT/$leg/live" --declare 32,3,32,4 --out "$OUT/$leg" --at 2026-10-21T00:00:00Z --by "${BY:-commit-legs}" \
     > "$OUT/$leg/stdout.log" 2> "$OUT/$leg/stderr.log"

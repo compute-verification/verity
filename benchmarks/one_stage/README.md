@@ -51,10 +51,20 @@ negatives.
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `llama1b_tp1_commit.sh`: the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
+- `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
+  (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
+  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
+  few greedy requests from the certifier's traffic generator, and seals each window. On the window holding the most requests,
+  none carried, it runs sampled proofs: the window's advice and request Programs, V3b's window circuit at each class of
+  `CLASSES`, then the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
+  and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
+  `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
+  gets no verdict. Finally the all-protocols window report and CMP-153's block record. Each step's verdict line is in
+  `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -82,6 +92,18 @@ negatives.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
+- `prove_bundle.sh`: a drawn-unit replay bundle (`benchmarks/e2e_demo`, `verity/drawn-unit-bundle/v2`) proved by
+  `prove_bundle.py`. `prove_bundle.py make` writes the torch loop's window under the fixture's test key and the bundle of
+  its draw: the fixture's `FIXTURE_DRAW`, or with `PB_K=K` a live one over a window registered `subset:K`, the
+  challenger's receipt of the registration and then Lean `flock-verify draw --registration` of the registered law's
+  units over the whole partition on its own coins. The bundle is held to the prover's window: its own check (the draw's
+  law the registered one among it), its run, registration and partition, each drawn member's public body and a live
+  draw's receipt and record. Each drawn member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
+  draw, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
+  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the firewall and
+  refused by Lean without it. `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and firewall into its `out/bin`, stamped
+  with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
+  source, so M3's reserved window doesn't spend time on the build.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node

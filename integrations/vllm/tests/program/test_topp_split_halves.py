@@ -9,8 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import topp_split as TS
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import topp_split as TS
 
 f32 = np.float32
 V, S, P = 3000, 16, f32(0.5)

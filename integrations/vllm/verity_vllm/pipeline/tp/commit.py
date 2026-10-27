@@ -51,8 +51,7 @@ from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline.tp import run_root as RT
-
-SCHEMA = "verity/commit-integ/delta-tp/v1"
+from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
@@ -206,7 +205,7 @@ def main(args: Options) -> int:
     from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.check.verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
     from verity_vllm.pipeline.tp.capture import parse_engine_args
-    from verity_vllm.engine.rank_worker import EXTENSION
+    from verity_vllm.pipeline.tp.rank_worker import EXTENSION
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
     from verity_vllm import protocols as PO

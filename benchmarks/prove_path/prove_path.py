@@ -44,6 +44,10 @@ Two kinds of committed run:
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...] [--vllm-python PY]
+    prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME ...] [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -75,6 +79,18 @@ Two kinds of committed run:
   no row dir), and the length it charges. ``records_audit.py`` audits a window
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
+* **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
+  class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
+  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at ASK-122's fixed slots; every slot's
+  Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
+  its description) and its input
+  count at the verifier's pins (``--pin``, the parameters whose roots it fixed before the run; a registered read of any
+  other is free), which ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
+  unit's rows as the record's members (V3c).
+* **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
+  Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
+  (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
+  requests).
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -345,7 +361,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
     from verity.ml.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"
@@ -511,9 +527,11 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
     """φ of a served engine as vllm's advice compiler (#3619's) registers it (the formula its Build compiles the request Programs under):
-    the pinned model (``serve.json``'s ``model`` and ``revision``, the checkpoint's ``config.json``, default unsloth/Llama-3.2-1B's),
-    the serving device's target profile (``serve.json``'s ``target``, else the file ``target``) and the engine's execution label
-    (``execution``, else ``engine.execution``); no workload."""
+    the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
+    pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
+    unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
+    included, else the file ``target``) and the engine's execution label (``execution``, else ``engine.execution``); no workload."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict.phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
@@ -523,7 +541,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
     if not isinstance(execution, str) or not execution:
         raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or LLAMA32_1B_CONFIG).read_text())
+    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
     return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
 
 
@@ -993,7 +1011,7 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
     """The terms of the leak bound an accepted audit gives (README, "What an accepted plain audit means"): c, the advice's bits
     (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
-    (``location_bits``, `consumers.location_bits`); β_δ, the faulty units' committed bits (``harm_bound``: the profile's
+    (``location_bits``, `consumers.location_bits`); β_δ, the faulty proof blocks' committed bits (``harm_bound``: the profile's
     `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
     templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
     (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
@@ -1176,6 +1194,65 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     return {"bits": int(c.total_bits(c.decode(data)))}
 
 
+def window_class_of(arg: str | None) -> Any:
+    """``--class`` or ``--probe``'s SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] as a `window_circuit.WindowClass`, None the class of
+    record."""
+    from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, WindowClass
+
+    return CLASS_OF_RECORD if arg is None else WindowClass(*(int(x) for x in arg.split(",")))
+
+
+def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
+    """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
+    ``--class``, a class Program a slot flattened into units, every input row wired, registered or ingress), written to
+    ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
+    units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
+    length in bits and the record's input count at the verifier's pins (``--pin``)."""
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.predict.window_circuit import window_circuit
+
+    compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
+    compile_advice(compiler, data)
+    registered, cls = compiler.inner.registered, window_class_of(a.window_class)
+    t0 = time.time()
+    try:
+        circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls)
+    except Unexpressible as e:
+        raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
+    lowered = time.time() - t0
+    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
+    Path(a.out).write_bytes(IF.circuit_bytes(doc))
+    c = AW.codec_of()
+    return {"bits": int(c.total_bits(c.decode(data))), "count": IF.input_count(doc, pins=a.pin),
+            "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
+
+
+def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
+    """A served window's padded size at its class ``--class`` (`class_size`): one class Program of the window's registration
+    lowered at the small class ``--probe`` (`window_circuit.class_circuit`, exact), projected to ``--class`` with v19's heads
+    (`class_size.project`) and priced (`class_size.size`) a Program and at the class's slots, the window's circuit whatever
+    its requests (ASK-122). -> the probe's census, the requests its advice compiles to and the two sizes."""
+    from dataclasses import asdict
+
+    import class_size as CZ
+    from verity_vllm.program.predict.window_circuit import class_circuit
+
+    compiler = compiler_of_args(a)
+    requests = len(compile_advice(compiler, Path(a.advice).read_bytes()))
+    probe, cls = window_class_of(a.probe), window_class_of(a.window_class)
+    t0 = time.time()
+    seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
+    lowered = time.time() - t0
+    try:
+        one = CZ.project(seen, probe, cls)
+        sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
+    except ValueError as e:
+        raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None
+    return {"class": asdict(cls), "positions": cls.positions, "requests": requests,
+            "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
+
+
 def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's dir under ``a.out`` laid out from a single-GPU Commit of record, as serve-openai and `verity-vllm advice` lay
     one out: ``serve.json`` (the record's model, revision and seed, and the execution and target φ reads from its row,
@@ -1228,7 +1305,8 @@ def main(argv: list[str] | None = None) -> int:
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
         p.add_argument("--target", help="with --serve-run: the serving device's target profile (JSON), where serve.json records none")
-        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default unsloth/Llama-3.2-1B's)")
+        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default with --serve-run the "
+                                           "served pin's config of record, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
         p.add_argument("--opening", help="the advice's opening (advice_windows.opening): commit writes it, the prover's private file; "
                        "audit reads it, the named gap. A served window's is the server's (default advice/w<K>/private/opening.json)")
         p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "
@@ -1282,25 +1360,43 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--transfer-gate", action="append", default=[])
+    p = sub.add_parser("window-circuit", help="a served window's advice through I2 as one Circuit (V3), its record written to --out")
+    for flag in ("--serve-run", "--row-dir", "--advice", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--window", type=int, required=True)
+    p.add_argument("--cap", type=int, default=64, help="units a member (a statement), the record's stated cap")
+    p.add_argument("--description", action="store_true", help="write the circuit's description (templates, wires and "
+                   "declarations), not its record: no program is built")
+    p.add_argument("--pin", action="append", default=[], help="a registered parameter whose root the verifier fixed before "
+                   "the run, as `records_audit.py count --pin` takes it (repeatable; none: every registered read is free)")
+    p = sub.add_parser("class-size", help="a served window's padded size at its class, projected from a small probe class")
+    for flag in ("--serve-run", "--row-dir", "--advice"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--window", type=int, required=True)
+    p.add_argument("--probe", default="1,2,2", help="the class SLOTS,PROMPT,OUTPUTS one Program is lowered at exactly")
+    for name in ("window-circuit", "class-size"):
+        sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
+                                       "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
     sub.choices["audit"].add_argument("--builds", help="with --bundle or --serve-run: where the verifier traces its own Build of "
                                       "each Program I2 compiles (own_builds; default OUT/builds), never a row dir")
     for name in ("audit", "circuit"):
         sub.choices[name].add_argument("--vllm-python", default=sys.executable, help="the interpreter the verifier's own Builds "
                                        "are traced with, holding the pinned vLLM (CPU, on meta; default this one)")
-    for name in ("compiler", "serve-standin", "circuit"):
+    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
-    for name in ("compiler", "circuit"):
+    for name in ("compiler", "circuit", "window-circuit", "class-size"):
         sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
         return 0
-    if a.cmd == "circuit":
+    if a.cmd in ("circuit", "window-circuit", "class-size"):
+        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice}
         try:
-            print(json.dumps(circuit_of_advice(a)))
+            print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:
-            print(f"prove_path.py circuit: {e}", file=sys.stderr)
+            print(f"prove_path.py {a.cmd}: {e}", file=sys.stderr)
             return REFUSED
         return 0
     if a.cmd == "serve-standin":

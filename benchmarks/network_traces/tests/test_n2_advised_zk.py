@@ -4,10 +4,11 @@ moved release bucket, an output length one short, extra egress) fails in some wi
 head checks passing and every window's unit taking an instance; the verifier's own ``pub`` row, from public fields,
 the certificates and its own view of the public advice, is the prover's, in whole u16 words. The --e2e link's advice
 (`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
-proof unit (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
+proof block (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
 references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. Each builder
-`n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. Nothing here
-lowers or proves (`n2_advised_zk.prove` does, on a node)."""
+`n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. ``--jobs`` is 1
+unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
+(`n2_advised_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -334,3 +335,11 @@ def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_bu
     assert held_kept and all(kept[k] in wit for k in held_kept)
     assert {k for k in kept if k.rsplit(" @", 1)[0] in held} - held_kept == {
         f"head {end} {w} @2208" for end in n2.ENDS for w in range(n2.WINDOWS)}
+
+
+def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+    monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
+    argv = ["prove", "--out", "o", "--dry"]
+    assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
+    with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
+        n2.main([*argv, "--jobs", "2"])

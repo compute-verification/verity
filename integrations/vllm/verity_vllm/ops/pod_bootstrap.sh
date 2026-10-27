@@ -210,7 +210,7 @@ else:  # cpu mode: torch must import and run on the host; whether it also sees a
 check("vllm_import", lambda: __import__("vllm").__version__)
 check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__version__) or (_ for _ in ()).throw(RuntimeError(__import__("vllm").__version__)))
 check("verity_from_tree", lambda: under("verity.ml.circuits", core))
-check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
+check("verity_vllm_from_tree", lambda: under("verity_vllm.program", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
 check("sampled_proofs_from_tree", lambda: under("verity.core.protocols.sampled_proofs.plan", verifiers))   # the program tests import it
 def distributions_from_tree():
