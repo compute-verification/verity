@@ -22,7 +22,8 @@ that ran but wrote no answer is its error, unless it refused to run (``DIR/refus
 leaves it missing; no verdict is made for a piece that didn't run. A development piece writes ``DIR/development.json``
 (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
-``source`` ``fixture`` for an answer brought from a recorded run).
+``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
+the node it ran on.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -39,14 +40,18 @@ is one manifest under them; core's credit refuses the window and is shown beside
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
 as `served_integrity.answer` reads it; each other subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
-`piece_server` names: sampled proofs' and a piece's that ran here are the record's node's, the wipe's and any other's the
-one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows, with each one's server)
-and from it the block record (``block-record.json``, `block_record.from_period`, held by `block_record.check`), which
-composes only the answers about the record's node and carries the others as ``elsewhere``; an answer that names no server
-isn't carried. An accepted answer whose outputs are not its leg's certificate (`block_record.leg`) is its subprotocol's
-error. `block_record` carries only an accepted subprotocol's certificate, so where one about this node rejects or errs the
-composed verdict is ``reject`` and no block record is written; it is ``accept`` only when every subprotocol accepted here.
-Prints one ``RECORD`` line, naming each missing subprotocol and why, each rejecting one, and each one elsewhere.
+`piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
+on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
+with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
+`block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
+an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
+(`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
+where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
+``accept`` only when every subprotocol accepted here.
+The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
+a subprotocol: its verdict and, unless it accepted here, why; PoUW's development piece reads ``development run, credits
+nothing`` with core's refusal of the window's credit. Prints one ``RECORD`` line, naming each subprotocol's verdict (the
+development piece's `DEV_VERDICT`), each missing one and why, each rejecting one, and each one elsewhere.
 """
 from __future__ import annotations
 
@@ -79,8 +84,13 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
     "work": ("PoUW", "pouw", "compute-accounting",
              "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
     "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
-                  "the remote bandwidth audit of the served window's store, against the bandwidth verifier on vy-auditor-2"),
-    "space": ("PoUS", "pous", "memory-accounting", "PoUS over the served window's int8 weights"),
+                  ("a remote bandwidth session over this node's registered store, against the auditor's verifier on "
+                   "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/one_stage/served_bandwidth.sh "
+                   "and this node the verifier's key and the store")),
+    "space": ("PoUS", "pous", "memory-accounting",
+              ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
+               "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
+               "the challenger's key")),
     "communication": ("the network certifier", "certifier", "network-accounting",
                       "the network certifier in front of the serving endpoint"),
 }
@@ -98,9 +108,11 @@ SERVED = "served.json"
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
-DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under the lane's development key, and a window "
-           "counts for credit only under the lane's own key; core's credit also needs the window in a period whose open "
-           "commits its draw K, rows and weights")
+DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
+           "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
+           "whose open commits its draw K, rows and weights")
+#: a development piece's verdict in the ``RECORD`` line, in place of its row's ``missing``
+DEV_VERDICT = "development run, credits nothing"
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
 H1_CALLS = "h1/w{k}/pouw-h1-calls.json"
 
@@ -363,7 +375,12 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, A
         if not isinstance(doc, dict):
             return {"verdict": "error", "owner": owner, "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
         if doc.get("verdict") == "accept":
-            return {"verdict": "missing", "owner": owner, "why": DEV_WHY, "development": doc}
+            refused = (doc.get("credit") or {}).get("window")
+            if isinstance(refused, list) and len(refused) == 2:
+                refused = f"({refused[0]}) {refused[1]}"
+            why = DEV_WHY if refused is None else (f"{DEV_WHY}; core's credit refuses the window "
+                                                   f"{refused if isinstance(refused, str) else json.dumps(refused)}")
+            return {"verdict": "missing", "owner": owner, "why": why[:2000], "development": doc}
         return {"verdict": "reject", "owner": owner, "reason": "; ".join(doc.get("reasons") or ())[:2000],
                 "development": doc}
     if not f.exists():
@@ -384,12 +401,30 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, A
 
 
 def piece_server(key: str, pieces_dir: Path) -> tuple[str | None, str]:
-    """The server a piece's answer is about and the answer's source (``real`` or ``fixture``): its `SERVED` record's, else,
-    but for the wipe, the node `pieces` ran it on (`RAN`); None where neither names one."""
+    """The server a piece's answer is about and the answer's source (``real`` or ``fixture``): the server its `SERVED`
+    record names, else, but for the wipe, the node `pieces` ran it on (`RAN`); None where neither names one."""
     comp = PIECES.get(key, WIPE)[1]
     served, ran = _json(pieces_dir / comp / SERVED), _json(pieces_dir / comp / RAN)
-    at = served if isinstance(served, dict) else ran if isinstance(ran, dict) and key != "wipe" else {}
-    return at.get("server"), (served.get("source") if isinstance(served, dict) else None) or "real"
+    served = served if isinstance(served, dict) else {}
+    ran = ran if isinstance(ran, dict) and key != "wipe" else {}
+    return served.get("server") or ran.get("server"), served.get("source") or "real"
+
+
+def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | None, str]], node: str) -> str:
+    """The composed verdict's reason: one clause a subprotocol, its verdict and, unless it accepted about ``node``, why."""
+    out = []
+    for k, r in rows.items():
+        v, server = r.get("verdict"), at[k][0]
+        if v == "missing":
+            s = r.get("why") if "development" in r else f"missing: {r.get('why')}"
+        elif server not in (None, node):
+            s = f"{v} about {server}, another server: carried, not composed"
+        elif v == "accept":
+            s = "accept" if server is not None else "accept, naming no server: not carried"
+        else:
+            s = f"{v}: {r.get('reason')}"
+        out.append(f"{NAMES[k]}: {s}")
+    return "; ".join(out)
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
@@ -412,7 +447,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}}
-    verdicts = {NAMES[k]: r.get("verdict") for k, r in rows.items()}
+    verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
+                for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
     elsewhere = {NAMES[k]: at[k][0] for k in rows if at[k][0] not in (None, node)}
     unserved = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") != "missing" and at[k][0] is None)
@@ -425,6 +461,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     if bad:
         composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows
                                    if NAMES[k] in bad) else "pending"
+        report["composed"] = {"protocol": REPORT_FORMAT, "verdict": composed, "reason": said(rows, at, node)}
         line = {"composed": composed, "by": bad, **named, "block_record": None,
                 "why": "block_record carries an accepted subprotocol's certificate only"}
         return report, None, line
@@ -432,6 +469,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra)
+    report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
+                                                      "reason": said(rows, at, node)}
     line = {"composed": rec["composed"]["verdict"], **named, "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}

@@ -29,16 +29,19 @@
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, one at a time, each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
-#     own `gpu-lease`, the serve's being over. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`,
-#     the bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its
-#     piece reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (by default
-#     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it; empty, none), serve() calls
-#     it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT (default 20m), with (the serve
-#     dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and says its last line as WIPE. The record reads
-#     its pieces/wipe/answer.json and composes the wipe only when that answer accepts and pieces/wipe/served.json names this
-#     node as the server it ran on. A wipe that wrote no answer (refused, or failed before its judge) leaves the wipe
-#     missing, one served elsewhere stays missing, and one whose answer rejects makes the record reject: a failed wipe is
-#     never accepted.
+#     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
+#     tree has it and this node holds the memory challenger's key (~/.ssh/vy-auditor2-pous), and BANDWIDTH_CMD to
+#     'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the tree has it and this node holds the bandwidth
+#     verifier's key (~/.ssh/vy-auditor2-bw) and its registered store (BW_STORE's setup.json); set empty, MISSING.
+#     A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`) goes in SERVE_ARGS, serve-openai's
+#     further arguments, and its piece reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with
+#     WIPE_CMD set (by default 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it;
+#     empty, none), serve() calls it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT
+#     (default 20m), with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and says its last
+#     line as WIPE. The record reads its pieces/wipe/answer.json and composes the wipe only when that answer accepts and
+#     pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or failed
+#     before its judge) leaves the wipe missing, one served elsewhere stays missing, and one whose answer rejects makes the
+#     record reject: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing, `accept` only when every
 #     one accepted on this node; any other server's answer is carried as elsewhere.
@@ -84,7 +87,14 @@ MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 # shellcheck disable=SC2016
 [ -f "$TREE/benchmarks/pous/streamed_wipe/served_wipe.sh" ] \
   && WIPE_CMD=${WIPE_CMD-'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'}
-export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD
+# shellcheck disable=SC2016
+[ -f "$TREE/benchmarks/pous/served_piece.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-pous" ] \
+  && POUS_CMD=${POUS_CMD-'bash benchmarks/pous/served_piece.sh "$@"'}
+# shellcheck disable=SC2016
+[ -f "$TREE/benchmarks/one_stage/served_bandwidth.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-bw" ] \
+  && [ -f "${BW_STORE:-/workspace/research/pous-store/mem69-v2}/setup.json" ] \
+  && BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
+export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD
 ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 FW=${FLOCK_WORK:-$ROOT/flock-work}
@@ -392,7 +402,7 @@ rc=$?
 say "SAMPLED-PROOFS (run.sh exit $rc): $(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log" | cut -c1-3000)"
 [ -n "$(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log")" ] || say "SAMPLED-PROOFS: no RECORDS line; $(grep -v '^+' "$OUT/sampled-proofs.log" | tail -3 | tr '\n' ' ' | cut -c1-600)"
 
-# 4. the other subprotocols, each its piece's verdict or MISSING with its issue
+# 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" 2>&1 | tee -a "$OUT/verdicts.txt"
 

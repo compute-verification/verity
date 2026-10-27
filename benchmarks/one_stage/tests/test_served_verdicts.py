@@ -237,8 +237,9 @@ COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
     (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
 def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_names_each_that_does_not(
         tmp_path, monkeypatch, capsys, case, piece):
-    """Every piece's answer accepted on the record's node (each piece's `RAN`, the wipe's `SERVED`): the composed verdict
-    is ``accept``, with nothing missing. One piece with no answer leaves it ``pending`` and names that piece missing with
+    """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
+    about, and the wipe's `SERVED`): the composed verdict is ``accept``, with nothing missing, and its reason names each
+    subprotocol's accept. One piece with no answer leaves it ``pending`` and names that piece missing with
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
     no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -257,6 +258,8 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
         server = "vy-dc-h200-2" if comp == piece and case == "elsewhere" else "vy-dc-h200"
         if comp == "wipe" or server != "vy-dc-h200":
             (d / S.SERVED).write_text(json.dumps({"server": server}))
+        elif comp == "bandwidth":
+            (d / S.SERVED).write_text(json.dumps({"served": {"window": 1}, "scope": "beside the served window"}))
         if comp != "wipe":
             (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     (tmp_path / "serve").mkdir()
@@ -280,6 +283,7 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     if case == "accept":
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("accept", [], {}, {})
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
+        assert rec["composed"]["onsite"]["reason"] == "; ".join(f"{n}: accept" for n in S.NAMES.values())
         return
     assert line["composed"] == "pending" and line["record_missing"] == [leg]
     if case == "missing":
@@ -346,10 +350,18 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert tree == tmp_path / "pieces" / "pouw" / "session" / SID and SID in ledger and '"commit"' in pins
     assert (main, key) == (tmp_path / "main.txt", "ff" * 64)
     row = S.piece_row("work", tmp_path / "pieces")
-    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.DEV_WHY, "accept")
-    _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
+    why = f"{S.DEV_WHY}; core's credit refuses the window (budget) the window is in no period"
+    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
+    report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
     assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
-    assert BR.check(rec) == {}
+    assert line["verdicts"]["PoUW"] == S.DEV_VERDICT == "development run, credits nothing" and line["missing"]["PoUW"] == why
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert BR.check(rec) == {} and rec["composed"]["onsite"] == report["composed"]
+    reason = rec["composed"]["onsite"]["reason"]
+    assert reason.startswith(f"sampled proofs: accept; PoUW: {why}; ")
+    for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
+                      ("the wipe", "WIPE")):
+        assert f"; {name}: missing: {cmd}_CMD unset: " in reason
     env = {"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""}
     got = S.pieces(d, 1, tmp_path / "again", env=env)
     out = capsys.readouterr().out
