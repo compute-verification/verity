@@ -1125,6 +1125,20 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     assert len(calls) == 2
 
 
+def test_a_branch_sweep_at_its_limit_sweeps_again_the_next_tick(world, monkeypatch):
+    """A sweep pushes at most `SWEEP_LIMIT` deletions: 26 Oct, 900 branches; the rest go on the ticks after, not a day later."""
+    from research.merge import SWEEP_LIMIT
+
+    h = Harness(world, monkeypatch)
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(a) or ((SWEEP_LIMIT, 0) if len(calls) == 1 else (3, 0)))
+    h.tick()
+    assert any(f"at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" in x for x in world.logs)
+    h.tick()
+    h.tick()
+    assert len(calls) == 2
+
+
 def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world, monkeypatch):
     """18 Oct 00:43Z: with circuit-check back in the gate, drive launched four pre-warms in one tick (16 runs) beside four train
     checks, against six check slots, and no new train could start."""
