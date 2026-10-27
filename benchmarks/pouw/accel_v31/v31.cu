@@ -8,7 +8,8 @@
 //            each), X^T and B~^T = (B + d_B + U pi)^T for the wrap correction, and the peel's tail rows
 //            P_A = [Z_0 | -V | Z_1 .. Z_{dz-1} | V x (dy - 1)], P_B = [-U | Y_0 | U x (dz - 1) | Y_1 .. Y_{dy-1}] (Z_X and
 //            Y_W in balanced base-128 digits, the last digit a full int8)
-//   wrap     dO = w_X B~^T + X w_W^T, sparse, on the CUDA cores (a 128 x 128 tile a CTA)
+//   wrap     dO = w_X B~^T + X w_W^T, sparse, on the CUDA cores (a 128 x 128 tile a CTA); or (V31_WRAP 5) X w_W^T dense
+//            on the tensor cores (the plain GEMM on X and w_W as int8), then w_X B~^T, sparse
 //   gemm     X W'^T on the tensor cores (mma.sync s8, a 3-stage TMA ring, 128 x 128 tiles of 8 warps); after each segment
 //            of L = t L' inner indices every thread stores its accumulators' low 16 bits (T_s) to the words buffer; then
 //            P_A P_B^T's first two blocks (-Z_0 U^T - V Y_0^T) as more main stages, the tail stages subtracting the rest
@@ -201,7 +202,10 @@ __global__ void form_a_kernel(FormArgs f) {
   }
 }
 // B side: thread c holds Y_W[j, c] for its 16 rows in registers; U's row gathered through pi from shared memory
-__global__ void form_b_kernel(FormArgs f) {
+// (WRAP5: w_W to ww, N x K of -1, 0 or 1, wrap5's B operand; a parameter of its own, since a FormArgs field more costs
+// form_a_kernel 72 registers)
+template <bool WRAP5>
+__global__ void form_b_kernel(FormArgs f, int8_t* __restrict__ ww) {
   extern __shared__ int8_t us[];   // [16][L']
   __shared__ int scnt[16];
   const int c = threadIdx.x, lp = f.lp;
@@ -225,6 +229,7 @@ __global__ void form_b_kernel(FormArgs f) {
       const int bd = (int)f.Q[j * f.K + k] + ((f.bits[j * f.kb64 + (k >> 3)] >> (k & 7)) & 1), bt = bd + us[r * lp + pc];
       const int x = ((bt + 128) & 255) - 128, w = (bt - x) >> 8;
       f.X[j * f.K + k] = (int8_t)x;
+      if (WRAP5) ww[j * f.K + k] = (int8_t)w;
       y[r] += bd;
       bp[r >> 1] |= (u32)(bt & 0xFFFF) << (16 * (r & 1));
       if (w) {
@@ -617,6 +622,11 @@ __global__ void __launch_bounds__(256, CW == 128 ? 3 : 2) wrap4_kernel(WrapArgs 
   wrap_a_side<CW>(a, i0, jb);
 }
 
+// wrap5's A side: w_X B~^T added into dO's 128 x 128 tile a CTA, after the plain GEMM (X, w_W) has stored X w_W^T there
+__global__ void __launch_bounds__(256) wrap_a_kernel(WrapArgs a) {
+  wrap_a_side<TILE>(a, (size_t)blockIdx.y * TILE, (size_t)blockIdx.x * TILE);
+}
+
 // ---------------------------------------------------------------- TMA, mbarrier, ldmatrix, mma.sync (floored_gemm's)
 DEV uint32_t smem_u32(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 DEV void mbar_init(uint32_t bar, uint32_t count) {
@@ -683,6 +693,7 @@ struct GArgs {
                      // stages do; then Z_{b - 1} U^T (b <= dz) or V Y_{b - dz}^T, at 128^digit, subtract
   u32* ctr;          // the tile counter (null: CTA c takes tiles c, c + grid, ...); a launch advances it by its tiles
   u32 base;          // ctr's value before this launch
+  int diag;          // timing only (the bench's gemm_no* arms, wrong values): 1 no segment stores, 2 no tail (TT 0), 4 no dO
 };
 // 128 x 128 tiles, 8 warps of 64 x 32 (MI = 4 row blocks of 16, NI = 4 column blocks of 8), a 3-stage ring of 128 bytes of
 // depth; thread 0 issues every TMA as the CTA releases its slot (floored_gemm's ML, without its receipts and edits). With a
@@ -877,10 +888,11 @@ __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
   R.prologue();
   R.consumer_init(warp, lane);
   const int wm = warp / Ring::WARPS_N, wn = warp % Ring::WARPS_N, g = lane >> 2, q = lane & 3;
-  const int KT = a.K / BK, KS = KT + (PROTO ? 2 * a.lp / BK : 0);   // the main stages, then the tail's shift-0 blocks
+  const int KT = a.K / BK, KS = KT + (PROTO && a.TT ? 2 * a.lp / BK : 0);   // the main stages, then the tail's shift-0 blocks
   auto seg = [&](const int (&acc)[4][4][4], size_t tile, int kt) {
     if constexpr (PROTO)
-      if (((kt + 1) * BK) % a.L == 0 || kt + 1 == KT) store_words(acc, a.words, tile, a.S, ((kt + 1) * BK + a.L - 1) / a.L, wm, wn, g, q);
+      if (!(a.diag & 1) && (((kt + 1) * BK) % a.L == 0 || kt + 1 == KT))
+        store_words(acc, a.words, tile, a.S, ((kt + 1) * BK + a.L - 1) / a.L, wm, wn, g, q);
   };
   for (;;) {
     mbar_wait_warp(R.full(R.s), R.ph);
@@ -920,7 +932,7 @@ __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
       for (int ni = 0; ni < 4; ni++) {
         const size_t p = (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni, p8 = p + (size_t)8 * a.N;
         int2 lo = make_int2(acc[mi][ni][0], acc[mi][ni][1]), hi = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
-        if constexpr (PROTO) {
+        if (PROTO && !(a.diag & 4)) {
           const int2 d0 = __ldg(reinterpret_cast<const int2*>(a.dO + p)), d1 = __ldg(reinterpret_cast<const int2*>(a.dO + p8));
           lo.x = (int)((u32)lo.x + ((u32)d0.x << 8)); lo.y = (int)((u32)lo.y + ((u32)d0.y << 8));
           hi.x = (int)((u32)hi.x + ((u32)d1.x << 8)); hi.y = (int)((u32)hi.y + ((u32)d1.y << 8));
@@ -1305,13 +1317,15 @@ static std::string env_str(const char* name, const char* dflt) {
 // The knobs a bench line records. V31_CARVE: every kernel's preferred shared-memory carveout (percent; < 0 leaves the
 // driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
 // its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
-// the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel, 4: wrap4_kernel), V31_WCW its columns
-// a CTA (256 where N allows, or 128);
+// the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel, 4: wrap4_kernel; 5: X w_W^T on the
+// tensor cores, gemm_kernel<false> on X and w_W (form_b writes w_W), then wrap_a_kernel), V31_WCW its
+// columns a CTA (256 where N allows, or 128; 1 to 4);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
-// V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2).
+// V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
+// the bench's timing-only gemm_no* arms.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
-      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0);
+      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1319,8 +1333,8 @@ static void set_carveout(int pct) {
   const void* ks[] = {(const void*)gemm_kernel<true>,  (const void*)gemm_kernel<false>,  (const void*)wrap_kernel,
                       (const void*)wrap2_kernel<128>,  (const void*)wrap2_kernel<256>,   (const void*)wrap3_kernel<128>,
                       (const void*)wrap3_kernel<256>,  (const void*)wrap4_kernel<128>,  (const void*)wrap4_kernel<256>,
-                      (const void*)form_a_kernel,
-                      (const void*)form_b_kernel,      (const void*)bits_kernel,         (const void*)noise_kernel,
+                      (const void*)wrap_a_kernel,      (const void*)form_a_kernel,       (const void*)form_b_kernel<false>,
+                      (const void*)form_b_kernel<true>, (const void*)bits_kernel,         (const void*)noise_kernel,
                       (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
                       (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
                       (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>};
@@ -1332,7 +1346,7 @@ struct Ctx {
   int m, n, k, lp, t, row, L, S, NT, kb64, dz, dy, TL, TT, tiles, tiles_n, lpt, grid, nsm, capA, capB, nb = 1;
   u64 leaves;
   Seeds seeds;
-  int8_t *A, *B, *U, *V, *X, *XT, *W, *PA, *PB;
+  int8_t *A, *B, *U, *V, *X, *XT, *W, *PA, *PB, *WW = nullptr;
   int16_t* BtT;
   uint8_t *dA, *dB;
   uint16_t* perm;
@@ -1340,7 +1354,7 @@ struct Ctx {
   int wcw = 128;
   uint16_t* words[2] = {nullptr, nullptr};
   int* O[2] = {nullptr, nullptr};
-  Maps *maps_proto, *maps_plain;
+  Maps *maps_proto, *maps_plain, *maps_dw = nullptr;
   Committer cm;
   Params params;
   cudaStream_t s0, s1;
@@ -1409,6 +1423,12 @@ struct Ctx {
     maps_proto = dalloc<Maps>(1); maps_plain = dalloc<Maps>(1);
     CK(cudaMemcpy(maps_proto, &mp, sizeof mp, cudaMemcpyHostToDevice));
     CK(cudaMemcpy(maps_plain, &mq, sizeof mq, cudaMemcpyHostToDevice));
+    if (kn.wrap == 5) {
+      WW = dalloc<int8_t>(nk);
+      const Maps mw{tmap(X, k, m, TILE), tmap(WW, k, n, TILE), tmap(PA, TL, m, TILE), tmap(PB, TL, n, TILE)};
+      maps_dw = dalloc<Maps>(1);
+      CK(cudaMemcpy(maps_dw, &mw, sizeof mw, cudaMemcpyHostToDevice));
+    }
     CK(cudaFuncSetAttribute(gemm_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, Ring::SMEM));
     CK(cudaFuncSetAttribute(gemm_kernel<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, Ring::SMEM));
     CK(cudaFuncSetAttribute(wrap_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, TILE * 129 * 4));
@@ -1434,9 +1454,9 @@ struct Ctx {
   FormArgs fb() const {
     return FormArgs{B, dB, U, perm, W, BtT, listB, cntB, PB, flag, n, k, lp, NT, kb64, dz, dy, capB, TL, offB};
   }
-  GArgs gargs(int b, bool proto) const {
-    return GArgs{proto ? maps_proto : maps_plain, words[b], dO, O[b], m, n, k, L, S, proto ? TT : 0, 8, lp, dz,
-                 kn.dyn ? gctr : nullptr, gbase};
+  GArgs gargs(int b, bool proto, int diag = 0) const {
+    return GArgs{proto ? maps_proto : maps_plain, words[b], dO, O[b], m, n, k, L, S, proto && !(diag & 2) ? TT : 0, 8, lp,
+                 dz, kn.dyn ? gctr : nullptr, gbase, diag};
   }
   V31Row rowsrc(int b) const {
     return V31Row{reinterpret_cast<const uint8_t*>(words[b]), reinterpret_cast<const uint8_t*>(O[b]), (u64)lpt,
@@ -1453,11 +1473,17 @@ struct Ctx {
   }
   void form(cudaStream_t st) {
     form_a_kernel<<<m / 16, lp, 16 * lp * 4, st>>>(fa());
-    form_b_kernel<<<n / 16, lp, 16 * lp, st>>>(fb());
+    if (WW) form_b_kernel<true><<<n / 16, lp, 16 * lp, st>>>(fb(), WW);
+    else form_b_kernel<false><<<n / 16, lp, 16 * lp, st>>>(fb(), nullptr);
   }
   void wrap(cudaStream_t st) {
     const WrapArgs w{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB, offB, lp, NT};
-    if (kn.wrap == 1) wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(w);
+    if (kn.wrap == 5) {
+      gemm_kernel<false><<<grid, Ring::NCT, Ring::SMEM, st>>>(
+          GArgs{maps_dw, nullptr, nullptr, dO, m, n, k, L, S, 0, 8, lp, dz, kn.dyn ? gctr : nullptr, gbase, 0});
+      gbase += (u32)tiles;
+      wrap_a_kernel<<<dim3(n / TILE, m / TILE), 256, 0, st>>>(w);
+    } else if (kn.wrap == 1) wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(w);
     else if (kn.wrap == 3 && wcw == 256) wrap3_kernel<256><<<dim3(n / 256, m / TILE), 256, (lp + 1) * 128, st>>>(w);
     else if (kn.wrap == 3) wrap3_kernel<128><<<dim3(n / 128, m / TILE), 256, (lp + 1) * 128, st>>>(w);
     else if (kn.wrap == 4 && wcw == 256) wrap4_kernel<256><<<dim3(n / 256, m / TILE), 256, (lp + 1) * 128, st>>>(w);
@@ -1466,8 +1492,8 @@ struct Ctx {
     else wrap2_kernel<128><<<dim3(n / 128, m / TILE), 256, lp * 128, st>>>(w);
   }
   // launches that share gctr run in one stream's order, so each one's base is the tiles launched before it
-  void gemm(cudaStream_t st, int b, bool proto) {
-    if (proto) gemm_kernel<true><<<grid, Ring::NCT, Ring::SMEM, st>>>(gargs(b, true));
+  void gemm(cudaStream_t st, int b, bool proto, int diag = 0) {
+    if (proto) gemm_kernel<true><<<grid, Ring::NCT, Ring::SMEM, st>>>(gargs(b, true, diag));
     else gemm_kernel<false><<<grid, Ring::NCT, Ring::SMEM, st>>>(gargs(b, false));
     gbase += (u32)tiles;
   }
@@ -1546,11 +1572,13 @@ static std::vector<uint8_t> readfile(const std::string& p, size_t want) {
 struct KAttr { const char* name; const void* fn; };
 static void kernel_attrs(FILE* f) {
   const KAttr ks[] = {{"gemm_proto", (const void*)gemm_kernel<true>}, {"gemm_plain", (const void*)gemm_kernel<false>},
-                      {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel},
+                      {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel<false>},
+                      {"form_b5", (const void*)form_b_kernel<true>},
                       {"wrap", (const void*)wrap_kernel}, {"wrap2_128", (const void*)wrap2_kernel<128>},
                       {"wrap2_256", (const void*)wrap2_kernel<256>}, {"wrap3_128", (const void*)wrap3_kernel<128>},
                       {"wrap3_256", (const void*)wrap3_kernel<256>}, {"wrap4_128", (const void*)wrap4_kernel<128>},
-                      {"wrap4_256", (const void*)wrap4_kernel<256>}, {"bits", (const void*)bits_kernel},
+                      {"wrap4_256", (const void*)wrap4_kernel<256>}, {"wrap_a", (const void*)wrap_a_kernel},
+                      {"bits", (const void*)bits_kernel},
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
                       {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist},
                       {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>}};
@@ -1732,6 +1760,10 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
         {"leaf_nomem", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.leaves_nodes_of(s, NoMemRow{(u32)c.row}); }},
     };
     if (cut.best) arms.push_back({"cutlass", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) cut_run(cut, s); }});
+    // V31_DIAG: the protocol GEMM without its segment stores, its tail, its dO read, and all three (timing only)
+    if (c.kn.diag)
+      for (const auto& [nm, d] : {std::pair<const char*, int>{"gemm_nost", 1}, {"gemm_notail", 2}, {"gemm_nodo", 4}, {"gemm_bare", 7}})
+        arms.push_back({nm, [&c, d = d](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.gemm(s, 0, true, d); }});
     const gk::Timing tm = gk::timed_items(arms, reps, c.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
