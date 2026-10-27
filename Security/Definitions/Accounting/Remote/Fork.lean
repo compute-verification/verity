@@ -14,9 +14,9 @@ plurality of the rows a receipt shows (`Receipts.Shows`) over those continuation
 * `Receipts.Split D prf rest t ω ζ`: **the roots split**. Some receipt window `t` opens in both runs has its verifier,
   root or rank differ between them. Two accepted openings bind each other only at one root (`Hash.Guarantees.RowBinding`),
   so a fork whose roots split breaks nothing. A window whose receipts' roots, ranks and verifiers are fixed by its cut
-  never splits. The deployed prover holds the challenger's commitment to every coin (`Committed`), and a root it
-  computes from that commitment reads window `t`'s coin, which the two runs draw independently: there the roots may
-  split, and nothing bounds it yet (the gap `binding-split`).
+  never splits. The deployed prover is sent window `t`'s coin only after its roots are in, and the challenger's
+  commitment to the coins only with the outcome, so its roots read only what precedes window `t`'s coin; that the cut
+  fixes them is not yet a premise of the guarantees, and nothing here bounds `split` (the gap `binding-split`).
 * `Receipts.fork` and `Receipts.split`: their probabilities over a uniform pair `(ω, ζ)`.
 * `Receipts.finder D prf rest t q`: **window `t`'s fork finder**, a SHA-512 collision finder (`Claims.Finder`) on the
   coins `(ω, ζ)`. It runs the session on `ω` and on `cont t ω ζ`, and for a receipt both runs open it outputs two
