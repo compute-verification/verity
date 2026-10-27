@@ -23,7 +23,7 @@ prover (`witness`). `witness_freed` is the headline's conclusion there, from `Wo
 * The period (`twPd`): credited use `hon = (4, 4, 2)`, two honest sampling blocks whose commit phase commits the
   zero instance at no cost, whose work uses `(2, 2, 1)` and makes two oracle calls, and whose answer uses nothing
   (`honest`, timed use `hon`), `T = 8`, and one other job per resource worth its use at `μ`, so `μ` is the period's
-  dual price (`twDual`). The cap on a run's calls is `Q = 8`, the period's hash units (`twCap`); the honest prover
+  dual price (`twDual`). The cap on a run's calls is `Q = 8`, the period's capacity of resource 1, which each call uses (`twCap`); the honest prover
   makes 4, and its answers none. Each sampling block's honest cost is `H = H_mm + H_sha + H_o = 4 + 2 + 1` and the
   public bests are the honest ones (`pub_mm = 4`, `pub_sha = 2`), so `C = 14`. Every instance is registrable for
   every block (`twReg`): the noise reads none.

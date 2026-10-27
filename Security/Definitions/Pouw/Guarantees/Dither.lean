@@ -30,14 +30,14 @@ namespace Pouw.Guarantees.Dither
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
 /-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (R-ACCEL-1's freed compute; CMP-136,
-CMP-154). In every accelerator model `G` of the machine model 𝓜 and for every round protocol `P` (the no-fold protocol
+CMP-154). In every accelerator model `G` of the machine model 𝓜 and for every protocol `P : RoundProto` (the no-fold protocol
 is `noFoldRound` at its knobs, so protocol v1 and v2, or a SYM design's sampling blocks, are instances), every
 sampling block's set `Reg w` of registrable instances (each block's operands are committed in its commit phase, after
 the earlier blocks' coins, so `Reg w` holds every instance a prover may commit for it: RT-POOL RP23, RP26), every
 service verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`), every selection `sel`
-of a block by its check coin, every period `Pd` whose credited unit `hon` is the sampling blocks' honest use (their
-commit phases and work and the selected blocks' answers), and every price `μ` that is the period's dual price at that
-unit (`Period.DualOpt μ 1`): if
+of a block by its check coin, every period `Pd` whose credited use `hon` is the sampling blocks' honest use (their
+commit phases and work and the selected blocks' answers), and every price `μ` that is the period's dual price at one
+credit (`Period.DualOpt μ 1`): if
 each sampling block's honest cost is `H w = H_mm w + H_sha w + H_o w` at `μ` (its words and commitment, both
 positive, and the rest, `H_o w ≥ 0`, its operand root and answer among it), its public bests cost
 `pub_mm w ≤ H_mm w` and `pub_sha w ≤ H_sha w` at every instance of `Reg w`, the blocks' honest costs sum to
@@ -69,7 +69,7 @@ their commit phases and work) with
 `δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, with `C = μ · hon = Σ_w H w` and
 `ε_A = (Σ_w (H − pub_mm − pub_sha) w + ln(1/δ)/η + β K)/C + μ · ξ_A/C` (`epsWorkSound`).
 
-The rate `η` is one rate a unit of priced cost for every sampling block (RT-PROTO-2 P15, P20): a block selected by a
+The rate `η`, per priced cost, is one rate for every sampling block (RT-PROTO-2 P15, P20): a block selected by a
 Bernoulli coin at a probability proportional to its public cost meets its premises at `η = q/C` at `q` checks, so
 the luck term is `ln(1/δ)/q`. The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the
 honest kernel and hashing are the public best), the honest work that is neither (no lower bound, full weight), the

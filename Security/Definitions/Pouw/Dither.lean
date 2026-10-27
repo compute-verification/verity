@@ -427,7 +427,7 @@ section Freed
 /-- **A monitoring period's devices and the other work they could do**, in resource units: the period's length `T`
 (seconds), the other jobs `J`, each with its value `val` per unit and its use `needs` per unit, and the honest use
 `hon` of the credited work and its value `rv` (R-ACCEL-1's credit, in the jobs' units: its honest cost at the dual
-price; RT-LEAN L25). `WorkSound` reads it at `W = 1` credited unit: `hon` is the period's sampling blocks' total
+price; RT-LEAN L25). `WorkSound` reads it at `W = 1`, one credit: `hon` is the period's sampling blocks' total
 honest use, their commit phases, their work and the selected blocks' answers beside it, whose blocks differ (RT-LEAN-2
 L27, RT-PROTO-2 P15), and `rv` their credit. -/
 structure Period (G : Accel) where
@@ -449,10 +449,10 @@ variable {G : Accel} (Pd : Period G)
 def cap (r : G.Res) : ℝ := G.rate r * Pd.T
 
 /-- A strategy fits the devices: its credited part (its sampling blocks' commit phases and work, `Prover.timedUse`)
-uses `X`, its other work `z ≥ 0` units of each job, and the two together use no resource past its capacity. -/
+uses `X`, its other work `z j ≥ 0` of each job `j`, and the two together use no resource past its capacity. -/
 def Fits (X : G.Res → ℝ) (z : Pd.J → ℝ) : Prop := (∀ j, 0 ≤ z j) ∧ ∀ r, X r + ∑ j, z j * Pd.needs j r ≤ Pd.cap r
 
-/-- A strategy's value: its `W` credited rounds at `rv` each, plus its other work's. -/
+/-- A strategy's value: its `W` credits at `rv` each, plus its other work's. -/
 def value (W : ℝ) (z : Pd.J → ℝ) : ℝ := W * Pd.rv + ∑ j, Pd.val j * z j
 
 /-- **Freed compute is at most `ε C`** (R-ACCEL-1, Daniel 25 Oct): a strategy credited `W` with other work `z` gets

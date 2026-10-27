@@ -25,7 +25,7 @@ commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of it
     A run whose timed use fits the period's devices makes at most `cap_r / callUse_r` calls in its commit phases and
     work for each resource `r` a call uses (G3), and an answer that runs within the period as many
     (`AnswersFit`), so `WorkSound` reads it at such a `Q`.
-* `Realization` and `ShaRealize`: the realization premise on the no-fold round, prover by prover. On every run within
+* `Realization` and `ShaRealize`: the realization premise on the no-fold protocol, prover by prover. On every run within
   the cap, a prover's commitment-path hashing is its own calls and the verifier's evaluations, logged as `q A`
   black-box SHA-512 queries (the log). Its words program for a sampling block is the walk of the extractor over that
   log, its commitment program is its own commitment path, and the two cost at most the prover's own timed use plus
@@ -48,10 +48,10 @@ The modelling choices, each a hypothesis or a clause RT-LEAN can check:
   read them (an evaluation at a point nobody queried is a fresh uniform answer either way).
 * **(N3) each prover's own query budget `q A` and schedule `τ A`**: `q A` bounds `A`'s distinct SHA-512 inputs over
   the period, its commit phases', work's and selected answers' calls with the verifier's evaluations, on runs within
-  the cap `Q`. Round `w`'s root comes
+  the cap `Q`. Sampling block `w`'s root comes
   after the log's first `τ A w` queries and before the rest: the queries before the root, padded with dummy queries
-  (free in the analysis). The walk of round `w` reads only those, so `τ A w` must not reach past the root: the queries
-  after it depend on the round's check coins and later ones, which `Mw w`'s advice doesn't carry (WORKSOUND-WIT's
+  (free in the analysis). The walk of block `w` reads only those, so `τ A w` must not reach past the root: the queries
+  after it depend on the block's check coins and later ones, which `Mw w`'s advice doesn't carry (WORKSOUND-WIT's
   WIT1, CMP-136 6dbe5998). A prover with more queries has a larger `q A`, and so a larger `ξ A` and `κx A`; at the
   cap, `k + 1` segments of `⌈Q⌉ + V` queries and `k ⌈Q⌉` more in the last are one budget and schedule for every
   prover (`Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`).
@@ -157,21 +157,21 @@ def ExtractAdv (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Ins
 
 /-- **A realization of one prover's commitment path** at query budget `q`, schedule `τ` and advice size `Badv` (the
 per-prover form of `pouw-commit-realize`), on runs within the cap `Q` (`Prover.WithinCap` at the selection `sel`). On
-the no-fold round `nf` at the registrable instances `Reg`, whose oracle is the table `eo : nf.Orc ≃ (X → D)` (SHA-512 on the commitment path,
+the no-fold protocol `nf` at the registrable instances `Reg`, whose oracle is the table `eo : nf.Orc ≃ (X → D)` (SHA-512 on the commitment path,
 `E` its leaf and node encodings, `rD` and `pl` the root and path as digests, `dirs` a cell's position in the tree), the
 prover `A` has
 * a query log `L` of `q` distinct queries with schedule `τ` (B2, N1). `q` and `τ` are `A`'s own (N3);
 * the black-box reading, on every run within the cap: on every oracle and the answer stream it gives the log, the
-  rounds' roots are the log's, and every point an accepted opening's check hashes is a logged query (N2);
+  sampling blocks' roots are the log's, and every point an accepted opening's check hashes is a logged query (N2);
 * words programs `Mw w` on advice of at most `Badv` bits fixed before the sampling block's coins, each, on every answer
-  stream with distinct answers, the walk of the extractor down from the round's root over the queries before it
+  stream with distinct answers, the walk of the extractor down from the block's root over the queries before it
   (`MerkleExtract.ext`; a cell it can't reach reads `0`). Where answers repeat, `ext`'s choice among the matching
-  points can walk into another round's tree, and a repeat is already `κ_x`'s `q²` term (RT-LEAN-2 L40). The
+  points can walk into another block's tree, and a repeat is already `κ_x`'s `q²` term (RT-LEAN-2 L40). The
   commitment programs `Mh w` read the advice, the dither and the words, and their output is `A`'s root;
 * the cost half, over the period, on every run within the cap. The `Mw w` and `Mh w` use at most the prover's timed
   use (`Prover.timedUse`, its sampling blocks' commit phases and work) plus `k · ξw + q · ξl` of each resource: `ξw` the walk's use
-  per round, `ξl` the upkeep of one log entry.
-  - `Mh w` is the prover's commitment path between the round's dither and its root: its SHA-512 calls, each done by
+  per sampling block, `ξl` the upkeep of one log entry.
+  - `Mh w` is the prover's commitment path between the block's dither and its root: its SHA-512 calls, each done by
     the public implementation and logged (each of the prover's calls costs at least the public implementation's,
     R-ACCEL-7).
   - `Mw w` is the rest of the prover's work, then the walk.
@@ -207,7 +207,7 @@ def Realization (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Fin k → Set (noFold
 /-- `pouw-commit-realize` (proposed; the realization half of SHA-512 as a random oracle for the commitments, R-ACCEL-3
 with R-ACCEL-7, pending Daniel; the Accel instance of ASK-16's card 9cd57182, beside `StraightLineExtraction`). In the
 model at its device premises, with the oracle reached only through priced calls (G3, `Accel.OracleCalls`), every
-prover `A` of `k` sampling blocks on the no-fold round `nf` at the registrable instances `Reg` has a `Realization` on
+prover `A` of `k` sampling blocks on the no-fold protocol `nf` at the registrable instances `Reg` has a `Realization` on
 its runs within the cap `Q` at the selection `sel`, at its own query budget `q A`, schedule `τ A` and advice size `Badv A`, with the walk's use
 `ξw` a block and the log's `ξl` an entry. It says nothing about the probability: `κ_x` is proved (`ExtractOfRealize`),
 prover by prover. -/

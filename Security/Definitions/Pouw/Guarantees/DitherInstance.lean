@@ -73,7 +73,7 @@ other work `z` fits on the devices beside its sampling blocks' timed work with
 `rv + W_other(z) > OPT_honest + ε_A W_reg` is at most
 `δ + κ_S + κ_x(A) + κ_sha(A) + nsb (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, at `W_reg = μ · hon = Σ_b W_b` and
 `ε_A = (Σ_b (W_b − pub_mm − pub_sha) + ln(1/δ)/η_w + n_max W_mac E)/W_reg + μ · ξ_A/W_reg`. Here `W_ans` holds the
-selected blocks' honest answers and operand roots at full weight, and `η_w` is the rate a unit of priced cost,
+selected blocks' honest answers and operand roots at full weight, and `η_w` is the rate per priced cost,
 `η q/W_reg`. Every period the verdict accepts did its sampling blocks' commit phases and work within the period's
 capacity (`TimedWorkFits`) and ran its selected answers within the period (`AnswersFit`), which is what the deadlines
 buy.
