@@ -58,7 +58,8 @@ fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and it
 session's coins over ssh to that port of P's loopback, where the draw's client connects. The gate key and the warden
 run's witness are the auditor's, so the draw never runs on the served node, which is the prover's: a ``--coin-peer``
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
-node with no line is refused, so until P has one the chain draws on the verifier's coins. ``--main`` is the verifier's
+node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (since 27 Oct, with its /etc/vy/peers entry), and on
+a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's
 copy of main's first-parent history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does;
 ``--challenger-key`` is infra's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run.
 CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
@@ -84,12 +85,12 @@ The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate dir
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --eos-ids 128001 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
-(``--coins verifier``, without ``--send`` and ``--challenger-key``, until vy-nebius-cpu-2 has its coin-ports line);
+(``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
 
-and the dry rehearsal, on any CPU node:
+and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
 
-    research run --on vy-nebius-cpu-5 --pool network --source . --project verity --as network-accounting --cwd source \\
-      --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
+    research run --on vy-nebius-cpu-2 --pool network --source . --project verity --as network-accounting --cwd source \\
+      --timeout 45m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
       benchmarks/network_traces/served_session.py session --gate local --vocab 256 --prompts 16 --requests 16 \\
       --height 10 --keep /workspace/research/lanes/network-accounting/dry --out "$OUT"'
 """
