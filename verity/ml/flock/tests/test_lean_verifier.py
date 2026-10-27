@@ -48,7 +48,9 @@ def test_no_escape_hatches():
     assert sources()
     hits = [f"{p.relative_to(LEAN)}:{i}: {line.strip()}" for p in sources()
             for i, line in enumerate(p.read_text().splitlines(), 1) if FORBIDDEN.search(line)]
-    assert not hits, hits
+    assert not hits, ("the verifier of record runs only the definitions its proofs are about: write each of these in "
+                      "plain Lean, with no @[extern], @[implemented_by], unsafe or native_decide (reword a comment that "
+                      "names one):\n" + "\n".join(hits))
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
