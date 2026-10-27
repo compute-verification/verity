@@ -120,9 +120,10 @@ def entropy(seed: int):
     return random.Random(seed).randbytes
 
 
-def challenger_key(seed: int, H: int = 4) -> tuple[lms.PrivateKey, LC.ChallengerKey]:
-    """Key `seed`: 2^H leaves (sixteen by default, five a reserved session: the ledger's reserve and open, the record, the
-    close and the ledger's end)."""
+@functools.cache
+def challenger_key(seed: int, H: int = 5) -> tuple[lms.PrivateKey, LC.ChallengerKey]:
+    """Key `seed`: 2^H leaves (thirty-two by default, five a reserved session: the ledger's reserve and open, the record,
+    the close and the ledger's end; a served H1 window takes two sessions, its own and its draw session's)."""
     k = lms.keygen(lms.Params(64, 4, H), bytes([seed]) * 64)
     return k, LC.ChallengerKey(k.params.W, k.params.H, lms.public_key(k))
 
@@ -322,7 +323,7 @@ class Ledger:
     opens sign the model registry `registry`'s registrations (`Registry.opened`)."""
 
     def __init__(self, path: Path, seed: int, leaves: Iterator[int] | None = None,
-                 named: LC.ChallengerKey | None = None, H: int = 4, registry: Registry | None = None) -> None:
+                 named: LC.ChallengerKey | None = None, H: int = 5, registry: Registry | None = None) -> None:
         self.path, self.lines = path, []
         self.registry = registry or Registry()
         self.pins_path = write_pins(path.parent / f"{path.stem}.pins.jsonl")
@@ -373,12 +374,13 @@ class Ledger:
         self.append("reserve", session, {"by": "vllm", "minutes": 10, "started_utc": "2026-10-20T11:08:00Z",
                                          "expires_utc": "2026-10-20T11:18:00Z", "key_sha512": self.key_sha512}, leaf)
 
-    def open(self, session: str, window: dict, leaf: int | None = None) -> None:
+    def open(self, session: str, window: dict, leaf: int | None = None, withheld: bool = False) -> None:
         reserved = ({"reserve": self._reserves[session], "minutes": 10, "opened_by": "vllm",
                      "started_utc": "2026-10-20T11:08:46Z"} if session in self._reserves else {})
         self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": PINNED,
                                       "pins": LC.pins_seal(PINS),
-                                      "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved}, leaf)
+                                      "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved,
+                                      **({"withheld": True} if withheld else {})}, leaf)
         self._roots[session] = window.get("root")
 
     def end(self, session: str, directory: Path, closed: bool) -> None:
@@ -391,6 +393,10 @@ class Ledger:
                                      "refused_hellos": len((directory / R.HELLOS).read_text().splitlines())})
 
 
+#: the port the gate's answer names for a window's draw session (`Host.open_draw`)
+DRAW_PORT = 7812
+
+
 class Host:
     """`challenger` in session `session` of `window` (`WINDOW` by default), its record and close signed under key
     `seed` at the next of `leaves` (hosts sharing a key share them) and written to `directory`, serving one client; the
@@ -398,15 +404,18 @@ class Host:
     `ended`. When `gated` the ledger reserves the session at once (unless not `reserved`) and opens it only at `open`,
     the gate's open of the reserved session, for the window ``{root}`` the serving side names (an H1 window's open root,
     `pouw_h1_window.Window`), at the leaf held before the record's, since the ledger's check wants a record's leaf between
-    its session's open's and end's."""
+    its session's open's and end's. With `withhold` the session is withheld (`remote.open_session`), and the ledger's
+    open says so (``withheld: true``). `open_draw` opens the window's draw session, a `Host` of its own under the same
+    key, leaves and ledger, withheld on the window's draw root (`draw`)."""
 
     def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = session_id(1),
                  leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
-                 gated: bool = False, reserved: bool = True) -> None:
+                 gated: bool = False, reserved: bool = True, withhold: bool = False) -> None:
         self.directory, self.challenger, self.session_id = directory, challenger, session
+        self.seed, self.withhold, self.draw = seed, withhold, None
         directory.mkdir()
         private, self.key = challenger_key(seed)
-        leaves = itertools.count() if leaves is None else leaves
+        leaves = self.leaves = itertools.count() if leaves is None else leaves
         self.ledger = ledger or Ledger(directory.parent / f"{directory.name}.jsonl", seed, leaves)
         self.window = None if gated else WINDOW if window is None else window
         if self.window is not None:
@@ -415,7 +424,7 @@ class Host:
             self.ledger.reserve(session)
         self._open_leaf = next(leaves) if gated else None
         session_ = R.open_session(challenger, self.key, f"{HOST}.{session}",
-                                  lambda m: lms.sign_at(private, next(leaves), m).encode(), directory, session)
+                                  lambda m: lms.sign_at(private, next(leaves), m).encode(), directory, session, withhold)
         (directory / R.HELLOS).write_text("")
         ours, theirs = socket.socketpair()
         self.reason: str | None = None
@@ -432,15 +441,25 @@ class Host:
         """The gate's open of `session` on `root` (`pouw_h1_window.Gate`): the ledger opens it for ``{root}``, and
         the answer names its ledger entry, its root and the challenger's coin commitment."""
         self.window = {"root": root}
-        self.ledger.open(session, self.window, self._open_leaf)
+        self.ledger.open(session, self.window, self._open_leaf, self.withhold)
         return {"session": session, "seq": len(self.ledger.lines) - 1, "root": root,
-                "commitment": self.challenger.commitment.root.hex()}
+                **({} if self.withhold else {"commitment": self.challenger.commitment.root.hex()})}
+
+    def open_draw(self, session: str, root: str, withhold: bool = True) -> dict:
+        """The gate's open of the window's draw session `session` on its draw root `root`, withheld unless not
+        `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a draw session's coins
+        (`window.draw_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""
+        self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
+                         Wd.draw_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves, self.ledger,
+                         gated=True, withhold=withhold)
+        return {**self.draw.open(session, root), "port": DRAW_PORT}
 
     def ended(self) -> str | None:
-        """Join the session once its client has ended it, and the ledger ends it: None when the client closed it, else
-        why it ended."""
+        """Join the session once its client has ended it, and the ledger ends it, then its draw session's (`draw`), if
+        it opened one: None when each client closed its session, else why the first didn't."""
         self._thread.join()
         if not self._ended:
             self._ended = True
             self.ledger.end(self.session_id, self.directory, self.reason is None)
-        return self.reason
+        drawn = None if self.draw is None else self.draw.ended()
+        return self.reason if self.reason is not None else drawn

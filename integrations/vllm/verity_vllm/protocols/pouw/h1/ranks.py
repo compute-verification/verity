@@ -40,6 +40,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
+from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Matmul, Shape
@@ -344,8 +345,8 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     """H1 on an engine built with ``worker_extension_cls`` = `EXTENSION`: the ranks' layout gathered, each rank's `RankRun`
     installed, the window's salt from ``coins`` (an in-process `pouw.coins.Challenger`, as `pouw._install_h1` without a
     challenger) over every rank's weight roots, or opened by ``opener`` at round 0 (the challenger's), and the executor's
-    ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`, its draw family the
-    window's draw coin when ``coins`` are given. A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
+    ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`; when ``coins`` are
+    given, the window's draw coin is an in-process draw session's of ``rounds``' epoch (`window.draw_challenger`). A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
     (`pouw_h1_served.Served`, without the period's `Weights` or a registry) registers the window's tables from the rows
     the ranks ship; ``commit`` (with ``served``, at PP 1, the engine's ``worker_extension_cls`` `COMMIT_EXTENSION`)
     puts the Commit on every rank, its keywords `acquire.h1_commit.RankCommit.h1rank_commit`'s, and ``served``'s tap is the
@@ -385,7 +386,8 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     if coins is not None:
         commitment, opening = coins.commitment, coins.open("salt", weights_root(roots))
         salt = PH.program_salt(Epoch.start(declared, roots, commitment, opening).salt)
-        draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
+        draw = (LiveRecord(Wd.draw_challenger(rounds.challenger.commitment.epoch, verifier.coins), Wd.DRAW)
+                if rounds is not None else None)
         commits = {"coins": commitment.to_json(), "salt_opening": opening.to_json(),
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}
     source = PH.CHALLENGER if opener is not None else "in-process"
