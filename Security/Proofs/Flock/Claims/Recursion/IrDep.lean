@@ -16,8 +16,12 @@ recursive prover `rec_live` runs with C-Flock's prover behind it, as V\*'s stage
 * **Its rest** (`depRest`, `rec_vstar.queries`, `rec_vstage`, `verifier_rows`): each rep's openings at each level of table
   0's schedule (`schAt`), in rep, level and query order, with the position the verifier's rows draw (`Rows.posAt`), the
   opened row (`openAt`) and its siblings (`sibsOf`), each fitted to its level's `2^lanes` elements and `d - cap`
-  siblings as an honest proof has them; each rep's κ, eq(α) and v at its coins (`verifierRows`, v with the comb at
-  the lincheck's fold points).
+  siblings as an honest proof has them; each rep's κ, eq(α) at each level's queries and v at its coins
+  (`verifierRows`, v with the comb at the lincheck's fold points).
+
+`IrDepSession` evaluates `IrDep` at a deployed inner session, with the statement's setup read once (`setupB`, `rowsV`,
+`depRestV`: `setupB_eq`, `irDep_rows`, `irDep_rest`), and `test_irdep_difftest.py` holds it to the deployed builder's
+rows, openings, κ, eq(α), v and running sums' salts there.
 
 `irShaped_dep` proves `IrShaped (IrDep x)` at every dense statement, every tape and every history holding both reps'
 stream rounds, where the reps' tops differ at each later level (the tape exception, as `hok_honest` takes it):
@@ -112,7 +116,8 @@ def depRest (xI : Msg) (τ : DepTape) (cs : List Coin) : _root_.VStar.In.Src whe
   accSalts := τ.accSalts
   kappa := (Array.range 2).map fun k => ((verRowsAt xI cs k RecCoins.ZERO_COMB).map (·.2.2)).getD #[]
   eqA := (Array.range 2).map fun k =>
-    ((verRowsAt xI cs k RecCoins.ZERO_COMB).map fun t => t.2.1.lg.conss.map fun c => eqTable c.alpha).getD #[]
+    ((verRowsAt xI cs k RecCoins.ZERO_COMB).map fun t =>
+      t.2.1.lg.conss.map fun c => (eqTable c.alpha).extract 0 c.pos.size).getD #[]
   vs := (Array.range 2).map fun k => ((verRowsAt xI cs k (combAt xI cs k)).map (·.1)).getD #[]
   fresh := τ.fresh
 
@@ -433,5 +438,171 @@ theorem irShaped_dep {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some
         omega
       · rw [h, pair_getElem!_one]
         omega
+
+/-! ## At the inner statement's setup
+
+What a session reader evaluates (`IrDepSession`, the difftest against the deployed builder): `depRest`'s pieces with the
+inner statement's setup `v` read once rather than at every opening, each `depRest`'s own wherever the statement sets up
+at `v` (`depRest_eq`). -/
+
+/-- **Rep `k`'s verifier rows at the setup `v`**, table `t`'s shape and extra claims at the link coin `c₁`, rep `k`'s
+`canonRounds` at the rep rounds' coins `cs`, and the comb `comb`. -/
+def rowsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (c₁ : Coin) (cs : List Coin)
+    (t k : ℕ) (comb : Array F128) :
+    Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))) :=
+  RecAlgebra.verifierRows
+    (FlockSoundness.Refine.shapeOf (tabsOf v.2.2)[t]! ((fast100 (tabsOf v.2.2)[t]!.m).getD default)
+      (((tabsOf v.2.2)[t]!.extra (pointsOf v.2.1 c₁)).toOption.getD #[]).size)
+    (Rows.canonRounds v.2.1 v.2.2 cs k) (((tabsOf v.2.2)[t]!.extra (pointsOf v.2.1 c₁)).toOption.getD #[]) comb
+
+/-- The position verifier rows `r` draw for query `j` of level `l`. -/
+def posOf (r : Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128)))) (l j : ℕ) :
+    ℕ :=
+  match r with
+  | .ok (_, info, _) => (info.lg.conss[l]!).pos[j]!
+  | .error _ => 0
+
+/-- Table `t`'s schedule at the setup `v`. -/
+def schV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (t : ℕ) : _root_.Flock.Schedule :=
+  (fast100 (tabsOf v.2.2)[t]!.m).getD default
+
+/-- Rep `k`'s comb at the setup `v`. -/
+def combV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (cs : List Coin) (k : ℕ) :
+    Array F128 :=
+  (match (rowsV v (cs.headD default) cs.tail (k / 2) k RecCoins.ZERO_COMB).toOption with
+    | some (_, info, _) =>
+      ((tabsOf v.2.2)[k / 2]!.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn
+        info.lc.fold.ts).toOption
+    | none => none).getD RecCoins.ZERO_COMB
+
+/-- `depOpen` at the schedule `sch` and rep `rep`'s verifier rows `r`, computed once for all its queries. -/
+def depOpenV (sch : _root_.Flock.Schedule)
+    (r : Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))))
+    (ps : Array (_root_.Flock.Proof × F128)) (rep l j : ℕ) : _root_.VStar.In.Opening :=
+  let lv := sch.levels[l]!
+  let o := FlockSoundness.Refine.openAt (ps.getD rep default).1.ligerito (sch.levels.size - 1) l
+  { rep, level := l, j, pos := posOf r l j,
+    row := fitArr (2 ^ lv.lanes) 0 (o.1.getD j #[]),
+    sibs := fitArr (lv.d - lv.cap) ByteArray.empty (_root_.Flock.sibsOf o.2.1 (lv.d - lv.cap) j).toArray }
+
+/-- `depOpenings` at the setup `v`. -/
+def depOpeningsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (cs : List Coin)
+    (ps : Array (_root_.Flock.Proof × F128)) : Array _root_.VStar.In.Opening :=
+  let sch := schV v 0
+  ((List.range 2).flatMap fun rep =>
+    let r := rowsV v (cs.headD default) cs.tail 0 rep #[]
+    (List.range sch.levels.size).flatMap fun l => (List.range (sch.levels[l]!).q).map (depOpenV sch r ps rep l)).toArray
+
+/-- `depRest` at the setup `v`. -/
+def depRestV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (τ : DepTape)
+    (cs : List Coin) : _root_.VStar.In.Src where
+  msgs := #[]
+  openings := depOpeningsV v cs (τ.prove cs)
+  tops := #[]
+  accSalts := τ.accSalts
+  kappa := (Array.range 2).map fun k =>
+    (((rowsV v (cs.headD default) cs.tail (k / 2) k RecCoins.ZERO_COMB).toOption).map (·.2.2)).getD #[]
+  eqA := (Array.range 2).map fun k =>
+    (((rowsV v (cs.headD default) cs.tail (k / 2) k RecCoins.ZERO_COMB).toOption).map fun t =>
+      t.2.1.lg.conss.map fun c => (eqTable c.alpha).extract 0 c.pos.size).getD #[]
+  vs := (Array.range 2).map fun k =>
+    (((rowsV v (cs.headD default) cs.tail (k / 2) k (combV v cs k)).toOption).map (·.1)).getD #[]
+  fresh := τ.fresh
+
+section
+variable {xI : Msg} {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt}
+
+theorem posAt_eq (h : setupOf false xI = some v) (cs : List Coin) (q : OpenPiece) :
+    Rows.posAt xI cs q =
+      posOf (rowsV v (cs.headD default) cs.tail.dropLast q.table (2 * q.table + q.rep) #[]) q.level q.query := by
+  unfold Rows.posAt
+  rw [h]
+  rfl
+
+theorem schAt_eq (h : setupOf false xI = some v) (t : ℕ) : OpenLower.schAt xI t = schV v t := by
+  unfold OpenLower.schAt
+  rw [h]
+  rfl
+
+theorem verRowsAt_eq (h : setupOf false xI = some v) (cs : List Coin) (k : ℕ) (comb : Array F128) :
+    verRowsAt xI cs k comb = (rowsV v (cs.headD default) cs.tail (k / 2) k comb).toOption := by
+  unfold verRowsAt
+  rw [h]
+  rfl
+
+theorem combAt_eq (h : setupOf false xI = some v) (cs : List Coin) (k : ℕ) : combAt xI cs k = combV v cs k := by
+  unfold combAt
+  rw [h, verRowsAt_eq h]
+  rfl
+
+theorem depOpen_eq (h : setupOf false xI = some v) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128))
+    (rep l : ℕ) :
+    depOpen xI cs ps rep l = depOpenV (schV v 0) (rowsV v (cs.headD default) cs.tail 0 rep #[]) ps rep l := by
+  have e1 : (cs ++ [(default : Coin)]).headD default = cs.headD default := by cases cs <;> rfl
+  have e2 : (cs ++ [(default : Coin)]).tail.dropLast = cs.tail := by cases cs <;> simp
+  funext j
+  simp only [depOpen, depOpenV, schAt_eq h, posAt_eq h, e1, e2, Nat.mul_zero, Nat.zero_add]
+
+theorem depOpenings_eq (h : setupOf false xI = some v) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128)) :
+    depOpenings xI cs ps = depOpeningsV v cs ps := by
+  simp only [depOpenings, depOpeningsV, schAt_eq h, depOpen_eq h]
+
+/-- **The session reader's rest is the deployed prover's** wherever the inner statement sets up at `v`. -/
+theorem depRest_eq (h : setupOf false xI = some v) (τ : DepTape) (cs : List Coin) :
+    depRest xI τ cs = depRestV v τ cs := by
+  simp only [depRest, depRestV, verRowsAt_eq h, combAt_eq h, depOpenings_eq h]
+
+/-- **`IrDep x`'s rows** where its inner statement sets up at `v`: round `h.length`'s of `depRows` at the coins of `h`. -/
+theorem irDep_rows {x : Msg} (h : setupOf false (xIOf x) = some v) (w : Claims.Flock.Wit) (τ : DepTape)
+    (hs : List (Msg × Msg)) :
+    (IrDep x).rows w τ hs =
+      ((depRows v.2.1 v.2.2 (τ.prove (innerCoins hs)) (innerCoins hs)).getD hs.length []).map
+        _root_.VStar.In.wordsOf := by
+  show (match setupOf false (xIOf x) with
+    | some v => ((depRows v.2.1 v.2.2 (τ.prove (innerCoins hs)) (innerCoins hs)).getD hs.length []).map
+        _root_.VStar.In.wordsOf
+    | none => []) = _
+  simp only [h]
+
+/-- **`IrDep x`'s rest** where its inner statement sets up at `v`: `depRestV v` at the coins of `h`. -/
+theorem irDep_rest {x : Msg} (h : setupOf false (xIOf x) = some v) (w : Claims.Flock.Wit) (τ : DepTape)
+    (hs : List (Msg × Msg)) : (IrDep x).rest w τ hs = depRestV v τ (innerCoins hs) :=
+  depRest_eq h τ (innerCoins hs)
+
+end
+
+/-- `FlockDeploy.decode` with the re-encoding compared by `List.beq`, a loop, rather than by `decide`. -/
+def decodeB (x : Msg) : Option FlockDeploy.Raw :=
+  match FlockDeploy.Raw.read.run x with
+  | some (w, []) => if w.encode == x then some w else none
+  | _ => none
+
+/-- `FlockDeploy.insOf` at `decodeB`. -/
+def insB (zk : Bool) (x : Msg) : Option FlockDeploy.Ins := do
+  let w ← decodeB x
+  if w.zk ≠ zk then none
+  w.ins.toOption
+
+/-- `FlockDeploy.setupOf` at `decodeB`. -/
+def setupB (zk : Bool) (x : Msg) : Option (FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) := do
+  let s ← insB zk x
+  let (spec, sts) ← s.setup.toOption
+  pure (s, spec, sts)
+
+theorem decodeB_eq (x : Msg) : decodeB x = FlockDeploy.decode x := by
+  unfold decodeB FlockDeploy.decode
+  cases FlockDeploy.Raw.read.run x with
+  | none => rfl
+  | some p =>
+    obtain ⟨w, rest⟩ := p
+    cases rest with
+    | nil => simp [beq_iff_eq]
+    | cons _ _ => rfl
+
+/-- **The session reader's setup is the statement's.** -/
+theorem setupB_eq (zk : Bool) (x : Msg) : setupB zk x = setupOf zk x := by
+  unfold setupB insB
+  rw [decodeB_eq]
+  rfl
 
 end RecDeploy.VStarBuild
