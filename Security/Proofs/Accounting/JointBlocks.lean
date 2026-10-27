@@ -13,7 +13,7 @@ share is the one `Pous.Guarantees.ObligationDemo` proves (`demoMemoryShare_oblig
 
 namespace Accounting.SecurityProofs
 
-/-- **The demo's memory share is PoUS's.** At the demo's store, `N = 1038·2^16` blocks on a device of
+/-- **The demo's memory share is PoUS's.** At the demo's store, `N = 1038·2^16` labels on a device of
 `U = 139.64·2^33` bits, the bits of `U` above the state bound `S₀ = ⌊ρ·|C|⌋` are at most `demoMemoryShare · U`, the
 bound `Pous.Guarantees.ObligationDemo` proves. So the joint memory term at `Accounting.demoMemoryShare` is
 `ObligationDemo`'s, `undeclared ≤ 0.1163·U + S_chip + Σ cap·round`. -/
