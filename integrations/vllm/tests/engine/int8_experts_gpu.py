@@ -1,4 +1,4 @@
-"""VLLM-75 on one GPU: a MoE (OLMoE by default) pinned int8 (`int8-checkpoint`, recipe v1) served under `TargetProfile.int8_exact`
+"""On one GPU: a MoE (OLMoE by default) pinned int8 (`int8-checkpoint`, recipe v1) served under `TargetProfile.int8_exact`
 "linears", its routed experts on `Int8ExpertsMethod`, checked bit for bit on the CPU.
 
 One process writes `<out>/int8_experts_gpu.json` and `<out>/pin_entry.json` (the int8 pin's entry):

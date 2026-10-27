@@ -1,4 +1,4 @@
-"""`RMSNormFusedCuda_v2` (generic `fused_add_rms_norm_kernel` under `VLLM_BATCH_INVARIANT=1`): the IR body equals its
+"""`RMSNormFusedCuda_v2` (generic `fused_add_rms_norm_kernel` under `VLLM_BATCH_INVARIANT=1`): the circuit body equals its
 numpy twin gate for gate, and the twin reproduces every fused-norm row of the B0 commit store (v1 does not).
 
 Needs the numerics lane's MUFU.RSQ model (`verity.ml.definitions.numerics`: `librms_triton_model.so`, built on demand into the
