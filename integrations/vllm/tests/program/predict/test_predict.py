@@ -20,7 +20,8 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, UsageError
-from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
+from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
+from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program, weight_leaves, model_shape
 from verity_vllm.program.predict.phi import Phi
@@ -32,10 +33,14 @@ GLM53_S1 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__stoch-t0.8-p0.95__eager
 GLM53_S8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
 DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
+H200 = {"compute_capability": [9, 0], "num_sms": 132}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
 STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+#: TINY's exact-int8 checkpoint (`engine.int8_checkpoint`'s v1) on a target serving its linears int8 (serve-openai's verity_int8)
+INT8 = {**TINY, "quantization_config": dict(INT8_EXACT_QUANT)}
+INT8_LINEARS = {**RTXPRO6000, "int8_exact": "linears"}
 
 
 def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
@@ -269,6 +274,110 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     assert names & {"GemmBias_v1", "GemmBias_v2", "BiasAdd_v1"} == {kind}
 
 
+def test_the_int8_linears_follow_the_build_of_records_rule():
+    """An exact-int8 checkpoint on a target serving its linears int8: each decoder linear is its quantizer `Int8RowQuant_v1{K}`
+    then its product `ScaledMmS8_v1{K,N,DOT}` (`rules.vllm_bindings.int8`), reading the linear's s8 weight [N, K] and its f32
+    row scales [N, 1], which the weights record carries in that order; the LM head (recipe v1's ``lm_head``, not converted)
+    stays the bf16 GEMM."""
+    r = build_program(_phi(INT8, target=INT8_LINEARS), "step")
+    layer = ["Int8RowQuant", "ScaledMmS8", "RoPE", "RoPE", "Attention", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda",
+             "Int8RowQuant", "ScaledMmS8", "SiluMul", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda"]
+    nodes = r.program.fn.body.nodes
+    assert [n.fn.name for n in nodes] == ["Embedding", "RMSNormTriton", *layer, *layer, "Gemm", "TokenSelect"]
+    assert [n.fn.id for n in nodes[2:4]] == ["Int8RowQuant_v1{K=64}", "ScaledMmS8_v1{K=64,N=128,DOT=BlackwellS8ImmaDot32_v1}"]
+    leaves = weight_leaves(model_shape(INT8))
+    assert [(n.split("layers.0.")[-1], t.leaves, sorted(t.width_set())) for n, t in leaves[1:5]] == [
+        ("self_attn.qkv_proj.weight", 128 * 64, [8]), ("self_attn.qkv_proj.weight_scale", 128, [32]),
+        ("self_attn.o_proj.weight", 64 * 64, [8]), ("self_attn.o_proj.weight_scale", 64, [32])]
+    assert len(leaves) == len(weight_leaves(model_shape(TINY))) + 4 * 2
+
+
+def test_a_batch_invariant_request_reads_its_launchs_longest_query():
+    """FA3's tile reads the launch's max_seqlen_q (`pipeline.launch_context`), as the Build's attention binding does: at head dim 64,
+    an 8-row prompt prefilled beside a 40-row one runs the 40 rows' tile (BN 128), alone the one-warpgroup tile (8 x 2 query heads per
+    KV head <= 64: BN 192), and both decode at 192.  The H200 int8 B4 row's LP11_T8 request (traced bec8910e) is this case at Llama-3.2-1B's shapes.
+    A shape whose requests run in different launches has no one FA3 tile."""
+    def tiles(requests: list[dict]) -> dict[int, int]:
+        r = build_program(_phi({**TINY, "hidden_size": 256}, requests, target=dict(H200)), "request", LP=8, T=2)
+        return dict(sorted((int(m[1]), int(m[2])) for k in r.desc["definitions"] if (m := re.match(r"AttentionHead_v4\{T=(\d+),D=64,BN=(\d+)", k))))
+
+    one, other = {"prompt_len": 8, "max_tokens": 3, "arrive_step": 0}, {"prompt_len": 40, "max_tokens": 2, "arrive_step": 0}
+    assert tiles([one]) == {t: 192 for t in range(1, 11)}
+    assert tiles([one, other]) == {**{t: 128 for t in range(1, 9)}, 9: 192, 10: 192}
+    with pytest.raises(Unexpressible, match=re.escape("FA3's tile (kBlockN) is not one value")):
+        tiles([one, other, {**one, "arrive_step": 6}])
+
+
+def test_an_int8_rows_dtype_is_its_checkpoints():
+    """`score.phi_of` names an int8 row's checkpoint dtype "int8" (`config.DTYPES`): the decoder predicts it as the exact-int8
+    checkpoint, and refuses a dtype its checkpoint isn't or one it has no linears for."""
+    def as_row(phi: Phi, dtype: str) -> Phi:
+        return Phi.from_json({**phi.to_json(), "model": {**phi.model, "dtype": dtype}})
+
+    int8, bf16 = _phi(INT8, target=INT8_LINEARS), _phi(TINY)
+    assert build_program(as_row(int8, "int8"), "step").digest == build_program(int8, "step").digest
+    with pytest.raises(Unexpressible, match=re.escape("checkpoint dtype 'bfloat16' for an exact-int8 checkpoint")):
+        build_program(as_row(int8, "bfloat16"), "step")
+    with pytest.raises(Unexpressible, match=re.escape("checkpoint dtype 'int8' for a bf16 checkpoint")):
+        build_program(as_row(bf16, "int8"), "step")
+    with pytest.raises(Unexpressible, match=re.escape("checkpoint dtype 'float8_e4m3fn' (bfloat16 or int8 only)")):
+        build_program(as_row(bf16, "float8_e4m3fn"), "step")
+
+
+#: The H200 int8 Llama-3.2-1B rows' Builds of record (#4770's tree 4f078675fe; vy-dc-h200 run r20261026-185144-3ccb, the same digests
+#: as vy-dc-h200-2's r20261026-182623-0d2a): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
+#: each request shape (LP, T), GP-01's workload) and its `manifest.json`'s digest and identities, with the Programs its header names
+#: (`program_digest`, and a batch's `component_digests`).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
+H200_INT8 = {
+    "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
+        "step": (1, "66cc640b4c9736b2b784626f7987f865499ee9b62c0dc47b8b4e666dcc9990e538bc46e18fbd431221031b96dcfc4d608e38af457f6bd044d47afb07b8ca296f"),
+        "requests": {(256, 31): "963a228135f64eb6db7d423209c47f42f544aabfa05d7733f58f5912a7bc3241bb907af6ed69bb89203ae413042971cc0bfb30218ef6f90f2252fc58b0d99c23"},
+        "workload": "3acd044df21073dc7cfa7a999fd531f9e46055221fda040c54a0f6f5a81a980fb4d9ac11c6c7ff6174483f5e9ca0fd4a0b23206dc227ba788f91b262cfee26a4",
+        "manifest": ("6715e143e1ff21ea7baaf14cf496fe8706e2015f641bae337dfe1743787cd215", 12163, ("request LP256_T31",)),
+    },
+    "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager": {
+        "step": (4, "b24251993d3ede502ee5933b1688f95d871303f415a8553b152dba32fcce848b136f81238095b8fb8fb5adb168b523ba95c28a228109af54c1269dd150e54f62"),
+        "requests": {(11, 8): "bec8910e13b197706b72c29b9e64808d8c4bb8715e75880bd2ef142db8d74f399b77226af6e0725829ea34ef3adbd3f93063e224144baa75dec6bb64af1734d4",
+                     (123, 19): "5426f0fb0717df5ca97c05aca07dc9b0f7affa808e66c6928b3f9f30843b5f14ba0107b1ab76db8c1dd663d1f5db6dca1debc9363928fac716ddaab5f0e843b7",
+                     (159, 31): "878afca2b9a5f48d77183a3f008c5acd72ce5a0fc7976894c32b245f67079a60df0aff9579bda19ba580f34d5ecb7c954d5a23f4ec775c5ae4118e778d1fb7dd",
+                     (256, 1): "05780e3bd779ed8797e079b98cb00755381dbcbf86ff06b6c571fb4db454e2b1d1991943b4564cbcd09159314da23fa4078d89f24c5f9db72053e0ee8514d1c3"},
+        "workload": "b611b68a180f306936fb81c85d26be81a044a31d0fb70dea09a786a91343cb9f332d71f285d2d047d0897d295f5856aaa1830ce89fba940dcce24072e6b436ec",
+        "manifest": ("4d294fcb0d3ad28eddbd434dfd2773fffc5a379fda7c7796713ce0a71e990e7b", 23230,
+                     ("workload", "request LP11_T8", "request LP123_T19", "request LP159_T31", "request LP256_T1")),
+    },
+}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("row", sorted(H200_INT8), ids=["b1", "b4"])
+def test_the_h200_int8_rows_predict_their_builds_of_record(row):
+    """Llama-3.2-1B int8 on the H200 (`verity-int8/Llama-3.2-1B-INT8@15b0976d`, its config the checkpoint pin's, `pinned_hf_config`):
+    φ from the row's declared inputs predicts the step, every request and GP-01's workload Program its Build of record traced, and a
+    digest that moved is named.  `test_a_batch_invariant_request_reads_its_launchs_longest_query` holds one launch's context (the FA3
+    tile at TINY's shapes); this holds the whole step and request Programs at the served shapes (each int8 linear's quantizer and s8
+    product, FA3's tile in each launch of the batch, the bf16 LM head, the sampler) and the batch's composition, so a change to predict,
+    the int8 linears or the workload fails here by name.  Predict builds no manifest (it reads the trace's correspondence, `aot`): the
+    manifest of record is pinned with the Programs its header names, and a moved one names the manifest it leaves behind.  About 2 min."""
+    pin = H200_INT8[row]
+    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    phi = S.phi_of({"row": row, "workload": w}, config=str(pinned_hf_config(w["model"], RowEngine.of(w).revision)))
+    assert sorted(phi.request_shapes()) == sorted(pin["requests"]), "the workload's request shapes are not its Build's"
+    M, step = pin["step"]
+    want = {"step": step, **{f"request LP{lp}_T{t}": d for (lp, t), d in pin["requests"].items()}, "workload": pin["workload"]}
+    got, canon, comps = {"step": build_program(phi, "step", M=M, pos0=8).digest}, {}, {}
+    for lp, t in pin["requests"]:
+        r = build_program(phi, "request", LP=lp, T=t)
+        got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r, canon)
+    got["workload"] = S.predict_workload(phi, comps, canon)["digest"]
+    moved = [k for k in want if got[k] != want[k]]
+    manifest, identities, over = pin["manifest"]
+    stale = [k for k in over if k in moved]
+    assert not moved, "\n".join(
+        [f"{row}: predict moved from its Build of record (re-trace the row on the H200 and pin the new digests with the predictor's)"]
+        + [f"  {k}: Build {want[k][:16]}…, predicted {got[k][:16]}…" for k in moved]
+        + ([f"  the manifest of record {manifest[:16]}… ({identities:,} identities) is over {', '.join(stale)}"] if stale else []))
+
+
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
     ({**TINY, "model_type": "gpt2"}, {}, "model_type 'gpt2': not in the family facts table"),
     ({**TINY, "attention_bias": True}, {}, "attention_bias"),
@@ -292,6 +401,14 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     (TINY, {"engine": {"env": {"VLLM_USE_DEEP_GEMM": "0"}}}, "env VLLM_USE_DEEP_GEMM=0 (the switches modelled"),
     (TINY, {"engine": {"enforce_eager": False}}, "engine arg enforce_eager=False where the 'bi-eager' target applies True"),
     (TINY, {"engine": {"kv_cache_dtype": "fp8"}}, "engine arg kv_cache_dtype='fp8' (not modelled)"),
+    (INT8, {}, "an exact-int8 checkpoint on a target whose int8_exact is None"),
+    (TINY, {"target": INT8_LINEARS}, "a bf16 checkpoint on a target whose int8_exact is 'linears'"),
+    (INT8, {"target": {**RTXPRO6000, "int8_exact": "all"}}, "the exact-int8 attention (int8_exact 'all'"),
+    ({**TINY, "tie_word_embeddings": False, "quantization_config": dict(INT8_EXACT_LMHEAD_QUANT)}, {"target": INT8_LINEARS},
+     "an int8 LM head (verity-int8-channel127/v2"),
+    (INT8, {"target": INT8_LINEARS, "tp": {"world": 2, "rank": 0}}, "the int8 linears at TP2"),
+    ({**INT8, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32},
+     {"target": INT8_LINEARS}, "an int8 linear with a bias"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):

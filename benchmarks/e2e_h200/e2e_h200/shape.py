@@ -25,12 +25,15 @@ FROZEN = H200
 TINY = IFACE_TINY
 #: width 128, 1 layer, 8 query heads of 16, MLP 256, context 8: `FORMS` gives it every level of the map
 MINI = Shape("e2e-mqa-w128-l1", 128, 1, 8, 16, 1, 256, 256, 8, 16)
+#: MINI with its linears' registered rows a quantizer chunk (32 codes), as the frozen shape's are (8,192): each ``wrow{r}`` a
+#: proof block reads is one registered row (`weights_commit.reads`)
+MINI_ROWS = Shape("e2e-mqa-w128-l1-r32", 128, 1, 8, 16, 1, 256, 256, 8, 32)
 #: Phase 1's widths with the frozen shape's head size: width 128, 2 layers, 2 heads of 64, MLP 512
 SMALL = Shape("e2e-mqa-w128-l2", 128, 2, 2, 64, 1, 512, 256, 32, 128)
 #: a GPU slice: width 2,048, 4 layers, 32 heads of 64, MLP 8,192
 SLICE = Shape("e2e-mqa-w2048-l4", 2048, 4, 32, 64, 1, 8192, 256, 32, 256)
-SHAPES = {s.name: s for s in (FROZEN, SLICE, SMALL, MINI, TINY)} | {"h200": FROZEN, "slice": SLICE, "small": SMALL,
-                                                                    "mini": MINI, "tiny": TINY}
+SHAPES = {s.name: s for s in (FROZEN, SLICE, SMALL, MINI, MINI_ROWS, TINY)} | {
+    "h200": FROZEN, "slice": SLICE, "small": SMALL, "mini": MINI, "mini-rows": MINI_ROWS, "tiny": TINY}
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,7 @@ class Forms:
 
 #: MINI: 4 chunk rows of 32 a row of the width, 2 sums rows, 2 RMSNorm groups, quantizer chunks of 32 (R = K / 32), amax
 #: parts of 64 (2 a row of the width, 4 of the MLP's), heads gathered in pairs as at the frozen shape
-FORMS = {MINI.name: Forms(chunk=32, sums_row=2, group_chunks=2, quant_chunk=32, amax_part=64)}
+FORMS = {s.name: Forms(chunk=32, sums_row=2, group_chunks=2, quant_chunk=32, amax_part=64) for s in (MINI, MINI_ROWS)}
 
 
 def forms(s: Shape) -> Forms:

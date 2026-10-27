@@ -138,8 +138,9 @@ def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_res
 
 def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_reaches_a_kv_page():
     """The Commit's session (`Binder(kv=False)`): the KV pool is counted unregistered, the filler is its own region,
-    no registered byte is a KV cache's, and a step that writes KV (its appends, its frees) writes no registered block:
-    the memory map numbers the step and records no line."""
+    every region is under the driver's sketch-sha512 receipt, no registered byte is a KV cache's, and a step that
+    writes KV (its appends, its frees) writes no registered block: the memory map numbers the step and records no
+    line."""
     s = Store()
     b = Binder(s, passes=False, kv=False)
     r = runner()
@@ -148,6 +149,7 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     b.register_filler(3 * 4096 + 5, "cpu")
     st = b.stats()
     assert [x.kind for x in s.layout().regions] == ["weights", "filler"] and s._pool is None
+    assert [x.receipt for x in s.layout().regions] == ["sketch-sha512"] * 2
     assert st["bytes_by_kind"] == {"weights": 64 * 32 * 4, "filler": 3 * 4096}
     assert st["unregistered_bytes"] == 2 * 32 * 4 + 3 * 2 * PAGES * 2048 == 2 * 32 * 4 + b.unregistered["kv"]
     kv = [(c.untyped_storage().data_ptr(), c.untyped_storage().data_ptr() + c.untyped_storage().nbytes())

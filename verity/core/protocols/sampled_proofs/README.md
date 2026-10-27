@@ -1,7 +1,7 @@
 # Sampled proofs (`verity-sampled-proofs`)
 
 Sampled proofs spot-check a committed computation. While serving, the developer commits every value that crosses a
-proof-unit boundary of a partition of the program and registers the commitment roots. The verifier then draws proof units
+proof-block boundary of a partition of the program and registers the commitment roots. The verifier then draws proof blocks
 from its own randomness, the developer proves the drawn units, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.core.protocols.profile.IntegrityProfile`): except with
 probability δ, at most so many units are faulty, a unit being faulty when its committed outputs differ from its gates
@@ -43,18 +43,18 @@ but sizes each stratum by the work its units are credited: with `W = Σ_s w_s n_
 A work draw may add a closure, units proved with the drawn ones. Each verifier derives the strata from its own program and
 query, never from the prover.
 
-**What an accepted audit establishes.** Under a stratified draw, a set of faulty units has acceptance probability
+**What an accepted audit establishes.** Under a stratified draw, a set of faulty proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its units in
-stratum `s`, so a subcircuit that is faulty in every unit is never missed. Under the work sampling design, faulty units
+stratum `s`, so a subcircuit that is faulty in every unit is never missed. Under the work sampling design, faulty proof blocks
 doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
 has at most `2^-40`. The per-unit proof system adds its knowledge-soundness and binding errors (ε_ks and ε_bind).
-Applications weight the profile's faulty units by what each one costs them: exfiltration security by their output bits,
+Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
 plus a term for which units are faulty, and compute security by their work.
 
 **Two-stage sampling is retired** (Daniel, ASK-25, 18 Oct 19:00Z: everything is committed at serve time, no deferral
 or two-stage). The proof service has no two-stage rule, and the Lean verifier refuses a registration that names one.
 Not built yet: the security function and its red-team review (decision 41), and composition checks such as PoUW's tiles
-per proof unit matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
+per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
 
 Serving's record is not yet the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
 captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchmarks/one_stage/a5.py`) registers a stand-in
@@ -75,7 +75,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
-  prove that its draws accept faulty units no more often than the modelled sampling designs do, and
+  prove that its draws accept faulty proof blocks no more often than the modelled sampling designs do, and
   `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
@@ -97,6 +97,14 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
+- **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
+  `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
+  circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
+  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. The check runs
+  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
+  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
+  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
+  to `verify`'s. Onsite, remote and composition still read v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
@@ -276,7 +284,7 @@ only inside a proof (`one_stage.registered`).
   position, and refuses a statement that names no `registered` entry for such a port or names one it was not given,
   and one whose units it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
 - Served trees (`served.register_served`): a served root is a hiding commitment that binds nothing on its own, so every
-  served path registers each tree a proof unit reads as a registered value (`ServedTree`: value, root, leaves, words,
+  served path registers each tree a proof block reads as a registered value (`ServedTree`: value, root, leaves, words,
   `word_bits`, domain, its row format `row_schema`, for an earlier run's output its `(record digest, port)`, and for an
   earlier record's registered value it reuses, with no tree of its own, its `(record digest, value)`), writes the
   verifier's `--registered` file from it, and verifies with `flock-verify --zk --registered`: the premise
@@ -363,7 +371,7 @@ credit is a rule of its own (the Pearl-C statement review, item 5), documented w
 
 The one-stage profile (`audit.profile`) is core's `IntegrityProfile` of one level `unit` (`Level("unit", <partition
 digest>)`) with `sizes =
-(population,)`, drawn by the sampling design (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum per template), with `delta`, the program's digest and the count drawn. It bounds faulty units and weights nothing. The work
+(population,)`, drawn by the sampling design (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum per template), with `delta`, the program's digest and the count drawn. It bounds faulty proof blocks and weights nothing. The work
 sampling design's profile is `Stratified` over the same strata at the work sizes, counting the drawn units only: a
 closure proves more, which only helps.
 

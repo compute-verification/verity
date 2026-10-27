@@ -15,8 +15,9 @@ statement names what the Definition reading takes:
 * (b) every drawn unit's view of the words its registered reads carry (`Accounting.TS.Tile.tileView` of `rd`) meets
   the Definition's checks (`TileOk`) at the Definition's own dequant (`Accounting.TS.Lanes.dqOf dqW`), under the named
   premise `Accounting.TS.Tile.TileComputes` (the circuit computes `PouwH1TileZy_v1{TILE}` there, TILE `PouwH1Tile_v1`
-  or `PouwH1Tile_v3`), at sessions whose every circuit port is a port of `own`, what flock-verify's complete check
-  establishes (`Flock.Registered.checkComplete_ok`). That the Definition's `ok = 1` means `TileOk` is proved
+  or `PouwH1Tile_v3`). That every circuit port is a port of `own` is not a hypothesis: `tileLayer`'s acceptance
+  includes flock-verify's complete check (`Flock.Registered.checkComplete`), from which `checkComplete_ok` reads it.
+  That the Definition's `ok = 1` means `TileOk` is proved
   (`Accounting.TS.Tile.tileChecks_of_computes`, which gives `Accounting.Assumptions.TS.TileChecks`), at a `K` the
   tile's EXACT binds at (`32 ∣ K`, `K < 2^17`), which the statement takes of its `K`: the tile verifier pins each
   template's circuit by digest (`PouwCheck.tiles`) and reads no `K` it could refuse, and the served tiles' `K`s are
@@ -35,10 +36,10 @@ open scoped ENNReal
 
 /-- **A tile unit's proof layer, with its Definition's checks, is sound at `δ` through its C-Flock sessions, fully
 checked.** `CheckedSessionSound`'s window and premises, at the tile layer `tileLayer sess out ok known dq dec right`
-(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i`;
-opening the committed rows at the registered reads; its relation `TileRel`), and in addition at every session: every
-port of its circuit is a port of `own` (what `Flock.Registered.checkComplete` establishes, `checkComplete_ok`), the
-known content names the port `ok` with rows each the word `1` (`okRow`), and, at a `K` the tile's EXACT binds at
+(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i` and
+under its complete check, `Flock.Registered.checkComplete`: every port of the circuit is a port of `own`; opening the
+committed rows at the registered reads; its relation `TileRel`), and in addition at every session: the known content
+names the port `ok` with rows each the word `1` (`okRow`), and, at a `K` the tile's EXACT binds at
 (`32 ∣ K`, `K < 2^17`), its circuit computes `PouwH1TileZy_v1{TILE}`'s Definition (`Pouw.H1Zy.tileOk` at TILE's form
 `form` and the dequant's word view `dqW`) on the words `rd x w i` reads from the registered reads
 (`Accounting.TS.Tile.TileComputes`). Then the layer, at the Definition's dequant `dqOf dqW` and the view of those words
@@ -59,7 +60,6 @@ def TileSessionSound : Prop :=
     (∀ x w i u, (sess x w i).ServedRegistered u) →
     (∀ x w i, (∃ q : Fin (sess x w i).c.ports.size, (sess x w i).c.ports[q].name = ok) ∧
       ∃ pt ∈ (sess x w i).own, pt.name = ok) →
-    (∀ x w i, ∀ p ∈ (sess x w i).c.ports, ∃ r ∈ (sess x w i).own, r.name = p.name) →
     (∀ x w i, ∃ ks, (ok, ks) ∈ known x w i ∧ ∀ r ∈ ks, r.1 = okRow) →
     32 ∣ K → K < 2 ^ 17 →
     (∀ x w i, Accounting.TS.Tile.TileComputes form dqW (sess x w i) ok (rd x w i)) →
