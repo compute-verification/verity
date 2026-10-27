@@ -11,8 +11,8 @@ import Proofs.Core.Unroll
   ingress, or inside it, where it is an input gate and so initial information;
 * `BlockDescription`: Lemma 1's program for the proof block, at most `|e| + ⌈log₂ B⌉ + D + in_X([0, ∞))` bits;
 * `GateCount`: an isomorphism keeps the size, and `H` run `T` steps has size `T · |H|`;
-* the witnesses at `FixedMachine.Instances`: the honest machine's premises, and the hard-coding circuit, whose string
-  needs a one-bit program and has a budget of `0` bits.
+* the witnesses at `FixedMachine.Instances`: the honest machine's premises, and the hard-coding circuit, which meets
+  every premise but `FixedMachine` and whose string needs a one-bit program against a budget of `0` bits.
 -/
 
 namespace Accounting.SecurityProofs.FixedMachine
@@ -61,7 +61,7 @@ theorem card_unregistered_le (R : Registration) (A : Placed L) (φ : Circuit.Iso
     _ ≤ D + A.ingress X (Set.Ici 0) := by omega
 
 theorem BlockDescription : Guarantees.FixedMachine.BlockDescription := by
-  intro H S T R hR hH ρ M r t a_blk e y he hev L A φ X a D hblk hbud x hx u
+  intro H S T R hR hH ρ M r t a_blk e y he hev L A _ φ X a D hblk hbud x hx u
   have hB : R.d.D.Boolean := by
     rw [hR]
     exact Circuit.unroll_boolean H S T hH
@@ -84,24 +84,30 @@ theorem R₀_op_one (v : R₀.d.D.Transcript) : R₀.d.D.op ⟨1, by decide⟩ v
 
 theorem R₀_op_two (v : R₀.d.D.Transcript) : R₀.d.D.op ⟨2, by decide⟩ v = ~~~ (v ⟨1, by decide⟩) := rfl
 
-theorem BlockDescription_honest : Guarantees.FixedMachine.BlockDescription_honest := by
-  refine ⟨⟨fun _ => rfl, by decide⟩, ?_, ⟨φ₀⟩, ?_, ?_, ?_⟩
-  · rintro ⟨u, hu⟩ X
-    obtain rfl : u = 0 := by have : u < 1 := hu; omega
-    have hunreg : R₀.d.unregistered (R₀.P.gates ⟨0, by decide⟩) = {⟨0, by decide⟩} := by decide
-    have hidx : indexCode (⟨0, hu⟩ : Fin R₀.B) = [] := List.eq_nil_of_length_eq_zero (by simp [indexCode, R₀])
-    have hprog : blockProgram R₀ [] X ⟨0, hu⟩ = [(X ⟨0, by decide⟩).getLsbD 0] := by
-      rw [blockProgram, hunreg, hidx, sort_singleton]
-      rfl
-    have h1 : R₀.recompute X ⟨0, hu⟩ ⟨1, by decide⟩ = ~~~ (X ⟨0, by decide⟩) := by
-      rw [Registration.recompute, Circuit.run_free _ rfl, R₀_op_one, Circuit.run_fixed _ rfl]
-    have h2 : R₀.recompute X ⟨0, hu⟩ ⟨2, by decide⟩ = X ⟨0, by decide⟩ := by
-      rw [Registration.recompute, Circuit.run_free _ rfl, R₀_op_two, ← Registration.recompute, h1]
-      exact BitVec.not_not
-    rw [hprog]
-    show some [(X ⟨0, by decide⟩).getLsbD 0] = some [(R₀.recompute X ⟨0, hu⟩ ⟨2, by decide⟩).getLsbD 0]
-    rw [h2]
+theorem boolean_H₀ : H₀.Boolean := ⟨fun _ => rfl, by decide⟩
+
+/-- The empty evaluator performs the final-state extraction `y₀` on `R₀`'s proof block at `M₀`: the block's one
+unregistered input is the initial state, and negating it twice gives the final state. -/
+theorem evaluates_y₀ : Evaluates M₀ () 0 R₀ [] y₀ := by
+  rintro ⟨u, hu⟩ X
+  obtain rfl : u = 0 := by have : u < 1 := hu; omega
+  have hunreg : R₀.d.unregistered (R₀.P.gates ⟨0, by decide⟩) = {⟨0, by decide⟩} := by decide
+  have hidx : indexCode (⟨0, hu⟩ : Fin R₀.B) = [] := List.eq_nil_of_length_eq_zero (by simp [indexCode, R₀])
+  have hprog : blockProgram R₀ [] X ⟨0, hu⟩ = [(X ⟨0, by decide⟩).getLsbD 0] := by
+    rw [blockProgram, hunreg, hidx, sort_singleton]
     rfl
+  have h1 : R₀.recompute X ⟨0, hu⟩ ⟨1, by decide⟩ = ~~~ (X ⟨0, by decide⟩) := by
+    rw [Registration.recompute, Circuit.run_free _ rfl, R₀_op_one, Circuit.run_fixed _ rfl]
+  have h2 : R₀.recompute X ⟨0, hu⟩ ⟨2, by decide⟩ = X ⟨0, by decide⟩ := by
+    rw [Registration.recompute, Circuit.run_free _ rfl, R₀_op_two, ← Registration.recompute, h1]
+    exact BitVec.not_not
+  rw [hprog]
+  show some [(X ⟨0, by decide⟩).getLsbD 0] = some [(R₀.recompute X ⟨0, hu⟩ ⟨2, by decide⟩).getLsbD 0]
+  rw [h2]
+  rfl
+
+theorem BlockDescription_honest : Guarantees.FixedMachine.BlockDescription_honest := by
+  refine ⟨boolean_H₀, evaluates_y₀, ⟨φ₀⟩, ?_, ?_, ?_⟩
   · rintro ⟨u, hu⟩
     obtain rfl : u = 0 := by have : u < 1 := hu; omega
     ext g
@@ -137,8 +143,56 @@ theorem BlockDescription_honest : Guarantees.FixedMachine.BlockDescription_hones
   · intro x g hg
     exact absurd hg (notMem_empty g)
 
-theorem BlockDescription_nontrivial : Guarantees.FixedMachine.BlockDescription_nontrivial := by
-  unfold Guarantees.FixedMachine.BlockDescription_nontrivial BlockDescribed
+/-- **The hard-coding circuit is no fixed machine of `H₀`**: an iso would make it `H₀` run one step, whose operation
+gate negates where `Hard`'s outputs the constant `1`. -/
+theorem not_fixed_Hard (T : ℕ) : ¬ Accounting.FixedMachine H₀ S₀ T Hard := by
+  rintro ⟨φ⟩
+  have hN : 1 + 1 * T = 2 := by
+    have := Fintype.card_congr φ.e
+    simp only [Fintype.card_fin] at this
+    exact this
+  have hT : T = 1 := by omega
+  subst hT
+  have hg : (H₀.unroll S₀ 1).isInput ⟨1, by decide⟩ = false := rfl
+  have he : φ.e ⟨1, by decide⟩ = ⟨1, by decide⟩ := by
+    have hi := φ.isInput_e ⟨1, by decide⟩
+    rw [hg] at hi
+    revert hi
+    generalize φ.e ⟨1, by decide⟩ = g
+    revert g
+    decide
+  let ones : Hard.Transcript := fun _ => (1 : BitVec 1)
+  have h := congrArg BitVec.toNat (φ.op_e ⟨1, by decide⟩ hg ones)
+  rw [BitVec.toNat_cast, he] at h
+  exact absurd h (by
+    show (1 : ℕ) ≠ (~~~ (1 : BitVec 1)).toNat
+    decide)
+
+/-- `Hard`'s one proof block, its operation gate, is the region of its one location over the run. -/
+theorem region_Hard : Hard.region univ (Set.Ici 0) = {⟨1, by decide⟩} := by
+  ext g
+  rw [Actual.mem_region, mem_singleton]
+  simp only [mem_univ, Set.mem_Ici, Nat.zero_le, and_self, and_true]
+  revert g
+  decide
+
+/-- With gate `0` registered, `Hard`'s initial budget is `0` bits. -/
+theorem initialBudget_Hard : InitialBudget Hard {⟨0, by decide⟩} ∅ univ 0 := by
+  refine ⟨?_, ?_, ?_⟩
+  · intro g hg
+    exact absurd hg (notMem_empty g)
+  · intro g hg hx
+    clear hx
+    left
+    revert hg
+    revert g
+    decide
+  · simp [Placed.stateIn, Circuit.width]
+
+/-- `hardString` needs a one-bit program at `M₀`, more than a `0`-bit budget with no ingress, one proof block and the
+empty evaluator allow. -/
+theorem not_described_Hard : ¬ BlockDescribed M₀ () 0 Hard univ 0 1 0 hardString := by
+  unfold BlockDescribed
   have hin : Hard.ingress univ (Set.Ici 0) = 0 := by
     simp [Placed.ingress, Circuit.width]
   rw [hin, Nat.clog_one_right]
@@ -152,37 +206,7 @@ theorem BlockDescription_nontrivial : Guarantees.FixedMachine.BlockDescription_n
   have := h1.trans h
   norm_num at this
 
-theorem Hard_notFixed : Guarantees.FixedMachine.Hard_notFixed := by
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · rintro T ⟨φ⟩
-    have hN : 1 + 1 * T = 2 := by
-      have := Fintype.card_congr φ.e
-      simp only [Fintype.card_fin] at this
-      exact this
-    have hT : T = 1 := by omega
-    subst hT
-    have hg : (H₀.unroll S₀ 1).isInput ⟨1, by decide⟩ = false := rfl
-    have he : φ.e ⟨1, by decide⟩ = ⟨1, by decide⟩ := by
-      have hi := φ.isInput_e ⟨1, by decide⟩
-      rw [hg] at hi
-      revert hi
-      generalize φ.e ⟨1, by decide⟩ = g
-      revert g
-      decide
-    let ones : Hard.Transcript := fun _ => (1 : BitVec 1)
-    have h := congrArg BitVec.toNat (φ.op_e ⟨1, by decide⟩ hg ones)
-    rw [BitVec.toNat_cast, he] at h
-    exact absurd h (by
-      show (1 : ℕ) ≠ (~~~ (1 : BitVec 1)).toNat
-      decide)
-  · intro g hg
-    exact absurd hg (notMem_empty g)
-  · intro g hg hx
-    clear hx
-    left
-    revert hg
-    revert g
-    decide
-  · simp [Placed.stateIn, Circuit.width]
+theorem BlockDescription_nontrivial : Guarantees.FixedMachine.BlockDescription_nontrivial :=
+  ⟨boolean_H₀, evaluates_y₀, not_fixed_Hard, region_Hard, initialBudget_Hard, not_described_Hard⟩
 
 end Accounting.SecurityProofs.FixedMachine

@@ -3142,14 +3142,6 @@
    "assumptions": [],
    "type_hash": "fe5538c29e6e66fc919d2f322ee9bb45c1a12f651a83d58872dd7a5230be9009"
   },
-  "Accounting.SecurityProofs.FixedMachine.Hard_notFixed": {
-   "owner": "@lean",
-   "signature": [
-    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed : Accounting.Guarantees.FixedMachine.Hard_notFixed"
-   ],
-   "assumptions": [],
-   "type_hash": "99010ed7719e8f70e15c3ce723695b8534e97ca348e98a113290ac43ec158e5a"
-  },
   "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": {
    "owner": "@compute-accounting",
    "signature": [
@@ -11883,8 +11875,7 @@
    "Accounting.SecurityProofs.FixedMachine.BlockDescription": "frozen (no-function): It is the working draft's Lemma 1 for an actual circuit that is a fixed machine run T steps, each proof block the region of one location over the run with its initial information within a budget (Accounting.FixedMachine, Accounting.InitialBudget, Accounting.BlockDescribed, Security/Definitions/Accounting/FixedMachine.lean), about an arbitrary step circuit, registration, decoder and extraction rule, not about a function's code.",
    "Accounting.SecurityProofs.FixedMachine.GateCount": "frozen (no-function): It is about an arbitrary step circuit and an actual circuit that is it run T steps (Accounting.FixedMachine, Verity.Circuit.unroll, Security/Definitions/Core/Unroll.lean): its gate count is T times the step's; not about a function's code.",
    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest": "completeness: BlockDescription's honest witness (LEAN-66): its premises hold together at a constructed two-gate machine run two steps (Accounting.FixedMachine.H₀, Security/Definitions/Accounting/FixedMachine/Instances.lean); an instance, not a property of a function's code.",
-   "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial": "lemma: BlockDescription's nontrivial witness (LEAN-66): the hard-coding circuit's string is not described within its 0-bit budget and no ingress (Accounting.FixedMachine.Hard, Security/Definitions/Accounting/FixedMachine/Instances.lean); not about a function's code.",
-   "Accounting.SecurityProofs.FixedMachine.Hard_notFixed": "lemma: The hard-coding circuit is no fixed machine of H₀ at any number of steps, and its initial budget is 0 bits (Accounting.FixedMachine.Hard, Security/Definitions/Accounting/FixedMachine/Instances.lean): what makes BlockDescription_nontrivial a circuit that fails FixedMachine; not about a function's code.",
+   "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial": "lemma: BlockDescription's nontrivial witness (LEAN-66, exclusion form): at the hard-coding circuit every other premise holds, it is no fixed machine of H₀ at any number of steps, and its string is not described within its 0-bit budget and no ingress (Accounting.FixedMachine.Hard, Security/Definitions/Accounting/FixedMachine/Instances.lean); not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code."
   },
   "conjectures": {
@@ -12009,7 +12000,6 @@
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
     "Accounting.SecurityProofs.FixedMachine.GateCount",
-    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
@@ -13116,8 +13106,7 @@
     "Accounting.SecurityProofs.FixedMachine.BlockDescription",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
-    "Accounting.SecurityProofs.FixedMachine.GateCount",
-    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
+    "Accounting.SecurityProofs.FixedMachine.GateCount"
    ]
   },
   "Definitions.Accounting.FixedMachine.Instances": {
@@ -13141,8 +13130,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
-    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
-    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial"
    ]
   },
   "Definitions.Accounting.Gates.Codec": {
@@ -13770,15 +13758,13 @@
     "Accounting.Guarantees.FixedMachine.BlockDescription": "ae30036a2c56758612ee894b4f4afff33d937384a7fca2a864db1efc822c23ac",
     "Accounting.Guarantees.FixedMachine.BlockDescription_honest": "ce2f6dff539c3c48a2e3737bfb9a315933f80f577314e3b6d3c29742f94127b5",
     "Accounting.Guarantees.FixedMachine.BlockDescription_nontrivial": "10d843ea12d63de66a23cd1b7f6ba57ae8711419c77dbeb158330c25a2e8cdd0",
-    "Accounting.Guarantees.FixedMachine.GateCount": "7e66c352fe3ee54d101a940dac9658ed5e37978bfdaf70dc685bade114f2db19",
-    "Accounting.Guarantees.FixedMachine.Hard_notFixed": "54f32f50a5503efad3573dd75f6ac31778ebf9170f96f83358985d03820b8af6"
+    "Accounting.Guarantees.FixedMachine.GateCount": "7e66c352fe3ee54d101a940dac9658ed5e37978bfdaf70dc685bade114f2db19"
    },
    "guarantees": [
     "Accounting.SecurityProofs.FixedMachine.BlockDescription",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
-    "Accounting.SecurityProofs.FixedMachine.GateCount",
-    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
+    "Accounting.SecurityProofs.FixedMachine.GateCount"
    ]
   },
   "Definitions.Accounting.Guarantees.FpG1": {
@@ -17879,7 +17865,6 @@
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
     "Accounting.SecurityProofs.FixedMachine.GateCount",
-    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
@@ -18824,8 +18809,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.FixedMachine.BlockDescription",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
-    "Accounting.SecurityProofs.FixedMachine.GateCount",
-    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
+    "Accounting.SecurityProofs.FixedMachine.GateCount"
    ]
   },
   "Definitions.Flock.Accounting.Bound": {
