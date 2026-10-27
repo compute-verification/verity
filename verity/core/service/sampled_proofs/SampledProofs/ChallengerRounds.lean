@@ -54,7 +54,7 @@ in the log's order (a log `releasedRootsOf` has read: its head, then a root and 
 def receivedOrder (log : List String) : List String :=
   log.tail.zipIdx.filterMap fun (line, i) =>
     if i % 2 != 0 then none else
-    match Json.parse line with
+    match Flock.JsonParse.parse line with
     | .ok r => match getD r "label" with | .str l => some l | _ => none
     | .error _ => none
 
