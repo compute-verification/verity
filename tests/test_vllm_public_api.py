@@ -1,5 +1,4 @@
-"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces
-(note:20261024T0615Z-draft-verity-vllm-vision, sections 3 and 5).
+"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
 
 ``PUBLIC`` names each public module and the interface it is. Outside code may import it, and from it only the names its
 ``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
