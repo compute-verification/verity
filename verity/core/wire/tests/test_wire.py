@@ -32,7 +32,7 @@ def test_a_message_round_trips_and_its_head_is_the_commitments_canonical_json():
     assert head == canonical_json_bytes(OK.head()) == canonical(OK.head())
     assert body == b"\x00\x01" and data == frame(head, body)
     assert R.decode(data) == OK
-    assert R.kind("Ping", 2) == "output" and R.type_of(data) == ("Ping", 1)
+    assert R.kind("Ping", 2) == "output"
 
 
 def test_each_rule_broken_is_refused_by_its_name():
@@ -170,6 +170,18 @@ def test_a_signature_that_doesnt_verify_is_refused():
     with pytest.raises(Refused) as e:
         side("alice", "bob", 1).on(hb[0])
     assert e.value.name == "out-of-phase"
+
+
+def test_a_signature_that_doesnt_parse_is_refused_with_what_was_caught():
+    a, b = side("alice", "bob", 1), side("bob", "alice", 2)
+    hb = b.start()
+    a.start()
+    a.on(hb[0])
+    b.on(a.frames[0])
+    with pytest.raises(Refused) as e:
+        b.on(H.REGISTRY.encode(Message("Signature", body=b"\x00")))
+    assert e.value.name == "handshake-signature"
+    assert "doesn't parse" in e.value.detail and type(e.value.__cause__).__name__ in e.value.detail
 
 
 def test_a_side_signs_its_own_name_so_the_other_sides_signature_doesnt_pass_for_it():

@@ -35,7 +35,6 @@ import json
 import os
 import select
 import subprocess
-import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,9 +50,10 @@ from .party import Action, Finish, Identity, Party, Received, Record, Send, Time
 from .transcript import Entry, Transcript, record
 
 MODES = ("live", "simulated", "mixed", "replay")
-RUNTIME = Registry([Schema("Closed", 1, "structure"),
+RUNTIME = Registry([Schema("Closed", 1, "structure", {"how": Str(1024)}),
                     Schema("Refused", 1, "structure", {"name": Str(64), "detail": Str(1024)})])
-"""What the runtime tells a party: its channel closed, or a frame on it was refused by name."""
+"""What the runtime tells a party: its channel closed (`how`: `end` when the peer ended it, else what failed on it, the
+channel's `ended`), or a frame on it was refused by name."""
 FAILED = ("party-died", "stalled")
 RUNS = "runs.jsonl"
 
@@ -147,18 +147,18 @@ class Host:
         if not self.started:
             self.early.append((channel, raw))
             return
-        t = ep.accepts.type_of(raw)
-        self.transcript.append("in", channel, "private" if t is None else ep.accepts.kind(*t), raw)
         try:
             msg = ep.accepts.decode(raw)
         except Refused as e:
+            self.transcript.append("in", channel, "private", raw)
             ep.closed = True
+            told = Message("Refused", {"name": e.name, "detail": e.detail[:1024]})
             refused = _refused(e.name, channel=channel, detail=e.detail)
-            self._act(lambda: self.party.on(Received(channel, Message("Refused", {"name": e.name,
-                                                                                 "detail": e.detail[:1024]}))), refused)
+            self._act(lambda: self.party.on(Received(channel, told)), refused)
             if self.finished is None:
                 self._end(refused)
             return
+        self.transcript.append("in", channel, ep.accepts.kind(msg.type, msg.version), raw)
         self._act(lambda: self.party.on(Received(channel, msg)))
 
     def event(self, channel: str, msg: Message) -> None:
@@ -248,6 +248,9 @@ class RunResult:
     placement: Placement | None = None
     run: int | None = None
     incomplete: list[int] = field(default_factory=list)
+    ended: dict[str, dict[str, str]] = field(default_factory=dict)
+    """What failed on each party's channels that failed (`Pipe.ended`), by party and channel: those that failed while
+    the party ran are in its transcript too, in the `Closed` it was told."""
 
     def record(self) -> bytes:
         """The run's record: its transcripts' public projections (`transcript.record`)."""
@@ -256,7 +259,7 @@ class RunResult:
     def summary(self) -> dict[str, Any]:
         return {"mode": self.mode, "status": self.status, "outcomes": self.outcomes, "divergence": self.divergence,
                 "placement": None if self.placement is None else self.placement.to_json(), "run": self.run,
-                "incomplete": self.incomplete,
+                "incomplete": self.incomplete, "ended": self.ended,
                 "transcripts": {p: t.digest().hex() for p, t in sorted(self.transcripts.items())},
                 "record": hashlib.sha512(self.record()).hexdigest()}
 
@@ -303,13 +306,13 @@ class Runtime:
                 p.peer_gone()
 
     def transmit(self, ep: Endpoint, frame: bytes) -> None:
+        """A frame on the wire. A stream keeps a send that failed as its `ended`, which the party is told when its
+        channel closes."""
         try:
             ep.pipe.send(frame)
         except Refused as e:
             self.divergence = e.detail
             raise Diverged(e.detail) from None
-        except OSError:
-            pass
 
     def finished(self, host: Host) -> None:
         for ep in host.endpoints.values():
@@ -346,7 +349,7 @@ class Runtime:
                 if raw is not None:
                     h.receive(ch, raw)
                 elif ep.pipe.closed:
-                    h.event(ch, Message("Closed"))
+                    h.event(ch, Message("Closed", {"how": (ep.pipe.ended or "end")[:1024]}))
                 else:
                     continue
                 progress = True
@@ -632,7 +635,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
         t = Transcript(a, None if tdir is None else tdir / f"{a}.transcript")
         rt.hosts[a] = Host(a, protocol.parties[a](), identity(a), config.get("params", {}), t,
                            _endpoints(m, a, pipes[a], handshakes), rt.transmit, rt.finished)
-    from .process import spawn  # noqa: PLC0415 - process imports this module
+    from .process import spawn  # here, since process imports this module
 
     for b, spec in sorted(processes.items()):
         child = spawn(dict(spec, config=dict(config), parties_here=[b], mode=mode,
@@ -660,9 +663,12 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
             outcomes[b] = {"outcome": {"exit": child.returncode}, "refused": "party-died"}
     for h in rt.hosts.values():
         h.transcript.close()
+    ended = {n: e for n, h in sorted(rt.hosts.items())
+             if (e := {ch: ep.pipe.ended for ch, ep in sorted(h.endpoints.items())
+                       if ep.pipe is not None and ep.pipe.ended is not None})}
     result = RunResult(mode if not playback else "mixed", _status(outcomes, rt.divergence), outcomes,
                        {n: h.transcript for n, h in rt.hosts.items()}, rt.divergence, placement,
-                       None if runs is None else runs.n, [] if runs is None else runs.incomplete)
+                       None if runs is None else runs.n, [] if runs is None else runs.incomplete, ended)
     if runs is not None:
         (tdir / "record").write_bytes(result.record())
         runs.end(result.status)
