@@ -47,7 +47,8 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py fill-params DIR NAME:M:N:K ... [--L L] [--served]   CGP1 params of Dither's no-fold calls for
                                                 `v31 fill-bench` (served: O committed; else the filler's)
     python3 v31.py fill-sample DIR              a fill-bench shape's two sampled tiles against the no-fold reference
-    python3 v31.py fill-table BENCH.jsonl ...   the no-fold call's gamma over cuBLASLt and CUTLASS, and where its time goes
+    python3 v31.py fill-table BENCH.jsonl ... [--bar B]   the no-fold call's gamma over cuBLASLt and CUTLASS, where its
+                                                time goes, and the commit's compressions a SM-cycle over the ruler (and B)
 
 Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py), served or the filler's, is `Fill` below: its
 reference and verifier here, its GPU prover v31.cu's Fill, and its per-call binding v31lib.py.
@@ -915,6 +916,17 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
     return 0 if rep["exact"] else 1
 
 
+def fill_variant(r: dict) -> str:
+    """A fill-bench line's knobs, as fill-table labels its rows."""
+    return (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
+            + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
+            + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
+            + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
+            + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
+            + (f" m{r['lminb']}" if r.get("lminb", 5) != 5 else "") + (" sa" if r.get("sahead") else "")
+            + (" nofull" if r.get("full") == 0 else "") + (f" np{r['lpieces']}" if r.get("lpieces", 1) > 1 else ""))
+
+
 def cmd_fill_table(a: argparse.Namespace) -> int:
     """`v31 fill-bench`'s JSON lines: gamma of Dither's no-fold call overlapped (a served call's, or a filler's), over
     cuBLASLt and CUTLASS, with the weight side a period's (v3.2: ovl), a call's (the run of record's per-call weight coins:
@@ -922,7 +934,11 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     registers; wrong roots, timing only), the GEMM's tensor duty (cuBLASLt's time over the call's period, per-call weight
     coins) and where the call's time goes. An arm the call doesn't run (a served call's pad) is "-". Then wgmma.linear's
     time (a -DV31_WG build's served bench), gamma ovl_w over it, and the share of O's rows the GEMM's hash warps hashed
-    (V31_RP 4, the last overlapped call)."""
+    (V31_RP 4, the last overlapped call).
+
+    Then the commit's parts alone (lines that carry them): each part's SHA-512 compressions a SM-cycle at its median time
+    and clock, over the build's own compression rate (the sha arm, commit_gpu's ruler), and with ``--bar`` (the card's
+    fastest full-output compression a SM-cycle) over that bar."""
     rows = []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
@@ -938,12 +954,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
-        variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
-                   + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
-                   + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
-                   + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
-                   + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
-                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+        variant = fill_variant(r)
         fused = "-"
         if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
             fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
@@ -958,6 +969,26 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
               f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
               f"{100 / duty:.1f}% | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
               f"{fused} |")
+    parts = [r for r in rows if "per_sm_cycle" in r]
+    if not parts:
+        return 0
+
+    def c(x) -> str:
+        return "-" if x is None else f"{x:.5f}"
+
+    def of(x, bar) -> str:
+        return "-" if x is None or not bar else f"{x / bar:.3f}"
+
+    print()
+    print("| shape | variant | sha / SM-cycle | part | ms | MHz | compressions | / SM-cycle | of sha | of bar |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for r in parts:
+        pc, cm = r["per_sm_cycle"], r["comp"]
+        for part, comp in (("leaf", cm["leaf"]), ("leaf_nomem", cm["leaf"]), ("salt", cm["salt"]),
+                           ("commit", cm["leaf"] + cm["salt"])):
+            arm = r["arms"].get(part, {})
+            print(f"| {r['shape']} | {fill_variant(r)} | {c(pc['sha'])} | {part} | {g(arm.get('ms'))} | {arm.get('mhz', '-')} | "
+                  f"{comp:.0f} | {c(pc[part])} | {g(r['of_sha'][part])} | {of(pc[part], a.bar)} |")
     return 0
 
 
@@ -1335,6 +1366,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("dir")
     p = sub.add_parser("fill-table")
     p.add_argument("files", nargs="+")
+    p.add_argument("--bar", type=float, default=None,
+                   help="the card's fastest full-output SHA-512 compressions a SM-cycle, for the commit's parts")
     a = ap.parse_args(argv[1:])
     return {"cpu-run": cmd_cpu_run, "gpu-prep": cmd_gpu_prep, "gpu-check": cmd_gpu_check, "gpu-sample": cmd_gpu_sample,
             "params": cmd_params, "table": cmd_table, "timeline": cmd_timeline, "fill-params": cmd_fill_params,

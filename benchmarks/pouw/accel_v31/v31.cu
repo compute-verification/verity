@@ -48,6 +48,7 @@
 #include <cstring>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "../commit_gpu/commit_gpu.cuh"
@@ -1364,19 +1365,88 @@ struct CellRow {
   DEV uint4 ld16(u32 off) const { return ldg16(at(off)); }
   DEV void pf(u32 off) const { pf_to(at(off), pfm); }
 };
+
+// Full-block rows (ROW a multiple of 128): no data block holds padding, and the padding block is a constant whose schedule
+// the host computed (C.kw_xpad, the Committer's lb = ROW), so a row is T = ROW / 128 + 1 chunks after P. hash_full_range
+// takes the chaining value x (C.mid_P before chunk 0) through chunks c0 .. c1 - 1, each data block's 16 words from
+// src.block(b, W) at one address a block, the next block's line prefetched (src.pf) as its compression starts.
+template <class Src>
+DEV void hash_full_range(u64* x, const Src& src, u32 nblk, u32 c0, u32 c1, bool pf) {
+  const u32 e = c1 < nblk ? c1 : nblk;
+  for (u32 b = c0; b < e; ++b) {
+    if (pf && b + 1 < nblk) src.pf(b + 1);
+    u64 W[16];
+    src.block(b, W);
+    sha::compress(x, W);
+  }
+  if (c1 > nblk) sha::compress_kw(x, C.kw_xpad);
+}
+DEV void be_words(const uint4 v, u64* w) {
+  w[0] = be64(v.x, v.y);
+  w[1] = be64(v.z, v.w);
+}
+// Block b of a full-block row laid out in 128-cell rows of 4-byte cells: quarter q = q0 + b (32 cells, 128 bytes) at
+// p + (q >> 2) rs + (q & 3) 128 (CellRow's and ServedSrc's addresses, since c0 is a multiple of 32)
+struct QuarterSrc {
+  const uint8_t* p;
+  u32 rs, q0, pfm;
+  DEV const uint8_t* at(u32 b) const {
+    const u32 q = q0 + b;
+    return p + (u64)(q >> 2) * rs + (q & 3) * 128;
+  }
+  DEV void block(u32 b, u64* W) const {
+    const uint4* d = reinterpret_cast<const uint4*>(at(b));
+#pragma unroll
+    for (int c = 0; c < 8; ++c) be_words(__ldg(d + c), W + 2 * c);
+  }
+  DEV void pf(u32 b) const { pf_to(at(b), pfm); }
+};
+// ServedSrc's block b of a full-block row: QuarterSrc's quarter, each cell plus sb_j ra_i + sa_i rb_j for the tile's row
+// i0 + (q >> 2) and columns j0 + (q & 3) 32 ... A prefix-sum row reads its tile's sums too, masked to 0 by z, so a warp whose
+// leaves straddle the two kinds doesn't diverge. ra .. sb are the call's (the kernel's parameters), so they hold no
+// per-thread registers across the compression.
+struct ServedBlk {
+  QuarterSrc d;
+  const int *ra, *sa, *rb, *sb;
+  u32 i0, j0, z;
+  DEV void block(u32 b, u64* W) const {
+    const u32 q = d.q0 + b, i = i0 + (q >> 2), j = j0 + (q & 3) * 32;
+    const uint4 *v = reinterpret_cast<const uint4*>(d.at(b)), *bp = reinterpret_cast<const uint4*>(rb + j),
+                *tp = reinterpret_cast<const uint4*>(sb + j);
+    const u32 a = (u32)__ldg(ra + i) & z, s = (u32)__ldg(sa + i) & z;
+#pragma unroll
+    for (int c = 0; c < 8; ++c) {
+      const uint4 o = __ldg(v + c), x = __ldg(bp + c), t = __ldg(tp + c);
+      be_words(make_uint4(o.x + t.x * a + s * x.x, o.y + t.y * a + s * x.y, o.z + t.z * a + s * x.z, o.w + t.w * a + s * x.w),
+               W + 2 * c);
+    }
+  }
+  DEV void pf(u32 b) const { d.pf(b); }
+};
 // leaf pos: tile pos / LPT; j = pos % LPT < S ROW_W a prefix-sum row (segment j / ROW_W), else O's row j - S ROW_W. Both kinds
 // go through one CellRow, so a warp whose leaves straddle the two (most warps: LPT isn't a multiple of 32) hashes once,
 // not once a kind.
+// A row source's leaf phase (leaf_persist): chunks() of a row, digest_range hashing chunks c0 .. c1 - 1 into x; full (set
+// by the host for ROW a multiple of 128): hash_full_range's path, else one chunk, the whole row from hash_after_block.
 struct V31Row {
   const uint8_t* words;
   const uint8_t* O;
   u64 lpt, srw, N, tiles_n;
-  u32 row, S, pf;
+  u32 row, S, pf, full;
   DEV void digest(u64 pos, u64* x) const {
     const u64 t = pos / lpt, j = pos % lpt;
     const bool w = j < srw;
     const uint8_t* base = w ? words + t * S * 32768ull + j * row : O + ((t / tiles_n) * TILE * N + (t % tiles_n) * TILE) * 4;
     hash_after_block(C.mid_P, CellRow{base, w ? 512ull : N * 4, w ? 0u : (u32)((j - srw) * row / 4), pf}, row, x, pf != 0);
+  }
+  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
+  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
+    if (!full) { digest(pos, x); return; }
+    const u64 t = pos / lpt, j = pos % lpt;
+    const bool w = j < srw;
+    const uint8_t* base = w ? words + t * S * 32768ull + j * row : O + ((t / tiles_n) * TILE * N + (t % tiles_n) * TILE) * 4;
+    const QuarterSrc src{base, w ? 512u : (u32)(N * 4), w ? 0u : (u32)((j - srw) * row / 128), pf};
+    hash_full_range(x, src, row / 128, c0, c1, pf != 0);
   }
 };
 // timing only (the bench's leaf_nomem arm): a row's bytes made in registers, V31Row's compressions without its loads
@@ -1385,9 +1455,22 @@ struct NoMemSrc {
   DEV uint4 ld16(u32 off) const { return make_uint4(seed ^ off, seed + off, seed * 3u ^ off, off); }
   DEV void pf(u32) const {}
 };
+struct NoMemBlk {
+  u32 seed;
+  DEV void block(u32 b, u64* W) const {
+#pragma unroll
+    for (int c = 0; c < 8; ++c) be_words(NoMemSrc{seed}.ld16(128 * b + 16 * c), W + 2 * c);
+  }
+  DEV void pf(u32) const {}
+};
 struct NoMemRow {
-  u32 row;
+  u32 row, full;
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, NoMemSrc{(u32)pos}, row, x); }
+  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
+  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
+    if (full) hash_full_range(x, NoMemBlk{(u32)pos}, row / 128, c0, c1, false);
+    else digest(pos, x);
+  }
 };
 // A no-fold call's prefix-sum rows (S = 1) read from cuBLASLt's int32 D = X W'^T (m x N row-major), its low halves: the row's
 // 16-byte piece at off is cells c0 + off / 2 .. + 7 of the tile at base (one tile row's 8 adjacent cells, 32 bytes of D),
@@ -1411,15 +1494,47 @@ struct LtSrc {
     pf_to(reinterpret_cast<const uint8_t*>(at(off + 64)), pfm);
   }
 };
+// LtSrc's block b of a full-block row: half-row h = h0 + b (64 cells, 256 bytes of D) at p + (h >> 1) N + (h & 1) 64
+struct LtBlk {
+  const int* p;
+  u64 N;
+  u32 h0, pfm;
+  DEV const int* at(u32 b) const {
+    const u32 h = h0 + b;
+    return p + (u64)(h >> 1) * N + (h & 1) * 64;
+  }
+  DEV void block(u32 b, u64* W) const {
+    const uint4* d = reinterpret_cast<const uint4*>(at(b));
+#pragma unroll
+    for (int c = 0; c < 8; ++c) {
+      const uint4 a = __ldg(d + 2 * c), e = __ldg(d + 2 * c + 1);
+      be_words(make_uint4(__byte_perm(a.x, a.y, 0x5410), __byte_perm(a.z, a.w, 0x5410), __byte_perm(e.x, e.y, 0x5410),
+                          __byte_perm(e.z, e.w, 0x5410)),
+               W + 2 * c);
+    }
+  }
+  DEV void pf(u32 b) const {
+    const uint8_t* q = reinterpret_cast<const uint8_t*>(at(b));
+    pf_to(q, pfm);
+    pf_to(q + 128, pfm);
+  }
+};
 struct LtRow {
   const int* D;
   u64 lpt, N, tiles_n;
-  u32 row, pf;
+  u32 row, pf, full;
   DEV LtSrc src(u64 pos) const {
     const u64 t = pos / lpt, j = pos % lpt;
     return LtSrc{D + (t / tiles_n) * TILE * N + (t % tiles_n) * TILE, N, (u32)(j * row / 2), pf};
   }
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
+  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
+  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
+    if (!full) { digest(pos, x); return; }
+    const u64 t = pos / lpt, j = pos % lpt;
+    hash_full_range(x, LtBlk{D + (t / tiles_n) * TILE * N + (t % tiles_n) * TILE, N, (u32)(j * row / 128), pf}, row / 128, c0,
+                    c1, pf != 0);
+  }
 };
 // A served call's rows (dither.Shape(o=True)): per tile its W prefix-sum rows (the prefix-sum buffer, W tile-segments a
 // tile), then its O rows: cells c0 + off / 4 .. + 3 of the tile, O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (serve_rows_kernel: rb
@@ -1451,7 +1566,7 @@ struct ServedRow {
   const uint8_t* words;
   const int *D, *ra, *sa, *rb, *sb;
   u64 lpt, wrows, N, tiles_n;
-  u32 row, W, pf;
+  u32 row, W, pf, full;
   template <bool LIVE = false> DEV ServedSrcT<LIVE> src(u64 pos) const {
     const u64 t = pos / lpt, j = pos % lpt, tm = t / tiles_n, tn = t % tiles_n;
     const bool w = j < wrows;
@@ -1459,6 +1574,15 @@ struct ServedRow {
                             sa + tm * TILE, rb + tn * TILE, sb + tn * TILE, N, w ? 0u : (u32)((j - wrows) * row / 4), pf};
   }
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
+  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
+  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
+    if (!full) { digest(pos, x); return; }
+    const u64 t = pos / lpt, j = pos % lpt, tm = t / tiles_n, tn = t % tiles_n;
+    const bool w = j < wrows;
+    const QuarterSrc d{w ? words + t * W * 32768ull + j * row : reinterpret_cast<const uint8_t*>(D + tm * TILE * N + tn * TILE),
+                       w ? 512u : (u32)(N * 4), w ? 0u : (u32)((j - wrows) * row / 128), pf};
+    hash_full_range(x, ServedBlk{d, ra, sa, rb, sb, (u32)(tm * TILE), (u32)(tn * TILE), w ? 0u : ~0u}, row / 128, c0, c1, pf != 0);
+  }
 };
 
 // hash_after_block's SHA-512 chunks b0 .. of the row (x: the chaining value after the first b0), at most budget of them,
@@ -1545,6 +1669,8 @@ struct FusedRow {
     }
     hash_blocks(x, row.src(pos), row.row, b, row.pf != 0, NoStop{});
   }
+  DEV u32 chunks() const { return 1; }
+  DEV void digest_range(u64 pos, u64* x, u32, u32) const { digest(pos, x); }
 };
 
 // ---------------------------------------------------------------- the commit in at most cap CTAs an SM
@@ -1668,23 +1794,55 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     }
   persist_done(p);
 }
-// leaf_small (g = 1, no bc, no fused top) a group at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by registers (4:
-// 128 a thread, no spills, for a leaf phase that has the SMs to itself)
+// leaf_persist's rows in np pieces (1: each row whole): unit u is piece k = u / ng of group u % ng, chunks k T / np ..
+// (k + 1) T / np - 1 of each of the group's rows (T = Row::chunks()). A piece past the first starts from the chaining values
+// its predecessor stored in xs, once flag[group] = epoch << 8 | k. Units are claimed in order, so a piece's predecessor went
+// to a CTA that was already running, and every wait ends; the groups of the last round then end within a piece of the
+// others rather than a row.
+struct Pieces {
+  u64* xs;     // a chaining value a leaf
+  u32* flag;   // a word a group
+  u32 np, ng;
+};
+// leaf_small (g = 1, no bc, no fused top) a group (or a piece of one) at a time (nvb = ng np units, ng = ceil(n / 128));
+// MINB its CTAs an SM by registers (4: 128 a thread, for a leaf phase that has the SMs to itself)
 template <class Row, int MINB = SMALL_MINB>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
-                 u64* levels) {
-  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
+                 u64* levels, Pieces pc) {
+  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS), T = row.chunks();
   if (persist_claim(p))
-    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
+    for (u32 u; (u = persist_next(p)) < p.nvb;) {
+      const u32 k = u / pc.ng, vb = u - k * pc.ng;
+      const bool last = k + 1 == pc.np;
       const u64 pos = (u64)vb * SMALL_THREADS + threadIdx.x;
-      if (pos < n) {
-        u64 x[8], out[8];
-        row.digest(pos, x);
-        leaf_from_digest<0>(dom, pos, x, S, out, nullptr, F);
-        st8(levels + 8 * pos, out);
+      if (k) {
+        if (threadIdx.x == 0) {
+          while (*reinterpret_cast<volatile u32*>(pc.flag + vb) != (p.epoch << 8 | k)) __nanosleep(128);
+          __threadfence();
+        }
+        __syncthreads();
       }
-      fold_vb(dom, levels, width, cnt, log2_cnt(cnt), vb);
+      if (pos < n) {
+        u64 x[8];
+        if (k) ld8cg(pc.xs + 8 * pos, x);
+        else cpy8(x, C.mid_P);
+        row.digest_range(pos, x, k * T / pc.np, (k + 1) * T / pc.np);
+        if (last) {
+          u64 out[8];
+          leaf_from_digest<0>(dom, pos, x, S, out, nullptr, F);
+          st8(levels + 8 * pos, out);
+        } else {
+          st8(pc.xs + 8 * pos, x);
+          __threadfence();
+        }
+      }
+      if (last) {
+        fold_vb(dom, levels, width, cnt, log2_cnt(cnt), vb);
+      } else {
+        __syncthreads();
+        if (threadIdx.x == 0) *reinterpret_cast<volatile u32*>(pc.flag + vb) = p.epoch << 8 | (k + 1);
+      }
     }
   persist_done(p);
 }
@@ -1935,15 +2093,18 @@ static std::string env_str(const char* name, const char* dflt) {
 // (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
-// A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
-// but room for a fifth CTA an SM); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued
-// with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves.
+// A Fill's commit: V31_LMINB 4, 5 (the default), 6 or 8, its leaf phase's CTAs an SM by registers (leaf_persist's MINB: 128,
+// 96, 80 or 64 a thread); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued with the
+// call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves; V31_FULL 0, rows of
+// a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks; V31_LPIECES, the
+// pieces a row's chunks are cut into (Pieces; 0, the default: 8 when the groups outnumber the CTAs the caps allow, else 1).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
-      ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
+      ltw = env_int("V31_LTW", 0),   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
+      full = env_int("V31_FULL", 1), lpieces = env_int("V31_LPIECES", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1961,21 +2122,46 @@ static void set_carveout(int pct) {
                       (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>,
                       (const void*)leaf_small<LtRow, 0>, (const void*)leaf_persist<LtRow>,  (const void*)fill_a_kernel,
                       (const void*)fill_b_kernel,      (const void*)leaf_small<ServedRow, 0>, (const void*)leaf_persist<ServedRow>,
-                      (const void*)serve_rows_kernel,  (const void*)leaf_persist<FusedRow>};
+                      (const void*)serve_rows_kernel,  (const void*)leaf_persist<FusedRow>,
+                      (const void*)leaf_persist<V31Row, 4>, (const void*)leaf_persist<V31Row, 6>, (const void*)leaf_persist<V31Row, 8>,
+                      (const void*)leaf_persist<LtRow, 4>, (const void*)leaf_persist<LtRow, 6>, (const void*)leaf_persist<LtRow, 8>,
+                      (const void*)leaf_persist<ServedRow, 6>, (const void*)leaf_persist<ServedRow, 8>,
+                      (const void*)leaf_persist<NoMemRow, 4>, (const void*)leaf_persist<NoMemRow, 6>,
+                      (const void*)leaf_persist<NoMemRow, 8>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
 }
 
 // A committer's salt and leaf phases in at most ccta CTAs an SM (salt_persist, leaf_persist; ccta 0: commit_gpu's small
 // path), then its levels above the leaves' CTAs. Launches that share ctl run in one stream's order.
+template <class R> static u32 host_chunks(const R& r) { return r.full ? r.row / 128 + 1 : 1; }
+static u32 host_chunks(const FusedRow&) { return 1; }
 struct Lanes {
   u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1, lminb = SMALL_MINB;
+  int nsm = 1, lminb = SMALL_MINB, lpieces = 0;
+  u64* xs = nullptr;     // Pieces: a chaining value for each of up to cap_n leaves, a flag a group
+  u32* flag = nullptr;
+  u64 cap_n = 0;
   void init(int nsm_) {
     nsm = nsm_;
     ctl = dalloc<u32>(2 + 2 * 8 * (size_t)nsm);
     claim = dalloc<u32>(1024);
     CK(cudaMemset(ctl, 0, 4 * (2 + 2 * 8 * (size_t)nsm)));
     CK(cudaMemset(claim, 0, 4096));
+  }
+  void pieces_init(u64 n) {
+    const u64 ng = (n + SMALL_THREADS - 1) / SMALL_THREADS;
+    cap_n = n;
+    xs = dalloc<u64>(8 * n);
+    flag = dalloc<u32>(ng);
+    CK(cudaMemset(flag, 0, 4 * ng));
+  }
+  // the pieces of a leaf phase over ng groups (V31_LPIECES; 0: 8 when the groups outnumber ccta CTAs an SM, else 1)
+  template <class Row>
+  u32 pieces(const Row& rows, u64 n, u64 ng, int ccta) const {
+    const u32 T = host_chunks(rows);
+    if (T < 2 || !xs || n > cap_n) return 1;
+    const u32 want = lpieces > 0 ? (u32)lpieces : ng > (u64)ccta * nsm ? 8u : 1u;
+    return std::min({want, T, 255u});
   }
   // a capped launch over nvb groups: twice the CTAs the caps allow, so SMs whose first CTAs land late still get theirs
   Persist persist(u64 nvb, int ccta) {
@@ -2001,13 +2187,26 @@ struct Lanes {
     if (!ccta) {
       cm.leaves(rows, st);
     } else {
-      const u64 nvb = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
-      if (lminb == 4)
-        leaf_persist<Row, 4><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, cm.S, cm.F, cm.n,
-                                                                        cm.width, cm.levels);
-      else
-        leaf_persist<Row><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, cm.S, cm.F, cm.n,
-                                                                     cm.width, cm.levels);
+      const u64 ng = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
+      const u32 np = pieces(rows, cm.n, ng, ccta);
+      const u64 nu = ng * np;
+      const Persist p = persist(nu, ccta);
+      const Pieces pc{xs, flag, np, (u32)ng};
+      const unsigned g = grid(nu, ccta);
+      if (lminb == 4) {
+        leaf_persist<Row, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+      } else if (lminb == 6 || lminb == 8) {
+        if constexpr (std::is_same_v<Row, FusedRow>) {
+          fprintf(stderr, "V31_LMINB %d: the fused leaf phase takes 4 or %d\n", lminb, SMALL_MINB);
+          exit(2);
+        } else if (lminb == 6) {
+          leaf_persist<Row, 6><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+        } else {
+          leaf_persist<Row, 8><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+        }
+      } else {
+        leaf_persist<Row><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+      }
     }
     cm.nodes(st);
   }
@@ -2422,7 +2621,11 @@ struct Fill {
     grid = std::min(items, nsm);
     ltw = kn.ltw && S == 1 && !o;
     if (kn.ccta < 0 || kn.ccta > 8) { fprintf(stderr, "V31_CCTA: 0 to 8\n"); exit(2); }
-    if (kn.lminb != 4 && kn.lminb != SMALL_MINB) { fprintf(stderr, "V31_LMINB: 4 or %d\n", SMALL_MINB); exit(2); }
+    if (kn.lminb != 4 && kn.lminb != SMALL_MINB && kn.lminb != 6 && kn.lminb != 8) {
+      fprintf(stderr, "V31_LMINB: 4, %d, 6 or 8\n", SMALL_MINB);
+      exit(2);
+    }
+    if (kn.lpieces < 0 || kn.lpieces > 255) { fprintf(stderr, "V31_LPIECES: 0 to 255\n"); exit(2); }
     own = !c0;
     if (own) {
       int lo, hi;
@@ -2437,6 +2640,8 @@ struct Fill {
     CK(cudaMemset(gctr, 0, 4));
     pl.init(nsm);
     pl.lminb = kn.lminb;
+    pl.lpieces = kn.lpieces;
+    if (full_rows()) pl.pieces_init(leaves);
     if (kn.sahead) {
       int pr;
       CK(cudaStreamGetPriority(s1, &pr));
@@ -2649,15 +2854,22 @@ struct Fill {
   }
   V31Row rowsrc(int b) const {
     const uint8_t* w = reinterpret_cast<const uint8_t*>(words[b]);
-    return V31Row{w, w, (u64)lpt, (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf};
+    return V31Row{w, w, (u64)lpt, (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf, full_rows()};
   }
-  LtRow ltrow(int b) const { return LtRow{D[b], (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)kn.pf}; }
+  LtRow ltrow(int b) const { return LtRow{D[b], (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)kn.pf, full_rows()}; }
   ServedRow servedrow(int b) const {
     return ServedRow{reinterpret_cast<const uint8_t*>(words[b]), D[b], ra[b], sa[b], rb[b], sb[b], (u64)lpt,
-                     (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf};
+                     (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf, full_rows()};
+  }
+  // rows of whole SHA-512 blocks (V31_FULL): the leaf phase's hash_full_range path
+  u32 full_rows() const { return kn.full && row % 128 == 0 ? 1u : 0u; }
+  // the pieces copy b's leaf phase cuts its rows into (Lanes::pieces; the fused rows and the small path's, 1)
+  u32 leaf_pieces(int b) const {
+    if (!kn.ccta || (o && xd[b])) return 1;
+    return pl.pieces(rowsrc(b), leaves, (leaves + SMALL_THREADS - 1) / SMALL_THREADS, kn.ccta);
   }
   void leaves_nodes(int b, cudaStream_t st) {
-    if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
+    if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row, full_rows()}, kn.ccta, st);
     else if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
     else if (o && xd[b]) pl.leaves_nodes(cm[b], FusedRow{servedrow(b), xd[b], xf[b], xep[b]}, kn.ccta, st);
     else if (o) pl.leaves_nodes(cm[b], servedrow(b), kn.ccta, st);
@@ -2851,7 +3063,12 @@ static void kernel_attrs(FILE* f) {
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
                       {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist<false>},
                       {"salt_persist_ks", (const void*)salt_persist<true>},
-                      {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>}};
+                      {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>},
+                      {"leaf_persist_m6", (const void*)leaf_persist<V31Row, 6>},
+                      {"leaf_persist_lt", (const void*)leaf_persist<LtRow>}, {"leaf_persist_lt_m6", (const void*)leaf_persist<LtRow, 6>},
+                      {"leaf_persist_served", (const void*)leaf_persist<ServedRow>},
+                      {"leaf_persist_served_m6", (const void*)leaf_persist<ServedRow, 6>},
+                      {"leaf_persist_served_m8", (const void*)leaf_persist<ServedRow, 8>}};
   fprintf(f, "{");
   for (size_t i = 0; i < sizeof ks / sizeof ks[0]; i++) {
     cudaFuncAttributes a;
@@ -2876,6 +3093,37 @@ static void kernel_attrs(FILE* f) {
   }
 #endif
   fprintf(f, "}");
+}
+
+// commit_gpu's ruler (commit_gpu.cu's sha_rate and sha_bench's launch) in this build: each thread chains reps compressions,
+// its block from the last state; RULER_CTAS CTAs of 256 threads an SM
+constexpr int RULER_CTAS = 8, RULER_CHAIN = 256;
+__global__ void sha_ruler(u64* io, int reps) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  u64 st[8], w[16];
+  sha::iv(st);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = t * 16 + i;
+  for (int r = 0; r < reps; ++r) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] ^= st[i];
+    sha::compress(st, w);
+  }
+  if (st[0] == 0x0123456789abcdefull) io[t] = st[1];
+}
+// The SHA-512 compressions of a Fill commit's parts (compress_from and compress_kw count as one each) over n leaves of
+// nblk chunks in a tree of width leaves (width >= SMALL_THREADS): the leaf phase, nblk + 3 a leaf (the row, h's two, the frame
+// leaf's second) and two a node of the groups that hold data and of the levels above the groups; the salt phase, 6 a leaf
+// (the PRF's three, the salt digest's two, the frame leaf's first; the mask is no compression), two a pad and a node of the
+// groups of pads alone; the ruler, RULER_CHAIN a thread.
+struct CommitCounts {
+  double leaf, salt, sha;
+};
+static CommitCounts commit_counts(u64 n, u64 width, u32 nblk, int nsm) {
+  const u64 ng = (n + SMALL_THREADS - 1) / SMALL_THREADS, wg = width / SMALL_THREADS;
+  return CommitCounts{(double)n * (nblk + 3) + 2.0 * ((double)ng * (SMALL_THREADS - 1) + (double)(wg - 1)),
+                      6.0 * (double)n + 2.0 * (double)(width - n) + 2.0 * (SMALL_THREADS - 1) * (double)(wg - ng),
+                      (double)nsm * RULER_CTAS * 256 * RULER_CHAIN};
 }
 
 static u64 sum_counts(const int* d, int rows) {
@@ -3238,7 +3486,10 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
 // with the weight side a period's (v3.2); ovl, back-to-back calls each committed beside the next call's compute, the
 // weight side a period's; ovl_w, the same with the weight side every call (the run of record's per-call weight coins);
 // ovl_pad, the filler's call (the pad and every coin a call); ovl_nomem, ovl with each leaf's bytes made in registers
-// (NoMemRow: the commit's compressions without its loads). Call c salts from c leaves. One JSON line a shape.
+// (NoMemRow: the commit's compressions without its loads); the commit's parts alone: salt (Ks and the salt phase), leaf
+// (the leaf phase and the levels above it), leaf_nomem (leaf on NoMemRow); sha, this build's raw compression rate
+// (sha_ruler, commit_gpu's ruler). Call c salts from c leaves. One JSON line a shape, with each part's compressions
+// (commit_counts) and its compressions a SM-cycle at its median time and clock.
 static int cmd_fill_bench(int reps, const std::string& out, const std::string& pdir, int lp, int Lspec, int row,
                           const std::vector<std::string>& shapes) {
   gk::Nvml nv(0);
@@ -3257,6 +3508,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     f.setup(m, n, k, lp, L, row, read_params(pfile), 0);
     int8_t* A = dalloc<int8_t>((size_t)m * k);
     int *D = dalloc<int>((size_t)m * n), *D2 = dalloc<int>((size_t)m * n);
+    u64* rio = dalloc<u64>((size_t)f.nsm * RULER_CTAS * 256);
     gen_kernel<<<m, 256, 0, f.s0>>>(A, k, (u32)rng(), true);
     gen_kernel<<<n, 256, 0, f.s0>>>(f.B, k, (u32)rng(), false);
     std::vector<uint8_t> sd(384);
@@ -3319,6 +3571,15 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              f.leaves_nodes(0, s);
            }
          }},
+        {"salt", [&](cudaStream_t s, int r) {
+           for (int i = 0; i < r; i++) {
+             f.set_ks(0, s);
+             f.pl.salts(f.cm[0], f.kn.ccta, s, f.leaves);
+           }
+         }},
+        {"leaf", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) f.leaves_nodes(0, s); }},
+        {"leaf_nomem", [&](cudaStream_t s, int r) { f.nomem = true; for (int i = 0; i < r; i++) f.leaves_nodes(0, s); f.nomem = false; }},
+        {"sha", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) sha_ruler<<<f.nsm * RULER_CTAS, 256, 0, s>>>(rio, RULER_CHAIN); }},
         {"call", [&](cudaStream_t s, int r) {
            for (int i = 0; i < r; i++) {
              f.coins(s, false, false);
@@ -3429,6 +3690,19 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              "\"gamma_gemm_cutlass\": %s, \"cutlass_over_lt\": %s, ",
              jn(at("ovl") / med[ICUT]).c_str(), jn(at("ovl_w") / med[ICUT]).c_str(), jn(at("ovl_pad") / med[ICUT]).c_str(),
              jn(at("gemm") / med[ICUT]).c_str(), jn(med[ICUT] / l).c_str());
+    const CommitCounts cc = commit_counts(f.leaves, f.cm[0].width, nblk, f.nsm);
+    auto per_cycle = [&](const char* nm, double c) {   // compressions a SM-cycle at the arm's median time and clock
+      for (size_t a = 0; a < arms.size(); a++)
+        if (arms[a].name == nm) return c / (med[a] * 1e-3) / ((double)f.nsm * mhz[a] * 1e6);
+      return (double)NAN;
+    };
+    const double rs = per_cycle("sha", cc.sha), rl = per_cycle("leaf", cc.leaf), rn = per_cycle("leaf_nomem", cc.leaf),
+                 rt = per_cycle("salt", cc.salt), rc = per_cycle("commit", cc.leaf + cc.salt);
+    printf("\"full\": %u, \"lpieces\": %u, \"comp\": {\"sha\": %.0f, \"leaf\": %.0f, \"salt\": %.0f}, \"per_sm_cycle\": {\"sha\": %s, "
+           "\"leaf\": %s, \"leaf_nomem\": %s, \"salt\": %s, \"commit\": %s}, \"of_sha\": {\"leaf\": %s, \"leaf_nomem\": %s, "
+           "\"salt\": %s, \"commit\": %s}, ",
+           f.full_rows(), f.leaf_pieces(0), cc.sha, cc.leaf, cc.salt, jn(rs).c_str(), jn(rl).c_str(), jn(rn).c_str(),
+           jn(rt).c_str(), jn(rc).c_str(), jn(rl / rs).c_str(), jn(rn / rs).c_str(), jn(rt / rs).c_str(), jn(rc / rs).c_str());
     printf("\"kernels\": ");
     kernel_attrs(stdout);
     printf("}\n");
