@@ -11,7 +11,7 @@ head-check units and the I/O tie's units all ride it.
       --out DIR --shape gemm:1b:2048 [--shape attention:1b:69 ...] [--negatives] [--census] [--reads slots]
 
 * **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
-  refuses typed and template statements until PRF-133), `UnitStager`'s rows and output rows, the prover's rows, the rows
+  refuses typed and template statements), `UnitStager`'s rows and output rows, the prover's rows, the rows
   the verifier derives itself (``held``: public inputs, opened by ``b || c`` to its own copy under the salts the prover
   reveals for those rows alone), and the output rows it requires (``expect``: an ok bit). ``stage_kw`` passes a shared-row
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
@@ -42,9 +42,9 @@ Served Definitions (`served`, ``defs``): vLLM's served Definitions as the fronte
 template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values. A
 shape whose rows' in-circuit hashing alone passes C-Flock's block (`m1_families.block`) is reported refused, not lowered.
 
-Known limits: units flat or untyped staged (PRF-133); C-Flock's block at most 2^27 (split-K, #3467, past K = 5041);
-table-heavy units need lookup slots (``--reads slots``; #3416, #3478); tail lookup slots are the GPU prover's; prover
-worker threads may need a bigger stack (PRF-141).
+Known limits: units flat or untyped staged; C-Flock's block at most 2^27 (split-K past K = 5041);
+table-heavy units need lookup slots (``--reads slots``); tail lookup slots are the GPU prover's; prover
+worker threads may need a bigger stack.
 """
 from __future__ import annotations
 

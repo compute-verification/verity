@@ -137,25 +137,8 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
-#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
-#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
-#: coins' path)
-TUNNEL_WAIT_S = 120
-
-
-def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] = R.RemoteChallenger.connect,
-                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
-                           sleep: Callable[[float], None] = time.sleep) -> Any:
-    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
-    coin, so it is tried again every half second for up to `wait_s`; any other failure raises at once."""
-    deadline = clock() + wait_s
-    while True:
-        try:
-            return connect(address, secret)
-        except ConnectionRefusedError:
-            if clock() >= deadline:
-                raise
-            sleep(0.5)
+#: the proof service's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
+TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listening
 
 
 class Draws:

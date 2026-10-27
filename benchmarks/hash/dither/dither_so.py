@@ -41,7 +41,7 @@ fault, fault_y and fault_rr (here: round s + D - 1 recorded without step s's rec
 itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 1, a coin the prover held before round
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  $DITHER_SO_UNITS=j10r
-(`UNITS_ENV`; RT-ALGO-16's verifier form, #3574, at $DITHER_SO_J10R_M=slot on a slot T with every row block computed:
+(`UNITS_ENV`; RT-ALGO-16's verifier form, at $DITHER_SO_J10R_M=slot on a slot T with every row tile computed:
 `forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the window's end on j10r_so's
 references in h1r v1's place, and the gate step's units held to J10R's Definition.
 
@@ -69,7 +69,7 @@ sent after the last step's coin, whose coin comes back; then the manifest root, 
 window in order (epoch, steps, final; its domain naming the window, its root and its steps), which binds each step's
 round leaves and every call's A, admit, z, y and receipt roots under them; then the draw coin opened after the manifest
 root, and the session closed.  Until the draw the prover keeps what it must open a drawn unit from: each step's live A
-rows and scales and its z/y records' live row blocks (-wea: A and the scales alone, z/y recomputed from them), copied
+rows and scales and its z/y records' live row tiles (-wea: A and the scales alone, z/y recomputed from them), copied
 to pinned host memory on a stream of their own from the ring slot that holds them, a slot rewritten only once its copy is
 out (`Spill`).  In process the window ends after each of sbench's generates (and a new one opens at the
 next step on a challenger made beforehand, `prepare`, as the gate makes an off-node session's); off the node the
@@ -152,27 +152,27 @@ COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # to them; the same receipts.  den at most SMQ_DEN_MAX (h1u.cu's), past every %smid, so q/256 keeps the SMs below q
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
 SMQ_DEN_MAX = 256
-# "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
+# "1": the receipt tables' rows in a dead row tile (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
-# "j10r": a step's units under J10-R's call-scale noise (j10r_so.LABEL; #3574's form, forms.j10r_part): in h1r_launch's
+# "j10r": a step's units under J10-R's call-scale noise (j10r_so.LABEL; forms.j10r_part): in h1r_launch's
 # version 0 place every call's seed_c at its first position and each unit's sigma_R at its own (h1u.cu's
-# kh_seeds_j10r_h1r, on the same call table), then each call's row blocks hashed once and its units on them
+# kh_seeds_j10r_h1r, on the same call table), then each call's row tiles hashed once and its units on them
 # (kh_units_multi_j10r, under $DITHER_SO_UNITS_SMQ kh_units_multi_j10r_sm); needs $DITHER_SO_FUSED=1.  The gate holds it
 # to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
 UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
 # R (with $DITHER_SO_UNITS=j10r and $DITHER_SO_FUSED=1): a step whose units compute at least R rows (the layout's M, its
-# live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside its rows, and its units
+# live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column tiles once too, beside its rows, and its units
 # read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
 # rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
-# units hash a column block once in each row tile
+# units hash a column tile once in each row tile
 # they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
 # --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"
-# "1" (with $DITHER_SO_UNITS=j10r): a row block wholly past the step's live rows is skipped, h1tile's canonical dead tile
+# "1" (with $DITHER_SO_UNITS=j10r): a row tile wholly past the step's live rows is skipped, h1tile's canonical dead tile
 # (PouwH1Tile_v4's: the zero receipt, no noise derived), as today's units always do; unset, every unit of the call's M
 # layout rows is computed in full, as J10-R's PouwH1Tile_v5 / v6 define it (the skip stays off by default until the
 # credit counts only live units).  Unset, $DITHER_SO_RDEAD's zero-receipt rows don't hold
@@ -1407,7 +1407,7 @@ class SoSide(DA.Side):
         rws = []
         if self.j10r:
             # each call's workspace at T rows (the most a layout takes) as the build sizes it (j10r_ws: an H1U_JW
-            # build's column blocks and W' too, RC's under $DITHER_SO_J10RC_MIN_T), one workspace for every ring slot:
+            # build's column tiles and W' too, RC's under $DITHER_SO_J10RC_MIN_T), one workspace for every ring slot:
             # a step's units run on the units stream after the step before's
             nbytes = [JWS.workspace_bytes(h, win.t, n, k, rc=bool(self.j10rc_min_t)) for n, k in win.nk]
             self.j10r_ws = torch.empty(sum(nbytes), dtype=torch.uint8, device=win.dev)
@@ -1936,7 +1936,7 @@ class Ov:
 
 
 class Spill:
-    """-we: each step's live A rows and scales and (mode "azy") its z/y records' live row blocks, the values the prover
+    """-we: each step's live A rows and scales and (mode "azy") its z/y records' live row tiles, the values the prover
     opens a drawn unit from after the draw, copied on a stream of their own into pinned host memory from the ring slot
     that holds them, and held until the window's end (`take_window`).  The serving stream rewrites a slot only once its
     copy is out (`wait_a`, `wait_z`): ring slot s mod D at stash s + D; the z/y records at forward s + 1 (under -ov round
@@ -2004,7 +2004,7 @@ class Spill:
                          "ms": round(1e3 * (time.perf_counter() - t0), 1)}
 
     def prefix(self, w: int, m: int) -> int:
-        """Call w's records' live bytes at m rows: its row blocks below m."""
+        """Call w's records' live bytes at m rows: its row tiles below m."""
         ur, per = self.row_block[w]
         return -(-m // ur) * per
 
