@@ -52,7 +52,9 @@ rule keep working. Once lanes declare their outputs it drops to 0, and undeclare
 3. **Keep outputs small:** the numbers, JSON, logs and the digests of big things. An artifact that must survive but is
    large (a model, a proof, a trace over about 100 MiB) goes in `$OUT` too: custody is the only way a node run's bytes reach
    the store (a node holds no store write key, so `research data put` inside a job fails; TOP-90 row 51), and the run's
-   attempt cites them as its `run_files`. Cite it as the run id and its path under `out/`.
+   attempt cites them as its `run_files`. Cite it as the run id and its path under `out/`. An uncited run record leaves the
+   store 7 days after its upload (the store README §7.4), so a label or a note naming the run id is what keeps it. Don't
+   copy into `$OUT` what the commit regenerates (a circuit, a build): 26 Oct's 476 GiB of run records were mostly that.
 4. **Put scratch in a `mktemp -d` directory that you delete,** as in the example, or elsewhere outside the run dir. A job's
    `$TMPDIR` may be unset (queued jobs on vy-nebius-1 have none), so `$TMPDIR/x` can become `/x`. Caches, build trees
    (`target/`, `.lake/`, `node_modules/`), downloaded datasets and checkpoints never go in the run dir.

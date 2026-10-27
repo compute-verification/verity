@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 /-!
 # The registration's population is the game's units, in order (`Bridge.PopMatches`)
 
-`Bridge.PopMatches desc q n`, a decidable check on the files, as `Bridge.RowsV2` is: the descriptor bytes `desc` parse
+`Bridge.PopMatches desc q n`, a decidable check on the files, as `Bridge.RowsOk` is: the descriptor bytes `desc` parse
 (`SampledProofs.Program.parse`), the layout the deployed verifier evaluates on them under the registration's query `q`
 (`SampledProofs.Slots.layout`, which reads the query as JSON, `Reg.query`) is defined, and its population, the layout's
 first class, is `n` replay units with slot `u` unit `u`. It says nothing of the units' gates: that slot `u`'s gates are

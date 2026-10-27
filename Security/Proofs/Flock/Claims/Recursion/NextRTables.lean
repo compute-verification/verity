@@ -90,13 +90,13 @@ theorem sessionRun_decides_tables {H : Claims.Msg → Claims.Msg} (h64 : Claims.
     (hcs : cs.head? = some c₁) (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes)
     (hk : cs.length = (V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (hrd : rd last = some fl)
-    (hps : fl.ps = filePs spec sts c₁ pfs) :
+    (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
       repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
         (Ts k)) last) cs = some d := by
   have htab := tablesOk_of_plainTables hx hP
   exact sessionRun_decides_coins h64 hx hcs hresp (hlen_of_k hx (fun i hi => (htab i hi).1) hk)
-    (fun i hi => ⟨(htab i hi).1, (htab i hi).2 c₁⟩) hS hrd hps
+    (fun i hi => ⟨(htab i hi).1, (htab i hi).2 c₁⟩) hS hrd hps hst
 
 /-- **Non-vacuity of `PlainTablesOk`'s table count**: `checkP`'s count refusal passes plain sessions of 2 and of
 `Tags.MAX_TABLES` tables at public outputs, and `sizesOk` passes two tables of `m = 22`. -/

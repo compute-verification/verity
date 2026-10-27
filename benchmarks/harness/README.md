@@ -86,7 +86,7 @@ pin's BF16 base.
 1. **Gates before timing.** Every arm runs every point, with the point's sampling, before anything is timed:
    - `tokens`: an arm with a control must produce the control's tokens exactly. A failure records the first divergent
      request, position and tokens.
-   - `kv-pool`: an arm and its control must get the same KV-cache pool, in tokens. vLLM schedules by free KV blocks, and
+   - `kv-pool`: an arm and its control must get the same KV-cache pool, in tokens. vLLM schedules by free KV pages, and
      a step's batch composition reaches the numerics, so unequal pools can flip tokens. The preset pins it with
      `resident_kv_cache_memory_bytes` and `block_kv_cache_memory_bytes`. An engine that doesn't report its pool fails it.
    - `arm`: the arm's own gate, when it provides one.
@@ -188,7 +188,7 @@ count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8
 benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher forwards, else the first that exists of
 `$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's) and
 `$WORK/pouw/mvp-e2e/venv312`. `benchmarks` is on its path, so a spec names an experimental arm's module from there
-(`served_commit.arm:SERVED_COMMIT`). A point's identity hashes the resolved spec,
+(`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec,
 the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
 as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
 passed, exit code 0 and a clean source tree. A requeued point first deletes its run's old `result.json`. The lookup

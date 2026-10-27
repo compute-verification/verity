@@ -99,7 +99,12 @@ head ending in its id's last four characters (a coordinator's `cursor/...-1037`)
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
+worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more,
+as **no_step**, rung to @top: on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one.
+Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
+stream event, since no_step advises stopping and archiving it: on 26 Oct at 21:05Z it said so of compute-accounting's and
+network-accounting's coordinators, each working in Slack within two minutes, with no note or push for 6 h.
+Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
 
 When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
 does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, deployed as `/data/agent-watch/nodes.json`: the
@@ -181,7 +186,9 @@ UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a
 WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
-AGENTS_PAGE = 50            # GET /v1/agents page size: 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
+AGENTS_PAGE = 25            # GET /v1/agents page size (50 503s every call since 16:25Z, 26 Oct; 25 answers): 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
+SWEEP_READS_S = 12 * 60     # a sweep's reads stop after this long (a sweep takes ~6 min; with reads near their 60 s timeout, one
+#                             took 24 min, 26 Oct, and the cloud watch alerts after 20 min without a finished sweep)
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
 WORKER_RELAUNCH_S = 20 * 60 # a worker still idle this long after its coordinator was rung for it: relaunched fresh
 RELAUNCH_EVERY_S = 6 * 3600 # an agent is relaunched at most once in this long
@@ -249,7 +256,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
-                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread")
+                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -275,6 +282,8 @@ WORKERS_NEW = 20                # workers read for the first time per sweep: a f
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
 COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to @top (TOP-90 row 37: memory-accounting hung 01:47-04:39Z)
 SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
+NO_STEP_S = 6 * 3600            # ... and still nothing this long: one `no_step`, rung to @top (top, 26 Oct: nine workers ACTIVE
+                                # with no step for 30-64 h, each rung twice as silent and then by no one)
 HEADS_EVERY_S = 5 * 60          # the branch heads (`git ls-remote --heads`) are read this often
 HEADS_STALE_S = 3 * HEADS_EVERY_S   # heads older than this tell no push apart from none: nobody is judged silent
 RUN_ENDS_EVERY_S = 5 * 60       # the nodes' ended runs are read this often (nodes.json `every_s`)
@@ -660,11 +669,13 @@ def started(x: dict) -> bool:
 
 
 class Api:
-    """Cursor's Cloud Agents API, v1."""
+    """Cursor's Cloud Agents API, v1. Past `reads_until` (by `clock`), a GET raises TimeoutError without asking; POSTs, the
+    watch's actions, always go."""
 
-    def __init__(self, key: str, base: str = API, timeout: float = 60):
+    def __init__(self, key: str, base: str = API, timeout: float = 60, clock: Callable[[], float] = time.monotonic):
         self.auth = "Basic " + base64.b64encode(f"{key}:".encode()).decode()
-        self.base, self.timeout = base, timeout
+        self.base, self.timeout, self.clock = base, timeout, clock
+        self.reads_until: float | None = None
 
     def _req(self, method: str, path: str, body: dict | None = None, headers: dict | None = None):
         data = json.dumps(body).encode() if body is not None else None
@@ -675,7 +686,11 @@ class Api:
 
     def get(self, path: str, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
-        with urllib.request.urlopen(self._req("GET", path + q), timeout=self.timeout) as r:
+        timeout = self.timeout
+        if self.reads_until is not None:
+            if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
+                raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
+        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:
             return json.load(r)
 
     def post(self, path: str, body: dict | None = None) -> dict:
@@ -1201,6 +1216,9 @@ class Watch:
             elif first is not None and t - first >= UNREADABLE_S and self.once(run + "#unreadable", t):
                 self.record("unreadable", r, status=f"HTTP {e.code}", since=iso(first), minutes=int((t - first) // 60))
             return None
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"{iso(self.clock())} run {run} of {a['id']}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            return None
         if info.get("status") in TERMINAL:
             self.final[run] = info
         return info
@@ -1360,7 +1378,15 @@ class Watch:
                 s, changed = None, True
             n = s["rings"] if s else 0
             coord = agent in self.coords
-            if n >= SILENT_RINGS or t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
+            if n >= SILENT_RINGS:
+                still = max(last, k.get("acted") or last)
+                if s and not s.get("no_step") and t - still >= NO_STEP_S:
+                    s["no_step"] = True
+                    changed = True
+                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(still), hours=int((t - still) // 3600),
+                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top")
+                continue
+            if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
             self.silent[agent] = {"from": last, "rings": n + 1}
             changed = True
@@ -1815,16 +1841,22 @@ class Watch:
         for a in agents:
             if a["id"] in coords and a.get("status") == "ACTIVE":
                 active[a["id"]] = since = self.active.get(a["id"], t)
+                judge = judges.get(a["id"]) or {}
+                with self.lock:
+                    r = self.runs.get(judge.get("id") or "")
+                acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
+                                         r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
                 known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
-                                  "run": (judges.get(a["id"]) or {}).get("id") or a.get("latestRunId") or "", "since": since,
-                                  "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a))}
+                                  "run": judge.get("id") or a.get("latestRunId") or "", "since": since,
+                                  "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
         if active != self.active:
             self.active = active
             self.save()
         for agent, w in self.workers.items():
             if w.get("status") == "ACTIVE" and not w.get("gone") and w.get("since") is not None:
                 known[agent] = {"name": str(w.get("name") or ""), "handle": w.get("handle"), "lane": w.get("lane") or "",
-                                "run": "", "since": w["since"], "branches": list(w.get("branches") or [])}
+                                "run": "", "since": w["since"], "branches": list(w.get("branches") or []),
+                                "acted": w.get("updated")}
         self.read_heads(t)
         self.watch_silence(known, t)
         self.run_ends(coords, t)
@@ -2062,6 +2094,7 @@ def main(argv: list[str] | None = None) -> int:
         watch.sweep(lambda r: None)
         return 0
     while True:
+        api.reads_until = api.clock() + SWEEP_READS_S
         try:
             watch.sweep(lambda r: follow(watch, r))
         except (urllib.error.URLError, OSError, ValueError) as e:

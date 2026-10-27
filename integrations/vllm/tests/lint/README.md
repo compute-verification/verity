@@ -45,8 +45,8 @@ at least as much, so a move from one package to another passes, but the kind's t
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml` and the root `dev` group's
 ruff pin, so the gate reruns it with the base's config at the base's pin. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
-PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. Once drive.toml's `landing_gates` names it, the merge
-queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
+PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
+it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 

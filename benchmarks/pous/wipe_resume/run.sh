@@ -5,7 +5,7 @@
 #   research run --on NODE --project verity --source . --cwd clone --timeout 60m -- \
 #     bash benchmarks/pous/wipe_resume/run.sh [--labels N] [--k K] [--blocks B]
 #
-#   --labels N   the streamed fill in labels (default 2^19: one 32 MiB segment, StreamedWipeMeetsFamily's least)
+#   --labels N   the streamed fill in labels (default 2^19: one 32 MiB segment)
 #   --k K        reads a session (default 2152)
 #   --blocks B   blocks of the band and dense segments the state attack rebuilds at 64 KiB (default 6)
 #

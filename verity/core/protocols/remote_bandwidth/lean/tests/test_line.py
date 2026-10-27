@@ -4,8 +4,9 @@ stretch length, with bursts, the host tier, filler, wrong receipts (the pooled b
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
 group's, a stretch's empty span), with malformed inputs rejected by both. The same line read off an accepted session's
 record (`line_record`, `line.line_of_record`: its groups' passes, its windows and its registered blocks the record's,
-what the auditor saw of each window beside it), with the record's own refusals (the auditor saw another count of
-windows, a window drew other than min(s, U_t)) and malformed records. The line of record is the Lean's
+what the auditor saw of each window beside it; drawn g > 1 windows a coin, its draws in place of its windows), with
+the record's own refusals (the auditor saw another count of windows, a window or a draw drew other than min(s, U), a
+record drawn g > 1 a coin at one window in flight) and malformed records. The line of record is the Lean's
 (`auditor_line.py` runs the verifier process's `line_record` and holds it exactly to the Python's), so the Lean is of
 record here."""
 
@@ -267,12 +268,21 @@ def records(draw) -> dict:
     rates = {"squarings_per_s": draw(rational(10 ** 6)), "encode_squarings": draw(st.integers(1, 10)),
              **{k: draw(rational(10 ** 5)) for k in line.RATES[1:3]},
              **{k: draw(rational(10)) for k in line.RATES[3:]}}
-    pace = draw(st.one_of(st.none(), st.builds(lambda k, w: {"k": k, "window_ns": w}, st.integers(1, 3),
-                                               st.integers(1, 10 ** 9))))
+    pace = draw(st.one_of(st.none(), st.builds(lambda k, w, one: {"k": k, "window_ns": w} | ({"in_flight": 1} if one
+                                                                                             else {}),
+                                               st.integers(1, 3), st.integers(1, 10 ** 9), st.booleans())))
     record = {"windows": ws, "blocks": blocks, "appended": draw(st.integers(0, 5)),
               "released": draw(st.integers(0, 5)), "lifetime": draw(st.integers(1, 4)), "pace": pace,
               "appends": draw(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex))),
               "registration": "ab" * 64}
+    if (per_coin := draw(st.sampled_from([1, 2, 3]))) > 1:
+        record["groups_per_coin"] = per_coin
+        for a in range(0, len(ws), per_coin):
+            xs = ws[a:a + per_coin]
+            total = min(samples, sum(sum(w["lengths"]) for w in xs))
+            cuts = sorted(draw(st.lists(st.integers(0, total), min_size=len(xs) - 1, max_size=len(xs) - 1)))
+            for w, lo, hi in zip(xs, [0, *cuts], [*cuts, total]):
+                w["drawn"] = hi - lo
     v = {"record": record, "samples": samples, "seen": seen, "per": per, "block_bytes": b,
          "chip_bytes": draw(st.integers(0, 3 * b)), "node_bytes": draw(st.integers(1, 10 ** 6)),
          "delta": draw(st.sampled_from(DELTAS)), "rates": rates}
@@ -291,7 +301,8 @@ def records(draw) -> dict:
         bad = draw(st.sampled_from([-1, "1", None, True, [], {}, "xyz", "AB" * 64]))
         at = draw(st.sampled_from(["record", "window", "list", "heads", "pace", "appends", "seen", "input"]))
         if at == "record":
-            record[draw(st.sampled_from(["windows", "blocks", "appended", "released", "lifetime"]))] = bad
+            record[draw(st.sampled_from(["windows", "blocks", "appended", "released", "lifetime",
+                                         "groups_per_coin"]))] = bad
         elif at == "window" and ws:
             draw(st.sampled_from(ws))[draw(st.sampled_from(["released_ns", "deadline_ns", "opened_ns", "drawn"]))] = bad
         elif at == "list" and ws:
@@ -338,6 +349,53 @@ def test_the_records_line_is_the_line_of_its_groups_and_windows(server, samples)
         want = line.run_json(v | {"windows": [[2 * N, min(samples, 2 * N)]] * len(v["groups"])})
         assert "refused" not in want and line.record_run_json(r) == want
         assert D.replay(record_port(), r, server) == ("output", D.canonical(want))
+
+
+def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
+    """Drawn four windows a coin (`groups_per_coin`), the record's line is `line`'s at the same groups and its three
+    draws, each four windows' receipts and draws summed (`line.draws_of`, the pooled bound's `audit.pooled_windows`),
+    the Lean's and line.py's alike; a draw that drew other than min(s, U) is refused, word for word, and at one window
+    in flight the record has no line (`line.SHARED`)."""
+    v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))
+    r = recorded(v, 37)
+    r["record"]["groups_per_coin"] = 4
+    for a in range(0, 12, 4):
+        for k, w in enumerate(r["record"]["windows"][a:a + 4]):
+            w["drawn"] = [20, 0, 17, 0][k]
+    want = line.run_json(v | {"windows": [[8 * N, 37]] * 3})
+    assert "refused" not in want and want != line.run_json(v | {"windows": [[2 * N, 37]] * 12})
+    assert line.record_run_json(r) == want
+    assert D.replay(record_port(), r, server) == ("output", D.canonical(want))
+    r["record"]["windows"][5]["drawn"] = 1
+    why = f"draw 1 drew 38 of its {8 * N} receipts, not min(37, {8 * N})"
+    assert line.record_run_json(r) == {"refused": why} and D.replay(record_port(), r, server) == refused(why)
+    r["record"]["pace"]["in_flight"] = 1
+    assert line.record_run_json(r) == {"refused": line.SHARED}
+    assert D.replay(record_port(), r, server) == refused(line.SHARED)
+    r["record"]["groups_per_coin"] = 1
+    why = "window 0 drew 20 of its 2000 receipts, not min(37, 2000)"
+    assert line.record_run_json(r) == {"refused": why} and D.replay(record_port(), r, server) == refused(why)
+
+
+def test_a_draw_of_two_to_the_64_receipts_is_refused(server) -> None:
+    """Drawn four windows a coin, a draw whose windows' receipts, each below 2^64 as `receive` holds a window's, sum to
+    2^64 or more is refused, the Lean's and line.py's word for word: the memory model's draw reads at most 2^64 − 1
+    (`Properties.RemoteAudit.Line.receiptMax`). One receipt fewer, the draw is read."""
+    v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))
+    r = recorded(v, 37)
+    r["record"]["groups_per_coin"] = 4
+    for t, w in enumerate(r["record"]["windows"]):
+        w["drawn"] = 37 if t % 4 == 0 else 0
+    big = r["record"]["windows"][4:8]
+    for w in big[:2]:
+        w["lengths"][0] = (1 << 63) - N
+    u = sum(sum(w["lengths"]) for w in big)
+    assert u >= 1 << 64 and all(sum(w["lengths"]) < 1 << 64 for w in big)
+    why = f"draw 1 has {u} receipts, not fewer than 2^64"
+    assert line.record_run_json(r) == {"refused": why} and D.replay(record_port(), r, server) == refused(why)
+    big[0]["lengths"][0] -= u - (1 << 64) + 1
+    out = line.record_run_json(r)
+    assert "refused" not in out and D.replay(record_port(), r, server) == ("output", D.canonical(out))
 
 
 def short_seen(r: dict) -> None:

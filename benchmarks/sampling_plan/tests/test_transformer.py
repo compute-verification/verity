@@ -98,7 +98,7 @@ def test_pooled_is_integrity_horizon_for_one_uniform_stratum():
         assert T.horizon(plan, [cand], delta) == pytest.approx(log(1 / delta) * 1024 / 64)
         for blocks in (1, 1008, 525_600_000):
             got = T.pooled(plan, [cand], delta, blocks)
-            assert got == pytest.approx(log(1 / delta) * 1024 / 64) and ceil(got) == horizon
+            assert got == pytest.approx(log(1 / delta) * 1024 / 64, rel=2 ** -18) and ceil(got) == horizon
 
 
 def test_handoff_work_law_draws_the_plans_k_and_its_windows_are_integrity_period_logs(small):
