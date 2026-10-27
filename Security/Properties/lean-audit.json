@@ -1848,7 +1848,13 @@
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f"
   },
   "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata :",
+    "  Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata"
+   ],
+   "assumptions": [],
+   "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64"
   },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
@@ -4380,7 +4386,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.Assumptions.CreditedWords": {
@@ -4479,7 +4486,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.Carrier": {
@@ -4633,7 +4641,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.ComposePeriod": {
@@ -4677,7 +4686,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.Device": {
@@ -4934,7 +4944,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.HMu": {
@@ -4954,7 +4965,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.Joint": {
@@ -5365,6 +5377,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
@@ -5404,7 +5417,10 @@
     "Accounting.TS.J10R.unitNoise": "c8b6ea8e36d810d9e773ea2dd84717f8f360a291afd6594ebd0d0dc27f151c4b",
     "Accounting.TS.J10R.value": "1fd214974f9bc3347ab34c4f54eaa503560aca0747787019765fce52174ac563"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
+   ]
   },
   "Definitions.Accounting.TS.Machine": {
    "digest": "2279040738c1521c54f6a556c516019dc0610aedc92e30143707cc28cdbae52a",
@@ -5417,7 +5433,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.TS.Play": {
@@ -5435,7 +5452,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.TS.ProofLayer": {
@@ -5449,7 +5467,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -5472,7 +5491,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.TS.ReceiptHMu": {
@@ -5486,7 +5506,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.TS.Routes": {
@@ -5507,7 +5528,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Accounting.Tag.Sketch": {
@@ -6703,7 +6725,10 @@
     "Pouw.PearlC.Sha512.ssig0": "0bf48aa35b6f2c55c3c0ff981d8c614c8325442bbd60d88299dcb36ba0baafce",
     "Pouw.PearlC.Sha512.ssig1": "83559e2ac05eda653e1c0059e5939d92fb58105db8b7676f36c02405157f2226"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
+   ]
   },
   "Definitions.Pouw.PearlC.W1": {
    "digest": "2103ebd0e10fdadc34bfdb52870a92ed82c1cd280321532c7c37806bd27b4397",
@@ -6756,7 +6781,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Definitions.Pouw.Window": {
@@ -6770,7 +6796,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Evaluate.Casts": {
@@ -7173,6 +7200,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -7294,6 +7322,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
@@ -7362,6 +7391,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Strata.strataTile",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -7516,6 +7546,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -7633,6 +7664,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -7704,6 +7736,7 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -7723,6 +7756,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -7752,6 +7786,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -7988,6 +8023,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -8044,6 +8080,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -8139,7 +8176,10 @@
     "Flock.Registered.knownPayload": "95c0f843bbe9566de2422e1406f3d155ee6bad1c6b6b210f8019b330838a6cf4",
     "Flock.Registered.rowBytesV2": "affced86a8e5d0b9ad7afc24bef4a37c01a20bf1001100e3ea46cba35528988c"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
+   ]
   },
   "Flock.Registered": {
    "digest": "98b1cae99f498cd66a018d69b4ffb86ae84da886d723695ae115b45e30dc1c46",
@@ -8172,6 +8212,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -8467,7 +8508,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "MemoryChallenger.FrameV3": {
@@ -10007,7 +10049,10 @@
     "PouwCheck.Chunks.CHUNK_MAX": "397a27ae76db15159d05208e3ab551123c96e4d4d1e875a54a6e02b1e85e0e01",
     "PouwCheck.Chunks.chunks": "d092d50cf46303721c19e9adb39fdfd95286658ea8de16b888b6177db14ed148"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
+   ]
   },
   "PouwCheck.Credit": {
    "digest": "fe1123a42c2f67481f23c939a205ccb2e0fa51c2d675bafd7486bd5ab2a7cca9",
@@ -10227,6 +10272,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -10347,7 +10393,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "PouwCheck.Json": {
@@ -10379,6 +10426,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -10389,7 +10437,10 @@
     "PouwCheck.publicRowSalt": "b035b784cb8accd761a09d0d3e0ae27eb099adbfce3561e0d7a5cdf7ea2939d9",
     "PouwCheck.saltBytes": "7b89eb468ce1f177dc3fcaf8d6555a7d36bc14fc8e43ae46b5a71c6242c4c0da"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
+   ]
   },
   "PouwCheck.Pass": {
    "digest": "2226beee1bf478122eb20cfab5e9b1128fbc560c895bc188138a59336a836df9",
@@ -10474,6 +10525,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -10626,7 +10678,8 @@
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "PouwCommit.Frame": {
@@ -10671,7 +10724,8 @@
     "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "PouwCommit.Py": {
@@ -10707,7 +10761,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "PouwCommit.Rows": {
@@ -10738,7 +10793,8 @@
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "PouwWindow.Draw": {
@@ -10893,6 +10949,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -12146,11 +12203,12 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "Properties.Pouw.PeriodJ10R": {
-   "digest": "a0f35202b6ef99ebe85d8ddb06ed6c2cf74026628280a1bba30236cb11c5ff6e",
+   "digest": "15338e934e419b72a7e3b4a83451fe841b0120266f5fd4e755cae2566a53c59a",
    "definitions": {
     "Properties.Pouw.PeriodJ10R.Answered": "ad07d7dcb3b5ba1b02c1e159a9fa1fbc49fa3c68721667dba455072e3f7cfc7f",
     "Properties.Pouw.PeriodJ10R.Answered.draw": "34232c1aa04dce901132afc7c85bd9db84df44b652b39520da011c3cdcaf91c9",
@@ -12209,10 +12267,35 @@
     "Properties.Pouw.PeriodJ10R.stratum": "0fe4336d41b2989d69cfa42ae95d8f0c6647af2e53b350508508595663a6f361",
     "Properties.Pouw.PeriodJ10R.tileAt": "e9b64854c8ad31a1158ed8bfa3017d391ad5b121854ae9f83d2e8560b86a24b4",
     "Properties.Pouw.PeriodJ10R.tileCount": "294cbe291655d25c16ca6b696758908921beda6dfe08299ee58d4b1c93638257",
+    "Properties.Pouw.PeriodJ10R.tileDraw": "c07e6b3d8516ad948a68197ec9a518ac3c0361df1012d19028bb749f93e31485",
     "Properties.Pouw.PeriodJ10R.tileLayer": "414abffad6ce996ac797d9e02ef17e9b3e5382e07d8861f61e411e2763c447e8",
     "Properties.Pouw.PeriodJ10R.tileRun": "cec0665a41dda106f97939c5975a7ebf6cd1733f2d6211297445ffcc0673a4ca"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
+   ]
+  },
+  "Properties.Pouw.PeriodJ10RStrata": {
+   "digest": "1faea3e343035451fb9b47b2ad7aca2ac42a66db41de4123dfdfae19f1d1b5fa",
+   "definitions": {
+    "Properties.Pouw.PeriodJ10RStrata.BlockDraw": "8c51d87a44f26cbacd92f87b041c9f78598f3db7ddd2a2faba318647f99e076c",
+    "Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata": "f1cd337a976e247f25a828cdce01cb6f7f96bce66da6ab844dbbd62e03dea897",
+    "Properties.Pouw.PeriodJ10RStrata.Rest": "8a7ce9ec6b58e64025d0e07db7d22b6838a29c7f5500f05be754aefa00e8d31a",
+    "Properties.Pouw.PeriodJ10RStrata.StrataCoin": "3b72d8959db0aa1c61278a35b72916d9816258e5e421d654717d40ba985d6b37",
+    "Properties.Pouw.PeriodJ10RStrata.StrataDrawIsCoin": "b6039c004f6202b9861b2b79fee2fa88f87b94fe22d929eeeb05bde7cc17cc3b",
+    "Properties.Pouw.PeriodJ10RStrata.atStratum": "830f7e19021da2a837bedbba12df6354b7ecb47b65cfc9a77d72876ae5c77f5c",
+    "Properties.Pouw.PeriodJ10RStrata.creditAt": "cd18afe088ab117e28401e6a08383ed0cb18a5a3551d10a282d995b0212820e7",
+    "Properties.Pouw.PeriodJ10RStrata.layerAt": "e03bebb34cdbb32b5a74d034a3ae65a88ec2ac61bc99ab382e5ef5f00668f7fd",
+    "Properties.Pouw.PeriodJ10RStrata.pathsAt": "93af8a0ff9e42bc9689e4b52f8c86420b30379acc1dfbbab9db9bf0a31c13d79",
+    "Properties.Pouw.PeriodJ10RStrata.pathsCongr": "e0341d2e2a2151a4b4005e491e56b32e9e3a3cab3ba7a43078ce44d901e1b6d9",
+    "Properties.Pouw.PeriodJ10RStrata.pullAt": "fc1ebaf3fde2273738b9a4bf7c55e02b80bcf2dddbf9fdb24d2e2134390bfd91",
+    "Properties.Pouw.PeriodJ10RStrata.relAt": "175453463eda382310efd4972422fa26dfc98094697ae4c6868f723c773475d2",
+    "Properties.Pouw.PeriodJ10RStrata.rightAt": "7998f40eaf2fe1b25eda4eace37ea67692654090865471ab3b4c2cf50f845af5",
+    "Properties.Pouw.PeriodJ10RStrata.runAt": "ba2c8b169a756bd49693d87e4b73c43e13948ecd2ea88313c0aa8f5c7bf0d2c5",
+    "Properties.Pouw.PeriodJ10RStrata.stratumLive": "ab89b5316fd9a86746b29c9490323bd745cbde74d01bcd07a3fc98331b93d600"
+   },
+   "guarantees": ["Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"]
   },
   "Properties.Pouw.Strata": {
    "digest": "8e088b868f61790cb1bfeec1de99b9ea0f019e2b66932ee2ac5eeeedf34876dd",
@@ -13451,7 +13534,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "SampledProofs.ChallengerRecord": {
@@ -13498,7 +13582,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "SampledProofs.ChallengerSession": {
@@ -13661,7 +13746,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"
    ]
   },
   "SampledProofs.Draw": {
@@ -13777,6 +13863,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -13915,6 +14002,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
     "Properties.SampledProofs.noAcceptAfterHalt"
@@ -13976,6 +14064,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
