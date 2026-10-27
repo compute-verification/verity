@@ -582,7 +582,8 @@ class CommitConfig:
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
                                       help="opt in, never the record: the Commit also commits every unit of this partition file's templates "
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
-                                           "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
+                                           "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
+                                           "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
