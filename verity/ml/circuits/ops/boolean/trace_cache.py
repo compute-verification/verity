@@ -6,11 +6,11 @@
 it (the Definition's name, version and bindings), looks the circuit up in the directory `use` named before it runs the builder,
 and writes the circuit it traced there. An entry is named by the SHA-512 of that key with the parameter and return types, ``cse``,
 Python's and numpy's versions, and a digest of the code that could change the gates (`code_digest`): every Python and JSON file
-of `verity` but tests, every file of `verity.ml.circuits` but its tests (its tables), and the builder's source file when it is
-elsewhere. So an edit anywhere in `verity` makes every entry a miss. What the digest can't see (a builder outside `verity` that
-calls a helper from another module there, a monkeypatched builder) can make an entry stale; a stale or tampered entry gives other
-gates, and so a Program digest unequal to one built without the cache. An entry whose bytes don't match the SHA-512 its header
-records, or whose header doesn't hold its key, is traced again and rewritten.
+of `verity` but tests, every file of `verity.ml.circuits` but its tests, Markdown and TOML (so its tables), and the builder's
+source file when it is elsewhere. So an edit anywhere in `verity` makes every entry a miss. What the digest can't see (a builder
+outside `verity` that calls a helper from another module there, a monkeypatched builder) can make an entry stale; a stale or
+tampered entry gives other gates, and so a Program digest unequal to one built without the cache. An entry whose bytes don't
+match the SHA-512 its header records, or whose header doesn't hold its key, is traced again and rewritten.
 
 An entry is ``MAGIC``, a line of JSON (the key, the circuit's sizes and counts, its arrays' type code and byte order, the payload's
 SHA-512), then the payload: each gate's kind as one byte (`trace._KINDS`), each gate's first and second operand wires (a NOT's
@@ -49,7 +49,7 @@ def _covered(path: Path) -> bool:
         return False
     if any(d in _SKIP or d.startswith(".") for d in path.relative_to(_VERITY).parts[:-1]):
         return False
-    return path.suffix in (".py", ".json") or path.is_relative_to(_CIRCUITS)
+    return path.suffix in (".py", ".json") or (path.is_relative_to(_CIRCUITS) and path.suffix not in (".md", ".toml"))
 
 
 @functools.cache
