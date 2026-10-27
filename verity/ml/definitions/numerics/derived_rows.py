@@ -1,7 +1,7 @@
 """Vectorized exact evaluators for **derived boundaries** — interior gate values of the registered B0/B1
-serving semantics that the commit store does not materialise (lane VU-ACQUIRE, GUIDANCE §29 wave).
+serving semantics that the commit store does not materialise.
 
-"Any gate output can be a VU boundary": VU placement is defined over the circuit (core rule 4), so a plan
+"Any gate output can be a proof-block boundary": proof-block placement is defined over the circuit (core rule 4), so a plan
 may select values that live *inside* the kernel-aligned leaves the adapter commits.  Replay can only serve
 such a plan if the interior value can be produced fast and bit-exactly from committed neighbours.  This
 module provides that production path for four derived classes, as numpy twins of the registered gate
@@ -30,7 +30,7 @@ Non-finite bf16 operands in a tensor-core dot follow the *documented extension* 
 `prims.AmpereBF16TcDot16` only in the scalar registry; here such rows are flagged ``nonfinite`` and are
 never claimed exact (the `fa2_model` convention).
 
-Validation: `tests/program/test_derived_rows.py` (gate-by-gate IR evaluation on small shapes) and
+Validation: `tests/program/test_derived_rows.py` (gate-by-gate circuit evaluation on small shapes) and
 `verity_vllm.check.poc_derived_b0_check` (every norm/attention/silu row of a committed B0 request).
 """
 
@@ -916,7 +916,7 @@ def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, do
     `Attention_v2{T, NH, KVH, D, BN, DOT, INV}` (FA3 on sm_90: DOT = HopperBF16WgmmaDot16_v1, INV = Fa3InvSum_v1; `Attention_v4` adds ``masked_from``, `Attention_v5` ``rescale_only`` as well) -- exactly as the
     registered Definitions compose it: head h reads KV head h // (NH/KVH); one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks
     visited last -> first (`AttentionHead_v2/v3`).  q (NH, D), kc / vc (T, KVH, D) bf16 words -> (out (NH, D) bf16 words, nonfinite (NH,)).
-    This is the composition of the row's VUs on its committed boundary (q, the K/V history, out); the block INTERIORS Q(P) selects live in
+    This is the composition of the row's proof blocks on its committed boundary (q, the K/V history, out); the block INTERIORS Q(P) selects live in
     the M1 export stream and are not read here -- the caller names that mechanism."""
     q = np.asarray(q, dtype=np.uint16)
     kc = np.asarray(kc, dtype=np.uint16)

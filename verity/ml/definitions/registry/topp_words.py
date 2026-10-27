@@ -12,7 +12,7 @@ is fixed, and this module restates it at that S:
   the Definition's gates are exactly the instances the circuit counts.
 
 `TopPKeepWord_v1{V,S}` equals `topp_keep(x, p, S)` (and so `TopPMaskWordx{V}_v1` at `splits = S`) on every row: the test
-evaluates the Definition with the IR's evaluator against `topp_split`. `TopPMask_v2{V,S}` applies it lane by lane with a select
+evaluates the Definition with the circuit evaluator against `topp_split`. `TopPMask_v2{V,S}` applies it lane by lane with a select
 (no `BitAt`), and `GumbelTopPTokenSelect_v2{V,S}` is `GumbelTopPTokenSelect_v1{V}` at the constant split count.
 """
 from __future__ import annotations

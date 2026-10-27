@@ -9,7 +9,7 @@ The private circuit's gates and wiring are a value, a `Netlist`, that this Defin
 unit's structure is a function of the size class (G, N_IN, N_OUT) alone. It is not how a private circuit is hidden: circuit
 hiding is recursion (C-Flock's ``--hide``).
 
-**The netlist** is in SSA form: wires 0 .. N_IN - 1 are the data inputs x, and wire N_IN + g is gate g's output. Gate g is
+**The private circuit's description** is in SSA form: wires 0 .. N_IN - 1 are the data inputs x, and wire N_IN + g is gate g's output. Gate g is
 ``(op, a, b)``; it reads wires a and b and computes
 
     op 0  XOR    a ^ b
@@ -18,9 +18,9 @@ hiding is recursion (C-Flock's ``--hide``).
     op 3  NAND   ~(a & b)
 
 op's bit 0 picks AND over XOR and its bit 1 negates. With a = b they give the constants 0 (XOR) and 1 (XNOR), NOT a (NAND) and a
-copy of a (AND), so the set is complete. Output i is wire ``out[i]``. Every bit string is a netlist: a source at or past the
+copy of a (AND), so the set is complete. Output i is wire ``out[i]``. Every bit string describes a private circuit: a source at or past the
 reading gate's own wire (a forward read, or one past W) reads 0, as does an output past W, so the Definition is total and no
-netlist has a cycle. A no-op gate is ``(XOR, 0, 0)``: the constant 0, which nothing reads. `pad` fits a smaller netlist to a class
+description has a cycle. A no-op gate is ``(XOR, 0, 0)``: the constant 0, which nothing reads. `pad` fits a smaller private circuit to a class
 with no-op gates and unread inputs, and leaves its outputs unchanged; `interpret` is the reference the Definition agrees with.
 
 **Routing.** Each source and each output is a multiplexer tree over the wires it may read (`gather.gather`, filling with 0):
@@ -30,13 +30,13 @@ c = m. In all (`and_count`):
 
     ANDs = sum over g < G of (2 T(N_IN + g) + 2)  +  N_OUT T(W)  ~  G (2 N_IN + G) + N_OUT W
 
-which is O(G W) with W = N_IN + G: about 2 N_IN + G ANDs per netlist gate.
+which is O(G W) with W = N_IN + G: about 2 N_IN + G ANDs per gate of the private circuit.
 
 **Why this design.** It is the simplest universal unit, built from the multiplexer tree core already has.
 - SSA, not a register file (W registers, each gate writing a destination): a register file pays a destination decoder and a
   W-wide conditional write per gate besides the two reads, about 4W ANDs a gate. SSA pays only the reads, and since a gate reads
-  only earlier wires, every bit string is an acyclic netlist with no validity check. A register file's advantage, W below
-  N_IN + G for a long, narrow netlist, is what a permutation network gives better.
+  only earlier wires, every bit string describes an acyclic circuit with no validity check. A register file's advantage, W below
+  N_IN + G for a long, narrow private circuit, is what a permutation network gives better.
 - Multiplexers, not a permutation network: one Beneš or Waksman network from every wire to every gate input would read each
   gate's own output and later ones, a cycle, so routing in O(k log k) needs Valiant's edge-universal graphs over the k =
   N_IN + G + N_OUT nodes, about 4.5 k log2 k ANDs in their best known form (one AND per switch) and far more structure. That
@@ -102,7 +102,7 @@ class Netlist:
 
 
 def interpret(net: Netlist, x: Sequence[int]) -> list[int]:
-    """The netlist run gate by gate on the bits ``x``: the reference `UniversalUnit` agrees with."""
+    """The private circuit run gate by gate on the bits ``x``: the reference `UniversalUnit` agrees with."""
     if len(x) != net.n_in:
         raise ValueError(f"the netlist has {net.n_in} inputs, not {len(x)}")
     w = [b & 1 for b in x]

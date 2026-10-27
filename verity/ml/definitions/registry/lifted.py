@@ -628,7 +628,7 @@ def l_step_live(E: int) -> PrimitiveDefinition:
 # ---------------------------------------------------------------------------------------------------------
 # Continuation_v1: the controller family -- `b_t`, `e_t`, `o_t` as REGISTERED gates
 # beside the unit's `r_{t+1}` (`s=<s>/live` = LStepLive) and `u_{t+1}` (`s=<s>/tok_in` = LSelect), which compute exactly `run` / `in`
-# of the rule (verity.ir/continuation.py `chain_bits`, exhaustively tested).  Slot `t` <-> event `s = t - 1`.
+# of the rule (`verity_vllm/program/lifting/continuation.py` `chain_bits`, exhaustively tested).  Slot `t` <-> event `s = t - 1`.
 # ---------------------------------------------------------------------------------------------------------
 
 CONTINUATION_VERSION = "continuation-v1"
@@ -1596,7 +1596,7 @@ def assign_inactive(request: Any, served: Sequence[int], eos_set: Sequence[int],
 
 
 # ---------------------------------------------------------------------------------------------------------
-# TRUE widened widths (PAD-02 CLOSED): the width of a lifted VU set is Σ (w+1) over its escaping
+# TRUE widened widths (PAD-02 CLOSED): the width of a lifted proof-block set is Σ (w+1) over its escaping
 # leaves, nothing is split to fit 32 bits, and admissibility is the UNCHANGED validator at the lifted protocol parameter
 # ---------------------------------------------------------------------------------------------------------
 
@@ -1613,7 +1613,7 @@ W_MAX_LIFTED_STATUS = ("accepted-revb-M-0042 (LIFTING-SPEC v0.5.1 B1: w_max_lift
 
 
 def lifted_width_summary(out_widths_payload: Sequence[int], *, w_max_lifted: int = W_MAX_LIFTED) -> dict:
-    """For a VU set whose escaping leaves have **payload** widths `out_widths_payload`, the width of the
+    """For a proof-block set whose escaping leaves have **payload** widths `out_widths_payload`, the width of the
     lifted set is the TRUE lifted width `w_out_lifted = Σ (w+1)` and admissibility is `w_out_lifted <= w_max_lifted` — the unlifted
     rule at the lifted parameter, no activity/payload split, no `n_max`, no re-tiling.  Reported beside it, for information only
     (A4.4 "summaries report real widths"): the payload width, `n_out` (how many bits the set grew by), and the verdict of the
@@ -1639,7 +1639,7 @@ N_OUT_HISTOGRAM_MAX_SETS = 50_000  # the exact per-set walk is bounded; the summ
 
 
 def n_out_histogram(fam: Any, *, max_sets: int = N_OUT_HISTOGRAM_MAX_SETS, program: Any = None) -> dict:
-    """The histogram of `n_out(S) = |out(S)|` — escaping leaves per VU set — over
+    """The histogram of `n_out(S) = |out(S)|` — escaping leaves per proof-block set — over
     the family, computed by the SAME boundary module the validator uses (`boundary.out_gates`, exact; `Unsupported` sets counted apart),
     and with `program` the per-set TRUE lifted width `w_out^⊥(S) = Σ_{g ∈ out(S)} width(g)` (`boundary.gate_width`): `w_out_lifted_max`,
     `n_out_max`, `growth_max` (the tag bits of a set: one per escaping LIFTED leaf -- under G1  an escaping ORDINARY leaf, a
@@ -1684,7 +1684,7 @@ def n_out_histogram(fam: Any, *, max_sets: int = N_OUT_HISTOGRAM_MAX_SETS, progr
 
 def lifted_width_admissibility(program: Any, fam: Any, *, w_max_lifted: int = W_MAX_LIFTED, limits: Any = None,
                                histogram_max_sets: int = N_OUT_HISTOGRAM_MAX_SETS) -> dict:
-    """Admissibility of a LIFTED Program's VU family: `partition.validate_width` — the one validator, UNCHANGED — run at the
+    """Admissibility of a LIFTED Program's proof-block family: `partition.validate_width` — the one validator, UNCHANGED — run at the
     lifted parameter `w_max_lifted` on the lifted (w+1) widths the Program's types carry.  Returns the verdict's JSON with the lifted
     labels (A5) and the A4.4 width summary (`max_seen` from the validator, the `n_out` histogram from the boundary module); beside it,
     for information, the same validator's verdict at the active-reference `W_MAX` (fails on any set holding a 32-bit leaf, by design)."""

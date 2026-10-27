@@ -35,7 +35,7 @@ EVALUATORS = {
                # (literals, held equal to registry.tc_total's constants by test_sampled_replay)
                "k16 step = registry.tc_total ampere_bf16_m16n8k16 total family v3",
     # the statics-lifted GEMM every non-(Ampere, FA2) target binds (targets.gemm_spec -> b1.GemmV2):
-    # `Gemm_v2{K,N,DOT}` -- the SAME VU as Gemm_v1 (one token row: x[K] @ W[N,K]^T -> [N], the instance row Q(P) selects; the registry's
+    # `Gemm_v2{K,N,DOT}` -- the SAME proof block as Gemm_v1 (one token row: x[K] @ W[N,K]^T -> [N], the instance row Q(P) selects; the registry's
     # GemmCoordinate is its interior), with the k16 accumulator step read from the DOT static of THIS row's spec: HopperBF16WgmmaDot16_v1
     # (wgmma m64nNk16: one group of 16 + acc, 26-bit adder, floor -133, the H100 measurement of record) -> derived_rows.dot_bf16_hopper;
     # AmpereBF16TcDot16_v2 -> dot_bf16.  A DOT with no registered twin is refused BY NAME (`Declined`), never another adder.
@@ -97,7 +97,7 @@ EVALUATORS = {
     **{f"GumbelTopPTokenSelect_v{n}": "GumbelTopPTokenSelect_v1's row at the split count S (registry.topp_words, a single-request Program's select; "
                                       "v3 = v2 word for word): `splits` = S as v1 reads it, any other value as an unlaunched count, where v1 keeps no lane either" for n in (2, 3)},
     # the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
-    # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
+    # from the committed bf16 row), the GEMM row is the proof block -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
     "Fp8GroupQuant_v1": "verity.ml.definitions.numerics.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
     "ScaledMmFp8Block_v1": "verity.ml.definitions.numerics.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps from +0 per 128-block, "
                            "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
@@ -138,7 +138,7 @@ EVALUATORS = {
     # a graph VALUE the row wires (arg 1: a registered buffer / input slice), never a constant of the evaluator.  Evaluated with the registry's
     # own word helpers (derived_rows: bf16_to_f32_words = Bf16ToF32, mul_rn = F32Mul, f2fp_bf16 = F2fpBf16), node for node the Definition's body.
     # When the Program's dataflow reads its output from another module it is a boundary Value of the v2 query (`model/out`) and the replay
-    # evaluates it as a VU against the committed member.
+    # evaluates it as a proof block against the committed member.
     "Bf16MulScalarTensor_v1": "verity.ml.definitions.numerics.derived_rows bf16_to_f32_words (Bf16ToF32) on x[N] and on the one-word scalar s, mul_rn (F32Mul: "
                               "one RN multiply), f2fp_bf16 (F2fpBf16 = cvt.rn.bf16.f32, NaN -> 0x7FFF) -- b1.Bf16MulScalarTensor{N} node for node -> out",
 }

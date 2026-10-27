@@ -187,7 +187,7 @@ def _lifted_core(B, S, x, logits, w13, w2, a):
 @composite("LMoeFfn", 1, ["E", "TOPK", "VPT", "H", "I"],
            lambda S: (block_signature(S)[0], Array(S.H, V(16))), conformance="protocol-defined")
 def LMoeFfn(B, S, x, wg, w13, w2, a):
-    """The block as a layer would call it: `y` only (the assignment record stays inside the callee's nodes, addressable as VUs); the
+    """The block as a layer would call it: `y` only (the assignment record stays inside the callee's nodes, addressable as proof blocks); the
     caller's enable is its last operand, as for every lifted callee."""
     return B.call(bind(LMoeBlock, E=S.E, TOPK=S.TOPK, VPT=S.VPT, H=S.H, I=S.I), x, wg, w13, w2, a, name="moe")[0]
 

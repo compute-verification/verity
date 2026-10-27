@@ -2,7 +2,7 @@
 
 The models compile their ``.so`` on first use.  Concurrent first users -- forked replay
 evaluators after a fresh install, two Commits on one pod -- used to race: one process' ``g++ -o lib.so`` was still writing while a
-sibling ``dlopen``'ed the path (``OSError: lib.so: file too short``) and the sibling's VUs came back 'not evaluated'.  Here the compile
+sibling ``dlopen``'ed the path (``OSError: lib.so: file too short``) and the sibling's proof blocks came back 'not evaluated'.  Here the compile
 goes to a private temp path and is published by ``os.replace`` (atomic: a reader sees the old complete file or the new complete one,
 never a partial), and builders serialise on an ``fcntl`` lock beside the library, re-checking staleness once they hold it (the second
 builder finds the first's output fresh and returns).  Processes that already mapped an older file keep their mapping (POSIX unlink

@@ -24,7 +24,7 @@ What nvcc makes of TileLang's expressions, in the CUDA and its PTX: `a + b * c` 
 (`F32Fmaxf_v1`); a bf16 store is `cvt.rn.bf16.f32` (`F2fpBf16_v1`).  `a - b` is `sub.f32`, written `add(a, neg(b))`: the same
 word but for a NaN's payload.  Each `T.reduce_*` / reducer finalisation and each `warp_reduce` is TileLang's xor butterfly (lane
 t takes `op(v[t], v[t ^ h])` for h = n/2 .. 1: `dsa.halving_tree`), each accumulator and each cross-warp sum a chain from +0
-in index order (`chain`).  A NaN word is IR's (0x7FC00000) where a leaf's is, and the GPU's 0x7FFFFFFF elsewhere; no output reads
+in index order (`chain`).  A NaN word is the evaluator's (0x7FC00000) where a leaf's is, and the GPU's 0x7FFFFFFF elsewhere; no output reads
 a NaN's payload on finite operands.
 
 The Sinkhorn normalisation (tilelang_kernels.py:247-266, and :410-429 in the broadcast), on the 4 x 4 logits x[r][c] = `fma(mixes[8 + 4r + c], scale[2],
