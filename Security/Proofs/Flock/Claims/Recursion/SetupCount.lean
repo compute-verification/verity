@@ -1725,6 +1725,17 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
       (∀ pub, PT K pub ∧ PN K pub → countC.P (f pub) m) → 1 + m ≤ N →
       countC.P (HmIn.drawnWith (Hashes.counted h) c pi pop d >>= f) N :=
     fun c pi pop _ _ _ _ hp hf hN => bindQ (drawn_cost h _ pop d) (H3 c pi pop hp) hf hN
+  -- at an open bound the walk assigns it (`2 + m`, `1 + m`); a sibling arm's `throw0` would otherwise fix it at `0`
+  have hParseE : ∀ {β : Type} {f : Circuit → CountV β} {m : Nat}, (∀ c, PC c → countC.P (f c) m) →
+      countC.P (HmOut.parseWith (Hashes.counted h) tags cf tables >>= f) (2 + m) :=
+    fun hf => hParse hf (Nat.le_refl _)
+  have hLoadE : ∀ c pi {β : Type} {f : Public → CountV β} {m : Nat}, PC c → (∀ pop, PT K pop → countC.P (f pop) m) →
+      countC.P (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf >>= f) (1 + m) :=
+    fun c pi _ _ _ hc hf => hLoad c pi hc hf (Nat.le_refl _)
+  have hDrawnE : ∀ c pi pop {β : Type} {f : Public → CountV β} {m : Nat}, PT K pop →
+      (∀ pub, PT K pub ∧ PN K pub → countC.P (f pub) m) →
+      countC.P (HmIn.drawnWith (Hashes.counted h) c pi pop d >>= f) (1 + m) :=
+    fun c pi pop _ _ _ hp hf => hDrawn c pi pop hp hf (Nat.le_refl _)
   have hCP : ∀ c pub, PC c → PT K pub ∧ PN K pub →
       countC.P (HmOut.checkPublicWith (Hashes.counted h) c pub) (NP * perRow K) :=
     fun c pub hc hp => countC.mono (checkPublic_cost h c pub K hp.1 hp.2) (Nat.mul_le_mul_right _ (hPC c hc))
@@ -1741,6 +1752,9 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
     apply countC.mono
     · repeat (first
         | extract_lets
+        | (with_reducible apply hParseE)
+        | (with_reducible apply hLoadE)
+        | (with_reducible apply hDrawnE)
         | (with_reducible apply hParse)
         | (with_reducible apply hLoad)
         | (with_reducible apply hDrawn)
@@ -1782,6 +1796,9 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
         all_goals try (dsimp +zetaDelta -zeta only)
         all_goals repeat (first
           | extract_lets
+          | (with_reducible apply hParseE)
+          | (with_reducible apply hLoadE)
+          | (with_reducible apply hDrawnE)
           | (with_reducible apply hParse)
           | (with_reducible apply hLoad)
           | (with_reducible apply hDrawn)
