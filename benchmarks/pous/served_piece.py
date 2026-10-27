@@ -332,7 +332,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             answer_s = round(time.monotonic() - t, 3)
             del inputs
             row = bytes.fromhex(inner["commitment"])
-            hidden = advice.register([row], 8 * len(row), bind)
+            hidden = advice.commit([row], 8 * len(row), bind)
             opening = hidden.open(0)
             _private(private, {
                 "opening.json": {"binding": bind.hex(), "count": 1, "index": opening.index, "n_bits": 8 * len(row),
