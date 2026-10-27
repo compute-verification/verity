@@ -340,7 +340,7 @@ LEVERS = {
     "W": "wired ports by reference",
     "R": "registered ports by reference",
     "L4": "one Merkle root over members",
-    "P": "outputs in shared 1 KiB rows (CIR-113)",
+    "P": CS.SOURCES["levers"]["P"],
 }
 
 
@@ -709,8 +709,8 @@ def report(doc: dict) -> str:
     st = doc.get("stream")
     if st:
         lines += ["", f"serving's own stream commit, made while it serves, before the window's commit and beside it (rows-sha512: "
-                  f"{STREAM_ROW} compressions a 4 KiB row; the seal's store at {SEAL_BYTES_S / 1e9:.3f} GB/s, VLLM-102's "
-                  f"r20261027-054922-0f54), the full window; {STREAM_LEVER}:", "",
+                  f"{STREAM_ROW} compressions a 4 KiB row; the seal's store at {SEAL_BYTES_S / 1e9:.3f} GB/s, "
+                  f"{CS.SOURCES['seal_store']}), the full window; {STREAM_LEVER}:", "",
                   "| schedule | stream bytes | fa*.m1 bytes (share) | commit ANDs (ratio) | commit s at 3.1 (4.79) G/s (ratio) | "
                   "seal s (ratio) | under F: commit ANDs (ratio) | commit s (ratio) | seal s (ratio) |",
                   "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]

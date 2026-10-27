@@ -187,9 +187,9 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
 #: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
-#: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
-PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
-                 "C); the statement reads no registered values and no shared rows")
+#: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of), with the
+#: changes it waits on (``sources.json``)
+PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_interim"]
 
 
 @dataclass(frozen=True)
