@@ -22,6 +22,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (`config.EnginePin`, with the manifests it reads), the workload record `config` loads, and the config loader they stand on.
 inputs_only = true
 inputs = ["integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
+          "integrations/vllm/verity_vllm/settings.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/engine/spec.py",
           "integrations/vllm/verity_vllm/engine/__init__.py", "integrations/vllm/verity_vllm/records",
           "integrations/vllm/manifests/checkpoints.json", "integrations/vllm/manifests/checkpoints-int8.json",
