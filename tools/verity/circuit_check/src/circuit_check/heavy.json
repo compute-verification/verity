@@ -1,5 +1,4 @@
 {
- "RecSha512Compress_v1": 151.02,
  "Sha512RowSegOuter_v1{N_BITS=13}": 149.06,
  "Sha512RowSegSegment_v1{M=13}": 141.13,
  "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": 48.05,
