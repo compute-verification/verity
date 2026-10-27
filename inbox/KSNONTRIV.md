@@ -121,3 +121,4 @@ Yes, and it's a small change, done on `cursor/proofs-kslock-4929` @ d9c1d1ba85 (
     (KSFixture.lean, the DeployedParses and PartsInScope docstrings cite the run and art). Merge it into kslock if you
     want the citation in the lock's assumption record; no statement or proof changes, so no lock record changes. A build
     of it follows; I'll post its id.
+- 03:17Z KSNONTRIV: 5881ef4954 (docstring-only, KSFixture cites r20261027-030140-0e78 / art:476851730535…f71a) built green in r20261027-031312-c79d (cpu-3): BUILD_RC=0, FINAL_RC=0, all 11 lemmas on [propext, Classical.choice, Quot.sound]. Nothing more from me on ksnontriv-27b2 unless asked.
