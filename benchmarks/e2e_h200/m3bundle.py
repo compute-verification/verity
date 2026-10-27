@@ -104,7 +104,7 @@ def definition(win: Window, fam: str) -> Any:
 
 
 def binding_of(template: str) -> str:
-    return "GEMM_SM120_S8" if template.startswith("ScaledMm") else "GEMM_HOPPER"
+    return "BOOLEAN_SM90_S8" if template.startswith("ScaledMm") else "BOOLEAN_HOPPER"
 
 
 class _At:

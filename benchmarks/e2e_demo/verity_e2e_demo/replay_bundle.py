@@ -12,8 +12,8 @@ in the payload and holds only public structure, hiding commitments and paths bes
   reaches, ``{port: {root, leaves, domain, schema}}``, each the registration's root under the window-domain rule
   (`verity.ml.commitments.window`).
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
-  H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000). Every unit's template binds that
-  dot, as circuits resolves the binding.
+  H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
+  on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
 * ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof service's draw of record, with
   ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand). The law is
   the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
@@ -89,6 +89,7 @@ import numpy as np
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -109,7 +110,9 @@ SALT = INST.salt_bytes
 COORDS = ("block", "step", "slot", "layer", "op", "unit")
 #: a card's binding of the templates' dot, by name: (card, the binding's statics as circuits resolves them)
 BINDINGS = {"GEMM_SM120_S8": ("sm_120", G.GEMM_SM120_S8), "GEMM_SM90_S8": ("sm_90", G.GEMM_SM90_S8),
-            "GEMM_HOPPER": ("sm_90", G.GEMM_HOPPER)}
+            "GEMM_HOPPER": ("sm_90", G.GEMM_HOPPER),
+            "BOOLEAN_SM120_S8": ("sm_120", BG.GEMM_SM120_S8), "BOOLEAN_SM90_S8": ("sm_90", BG.GEMM_SM90_S8),
+            "BOOLEAN_HOPPER": ("sm_90", BG.GEMM_HOPPER)}
 
 @dataclass(frozen=True)
 class Read:
@@ -770,10 +773,10 @@ def replay(unit: Mapping[str, Any], payload: bytes) -> bool:
     params, ret = fn.signature()
     lay = IF.layout(fn)
     rows = {r["port"]: payload[r["row"][0]:r["row"][0] + r["row"][1]] for r in unit["rows"]}
+    if any(ty.width_set() == {1} for _, ty in params):
+        return _replay_bits(fn, params, ret, lay, rows)
     ins = []
     for (name, ty), width in zip(params, lay.widths):
-        if ty.width_set() == {1}:
-            raise ValueError(f"{name}: a Boolean-profile port; the bundle replays word ports")
         n = len(ty.leaf_widths())
         ins.append(_elements(rows[name], width, () if n == 1 and not getattr(ty, "shape", None) else (n,)))
     want = np.asarray(evaluate_batch(fn, *ins)).reshape(1, -1).astype(np.uint64)
@@ -783,6 +786,28 @@ def replay(unit: Mapping[str, Any], payload: bytes) -> bool:
         got.append(np.frombuffer(rows[o][:leaves * width // 8], dtype=f"<u{width // 8}").astype(np.uint64))
     got_a = np.concatenate(got).reshape(1, -1)
     return got_a.shape == want.shape and bool((got_a == want).all())
+
+
+def _bits_of(row: bytes, n: int) -> np.ndarray:
+    return np.unpackbits(np.frombuffer(row, np.uint8), bitorder="little")[:n].reshape(1, n)
+
+
+def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.Layout, rows: Mapping[str, bytes]) -> bool:
+    """`replay` of a Boolean-profile template: each row is its port's bits in order, packed little-endian into its u16
+    words (`IF.layout`), and an output field of fewer than 16 bits is its bits low in one zero-padded word, which must be
+    zero."""
+    ins = [_bits_of(rows[name], sum(ty.leaf_widths())) for name, ty in params]
+    out = evaluate_batch(fn, *ins)
+    want = np.concatenate([np.asarray(o).reshape(1, -1) for o in (out if isinstance(out, (tuple, list)) else (out,))], axis=1)
+    got = []
+    for (o, words), f in zip(lay.outs, IF._fields(ret)):
+        n = sum(f.leaf_widths())
+        row = np.unpackbits(np.frombuffer(rows[o], np.uint8), bitorder="little")
+        if row.size != 16 * words or row[n:].any():
+            return False
+        got.append(row[:n].reshape(1, n))
+    got_a = np.concatenate(got, axis=1)
+    return got_a.shape == want.shape and bool((got_a == want.astype(np.uint8)).all())
 
 
 def _check_commitment(doc: Mapping[str, Any], bad: dict[str, str],
