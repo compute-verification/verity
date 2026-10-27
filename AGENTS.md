@@ -34,9 +34,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   `tools/agent-guard/` (the VM's secret guard, OOM recorder and shell hook) and `tools/move/`.
 - `infra/`: our machines: `infra/cluster/`, `infra/control/` (the control pod), `infra/cursor/` (launching
   coordinators), `infra/nebius/`, `infra/slack-events/` (comms's) and `infra/ops/`.
-- `archive/`: kept but not developed: A-GKR, B-Ligero, D-SP1, the VOLE prover, and what a ruling retires
-  (`archive/AGENTS.md`). `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the
-  whole tree.
+- `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the whole tree. The archived
+  proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
+  archive` restores them.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier of record is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -78,7 +78,7 @@ nowhere else.
   integrity profile. A protocol carries no policy parameter: it surfaces what its draw established (ε at δ), and the
   model's size is public.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hm96 rows in frame-v3-sha512 trees, signatures
-  are hash-based (LMS, n = 64), and BLAKE3 is `archive/`'s. Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
+  are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
   named premise H-μ⁺ (the premise ledger's row R1, `note:20261016T0219Z-report-premise-ledger`), not yet in a lock.
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: the remote bandwidth

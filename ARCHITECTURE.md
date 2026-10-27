@@ -37,9 +37,8 @@ Each layer may depend on the layers below it (the import rules: `AGENTS.md`, "Ma
 ~~~text
 integrations/vllm, examples/, benchmarks/ (with the census)
 ---------------------------------------------------------------------------
-verity/core/: the verifiers, trusted           archive/
-  protocols: profile, sampled_proofs,          kept, not developed:
-  pouw, pous, certifier; claims                gkr, direct, sp1, vole
+verity/core/: the verifiers, trusted
+  protocols: profile, sampled_proofs, pouw, pous, certifier; claims
   Lean, the verifier of record, C-Flock's in service/flock
 Security/: the definitions, models and proofs of the guarantees (nci among them)
 ---------------------------------------------------------------------------

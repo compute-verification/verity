@@ -59,7 +59,8 @@ key    = ( "verity/blake3-leaf/v1/" ‖ ("x" for role 1 | "w" for role 2) )  zer
 digest = BLAKE3( row_bytes, key = key )          (standard keyed mode, 32-byte output)
 ~~~
 
-This is B-Ligero's `leaf = blake3` framing (`archive/direct/ligero/leaf/blake3.py`), promoted byte for byte. The
+This is B-Ligero's `leaf = blake3` framing (its `leaf/blake3.py`, deleted with `archive/` in `2091252fe3`), promoted
+byte for byte. The
 schema string and keys are pinned in `ligero-verify` (`src/leaf.rs`), and the full-width vectors match B-Ligero's
 chunk-CV fold. The key separates roles. The word width is not bound, as in B-Ligero: a row's length is the domain's
 business, since frame-v3 domain bindings name K and the schema.
@@ -275,7 +276,7 @@ hashes no index, and a leaf (its own tag) and a node (its level's key) cannot co
   pins a domain id, leaf, node, pad, empty root and root, and rebuilds the root with the `blake3` package when that is
   installed. `verity.ml.crypto.blake3` itself matches that package on `vectors.json`'s BLAKE3 cases, hash and keyed
   (`test_frame_v3.py`). Pearl-C's BLAKE3 device kernels, checked against this reference on the host while Pearl-C hashed
-  with BLAKE3, are kept unmaintained in `archive/pouw-blake3/pearl_c/` (`hash.cuh`).
+  with BLAKE3, were deleted with `archive/` in `2091252fe3` (`pouw-blake3/pearl_c/hash.cuh`).
 - **Hashes.** Binding a value to a position rests on `cr/blake3`. As in §6, which statement and session a root belongs to
   also rests on `binding` (64 or 32 bytes, as in §6) and the positions' identity, a SHA-256 identity digest, so a Table 1 row
   citing this mode cites `cr/sha-256` beside `cr/blake3`, and `cr/sha-512` for a 64-byte binding.
