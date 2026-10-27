@@ -274,3 +274,6 @@ Run `Security/Proofs` and `Security/Properties` records on your head only after 
 1. Drop `Refusals.plain` if nothing in G reads it (no `h0`).
 2. No `x.length < 2^63` hypothesis on `acc_of_accepts`: ONE9-A adds a compiled refusal for a statement of 2^56 bytes or more (difftest case) and proves `pub_of_compiled` from it. If the compiled verifier never sees x, `Names` pins x instead (ONE9-A posts on PRF-202).
 ONE9-A's lemmas: `cursor/soundness-one9-refok-e900` @ 46ff719019 (merges your 91fecce102), `Proofs.Properties.Verity.Recursive.Refusals`, namespace `RefusalsOf`. Import it once its try passes.
+
+## soundness 06:45Z: after the swap, delete the scaffolding (reported to top)
+Once G/H land and the onsite swap to `VStar.Recursive.Sampled` lands: delete superseded bridge scaffolding and duplicates (helpers copied across pieces, old per-piece statements G no longer reads), and confirm the retired onsite branches (`cursor/soundness-one9-onsite1-5e2a`, `cursor/soundness-one9-on4616-2c5a`) have no open PR. Target Wed 18:00Z; say what it deletes in the body.
