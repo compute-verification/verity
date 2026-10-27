@@ -3,7 +3,7 @@
 # the dispatcher forwards when it is set, else the first of the nodes' pinned-vLLM environments that exists: the one
 # integrations/vllm/verity_vllm/ops/pod_bootstrap.sh makes ($WORK/venv312), vy-nebius-2's jobs environment and the PoUW
 # pod's. `benchmarks` is on the path so a spec names an experimental arm module from there
-# (`served_commit.arm:SERVED_COMMIT`).
+# (`served_commit.prof_arm:SERVED_COMMIT_ROWS`).
 WORK=${WORK:-/workspace}
 VENVS="$WORK/venv312 $WORK/jobs/venv312 $WORK/pouw/mvp-e2e/venv312"
 if [ -n "${VERITY_BENCH_VENV:-}" ]; then
