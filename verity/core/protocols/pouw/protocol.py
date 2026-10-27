@@ -3,8 +3,8 @@
 A scheme turns one declared matmul's committed operand rows into the checked values of each tile, the tile's
 transcript leaf and the useful output.  Everything else (commitments, the salt, the draw, the openings, the profile) is
 the protocol's, in `audit`, and is the same for every scheme.  Like `verity.ml.commitments.scheme.CommitmentScheme`, a
-scheme is a named, versioned object: its ``name`` is what `verity.core.protocols.pouw.schemes.get` looks up, and its spec section in
-``PROTOCOL.md`` and its pinned vectors under ``tests/vectors`` carry the same string.
+scheme is a named, versioned object: its ``name`` is what `verity.core.protocols.pouw.schemes.get` looks up, and its
+pinned vectors under ``tests/vectors`` carry the same string.
 
 Operands are committed as rows along k: ``A`` is ``m x k`` and the weight ``B`` is stored as its ``n`` rows, so a matmul
 computes ``A·Bᵀ`` and a tile (rows of A, rows of B) reads only its own strips.  Each scheme fixes its row encoding.

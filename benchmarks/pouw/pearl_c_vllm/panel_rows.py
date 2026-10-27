@@ -8,8 +8,8 @@ The rows go under ``pearl-c-sm120`` at the scheme's version (v1-h3), at the pane
 row's slowdown is ``pearlc`` over stock vLLM ``fp8`` in the same window, interleaved rep by rep, or in ABAB blocks when the two
 engines could not stay resident, which the row's description then says; ``--hash-free`` is ``pearlc-nohash`` over ``fp8``.  The clocks
 are every rep's SM clock, the arm's and the ``fp8`` baseline's.  Refused, with the reason, unless every gate held, both verify
-passes repeated their timed commitments and were replay-verified (development shortcut; the protocol's check is a ZK proof,
-PROTOCOL.md), and the negative control was rejected.  The decode row is the
+passes repeated their timed commitments and were replay-verified (development shortcut; the protocol's check is a ZK
+proof), and the negative control was rejected.  The decode row is the
 prefill row's attempt, another phase of it (``--attempt``).  Without ``--append`` it prints the commands.
 
 When the window also timed stock FP8 as vLLM serves it (``--fp8-graphs``), decode's headline row is over that graphed

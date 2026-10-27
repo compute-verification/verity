@@ -19,7 +19,7 @@ is within its caps.
 numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then runs
 `verify_run.py` on each pass's manifest that ``DIR/served.json`` names, in order, against ``DIR/coins.json``, and exits 0
 only when every one is accepted.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PROTOCOL.md).
+protocol's check is a ZK proof).
 """
 from __future__ import annotations
 
