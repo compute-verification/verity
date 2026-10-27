@@ -130,10 +130,8 @@ ROOT_CALL_NS = 854_029
 the `Δ + RTT` that SeqRoot's 2× margin must stay under.  The certificate allows no such call within the deadline.  The
 single-core floor is the timing red team's Zen 5 at 5.7 GHz with full-rate IFMA, 2,060.845 cycles = 361.55 ns per
 squaring (`regate.py`) over the root's 16,486 squaring-equivalents, 5,960.54 µs; the measured 8-core speedup on one
-Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring (run r20260929-060834-0ec4,
-art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the cooperating root is 1,708,058.35 ns
-and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
-art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
+Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring.  So the cooperating root is 1,708,058.35 ns and
+half of it 854,029.18 ns (spec v1.1, `p2/PROTOCOL.md` §12)."""
 
 DELTA_NS = 500_000
 """Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""

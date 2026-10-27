@@ -1,4 +1,4 @@
-"""The monitoring period's pooled step (`monitoring`): the count is the least within δ of #4413's C(T, M)·p^M, the
+"""The monitoring period's pooled step (`monitoring`): the count is the least within δ of the count bound's C(T, M)·p^M, the
 reference year at 10⁻⁶ leaves one session uncovered where the union T·eps doesn't reach δ, the per-window figure is the
 session's openings bound at δ/T, and a rejected session pools nothing."""
 
@@ -16,7 +16,7 @@ EPS = Fraction(2 ** 24 + 34, 2 ** 64)
 ALL_DRAWN = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
              "profile": {"delta": str(Fraction(1, 2 ** 40)), "gaps": [], "receipts": 34, "windows": [[17, 17], [17, 17]],
                          "wrong": "0"}}
-"""An accepted run of the subprotocol at 64 KiB (r20261025-235311-4b2b): two windows of 17 receipts, every one drawn."""
+"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one drawn."""
 
 
 def partly_drawn() -> dict:
