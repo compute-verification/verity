@@ -10,5 +10,4 @@ on the mix (`Accounting.SecurityProofs.BoundReceiptLinkInteractive`), and its sh
 assumptions (`Accounting.SecurityProofs.TileUnpredictableOfTT`, `Accounting.SecurityProofs.TileUnpredictableOfNCPU`,
 `Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut`) and over fewer bound entries
 (`Accounting.SecurityProofs.TileUnpredictableMono`), and the deployed sketch's relay bound by Lindsey's lemma
-(`Accounting.SecurityProofs.InnerProductRelay`, `Accounting.SecurityProofs.BoundSketchRelay`); and the link relay on
-a node with several memory tiers (`Accounting.SecurityProofs.TieredBoundReceiptLink`). -/
+(`Accounting.SecurityProofs.InnerProductRelay`, `Accounting.SecurityProofs.BoundSketchRelay`). -/

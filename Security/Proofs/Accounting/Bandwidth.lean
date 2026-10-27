@@ -12,8 +12,8 @@ import Proofs.Accounting.Bandwidth.CausalJoint
 /-! The bandwidth audit v0's proofs: the guarantee in the random-oracle model (`Bandwidth.SecurityProofs.AuditRO`), its
 completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee with relayed tags
 (`Bandwidth.SecurityProofs.AuditRelay`), with side sources that answer what the chip sent
-(`Bandwidth.SecurityProofs.AuditInteractive`, and `AuditInteractiveRO` when they ignore the oracle), and on the actual
-circuit given a simulation (`Bandwidth.SecurityProofs.Actual.audit`, B3), and for the chip as a tick transducer over
+(`Bandwidth.SecurityProofs.AuditInteractive`, and `AuditInteractiveRO` when they ignore the oracle), and for the chip
+as a tick transducer over
 the links' signals (B3: `Bandwidth.SecurityProofs.Ticked.audit_reads` in the reads form, given passive memory, and
 `Ticked.audit` in the capacity form), and for the chip of a strategy causal from every tick whose links split what
 crosses into it (`Bandwidth.SecurityProofs.Causal.audit_reads`, with the chip's state `M + 1` bits), and from the links'

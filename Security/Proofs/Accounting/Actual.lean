@@ -64,11 +64,6 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
   `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values
   (`acts_encard_le_links`; the `+ 1` is the content's length).
-* `Actual/Ticks.lean`: memory accounting's `held_tick` (a width-0 held gate at a coin-dependent tick, causal under
-  v2.2's state as seen) is closed by v2.4's content: no holding makes it causal from every tick (`held_tick_closed`),
-  and it admits one (`tick_holding`).
-* `Actual/Source.lean`: ingress by source adds over disjoint sources, and a cover of the outside bounds ingress; under
-  `Links`, ingress from a source is at most the capacity of the links joining it to `X`.
 * `Actual/WipePool.lean`: `WipePool`, the memory cap's lifetime pool as a lemma, by Ville's inequality over an
   abstract run tree of a prover's wipes: on a tree meeting `UnheldFails`, every wipe passes with the un-held fractions
   summing to at least `H` with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at
