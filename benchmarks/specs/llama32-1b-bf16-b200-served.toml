@@ -1,8 +1,10 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama32-1b-bf16-b200-served"
-arms = ["stock", "served-commit", "served-commit-noretain"]
-arm_modules = ["served_commit.arm:SERVED_COMMIT", "served_commit.arm:SERVED_COMMIT_NORETAIN"]
+# The Commit as served_commit measures it: rows-sha512 (prof_arm's rows arm). Its runs before 27 Oct measured served-commit and
+# served-commit-noretain, vllm-v1 (SHA-256), which their arms now refuse to run.
+arms = ["stock", "served-commit-rows"]
+arm_modules = ["served_commit.prof_arm:SERVED_COMMIT_ROWS"]
 sweep = "served"
 reps = 3
 eager = false

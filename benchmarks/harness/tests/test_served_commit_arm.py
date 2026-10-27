@@ -1,4 +1,5 @@
-"""served_commit's arm (`benchmarks/served_commit/arm.py`) gates on the harness's run phases: under bounded staging its gate and
+"""served_commit's arm (`benchmarks/served_commit/arm.py`) installs only a scheme other than vllm-v1, which it refuses by name.
+It gates on the harness's run phases: under bounded staging its gate and
 warm-up runs are learn-only, a run of theirs left without a root is a declared warm-up named in the custom gate's verdict, and a
 measured run without a root fails the gate. Its ``ready``, and the stock profiling arm's (`prof_arm.py`), read only the engine's
 public names (``vllm``, ``model``, ``pin``), for ``verity_vllm.LLM`` and for the harness's local checkpoint, and the committer
@@ -11,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+
+import pytest
 
 ARM = Path(__file__).resolve().parents[2] / "served_commit" / "arm.py"
 PROF_ARM = ARM.parent / "prof_arm.py"
@@ -83,6 +86,20 @@ def test_a_measured_run_without_a_root_fails_the_gate():
     assert got["failed"][0]["run"] == "measure:B32" and "not a declared warm-up" in got["failed"][0]["errors"][0]
 
 
+def test_a_vllm_v1_arm_refuses_to_install_by_name_and_a_rows_arm_installs(monkeypatch):
+    mod = _arm_module()
+    for arm in (mod.SERVED_COMMIT, mod.SERVED_COMMIT_NORETAIN):
+        with pytest.raises(RuntimeError, match=rf"{arm.id} arm commits 'vllm-v1' \(SHA-256\), not 'rows-sha512'"):
+            arm.install(SimpleNamespace(hooks=None))
+        assert arm.source is None
+    source = ModuleType("verity_vllm.acquire.sources.served_compiled_source")
+    source.ServedCompiledSource = lambda into, batch_copies: SimpleNamespace(install_hooks=lambda: None)
+    monkeypatch.setitem(sys.modules, source.__name__, source)
+    rows = mod.ServedCommitArm("served-commit-rows", retain="none")
+    rows.commit_scheme = "rows-sha512"
+    assert rows.install(SimpleNamespace(hooks=None)) is rows and rows.source is not None
+
+
 def test_unbounded_staging_runs_no_learn_only_pass():
     mod = _arm_module()
     arm, com = mod.ServedCommitArm("served-commit-noretain", retain="none"), _Committer(bounded=False)
@@ -106,7 +123,7 @@ class _Runner:
 
 
 def _vllm(runner: _Runner, *, path: str = "/models/local"):
-    """A ``vllm.LLM`` as far as the arms and the committer read it: the in-process runner (`get_model_runner`'s path) and the
+    """A ``vllm.LLM`` as far as the arms and the committer read it: the in-process runner (`engine.handle.model_runner`'s path) and the
     config."""
     hf = SimpleNamespace(hidden_size=64, num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2, head_dim=16,
                          intermediate_size=128, vocab_size=1000, model_type="llama")
