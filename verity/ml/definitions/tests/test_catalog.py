@@ -1,5 +1,7 @@
 """`catalog.load()` registers exactly `COUNT` Definitions and primitives: a module that stops importing or registering, or
 one that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
+Each scope registers them in the order `ORDER` pins, so a module that registers on import, a subpackage's among them, can't
+move a digest while the count holds.  Change `ORDER` in the change that adds, removes or reorders a Definition.
 
 The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
 registers) is not in it."""
@@ -31,11 +33,36 @@ COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
+#: by scope of `catalog.load`, the SHA-512 of its Definitions' ids (`REGISTRY.defs`' keys) newline-joined in registration order:
+#: the default, and ops with the registry (replay's and the red-team demo's)
+ORDER = {
+    "registry":
+        "270213f4ab439d78deadf44941a1e1ced8b16401062ccddc58352a2311dfc56c2e8ff32e81c26628054bbce4a61f775cec8fa125876bc8724e9f00b32f29d73a",
+    ("ops", "registry"):
+        "33cc950b3fa175a02ce72288d12e66e1afae0b06125e272b16d571b903697ef7c60b640e593dca7183981df4622b5ab9787bc5d7da89ac207199684db0fbbd9d",
+}
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
     assert not errors, errors
     assert len(registry.defs) == COUNT, f"catalog.load() registers {len(registry.defs)} Definitions, not {COUNT}"
+
+
+def test_each_scope_registers_its_definitions_in_the_pinned_order():
+    """Each scope of `ORDER` registers its Definitions in the order its digest pins: each in a process of its own, since the
+    test modules beside this one import registry modules as they are collected, which reorders this process's registry."""
+    for scope, want in ORDER.items():
+        code = ("import hashlib\n"
+                "from verity.ml.definitions.registry import catalog\n"
+                f"registry, errors = catalog.load({scope!r})\n"
+                "assert not errors, errors\n"
+                "print(len(registry.defs), hashlib.sha512('\\n'.join(registry.defs).encode()).hexdigest())\n")
+        p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert p.returncode == 0, p.stderr[-2000:]
+        n, got = p.stdout.split()
+        assert got == want, (f"catalog.load({scope!r}) registers its {n} Definitions in another order or set: their ids hash to "
+                             f"{got}.  If the change adds, removes or reorders a Definition, set ORDER[{scope!r}] to that digest")
 
 
 def test_the_ops_scope_imports_every_module_of_ops():
