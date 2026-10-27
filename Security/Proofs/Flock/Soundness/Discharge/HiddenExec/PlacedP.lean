@@ -118,7 +118,7 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
     a.rows = Placed.circuitRows c hU := by
   have hc := a.c_eq hp
   unfold rows Placed.circuitRows unitRows
-  rw [Placed.ofNet_eq hc a.L.unit_built hU, hc]
+  rw [Placed.ofNet_eq (Placed.lunit_of_parse hp hc) a.L.unit_built hU, hc]
 
 /-- **`Layout.Aliased` in `ProgPlaces`' form**, as `AcceptedH.aliased_of_layout`. -/
 theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
