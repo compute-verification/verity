@@ -1,7 +1,7 @@
 """The frozen shape's J10-R calls (HASH-22): the operands, salt, roots and positions of each (linear, M), and the units
 the fixtures sample. Shared by `fixtures.py` (the expected values, CPU), `check.py` and `bench.py` (the GPU).
 
-* **Linears** (`LINEARS`, s8_simple's SHAPES, #4472): the H200 demo's MQA decoder, width 16384, 256 query heads of 64,
+* **Linears** (`LINEARS`, KS8-SIMPLE's SHAPES, #4472): the H200 demo's MQA decoder, width 16384, 256 query heads of 64,
   one KV head, MLP 65536: q, kv (wk's rows then wv's), o, up, down, and the head once a step. A call is A [M, K] (token
   rows) times B [N, K] (the linear's weight), its units the 32 x 32 tiles, unit u = ri (N / 32) + cj.
 * **B** is layer 0's weight of the demo's served weights: ALLP-IFACE's generator (`verity_torch_loop.weights` on

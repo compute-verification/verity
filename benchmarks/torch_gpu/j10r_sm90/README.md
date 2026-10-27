@@ -49,7 +49,7 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
   word for word), its `_sm` launch word for word against its plain launch, and the fallback on the sampled units
   (receipts, z, seeds). Writes `check.json` and exits 4 on any difference.
 - `bench.py`: the call's arms interleaved, in an order that rotates each rep:
-  - plain, s8_simple's `linear` (#4472, the file sent with the run);
+  - plain, s8_linear's `int_mm.linear` (#4472, the exact W8A8 linear's int_mm backend);
   - `wgmma`, KP2-S8's `wgmma.scaled_mm` (s8_linear, #4520, its files sent with the run) at its
     tuned config for the linear and M, held to plain's output on every cell;
   - `torch._int_mm` alone;
@@ -58,7 +58,7 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
   - the fallback over every unit.
 
   Every arm's last run is held to the fixtures. Reports overhead (units / plain) and gamma ((plain + units) / plain)
-  per call, per layer (q, kv, o, up and down) and per step (52 layers and the head), against s8_simple and against
+  per call, per layer (q, kv, o, up and down) and per step (52 layers and the head), against int_mm and against
   wgmma.
 - `prof.py`: `run` makes one call of each linear with an h1u build's served launch, each in its own NVTX range, for
   ncu to profile; `summary` keeps the pipe, issue, occupancy, memory, stall and SASS-mix columns of ncu's raw page.

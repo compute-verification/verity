@@ -29,7 +29,7 @@
   corrupted row, one row at p and a last block nonzero past the matrix's end, each refused with its flag, and the honest
   blocks passed.
 - **gemm**, for each batch M and each staged matrix: x [M, K] s8 and sx [M] f32 seeded on the device (rows 0, 1 and 2
-  all -128, all 127 and all 0), the stream's f32 scales sw (held to the manifest's SHA-256), `gemm.scaled_mm` timed,
+  all -128, all 127 and all 0), the stream's f32 scales sw (held to the manifest's SHA-256), `int_mm.linear` (s8_linear's int_mm backend, eager epilogue) timed,
   every output word against `gemm.twin`, and samples for `check.py`. With all four, the implied step at each M: 52 layers
   x (the layer's `decode_layer` + its four GEMMs).
 
@@ -50,7 +50,9 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
 import gemm as G  # noqa: E402
+import int_mm as IM
 import layout as L  # noqa: E402
 import stage as S  # noqa: E402
 from p2_v1 import gpu  # noqa: E402
@@ -406,9 +408,9 @@ def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
         for name, (w, sw) in staged.items():
             N, K = w.shape
             x, sx = activations(M, K, gen)
-            y = G.scaled_mm(x, sx, w, sw)
+            y = IM.linear(x, sx, w, sw, "eager")
             t_int = timed(lambda: torch._int_mm(x, w.t()), args.reps)
-            t_all = timed(lambda: G.scaled_mm(x, sx, w, sw), args.reps)
+            t_all = timed(lambda: IM.linear(x, sx, w, sw, "eager"), args.reps)
             res = G.twin(x, sx, w, sw, y)
             ok &= res["mismatches"] == 0
             sm = G.samples(x, sx, w, sw, y, args.samples, cpu)

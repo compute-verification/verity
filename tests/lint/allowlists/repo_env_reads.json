@@ -240,7 +240,6 @@
     {"file": "benchmarks/torch_gpu/commit_slots/step.py", "count": 3},
     {"file": "benchmarks/torch_gpu/p2_stage/sketch.py", "count": 1},
     {"file": "benchmarks/torch_gpu/s8_linear/wgmma.py", "count": 2},
-    {"file": "benchmarks/torch_gpu/s8_simple/check.py", "count": 2},
     {"file": "benchmarks/torch_gpu/sha512_rows/engine.py", "count": 2},
     {"file": "benchmarks/torch_gpu/units/bench.py", "count": 3},
     {"file": "benchmarks/torch_gpu/units/check.py", "count": 8},

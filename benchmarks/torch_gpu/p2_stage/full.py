@@ -29,7 +29,7 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   to that directory for `bw_ref.py`.
 - **gemm**, after the pass, `--gemm-layer`'s matrices staged again one at a time: x [M, K] s8 and sx [M] f32 seeded on the
   device (rows 0, 1 and 2 all -128, all 127 and all 0), the stream's f32 scales (held to the manifest's SHA-256),
-  `s8_simple.linear` (fused epilogue on CUDA) on `n_chunk` output channels at a time, every word against `gemm.twin`, and
+  `int_mm.linear` (s8_linear's int_mm backend, fused epilogue on CUDA) on `n_chunk` output channels at a time, every word against `gemm.twin`, and
   samples for `check.py`; and the pass's peak HBM.
 
 Writes `OUT/full.json` (one record per tensor, the summary, the GEMMs) and `OUT/samples-<matrix>-m<M>.npz`; exits 1 if a
@@ -53,7 +53,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "s8_simple"))
+sys.path.insert(0, str(HERE.parent / "s8_linear"))
 import gemm as G  # noqa: E402
 import layout as L  # noqa: E402
 import stage as S  # noqa: E402
@@ -372,7 +372,7 @@ def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, tor
 
 
 def gemm_pass(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, out: Out) -> bool:
-    import s8_simple
+    import int_mm
 
     epilogue = "fused" if DEVICE.type == "cuda" else "eager"
     tensors = [t for t in lay.layer(args.gemm_layer) if t.matrix is not None]
@@ -403,8 +403,8 @@ def gemm_pass(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, out: Out) 
                 for n0 in range(0, t.n, args.n_chunk):
                     n1 = min(t.n, n0 + args.n_chunk)
                     wc, swc = w[n0:n1], sw[n0:n1]
-                    y = s8_simple.linear(x, sx, wc, swc, epilogue)
-                    secs += min(events(partial(s8_simple.linear, x, sx, wc, swc, epilogue), args.reps))
+                    y = int_mm.linear(x, sx, wc, swc, epilogue)
+                    secs += min(events(partial(int_mm.linear, x, sx, wc, swc, epilogue), args.reps))
                     res = G.twin(x, sx, wc, swc, y)
                     words, bad = words + res["words"], bad + res["mismatches"]
                     first += [{**f, "n": f["n"] + n0} for f in res["first"]][:8 - len(first)]
