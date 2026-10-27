@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmarks/census/schemas/adversary.schema.json",
+  "title": "Census adversary resource models: the compute every result is stated against",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "label",
+      "role",
+      "monitoring_period_s",
+      "requests",
+      "tokens_per_request",
+      "model",
+      "active_params",
+      "datatype",
+      "flop_per_active_param_per_token",
+      "flop_per_request",
+      "total_flop",
+      "h100_hour_flop",
+      "h100_equivalents",
+      "flop_per_s_per_h100",
+      "growth_per_year",
+      "sources"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "reference",
+          "sensitivity"
+        ]
+      },
+      "monitoring_period_s": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "requests": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "tokens_per_request": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "model": {
+        "type": "string",
+        "minLength": 1
+      },
+      "active_params": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "datatype": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+$"
+      },
+      "flop_per_active_param_per_token": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "flop_per_request": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "total_flop": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "h100_hour_flop": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "h100_equivalents": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "flop_per_s_per_h100": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "growth_per_year": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "note": {
+        "type": "string",
+        "minLength": 1
+      },
+      "sources": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label"
+          ],
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "href": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      }
+    }
+  }
+}

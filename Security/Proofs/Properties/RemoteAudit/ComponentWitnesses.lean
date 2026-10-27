@@ -86,9 +86,30 @@ theorem disks_zero {Ω : Type} (T : Trace Ω) (h : T.disk = fun _ _ => 0) {β B 
   rw [h]
   exact bucket_zero ω u v hβ hB
 
-theorem chip_empty {Ω : Type} (T : Trace Ω) (h : T.chip = fun _ _ => ∅) (S : ℕ) : ChipCeiling T S := fun ω t => by
-  rw [h]
-  simp
+/-- `overBlocks`' reading of a set of registered blocks below `M` as indices below `N`. -/
+def reIdx (M N : ℕ) (s : Finset (Fin M)) : Finset (Fin N) := univ.filter fun j => (j : ℕ) ∈ s.image Fin.val
+
+theorem reIdx_empty (M N : ℕ) : reIdx M N ∅ = ∅ := by
+  unfold reIdx
+  exact filter_false_of_mem fun j _ => by simp
+
+theorem reIdx_univ {M N : ℕ} (h : N ≤ M) : reIdx M N univ = univ := by
+  unfold reIdx
+  exact filter_true_of_mem fun j _ => mem_image.2 ⟨⟨j, lt_of_lt_of_le j.isLt h⟩, mem_univ _, rfl⟩
+
+theorem reIdx_mono {M N : ℕ} {s s' : Finset (Fin M)} (h : s ⊆ s') : reIdx M N s ⊆ reIdx M N s' := by
+  intro j hj
+  unfold reIdx at hj ⊢
+  rw [mem_filter] at hj ⊢
+  exact ⟨hj.1, image_subset_image h hj.2⟩
+
+theorem present_full {M N : ℕ} (h : N ≤ M) : reIdx M N univ ∪ reIdx M N ∅ = univ := by
+  rw [reIdx_univ h, reIdx_empty, union_empty]
+
+theorem chip_empty {Ω : Type} (T : Trace Ω) (h : ∀ ω t, T.chip ω t = ∅) (S : ℕ) : ChipCeiling T S :=
+  fun ω t => by
+    rw [h ω t, card_empty]
+    exact Nat.zero_le _
 
 theorem routed_of_antitone {Ω : Type} (T : Trace Ω) (h : ∀ ω t, T.present ω (t + 1) ⊆ T.present ω t) :
     Routed T := fun ω t => by
@@ -152,10 +173,10 @@ theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fi
 any records of the prover's whose schedule is honest (`HonestSchedule`), the honest trace (`honestTrace`: the whole
 store in node memory at every tick, nothing on a chip, rebuilt or read in, every receipt correct), no outside device
 (`noOutside`), correct receipts holding every receipt a draw can have and the sampler's fallbacks 0, every premise
-holds: the three ceilings, the chips', `Routed`, `Paced` at the record's groups, `Covers`, `SketchBoundAt` at 0,
-`NoOutsideCompute`, the draw's `Live` at every commitment, `Refused`, `Counted` and `Registered`; and the bound's
-terms the prover could raise are 0: each draw's distinguisher has no advantage on its coin function and each hiding
-term is 0. -/
+holds of its trace of record (`ofRecord`, the honest trace over the registration's blocks): the three ceilings, the
+chips', `Routed`, `Paced` at the record's groups, `Covers`, `SketchBoundAt` at 0, `NoOutsideCompute`, the draw's
+`Live` at every commitment, `Refused` and `Counted`; and the bound's terms the prover could raise are 0: each draw's
+distinguisher has no advantage on its coin function and each hiding term is 0. -/
 theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
     (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax) (recs : Cm → Coins node.draws κ X → Record)
     (com : Coins node.draws κ X → Cm) (R : Receipts node.draws κ X) (passes : ℕ)
@@ -180,7 +201,6 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
       (ofRecord (honestTrace node passes tick) node (played recs com)) R ∧
     Counted ((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com)
       (ofRecord (honestTrace node passes tick) node (played recs com)) ∧
-    Registered (ofRecord (honestTrace node passes tick) node (played recs com)) node ∧
     (∀ t, Pous.StreamedWipe.prfAdvantage (prf t)
       (((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play
         (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t) = 0) ∧
@@ -194,11 +214,11 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
       exact Finset.range_subset_range.2 (D.size t ω).isLt.le
   refine ⟨links_zero _ rfl (link_nonneg node hl) (burst_nonneg hlb _),
     squarings_zero _ rfl (squarings_nonneg node hsq) (burst_nonneg hrb _),
-    disks_zero _ rfl (disk_nonneg node hd) (burst_nonneg hdb _), chip_empty _ rfl _,
-    routed_of_antitone _ fun _ _ => Finset.Subset.refl _, ?_, covers_univ _ fun _ _ => rfl,
-    sketch_zero _ _ fun ω p _ => ⟨tick ω p, le_refl _, htick ω p, Finset.union_empty _⟩, noOutside_ok _,
+    disks_zero _ rfl (disk_nonneg node hd) (burst_nonneg hdb _), chip_empty _ (fun _ _ => reIdx_empty _ _) _,
+    routed_of_antitone _ fun _ _ => Finset.Subset.refl _, ?_, covers_univ _ fun _ _ => reIdx_univ le_rfl,
+    sketch_zero _ _ fun ω p _ => ⟨tick ω p, le_refl _, htick ω p, present_full le_rfl⟩, noOutside_ok _,
     fun c t ω ω' _ _ => ⟨Fin.ext (congrArg (min · receiptMax) (hsize c c ω ω' t)), rfl⟩,
-    refused_honest _ (hc _ fun _ _ => rfl) prf _ R, counted_of _ _ fun _ _ => Finset.Subset.refl _, rfl,
+    refused_honest _ (hc _ fun _ _ => rfl) prf _ R, counted_of _ _ fun _ _ => Finset.Subset.refl _,
     fun t => Accounting.SecurityProofs.Remote.Draw.prfAdvantage_honest _ (hc _ fun _ _ => rfl) prf _ t,
     fun t => ?_⟩
   · intro ω hv
@@ -262,10 +282,9 @@ theorem verified_of_not_heldBy {Ω : Type} {T : Trace Ω} {ω : Ω} {node : Node
 theorem lineHeldAtComponentBy_record (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop) :
     LineHeldAtComponentBy acc Verified Record.summary := by
   intro node κ X Cm _ prf rest recs correct com T R δs a b e r F O hL hS hD hC hR hP hCv hSk hN hLive hRef hCnt
-    hReg
   exact le_trans (Pouw.pr_mono fun ω h => ⟨verified_of_not_heldBy h.2, h.2⟩)
     (Properties.RemoteAudit.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs O hL hS hD hC
-      hR hP hCv hSk hN hLive hRef hCnt hReg)
+      hR hP hCv hSk hN hLive hRef hCnt)
 
 /-! ## A verifier that accepts everything -/
 
@@ -501,16 +520,29 @@ theorem toy_paced {Ω : Type} (ver : Node → Record → Prop) :
     rw [toy_groups]
     decide +kernel
 
+theorem toy_mem_anti {Ω : Type} (ω : Ω) (t : ℕ) :
+    (Toy.trace (Ω := Ω)).mem ω (t + 1) ⊆ (Toy.trace (Ω := Ω)).mem ω t := by
+  show (if t + 1 < 10 then Finset.univ else ∅) ⊆ (if t < 10 then Finset.univ else ∅)
+  split_ifs <;> first | (exfalso; omega) | exact Finset.Subset.refl _ | exact Finset.empty_subset _
+
+theorem toy_late {Ω : Type} (ver : Node → Record → Prop) (ω : Ω) (t : ℕ) (ht : 10 ≤ t) :
+    (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec).mem ω t = ∅ := by
+  show reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).mem ω t) = ∅
+  rw [show (Toy.trace (Ω := Ω)).mem ω t = ∅ from if_neg (by omega)]
+  exact reIdx_empty _ _
+
 theorem toy_routed {Ω : Type} (ver : Node → Record → Prop) :
     Routed (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec) :=
-  routed_of_antitone _ fun _ t => by
-    show (if t + 1 < 10 then Finset.univ else ∅) ∪ ∅ ⊆ (if t < 10 then Finset.univ else ∅) ∪ ∅
-    split_ifs <;> first | (exfalso; omega) | simp
+  routed_of_antitone _ fun ω t => by
+    show reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).mem ω (t + 1)) ∪
+        reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).chip ω (t + 1)) ⊆
+      reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).mem ω t) ∪ reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).chip ω t)
+    exact union_subset_union (reIdx_mono (toy_mem_anti ω t)) (Finset.Subset.refl _)
 
 theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
     (O : Outside (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec)) :
     SketchBoundAt (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec) O 0 :=
-  sketch_zero _ O fun _ p hp => by
+  sketch_zero _ O fun ω p hp => by
     change p < 1 at hp
     obtain rfl : p = 0 := by omega
     refine ⟨0, ?_, ?_, ?_⟩
@@ -518,9 +550,10 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
       simp
     · show 0 < (if 0 + 1 = 0 then 0 else 10)
       simp
-    · show (if (0 : ℕ) < 10 then Finset.univ else ∅) ∪ ∅ = Finset.univ
-      simp
-      rfl
+    · show reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).mem ω 0) ∪
+          reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).chip ω 0) = Finset.univ
+      rw [show (Toy.trace (Ω := Ω)).mem ω 0 = Finset.univ from if_pos (by norm_num)]
+      exact present_full le_rfl
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
     (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
@@ -543,14 +576,15 @@ theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
     (noOutside _) (links_zero _ rfl (link_nonneg _ (le_refl _)) (burst_nonneg (le_refl _) _))
     (squarings_zero _ rfl (squarings_nonneg _ (le_refl _)) (burst_nonneg (le_refl _) _))
-    (disks_zero _ rfl (disk_nonneg _ (le_refl _)) (burst_nonneg (le_refl _) _)) (chip_empty _ rfl _)
-    (toy_routed _) (toy_paced _) (covers_univ _ fun _ _ => rfl) (toy_sketch _ _) (noOutside_ok _)
-    (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _) rfl
+    (disks_zero _ rfl (disk_nonneg _ (le_refl _)) (burst_nonneg (le_refl _) _))
+    (chip_empty _ (fun _ _ => reIdx_empty _ _) _) (toy_routed _) (toy_paced _)
+    (covers_univ _ fun _ _ => reIdx_univ le_rfl) (toy_sketch _ _) (noOutside_ok _)
+    (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _)
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
   · simp [binding_empty, toy_delta]
     norm_num
-  · exact fun ω => ⟨trivial, toy_not_held _ rfl (fun _ t ht => if_neg (by omega)) ω⟩
+  · exact fun ω => ⟨trivial, toy_not_held _ rfl (fun ω' t ht => toy_late _ ω' t ht) ω⟩
 
 /-- **The line credits only what the trace held**: on one node, record and summary, every link-charged stretch
 credits what a trace with the store in node memory held, and not what the same trace held with node memory emptied

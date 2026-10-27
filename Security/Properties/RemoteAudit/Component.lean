@@ -94,7 +94,6 @@ def LineHeldAtComponent : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
@@ -153,7 +152,7 @@ def paceBy {Ω : Type} (sum : Node → Record → Option RemoteAudit.Session.Sum
 
 /-- `ofRecord` at a verifier's verdict `ver`. -/
 def traceBy {Ω : Type} (T : Trace Ω) (node : Node) (ver : Node → Record → Prop) (rec : Ω → Record) : Trace Ω :=
-  { T with accepts := fun ω => ver node (rec ω) }
+  { overBlocks T node.blocks with accepts := fun ω => ver node (rec ω) }
 
 /-- **`LineHeldAtComponent` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
 component's acceptance in the event (`Plays`), the trace's verdict `ver` (`Verified`) and the record the line and its
@@ -176,7 +175,6 @@ def LineHeldAtComponentBy (acc : Node → Record → ByteArray → ByteArray →
     Covers (traceBy T node ver r) → SketchBoundAt (traceBy T node ver r) O δs →
     NoOutsideCompute (traceBy T node ver r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
-    Registered (traceBy T node ver r) node →
     Pouw.pr (fun ω => acc node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldBy sum (traceBy T node ver r) ω node (r ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)

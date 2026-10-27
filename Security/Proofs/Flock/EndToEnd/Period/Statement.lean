@@ -4,26 +4,28 @@ import Proofs.Flock.EndToEnd.Period.Run
 /-!
 # The integrity audit over a period, and over a horizon (trusted)
 
-A period's integrity audit is a sequence of windows, each one `--zk` session under hidden outputs with a fresh live
-subset draw, as in `EndToEndHidden` (a `HiddenWindow`: every binder of `EndToEndHidden` but the prover). One prover
-strategy plays the whole period (`Period.game`), adaptively: the strategy each window is played with may depend on
-everything before it. `Period.run` records, for each window, whether flock-verify accepted it, its wrong units in the
-committed transcript fixed at its registration (`wrongRegZ` at `XplurZC`, as in `EndToEndHidden`), and whether a drawn
-unit is one of them.
+A period's integrity audit is a sequence of sampling blocks, each one `--zk` session under hidden outputs with a fresh
+live subset draw, as in `EndToEndHidden` (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One
+prover strategy plays the whole period (`Period.game`), adaptively: the strategy each sampling block is played with may
+depend on everything before it. `Period.run` records, for each sampling block, whether flock-verify accepted it, its
+wrong units in the committed transcript fixed at its registration (`wrongRegZ` at `XplurZC`, as in `EndToEndHidden`),
+and whether a drawn unit is one of them.
 
-* `IntegrityPeriod`: the probability that some window is accepted with at least its `K₀` units wrong is at most
-  `Σ_w (miss_w + ε_ks,w + δ_link,w)`, each window's `EndToEndHidden` bound. So outside that probability, if flock-verify
-  accepts every window, every window has fewer than its `K₀` units wrong.
-* `IntegrityPeriodLog`: `IntegrityPeriod` with each window's threshold `K₀ ≥ ln(1/δ)/q`, where its draw covers a
-  fraction `q` of its units, so each window's sampling term is at most `δ`.
-* `IntegrityHorizon`: over `T` windows whose draws each cover at least a fraction `q` of their units, the probability
-  that every window is accepted and the wrong units total at least `ln(1/δ)/q` is at most `δ + Σ_w (ε_ks,w + δ_link,w)`.
+* `IntegrityPeriod`: the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
+  `Σ_w (miss_w + ε_ks,w + δ_link,w)`, each sampling block's `EndToEndHidden` bound. So outside that probability, if
+  flock-verify accepts every sampling block, every sampling block has fewer than its `K₀` units wrong.
+* `IntegrityPeriodLog`: `IntegrityPeriod` with each sampling block's threshold `K₀ ≥ ln(1/δ)/q`, where its draw covers a
+  fraction `q` of its units, so each sampling block's sampling term is at most `δ`.
+* `IntegrityHorizon`: over `T` sampling blocks whose draws each cover at least a fraction `q` of their units, the
+  probability that every sampling block is accepted and the wrong units total at least `ln(1/δ)/q` is at most
+  `δ + Σ_w (ε_ks,w + δ_link,w)`.
 
-`ε_ks,w` is the window's knowledge term at the worst registration (`HiddenWindow.ks`), since the registration is the
-prover's; `miss_w` and `δ_link,w` are `EndToEndHidden`'s. The named assumptions are `EndToEndHidden`'s, at every window:
-A3 (`uniform/io-getrandombytes`) for the window's draw bytes, `live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512`
-and `ecr/sha-512` (`HiddenWindow.CR`) at the strategy the period's prover plays the window with, on every run
-(`Period.CR`). The proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityHorizon`.
+`ε_ks,w` is the sampling block's knowledge term at the worst registration (`SamplingBlock.ks`), since the registration
+is the prover's; `miss_w` and `δ_link,w` are `EndToEndHidden`'s. The named assumptions are `EndToEndHidden`'s, at every
+sampling block: A3 (`uniform/io-getrandombytes`) for the sampling block's draw bytes, `live-verifier`
+(`SamplingBlock.hCust`), and `cr/sha-512` and `ecr/sha-512` (`TableCRZ` and `LinkCRZC`) at every strategy the period's
+prover plays the sampling block with on some run (`Period.Plays`), stated flat as `EndToEndHidden` states them. The
+proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityHorizon`.
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -36,12 +38,12 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **One window of a period**: one `--zk` session under hidden outputs over `n` proof units, with every binder of
-`EndToEndHidden` but the prover: its statement (circuit descriptor, public file), its law (a uniform `kd`-subset of the
-`n` units, split evenly over the session's tables), its record (draw files, session writer, reference setup), the
+/-- **One sampling block of a period**: one `--zk` session under hidden outputs over `n` proof units, with every binder
+of `EndToEndHidden` but the prover: its statement (circuit descriptor, public file), its law (a uniform `kd`-subset of
+the `n` units, split evenly over the session's tables), its record (draw files, session writer, reference setup), the
 verifier's byte source, the verify command's tags, `live-verifier` (`hCust`), the count curve's parameters, the
 threshold `K₀` and the knowledge finders' budgets `qF`, `qS`. -/
-structure HiddenWindow where
+structure SamplingBlock where
   n : ℕ
   Reg : Type
   I : Inputs
@@ -87,18 +89,18 @@ structure HiddenWindow where
   qF : ℝ
   qS : ℝ
 
-attribute [instance] HiddenWindow.fintypeΩ HiddenWindow.nonemptyΩ
+attribute [instance] SamplingBlock.fintypeΩ SamplingBlock.nonemptyΩ
 
-namespace HiddenWindow
+namespace SamplingBlock
 
 open Classical
 
-variable (w : HiddenWindow)
+variable (w : SamplingBlock)
 
-/-- The window's draw: `Flock.Draw.drawOS`'s uniform `kd`-subset on the verifier's byte source. -/
+/-- The sampling block's draw: `Flock.Draw.drawOS`'s uniform `kd`-subset on the verifier's byte source. -/
 def L : Law w.n := Law.execOS (n := w.n) w.src (.subset w.kd) w.n
 
-/-- The window's audit as it runs: `EndToEndHidden`'s game. -/
+/-- The sampling block's audit as it runs: `EndToEndHidden`'s game. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
   auditLive w.L w.Reg (liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr)
 
@@ -119,8 +121,8 @@ noncomputable def sim (τ : Strategy w.game) :=
         w.wr _ w.hTags w.hCust.1
         fun _ => drawOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
 
-/-- **The window's wrong units** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at registration
-(`XplurZC`), as in `EndToEndHidden`. -/
+/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
+registration (`XplurZC`), as in `EndToEndHidden`. -/
 noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.n) :=
   wrongRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))
     (XplurZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ)) (cont (w.sim τ)) w.k w.Rw)
@@ -145,82 +147,103 @@ noncomputable def link : ℝ≥0∞ :=
       (Fintype.card (ΩcZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.L p) : ℝ) / Fintype.card w.L.Ω) *
     (2 * (w.t' * (1 + w.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * w.M) + w.k / (Real.exp 1 * w.Rw)) / (1 - w.ρ))
 
-end HiddenWindow
+end SamplingBlock
 
-/-- What a period's run records of window `idx`: whether flock-verify accepted it, how many of its units are wrong
-(`HiddenWindow.wrongSet`), and whether a drawn unit is one of them. -/
+/-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, how many of its units are
+wrong (`SamplingBlock.wrongSet`), and whether a drawn unit is one of them. -/
 structure WindowRec where
   idx : ℕ
   accepted : Prop
   wrong : ℕ
   drawnWrong : Prop
 
-namespace HiddenWindow
+namespace SamplingBlock
 
 open Classical
 
-/-- Window `t`'s record, at the strategy `τ` that played it and its output `o`. -/
-noncomputable def record (w : HiddenWindow) (t : ℕ) (τ : Strategy w.game)
+/-- Sampling block `t`'s record, at the strategy `τ` that played it and its output `o`. -/
+noncomputable def record (w : SamplingBlock) (t : ℕ) (τ : Strategy w.game)
     (o : w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) : WindowRec :=
   ⟨t, LiveAcceptsZK w.I o, (w.wrongSet τ).card, ∃ u ∈ o.2.1, u ∈ w.wrongSet τ⟩
 
-end HiddenWindow
+end SamplingBlock
 
 namespace Period
 
-/-- **A period of `T` windows**, window `t`'s audit after window `t − 1`'s, against one prover. -/
-noncomputable def game (W : ℕ → HiddenWindow) (T : ℕ) : Game Unit := periodG (fun t => (W t).game) 0 T
+/-- **A period of `T` sampling blocks**, sampling block `t`'s audit after sampling block `t − 1`'s, against one
+prover. -/
+noncomputable def game (W : ℕ → SamplingBlock) (T : ℕ) : Game Unit := periodG (fun t => (W t).game) 0 T
 
-/-- The period's run at the prover strategy `s`: each window's record, in order. -/
-noncomputable def run (W : ℕ → HiddenWindow) (T : ℕ) (s : Strategy (game W T)) : Game (List WindowRec) :=
+/-- The period's run at the prover strategy `s`: each sampling block's record, in order. -/
+noncomputable def run (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) : Game (List WindowRec) :=
   periodRun (fun t => (W t).game) (fun t => (W t).record t) 0 T s
 
-/-- `cr/sha-512` and `ecr/sha-512` (`HiddenWindow.CR`) at every window's strategy, on every run of the period. -/
-def CR (W : ℕ → HiddenWindow) (T : ℕ) (s : Strategy (game W T)) : Prop :=
-  PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s
+/-- **The strategies the period plays sampling block `t` with**: `τ` plays sampling block `t` on some run of the period
+at `s`. -/
+def Plays (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
+  PeriodPlays (fun t => (W t).game) 0 T s t τ
 
 end Period
 
-/-- **The integrity audit over a period.** In a period of `T` windows `W t`, each a `--zk` session under hidden outputs
-with a fresh live uniform `kd`-subset draw, played by one adaptive prover `s`, the probability that some window is
-accepted by flock-verify with at least its `K₀` units wrong is at most the sum of the windows' `EndToEndHidden` bounds,
-$$\Pr[\exists t,\ \text{window } t \text{ accepted} \wedge K_{0,t} \le \text{wrong}_t] \le
+/-- **The integrity audit over a period.** In a period of `T` sampling blocks `W t`, each a `--zk` session under hidden
+outputs with a fresh live uniform `kd`-subset draw, played by one adaptive prover `s`, the probability that some
+sampling block is accepted by flock-verify with at least its `K₀` units wrong is at most the sum of the sampling blocks'
+`EndToEndHidden` bounds,
+$$\Pr[\exists t,\ \text{sampling block } t \text{ accepted} \wedge K_{0,t} \le \text{wrong}_t] \le
   \sum_t \left(\frac{\binom{n_t-K_{0,t}}{kd_t}}{\binom{n_t}{kd_t}} + \varepsilon_{ks,t} + \delta_{link,t}\right).$$
-Its named assumptions, at every window: A3 (`Assumptions.UniformRandomBytes`) for the window's draw bytes,
-`live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512` and `ecr/sha-512` at the strategy each window is played with
-on every run (`Period.CR`). -/
+Its named assumptions, at every sampling block: A3 (`Assumptions.UniformRandomBytes`) for the sampling block's draw
+bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`),
+`EndToEndHidden`'s hypotheses, at every strategy a sampling block is played with on some run (`Period.Plays`). -/
 def IntegrityPeriod : Prop :=
-  ∀ (W : ℕ → HiddenWindow) (T : ℕ),
+  ∀ (W : ℕ → SamplingBlock) (T : ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T), Period.CR W T s →
+    ∀ s : Strategy (Period.game W T),
+    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
+    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
+      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
+        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
     value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
       ∑ t ∈ Finset.range T, ((W t).miss + (W t).ks + (W t).link)
 
-/-- **The integrity audit over a period, at `δ`.** In a period as in `IntegrityPeriod` whose windows' draws each cover
-at least a fraction `q > 0` of their units (`q ≤ kd_t/n_t`), with each window's threshold `K₀,t ≥ ln(1/δ)/q`, the
-probability that some window is accepted with at least its `K₀` units wrong is at most
+/-- **The integrity audit over a period, at `δ`.** In a period as in `IntegrityPeriod` whose sampling blocks' draws each
+cover at least a fraction `q > 0` of their units (`q ≤ kd_t/n_t`), with each sampling block's threshold
+`K₀,t ≥ ln(1/δ)/q`, the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
 $$\sum_t (\delta + \varepsilon_{ks,t} + \delta_{link,t}),$$
-each window's sampling term `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀}` being at most `δ`. Its named assumptions are
+each sampling block's sampling term `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀}` being at most `δ`. Its named assumptions are
 `IntegrityPeriod`'s. -/
 def IntegrityPeriodLog : Prop :=
-  ∀ (W : ℕ → HiddenWindow) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
+  ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
     (∀ t < T, Real.log (1 / δ) / q ≤ (W t).K₀) →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T), Period.CR W T s →
+    ∀ s : Strategy (Period.game W T),
+    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
+    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
+      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
+        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
     value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
       ∑ t ∈ Finset.range T, (ENNReal.ofReal δ + (W t).ks + (W t).link)
 
-/-- **The integrity audit over a horizon.** In `T` windows as in `IntegrityPeriod`, each window's draw covering at
-least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every window is accepted and the wrong
-units total at least `ln(1/δ)/q` is at most
+/-- **The integrity audit over a horizon.** In `T` sampling blocks as in `IntegrityPeriod`, each sampling block's draw
+covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling block is
+accepted and the wrong units total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityPeriod`'s. -/
 def IntegrityHorizon : Prop :=
-  ∀ (W : ℕ → HiddenWindow) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
+  ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T), Period.CR W T s →
+    ∀ s : Strategy (Period.game W T),
+    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
+    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
+      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
+        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
     value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ))
         (Period.run W T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link)

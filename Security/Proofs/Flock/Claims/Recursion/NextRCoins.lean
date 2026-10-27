@@ -112,7 +112,7 @@ theorem filesFinalC {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp
     exact (htab _ (by omega)).1.k
   intro k hk
   rw [hsz] at hk
-  obtain ⟨-, -, -, -, -, hfz⟩ := hall k hk
+  obtain ⟨-, -, -, -, -, hfz, -⟩ := hall k hk
   have hsum : ((List.range k).map (JsonRT.sendsP resp spec (tabsOf sts))).sum = ((repLens spec sts).take k).sum := by
     rw [take_eq_map_getD _ k (by rw [repLens_length]; omega)]
     congr 1
@@ -147,7 +147,7 @@ theorem sessionRun_decides_coins {H : Claims.Msg → Claims.Msg} (h64 : Claims.O
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (hrd : rd last = some fl)
-    (hps : fl.ps = filePs spec sts c₁ pfs) :
+    (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
       repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
         (Ts k)) last) cs = some d := by
@@ -159,7 +159,7 @@ theorem sessionRun_decides_coins {H : Claims.Msg → Claims.Msg} (h64 : Claims.O
       subst hcs
       simpa using hresp 0 (by simp)
   exact sessionRun_decides_fit h64 hx hcs hc htab hS
-    (filesFinalC h64 hc (setup_tables hx).2.symm htab hS hresp hlen) hrd hps
+    (filesFinalC h64 hc (setup_tables hx).2.symm htab hS hresp hlen) hrd hps hst
 
 theorem sum_range_two_mul (g : ℕ → ℕ) : ∀ n,
     ((List.range (2 * n)).map fun k => g (k / 2)).sum = ((List.range n).map fun i => 2 * g i).sum

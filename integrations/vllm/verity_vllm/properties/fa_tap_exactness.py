@@ -25,6 +25,11 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
       first and causal-masked ones (`masked_from`) -- and every output row against `Attention_v4` evaluated on the launch's inputs
       (`out_vs_ir`: the twin, and the reference evaluator on rows the twin does not cover).
 
+Beside the property, an FA3 run can check every row of its prefill launches against the decode-shaped Definitions (`--against-decode`,
+`prefill_cases`, `out_vs_decode`, `decode_shaped`): `Attention_v4` at the one-row decode's tile (`decode_tile`) and its `MASKED_FROM`,
+which the window circuit's class Program binds at every position, prompt positions included, while the engine prefills a prompt at the
+prefill's tile (VLLM-127).  It is a finding, not part of `ok`.
+
 Every stream word is `FILL` before the launch.  The `edge_rows` cases give some query rows the scores -inf (so the max and the guard see
 -inf everywhere), +inf or NaN throughout (`SPECIAL`).
 
@@ -103,6 +108,33 @@ def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
         cs += [_case("smallq_onewg", 4, 2, [3, 5, 8, 1], [3, 700, 8, 129]),
                _case("chunked_tail", 4, 2, [64, 40], [164, 290])]
     return [c for c in cs if c["name"] in QUICK] if quick else cs
+
+
+#: the H200 window class of record's attention heads (32 query heads over 8 KV heads) prefilling its 1,024-id prompt, beside a 200-id
+#: and a 17-id prompt (VLLM-127)
+GQA4_PREFILL = _case("prefill_1024_gqa4", 32, 8, [1024, 200, 17], [1024, 200, 17])
+
+
+def prefill_cases(quick: bool = False) -> list[dict[str, Any]]:
+    """The FA3 launches with a prefill row (some sequence's seqlen_q above 1) that the decode-shaped check reads, and `GQA4_PREFILL`."""
+    return [c for c in cases(3, quick) if max(c["seqlens_q"]) > 1] + [GQA4_PREFILL]
+
+
+def decode_tile(D: int, g: int) -> tuple[int, int]:
+    """(kBlockM, kBlockN) of FA3's one-row decode at head dim D and g query heads a KV head: the tile the class Program's Definitions are
+    bound at (`window_circuit`: every position a one-row decode, `targets.attention_spec` at seqlen_q 1)."""
+    return fa3_tile(D, 1, g, 1)
+
+
+def decode_shaped(doc: dict[str, Any]) -> dict[str, Any]:
+    """A record's prefill rows against the decode-shaped Definitions (its cases' `out_vs_decode`): `exact` when every row is evaluated and
+    equals `Attention_v4` at the one-row decode's tile; the mismatched rows (those whose every score is special apart) and the fewest keys
+    a mismatched row sees."""
+    es = [e["out_vs_decode"] for e in doc["cases"] if e.get("out_vs_decode")]
+    total = {k: sum(e.get(k, 0) for e in es) for k in ("rows", "heads", "mismatch", "mismatch_rows", "special_mismatch_rows", "unevaluated")}
+    least = [e["min_T_mismatch"] for e in es if e.get("min_T_mismatch") is not None]
+    return {**total, "cases": len(es), "min_T_mismatch": min(least) if least else None,
+            "exact": bool(es) and total["rows"] > 0 and total["mismatch"] == 0 and total["unevaluated"] == 0}
 
 
 def geometry(fa_version: int, c: dict[str, Any], D: int, swapped: bool | None = None) -> dict[str, Any]:

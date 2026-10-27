@@ -5,7 +5,9 @@ in order), each a list of forms LSB first, as C-Flock's pieces take one argument
 list of forms (one element) or a list of elements, those of the return type in order.
 
 `trace` runs it once on a `Circuit` whose forms remember how they were made (`TL`: the XOR of two forms, or the NOT of one),
-and keeps the ANDs live in the outputs. Each AND becomes one `And2_v1`, except a committed copy (an AND with the constant 1,
+and keeps the ANDs live in the outputs. A form's bits are a frozenset, or past `_SMALL` bits a `_Set` whose subtrees the circuit
+interns, so a chain that XORs one bit a step into a growing form (a running max's `mux`) shares the form's bits instead of
+copying them, and equal sets are still equal. Each AND becomes one `And2_v1`, except a committed copy (an AND with the constant 1,
 ``A = form, B = 1``, as `sha512.commit` writes one), which becomes no gate: its bit is its form's wire. Each AND operand and each
 output is written as the XORs and NOTs the builder made it by (identical forms share one wire), or, for a form the builder did
 not make from tracked forms, as a balanced XOR tree over its bits. So the gate circuit has exactly the builder's live ANDs (its
@@ -22,6 +24,7 @@ own circuit, so a commit is a row there, and an AND operand the form its builder
 """
 from __future__ import annotations
 
+from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
@@ -34,39 +37,232 @@ from .forms import ONE, Circuit, L
 
 __all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "trace", "word_of"]
 
+#: a form of more bits than this keeps them as a `_Set`, of at most this many as a frozenset (one of each per set)
+_SMALL = 64
+
+
+class _Set:
+    """A set of committed bits as a big-endian Patricia trie: ``l`` holds the keys without bit ``m``, ``r`` those with it, each
+    an int (one key) or a `_Set`, and ``p`` the bits above ``m`` they share. Its circuit's table ``tab`` interns every node by its
+    children, so equal sets are one node: equality and hashing are identity, and a set one key away from another shares all of
+    it but one path."""
+
+    __slots__ = ("p", "m", "l", "r", "n", "tab")
+
+    def __init__(self, p, m, l, r, tab):
+        self.p, self.m, self.l, self.r, self.tab = p, m, l, r, tab
+        self.n = (1 if type(l) is int else l.n) + (1 if type(r) is int else r.n)
+
+    def __len__(self):
+        return self.n
+
+    def __iter__(self):
+        stack = [self]
+        while stack:
+            t = stack.pop()
+            if type(t) is int:
+                yield t
+            else:
+                stack.append(t.r)
+                stack.append(t.l)
+
+    def __contains__(self, k):
+        t = self
+        while type(t) is not int:
+            if (k & ~((t.m << 1) - 1)) != t.p:
+                return False
+            t = t.r if k & t.m else t.l
+        return t == k
+
+    def __xor__(self, o):
+        return _sx(self.tab, self, o)
+
+    __rxor__ = __xor__
+
+
+def _br(tab, p, m, l, r):
+    if l is None:
+        return r
+    if r is None:
+        return l
+    t = tab.get((l, r))
+    if t is None:
+        t = tab[(l, r)] = _Set(p, m, l, r, tab)
+    return t
+
+
+def _join(tab, p0, t0, p1, t1):
+    """The union of disjoint tries ``t0``, ``t1`` whose prefixes ``p0``, ``p1`` differ (a key is its own prefix)."""
+    m = 1 << ((p0 ^ p1).bit_length() - 1)
+    p = p0 & ~((m << 1) - 1)
+    return _br(tab, p, m, t1, t0) if p0 & m else _br(tab, p, m, t0, t1)
+
+
+def _tog(tab, t, k):
+    """``t`` with key ``k`` added if absent, else removed."""
+    if t is None:
+        return k
+    if type(t) is int:
+        return None if t == k else _join(tab, k, k, t, t)
+    p, m = t.p, t.m
+    if (k & ~((m << 1) - 1)) != p:
+        return _join(tab, k, k, p, t)
+    if k & m:
+        return _br(tab, p, m, t.l, _tog(tab, t.r, k))
+    return _br(tab, p, m, _tog(tab, t.l, k), t.r)
+
+
+def _xor(tab, s, t):
+    """The symmetric difference of tries ``s`` and ``t``."""
+    if s is None:
+        return t
+    if t is None:
+        return s
+    if s is t:
+        return None
+    if type(s) is int:
+        return _tog(tab, t, s)
+    if type(t) is int:
+        return _tog(tab, s, t)
+    ps, ms, pt, mt = s.p, s.m, t.p, t.m
+    if ms == mt and ps == pt:
+        return _br(tab, ps, ms, _xor(tab, s.l, t.l), _xor(tab, s.r, t.r))
+    if ms > mt and (pt & ~((ms << 1) - 1)) == ps:
+        return _br(tab, ps, ms, s.l, _xor(tab, s.r, t)) if pt & ms else _br(tab, ps, ms, _xor(tab, s.l, t), s.r)
+    if mt > ms and (ps & ~((mt << 1) - 1)) == pt:
+        return _br(tab, pt, mt, t.l, _xor(tab, t.r, s)) if ps & mt else _br(tab, pt, mt, _xor(tab, t.l, s), t.r)
+    return _join(tab, ps, s, pt, t)
+
+
+def _build(tab, ks, lo=0, hi=None):
+    """The trie of the sorted distinct keys ``ks[lo:hi]``, which are not none."""
+    hi = len(ks) if hi is None else hi
+    if hi - lo == 1:
+        return ks[lo]
+    a, b = ks[lo], ks[hi - 1]
+    m = 1 << ((a ^ b).bit_length() - 1)
+    p = a & ~((m << 1) - 1)
+    mid = bisect_left(ks, p | m, lo, hi)
+    return _br(tab, p, m, _build(tab, ks, lo, mid), _build(tab, ks, mid, hi))
+
+
+def _set(t):
+    """The set of trie ``t`` (``None``, a key or a `_Set`) as a form keeps it: a frozenset of at most `_SMALL` keys, else a `_Set`."""
+    if t is None:
+        return frozenset()
+    if type(t) is int:
+        return frozenset((t,))
+    return t if t.n > _SMALL else frozenset(t)
+
+
+def _canon(tab, s):
+    """The set ``s`` (a frozenset or a `_Set`) as a form keeps it."""
+    return _build(tab, sorted(s)) if type(s) is not _Set and len(s) > _SMALL else s
+
+
+def _sx(tab, a, b):
+    """``a ^ b`` for sets as forms keep them, kept so."""
+    if type(a) is not _Set:
+        if type(b) is not _Set:
+            return _canon(tab, a ^ b)
+        a, b = b, a
+    if type(b) is _Set:
+        return _set(_xor(tab, a, b))
+    if len(b) <= 1:
+        return _set(_tog(tab, a, next(iter(b)))) if b else a
+    return _set(_xor(tab, a, _build(tab, sorted(b))))
+
 
 class TL(L):
     """A form that remembers its making: ``src`` is ``None`` (a committed bit, or made without tracking), ``("x", a, b)`` or
-    ``("n", a)``."""
+    ``("n", a)``; ``tab`` is its circuit's table of `_Set` nodes."""
 
-    __slots__ = ("src",)
+    __slots__ = ("src", "tab")
 
-    def __init__(self, s=frozenset(), c=0, src=None):
+    def __init__(self, s=frozenset(), c=0, src=None, tab=None):
         super().__init__(s, c)
         self.src = src
+        self.tab = tab
 
     def __xor__(self, o):
-        return TL(self.s ^ o.s, self.c ^ o.c, ("x", self, o))
+        s = self.s ^ o.s
+        if type(s) is frozenset and len(s) > _SMALL:
+            s = _build(self.tab, sorted(s))
+        return TL(s, self.c ^ o.c, ("x", self, o), self.tab)
 
     def __rxor__(self, o):
-        return TL(o.s ^ self.s, o.c ^ self.c, ("x", o, self))
+        s = o.s ^ self.s
+        if type(s) is frozenset and len(s) > _SMALL:
+            s = _build(self.tab, sorted(s))
+        return TL(s, o.c ^ self.c, ("x", o, self), self.tab)
 
     def inv(self):
-        return TL(self.s, self.c ^ 1, ("n", self))
+        return TL(self.s, self.c ^ 1, ("n", self), self.tab)
 
 
 class TracingCircuit(Circuit):
-    """A `Circuit` whose committed bits are `TL` forms; it refuses hints and table reads (not Boolean gates)."""
+    """A `Circuit` whose committed bits are `TL` forms; it refuses hints and table reads (not Boolean gates). ``sets`` interns
+    its forms' `_Set` nodes; a plain `L` a builder makes of more than `_SMALL` bits gets its bits as one (`canon`) where a form is
+    compared, so equal sets compare equal."""
+
+    def __init__(self, cse: bool = False):
+        super().__init__(cse)
+        self.sets: dict = {}
 
     def _new(self, kind, data):
         if kind not in ("in", "and"):
             raise TypeError(f"a {kind!r} bit has no Boolean gate")
         w = super()._new(kind, data)
-        return TL(w.s, 0, None)
+        return TL(w.s, 0, None, self.sets)
+
+    def canon(self, f: L) -> L:
+        if type(f.s) is not _Set and len(f.s) > _SMALL:
+            return L(_build(self.sets, sorted(f.s)), f.c)
+        return f
+
+    def AND(self, a, b):
+        return super().AND(self.canon(a), self.canon(b))
 
     def commit(self, word):
         """The word itself: a commit (`forms.Circuit.commit`) is a row of a lowering that runs the builder (``build``), not a gate."""
         return list(word)
+
+    def live(self):
+        """`Circuit.live`, reading each shared `_Set` node once."""
+        seen, stack, walked = set(), [], set()
+
+        def push(s):
+            if type(s) is not _Set:
+                stack.extend(s)
+                return
+            nodes = [s]
+            while nodes:
+                t = nodes.pop()
+                if type(t) is int:
+                    stack.append(t)
+                elif t not in walked:
+                    walked.add(t)
+                    nodes.append(t.l)
+                    nodes.append(t.r)
+
+        for bits in self.outputs.values():
+            for w in bits:
+                push(w.s)
+        for _, w in self.asserts:
+            push(w.s)
+        for bits in self.inputs.values():
+            for w in bits:
+                push(w.s)
+        while stack:
+            v = stack.pop()
+            if v in seen:
+                continue
+            seen.add(v)
+            if self.kind[v] == "and":
+                a, b = self.data[v]
+                push(a.s)
+                push(b.s)
+        return seen
 
 
 _KINDS = ("and", "xor", "not")
@@ -107,7 +303,7 @@ def _flat_out(res: Any, ret: Type) -> list[L]:
 def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True) -> Traced:
     C = TracingCircuit(cse=cse)
     ins = _elements_in(C, params)
-    outs = _flat_out(build(C, *ins), ret)
+    outs = [C.canon(f) for f in _flat_out(build(C, *ins), ret)]
     C.output("out", outs)
     live = C.live()
 

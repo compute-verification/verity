@@ -202,7 +202,9 @@ def relocate_components(derived: dict, artifact_path: str) -> dict:
 def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     """Lane gprog's `workload_program.json` (GP-01, `verity/workload-program/v1`) -> this checker's interface.  The rooted Program's
     component dirs come from `inputs.derived` ("lp,t" -> derive_step dir); its address map and chronology are carried through and
-    cross-checked (component digests, per-request instance counts, programmed steps)."""
+    cross-checked (component digests, per-request instance counts, programmed steps).  The manifest it was built from
+    (`workload_path`, else `inputs.manifest`) is read through the workload record, and one that declares no prompt for a request (a
+    lengths-only plan) is refused by name."""
     art = json.load(open(artifact_path))
     if not art.get("ok", True):
         raise ValueError(f"{artifact_path}: builder result not ok ({art.get('reason')}: {art.get('missing_derived')})")
@@ -239,13 +241,17 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     relocation = relocate_components(derived, artifact_path)
     derived = relocation["derived"]
     wl_path = workload_path or (art.get("inputs") or {}).get("manifest")
-    wl = json.load(open(wl_path)) if wl_path and os.path.exists(wl_path) else None
+    wl = Workload.load(wl_path) if wl_path and os.path.exists(wl_path) else None
+    declared = () if wl is None else wl.requests
+    for i, q in enumerate(declared):
+        if q.prompt_token_ids is None:
+            raise RecordError(wl.where, f"requests[{i}].prompt_token_ids", "is absent (a lengths-only plan): the Program declares each prompt")
     # prompts by manifest POSITION (the Program's r<k>); the manifest's own request_id is the workload (UUID) id
-    prompts = {request_id_of(i): r["prompt_token_ids"] for i, r in enumerate((wl or {}).get("requests", []))}
-    wl_uuids = {request_id_of(i): r.get("request_id") for i, r in enumerate((wl or {}).get("requests", []))}
+    prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared)}
+    wl_uuids = {request_id_of(i): q.request_id for i, q in enumerate(declared)}
     amap = {r["request_id"]: r for r in (art.get("address_map") or {}).get("requests", [])}
     chron = {r["request_id"]: r for r in (art.get("chronology") or {}).get("requests", [])}
-    plan = PP.plan(wl) if wl is not None else None
+    plan = PP.plan(wl.dump()) if wl is not None else None
     reqs = []
     for r in art["requests"]:
         lp, cap = int(r["prompt_len"]), int(r["cap"])

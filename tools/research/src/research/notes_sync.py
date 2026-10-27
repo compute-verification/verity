@@ -57,6 +57,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -169,16 +170,26 @@ def pull(root: Path, remote: str = "origin") -> subprocess.CompletedProcess:
     return _run(root, *opts, "pull", "-q", "--ff-only", where, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}", timeout=300)
 
 
+_CLONE_LOCK = threading.Lock()
+
+
 def ensure_clone(root: Path) -> str | None:
     """Clone NOTES_URL to `root` when `root` is missing and RESEARCH_NOTES_TOKEN is set (a fresh cloud VM), its `origin` the plain
-    URL: a line saying it did, or why it failed; None when there was nothing to do."""
+    URL: a line saying it did, or why it failed; None when there was nothing to do.  One thread of a process clones at a time
+    (`research run`'s machine probes run in parallel: a clone directory named by pid alone was each other's, 26 Oct), and each
+    clones into a directory of its own, so another process cloning beside it never touches it."""
     root = Path(root).expanduser()
     if root.exists() or not (t := token_url(NOTES_URL)):
         return None
-    opts, url = t
+    with _CLONE_LOCK:
+        if root.exists():
+            return None
+        return _clone(root, *t)
+
+
+def _clone(root: Path, opts: list[str], url: str) -> str:
     root.parent.mkdir(parents=True, exist_ok=True)
-    tmp = root.with_name(f".{root.name}.clone-{os.getpid()}")
-    shutil.rmtree(tmp, ignore_errors=True)
+    tmp = Path(tempfile.mkdtemp(prefix=f".{root.name}.clone-", dir=root.parent))
     r = subprocess.run(["git", *opts, "clone", "-q", url, str(tmp)], capture_output=True, text=True, errors="replace", timeout=900)
     if r.returncode == 0:
         _run(tmp, "remote", "set-url", "origin", NOTES_URL)

@@ -435,8 +435,8 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
 
 def hook(llm) -> Window:
     """The step hook around the engine's runner (`execute_model`), and the window (built at the engine's first forward)."""
-    from verity_vllm.engine import engine_profile as prof
-    runner = prof.get_model_runner(llm)
+    from verity_vllm.engine import handle
+    runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
     orig = runner.execute_model
 
