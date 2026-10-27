@@ -221,7 +221,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     obtain ⟨⟨⟩, hsc, hv⟩ := bind_ok hv
     obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
     rcases D with _ | d
-    · simp only [Option.isNone_none, eq_self_iff_true, ↓reduceIte] at hv
+    · simp only [Option.isNone_none, ↓reduceIte] at hv
       obtain ⟨⟨⟩, hdl, -⟩ := bind_ok hv
       first | cases hdl | simp [Flock.ProvedScope.drawLaw] at hdl
     simp only [Option.isNone_some, Bool.false_eq_true, ↓reduceIte] at hv
@@ -251,7 +251,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     obtain ⟨rfl, rfl⟩ := hpair
     rw [← hD] at hbs hfd
     subst hT'
-    exact ⟨tags0, circuitB, pubB, registered, rB, record, _, _, proofs, hT, hc, hp, hreg, hrB, hu, hds, hbs,
+    exact ⟨tags0, circuitB, pubB, registered, rB, record, _, _, proofs, (by first | rfl | exact hT), hc, hp, hreg, hrB, hu, hds, hbs,
       hf, hzv, hsc, hfd, hid, hrt⟩
 
 /-- **Piece E: a V\* part's compiled verdict is the model's decision at its session.** Where part `j`'s compiled
