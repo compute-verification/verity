@@ -7,6 +7,10 @@ is credited at the public best price of its work, and the work the developer cou
 the fixes RT-POOL routed to it (note:compute-research/20261026T1752Z-draft-accel-rt-pool, on CMP-151, CMP-152 and
 CMP-154), written in the shared notation (CMP-158).
 
+Its credit at pub(μ°) against W_reg is superseded (Daniel, 26 Oct, 6:40 PM PDT, tentative): credit is a sampling block's
+size in AND gates, a statement about values, and 𝓜's resources appear only inside the exclusion argument
+(`glossary/README.md`, "Size, credit and exclusion"). CMP-158 restates this document and D6 in it.
+
 The protocol is experimental. Its guarantee is stated in Lean on open PRs: `Pouw.Guarantees.Dither.WorkSound` and its
 card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on
 [#4665](https://github.com/compute-verification/verity/pull/4665), over the machine model `Accel` on
