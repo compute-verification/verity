@@ -99,23 +99,23 @@ theorem faulty_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ)
   have hbi' := (witRows_val_some hs hbi).1
   rw [hvi] at hbi'
   subst hbi'
-  let X : Fin C.N → Bool := fun a => ((progOf C κ).read ref (posOf C a)).getD false
+  let Xv : Fin C.N → Bool := fun a => ((progOf C κ).read ref (posOf C a)).getD false
   have hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
-      posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (P.localEval X u a) := by
+      posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (P.localEval Xv u a) := by
     intro p hp x hx a ha hn
     have hne := (hc' p hp).1 x hx (posOf C a) ha hn
     obtain ⟨y, hy⟩ := Option.ne_none_iff_exists'.1 hne
     have hau : P.unit a ≠ some u := fun h => hn (posOf_mem_unitGates.2 h)
-    rw [localEval_of_not_mem P X hau]
-    simp only [X, hy, Option.getD_some]
-  have hrun := runIn_posOf_of (κ := κ) P u (P.localEval X u) (fun _ h => localEval_of_mem P X h) ref hread g.val g
+    rw [localEval_of_not_mem P Xv hau]
+    simp only [Xv, hy, Option.getD_some]
+  have hrun := runIn_posOf_of (κ := κ) P u (P.localEval Xv u) (fun _ h => localEval_of_mem P Xv h) ref hread g.val g
     rfl hu
-  have hVi : P.localEval X u i = false := by
+  have hVi : P.localEval Xv u i = false := by
     have hne : P.unit i ≠ some u := by rw [hiu]; simp
-    rw [localEval_of_not_mem P X hne]
-    simp only [X, hread_i, F1, hbi, Option.getD_some]
-  have hVg : P.localEval X u g = false := by
-    rw [localEval_of_mem P X hu, hop]
+    rw [localEval_of_not_mem P Xv hne]
+    simp only [Xv, hread_i, F1, hbi, Option.getD_some]
+  have hVg : P.localEval Xv u g = false := by
+    rw [localEval_of_mem P Xv hu, hop]
     simp [Op.apply, xorSum, hVi]
   rw [hVg] at hrun
   obtain ⟨bb, hbb, hrb⟩ := (hc' _ hpg).2 hb
