@@ -24,6 +24,7 @@ own circuit, so a commit is a row there, and an AND operand the form its builder
 """
 from __future__ import annotations
 
+import gc
 from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
@@ -307,6 +308,16 @@ def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = Tru
     build has turned it on, give the circuit an earlier trace of the same key and code made."""
     if key is not None and CACHE is not None:
         return CACHE.trace(key, build, params, ret, cse)
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        return _trace(build, params, ret, cse)
+    finally:
+        if on:
+            gc.enable()
+
+
+def _trace(build: Callable, params: Sequence[Type], ret: Type, cse: bool) -> Traced:
     C = TracingCircuit(cse=cse)
     ins = _elements_in(C, params)
     outs = [C.canon(f) for f in _flat_out(build(C, *ins), ret)]
