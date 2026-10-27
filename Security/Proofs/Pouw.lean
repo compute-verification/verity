@@ -81,6 +81,8 @@ import Proofs.Pouw.Period.Honest
 import Proofs.Pouw.Period.Sort
 import Proofs.Pouw.PeriodJ10R
 import Proofs.Pouw.PeriodJ10R.Honest
+import Proofs.Pouw.ServedSize
+import Proofs.Pouw.ServedSize.Honest
 import Proofs.Pouw.PearlC
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.AtomErr
