@@ -24,8 +24,7 @@
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 5), wcw (256), ccta (1), pf (0), diag (0) (v31.cu's Knobs) and nreg (the GEMM's
 # register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS
-# (default 7); Q, the proof blocks a verdict
-# opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
+# (default 7); Q, the proof blocks a verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU
 # (default gpu-lease 1 --wait --max-min 25 --; a timed run passes "gpu-lease 8 --wait --timed --max-min 30 --" under
