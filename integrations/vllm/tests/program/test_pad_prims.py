@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.definitions.registry import pad_prims as PP  # noqa: E402
+from verity.ml.definitions.registry import pad_prims as PP
 
 
 def test_bit_gates_truth_tables_and_absorption():

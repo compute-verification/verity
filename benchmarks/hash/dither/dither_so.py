@@ -1,7 +1,7 @@
-"""dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
+"""dither-a in the statement's order: the arms
 `dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we|-wea]`, labelled as every arm by
-`forms.form_of` (`SoSide.label`): -aom/-aomn without -ov form=ASK-71 A (provisional), since the served epilogue commits
-#3018's per-unit z/y records under round s's root before coin s; -ab/-abn and -ov (-ov1, -ovp) form=beside (unadopted
+`forms.form_of` (`SoSide.label`): -aom/-aomn without -ov form=`forms.FORM_A`, since the served epilogue commits
+the per-unit z/y records under round s's root before coin s; -ab/-abn and -ov (-ov1, -ovp) form=beside (unadopted
 arm), neither ruled in (`SoSide.unadopted`).
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
@@ -174,8 +174,8 @@ J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 J10R_M_ENV = "DITHER_SO_J10R_M"
 # "1" (with $DITHER_SO_UNITS=j10r): a row block wholly past the step's live rows is skipped, h1tile's canonical dead tile
 # (PouwH1Tile_v4's: the zero receipt, no noise derived), as today's units always do; unset, every unit of the call's M
-# layout rows is computed in full, as J10R's PouwH1Tile_v5 / v6 define it (compute-accounting on CMP-76, 24 Oct: the
-# skip stays off by default until CREDITFIX and LIVEUNIT land).  Unset, $DITHER_SO_RDEAD's zero-receipt rows don't hold
+# layout rows is computed in full, as J10-R's PouwH1Tile_v5 / v6 define it (the skip stays off by default until the
+# credit counts only live units).  Unset, $DITHER_SO_RDEAD's zero-receipt rows don't hold
 SKIP_DEAD_ENV = "DITHER_UNITS_SKIP_DEAD"
 # "1" (without -ov, D >= 3): a step that holds no capture leaves its round on the serving stream with its root and y
 # check copied to pinned memory, and returns to the engine; the next step's `before` waits for that copy, then sends
