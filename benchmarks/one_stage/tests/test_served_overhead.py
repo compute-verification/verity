@@ -14,7 +14,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-import served_overhead as O
+import served_overhead as O  # noqa: E402  (a script beside the suite, importable only once its dir is on the path)
 
 HEADER = {"kind": "header", "schema": "verity-vllm/step-trace/v1", "config": {"max_num_batched_tokens": 512, "num_gpu_blocks": 7}}
 

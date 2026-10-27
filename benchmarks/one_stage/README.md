@@ -80,11 +80,6 @@ negatives.
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
   `out/verdicts.txt`.
-- `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
-  served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
-  table` compares the composed run with it on both runs' engine step traces (`advice_trace.jsonl`). It reports time per
-  output token, time to first token and tokens per second as composed over stock, the composed run's window open and close
-  on the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -156,6 +151,12 @@ negatives.
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
+- `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
+  served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
+  table` compares the composed run with it on two clocks, each the same code in both runs: the client's
+  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). It reports time per output
+  token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
+  the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
