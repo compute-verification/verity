@@ -1,0 +1,11 @@
+# The network example's rung on the ladder (examples/README.md): level 0, moved. The README's runs of record (infra's gate
+# rehearsals and their report runs) are what a level-1 claim would cite.
+protocol = "certifier"
+workload = "vllm"
+level = 0
+
+[placement]
+endpoint = "gpu-node"        # vllm's served model, vy-nebius-1
+certifier = "auditor-host"   # the rehearsal through vy-challenger-1's gate (INF-199)
+prover = "cpu-node"          # C-Flock prove --zk, vy-nebius-cpu-1's network slot
+verifier = "cpu-node"        # Lean verify --zk, beside the prover

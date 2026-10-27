@@ -1,4 +1,4 @@
-"""The network night on the lab host in one command: `verity bench network_sim --out DIR`.
+"""The network night on the lab host in one command: `verity example network_sim --out DIR`.
 
 `verity` isn't on vy-nebius-cpu-2's path, so there it is `python3 examples/network_sim/run.py --out DIR`. In one
 process tree it runs:

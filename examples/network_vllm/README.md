@@ -1,4 +1,4 @@
-# network_e2e
+# network_vllm
 
 Network accounting end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
@@ -12,6 +12,16 @@ network certifier in front of a served endpoint, `benchmarks/network_traces/cert
 It writes `report.json` and `report.md` under `--out` (`$OUT` under `research run`). `e2e.py` is the driver, and its
 docstring has the details. It reuses the rehearsal and N2-ZK's driver and re-implements neither.
 
+## The example
+
+- **Protocol:** the network certifier (`verity/core/protocols/certifier`), its head checks proved by the proof service.
+- **Workload:** `integrations/vllm`, a model vLLM serves behind `verity-vllm serve-openai`, with the certifier in front.
+- **Placement** (`example.toml`), as in the runs of record below: the endpoint on a GPU node (vy-nebius-1), the
+  certifier on the auditor's host (vy-challenger-1's gate), and the prover and the Lean verifier on a CPU node
+  (vy-nebius-cpu-1's network slot).
+- **Command:** `verity example network_vllm ARGS`, which runs `run.sh` (below).
+- **Owner:** network-accounting.
+
 ## The one command
 
 On a node, proving, from a rehearsal you already have (a directory, a tarball of one, or several, as below):
@@ -22,7 +32,7 @@ research run --pool research --as LANE --pool-wait 3600 --timeout 5h --project v
   bash -c 'bash examples/network_vllm/run.sh --from "$RESEARCH_RUN_DIR/inputs/planned-40.tgz"'
 ~~~
 
-`run.sh` is what `verity bench network_e2e` runs. It builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean
+`run.sh` is what `verity example network_vllm` runs. It builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean
 firewall and network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py`. On
 vy-nebius-cpu-1 a run goes through a check slot (`--pool research`), so `--mem-gb` is dropped there and the slot's
 memory applies. `E2E_MEM_GB` is the proving sessions' memory cap. Exit 0 means the report says OK.
@@ -31,7 +41,7 @@ N2 alone, without proofs, runs on any machine with `lake` on the PATH (the Lean 
 use):
 
 ~~~text
-uv run --extra torch-cpu verity bench network_e2e --from REHEARSAL --out DIR --no-prove
+uv run --extra torch-cpu verity example network_vllm --from REHEARSAL --out DIR --no-prove
 ~~~
 
 When `n2_zk.sh` has already proved these runs, don't prove them again: pass its run's `out/n2zk` (or a tarball of it) as
@@ -103,9 +113,9 @@ The plan's target (G-A) is one command from serving to the Lean verdict: serve, 
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
 
 ~~~text
-verity bench network_e2e --endpoint-peer NAME:PORT --endpoint-run SERVE_DIR --traffic varied --out DIR \
+verity example network_vllm --endpoint-peer NAME:PORT --endpoint-run SERVE_DIR --traffic varied --out DIR \
   --strategies honest,late,extra,drop,token --prove-path PROVE_PATH_OUT
-verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic varied --out DIR \
+verity example network_vllm (--upstream URL | --endpoint-peer NAME:PORT) --traffic varied --out DIR \
   --strategies honest,late,extra,drop,token --advice ADVICE --serving-config CONFIG.json --prove-path PROVE_PATH_OUT
 ~~~
 

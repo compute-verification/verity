@@ -1,0 +1,10 @@
+# The mock datacenter's rung on the ladder (examples/README.md): level 0, moved. Every role runs on the lab host,
+# vy-nebius-cpu-2, one machine.
+protocol = "certifier"
+workload = "vllm"
+level = 0
+
+[placement]
+prover = "local"      # the blocks, each a namespace running the workload (workload/lab_run.py)
+certifier = "local"   # each block's certifier, the proxy in the namespace on its uplink
+verifier = "local"    # the certifiers' audit, the datacenter record check, N3 and N2

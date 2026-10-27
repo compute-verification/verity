@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# network-e2e's runner, `verity bench network_e2e ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove,
+# network-e2e's runner, `verity example network_vllm ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove,
 # --proofs DIR or --traffic varied (whose advice profile n2_zk doesn't prove) it runs e2e.py alone (N2's network-records
 # is built on first use, with lake on the PATH). Otherwise it
 # runs under `research run` on a CPU node: it builds what n2_zk.sh builds (hidden_zk's job.sh, sourced: C-Flock's

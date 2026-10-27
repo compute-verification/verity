@@ -13,7 +13,7 @@ still stubbed.
     python examples/network_vllm/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
-`run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
+`run.sh` is the runner (`verity example network_vllm`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
 then runs this. The README says what the report establishes and what it doesn't.
 
 * **The runs** (`collect`). Each ``--from`` SRC is a rehearsal (`certifier_serve.py rehearse --out`'s directory: its
