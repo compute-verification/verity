@@ -79,7 +79,7 @@ def test_a_subprotocol_with_no_piece_is_named_missing_with_its_issue(tmp_path, c
     assert [g["verdict"] for g in got.values()] == ["missing"] * 4
     assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING the bandwidth audit", "MISSING PoUS",
                                                        "MISSING the network certifier"]
-    assert all(issue in "\n".join(lines) for issue in ("VLLM-33 G1", "VLLM-33 G2", "MEM-94", "NET-83", "served_bandwidth.sh"))
+    assert all(issue in "\n".join(lines) for issue in ("VLLM-33 G1", "VLLM-33 G2", "MEM-94", "NET-83", "INF-263"))
     assert not (tmp_path / "pieces").exists()
 
 

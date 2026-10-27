@@ -70,10 +70,9 @@ PIECES: dict[str, tuple[str, str, str, str, str]] = {
     "work": ("PoUW", "pouw", "vllm-serve-arms", "VLLM-33 G1",
              ("H1 on the served window: with H1_GATE its coins are vy-challenger-1's (--challenger-gate, a development run "
               "that credits nothing until the lane's Cursor secret, Daniel's call), else in-process")),
-    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting", "VLLM-33 G2",
-                  ("a remote bandwidth session over the node's registered store on the card, beside the served window, "
-                   "against the auditor's verifier on vy-auditor-2: BANDWIDTH_CMD='bash benchmarks/one_stage/"
-                   "served_bandwidth.sh \"$1\" \"$2\" \"$3\"'")),
+    "bandwidth": ("the bandwidth audit", "bandwidth", "vllm-serve-arms", "VLLM-33 G2",
+                  ("the remote bandwidth audit of the served window, against the bandwidth verifier on vy-auditor-2 at "
+                   "10.96.0.36:7952 (INF-263, due Tue 27 Oct 18:00Z)")),
     "space": ("PoUS", "pous", "memory-accounting", "MEM-94",
               ("which weights PoUS covers for the served vLLM window, and a PoUS path over vLLM's weights (the vLLM "
                "adapter refuses int8 today)")),
