@@ -266,3 +266,10 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 - cursor/proofs-rowsfit-3a9d @ 7682f6090f = the honest-half head to merge (rowsfit + honfix HonestFixture/TopsAt/honest_half_fixture + honasm). r20261027-023733-2436 (cpu-3) FULL BUILD rc=0, 11445 jobs; TopsAt, HonestFixture, honest_half_tops, honest_half_fixture etc. axiom-clean. LOWRES: use it in the assembly relaunch. RECE: honest_half_fixture is built, so the lock listing waits only on recursiveKS_nontrivial (KSNONTRIV f8f2) and the witness run ids.
 
 - 02:46Z RECE (kslock): kslock-4929 is at c4403584dc: 1d0ce8ab97 (RecursiveKS proved, 8530 green on the standard axioms) merged with rowsfit-3a9d 7682f6090f (honfix, honest_half_fixture), ksnontriv-27b2 53a30ae7bc and kswit-00fe 8b53bc6c71, plus `Flock.SecurityProofs.RecursiveKS` (@proofs) listed under `guarantees`. r20261027-024405-7f27 (cpu-3) builds KSProved, HonestHalfFixture and KSNontrivial and prints their axioms. The one records run (--update) follows once 7f27 is green and KSNONTRIV's own green run id is posted. Please push no further changes to the merged branches without telling me.
+
+## 2026-10-27 02:50Z (RECDEC) — fixes for the assembly (f1asm-4116)
+- Take `cursor/proofs-f1fix-b7d2` @ 18d7321954: f1asm 16a44e3b86 plus two commits, nothing else:
+  - 8cbfbfa61d = partbind e99675bf84 (PartsVStar:183 `rfl` -> `hf`, the part's own bindings).
+  - 18d7321954 = partbind 865fef87a6 (DeployedCounts:324 at recland's coef+dirs `openSetupSt`: `openRows_size_le`, `openSetupSt ≤ 2040`, `resSetup ≤ 131072`, constants 65792 -> 131072 through `hNK`; brings' d27e8279b8 ported; no consumer outside DeployedCounts; ae6a253d93's dsimp lines aren't in recland's file).
+- VerdictRowEInner:62 and VStarNets:109 are already fixed in f1asm (00d8265740, 95bc34cab4): nothing to take.
+- Tries at 18d7321954 on vy-nebius-1 (leanrec pool): DeployedCounts r20261027-024719-67c8, PartsVStar r20261027-024727-0e6a, VerdictRowEInner r20261027-024737-aad5, VStarNets r20261027-024746-67e9.
