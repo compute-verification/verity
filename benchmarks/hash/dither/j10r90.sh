@@ -4,7 +4,7 @@
 #   kr        the receipts-only base (job.sh's kr: H1U_KSPLIT = 4, H1K_AUTO, H1K_RONLY)
 #   kra       A: kr + H1U_JCTA, H1U_WARPS = 4, H1U_JX, H1U_JBW
 #   kraq      AQ: kra + H1U_PF, H1U_JPI, H1U_JCS = 2 (H1U_JXS stays off: it stalls under PREQ on the RTX)
-#   kraqwxsc  the sm_90a arm: kra + H1U_PF, H1U_JPI, H1U_JW, H1U_JXS, H1U_JWS, H1U_JPC (no JCS: the column blocks and
+#   kraqwxsc  the sm_90a arm: kra + H1U_PF, H1U_JPI, H1U_JW, H1U_JXS, H1U_JWS, H1U_JPC (no JCS: the column tiles and
 #             W' once a call, X and W' in fragment order, their prep's stores coalesced)
 #
 #   build  (a CPU node) job.sh's build of the four at sm_90a with --no-compress ($OUT/lib/sm_90a), then the SASS gate on

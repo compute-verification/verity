@@ -58,7 +58,7 @@ Arms:
                  carveout (DITHER_UNITS=block2 / split2, `h1o_unitsb2p` / `h1o_unitss2p`: two units' blocks an SM, not
                  the driver's default one; block2 with immediate barrier ids), the same code and values
     dither-1s-mix-cpeel  dither-1s-cpeel with a units form per call (DITHER_UNITS=mix, `dither_one.MIX_FORMS`): block2
-                 where the call's column blocks outnumber the SMs (qkv, gate_up), split elsewhere (o, down)
+                 where the call's column tiles outnumber the SMs (qkv, gate_up), split elsewhere (o, down)
     dither-1s-percall0  dither-1s with the per-call challenger round between each call's A table and its units (`h1o_percall`:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
@@ -136,7 +136,7 @@ Arms:
                  H1U_JCS=2's, shorter; DITHER_SO_PREQ=0 makes the stalls rarer without removing them
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
-    ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
+    ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row tiles are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
                  one with DITHER_SO_RDEAD=0 (J10-R's default computes them in full, which $DITHER_SO_RDEAD=1 refuses)
     ARM-lag1, ARM-lag2  a dither-a-so arm with DITHER_SO_ROOT_LAG=1 or 2
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)

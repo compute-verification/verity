@@ -4,7 +4,7 @@ banded arm's gate holds it to CA's banded reference itself (#2866, `banded.bande
 `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and requires it; its check docs carry `j10b_ref.CA_LABEL`.
 
     dither-1s-hbk-bG     (H200, B200) dither-1s-hbk with h1u.cu's kh_one_peel_band at G in place of kh_one_peel, from the
-                         same .so (HB_H1U_KSPLIT): h1j_noise hashes each band's row blocks once, into its leader's
+                         same .so (HB_H1U_KSPLIT): h1j_noise hashes each band's row tiles once, into its leader's
                          workspace region, and every unit's columns. Gated as dither-1s-hbk (hb_peel.check, its tokens
                          equal to exact's on the gate and every rep), with the receipts reference h1r_launch_band at G
                          (j10rtx.BandH1R), the CPU units' rows from their band leader's seed_j (j10b_ref.rows_of: in

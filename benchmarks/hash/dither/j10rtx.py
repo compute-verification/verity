@@ -1,5 +1,5 @@
 """J10 banded noise on the RTX PRO 6000 at kernel level: the credited one-stream arm `mix-cpeel` (block2 where a call's
-column blocks outnumber the SMs, split elsewhere; peeled, z = A B^T) with per-unit noise, against the same units on banded
+column tiles outnumber the SMs, split elsewhere; peeled, z = A B^T) with per-unit noise, against the same units on banded
 noise (h1o.cu's h1o_band_launch: a band-rows pass, then units that hash only their columns), labelled `j10b_ref.LABEL`
 until CA's reference lands. Measured only: nothing here is served or credited.
 
@@ -10,7 +10,7 @@ until CA's reference lands. Measured only: nothing here is served or credited.
                            workspace in its segment loop (groups of 4 chunks, h1o.cu's forms 0 and 3)
           mix-cpeel-bGs    the same with block2's rows staged in its noise buffers (forms 4 and 5); split always stages
           mix-cpeel-bGp    mix-cpeel-bG with the units launched as the pass's programmatic dependents (h1o_band_launch's
-                           mode 3: their seeds, midstates and column blocks overlap the pass, which decode's latency is)
+                           mode 3: their seeds, midstates and column tiles overlap the pass, which decode's latency is)
     gate  per arm and window, as h1ogate.py: a dither_one.Window over NL layers with the served shapes, a step of m rows
           captured per Window.captures (0xA5 first, the band workspace too) and dither_one.check on each, the gate
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts

@@ -74,7 +74,7 @@ def ca_reference(units: list[dict], workers: int = 8) -> dict:
 
 
 def leader(u: int, ncb: int, g: int) -> int:
-    """Unit u's band leader: the first unit of its row block's band of g column tiles."""
+    """Unit u's band leader: the first unit of its row tile's band of g column tiles."""
     ri, cj = divmod(u, ncb)
     return ri * ncb + (cj // g) * g
 
@@ -132,7 +132,7 @@ def reference(a: np.ndarray, b: np.ndarray, salt: bytes, base: int, roots: tuple
 
 
 def row_block(seed_l: bytes, i: int, c: int, k: int) -> list[int]:
-    """Row i's c-th noise block from the leader's seed_j, as 16 big-endian halves (seeds.halves): what the kernels'
+    """Row i's c-th noise chunk from the leader's seed_j, as 16 big-endian halves (seeds.halves): what the kernels'
     band workspace holds at (row i, chunk c)."""
     return SD.halves(SD.noise_block(seed_l, HT.Layout(32, 32, k).row(i) + c))
 

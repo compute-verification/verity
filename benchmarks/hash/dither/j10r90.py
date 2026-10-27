@@ -16,7 +16,7 @@ the base build's, the sampled units' receipts (the unit grid's corners, its midd
 the units write as 0xA5A5A5A5, up to 8) equal to j10r_units.call_receipts' and their seeds to seeds.call_seed and
 receipt_seed; the same call
 by kh_units_multi_j10r_sm on every SM equal on every word; the no-write control (zero units) refused; one bit of the row
-workspace moving exactly row block 0's units, and one bit of unit 0's seed_c moving unit 0 alone (unitsbench.j10r_gate's
+workspace moving exactly row tile 0's units, and one bit of unit 0's seed_c moving unit 0 alone (unitsbench.j10r_gate's
 faults, through the rows and units launches alone; under H1U_JW, whose column pass alone reads the call's seed_c, one
 bit of unit 0's sigma_R moving unit 0 alone and one bit of the call's seed_c moving every unit); the workspace the
 build's own size (j10r_ws.py), no launch writing the sentinel tail past it, and under H1U_JW its last bytes written
@@ -128,7 +128,7 @@ def digest(row) -> bytes:
 # -- on the GPU --------------------------------------------------------------------------------------------------------
 
 class JCall:
-    """One call's J10-R state on one build (unitsbench.MultiJ10R's entry): A [M, K] with every row block live, B, the
+    """One call's J10-R state on one build (unitsbench.MultiJ10R's entry): A [M, K] with every row tile live, B, the
     seed data and each unit's [seed_c, sigma_R]."""
 
     def __init__(self, lib, a: torch.Tensor, b: torch.Tensor, c: dict):
