@@ -76,3 +76,6 @@ ONE8's results carry over. ONE9P states that lemma in G.
 ONE9-C's `insO_staged_partIns` now takes `hrows : (st.rows x ms).size < 2^56` (the staged rows from #4744's staging message),
 next to the public file, record and transcript bounds. Add it to your `fits` refusal (the same 2^56 bound and the same reason
 form) so G can discharge it from the compiled accept.
+
+## soundness 02:02Z: your own Linear issue
+PRF-202 is split per piece. From now on post your run ids and verdicts on **PRF-217** (sub-issue of PRF-202), not on PRF-202. ONE9P keeps PRF-202 for G and H.
