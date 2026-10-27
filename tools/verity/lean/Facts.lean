@@ -820,8 +820,9 @@ def acceptAllOf (env : Environment) (t : Expr) : Array String := Id.run do
 
 /-- A statement's conclusion past its `∀`, `→` and `∃` binders, split at its `∧`s, each conjunct again past its own: for
 each conjunct its head constant (`head`), the definitions declared under `meaning` it applies itself (`defs`, followed no
-further), whether it is a reflexivity (`a = a`, `a ↔ a`, `HEq a a`: `refl`) and whether it is a hypothesis in scope, the
-hypotheses split at `∧` (`assumed`); and whether a hypothesis is `False` (`absurd`). Read as written: nothing is
+further), whether it is a reflexivity (`a = a`, `a ↔ a`, `HEq a a`: `refl`), whether it is a hypothesis in scope, the
+hypotheses split at `∧` (`assumed`), and whether it is a `¬` (`negated`), with the head of what it negates past that
+proposition's own `∀` binders (`inner`); and whether a hypothesis is `False` (`absurd`). Read as written: nothing is
 unfolded. -/
 partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (hyps : Array Expr := #[]) :
     MetaM (Array Json × Bool) :=
@@ -843,8 +844,12 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
       | _, _ => false
     let refl := ((b.isAppOfArity ``Eq 3 || b.isAppOfArity ``Iff 2) && b.appFn!.appArg! == b.appArg!) ||
       (b.isAppOfArity ``HEq 4 && b.getArg! 1 == b.getArg! 3)
+    let negated := b.isAppOfArity ``Not 1
+    let inner ← if negated then forallTelescope b.appArg!.consumeMData fun _ ib => pure ib.consumeMData.getAppFn.constName?
+      else pure none
     return (#[Json.mkObj [("head", toJson (b.getAppFn.constName?.map toString)),
-      ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b))]],
+      ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b)),
+      ("negated", toJson negated), ("inner", toJson (inner.map toString))]],
       hs.any (·.isConstOf ``False))
 
 def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name)

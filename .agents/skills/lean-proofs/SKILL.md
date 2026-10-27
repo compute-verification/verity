@@ -141,7 +141,9 @@ Daniel's Lean rulings in force, each stated as itself; who set each one, when an
   commitment); the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
-  failing either, it says nothing.
+  failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
+  only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
+  premise and the bound fail.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.
@@ -152,5 +154,3 @@ Daniel's Lean rulings in force, each stated as itself; who set each one, when an
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt`.
-- `check.py` holds each guarantee of what an acceptance means, or an exclusion's bound, to two lemmas that build their
-  instance (`witnesses`): `honest` at the deployed verifier, `nontrivial` at accept-all or a circuit beating the bound.
