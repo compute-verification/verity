@@ -3,9 +3,7 @@ import Definitions.Accounting.TS.ProofLayer
 /-!
 # A sampled window's proofs: what (I8) reads of its drawn units (trusted)
 
-`ProofLayer`'s counterpart for 𝒫_samp (note:20261018T0449Z-draft-i8-sampled, restated after
-note:20261018T0728Z-draft-rt-i8, decisions 114 and 119, and after RT-COMPOSE r2's R2-B1,
-note:20261018T1200Z-draft-rt-compose-r2). A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
+`ProofLayer`'s counterpart for 𝒫_samp. A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
 released before the draws, in order (the round's σ, or a window's call sites' coins, each after the values it follows
 are committed), and on `B` the live draw coin, which names `s` units (`DrawnLayer.draw`), with the proofs' coins. Each
 drawn unit is proved alone, with its own noise's generation (decision 105); a unit is one output coordinate, or a

@@ -197,7 +197,7 @@ accepted at every sample, makes `N` oracle queries and reads `N·d` bits of memo
 
 **The reading.** At `RateSketchHonest`'s budgets (`S = 0`, `L = ρ·w`, `q = N`, `F = N·c_tag`), `RateAuditSketch`'s
 floor is `k·m·w − (N − k)·c_tag·w/c_enc` bits. This prover is accepted on every coin and reads `N·d` bits, every bit
-that conservation counts (Daniel, 12 Oct, #1884: one prover, the reads of every tier of its memory). At 4 KiB tiles
+that conservation counts (one prover, the reads of every tier of its memory). At 4 KiB tiles
 (`m = 128`, `w = 256`) and `k_s = 16` rows (`d = 512`) that is 1/64 of the store, at `k_s = 64` (`d = 2048`) 1/16
 (`RateTensorSketchTable`). So no bound of `RateAuditSketch`'s form, at any number of rows and any rank of the signs,
 holds for a prover whose memory may hold any function of the store, which is `RateAudit`'s model: a digest that

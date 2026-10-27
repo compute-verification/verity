@@ -3,8 +3,7 @@ import Definitions.Accounting.TS.Receipt
 /-!
 # One noise seed a call: the call's coin and a tile's own part of it (trusted)
 
-J10 (note:compute-accounting/20261019T0825Z-draft-j10-shared-noise; red team
-note:compute-accounting/20261019T1054Z-finding-j10-redteam): H1 + fx1's noise derived from one seed a call, where
+J10: H1 + fx1's noise derived from one seed a call, where
 `h1tile` derives it once a tile. Banded, a call row block's row streams are shared along a band of at most 64 column
 tiles, its column streams carry the row block, and each tile's fold keys stay its own (σ_R of its position, decision
 121).
@@ -34,7 +33,7 @@ read at `C = CallCoin`, at the values they have today:
   tile's keys.
 
 What changes is the scope of those three claims (one seed a call, rows shared along a band), not their statements.
-Daniel approved that scope on 19 Oct (ASK-66: "Yes, same values; served only after kernels measure the gain").
+That scope is approved, with the same values, and served only once the gain is measured.
 
 **The bits.** `CallCoin` fixes what is shared, not how it is derived. `h1tile.banded_noise`
 (`verity/core/protocols/pouw/circuit/h1tile.py`, #2866) is the bit-exact derivation. Bands are g ≤ 64 column tiles, cut from

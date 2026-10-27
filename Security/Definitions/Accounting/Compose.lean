@@ -6,9 +6,7 @@ import Definitions.Pouw.Window
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
 
-The vocabulary of `Definitions.Accounting.Guarantees.Compose`
-(note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5), restated after RT-COMPOSE r4
-(note:compute-accounting/20261018T1522Z-draft-rt-compose-r4) under decisions 107, 109–114, 117, 119 and 122. The
+The vocabulary of `Definitions.Accounting.Guarantees.Compose`. The
 compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise drawn
 after its operands are committed, one coin a round (decision 122). The service then draws one uniform subset of the
 window's grid-padded tiles, one a proof unit, and proves each drawn tile with the generation of its own noise.
@@ -437,11 +435,11 @@ noncomputable def LuckForm.value : LuckForm → ℕ → ℝ
 operands (decision 109; `0` where the noise proves none, as one-sided noise proves none), whether the kind is credited
 (a word of an uncredited kind counts in no `N_w` and no floor), the span a skip pattern has before the receipt's next
 checkpoint (W6), the form of the operand luck its template proves, and the three lucks the window is held to:
-* `mu`: (H-μ)'s point mass at a folded unit's deficient words (#2482's `OperandHMu`, `¾` in the headlines);
-* `rB`: the receipt's luck when they are not all right (#2482's `ReceiptLuckAt`, HMU's B′, card 8b00536a, `½`);
+* `mu`: (H-μ)'s point mass at a folded unit's deficient words (`OperandHMu`, `¾` in the headlines);
+* `rB`: the receipt's luck when they are not all right (`ReceiptLuckAt`, HMU's B′, `½`);
 * `guess`: a unit skipped whole keeps its honest checked value only by a guess of its fold state
-  (`Assumptions.Compose.GuessLuckAt`, a condition at this value: `½`, B′'s, for the live line under ASK-9, card
-  8b00536a, decided at 20:23Z, where `2^-64` for a 64-bit state was proposed and isn't granted);
+  (`Assumptions.Compose.GuessLuckAt`, a condition at this value: `½`, B′'s, for the live line as ruled,
+  where `2^-64` for a 64-bit state was proposed and isn't granted);
 * `seedRate`: the rate `θ_k`, per committed word of the circuit, at which a seed group of kind `k`'s template gain at
   `κ = 4` has moment at most `1` over its seed (GRIND's `Accounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
   product, times a word's products), and `0` where none is proved, which charges a group its whole weight;
