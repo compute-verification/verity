@@ -1,7 +1,7 @@
 """numpy models of the training step's blocks, each composed of its Definitions' models (`torch_kernels`, `mla_check.bmm_rows`):
 `registry.torch_attention`'s `EagerAttentionTorch_v1` and its backward on one sequence, `registry.torch_loss`'s
-`LogSoftmaxRow_v1` and `LogSoftmaxNllBackwardRow_v1` on rows, `registry.torch_embedding`'s `EmbeddingBackwardTied_v1` and
-`EmbeddingTorch_v1`, and `registry.torch_clip`'s `ClipGradNorm_v1` with its norms and coefficient.
+`LogSoftmaxRow_v1` and `LogSoftmaxNllBackwardRow_v1` on rows, `registry.torch_embedding`'s `EmbeddingBackwardTied_v1` (and
+`_v2`, the same function) and `EmbeddingTorch_v1`, and `registry.torch_clip`'s `ClipGradNorm_v1` with its norms and coefficient.
 Their tests hold each block to its model word for word. `MODELS` are the same models by family, as `program_walk` calls them:
 the statics, then each argument's words with the call's members first (`program_walk.Model`)."""
 from __future__ import annotations
@@ -79,7 +79,8 @@ def row_backward(x, t, mx, ls, g) -> np.ndarray:
 
 
 def tied(t, g, w) -> np.ndarray:
-    """`EmbeddingBackwardTied_v1`: the LM head's dW w (V, H) plus the embedding's gradient over the M ids t from g (M, H)."""
+    """`EmbeddingBackwardTied_v1` and `_v2`: the LM head's dW w (V, H) plus the embedding's gradient over the M ids t from g
+    (M, H)."""
     return TK.bf16_add(w, TK.embedding_dense_backward(t, g, range(w.shape[0])))
 
 
@@ -115,6 +116,7 @@ MODELS: dict[str, Callable[..., Any]] = {
     "LogSoftmaxRow_v1": lambda S, x, t: row(x, t),
     "LogSoftmaxNllBackwardRow_v1": lambda S, x, t, mx, ls, g: row_backward(x, t, mx, ls, g),
     "EmbeddingBackwardTied_v1": _each(lambda S, t, g, w: tied(t, g, w)),
+    "EmbeddingBackwardTied_v2": _each(lambda S, t, g, w: tied(t, g, w)),
     "EmbeddingTorch_v1": _each(lambda S, t, w: embedding(t, w)),
     "ClipGradNorm_v1": _each(lambda S, g, m: clip(g, m, S["SIZES"])),
     "ForeachNorm_v1": lambda S, x: TK.foreach_norm(list(x))[1],
