@@ -141,9 +141,9 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
             "per_step": steps}
 
 
-#: [R19 admit, F-dA-15 correction] the windowed collector (native_collect_v2b, row_pod default `--window-mb 256`) WITHOUT bounded staging
+#: the windowed collector (native_collect_v2b, row_pod default `--window-mb 256`) WITHOUT bounded staging
 #: copies EVERY window of every step to the pinned pool as the learning re-hash source / hit-plan hedge copy, whatever `--retain` says
-#: (R18 #60 datum: `--retain none` still allocated the 112 GiB pool).  The pool is a term of the run under every retention on that path.
+#: (`--retain none` still allocates the whole pool).  The pool is a term of the run under every retention on that path.
 HIDDEN_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
 
 
@@ -213,15 +213,15 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
         over = (f"; WARNING the pool predicted for this path ({predicted >> 20} MiB: {pool_rule}) exceeds the limit {host_cap_bytes >> 20} MiB by "
                 f"{(predicted - host_cap_bytes) >> 20} MiB -- expect an OOM-kill unless the staging path changes"
                 if host_cap_bytes is not None and predicted > host_cap_bytes else f"; pool predicted {predicted >> 20} MiB ({pool_rule})")
-        who = f"retain={retain}" + (" + bounded staging (the bounded HOST BOUND governs, revb M-0254)" if bounded else "")
-        rec.update(admitted=True, why=f"{who}: outside the F-dA-15 refusal domain (--retain host, unbounded), recorded not refused{over}")
+        who = f"retain={retain}" + (" + bounded staging (the bounded HOST BOUND governs)" if bounded else "")
+        rec.update(admitted=True, why=f"{who}: outside the refusal domain (--retain host, unbounded), recorded not refused{over}")
     elif host_cap_bytes is None:
         rec.update(admitted=True, why="no container memory limit visible (memory.max unset): nothing to compare against; the scheduled bound is on the record")
     elif predicted > host_cap_bytes:
-        rec.update(admitted=False, why=(f"F-dA-15: predicted host {predicted >> 20} MiB (pool: raw {raw >> 20} MiB x{levels_factor} for levels = {pool >> 20} MiB; "
+        rec.update(admitted=False, why=(f"predicted host {predicted >> 20} MiB (pool: raw {raw >> 20} MiB x{levels_factor} for levels = {pool >> 20} MiB; "
                                         f"resident beside it {(predicted - pool) >> 20} MiB) exceeds the "
-                                        f"container memory limit {host_cap_bytes >> 20} MiB by {(predicted - host_cap_bytes) >> 20} MiB -- not launched unchanged "
-                                        f"(R17-7.3); the change that admits it is a larger container or a non-host retention, never a smaller check"))
+                                        f"container memory limit {host_cap_bytes >> 20} MiB by {(predicted - host_cap_bytes) >> 20} MiB -- not launched unchanged; "
+                                        f"the change that admits it is a larger container or a non-host retention, never a smaller check"))
     else:
         envp = rec["envelope_predicted_host_bytes"]
         env_note = (f"envelope bound {envp >> 20} MiB was {'over' if envp > host_cap_bytes else 'under'} it" if envp else "no envelope bound on this record")
@@ -255,7 +255,7 @@ def observed_steps(path: str | Path, pair: int = 0, arm: str = "instrumented") -
 
 
 def host_cap() -> tuple[int | None, str | None]:
-    """The host memory bound of this machine and its SOURCE by name: the cgroup limit when one is visible, else [rev S-r17-09 n1] the
+    """The host memory bound of this machine and its SOURCE by name: the cgroup limit when one is visible, else the
     machine's MemTotal (a bare host is still a bound; only an unreadable machine yields None)."""
     for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
         try:
@@ -281,7 +281,7 @@ class Options:
     cap_bytes: int | None = option("--cap-bytes", type=int, default=None,
                                    help="container memory limit (default: this host's cgroup, if any)")
     lag: int = option("--lag", type=int, default=1,
-                      help="post-EOS rows per request (R17-1 declared LAG; default 1 = async scheduling)")
+                      help="post-EOS rows per request (the declared LAG; default 1 = async scheduling)")
     retain: str = option("--retain", default="host", choices=["host", "device", "none", "sample"])
     per_step_blocks: bool = option("--per-step-blocks", default=False, action="store_true",
                                    help="the collector stages per-step blocks (--window-mb 0); default: windowed (row_pod's 256 MiB ring)")

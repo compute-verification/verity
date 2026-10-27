@@ -3,7 +3,7 @@ the evidence store only. It measures nothing: the runs it reads are `benchmarks/
 G2 has no pass/fail number: it is this curve.
 
 Where the numbers come from:
-- Runs labeled campaign=g2 (`research data label RUN campaign g2 --by circuits --ref RUN`). The run's record
+- Runs labeled campaign=g2 (`research data label RUN campaign g2 --by LANE --ref RUN`). The run's record
   (`outputs.run_record`) holds verity-bench result docs (`*bench/result.json`, schema verity-bench/vllm-overhead/v1, from
   served_commit's `run.sh` or `prof.sh`: TP1 engines under vLLM's serving defaults) or tp_decode summaries
   (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's workload of record). A tp_decode arm's value
