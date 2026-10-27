@@ -8,7 +8,7 @@
 #   research run --on vy-dc-l40s --project verity --campaign cmp-13 --source /workspace --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=ada --env TK_ARCH=89 -- bash benchmarks/pouw/tensor_kinds/run.sh
 #   research run --on vy-dc-b200 --project verity --campaign eps1 --cwd source --mem-gb 8 \
-#     --env GPU_LEASE_WHO=rt2-blackwell --env TK_ARCH=100 -- bash benchmarks/pouw/tensor_kinds/run.sh
+#     --env GPU_LEASE_WHO=LANE --env TK_ARCH=100 -- bash benchmarks/pouw/tensor_kinds/run.sh
 #
 # The binaries are built and their SASS dumped outside the lease; the timed GPU work runs under `gpu-lease 1 --wait
 # --max-min 15`, with nvidia-smi sampling the leased GPU's clock and power every 200 ms. Clocks are read, never set.

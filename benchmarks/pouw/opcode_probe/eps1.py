@@ -1,4 +1,4 @@
-"""EPS1's readings of the opcode probes: joint facets, side units, clock.
+"""The epsilon program's readings of the opcode probes: joint facets, side units, clock.
 
   python eps1.py facets OUT/rows.jsonl... [--margin 0.02] [--prior rows.csv] [--emit EPOCH]
       # frontier.cu's MMA + X points (every run given) -> facets (SMSP-cycles a warp instruction, x (1 - margin)), with
@@ -334,7 +334,7 @@ def cmd_uniform(a) -> int:
     return 0
 
 
-#: QSTAR's fastest table kernel (fr16_c32, benchmarks/pouw/qstar) sustains this
+#: qstar's fastest table kernel (fr16_c32, benchmarks/pouw/qstar) sustains this
 QSTAR_TBS = 3.3
 
 

@@ -16,7 +16,7 @@ the family's headline. That bound is the larger of two branches (`Whole.headline
 at the whole-unit luck ½ (`WholeLuckAt`), `1 − (N_w w* + N_w φ*)/B_♭ · (1 − 41/S)`.
 
 The vector classes (`vec`, which A6's `SheetWords` and SCALAR-ROUTE sum over) are model.toml's `cuda` lane classes and
-the 64-bit lane classes it leaves out, ALU64, CVT64, DMUL, IMADW and MOV64 (`VEC_64`, -6): a run that heads
+the 64-bit lane classes it leaves out, ALU64, CVT64, DMUL, IMADW and MOV64 (`VEC_64`): a run that heads
 vector words with IMAD.WIDE meets A6 then. Each of the five costs what IMAD does at both π*, so ε doesn't move.
 
 sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
@@ -24,7 +24,7 @@ sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
 rows sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar
 routes at `q = q_T = 9/8`, ♭'s skippable work at the vector's ε_skip, and π* at q* = 9/8. `measured()` checks it the
 same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of `Real.hasSum_log_one_add_inv` at
-7). The vector is VF3s-16, RT-FACET's refit of VF3r-16's joint issue rows, and not model.toml's `current` (VF3r-16):
+7). The vector is VF3s-16, facet_break's refit of VF3r-16's joint issue rows, and not model.toml's `current` (VF3r-16):
 measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in honest's IMMA16832),
 and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
 """

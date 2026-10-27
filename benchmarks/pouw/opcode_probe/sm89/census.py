@@ -192,7 +192,7 @@ def build(scalar: Path, tk: Path, ji: list[Path] = ()) -> tuple[list[list[str]],
     return rws, cen
 
 
-#: a ji.py lane: the E families its IMMA.16832 programs join, the ones a ji32 program beat (r20261017-102743-9e4d: EFFMA0
+#: a ji.py lane: the E families its IMMA.16832 programs join, the ones a ji32 program beat (EFFMA0
 #: 1.097, EALU2 and EIADD32 1.075; IMAD lanes reach EIMAD2 0.988, so EIMAD keeps scalar.cu's fit). Both ALU families
 #: bound IMMA16832 + ALU.
 JI_FAMILIES = {"fmuli": ("ffma",), "faddi": ("ffma",), "ffmai": ("ffma",), "ffma": ("ffma",), "iadd3": ("iadd3", "lop3"),

@@ -7,7 +7,7 @@
 # SM clock) and `egemm il` (each arm against plain) at the shapes in TSHPS, and ncu's instruction and pipe sections on
 # NCU_ARMS at the first shape. Clocks are read, never set. Run from a checkout at a pushed commit:
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source \
-#     --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/edited_gemm/egemm_fill_probe.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/edited_gemm/egemm_fill_probe.sh
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH

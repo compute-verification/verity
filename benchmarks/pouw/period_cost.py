@@ -2,7 +2,7 @@
 
     uv run benchmarks/pouw/period_cost.py [--json OUT] [--md OUT]
 
-**The bound.** An accepted period of n windows ('s `ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
+**The bound.** An accepted period of n windows (`ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
 sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit ratio r:
 
     x = K_d/(r·M),  Λ = max(a/(M·(−ln(p + (1 − p)e^{−x}))), b/(M·(−ln(p0 + (1 − p0)e^{−x})))),
@@ -14,7 +14,7 @@ A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at th
 earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every drawn tile passes with
 p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
 
-**The served window** (SERVE-H1 on vy-nebius-2): 18 rounds, 16 served steps and 2 empty, 64 rows a
+**The served window** (served_h1 on vy-nebius-2): 18 rounds, 16 served steps and 2 empty, 64 rows a
 step; 2,304 GEMM calls and 1,548,288 units of 32×32 outputs (86,016 a step: qkv 384, o 256, gate_up 1,792 at K = 4,096
 and down 256 at K = 14,336, a layer, 32 layers). 5 sequences fill 119 of its 1,152 row slots (u = 119/1152; 731,136 units
 live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound torch, on a node at load 500 to 615), 1.7 s of
@@ -31,7 +31,7 @@ circuit file and its teardown, and Lean's session check) plus a part a lane. `RA
 
 **Node-days** are memory-packed: a node runs ⌊node GB / process GB⌋ provers (prover and session verifier) or Lean checks
 at once, and a window's node-seconds are its prove seconds over the prove slots plus its Lean seconds over the Lean
-slots. Process-days are the same seconds unpacked (INT-PERIOD's node-days). Windows certify in parallel on N nodes, but
+slots. Process-days are the same seconds unpacked (node-days). Windows certify in parallel on N nodes, but
 one stream serves the period (disjoint periods, one stream each), and a window's draw comes only once it is
 served, so the period takes max(serving, certifying its first n − 1 windows on N nodes) plus its last window's
 certification: its statements in parallel, but no sooner than one statement's prove and check.

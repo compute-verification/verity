@@ -1,4 +1,4 @@
-// EPS1 P10: the vector issue slots a uniform-datapath instruction takes. Each kernel
+// P10: the vector issue slots a uniform-datapath instruction takes. Each kernel
 // is 16 warps (4 a SMSP, one block a SM); its loop runs a fixed stream F and K uniform instructions: eight warp-uniform
 // chains seeded from a parameter and carried around the loop, K/8 steps of each chain pair an iteration.
 //

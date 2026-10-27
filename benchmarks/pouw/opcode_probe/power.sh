@@ -4,7 +4,7 @@
 # and the 600 W cap), sustain them again, and lock the GPU back to the node's clock on exit. From a pushed commit:
 #
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/opcode_probe/power.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/power.sh
 #
 # $OUT gets sustain.jsonl (a line a launch: clock64 over %globaltimer, NVML's clock, power and reasons), smi_trace.csv
 # (nvidia-smi every 100 ms), phases.jsonl and the nvidia-smi -q snapshots. POWER_SECS (25) is each kernel's time;

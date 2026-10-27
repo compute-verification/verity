@@ -1,4 +1,4 @@
-"""FACET-BREAK's generator: a seeded grid of MMA + lane programs, emitted as one opcode probe source over `mix.cuh`.
+"""The facet-break generator: a seeded grid of MMA + lane programs, emitted as one opcode probe source over `mix.cuh`.
 
 A program is a dict (`kind` mix | spec | alone | mma, the MMA `form`, lane ops `l1`/`l2`, `q` lane ops a 8 MMAs, placement
 `p`, `tpb`, and for spec `wm` MMA warps). The grid has two parts:
@@ -478,8 +478,8 @@ def targeted_ji() -> list[dict]:
 
 
 def targeted_jifine() -> list[dict]:
-    """The near-frontier sweep of the ji family's break (r20261017-085714-2f2a: FMUL by an immediate on 4 accumulators at
-    2 warps a SMSP beat JI3q_1..10 and EFFMA1..6; on 8 accumulators it doesn't): the one-read FP lanes and FFMA at 2 to 6
+    """The near-frontier sweep of the ji family's break (FMUL by an immediate on 4 accumulators at 2 warps a SMSP beat
+    JI3q_1..10 and EFFMA1..6; on 8 accumulators it doesn't): the one-read FP lanes and FFMA at 2 to 6
     accumulators, 1 to 4 warps a SMSP, densities from the MMA end (JI3q_11) to the vector end (JI3q_0), each form."""
     out: list[dict] = []
     dense = (32, 48, 64, 80, 96, 112, 128, 144, 160, 192, 224)
@@ -507,7 +507,7 @@ def targeted_jifine() -> list[dict]:
 
 
 def targeted_jipair() -> list[dict]:
-    """Two dispatch pipes beside the HMMA forms (r20261017-092045-f7f6: HMMA.16816.F16 beside FFMA-immediate and
+    """Two dispatch pipes beside the HMMA forms (HMMA.16816.F16 beside FFMA-immediate and
     add/xor-immediate in turn beat JI3q_11): a FMA-pipe lane and AXI at 3, 4 and 8 accumulators, 2 and 4 warps a SMSP,
     48-128 lane ops a 8 MMAs; IMMA.16832 beside FFMA-immediate and AXI at 3 and 4."""
     out: list[dict] = []
@@ -535,7 +535,7 @@ R4_ALU_FP = (("fmuli", "shfi"), ("fmuli", "prmti"), ("fmuli", "shfi", "prmti"))
 
 
 def targeted_r4() -> list[dict]:
-    """FACET-BREAK r4: the 2-3 accumulator break (FMUL by an immediate, 2 warps a SMSP) on every other MMA form, 8-192
+    """The `r4` batch: the 2-3 accumulator break (FMUL by an immediate, 2 warps a SMSP) on every other MMA form, 8-192
     lane ops a 8 MMAs; the three beating programs again, three copies each spread through the batch; and ALU-pipe work
     beside the MMA (the A and issue rows an ALU-bound fold rests on), alone and beside FMUL."""
     qs = (8, 16, 24, 32, 48, 64, 80, 96, 112, 128, 160, 192)
@@ -565,7 +565,7 @@ def targeted_r4() -> list[dict]:
     return out
 
 
-#: RT-FACET r1: the schedule axes the ji, jifine and r4 batches left at a single value on the low-accumulator break (2-3
+#: the `rt` batch: the schedule axes the ji, jifine and r4 batches left at a single value on the low-accumulator break (2-3
 #: accumulators, 2 warps a SMSP, where IMMA.16832 and FMUL by an immediate reach every JI3s row's 0.98): na 5, 1 and 3
 #: warps a SMSP, unroll and placement (ji swept them on 8 accumulators only), and the uniform datapath beside the FMA and
 #: ALU pipes at low na (ji timed it on 8 accumulators only, where it traded 1:1 with the FMA pipe instead of co-issuing)
@@ -576,7 +576,7 @@ RT_PIPE = (("fmuli", "axi"), ("fmuli", "dp4ai"), ("axi", "dp4ai"), ("fmuli", "im
 
 
 def targeted_rt() -> list[dict]:
-    """RT-FACET r1 beside IMMA.16832 (H1+fx1's binding form): the ceiling of the FMA-pipe lanes at 2-6 accumulators and
+    """The `rt` batch beside IMMA.16832 (H1+fx1's binding form): the ceiling of the FMA-pipe lanes at 2-6 accumulators and
     1-4 warps a SMSP around honest's 16-20 lane ops a MMA; unroll 2 and 4 and placements 1-3 on 2-4 accumulators; the
     FMA lane beside the uniform datapath, then FMA, ALU and uniform in turn, at 2-4 accumulators; and two dispatch pipes
     (FMA, ALU, IMAD) at 2-4 accumulators across the binding ratio."""
@@ -616,13 +616,13 @@ def targeted_rt() -> list[dict]:
     return out
 
 
-#: RT-FACET r1b: r1's two gains crossed (r20261017-183924-3b6d: unroll 4 on 3 accumulators took FMUL to JI3s_0 0.9906,
+#: the `rt2` batch: `rt`'s two gains crossed (unroll 4 on 3 accumulators took FMUL to JI3s_0 0.9906,
 #: and FFMA beside the uniform datapath on 2 accumulators took JI3s_13 to 0.9919), with unroll 8 for the instruction cache
 RT2_LANES = ("fmuli", "faddi", ("ffmai", "uaxi"), ("fmuli", "uaxi"), ("faddi", "uaxi"), ("fmuli", "axi", "uaxi"))
 
 
 def targeted_rt2() -> list[dict]:
-    """RT-FACET r1b beside IMMA.16832: the FMA-pipe lanes alone and beside the uniform datapath at unroll 2, 4 and 8 on
+    """The `rt2` batch beside IMMA.16832: the FMA-pipe lanes alone and beside the uniform datapath at unroll 2, 4 and 8 on
     2-4 accumulators, 2 warps a SMSP, from the MMA end of JI3s_13 (64 lane ops a 8 MMAs) to JI3s_0's (160); and the
     lanes after each MMA's group (placement 3) at unroll 4."""
     i = "i16832"
@@ -638,7 +638,7 @@ def targeted_rt2() -> list[dict]:
 
 
 def targeted_rt3() -> list[dict]:
-    """RT-FACET r2 beside IMMA.16832: the FMA lane past r1b's unroll 8 (r20261017-190803-a98f: FMUL at 3 accumulators, 128
+    """The `rt3` batch beside IMMA.16832: the FMA lane past `rt2`'s unroll 8 (FMUL at 3 accumulators, 128
     lane ops a 8 MMAs, loaded JI3s_0 0.9995, its loop 7 uncounted instructions an iteration), at unroll 8 to 32 on 2-4
     accumulators from 112 to 160 lane ops, 2 warps a SMSP; FADD on 3 accumulators; 1, 3 and 4 warps a SMSP and
     placements 1-3 at the best point."""
@@ -660,7 +660,7 @@ def targeted_rt3() -> list[dict]:
 
 
 def targeted_rt4() -> list[dict]:
-    """RT-FACET r2b beside IMMA.16832: r2's break again and around it (r20261017-191843-eb32: FMUL at 3 accumulators, 120
+    """The `rt4` batch beside IMMA.16832: `rt3`'s break again and around it (FMUL at 3 accumulators, 120
     lane ops a 8 MMAs, unroll 16, loaded JI3s_2 1.0127, falling past unroll 16 as the loop outgrows the instruction
     cache): 104-132 lane ops at unroll 10-20 on 3 accumulators, 2 on 2, FADD and FFMA beside, and 1 and 3 warps a SMSP."""
     i = "i16832"
@@ -682,8 +682,8 @@ def targeted_rt4() -> list[dict]:
 
 
 def targeted_rt5() -> list[dict]:
-    """RT-FACET r3: r2's unroll on every other MMA form, whose VF3s-16 hull is still FACET-BREAK r4's unroll-1 programs
-   : FMUL beside each at unroll 8 and 16 on 2 and 3 accumulators, 96-128 lane ops a 8 MMAs, 2
+    """The `rt5` batch: `rt3`'s unroll on every other MMA form, whose VF3s-16 hull is still the `r4` batch's unroll-1
+    programs: FMUL beside each at unroll 8 and 16 on 2 and 3 accumulators, 96-128 lane ops a 8 MMAs, 2
     warps a SMSP, and 4 at the vector end (128 on 2 accumulators)."""
     out: list[dict] = []
     for form in R4_FORMS + ("h16816f16", "h1688t"):
@@ -696,14 +696,14 @@ def targeted_rt5() -> list[dict]:
     return out
 
 
-#: the forms r3 took past VF3s-16 at its grid's edge (128 lane ops, unroll 16), and the rest
+#: the forms `rt5` took past VF3s-16 at its grid's edge (128 lane ops, unroll 16), and the rest
 RT6_BEAT = ("isp16864", "hsp16832", "qsp16864", "isp16832", "i16816", "qsf16832")
 RT6_REST = ("h16816", "h16816f16", "h1684t", "h1688t", "q16832", "osf16864")
 
 
 def targeted_rt6() -> list[dict]:
-    """RT-FACET r3b: r3's vector-end break past its grid's edge, on 2 accumulators beside FMUL: the forms r3 beat at
-    128-192 lane ops a 8 MMAs, unroll 16-24, 2 and 4 warps a SMSP; the rest at 128 and 160, unroll 16 and 20."""
+    """The `rt6` batch: `rt5`'s vector-end break past its grid's edge, on 2 accumulators beside FMUL: the forms `rt5`
+    beat at 128-192 lane ops a 8 MMAs, unroll 16-24, 2 and 4 warps a SMSP; the rest at 128 and 160, unroll 16 and 20."""
     out: list[dict] = []
     for form in RT6_BEAT:
         for q in (128, 144, 160, 192):
@@ -719,9 +719,10 @@ def targeted_rt6() -> list[dict]:
 
 
 def targeted_rt7() -> list[dict]:
-    """RT-FACET r4: the warp-specialized programs with the lane warps' trip widened. FACET-BREAK's ran 16 lane ops a
-    trip, beside the trip's uncounted stop poll, counter and branch; here 64-256 lane ops a trip beside FMUL, on the
-    forms r3 and r3b beat and IMMA.16832, 1-2 MMA warps a SMSP among 2-4, 4 and 8 accumulators, 32 and 64 MMAs a trip."""
+    """The `rt7` batch: the warp-specialized programs with the lane warps' trip widened. The earlier batches' programs ran 16
+    lane ops a trip, beside the trip's uncounted stop poll, counter and branch; here 64-256 lane ops a trip beside FMUL,
+    on the forms `rt5` and `rt6` beat and IMMA.16832, 1-2 MMA warps a SMSP among 2-4, 4 and 8 accumulators, 32 and 64
+    MMAs a trip."""
     out: list[dict] = []
     for form in ("isp16864", "hsp16832", "qsp16864", "i16832"):
         for mw, w in ((1, 2), (1, 3), (2, 4)):
@@ -732,8 +733,8 @@ def targeted_rt7() -> list[dict]:
     return out
 
 
-#: RT-FACET r5's two-form pairs beside FMUL: IMMA.16832 (H1+fx1's form) with each form r3 and r3b beat and two dense
-#: ones, and sparse beside sparse
+#: the `rt8` batch's two-form pairs beside FMUL: IMMA.16832 (H1+fx1's form) with each form `rt5` and `rt6` beat and two
+#: dense ones, and sparse beside sparse
 RT8_LANE_PAIRS = (("i16832", "isp16864"), ("i16832", "hsp16832"), ("i16832", "qsp16864"), ("i16832", "h16816"),
                   ("i16832", "q16832"), ("i16832", "h16816f16"), ("isp16864", "hsp16832"), ("isp16864", "qsp16864"))
 #: and alone (one tensor peak for every form: DS-120's DS_tensor, A3, and the measured M): those, IMMA.16832 with the
@@ -747,11 +748,11 @@ RT8_BEST = ("jm_isp16864_fmuli_q128_p0_a2u20_w8", "jm_i16832_fmuli_q120_p0_a3u20
 
 
 def targeted_rt8() -> list[dict]:
-    """RT-FACET r5: two MMA forms in turn in one loop, never timed before (FACET-BREAK's ji `jx` programs were added after
-    its runs): the lane pairs beside FMUL at r3b's vector-end break (112-144 lane ops a 8 MMAs, 1-3 accumulators a form,
-    unroll 8-20, 2 warps a SMSP, and 4 at 128); every tensor pair alone at 2-8 accumulators, unroll 1 and 4, 2-8 warps a
-    SMSP; the pipe pairs alone and beside IMMA.16832; and interleaved baselines: each form and pipe lane alone, and r3b's
-    two best single-form programs, three copies each through the batch."""
+    """The `rt8` batch: two MMA forms in turn in one loop (the `jx` programs, which no earlier batch ran): the lane
+    pairs beside FMUL at `rt6`'s vector-end break (112-144 lane ops a 8 MMAs, 1-3 accumulators a form, unroll 8-20, 2
+    warps a SMSP, and 4 at 128); every tensor pair alone at 2-8 accumulators, unroll 1 and 4, 2-8 warps a SMSP; the pipe
+    pairs alone and beside IMMA.16832; and interleaved baselines: each form and pipe lane alone, and `rt6`'s two best
+    single-form programs, three copies each through the batch."""
     lanes: list[dict] = []
     for f1, f2 in RT8_LANE_PAIRS:
         for q in (112, 120, 128, 144):
@@ -783,21 +784,21 @@ def targeted_rt8() -> list[dict]:
     return out
 
 
-#: RT3-120's lane classes, which JI3t_0 pools at FMUL's coefficient and no fit run put beside a MMA; `sampled` leaves
-#: them out
+#: the lane classes JI3t_0 pools at FMUL's coefficient and no fit run put beside a MMA; `sampled` leaves them out
 RT9_LANES = ("shfl",)
-#: the load and store kinds RT3-120 puts at the binding schedule: the fit's table loads, and a GEMM's operand staging
+#: the load and store kinds the `rt9` batch puts at the binding schedule: the fit's table loads, and a GEMM's operand
+#: staging
 RT9_LOADS = ("lds32", "lds128", "ldg32", "ldg128", "tld1", "ldsm4", "sts128")
 RT9_BASE = "jm_i16832_fmuli_q120_p0_a3u20_w8"
 
 
 def targeted_rt9() -> list[dict]:
-    """RT3-120 against VF3s-16's JI3t_0 (the measured headline's π*), which prices every vector, memory and atomic class
-    at FMUL's coefficient: what its fit runs never put at the binding schedule (IMMA.16832 on 2-3 accumulators, unroll
-    4-16, 2 warps a SMSP, where FMUL beside it is tight). Each load and store kind at 2-8 a 8 MMAs, alone and under 96-120
-    FMUL; SHFL alone and alternating with FMUL; the 64-bit lanes (IMAD.WIDE, IADD.64) alone and beside FMUL;
-    HMMA.16816.F16 (MMA's least) beside the shared kinds at 2 and 4 warps; and RT-FACET's tight program, three copies
-    through the batch."""
+    """The `rt9` batch, against VF3s-16's JI3t_0 (the measured headline's π*), which prices every vector, memory and
+    atomic class at FMUL's coefficient: what its fit runs never put at the binding schedule (IMMA.16832 on 2-3
+    accumulators, unroll 4-16, 2 warps a SMSP, where FMUL beside it is tight). Each load and store kind at 2-8 a 8 MMAs,
+    alone and under 96-120 FMUL; SHFL alone and alternating with FMUL; the 64-bit lanes (IMAD.WIDE, IADD.64) alone and
+    beside FMUL; HMMA.16816.F16 (MMA's least) beside the shared kinds at 2 and 4 warps; and `rt4`'s tight program, three
+    copies through the batch."""
     i = "i16832"
     rest: list[dict] = []
     for d in RT9_LOADS:
@@ -825,17 +826,17 @@ def targeted_rt9() -> list[dict]:
     return out
 
 
-#: the ALU- and IMAD-pipe lanes JI3t_0 pools at FMUL's coefficient, which r4 and RT-FACET r1 timed beside IMMA.16832 only
-#: at unroll 1: alone, and alternating with FMUL
+#: the ALU- and IMAD-pipe lanes JI3t_0 pools at FMUL's coefficient, which the `r4` and `rt` batches timed beside
+#: IMMA.16832 only at unroll 1: alone, and alternating with FMUL
 RT10_LANES = ("axi", "shfi", "prmti", ("fmuli", "axi"), ("fmuli", "shfi"), ("fmuli", "prmti"), ("fmuli", "imadi"),
               ("fmuli", "dp4ai"))
 
 
 def targeted_rt10() -> list[dict]:
-    """RT3-120 against JI3t_0 again: the ALU-pipe lanes (IADD3/LOP3, SHF and PRMT by an immediate) and IMAD-pipe ones
-    beside FMUL at the binding schedule (IMMA.16832 on 2-3 accumulators, unroll 16 and 20, 2 warps a SMSP, 112-144 lane
-    ops a 8 MMAs), where r4 and RT-FACET r1 never took them past unroll 1; and RT-FACET's tight program, three copies
-    through the batch."""
+    """The `rt10` batch, against JI3t_0 again: the ALU-pipe lanes (IADD3/LOP3, SHF and PRMT by an immediate) and
+    IMAD-pipe ones beside FMUL at the binding schedule (IMMA.16832 on 2-3 accumulators, unroll 16 and 20, 2 warps a
+    SMSP, 112-144 lane ops a 8 MMAs), where the `r4` and `rt` batches never took them past unroll 1; and `rt4`'s tight
+    program, three copies through the batch."""
     rest = [_jm("i16832", ls, q, 2, na=na, u=u) for ls in RT10_LANES for na in (2, 3) for u in (16, 20)
             for q in (112, 128, 144)]
     base = [g for g in targeted_rt4() if name_of(g) == RT9_BASE]
@@ -845,17 +846,17 @@ def targeted_rt10() -> list[dict]:
     return out
 
 
-#: the uniform datapath, which JI3t_0 prices below every vector class (UNI 0.714566 against 0.963546) and RT-FACET r1 and
-#: r1b timed beside IMMA.16832 only up to unroll 8: alternating with each FMA-pipe lane, with FMUL and the ALU lane, and
-#: alone
+#: the uniform datapath, which JI3t_0 prices below every vector class (UNI 0.714566 against 0.963546) and the `rt` and
+#: `rt2` batches timed beside IMMA.16832 only up to unroll 8: alternating with each FMA-pipe lane, with FMUL and the ALU
+#: lane, and alone
 RT11_PAIRS = (("fmuli", "uaxi"), ("faddi", "uaxi"), ("ffmai", "uaxi"))
 
 
 def targeted_rt11() -> list[dict]:
-    """RT3-120 against JI3t_0 a third time: the uniform datapath (UIADD3/ULOP3) at the binding schedule (IMMA.16832 on 2-3
-    accumulators, unroll 12-20, 2 warps a SMSP), where RT-FACET r1 and r1b never took it past unroll 8: alternating with
-    FMUL, FADD and FFMA at 96-176 lane ops a 8 MMAs, with FMUL and the ALU lane at 120 and 144, and alone at 32-96; and
-    RT-FACET's tight program, three copies through the batch."""
+    """The `rt11` batch, against JI3t_0 a third time: the uniform datapath (UIADD3/ULOP3) at the binding schedule
+    (IMMA.16832 on 2-3 accumulators, unroll 12-20, 2 warps a SMSP), where the `rt` and `rt2` batches never took it past
+    unroll 8: alternating with FMUL, FADD and FFMA at 96-176 lane ops a 8 MMAs, with FMUL and the ALU lane at 120 and
+    144, and alone at 32-96; and `rt4`'s tight program, three copies through the batch."""
     i = "i16832"
     rest: list[dict] = []
     for na in (2, 3):

@@ -30,7 +30,7 @@
 
 constexpr uint32_t U_TAG = 6;
 constexpr int F_TAG = 1;   // pm1, B's side
-// B's noise word from F's pm1 word: F, or with -DLP_DITHER decision 29's dither b = (1 - F) / 2 in {0, 1} from the same coin
+// B's noise word from F's pm1 word: F, or with -DLP_DITHER the dither b = (1 - F) / 2 in {0, 1} from the same coin
 // bits (B' = B + b, the served X = floor(x / s) + b)
 #ifdef LP_DITHER
 DEV uint32_t fb_word(uint32_t w) { return (w >> 1) & 0x01010101u; }

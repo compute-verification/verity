@@ -1,4 +1,4 @@
-// Round-2 scheduling probe (compute-accounting).
+// Round-2 scheduling probe.
 //
 // Round 1 interleaved a tensor MMA with a lane op inside ONE warp, which
 // serialises issue: at 8 ops a MMA the IMMA kept only 0.756 of its alone MAC rate. RS-MODEL §9 fitted joint capacity

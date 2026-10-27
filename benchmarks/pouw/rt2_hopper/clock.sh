@@ -6,7 +6,7 @@
 #       builds sm90_clock.cu and msp90.cu for sm_90a, writes their SASS and sass_count.py's counts and gate.
 #       Outputs: nvcc.txt, sm90_clock.sass, sass.json, gate.txt, msp90.sass, msp90-sass.json, bins.tgz.
 #   research run --on vy-dc-h200 --project verity --campaign eps1 --source <tree> --cwd source --send bins.tgz \
-#     --timeout 25m --env GPU_LEASE_WHO=rt2-hopper -- bash benchmarks/pouw/rt2_hopper/clock.sh time
+#     --timeout 25m --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/rt2_hopper/clock.sh time
 #       under one gpu-lease: li's fold bit for bit against the host's reference (exact.jsonl), msp90's mma.sp
 #       timings for (M′) (msp90.jsonl), then each load's SM clock
 #       read in the kernel and its MACs a clock (clock.jsonl), with NVML sampled every 100 ms (smi.csv) and its clock,

@@ -1,4 +1,4 @@
-// Round-6 joint-row probe (compute-accounting).
+// Round-6 joint-row probe.
 //
 // RS-W' r3 (VF3d) has τ = 0.1208 set by the two-word credits of IADD.64
 // and DADD/DFMA, each priced at ONE dispatch slot on the issue row + JI3. A joint row MMA·a_M + op·a_X <= cycles can

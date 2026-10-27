@@ -6,7 +6,7 @@
 #       SASS (probe.py gate), and runs uni64.sh into $OUT/uni64/.
 #       Outputs: nvcc.txt, build.log, sass/, gate-build.{txt,json}, uni64/ (uni64.sass, uniform.txt), bins.tgz.
 #   research run --on vy-dc-h200 --project verity --campaign eps1 --source <tree> --cwd source --send bins.tgz \
-#     --custody-ttl 12h --timeout 30m --env GPU_LEASE_WHO=rt-hopper -- bash benchmarks/pouw/rt_hopper/rs.sh time [REPS]
+#     --custody-ttl 12h --timeout 30m --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/rt_hopper/rs.sh time [REPS]
 #       unpacks the build's bins.tgz (from $RESEARCH_RUN_DIR/inputs/), times every probe under one gpu-lease (clocks
 #       sampled every 200 ms) into probes/ (rows.jsonl, gate.json, times.jsonl), then rs.py into rs.json.
 #       Outputs: env/ (device.csv, clocks-{before,after}.txt, smi.csv), probes/, rs.json.
