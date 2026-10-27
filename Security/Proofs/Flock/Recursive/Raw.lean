@@ -230,7 +230,7 @@ theorem setup_zero_c {I : Inputs} (ht : I.tags.typed = false) (hh : I.tags.hidde
     obtain ⟨d, hd⟩ := hj 0 h0
     refine ⟨h0, ?_⟩
     have h1 : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok sts[0].c :=
-      (ZkHidden.parseH_identity ht' _ _ _).symm.trans (Hidden.setupHidden_spec' hd).parseF (HmOut.parse_isTmpl hc)
+      (ZkHidden.parseH_identity ht' _ _ _).symm.trans ((Hidden.setupHidden_spec' hd).parseF (HmOut.parse_isTmpl hc))
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
 

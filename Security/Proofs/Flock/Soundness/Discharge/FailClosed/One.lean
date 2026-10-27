@@ -2239,7 +2239,7 @@ theorem setupZH_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (h
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
     (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
     Nonempty (DrawSetupZKH I mPts S (dj S)) :=
-  ZkHidden.drawSetupZKH_of_acceptsI ZkHidden.zk_schedOK h.2.typed (h.2.parseH hh) hh hn h.1 hd hok
+  ZkHidden.drawSetupZKH_of_acceptsISt ZkHidden.zk_schedOK h.2.typed (h.2.parseH hh) hh hn h.1 hd hok
 
 /-- **`SoundZHJ`'s setup exists at every accepted draw, at every number of tables** (`setupZJ_of_verifiesZK` under
 hidden outputs). -/
@@ -2257,12 +2257,10 @@ theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {
   have hz' : Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
-  have hcJ : HmOut.parse (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).tables = .ok (circZ I) :=
-    (parseH_tagsAt ((zkTags_typed I).trans h.2.typed) _ _ _ _).trans (h.2.parseH hh)
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[0].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := drawSetupH_of_setupHiddenI (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
-    (mPts := mPts) ht' hcJ hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
+  obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenU (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
+    (mPts := mPts) ht' hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
   obtain ⟨y, -, -, -⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape 0 hj)
     (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
