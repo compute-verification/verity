@@ -26,6 +26,8 @@ import Definitions.Nci.Guarantees.CoverFanOut
 import Definitions.Nci.Guarantees.CoverTraining
 import Definitions.Nci.Guarantees.CoverChained
 import Definitions.Nci.Guarantees.Ldl
+import Definitions.Nci.Guarantees.PartitionCovers
+import Definitions.Nci.Guarantees.CompliesCK
 import Definitions.Nci.Guarantees.Hardness
 import Definitions.Nci.Ldl.Instances
 import Definitions.Nci.Guarantees.Ldl.Witnesses
