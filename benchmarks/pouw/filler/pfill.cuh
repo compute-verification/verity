@@ -589,7 +589,8 @@ template <int NC, int KD>
 static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps, int W) {
   constexpr int KH = KD == PF_E2M1 ? 2 : 1, NP = pf_planes<KD>();
   constexpr uint64_t dom = pf_dom(KD);
-  const int TN = 128 * W;  uint64_t st[8];
+  const int TN = 128 * W;
+  uint64_t st[8];
   const std::vector<uint64_t> Bb = pf_bcols<KD>(c0, c1, tile, TN);
   pf_block_h(dom, c0, c1, tile, PF_KEY, st);
   const PfKeys key = pf_keys(st);
@@ -649,7 +650,8 @@ static inline uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc
 // pfill-bU's uniformity gate (note:20261016T0710Z-draft-filler-floor-r2 §5.8): the s8 bytes of U over `tiles` tiles' B
 // blocks and of A over fragments 0 .. frags - 1 of each, from the round's coins, on the host generators dfill_ref reads,
 // so dgate's receipts hold the GPU's operands to them. hu, ha: 256 counts each, by the byte's u8 value.
-static void pf_bu_hist(uint64_t c0, uint64_t c1, int tiles, int frags, uint64_t* hu, uint64_t* ha) {  uint64_t st[8];
+static void pf_bu_hist(uint64_t c0, uint64_t c1, int tiles, int frags, uint64_t* hu, uint64_t* ha) {
+  uint64_t st[8];
   memset(hu, 0, 256 * sizeof *hu);
   memset(ha, 0, 256 * sizeof *ha);
   for (int tile = 0; tile < tiles; tile++) {
