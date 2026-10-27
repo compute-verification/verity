@@ -98,7 +98,7 @@ def cheat (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b
 
 end Strategies
 
-instance : NeZero (2 ^ 19 : ℕ) := ⟨(Nat.two_pow_pos 19).ne'⟩
+instance instNeZeroNatHPowOfNat_properties : NeZero (2 ^ 19 : ℕ) := ⟨(Nat.two_pow_pos 19).ne'⟩
 
 /-- One segment's device: no on-chip state, a store of `2^19` labels, `2^28` bits, and no side channel. -/
 def segmentDevice : Accounting.Device Unit := ⟨0, 2 ^ 19 * 512, fun _ => 0, 0, fun _ => 0⟩
