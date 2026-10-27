@@ -152,6 +152,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   local h1=()
   [ -n "${H1_GATE:-}" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
                                --challenger-peer "${H1_PEER:-vy-dc-h200}" --max-num-batched-tokens "${H1_T:-512}")
+  if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
+    mkdir -p "$OUT/pieces/wipe"
+    (cd "$TREE" && bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") > "$OUT/pieces/wipe/piece.log" 2>&1
+    say "WIPE (exit $?): $(tail -1 "$OUT/pieces/wipe/piece.log" | cut -c1-600)"
+  fi
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \
