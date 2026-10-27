@@ -1,4 +1,3 @@
-import Definitions.Accounting.Remote.Draw
 import Definitions.Accounting.TS.Drawn
 
 /-!
