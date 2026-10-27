@@ -317,7 +317,8 @@ theorem topsAtL_fit {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit
     ht2 (htop 0 (by omega)) (htop 1 (by omega)) (hall 0) (hall 1)
     (by rw [sameTop_comm]; exact hd _ _ (htop 0 (by omega)) (htop 1 (by omega)))
   rw [congrArg _root_.VStar.In.Tops.first (Except.ok.inj (hT.symm.trans h))]
-  simp [arrGetD_of_lt _ he]
+  have he' : e < (rs[k]?.getD default).2.1.size := by simpa using he
+  simp [arrGetD_of_lt _ he, Array.getElem?_eq_getElem he']
 
 /-! ## `IrShaped` at the deployed prover -/
 

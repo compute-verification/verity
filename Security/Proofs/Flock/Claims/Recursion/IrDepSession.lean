@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.IrDep
+import Proofs.Flock.Claims.Recursion.HonestHalfFixture
 
 /-!
 # `IrDep` at a deployed inner session: the difftest's Lean side
@@ -27,19 +28,21 @@ Prints one `IRDEP ` line of JSON on stdout and its progress on stderr:
 or on a node's warm slot tree, `VERITY_IRDEP_ARGS='TREE K' python3 tools/verity/lean/lean_changed.py --try FILE`, whose
 `lake env lean FILE` runs the `#eval` below. `TREE` is the run's tree (`stage/`: `circuit.txt`, `pub-K.bin`,
 `partition.json`, `program.json`; `inner/s0/session/`: `session.json` and `circuit.rep<r>.bin`; `v/acc-salts.bin`).
+It imports `HonestHalfFixture`, the fixture whose `IrDep x` this run witnesses, so that one `--try` elaborates both.
 -/
 
 namespace IrDepSession
 
-open Lean Flock
+open Flock
+open Lean (Json)
 open RecDeploy.VStarBuild
 open FlockDeploy (Coin tabsOf pointsOf)
 
-def fail {α : Type} (msg : String) : IO α := throw (IO.userError msg)
+def die {α : Type} (msg : String) : IO α := throw (IO.userError msg)
 
 def ofE {α : Type} (what : String) : Except String α → IO α
   | .ok a => pure a
-  | .error e => fail s!"{what}: {e}"
+  | .error e => die s!"{what}: {e}"
 
 def say (msg : String) : IO Unit := do
   IO.eprintln s!"irdep: {msg}"
@@ -70,7 +73,7 @@ def repProof (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
     IO (Proof × F128) := do
   let t := spec.tables[0]!
   let name := s!"{t}/rep{r}"
-  let some stream := sess.streams.find? (·.name == name) | fail s!"no stream {name}"
+  let some stream := sess.streams.find? (·.name == name) | die s!"no stream {name}"
   let extras ← ofE "extras" (st.extra sess.points)
   let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
   let shape : Flock.Shape :=
@@ -85,32 +88,32 @@ def repProof (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
   pure (p, T)
 
 def rowsJson (rounds : List (List (Array ℕ))) : Json :=
-  Json.arr (rounds.toArray.map fun rs => Json.arr (rs.toArray.map fun w => Json.arr (w.map fun n => toJson n)))
+  Json.arr (rounds.toArray.map fun rs => Json.arr (rs.toArray.map fun w => Json.arr (w.map fun n => Lean.toJson n)))
 
-def run (dir : String) (k : ℕ) : IO UInt32 := do
+def runTree (dir : String) (k : ℕ) : IO UInt32 := do
   let (raw, record) ← readTree dir k
   say s!"read the tree: circuit {raw.circuit.size} bytes"
-  let some v := setupB false raw.encode | fail "the inner statement does not set up (setupOf false)"
+  let some v := setupB false raw.encode | die "the inner statement does not set up (setupOf false)"
   let (spec, sts) := (v.2.1, v.2.2)
   say s!"set up: {sts.size} table(s) {spec.tables}"
-  if sts.size != 1 then fail s!"{sts.size} tables: the dense inner statement has one"
-  let sess ← ofE "record" (Record.decode spec record)
+  if sts.size != 1 then die s!"{sts.size} tables: the dense inner statement has one"
+  let sess ← ofE "record" (Flock.Record.decode spec record)
   let st := (tabsOf sts)[0]!
-  let some sch := fast100 st.m | fail s!"m = {st.m}: no fast100 schedule"
+  let some sch := fast100 st.m | die s!"m = {st.m}: no fast100 schedule"
   let mut ps : Array (Proof × F128) := #[]
   for r in [0:2] do
     ps := ps.push (← repProof spec st sch sess r
       (← IO.FS.readBinFile s!"{dir}/inner/s0/session/{spec.tables[0]!}.rep{r}.bin"))
   say s!"decoded both reps' proofs, T {ps.map (·.2.toHex)}"
   let c₁ : Coin := fun i => (sess.points.getD (i.val / spec.mPts) #[]).getD (i.val % spec.mPts) 0
-  if pointsOf spec c₁ != sess.points then fail "the link coin's points are not the record's"
+  if pointsOf spec c₁ != sess.points then die "the link coin's points are not the record's"
   let stream := fun (r : ℕ) =>
     ((sess.streams.find? (·.name == s!"{spec.tables[0]!}/rep{r}")).map (·.rounds)).getD #[]
   let repCoins : List Coin := (List.range 2).flatMap fun r =>
     (stream r).toList.map fun rd => (fun i => rd.coins.getD i.val 0 : Coin)
   for r in [0:2] do
     if RecDeploy.Rows.canonRounds spec sts repCoins r != (stream r).map (·.coins) then
-      fail s!"rep {r}: canonRounds is not the record's coins"
+      die s!"rep {r}: canonRounds is not the record's coins"
   let cs := c₁ :: repCoins
   let acc ← IO.FS.readBinFile s!"{dir}/v/acc-salts.bin"
   let n := MerkleScheme.hm96Sha512.saltBytes
@@ -128,12 +131,12 @@ def run (dir : String) (k : ℕ) : IO UInt32 := do
   let src := depRestV v τ cs
   say s!"rest: {src.openings.size} openings, {src.accSalts.size} running-sum salts"
   let out := Json.mkObj [
-    ("m", toJson st.m), ("k_log", toJson st.kLog), ("levels", toJson sch.levels.size),
-    ("rep_lens", Json.arr ((FlockDeploy.repLens spec sts).toArray.map fun n => toJson n)),
+    ("m", Lean.toJson st.m), ("k_log", Lean.toJson st.kLog), ("levels", Lean.toJson sch.levels.size),
+    ("rep_lens", Json.arr ((FlockDeploy.repLens spec sts).toArray.map fun n => Lean.toJson n)),
     ("T", jarr (fun p => jf p.2) ps),
     ("rows", rowsJson rounds), ("planted_rows", rowsJson plantedRounds),
-    ("openings", jarr (fun o => Json.mkObj [("rep", toJson o.rep), ("level", toJson o.level), ("j", toJson o.j),
-      ("pos", toJson o.pos), ("row", jarr jf o.row), ("sibs", jarr jb o.sibs)]) src.openings),
+    ("openings", jarr (fun o => Json.mkObj [("rep", Lean.toJson o.rep), ("level", Lean.toJson o.level), ("j", Lean.toJson o.j),
+      ("pos", Lean.toJson o.pos), ("row", jarr jf o.row), ("sibs", jarr jb o.sibs)]) src.openings),
     ("acc_salts", jarr jb src.accSalts),
     ("kappa", jarr (jarr (jarr (jarr jf))) src.kappa),
     ("eq_a", jarr (jarr (jarr jf)) src.eqA),
@@ -145,13 +148,14 @@ def run (dir : String) (k : ℕ) : IO UInt32 := do
 def main (args : List String) : IO UInt32 := do
   match args with
   | [dir, k] =>
-    let some k := k.toNat? | IO.eprintln s!"K: not a number: {k}"; pure 2
-    run dir k
-  | _ => IO.eprintln "usage: IrDepSession.lean TREE K"; pure 2
+    match k.toNat? with
+    | some k => runTree dir k
+    | none => IO.eprintln s!"K: not a number: {k}" *> pure 2
+  | _ => IO.eprintln "usage: IrDepSession.lean TREE K" *> pure 2
 
 end IrDepSession
 
 #eval show IO Unit from do
-  if let some a ← IO.getEnv "VERITY_IRDEP_ARGS" then
+  if let some a := (← IO.getEnv "VERITY_IRDEP_ARGS") then
     let rc ← IrDepSession.main ((a.splitOn " ").filter (· ≠ ""))
     if rc != 0 then throw (IO.userError s!"IrDepSession: exit {rc}")
