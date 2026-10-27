@@ -2061,6 +2061,10 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Verity.Wipe.OfRun.Preserves": {
+   "owner": "@lean",
+   "digest": "45c5ad1164100f090cc482a072e452e87b010ff9b680568679d026d17389be3a"
   }
  },
  "meaning": [
@@ -14218,9 +14222,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
   "Definitions.Accounting.Guarantees.JointLive": {
-   "digest": "583eda47a4737e7390d53288f5fd3a2ababf532c33bce6dd6aef6cb6c8f2da1f",
+   "digest": "7e9093fc4255d8b0f059dde0fab0a9a09c8df14269e3e4072fe9d0caf27b15df",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocksLive": "7aba628bcf7327fef7b6157db5a7ee77f485831b31c1b1d5207b00fdcf4bf14e",
+    "Accounting.Guarantees.JointHorizonBlocksLive": "1d921827d4895f3018e9f92b67a09c48cbec34a4498a01d6cd8607108178303d",
     "Accounting.Guarantees.JointHorizonLive": "b91981326061077c0d1c58dc725d4b7bcd16bd9996fcc06f8cc02f2d9caf20f0",
     "Accounting.Guarantees.JointPeriodLive": "349e9f2514c163a4b839875e871bc5887c67c4925ed473dd8d37a2ef7bbc293a",
     "Accounting.Guarantees.JointPeriodLiveECR": "df843142414904d054f986bb9bc6441ffd1f20d2d7f851c18800eba66f153a2b",
@@ -18575,7 +18579,7 @@
    ]
   },
   "Definitions.Core.Blocks": {
-   "digest": "f324f9fe5a6727b1a6ae24a5995f78d90bd4688bd02df29effb9d2b98f6ac7ed",
+   "digest": "69f002782ff74804c6c3e22d6b0b6edae9910c30843f3d7e24330817aecb1c30",
    "definitions": {
     "Verity.Block": "ac647c1b42deae35468cb0531bc2925fe228eb55c6a306078eaf695ede59f223",
     "Verity.Block.gates": "69e3f9952544c184ee133a01985437ca45d8beb2c9ced5ee4cda402f0cc3e544",
@@ -18588,6 +18592,14 @@
     "Verity.Blocks.since": "0f5dc1f0e458820235d86229818f1e1b5ed18d0b956777173b0c882cb74a75bf",
     "Verity.Device.State": "e8389d84bac78baa6d5ad2ea9a9e4666273452967a5aca4b40a11231b4ef2a52",
     "Verity.Wipe": "cb9fe1d306caeda4371e7748356746baa950d3d298fcecea07855c145b674168",
+    "Verity.Wipe.OfRun": "0329033188b44ad722cf035e5ddeb2ba6b96a4249bda4d8ac0bfcbe4a50385b1",
+    "Verity.Wipe.OfRun.Kept": "6c33f78861c6009ef90fed6f5ddb80163f5f50bf82925ee4cc6c2ef56063157f",
+    "Verity.Wipe.OfRun.Preserves": "45c5ad1164100f090cc482a072e452e87b010ff9b680568679d026d17389be3a",
+    "Verity.Wipe.OfRun.S_φ": "639d252a4985507eda5bd4db6bc81cf7cae2ec84c2d22a027939631906b8f505",
+    "Verity.Wipe.OfRun.accepts": "6f771ac0c2268af43331e1aec48b917f0a5a2612845143fa6d2d5667bca9947c",
+    "Verity.Wipe.OfRun.hold": "ddad2881a737a58a6cf4a3da4e83ba4aa3ed69499d3a08da338956ee0483dfb1",
+    "Verity.Wipe.OfRun.keep": "c0088120a9b89a5eb24703d75014eea9078ad0e536a1a9d833efa6d77ae3fc4f",
+    "Verity.Wipe.OfRun.view": "a46b7734283f0d3f253addcf8797eed1db018f03c52aff93fbc05b279e49bc19",
     "Verity.Wipe.SurvivorBound": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9",
     "Verity.Wipe.accepts": "74d2f856513d0d753a9ae10e6589d7661a626348c5da50492f34e095892f592d",
     "Verity.Wipe.egress": "ea0eedb7acd6f3fc2018bdeaec78608e8a7941a78d0095390dab2a5b79cac11d",
