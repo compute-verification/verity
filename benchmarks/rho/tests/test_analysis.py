@@ -183,17 +183,22 @@ def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_o
 
     monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
     monkeypatch.setenv("OUT", str(tmp_path))
-    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200"])
+    # nothing credited (residual 1) keeps remote below the comparator whatever the other inputs are
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200",
+                                      "--set", "regime.remote.residual=1"])
     run.main()
     text = capsys.readouterr().out
     summary, rest = text.split("## Attacks", 1)
-    assert "| reference-remote-h200 | **2.35 (vacuous)** | draft, contested | partial-sum | 2.5 | not modeled |" in summary
-    assert "5.87" not in summary and "[2.35" not in text
-    assert "| reference-remote-h200 | measured-full | full | draft | 5.87 |" in rest.split("\n## ", 1)[0]
-    assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
+    attacks = rest.split("\n## ", 1)[0]
+    row = next(line for line in summary.splitlines() if line.startswith("| reference-remote-h200 |"))
+    assert "(vacuous)** |" in row and "| 2.5 | not modeled |" in row and "[" not in row
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
+    attack = record["attack"]
+    assert f"| reference-remote-h200 | {attack['argument']} | {attack['family']} | {attack['status']} | " in attacks
+    assert run.fmt(attack["rho"]) not in row.split("|")[2]
+    assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
     assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
-    assert record["overhead"] == pytest.approx(2.35, rel=5e-3) and record["attack"]["rho"] == pytest.approx(5.87, rel=5e-3)
+    assert record["overhead"] < record["unmonitored"] <= attack["rho"]
     assert record["inference_overhead"]["value"] is None and record["inference_overhead"]["source"].startswith(
         "not modeled")
     assert "hi" not in record and "lo" not in record

@@ -5,7 +5,7 @@ import pytest
 from rho import analysis, classes, lean
 from rho.attacks import ATTACKS
 from rho.classes import CLASSES
-from rho.envelopes import KINDS, PARTS
+from rho.envelopes import KINDS, PARTS, ROUTES
 from rho.params import Registry
 from rho.scenario import build, evaluate, evaluate_named, reads
 
@@ -60,9 +60,9 @@ def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound(
 
 def test_s_times_and_gates_per_flop_come_from_one_source():
     """The bound holds a gate at `u/w = ω_max 2G / (κ s_×)` of the reference's weight, so the FLOP model's `G` beside
-    a Boolean design's measured `s_×` (#4826: 681 gates a bf16 product) moves onsite H200's lower bound, which the dark
-    leaves set, by `681 w`, about 18%, with nothing to say so. Building refuses the mix; with both from that design it
-    builds, and the lower bound moves by that much."""
+    a Boolean design's measured `s_×` (#4826: 681 gates a bf16 product) scales every weight counted at `u` (the dark
+    leaves, most of onsite H200's lower bound) by `681 w`, about 0.82, with nothing to say so. Building refuses the mix;
+    with both from that design it builds, and the lower bound moves by that much on the share counted at `u`."""
     design = "boolean:AmpereBF16TcDot16_v3"
     name = "reference-onsite-h200"
     mixed = REG.override({"structure.reference.s_times": 681, "structure.reference.basis": design})
@@ -73,7 +73,9 @@ def test_s_times_and_gates_per_flop_come_from_one_source():
     base, one = evaluate_named(REG, name), evaluate_named(mixed.override({"units.basis": design}), name)
     w = classes.weight_per_gate(base.families[0].profile, base.scenario.context.units)
     assert base.scenario.structure.basis == base.scenario.context.units.basis == "flop-model"
-    assert one.lo / base.lo == pytest.approx(681 * w, rel=5e-3) and 0.80 < one.lo / base.lo < 0.83
+    at_u = sum(t.share for t in analysis.attribution(base) if t.name == "dark" or t.name.split(".")[0] in ROUTES)
+    assert 0.5 < at_u <= 1
+    assert one.lo / base.lo == pytest.approx(1 / (at_u / (681 * w) + 1 - at_u), rel=5e-3)
     assert build(REG.override({"units.basis": design}), "reference-onsite-h200-elementary").structure.s_times == 1
 
 
