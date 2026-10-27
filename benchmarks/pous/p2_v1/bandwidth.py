@@ -536,12 +536,17 @@ class Prover:
         self.passes: dict[tuple[int, int], tuple[np.ndarray, bytes, ReceiptTree]] = {}
         self.steps: list[dict] = []
         self.opened: list[dict] = []
+        self.received: dict[int, coins.Released] = {}
 
-    def hold(self, registration: dict, commitment: coins.LiveCommitment) -> None:
+    def hold(self, registration: dict) -> None:
         if p2_party.registration_of(registration) != self.registration:
             raise ValueError("the verifier's registration is not this store's")
         self.engine.serve(p2_party.plan_of(registration, self.registration))
-        self.commitment = commitment
+
+    def end(self, commitment: coins.LiveCommitment, openings: list[coins.LiveOpening]) -> None:
+        why = coins.received_reason(commitment, [self.received[t] for t in sorted(self.received)], openings)
+        if why is not None:
+            raise ValueError(f"the session's coins are not the ones this prover was sent: {why}")
 
     def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray) -> int:
         """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store and their y to hashlib: the
@@ -562,7 +567,9 @@ class Prover:
             raise RuntimeError(f"{bad} of {len(positions)} spot units' σ or y are not the reference's")
         return len(positions)
 
-    def run(self, challenge: coins.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+    def run(self, challenge: coins.Released, t: int, i: int, previous: bytes) -> bytes:
+        if challenge.label != coins.CHALLENGE or self.received.setdefault(challenge.index, challenge) != challenge:
+            raise ValueError(f"not window {challenge.index}'s one challenge")
         seed = receipts.seed(coins.coin(challenge), i, previous)
         plan = self.engine.plan
         t0 = time.perf_counter()
