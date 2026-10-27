@@ -784,6 +784,30 @@ def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
     assert n == {"SiluMul_v2{I=64}": 40} and rows["SiluMul_v2{I=64}"] == 9 and max(rows.values()) == 14
 
 
+def _widest_row(circuit) -> dict[str, int]:
+    """Each template's widest row in or out under the circuit's cuts, in bytes, as C-Flock's `UnitStager` frames them (bit
+    rows of exactly their words, `interface.unit_rows`)."""
+    out = {}
+    for fn, _ in circuit.templates:
+        ins, _outs = IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn)))
+        out[_label(fn)] = max([b // 8 for _p, _s, b, _ps in ins] + [2 * w for _o, w in IF.layout(fn).outs])
+    return out
+
+
+def test_the_units_whose_rows_are_all_within_one_sha512_block_are_named(window):
+    """C-Flock's composer refuses a proof block none of whose rows is over 111 bytes: no row then has a compression before its
+    last SHA-512 block, and the block's SHA range holds no slot (besides a block of more than 256 rows, above, or past 2^27
+    bits, which its lowering counts). At TINY 14 templates have no wider row: its heads' of 16 values (RoPE, the key blocks,
+    the head end), the token select's chunk and combine at 64 logits a chunk, and the I/O shell's words (the feed, the mask,
+    the collectors, the entry); every other template has one."""
+    circuit, _ = window
+    short = {lab: b for lab, b in _widest_row(circuit).items() if b <= 111}
+    assert short == {"RoPEHead_v1{D=16}": 32, **{f"AttnBlockFirst_v1{{D=16,NVIS={t},BN=128}}": 64 for t in range(1, 6)},
+                     "AttnHeadEnd_v1{D=16}": 64, "TokenSelectChunk_v2{C=64}": 32, COMBINE: 4,
+                     MASK: 4, "OutCollect_v1{KO=2,FIRST=true}": 16, "OutCollect_v1{KO=2,FIRST=false}": 16, FEED: 20,
+                     "SlotEntry_v1{KO=2,IDB=17,NP=4}": 16}
+
+
 def test_a_token_select_is_its_function_at_the_grains_chunk():
     """At 128 logits a chunk, each of the circuit's ten token selects is two `TokenSelectChunk_v2{C=128}` units, each reading
     8 LM-head slices' rows as they are (its ``x`` cut 8), and a `TokenSelectCombine_v2{V=256, C=128}` reading the two: the
