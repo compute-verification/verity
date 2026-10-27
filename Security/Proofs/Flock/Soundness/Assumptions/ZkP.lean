@@ -18,8 +18,8 @@ open FlockSoundness
 `RecordCustodyZKJ`): the record `verify --zk --session-tables J --public-inputs` reads is the one the challenger wrote
 for the live session (`RecordsLiveZKJA` at that command's acceptance and setup: its draw, proofs and link points, and
 each table's root and rounds, are the live outcome's), and its draw file the one `flock-verify draw` printed for the
-verifier's own draw under the subset law (`DrawFileZK` at `subset kd` over the `n` units). Provisional, under
-ASK-160. -/
+verifier's own draw under the subset sampling design (`DrawFileZK` at `subset kd` over the `n` proof blocks).
+Provisional. -/
 def RecordCustodyZKJP {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)
     (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
