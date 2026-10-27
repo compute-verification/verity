@@ -2,10 +2,11 @@
 int8 (serve-openai's verity_int8) is the same class circuit with each decoder linear its quantizer unit and s8 GEMM slices,
 pinned on `test_window_circuit`'s TINY class and windows, at 512 weight words a slice.
 
-The window isn't held yet: the norm after the attention and the one after the MLP are one `RMSNormFusedCuda_v2` template,
-whose ``x`` o_proj's 4 slices write as 4 rows and down_proj's 8 as 8, and a port is cut once for every writer. The window
-refuses it by name, and the units and registered reads are pinned on its unwired lowering, the one its weights registration
-commits (`window_circuit.lower`, ``wired=False``).
+The norm after the attention and the one after the MLP are one `RMSNormFusedCuda_v2` template, whose ``x`` o_proj's 4 slices
+write as 4 rows and down_proj's 8 as 8, and a port is cut once for every writer. So the window holds the first as that
+template, ``x`` cut 4 ways, and cuts the second at its residual add: one `RMSNormFusedCudaAdd_v1` part, ``x`` cut 8 ways,
+and its tail. The units and registered reads are pinned on its unwired lowering, the one its weights registration commits
+(`window_circuit.lower`, ``wired=False``).
 """
 from __future__ import annotations
 
@@ -50,12 +51,14 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     512 words of codes, 32 of scales); the LM head stays bf16 `Gemm_v2`. q/k/v's and gate/up's quantizer is one
     `Int8RowQuant_v1{K}` unit reading the norm's row; o_proj's reads the attention's heads, at another row count, so it is
     that template's body, `Int8RowScale_v1{K}` and `Int8StaticQuant_v1{K}`.
-    The window is refused by name for the norm both o_proj and down_proj write (module docstring); its unwired lowering
-    registers the weights and the scan state."""
+    The window holds the norm both o_proj and down_proj write, cut at its residual add after down_proj (module docstring);
+    its unwired lowering registers the weights and the scan state."""
     reg = _registered()
-    with pytest.raises(Unexpressible, match=re.escape(
-            f"1 templates the window can't hold, each port cut once a writer row: {NORM} x read as [4, 8] rows")):
-        window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    window = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
+    add = "RMSNormFusedCudaAdd_v1{N=64,C=64,AT=0}"
+    assert {t: k for fn, k in window.templates if (t := _label(fn)).startswith("RMSNormFused")} == {
+        "RMSNormFusedCuda_v2{N=64}": 20, add: 20, "RMSNormFusedCudaTail_v1{N=64}": 20}
+    assert {t: c for t, c in window.cuts.items() if t.startswith("RMSNormFused")} == {NORM: {"x": 4}, add: {"x": 8}}
     circuit = _unwired(reg)
     n = {_label(fn): k for fn, k in circuit.templates}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
@@ -63,7 +66,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
         "Int8RowQuant_v1{K=64}": 40, "Int8RowScale_v1{K=64}": 20, "Int8StaticQuant_v1{K=64}": 20,
         "Int8RowQuant_v1{K=128}": 20, "ScaledMmS8_v1{K=64,N=16}": 560, "ScaledMmS8_v1{K=128,N=8}": 160,
         "Gemm_v2{K=64,N=8}": 320, "Gemm_v2{K=64,N=1}": 10}
-    assert (sum(circuit.units.values()), circuit.wires, circuit.cuts) == (1580, (), {})
+    assert (sum(circuit.units.values()), circuit.wires, circuit.cuts) == (1600, (), {})
     mm = ids["ScaledMmS8_v1{K=64,N=16}"]
     reads = {(r.param, r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
     layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
@@ -73,7 +76,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 25
     assert {p.split("/", 1)[0] for p in params} == {WC.WEIGHTS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit)) == {
-        "units": 1580, "inputs": 10548320, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1386464}
+        "units": 1600, "inputs": 10568800, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1406944}
 
 
 @pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
@@ -96,8 +99,8 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     assert set(pins) == set(_unwired(reg).registered.params) - {ROPE, SCAN_STATE}
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     held_ = IF.input_count(doc, pins=both, roots=both)
-    assert held_ == {"units": 1580, "inputs": 10548320, "wired": 0, "registered": 9161856 - rope, "ingress": 0,
-                     "free": 1386464 + rope}
+    assert held_ == {"units": 1600, "inputs": 10568800, "wired": 0, "registered": 9161856 - rope, "ingress": 0,
+                     "free": 1406944 + rope}
     served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
     refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}
     with pytest.raises(ValueError, match=re.escape(f"no weight registered: {refused} ")):
