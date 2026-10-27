@@ -80,6 +80,11 @@ negatives.
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
   `out/verdicts.txt`.
+- `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--piece DIR`
+  holds one subprotocol's `case.json` (its `serve` line, with `blobs` the paths of the files it reads) and its own Lean
+  answer on it, `answer.json`, whose `commitment` is its digest; onsite's `--registration DIR` is NCI's. It writes the
+  product's params, commitment and evidence in the composition's formats (`verity/core/protocols/composition/README.md`)
+  and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
