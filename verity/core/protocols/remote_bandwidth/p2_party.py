@@ -81,11 +81,11 @@ def send(f: BinaryIO, doc: Mapping[str, Any]) -> None:
 
 def message(line: bytes, key: str | None = None) -> Any:
     """The message `line` carries (its one key `key`'s value, if given; `P2Session.messageOf`): ConnectionError for a
-    line its sender didn't end, ValueError for one that isn't a JSON object of one key (`key`)."""
+    line its sender didn't end, ValueError for one that isn't UTF-8 JSON, an object of one key (`key`)."""
     if not line.endswith(b"\n"):
         raise ConnectionError("the peer closed mid-session")
     try:
-        doc = json.loads(line)
+        doc = json.loads(line.decode())
     except RecursionError:
         raise ValueError("a message nests too deep") from None
     if not isinstance(doc, dict) or len(doc) != 1:
@@ -449,19 +449,24 @@ class Twin:
         return answer(self.books.s, why, self.books.plan) | {"disagreement": d}
 
 
+def held_json(r: p2.Registration, plan: Plan) -> dict[str, Any]:
+    """What the Lean answers on holding the store (`P2Session.Held.json`): its digest, units and plan."""
+    return {"digest": r.digest.hex(), "plan": [list(run) for run in plan.runs], "plan_units": plan.length,
+            "units": r.blocks}
+
+
 def hold(lean: Lean, data: bytes, chunk: int = CHUNK) -> tuple[p2.Registration, Plan]:
     """The registration file's bytes `data`, held by both verifiers: the Python's registration and plan
     (`registration_of`, `plan_of`), refused (ValueError) unless the Lean holds the same store, every `chunk` draws
     checked on a thread (`P2Session.heldOf`)."""
-    doc = json.loads(data)
+    doc = json.loads(data.decode())
     reg = registration_of(doc)
     plan = plan_of(doc, reg)
     try:
         got = lean.call({"op": "p2_hold", "bytes": len(data), "chunk": chunk}, data)
     except LeanError as e:
         raise ValueError(f"the Lean verifier refuses the registration: {e}") from None
-    mine = {"digest": reg.digest.hex(), "plan": [list(r) for r in plan.runs], "plan_units": plan.length,
-            "units": reg.blocks}
+    mine = held_json(reg, plan)
     if got != mine:
         raise ValueError(f"{DISAGREEMENT}: the Lean verifier holds {got}, the Python {mine}")
     return reg, plan
@@ -615,29 +620,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         log(f"answer {out['verdict']} {out.get('failure') or ''} q_bytes={out.get('q_bytes')} "
             f"host={socket.gethostname()}")
 
-    with Lean(p2_lean.exe(a.lean_exe)) as lean:
+    exe = p2_lean.exe(a.lean_exe)
+    with Lean(exe) as lean:
         reg, plan = hold(lean, data)
-        log(f"registration {reg.digest.hex()[:16]} ({reg.blocks} units, {plan.length} a pass) on "
-            f"{socket.gethostname()}, of record in {p2_lean.EXE}")
-        if a.stdio:
-            done(session(sys.stdin.buffer, sys.stdout.buffer, reg, coins=secrets.token_bytes(64), lean=lean, plan=plan,
-                         log=log))
-            return 0
-        host, _, port = a.listen.rpartition(":")
-        with socket.create_server((host, int(port))) as srv:
-            print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
-            for _ in range(a.sessions):
-                conn, _ = srv.accept()
-                with conn, conn.makefile("rb") as r, conn.makefile("wb") as w:
-                    out = session(r, w, reg, coins=secrets.token_bytes(64), lean=lean, plan=plan, log=log)
-                done(out)
-                print(json.dumps({"answer": out}, sort_keys=True), flush=True)
+    log(f"registration {reg.digest.hex()[:16]} ({reg.blocks} units, {plan.length} a pass) on "
+        f"{socket.gethostname()}, of record in {p2_lean.EXE}")
+
+    def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:
+        """One session on a Lean process of its own, so that one the prover crashes ends only its session."""
+        with Lean(exe) as lean:
+            hold(lean, data)
+            return session(r, w, reg, coins=secrets.token_bytes(64), lean=lean, plan=plan, log=log)
+
+    if a.stdio:
+        done(served(sys.stdin.buffer, sys.stdout.buffer))
+        return 0
+    host, _, port = a.listen.rpartition(":")
+    with socket.create_server((host, int(port))) as srv:
+        print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+        for _ in range(a.sessions):
+            conn, _ = srv.accept()
+            with conn, conn.makefile("rb") as r, conn.makefile("wb") as w:
+                out = served(r, w)
+            done(out)
+            print(json.dumps({"answer": out}, sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["Books", "PROTOCOL", "Prover", "Twin", "answer", "hold", "main", "message", "opening_json", "opening_of",
-           "params_of", "plan_of", "prove", "registration_json", "registration_of", "request_of", "session",
-           "verdict_json"]
+__all__ = ["Books", "PROTOCOL", "Prover", "Twin", "answer", "held_json", "hold", "main", "message", "opening_json",
+           "opening_of", "params_of", "plan_of", "prove", "registration_json", "registration_of", "request_of",
+           "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())
