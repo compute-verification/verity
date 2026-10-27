@@ -15,13 +15,17 @@ what that record shows, for every input: the coins the challenger device drew, o
   accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a session of the device released after `after`, a session the device's
-  own ledger opens on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
+  own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 
 **The device** (`Device`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs sessions
-(`Session`): it draws each coin and its salt by position and publishes the frame-v3 root over their live leaves
+(`Session`): it draws each coin and its salt by position, commits to the frame-v3 root over their live leaves
 (`Session.commitment`), writes its release log (its head the commitment, then each root it received and the coin it
-released after it), and signs its record before any coin opens and its close over the log once the session ends. It
+released after it), and signs its record before any coin opens and its close over the log once the session ends. A
+session its ledger opens withheld (`OpensOn`, `remote.open_session(..., withhold=True)`) releases, while it runs, each
+coin's raw bytes and nothing else, and its commitment, salts and paths only once its close is signed, after the prover's
+commitments are in: nothing the prover sees before a coin depends on a coin not yet released, so no hiding premise on
+the root enters soundness (Daniel, 26 Oct). It
 also signs the auditor's ledger, line by line. `Signed` is all it signs under a key. One role per key: a key also used
 for another role is outside the model, and a `forgery` witness is then an EUF-CMA break only under that one-role
 reading.
@@ -29,7 +33,8 @@ reading.
 **The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a draw reads the concatenation
 of the coins it was released (`take`, in `SampledProofs.Draw.drawUnits`), with no hash between: no SHA-512-expanded
 stream is read as uniform. In the causal game each coin is one release of `8 * COIN_BYTES` bits (`bitsOf`), after the
-bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`).
+bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
+session's releases are those bits alone.
 
 **The break** (`Break`) is one adversary form's (Daniel, 26 Oct): it is no event of the run but what one fixed finder
 outputs. `findBreak` is a computable function of the run (the record the evidence carries and the device's log), the
@@ -126,10 +131,10 @@ def signedBy (dev : Device) (pk : ByteArray) : List ByteArray :=
 def Signed (dev : Device) (pk m : ByteArray) : Prop := m ∈ signedBy dev pk
 
 /-- The device's own ledger under `pk` opens window `w` (its open root) for the session `id`, under the ledger's v2
-schema. -/
+schema, as a withheld session (`withheld: true`). -/
 def OpensOn (dev : Device) (pk : ByteArray) (w id : String) : Prop :=
   ∃ line ∈ dev.ledger pk, ∃ e, ledgerEntry? line = some e ∧ e.kind = "open" ∧ e.schema = LEDGER_SCHEMA ∧
-    e.session = id ∧ getD (getD e.body "window") "root" = .str w
+    e.session = id ∧ getD (getD e.body "window") "root" = .str w ∧ getD e.body "withheld" = .bool true
 
 /-! ## What the reader checks and hashes -/
 

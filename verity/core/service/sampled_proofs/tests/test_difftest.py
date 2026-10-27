@@ -3539,9 +3539,10 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
     coins through `Challenger.drawCoins` (`coins.draw_coins`): under the verifier's key, on its window, of its family,
     released after the registration's digest, Lean's the Python's. The draw from those coins is accepted; it is rejected
     for another draw, the evidence's coins carrying a key (`coins_reason`'s form, where the prover named the key), none,
-    coins under another key, on another window, of another family, opened after another digest, or each mutation of the
-    segment, and refused for a challenger without a window. A verifier that names no challenger decides as before, and
-    rejects evidence that carries coins."""
+    coins under another key, on another window, of another family, opened after another digest, each mutation of the
+    segment, or a session the ledger doesn't open withheld (one whose challenger may have released its root before the
+    prover's commitment), and refused for a challenger without a window. A verifier that names no challenger decides as
+    before, and rejects evidence that carries coins."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
     mine = DR.derive(s.program, s.query, law, None)
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -3604,6 +3605,11 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
                     audit_of(d, draw, coins, challenger=None)]
         rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}) for name in DRAW_MUTATIONS
                      if name not in ("unread", "read-tampered", "other-after")]
+        bare = Drawn(rng, before=True, after=after, reads=reads, withheld=False)
+        bare_coins = {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"}
+        rejected.append(audit_of(bare, drawn_from(bare.read), bare_coins))
+        with pytest.raises(CoinError, match="withhold"):
+            draw_coins(bare.s.key, bare.ledger.window["root"], "draw", after, bare_coins, lms_verify)
         assert [verdict(a) for a in rejected] == ["reject"] * len(rejected)
         refused = audit_of(d, draw, coins, window_root=None)
         assert answer(_json(_case(refused)))["reason"].startswith("params:") and verdict(refused) == "reject"

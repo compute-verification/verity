@@ -24,8 +24,8 @@ from typing import Any
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import (COIN_BYTES, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
-                         live_reason, record_many, trusted_session_of)
+from .challenger import (COIN_BYTES, WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
+                         live_reason, record_many, trusted_session_of, withheld_on)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -159,7 +159,11 @@ class ChallengerCoins:
     index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`,
     and `coins_reason`, which the Lean verifier of record's run checks). It
     refuses a commitment whose coins are opened already, a read before any commitment, and every read after a coin
-    fails: a retry never redraws."""
+    fails: a retry never redraws.
+
+    On a withheld session (`remote.RemoteChallenger.withheld`) a read uses each coin's raw bytes as the challenger gave
+    them, and the segments hold those until the session closes; `settle` then puts in each coin's full opening, checked
+    against the commitment the challenger released at its close."""
 
     def __init__(self, record: LiveRecord) -> None:
         self.record = record
@@ -201,12 +205,32 @@ class ChallengerCoins:
             batch = min(m, MAX_BATCH)
             for o in record_many([(self.record, s.after)] * batch):
                 i = s.start + len(s.openings)
-                why = live_reason(commitment, o, s.label, i, s.after)
+                if commitment is None:
+                    why = None if (o.label, o.index, o.after, len(o.coin)) == (s.label, i, s.after, COIN_BYTES) else \
+                        "coin is not the one asked for, opened after what the verifier recorded"
+                else:
+                    why = live_reason(commitment, o, s.label, i, s.after)
                 if why is not None:
                     raise CoinError(f"the challenger's {s.label} coin {i}: {why}")
                 s.openings.append(o)
                 self._stream += o.coin
             m -= batch
+
+    def settle(self) -> None:
+        """Once a withheld session has closed (`remote.RemoteChallenger.close`): each segment's coins as the full openings
+        the challenger released at its close, each checked against its commitment as the coin read. Nothing to do on a
+        session that released them as it ran."""
+        ch = self.record.challenger
+        if not getattr(ch, "withheld", False):
+            return
+        if ch.commitment is None:
+            raise CoinError("a withheld session's coins are settled once it has closed")
+        for s in self.segments:
+            full = [ch.opened.get((o.label, o.index)) for o in s.openings]
+            for i, (o, f) in enumerate(zip(s.openings, full)):
+                if f is None or f.coin != o.coin or live_reason(ch.commitment, f, s.label, s.start + i, s.after) is not None:
+                    raise CoinError(f"the challenger's {s.label} coin {s.start + i} is not the one it released at its close")
+            s.openings[:] = full
 
 
 class Segment:
@@ -304,12 +328,15 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
     Unlike `coins_reason`'s evidence, this carries no key: the key, the window and the family are the verifier's, so a
-    prover can't sign a ledger of its own. One-stage's check reads its draw's coins through it (`OneStage.coinsOf`).
+    prover can't sign a ledger of its own. The session must be a withheld one (`withheld_on`): its challenger released
+    no root, salt or path before it closed. One-stage's check reads its draw's coins through it (`OneStage.coinsOf`).
     Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
         raise CoinError(DRAW_FORM)
     commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
                                            coins["session"], verify)
+    if not withheld_on(coins["ledger"], window):
+        raise CoinError(WITHHELD)
     segment = coins["segment"]
     if not (isinstance(segment, Mapping) and segment.get("label") == label):
         raise CoinError(f"the draw's coins are not the challenger's {label} family's")
