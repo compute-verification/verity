@@ -23,7 +23,7 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity_vllm.config import RowConfig, option
+from verity_vllm.config import RowConfig, option, workload_arg, workload_file
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
 from verity.ml.definitions.boolean import write_word
@@ -176,7 +176,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     wl = sampling.get("workload")
     if wl:
         try:
-            w = json.load(open(wl))
+            w = json.loads(workload_file(wl).read_text())
             reqs = list(w.get("requests") or [])
         except Exception as e:  # noqa: BLE001
             return refuse(f"cannot read the workload manifest {wl!r} for the sampler batch: {e!r}", reason="sampler_geometry")
@@ -716,7 +716,7 @@ class Options:
                                 help="TargetProfile: JSON overrides of the default (e.g. '{\"compute_capability\": [9, 0]}') or a path to a JSON profile")
     sampling: str | None = option("--sampling", default=None,
                                   help="[X-05] the row's sampling policy: greedy | stoch-t<T>-p<P>[-k<K>] | JSON (must agree with --workload if both)")
-    workload: str | None = option("--workload", default=None,
+    workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="[X-05] the row's workload manifest; its sampling policy becomes the structural input `sampling`")
     tp: int = option("--tp", type=int, default=1,
                      help="[R13 tp] tensor-parallel world size (structural input); the Program describes ONE rank")

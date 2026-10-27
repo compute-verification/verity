@@ -241,6 +241,9 @@ f-pad-768 fill 256 384 3072 256 768 1024 pad none
 f-llm-4096 fill 256 256 8192 512 4096 1024 llm none
 f-uniform-1280 fill 256 512 2560 256 1280 1024 uniform none
 f-lp512 fill 256 256 4096 512 1024 2048 llm none
+f-lp1024 fill 256 256 8192 1024 4096 1024 llm none
+c-skip-lp1024 fill 256 256 4096 1024 4096 1024 pad skip:1
+f-lp2048 fill 256 256 6144 2048 8192 1024 llm none
 f-row8k fill 128 256 8192 256 2048 8192 pad none
 f-big fill 512 1024 8192 512 4096 1024 llm none
 c-skip fill 256 256 4096 256 1024 1024 pad skip:5
@@ -252,6 +255,7 @@ s-k served 256 256 4096 512 4096 16384 llm none
 s-s4 served 256 256 4096 128 1024 16384 llm none
 s-partial served 256 384 3072 128 896 8192 llm none
 s-lp256 served 256 256 4096 256 2048 16384 llm none
+s-lp1024 served 256 256 8192 1024 4096 16384 llm none
 s-row1k served 256 512 2048 128 1024 1024 llm none
 s-big served 512 1024 8192 512 4096 16384 llm none
 s-uniform served 256 256 2048 256 2048 16384 uniform rootless
@@ -344,13 +348,16 @@ def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int
     return rep
 
 
+#: gate_pipeline's two Provers: ((M, N, K, LP, L, ROW), served)
+PIPELINE = [((256, 384, 4096, 512, 4096, 1024), False), ((384, 256, 2048, 128, 1024, 1024), True)]
+
+
 def gate_pipeline(lib: Lib, q: int, rng: np.random.Generator) -> dict:
     """A filler's Prover and a served Prover of different shapes in one process, their calls interleaved back to back (four
     each, each commit beside the next call's compute, the weight coins every call): every call's root against the
     reference (the c-th call salted from c leaves), a stale call's refusal, and a verdict on each Prover's last call."""
-    shapes = [((256, 384, 4096, 256, 4096, 1024), False), ((384, 256, 2048, 128, 1024, 1024), True)]
     out: dict = {"name": "pipeline", "calls": [], "verdicts": []}
-    ps = [Prover(*s, served=o, lib=lib) for s, o in shapes]
+    ps = [Prover(*s, served=o, lib=lib) for s, o in PIPELINE]
     try:
         ops = []
         for p in ps:

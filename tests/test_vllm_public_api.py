@@ -48,6 +48,8 @@ PUBLIC = {
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values (VLLM-125)",
+    "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
+                                          "its digest",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -143,7 +145,6 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.device",
     "verity_vllm.protocols.pouw.h1",
     "verity_vllm.protocols.pouw.h1.challenger",
-    "verity_vllm.protocols.pouw.h1.commit",
     "verity_vllm.protocols.pouw.h1.handoff",
     "verity_vllm.protocols.pouw.h1.kept",
     "verity_vllm.protocols.pouw.h1.prover",

@@ -8,7 +8,7 @@ and hashes.
     [service]   law                                  the proof service's selection law (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
     [params."<id>"]                                  a listed component's public structural parameters
-    [[party]]   name, machine, principal             machine: `local`, or a name `verity run --machine` gives
+    [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
     [[channel]] from, to, messages, after            after: the messages sent before this channel's
 
 A file states only its choices: a component's parameters and the workload's default to what the component or the

@@ -5,7 +5,7 @@
     verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
-    verity run CONFIG [--party ROLE ...] [--machine NAME] [--periods N] [--state DIR]
+    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
     verity config new|check|hash    write, check or hash a deployment configuration (run.py)
     verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its

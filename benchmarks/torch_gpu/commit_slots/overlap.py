@@ -54,6 +54,7 @@ from typing import Any
 
 import numpy as np
 import torch
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 E2E = HERE.parents[2] / "examples" / "h200"
@@ -599,9 +600,9 @@ def main(argv: list[str] | None = None) -> int:
     from e2e_h200 import served_weights as SW
     dev = torch.device("cuda")
     shape = SHAPES[a.shape]
-    smi = Smi(os.environ.get("GPU_LEASE_UUID") or "0")
+    smi = Smi(SHARED.GPU_LEASE_UUID or "0")
     props = torch.cuda.get_device_properties(dev)
-    doc: dict[str, Any] = {"env": {"name": props.name, "uuid": os.environ.get("GPU_LEASE_UUID"), "sms": props.multi_processor_count,
+    doc: dict[str, Any] = {"env": {"name": props.name, "uuid": SHARED.GPU_LEASE_UUID, "sms": props.multi_processor_count,
                                    "hbm_gb": round(props.total_memory / 1e9, 2), "torch": torch.__version__,
                                    "cuda": torch.version.cuda, "smi_fields": list(smi.fields), "limits": smi.limits()},
                            "shape": shape.name, "batch": a.batch, "micro_batch": a.micro_batch, "layouts": {}, "runs": []}

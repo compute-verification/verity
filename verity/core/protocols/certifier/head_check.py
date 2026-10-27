@@ -62,6 +62,7 @@ from typing import Callable, Sequence
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import and_reduce
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -112,28 +113,6 @@ def grid_bytes(params: GridParams, parameters: bytes) -> bytes:
 
 
 # --- the circuit: traced parts ----------------------------------------------------------------------------------------
-
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
-          version: int = 1) -> CompositeDefinition:
-    """A Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.traced = traced  # type: ignore[attr-defined]
-    # C-Flock lowers an activation by it, not gate by gate, and passes the statics only to a Definition that has some
-    # (`ir_lower._boolean_activation`)
-    d.build = build if statics else (lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
-    return d
-
 
 def _same(x, want) -> object:
     """1 iff bit x is `want`: a bit of the circuit, or the constant 0 or 1."""

@@ -1,15 +1,17 @@
 """`verity run` and `verity config`: a deployment configuration's parties, run on this machine, and the file itself
 (`verity.core.deploy.config`; `note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to 00:30Z).
 
-    verity run CONFIG [--party ROLE ...] [--machine NAME] [--periods N] [--state DIR]
-    verity config new --workload W --protocols P,... [--machine NAME] [--out FILE]
+    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
+    verity config new --workload W --protocols P,... [--on MACHINE] [--out FILE]
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, then runs the parties it places on this machine (``--machine``, default
+`verity run` checks the configuration, then runs the parties it places on this machine (``--on``, default
 ``local``), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state ``--state`` (default
-a new directory under the system's temporary one). Step 0's parties are those of the static table `REGISTRY` names
-(`verity_all_protocols.deployment`). A party that is an entry there, a function of the configuration, the state and
+a new directory under the system's temporary one). Step 0's parties are those of the static table `REGISTRY` names.
+It names none since the toy it ran was removed, so `verity run` and `verity config` are refused by name (``no-table``)
+until a workload's protocols bring their table; `verity_cli`'s tests run one (`tools/verity/cli/tests/step0.py`). A
+party that is an entry there, a function of the configuration, the state and
 whether every party is on one machine, runs first, each in a process of its own, one after another in the table's
 order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. Then the table's live parties here
 (sampled proofs', the core parties) run together in one live run of the deployment layer (the table's ``live``): in
@@ -57,8 +59,8 @@ from verity.core.wire import Refused
 from . import settings
 
 ROOT = Path(__file__).resolve().parents[4]
-#: step 0's static table: the directory on its import path, and its module
-REGISTRY = (ROOT / "benchmarks" / "all_protocols", "verity_all_protocols.deployment")
+#: step 0's static table: the directory on its import path, and its module (module docstring)
+REGISTRY: tuple[Path, str] | None = None
 #: what isn't an entry's message in the state: the build, the logs, the transcripts, the run and the tools it names
 UNSENT = ("build", "logs", "transcripts", "run.json", "tools.json", "record/transcripts", "record/verdicts.jsonl")
 PUBLIC = ("record/", "public/")
@@ -115,9 +117,13 @@ def _required_first(names: Sequence[str], components: Mapping[str, K.Component])
     return out
 
 
-def registry() -> Registry:
-    """Step 0's table (`REGISTRY`)."""
-    path, module = REGISTRY
+def registry(table: tuple[Path, str] | None = None) -> Registry:
+    """Step 0's table: ``table``, else `REGISTRY`; refused by name (``no-table``) when there is neither."""
+    table = table or REGISTRY
+    if table is None:
+        raise K.Refused("no-table", "step 0 has no table: the toy it ran was removed, and no workload's protocols "
+                                    "have brought theirs yet")
+    path, module = table
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
     D = importlib.import_module(module)
@@ -143,7 +149,7 @@ def plan(cfg: Mapping[str, Any], reg: Registry, machine: str, wanted: Sequence[s
     if unknown := [p for p in wanted if p not in at]:
         raise K.Refused("unknown-party", f"{', '.join(unknown)} (the configuration's: {', '.join(at)})")
     if elsewhere := [p for p in wanted if at[p] != machine]:
-        raise K.Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--machine)" for p in elsewhere))
+        raise K.Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--on)" for p in elsewhere))
     chosen = list(dict.fromkeys(wanted)) or [p for p, m in at.items() if m == machine]
     if not chosen:
         raise K.Refused("machine", f"the configuration places no party on {machine} (its machines: "
@@ -342,16 +348,16 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
                                  "machine (module docstring of verity_cli.run).")
     ap.add_argument("config", metavar="CONFIG")
     ap.add_argument("--party", action="append", default=[], metavar="ROLE", help="only this party (repeatable)")
-    ap.add_argument("--machine", default=K.LOCAL, metavar="NAME", help="this machine's name in the configuration "
+    ap.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help="this machine's name in the configuration "
                     f"(default {K.LOCAL})")
     ap.add_argument("--periods", type=int, default=1, metavar="N", help="the run's periods (default 1)")
     ap.add_argument("--state", metavar="DIR", help="the parties' shared state (default a new temporary directory)")
     a = ap.parse_args(argv)
     if a.periods < 1:
         ap.error(f"--periods is at least 1, not {a.periods}")
-    reg = reg or registry()
     state = Path(a.state or tempfile.mkdtemp(prefix="verity-run-")).resolve()
     try:
+        reg = reg or registry()
         cfg = load(Path(a.config), reg)
         chosen = plan(cfg, reg, a.machine, a.party)
         begin(cfg, state, a.periods, a.machine, hooks_of(cfg, reg))
@@ -384,14 +390,14 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
     p = sub.add_parser("new", help="a configuration that states only its choices")
     p.add_argument("--workload", required=True)
     p.add_argument("--protocols", required=True, help="the components, comma-separated")
-    p.add_argument("--machine", default=K.LOCAL, help=f"every party's machine (default {K.LOCAL})")
+    p.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help=f"every party's machine (default {K.LOCAL})")
     p.add_argument("--commit", help="the program's commit (default the running tree's HEAD)")
     p.add_argument("--out", help="write it here (default stdout)")
     for name in ("check", "hash"):
         sub.add_parser(name).add_argument("config", metavar="CONFIG")
     a = ap.parse_args(argv)
-    reg = reg or registry()
     try:
+        reg = reg or registry()
         if a.cmd == "new":
             protocols = [x for x in a.protocols.split(",") if x]
             cfg = K.new(a.workload, protocols, reg.components, reg.workloads, a.commit or head() or "", a.machine)

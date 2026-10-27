@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_file
 
 SCHEMA = "verity-sweep/hot-commit/v1"
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
@@ -166,7 +166,7 @@ def engine_identity(argv: list[str]) -> dict[str, Any]:
     wl_path = _argval(argv, "--workload", "workloads/workload_cov_b0_b1_c256.json")
     wl: dict[str, Any] = {}
     with contextlib.suppress(Exception):
-        wl = json.loads(Path(wl_path).read_text())
+        wl = json.loads(workload_file(wl_path).read_text())
     ck = _argval(argv, "--checkpoints", "manifests/checkpoints.json")
     return {"workload": {k: wl.get(k) for k in WORKLOAD_ENGINE_KEYS if k in wl}, "workload_path": wl_path,
             "checkpoints_sha256": sha256_file(ck) if os.path.exists(ck) else f"missing:{ck}",

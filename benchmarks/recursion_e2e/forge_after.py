@@ -75,7 +75,8 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     pos = reg["positions"]
     rows, salts = table_rows(inst, text, port, len(pos))
     wb, schema = int(port_.get("word_bits", 16)), port_.get("row_schema", RG.SCHEMA)
-    bc = lambda row, salt: RG._INST.commit_string(RG._INST.default_key, RG.row_digest(row, wb, schema), salt)
+    def bc(row, salt):
+        return RG._INST.commit_string(RG._INST.default_key, RG.row_digest(row, wb, schema), salt)
     honest = bc(rows[0], salts[0])
     at = pub.find(honest, pnl)
     if at < 0 or pub.find(honest, at + 1) >= 0:
@@ -106,7 +107,8 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     (out / "stmt" / "pub.bin").write_bytes(dump(ph_s) + bytes(b[pnl:]))
     rec["stmt"] = {"pub.bin": f"row 0's b || c and the header's frame_v3 root of {port}",
                    "frame_root": [fv["roots"][port][:16], ph_s["frame_v3"]["roots"][port][:16]]}
-    skip = lambda why: (shutil.rmtree(out / "value"), rec.__setitem__("value", {"skipped": why}), rec)[-1]
+    def skip(why):
+        return (shutil.rmtree(out / "value"), rec.__setitem__("value", {"skipped": why}), rec)[-1]
     if sorted(pos) != list(range(int(port_["leaves"]))):
         return skip(f"the table reads positions {pos}, not all {port_['leaves']} of the value's rows")
     meta = json.loads(text.split("\n", 2)[1][5:])
@@ -115,7 +117,8 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     if not progs:
         return skip("neither the session's program nor the statement's names the value's domain")
     by_pos = sorted(zip(pos, rows, salts))
-    mk = lambda rs: RG.Registered.commit(progs[0], port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
+    def mk(rs):
+        return RG.Registered.commit(progs[0], port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
     h = mk([r for _, r, _ in by_pos])
     if h.root.hex() != port_["root"] or [h.path(p).hex() for p in pos] != reg["paths"]:
         return skip("the rows and salts do not register to the statement's root and paths")
