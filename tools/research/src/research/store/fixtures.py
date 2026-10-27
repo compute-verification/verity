@@ -371,13 +371,15 @@ def _split_missing(fr: dict[str, Any], doc: dict[str, Any]) -> tuple[list[str], 
 
 
 def export(store: LocalStore, repo: Path, dest: Remote, *, srcs: Sequence[Remote], include_previous: bool = True,
-           blobs: Sequence[tuple[str, int]] = (), jobs: int = fetchset.JOBS, dry_run: bool = False) -> dict[str, Any]:
-    """Copy every registry entry's manifest and blobs (and `blobs`, the history stubs' bytes) to `dest`, blobs first and manifests
-    last, as `push` does: a manifest the export holds is never missing a blob.  Objects already there are skipped (conditional
-    create; a key holding different bytes is a RemoteConflict, reported).  `dry_run` HEADs and reports what would be uploaded."""
+           blobs: Sequence[tuple[str, int]] = (), arts: Sequence[str] = (), jobs: int = fetchset.JOBS,
+           dry_run: bool = False) -> dict[str, Any]:
+    """Copy every registry entry's manifest and blobs (and `arts`, artifacts published that the registry doesn't hold, and `blobs`,
+    the history stubs' bytes) to `dest`, blobs first and manifests last, as `push` does: a manifest the export holds is never
+    missing a blob.  Objects already there are skipped (conditional create; a key holding different bytes is a RemoteConflict,
+    reported).  `dry_run` HEADs and reports what would be uploaded."""
     repo = Path(repo)
     doc = load_map(repo)
-    want = export_ids(doc, include_previous=include_previous)
+    want = list(dict.fromkeys([*export_ids(doc, include_previous=include_previous), *arts]))
     fr = fetchset._report()
     ms = _ensure_local(store, repo, doc, want, srcs, jobs, fr)
     fetchset.fetch_blobs(store, blobs, srcs, jobs=jobs, report=fr)

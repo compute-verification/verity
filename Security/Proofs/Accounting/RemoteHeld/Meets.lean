@@ -175,8 +175,8 @@ def w2 : Trace Unit := burst 130023424 85000000 0 743590 1054688 1536
 /-- W2's session with no link block, for `Held`'s Identity. -/
 def w2Held : Trace Unit := burst 130023424 85000000 0 743590 1054688 0
 
-/-- **The premises meet at W2's instance** (8 × Qwen2.5-32B on one node, r20261019-001333-2569 and
-r20261019-004759-4580 for its disks and NIC), at the nanosecond tick: the squaring ceiling `s = 191.5` a tick
+/-- **The premises meet at W2's instance** (8 × Qwen2.5-32B on one node, its disks and NIC as
+measured), at the nanosecond tick: the squaring ceiling `s = 191.5` a tick
 (1.915·10¹¹ a second) at `E = 98,016` a block (p1024/k3/masked), the disks' `β = 4.32·10⁹ / 4096 / 10⁹` blocks a tick
 (the three disks' highest seconds, vdb by rate), the one 400 Gb/s NIC's `β_l = 50·10⁹ / 4096 / 10⁹`, and the chips'
 `S = 743,590` blocks. W2's session meets every premise of `HeldOverTimeLinks` with its first `B_r + B_d + B_l` blocks
