@@ -1,8 +1,8 @@
 /-!
 # Naive tiled against Strassen in the tensor-core model (trusted)
 
-Exact int8 matrix products in the ACCEL model, priced by the tensor core alone (G2's tensor resource over P1's exact
-domains), additions free.
+ACCEL NAIVE-STRASSEN (CMP-110; note:compute-research/20261026T0140Z-draft-accel-naive-strassen). Exact int8 matrix
+products, priced by the tensor core alone (G2's tensor resource over P1's exact domains), additions free.
 
 **Atoms.** An exact path for one sub-product is an MMA format (`Atom`): the tensor units a MAC uses, in eighths of an
 s8 MAC (`weight8`), the most consecutive integers it holds per operand entry (`cap`), and, for a float format, the

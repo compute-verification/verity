@@ -6,8 +6,8 @@ import Definitions.Core.Accel.Card
 The H200 SXM (GH100, sm_90a) at its data sheet's numbers, a tick one SM clock at f_max = 1980 MHz (H100 whitepaper
 V1.04 Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz',
 footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the driver's maximum on vy-dc-h200,
-`Accounting.TS.Sheets.H200.fmaxMHz`). Every per-SM figure is over the 132 SMs (whitepaper Table 3, H100 SXM5). These
-are data-sheet placeholders until CALIB measures them.
+note:20261017T0452Z-draft-eps1-dc; `Accounting.TS.Sheets.H200.fmaxMHz`). Every per-SM figure is over the 132 SMs
+(whitepaper Table 3, H100 SXM5). These are data-sheet placeholders until CALIB (CMP-115) measures them.
 
 **Stores** (words of 32 bits): the register file, 64 Ki registers an SM ('Register File Size / SM 256 KB'), plus the
 uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and
@@ -20,13 +20,13 @@ reports.
 **Rates** (units a tick):
 * tensor: 4096 s8 MACs an SM clock (`Accounting.TS.Sheets.H200` A3: the data sheet's 1,979 dense INT8 TOPS over
   2 · 132 SMs at the 1830 MHz tensor boost clock), so 540,672 a tick at the tick's clock (`tensor`, the per-clock
-  peak); `tensorLong` is the same 540,672, the tensor core at the 1980 MHz boost clock (θ never caps a rate below
-  what the card might reach). The sheet quotes its 1,979 TOPS at 1830 MHz
+  peak); `tensorLong` is the same 540,672, the tensor core at the 1980 MHz boost clock (RT-MODEL M14; coordinator,
+  26 Oct 06:23Z: θ never caps a rate below what the card might reach). The sheet quotes its 1,979 TOPS at 1830 MHz
   (whitepaper V1.04 Table 3's boost clock for the FP8, FP16, BF16, TF32 and INT8 tensor figures, against 1980 MHz for
   FP64 tensor, FP32 and FP64), and the card measured 1,942.7 TOPS at about 1797 MHz under saturated `wgmma`
   (r20261019-053910-d2c9). Neither shows that no operand class sustains a higher clock, so the long-window cap at
   132 · 4096 · 1830/1980 = 499,712 (RT-MODEL M1) waits on CALIB's check, locked at 1980 MHz with zero, constant and
-  uniform operands, and returns with that run's id if none sustains above 1830 MHz, except for DMMA, whose
+  uniform operands (CMP-115), and returns with that run's id if none sustains above 1830 MHz, except for DMMA, whose
   67 TFLOPS the sheet quotes at 1980 MHz: at 499,712 and weight 32 it would get 15,616 MACs a tick against the
   sheet's 16,896, which `tensorLong_sheet` (`Proofs/Core/Accel/Sheet.lean`) refuses; a MAC of `e4m3` or `e5m2`
   uses 1 unit (the same 1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any
@@ -39,8 +39,8 @@ reports.
   add, compare, min, max, logic and shift 64; multiply and multiply-add 64), so 8448 each. `IMAD.WIDE`
   (`Lane.madWide`) uses 2 `imad` lanes (Table 7's footnote 6: 32 for extended precision; RT-UNITS U13; CALIB's
   lane-pipe probe hasn't measured it yet) and `IMAD.HI` `Open.madHi`. The two pools overlap in full in the model,
-  which is generous: the card's don't (an IMAD-balanced SHA-512 took 58.1 SM-clocks a compression against the
-  41.2 full overlap predicts), and CALIB's joint ALU + IMAD facet for sm_90 is pending;
+  which is generous: the card's don't (HASH-23's IMAD-balanced SHA-512 took 58.1 SM-clocks a compression against
+  the 41.2 full overlap predicts, r20261026-045623-03b9), and CALIB's joint ALU + IMAD facet for sm_90 is pending;
 * `f64`: 64 lanes an SM clock (Programming Guide Table 7, CC 9.0: 64-bit floating-point add, multiply, multiply-add
   64), so 8448: the FP64 cores, 64 an SM apart from the tensor cores (whitepaper Table 3, 'FP64 Cores / SM (excl.
   Tensor)'); DMMA (`Op.dmma`) runs on the tensor cores (A100 whitepaper: the third-generation Tensor Cores accelerate
@@ -69,10 +69,10 @@ HBM (`cp.reduce.async.bulk`), priced as the copy.
 
 **Captured dots** (`captured`): the integer path exactly, `silicon.integer.HOPPER_SM90_S8_K32` (the clamp or wrap at
 D; `wgmma` m64n64k32, m64n128k32 and m64n256k32 `.s8`, all eight forms, about 10.3–10.6 M elements each with the
-extreme and clamp tiles, 0 mismatches; `mma.sync` m16n8k32 `.s8` pinned); `bf16` at `k = 16`,
-`TC.HOPPER_BF16_M16N8K16` (`mma.sync`
+extreme and clamp tiles, 0 mismatches, run r20261026-010336-7755, #4512; `mma.sync` m16n8k32 `.s8` pinned by DPRE,
+HASH-8); `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (`mma.sync`
 and `wgmma`, `models.HOPPER_BF16_M16N8K16`, `HOPPER_BF16_WGMMA_K16`); `e4m3` and `e5m2` at `k = 32`, one group of 32 on
-a 14-bit adder, floor −139 (`total_fp8.HOPPER_E4M3_WGMMA_K32`, H100, 144,543,744 words, 0 mismatches;
+a 14-bit adder, floor −139 (`total_fp8.HOPPER_E4M3_WGMMA_K32`, lane QZ, H100, 144,543,744 words, 0 mismatches;
 `models.HOPPER_E5M2_K32`, run r20260922-183837-940b, 25,554,432 elements, 0 mismatches; LIT: one group of 32 at
 width 14), validated at a zero accumulator only (`zeroOnly`: at any other accumulator the FP8 dot is `Open.dot`).
 Every other dot is `Open.dot`. `wgmma` `.s8` at m64n64k32, m64n128k32 and m64n256k32 runs at the data sheet's rate
@@ -193,8 +193,8 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 rates are the tensor core's s8 MACs, the 132 · 128 FP32 lanes, and HBM's bits a tick rounded up
 (4.8 · 10¹² · 8 / 1.98 · 10⁹ = 19,393.9). θ's floors: `sync ≥ 1` (the tensor pipe's peak is the data sheet's, which
 `wgmma` reaches, so no MMA form beats it; CALIB measured `mma.sync` at 65.6% of `wgmma` on every native form and the
-`k16` INT8 form at 48.7%, a card's `sync` of about 1.52 and 2.05, so the floor is the sheet's and generous),
-`b1 ≥ 1/8` (CALIB; the A100's binary peak is 8 × its INT8 peak),
+`k16` INT8 form at 48.7%, CMP-115 comment 3bf82c41, a card's `sync` of about 1.52 and 2.05, so the floor is the sheet's
+and generous), `b1 ≥ 1/8` (CALIB, CMP-115; the A100's binary peak is 8 × its INT8 peak)
 `madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7,
 CC 9.0, footnote 6; CALIB measured 30.6, r20261017-095350-02ff), and `slack ≥ 1` (a backlog of at least a tick: an
 MMA completes after the tick that issues it, and `Rate` and `CodeFetch` only get weaker as `slack` grows, so this floor

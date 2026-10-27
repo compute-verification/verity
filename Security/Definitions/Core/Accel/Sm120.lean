@@ -4,10 +4,10 @@ import Definitions.Core.Accel.Card
 # The RTX PRO 6000 Blackwell (sm_120) as an accelerator (trusted)
 
 The RTX PRO 6000 Blackwell Server Edition (GB202, sm_120a) at its data sheet's numbers, a tick one SM clock at
-f_max = 2430 MHz (the hardware's maximum, which the prover may set: SPEC's P1,
+f_max = 2430 MHz (the hardware's maximum, which the prover may set: SPEC's P1, note:20261017T0324Z-draft-eps1-spec,
 `benchmarks/pouw/machine_model/data/designs.toml`). Every per-SM figure is over 188 SMs (NVIDIA RTX PRO Blackwell GPU
 Architecture whitepaper v1.1, Appendix A, Table 4, the same 188-SM GB202). These are data-sheet placeholders until
-CALIB measures them.
+CALIB (CMP-115) measures them.
 
 **Stores** (32-bit words): the register file, 64 Ki registers an SM (whitepaper: a 256 KB register file an SM), plus
 the uniform registers (63 a warp at 48 warps, 3024 words), the predicates (7 bits a thread at 1536 threads, 336 words)
@@ -17,7 +17,7 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
 
 **Rates** (units a tick):
 * tensor: 1024 s8 MACs an SM clock (`IMMA.16832`, 4096 MACs in 16 tensor cycles of an SM sub-partition, the DS-120
-  census; the whitepaper's 1,007.6 dense FP8 TFLOPS over 2 · 188 SMs at its
+  census, note:20261017T1818Z-draft-axioms; the whitepaper's 1,007.6 dense FP8 TFLOPS over 2 · 188 SMs at its
   2617 MHz boost is the same 1024), so 192,512; a MAC of `e4m3`, `e5m2` or `e2m1` (`kind::f8f6f4`, `QMMA.16832`) uses
   1 unit, of `nvf4` or `mxf4` (`OMMA.SF.16864`, 8192 MACs in 16 cycles; whitepaper FP4 2,015.2 dense) 1/2, of `f16` or
   `bf16` 2 (503.8), of `tf32` 4 (251.9); sm_120 has no native `b1` MMA (below); `tensorLong` is `tensor`, since the
@@ -31,8 +31,9 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   footnote 6, 32 for extended precision; RT-UNITS U13), and the pools overlap in full, generous as on the H200;
 * `f64`: 2 lanes an SM clock (Programming Guide Table 7, CC 12.0: 64-bit floating-point multiply-add 2), so 376; DMMA
   (`Op.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card, and CALIB measured
-  1.75 MACs an SM clock (`DMMA.8x8x4`): 32 tensor units a MAC, 32 MACs an SM clock, 18 × that, stays as a generous
-  figure, since a measured rate bounds the card's from below only;
+  1.75 MACs an SM clock (`DMMA.8x8x4`, run r20261017-041103-d35d, note:20261017T0321Z-draft-eps1-tensor): 32 tensor
+  units a MAC, 32 MACs an SM clock, 18 × that, stays as a generous figure, since a measured rate bounds the card's
+  from below only;
 * shared memory: 32 banks of a 32-bit word a clock an SM (Programming Guide, 'Shared Memory'), so 6016;
 * GDDR7: 1597 GB/s (product page, 'Memory Bandwidth 1597 GB/s'), 1597 · 10⁹ / (4 · 2.43 · 10⁹) = 39925/243 words;
 * the L2's reads (`l2`, RT-MODEL M6(b)): no document gives them; CALIB's census read at most 7.10 TB/s, 18.05 bytes an
@@ -72,7 +73,8 @@ every other dot are `Open.dot`.
 **Coarser than the card**, and **not yet in the instance**: as for the H200 (`Accel.H200`), with FP6 (`e3m2`, `e2m3`)
 and the block-scaled FP8 and FP6 forms (`kind::mxf8f6f4`) among the gaps. DMMA, the FP64 lanes, `HFMA2`, the float
 reductions and `redux.sync` are over-approximated as on the H200 (`HFMA2`'s sm_120 rate is undocumented; the model
-gives it 256 FP16 FMAs an SM clock, two a lane on the 128 FP32 lanes, and CALIB's census measured 125.9).
+gives it 256 FP16 FMAs an SM clock, two a lane on the 128 FP32 lanes, and CALIB's census measured 125.9,
+note:20261015T0608Z-draft-census-sm120).
 -/
 
 open scoped NNRat
