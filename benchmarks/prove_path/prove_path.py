@@ -171,13 +171,10 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
+from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402, F401
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
-CAPPED = "verity/prove-path/capped-compiler/v0"
 I2 = "verity/prove-path/i2-compile-steps/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a TP Commit's few hundred requests (I1 spends tens of
-#: bits a row)
-CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
 LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
@@ -191,33 +188,6 @@ SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of), with the
 #: changes it waits on (``sources.json``)
 PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_interim"]
-
-
-@dataclass(frozen=True)
-class Capped:
-    """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` and ``transfer_gates`` are the inner
-    compiler's."""
-
-    inner: Any
-    cap_bits: int = CAP_BITS
-    name: str = CAPPED
-
-    def __post_init__(self) -> None:
-        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
-            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
-
-    @property
-    def digest(self) -> str:
-        return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
-                                              "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
-
-    @property
-    def transfer_gates(self) -> tuple[str, ...]:
-        return tuple(getattr(self.inner, "transfer_gates", ()))
-
-    def load(self, rank: int, world: int, requests: Any) -> Any:
-        return self.inner.load(rank, world, requests)
 
 
 @dataclass(frozen=True)
@@ -604,8 +574,8 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 @functools.lru_cache(maxsize=1)
 def served_identity() -> tuple[str, str]:
     """The code a served window's compiler runs, as `verity-vllm advice` names it (``pipeline.advice``'s
-    ``registered_compiler``): compile_steps by its module path, its digest over the tree's code identity
-    (`source_identity.code_identity`: ``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
+    ``registered_compiler``): compile_steps by its module path, its digest the verifier's `interface.compiler_digest` over
+    the integration's import closure (``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
     window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
     try:
         from verity_vllm.pipeline import advice as ADV
