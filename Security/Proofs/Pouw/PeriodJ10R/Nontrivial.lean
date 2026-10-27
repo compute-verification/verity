@@ -53,7 +53,8 @@ def CreditBoundBy {ι K T L U C B : Type} [Fintype C] [Fintype B] (Sc : Scheme K
   prob (fun x => Pl.accepts x ∧
     n * (Pl.run x).fixed < creditPrefix Sc Cd Np (prefixLenBy acc x) (creditLiveBy Sc Cd Wp acc x) 1 1 Λ δs) ≤ δ
 
-/-- **At `Credit.window`'s verdict it is the statement's conclusion.** -/
+/-- **At `Credit.window`'s verdict it is the statement's conclusion**, so `j10r_nontrivial`, `CreditBoundBy` at the verdict
+that credits every window, is the conclusion with that verdict in place of `Credit.window`'s. -/
 theorem creditBound_window {ι K T L U C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι)
     {nB mB n : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
@@ -114,16 +115,19 @@ theorem prob_true {Ω : Type} [Fintype Ω] (a : Ω) : prob (fun _ : Ω => True) 
 instance's circuit, scheme, period and rate over the tile stratum (`N_p = |stratum σ s_T|`, `1 ≤ k s_T`,
 `Λ = j10rRate (k s_T) 1`), with every window credited, the prover that fixes no word (`idle`) is accepted on every
 path with less than the credit, so the bound fails at every `δ_s + n·(δ_bind + δ_ks) < 1` once
-`Λ·ln(1/δ_s) < n`. -/
+`Λ·ln(1/δ_s) < n`. Its statement is `CreditBoundBy` at that verdict and play, unfolded, so it negates the conclusion's
+own `prob … ≤ …`. -/
 theorem j10r_nontrivial {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (sT : Fin mB) (hKd : 1 ≤ k sT) (n : ℕ) (hn : 0 < n) {δs δbind δks : ℝ}
     (hΛ : j10rRate (k sT) 1 * Real.log (1 / δs) < n) (hδ : δs + n * (δbind + δks) < 1) :
-    ¬ CreditBoundBy Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-      (fun _ _ => True) (idle Unit (tileCount σ sT) (k sT) n) (j10rRate (k sT) 1) δs (δs + n * (δbind + δks)) := by
+    ¬ prob (fun x : Paths (Ω1 σ sT) n => (idle Unit (tileCount σ sT) (k sT) n).accepts x ∧
+        n * ((idle Unit (tileCount σ sT) (k sT) n).run x).fixed <
+          creditPrefix Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) (prefixLenBy (fun _ _ => True) x)
+            (creditLiveBy Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
+              (fun _ _ => True) x) 1 1 (j10rRate (k sT) 1) δs) ≤ δs + n * (δbind + δks) := by
   intro h
   have hN : 0 < tileCount σ sT := Nat.lt_of_lt_of_le hKd (hk sT)
   have hpos := creditPrefix_pos hN hn hΛ
-  unfold CreditBoundBy at h
   have hall := (prob_mono (p := fun _ : Paths (Ω1 σ sT) n => True) fun x _ => by
     refine ⟨trivial, ?_⟩
     rw [prefixLenBy_all, creditLiveBy_all]
