@@ -2551,7 +2551,10 @@ struct Fill {
   // served: the wg GEMMs' arguments (wgmma.linear, the bench's baseline, in any -DV31_WG build), and V31_GEMM 1's D
   void wg_setup() {
 #ifdef V31_WG
-    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 5) { fprintf(stderr, "a served call's V31_RP is 0, 4 or 5\n"); exit(2); }
+    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 5) {
+      fprintf(stderr, "a served call's V31_RP is 0, 4 or 5\n");
+      exit(2);
+    }
     r5h = env_int("V31_R5H", wgp::R5_SPLITS[0]);
     if (!r5_kernel(256)) { fprintf(stderr, "V31_R5H is one of wg_proto.cuh's R5_SPLITS\n"); exit(2); }
     wg = kn.gemm != 0;
@@ -2594,7 +2597,8 @@ struct Fill {
   // RP 5's kernel at split hr (null: not one of R5_SPLITS)
   template <int BN, int I = 0> static const void* r5_kernel_at(int hr) {
     if constexpr (I == sizeof wgp::R5_SPLITS / sizeof wgp::R5_SPLITS[0]) return nullptr;
-    else return hr == wgp::R5_SPLITS[I] ? (const void*)wgp::gemm_r5<BN, FusedLeaves, wgp::R5_SPLITS[I]> : r5_kernel_at<BN, I + 1>(hr);
+    else if (hr == wgp::R5_SPLITS[I]) return (const void*)wgp::gemm_r5<BN, FusedLeaves, wgp::R5_SPLITS[I]>;
+    else return r5_kernel_at<BN, I + 1>(hr);
   }
   const void* r5_kernel(int bn) const { return bn == 256 ? r5_kernel_at<256>(r5h) : r5_kernel_at<128>(r5h); }
   // mode 0: a b^T (s32) into O; mode 2: wgmma.linear's bf16 values (s_a = s_w = 1/127), gamma's baseline

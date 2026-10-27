@@ -53,7 +53,8 @@
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU
 # (default gpu-lease 1 --wait --max-min 25 --; a timed run passes "gpu-lease 8 --wait --timed --max-min 30 --" under
-# `research run --no-sampler`; empty when already under a lease); CUTLASS=0 (no CUTLASS baseline), V31_CACHE (CUTLASS's
+# `research run --no-sampler`; empty when already under a lease); LEASE_ONCE=1 (MODE=fill): its GPU steps all under one
+# LEASE, after the builds and the CPU's prep, in place of a lease each; CUTLASS=0 (no CUTLASS baseline), V31_CACHE (CUTLASS's
 # clone and object, default /workspace/pouw/accel_v31); NVFLAGS, more nvcc flags for every build (H200: -DV31_WG=1, the
 # GEMM on warpgroup MMAs); SHA_FLAGS, sha512.cuh's issue choices (default -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1, tuned
 # on sm_120).
@@ -145,10 +146,19 @@ if [ "$MODE" = fill ]; then
       echo "fill-params $(knob "$v" row 1024)${sv[*]} L$L rc $?" >> "$O/rc.txt"
     done
   done
+  # the GPU steps, a lease each (LEASE_ONCE=1: all of them under one lease, LEASE's). First a canary, one call of the
+  # first variant on the first shape in at most 5 minutes: a hang or a crash ends them there (exit 3), not at the lease's cap
+  fill_gpu() {
   # shellcheck disable=SC2016
   $LEASE bash -c '
     nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv \
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
+    v=${VARIANTS%% *} L=${FILL_LS%% *} s=${FILL_SHAPES%% *}
+    # shellcheck disable=SC2046
+    env $(knob_env "$v") timeout 300 "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$O/canary.log" 2>&1
+    rc=$?
+    echo "canary rc $rc" >> "$O/rc.txt"
+    [ $rc = 0 ] || exit 3
     gk=(); [ "${FILL_GATE_KNOBS:-0}" = 1 ] && gk=($(knob_env "${VARIANTS%% *}"))
     for x in 0 1; do
       only=(); [ $x = 1 ] && only=(--only fill)
@@ -161,7 +171,9 @@ if [ "$MODE" = fill ]; then
         echo "fill dither ltw$x rc $?" >> "$O/rc.txt"
       fi
     done'
-  echo "lease fill gate rc $?" >> "$O/rc.txt"
+  rc=$?
+  echo "lease fill gate rc $rc" >> "$O/rc.txt"
+  [ $rc = 3 ] && return 3
   for x in 0 1; do
     grep -hE '^[a-z].*(ACCEPT|REFUSE)' "$O/fill-gates-ltw$x.log" "$O/fill-dither-ltw$x.log" 2> /dev/null | sed "s/^/ltw$x /" \
       >> "$O/verdicts.txt"
@@ -243,6 +255,15 @@ if [ "$MODE" = fill ]; then
     echo "lease fill prof rc $?" >> "$O/rc.txt"
     $PY $D/h200_pipes.py "$O" > "$O/pipes.md" 2> "$O/pipes.err"
     echo "pipes rc $?" >> "$O/rc.txt"
+  fi
+  }
+  if [ "${LEASE_ONCE:-0}" = 1 ] && [ -n "$LEASE" ]; then
+    export -f fill_gpu
+    # shellcheck disable=SC2086
+    $LEASE env LEASE= bash -c 'set -uo pipefail; fill_gpu'
+    echo "lease once rc $?" >> "$O/rc.txt"
+  else
+    fill_gpu
   fi
   for s in "$W"/fbench/*/samples/*/; do
     [ -d "$s" ] || continue
