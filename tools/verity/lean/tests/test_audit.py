@@ -2007,6 +2007,8 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
     verified = witnessed(g | {"reads": [cover, run]})
     assert A.witness_scope("P.sound", verified[0], verified[1]["pins"]["P.sound"]) == (
         "acceptance", "it reads P.Run.accepts, a verifier's acceptance")
+    device = witnessed(g | {"reads": [cover, run | {"name": "P.Device.Accepts"}]})
+    assert A.witness_scope("P.sound", device[0], device[1]["pins"]["P.sound"])[0] == "acceptance"
 
 
 def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
