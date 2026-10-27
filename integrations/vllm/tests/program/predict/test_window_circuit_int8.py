@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.window_circuit's int8 linears (VLLM-33's G3): an exact-int8 checkpoint served with its linears
+"""verity_vllm.program.predict.window_circuit's int8 linears: an exact-int8 checkpoint served with its linears
 int8 (serve-openai's verity_int8) is the same class circuit with each decoder linear its quantizer unit and s8 GEMM slices,
 pinned on `test_window_circuit`'s TINY class, windows and grain.
 """
@@ -64,7 +64,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     assert {(WB.weight_param(f"{w}.{t}", n), p, 0, n) for w in layer for t, p, n in (("weight", "w", 512),
                                                                                      ("weight_scale", "sw", 32))} <= reads
     params = dict(circuit.registered.params)
-    assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 24
+    assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 25
     assert {p.split("/", 1)[0] for p in params} == {WC.WEIGHTS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
     assert _blocks(circuit) == _blocks(other)
@@ -92,7 +92,7 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     d, man = _checkpoint(tmp_path, quant=INT8_EXACT_QUANT)
     registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     pins = WW.registration_pins(registration, WW.weights_record(reg, d, man, grain=GRAIN))
-    assert (ADV.registered_weights(registration), len(pins), list(registration["unrooted"])) == (pins, 23, [ROPE])
+    assert (ADV.registered_weights(registration), len(pins), list(registration["unrooted"])) == (pins, 24, [ROPE])
     assert set(pins) == set(circuit.registered.params) - {ROPE, SCAN_STATE}
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     assert IF.input_count(doc, pins=both, roots=both) == {"units": 1788, "inputs": 10765088, "wired": 1603232,

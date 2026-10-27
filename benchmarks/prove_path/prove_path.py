@@ -24,7 +24,7 @@ Two kinds of committed run:
 * **A served window** (``--serve-run DIR --window K --row-dir DIR``, TP1): one closed Commit window of a `verity-vllm
   serve-openai` run, its window ``rank0/``. The run dir is serve-openai's (``serve.json``, ``windows.jsonl``, ``requests.jsonl``)
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
-  the prover's); the window's Commit is its sealed row dir (#3532's form: ``commit/replay_bundle_p0``, the Commit's records, the
+  the prover's); the window's Commit is its sealed row dir (``commit/replay_bundle_p0``, the Commit's records, the
   Build's Programs, ``manifest.json``). The compiler is `Capped` over `I2Compiler` under φ of the served engine
   (`phi_of_serve`), the bodies each request's ingress record (`serve_ingress`), named as `verity-vllm advice` registers it
   (`served_identity`: compile_steps over the tree's code identity). The advice is committed once, by the server:
@@ -41,6 +41,8 @@ Two kinds of committed run:
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] [--challenger local|gate:USER@HOST --main FILE]
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR] [--vllm-python PY]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
+    prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
+        [--hf-config F] [--target F]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...] [--vllm-python PY]
@@ -73,6 +75,11 @@ Two kinds of committed run:
   compiler of record lists transfer gates (`GATES_OF_RECORD`), the inner compiler is the server's listing them
   (`I2Compiler.digest`), the name and digest ``verity-vllm advice --compiler-name N --compiler-digest D`` then registers the
   window's advice under.
+* **weights-registration** (the committer): a served run's weights registration (`weights_registration_of_serve`), each
+  weight committed under the committer's secret salts once its shards check against the checkpoint's manifest, the
+  document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
+  ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
+  coins and never recomputes one from the checkpoint.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 * **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
@@ -82,7 +89,7 @@ Two kinds of committed run:
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
   class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
-  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at ASK-122's fixed slots; every slot's
+  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots; every slot's
   Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
   its description) and its input count at the verifier's pins (``--pin NAME=ROOT``, the roots it fixed before the run,
   each of its parameter alone, a weight's ``weights/<label>@<words>``; ``--pins REGISTRATION``, each weight's hiding root
@@ -127,6 +134,7 @@ import hashlib
 import json
 import multiprocessing
 import os
+import secrets
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -161,7 +169,7 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 #: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
 #: (`served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O shell's units
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
-#: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``, #3619)
+#: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
 PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
@@ -517,7 +525,7 @@ def serve_id(q: Mapping[str, Any]) -> str:
 
 
 def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
-    """Each served request's body by its I1 id (`serve_id`), as vllm's advice compiler gives it to I2 (#3619's
+    """Each served request's body by its I1 id (`serve_id`), as vllm's advice compiler gives it to I2 (its
     ``advice_compile.served_inputs``): the sampling fields the request brought (its ingress record's ``brought``) with its
     prompt token ids."""
     out: dict[str, dict] = {}
@@ -530,7 +538,7 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's advice compiler (#3619's) registers it (the formula its Build compiles the request Programs under):
+    """φ of a served engine as vllm's advice compiler registers it (the formula its Build compiles the request Programs under):
     the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
     pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
     unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
@@ -549,10 +557,23 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
 
 
+def registered_seed(serve: Mapping[str, Any]) -> int:
+    """The default seed a served window's registration fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's advice compiler takes
+    it); a ValueError when ``serve.json`` says the server filled in another (or says none), since a request that sent no
+    seed would be compiled under a seed its draw didn't use."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    seed = serve.get("default_seed")
+    if type(seed) is not int or seed != DEFAULT_SEED:
+        raise ValueError(f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is "
+                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
+    return DEFAULT_SEED
+
+
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
     from verity_vllm.program.predict.steps import Registered
 
-    return Registered.of(phi_of_serve(serve, hf_config, target), int(serve.get("default_seed") or 0), cap_bits)
+    return Registered.of(phi_of_serve(serve, hf_config, target), registered_seed(serve), cap_bits)
 
 
 def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[str, ...]:
@@ -568,10 +589,10 @@ def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[s
 
 def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None, target: str | None,
                 cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = (), trace: str | None = None) -> I2Compiler:
-    """I2 over a served window: φ of the served engine (`phi_of_serve`), the server's default seed, the bodies the window's
-    requests brought (`serve_ingress`), each Program's body from the Build's files under ``programs_root`` (the prover's row
-    dir, or with ``trace`` the verifier's own Builds), named as the server registers it (`served_identity`), listing its model's
-    transfer gates of record (`served_gates`, which ``transfer_gates`` may only restate)."""
+    """I2 over a served window: φ of the served engine (`phi_of_serve`), the public default seed (`registered_seed`), the bodies
+    the window's requests brought (`serve_ingress`), each Program's body from the Build's files under ``programs_root`` (the
+    prover's row dir, or with ``trace`` the verifier's own Builds), named as the server registers it (`served_identity`),
+    listing its model's transfer gates of record (`served_gates`, which ``transfer_gates`` may only restate)."""
     serve = json.loads((Path(run) / "serve.json").read_text())
     name, digest = served_identity()
     return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)),
@@ -582,7 +603,7 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 @functools.lru_cache(maxsize=1)
 def served_identity() -> tuple[str, str]:
     """The compiler a served window's advice is registered under, the one `verity-vllm advice` binds (``pipeline.advice``'s
-    ``registered_compiler``, #3619): compile_steps by its module path, its digest over the tree's code identity
+    ``registered_compiler``): compile_steps by its module path, its digest over the tree's code identity
     (`source_identity.code_identity`: ``integrations/vllm`` and ``verity``), so the audit's tree holds the server's."""
     try:
         from verity_vllm.pipeline import advice as ADV
@@ -1013,7 +1034,7 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
 
 
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
-    """The terms of the leak bound an accepted audit gives (README, "What an accepted plain audit means"): c, the advice's bits
+    """The terms of the leak bound an accepted audit gives (README, "What an accepted audit means"): c, the advice's bits
     (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
     (``location_bits``, `consumers.location_bits`); β_δ, the faulty proof blocks' committed bits (``harm_bound``: the profile's
     `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
@@ -1175,6 +1196,40 @@ def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
 
 
+def committer_key(path: Path) -> bytes:
+    """The committer's 32-byte salt key at ``path``, which never leaves the committer: drawn fresh (mode 0600) the first
+    time, read thereafter. Refused (ValueError) unless 32 bytes."""
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+            f.write(secrets.token_bytes(32))
+    key = path.read_bytes()
+    if len(key) != 32:
+        raise ValueError(f"{path}: a committer's salt key is 32 bytes, not {len(key)}")
+    return key
+
+
+def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
+    """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
+    circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, drawn under ``--key``
+    (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
+    (default the tree's ``manifests/checkpoints.json``). Written to ``--out``: what the server's ``verity-vllm advice
+    --weights-of-record`` records in each window's registration, and the roots the verifier pins before the first window's
+    coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never recomputes one. Refused
+    (ValueError) for a checkpoint not of record or one the manifest pins as another model than ``serve.json``'s, and as
+    `advice.registered_weights` refuses it. -> how many roots it registers, and the weight parameters it leaves free
+    (``unrooted``)."""
+    from verity_vllm.pipeline.advice import registered_weights
+    from verity_vllm.program.predict.window_weights import weights_registration
+
+    serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
+    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
+                               a.checkpoint_dir, checkpoints_manifest=a.checkpoints)
+    roots = registered_weights(doc, serve)
+    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out}
+
+
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     """A served window's registered compiler as the command `records_audit.compile_check` runs: the advice ``--advice``
     compiled (`compile_advice`, every refusal a `ValueError`), the window over the compiler's Programs for it
@@ -1208,7 +1263,8 @@ def window_class_of(arg: str | None) -> Any:
 
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
-    ``--class``, a class Program a slot flattened into units, every input row wired or registered), written to
+    ``--class``, a class Program a slot flattened into units, every input row wired or registered, the weights' or the
+    network certifier's scan state rows), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
@@ -1239,7 +1295,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's padded size at its class ``--class`` (`class_size`): one class Program of the window's registration
     lowered at the small class ``--probe`` (`window_circuit.class_circuit`, exact), projected to ``--class`` with v19's heads
     (`class_size.project`) and priced (`class_size.size`) a Program and at the class's slots, the window's circuit whatever
-    its requests (ASK-122). -> the probe's census, the requests its advice compiles to and the two sizes."""
+    its requests. -> the probe's census, the requests its advice compiles to and the two sizes."""
     from dataclasses import asdict
 
     import class_size as CZ
@@ -1260,22 +1316,33 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
+def standin_brought(body: Mapping[str, Any], seed: int) -> dict[str, Any]:
+    """What a stand-in request's ingress brought: the record's body without its prompt, a stochastic one that names no seed
+    bringing the declared run's default ``seed``, since the stand-in's server fills in the public one (`registered_seed`)."""
+    out = {k: v for k, v in body.items() if k != "prompt"}
+    return {**out, "seed": int(seed)} if out.get("temperature") and out.get("seed") is None else out
+
+
 def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's dir under ``a.out`` laid out from a single-GPU Commit of record, as serve-openai and `verity-vllm advice` lay
-    one out: ``serve.json`` (the record's model, revision and seed, and the execution and target φ reads from its row,
-    `score.phi_of`), ``windows.jsonl`` (window 0 under the record's run root), ``requests.jsonl`` (each request's I1 id as its
-    ``user``, its prompt and the parameters the record served it under as what its ingress brought) and ``advice/w0/``: the
-    declared run's advice committed under the served compiler (registration.json, private/advice.bin, private/opening.json)."""
+    one out: ``serve.json`` (the record's model and revision, the public default seed `engine.served_seed.DEFAULT_SEED`, and the
+    execution and target φ reads from its row, `score.phi_of`), ``windows.jsonl`` (window 0 under the record's run root),
+    ``requests.jsonl`` (each request's I1 id as its ``user``, its prompt and the parameters the record served it under as what
+    its ingress brought, `standin_brought`) and ``advice/w0/``: the declared run's advice committed under the served compiler
+    (registration.json, private/advice.bin, private/opening.json)."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
     r, rec = record1(str(a.bundle), str(a.row_dir)), i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits)
     phi, out, root = rec.registered.phi, Path(a.out), bytes(record1(str(a.bundle), str(a.row_dir)).run.run_root).hex()
     run_id = f"{r.row.get('label')}/w0"
     out.mkdir(parents=True, exist_ok=True)
     (out / "serve.json").write_text(json.dumps({
-        "model": phi.model["repo"], "revision": phi.model["revision"], "default_seed": rec.registered.default_seed,
+        "model": phi.model["repo"], "revision": phi.model["revision"], "default_seed": DEFAULT_SEED,
         "engine": {"execution": phi.execution, "pin": {"world": 1}}, "target": phi.target, "run_id": run_id,
         "stand_in": f"prove_path.py serve-standin: the Commit of record {r.row.get('label')} laid out as a serve-openai run"}, indent=1))
     reqs = [{"http_id": i, "engine_id": i, "user": i, "prompt_ids": body["prompt"],
-             "ingress": {"brought": {k: v for k, v in body.items() if k != "prompt"}}, "windows": [0]} for i, body in rec.ingress.items()]
+             "ingress": {"brought": standin_brought(body, rec.registered.default_seed)}, "windows": [0]}
+            for i, body in rec.ingress.items()]
     (out / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
     (out / "windows.jsonl").write_text(json.dumps({"window": 0, "run_id": run_id, "run_root": root,
                                                    "requests": [q["engine_id"] for q in reqs], "passed": True}) + "\n")
@@ -1358,6 +1425,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--serve-run", required=True)
     p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
                    "(repeatable; the model's of record, GATES_OF_RECORD, whatever it says: another list is refused)")
+    p = sub.add_parser("weights-registration", help="a served run's weights registration, the committer's: what verity-vllm "
+                       "advice --weights-of-record takes, and the roots the verifier pins (window-circuit --pins)")
+    for flag in ("--serve-run", "--checkpoint-dir", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--key", required=True, help="the committer's 32-byte salt key file, drawn there the first time (0600); "
+                   "it never leaves the committer")
+    p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
+    p.add_argument("--hf-config")
+    p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
         p.add_argument(flag, required=True)
@@ -1402,8 +1478,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
         return 0
-    if a.cmd in ("circuit", "window-circuit", "class-size"):
-        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice}
+    if a.cmd in ("circuit", "window-circuit", "class-size", "weights-registration"):
+        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice,
+                    "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

@@ -42,6 +42,8 @@ PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
+    "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
+                                                  "verifier's pins of it (VLLM-113)",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -59,7 +61,6 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.index",
     "verity_vllm.check.replay.opening",
     "verity_vllm.check.weights_of_record",
-    "verity_vllm.commit",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.committer.native_collect",
     "verity_vllm.commit.committer.native_host",
@@ -81,7 +82,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.env",
     "verity_vllm.engine.hooks",
     "verity_vllm.engine.int8_attention",
-    "verity_vllm.engine.int8_attention_vllm",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
     "verity_vllm.engine.int8_ops",
@@ -172,9 +172,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_bytes'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_put'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_zeros'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
     ('verity_vllm.query.program_view', '_registry'),
     ('verity_vllm.query.program_view', '_spec_id'),
@@ -239,8 +236,10 @@ def exported(module: str) -> tuple[str, ...]:
 def _definitions(module: str) -> dict[str, tuple[str, ast.AST | None]]:
     """name -> (where it is bound: "top", "type-checking" or "lazy", its def or class node when this module defines it, or the
     module it imports it from)."""
-    tree = ast.parse(_module_file(module).read_text(encoding="utf-8"))
+    path = _module_file(module)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     out: dict[str, tuple[str, ast.AST | str | None]] = {}
+    package = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
 
     def bind(nodes, where):
         for n in nodes:
@@ -249,8 +248,9 @@ def _definitions(module: str) -> dict[str, tuple[str, ast.AST | None]]:
             elif isinstance(n, (ast.Assign, ast.AnnAssign)):
                 for t in n.targets if isinstance(n, ast.Assign) else [n.target]:
                     out.update({x.id: (where, None) for x in ast.walk(t) if isinstance(x, ast.Name)})
-            elif isinstance(n, ast.ImportFrom) and n.level == 0:
-                out.update({a.asname or a.name: (where, f"{n.module}.{a.name}") for a in n.names})
+            elif isinstance(n, ast.ImportFrom):
+                src = n.module if n.level == 0 else ".".join([*package[:len(package) + 1 - n.level], *filter(None, [n.module])])
+                out.update({a.asname or a.name: (where, f"{src}.{a.name}") for a in n.names})
             elif isinstance(n, ast.If) and "TYPE_CHECKING" in ast.unparse(n.test):
                 bind(n.body, "type-checking")
 

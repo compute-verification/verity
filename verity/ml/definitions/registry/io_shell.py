@@ -28,13 +28,13 @@ first id (a prompt has at least one); every other takes ``slot[1]`` while ``slot
 ``slot[0]`` positive on every slot but ``slot[0]`` = −2^31, else ``sel``: the sign of the count it carries on, so the count's one
 carry chain is the test. Each outputs its token and the next position's slot.
 
-A window has a fixed number of slots, each a class Program whether or not it carries a request (ASK-122), so whether a slot
+A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
 is occupied is a private word of its ingress row. `SlotRow_v1{NP}` opens that row, (occupancy, lp, ids[0], …, ids[NP − 1]),
 NP + 2 i32s, into its occupancy word and the first position's `TokenFeed_v1` slot (a copy, no gates). `SlotMask_v1` is a
 slot's output at a position: the token selected there while the slot is occupied (its occupancy word's low bit is 1), else
 `EMPTY`, which is no token id, so an empty slot's outputs are masked by its occupancy word wherever they are read.
 
-The network certifier's scan carries the slots (VLLM-126): the Programs at a boundary read their slots from the scan's
+The network certifier's scan carries the slots: the Programs at a boundary read their slots from the scan's
 state row before it (a registered row of NS u16 words, its fields bit-packed least significant bit first), and hand their
 outputs to the scan's Programs' row at that boundary. `ScanSlots_v1{NS, NP, IDB, K0, K, OCC, LP, MAX, IDS}` is the read,
 wires and no gate: for each of the row's lanes j (``OCC[j]``, ``LP[j]``, ``MAX[j]`` and ``IDS[j]`` the bit offsets of its
@@ -49,7 +49,7 @@ outputs served (up to ``max_tokens``, unsigned, and the first of the model's sto
 u32, then output i's low IDB bits for i < n and zeros past it, all zero for an empty slot, zero-padded to whole words. An
 occupied slot whose request the class can't hold has n = KO + 1 and no ids: its prompt not 1 to NP ids (after a Program's
 NP + KO − 1 positions the state's w is lp − NP − KO) or its outputs not ending within KO (``max_tokens`` past KO and no
-stop id among them). The scan refuses a Program's n over KO at its anchor (network-accounting's #4901), and the egress
+stop id among them). The scan refuses a Program's n over KO at its anchor (`ingress_scan`), and the egress
 renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
 
 Registered functions:
@@ -357,7 +357,7 @@ def slots_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC, L
 
 
 @composite("ScanSlots", 1, ["NS", "NP", "IDB", "K0", "K", "OCC", "LP", "MAX", "IDS"], slots_sig, refuse=slots_refuse,
-           conformance="the network certifier's scan state row as its Programs read their slots (VLLM-126)")
+           conformance="the network certifier's scan state row as its Programs read their slots")
 def ScanSlots(B, S, state):
     """Each lane's `SlotRow_v1` row and head from the scan's state row, its bits as they are (the module docstring)."""
     _, ret = slots_sig(S)

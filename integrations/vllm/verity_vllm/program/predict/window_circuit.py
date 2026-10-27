@@ -1,31 +1,30 @@
-"""I2's served window as one Circuit (VLLM-103's V3b, `verity.ml.windows.interface`): the window *class's* circuit, every
+"""I2's served window as one Circuit (`verity.ml.windows.interface`): the window *class's* circuit, every
 unit's output a committed row and every input row wired or registered.
 
-A window class (`WindowClass`, N1's scan class: note:network-accounting/20261025T0830Z-report-net68-scan-router) has a
-fixed number of slots a network timestep (ASK-122): ``lanes`` slots at each boundary, one every ``every`` scan buckets from the
-window's start, ``slots`` in all, each of at most ``prompt`` prompt ids and ``outputs`` outputs. Slots are lane-major: slot
-2j + b at the class of record is boundary b's lane j, anchored at bucket 16b. Its circuit is one class Program a slot,
-whatever the traffic (`class_circuit`): the Build's greedy request Program at one prompt row and P - 1 decode steps, P =
-prompt + outputs - 1 positions, every position computing the whole stack, the LM head and the token select, position p
-attending to keys 0..p. So the circuit is a function of the class alone: which slots carry a request, arrival steps, prompt
-lengths, output lengths and key counts are values, never structure.
+A window class (`WindowClass`, N1's scan class) has a fixed number of slots a network timestep: ``lanes`` slots at each
+boundary, one every ``every`` scan buckets from the window's start, ``slots`` in all, each of at most ``prompt`` prompt ids
+and ``outputs`` outputs. Slots are lane-major: slot 2j + b at the class of record is boundary b's lane j, anchored at
+bucket 16b. Its circuit is one class Program a slot, whatever the traffic (`class_circuit`): the Build's greedy request
+Program at one prompt row and P - 1 decode steps, P = prompt + outputs - 1 positions, every position computing the whole
+stack, the LM head and the token select, position p attending to keys 0..p. So the circuit is a function of the class
+alone: which slots carry a request, arrival steps, prompt lengths, output lengths and key counts are values, never
+structure.
 
-A slot's request comes from the network certifier's scan (VLLM-126, form (a)): the Programs at boundary b read the scan's
-state row before it (`scan_state.SCAN_STATE`, registered) through `io_shell.ScanSlots_v1` (`scan_state.bridge`, wires and
-no gate), which gives the slot's lane its `io_shell.SlotRow_v1` row (its occupancy word, its prompt's length and its ids)
-and its head (its prompt's length and ``max_tokens``). Position p's token is `io_shell.TokenFeed_v1{prompt, FIRST}`'s while
-p is below the class's prompt cap (the prompt's id below its length, else the previous position's select; the slot it
-carries starts as the row's), and past it the previous position's select. Each position's select is masked by the slot's
-occupancy word (`io_shell.SlotMask_v1`, so an empty slot's are `io_shell.EMPTY`) and collected (`io_shell.OutCollect_v1`:
-the ``outputs`` from the prompt's last position on). The slot's last position makes its entry of the scan's Programs' row
+A slot's request comes from the network certifier's scan: the Programs at boundary b read the scan's state row before it
+(`scan_state.SCAN_STATE`, registered) through `io_shell.ScanSlots_v1` (`scan_state.bridge`, wires and no gate), which
+gives the slot's lane its `io_shell.SlotRow_v1` row (its occupancy word, its prompt's length and its ids) and its head (its
+prompt's length and ``max_tokens``). Position p's token is `io_shell.TokenFeed_v1{prompt, FIRST}`'s while p is below the
+class's prompt cap (the prompt's id below its length, else the previous position's select; the slot it carries starts as
+the row's), and past it the previous position's select. Each position's select is masked by the slot's occupancy word
+(`io_shell.SlotMask_v1`, so an empty slot's are `io_shell.EMPTY`) and collected (`io_shell.OutCollect_v1`: the
+``outputs`` from the prompt's last position on). The slot's last position makes its entry of the scan's Programs' row
 (`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the registered model's first stop id, that one kept,
 `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot; a request the class can't hold
 (a prompt past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the
-scan refuses at the anchor (a Program's n over KO, network-accounting's #4901) and the egress never renders. The scan's
-state rows and the entries are the circuit's external ports. A slot's Program hands all its outputs to the scan at its
-anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the next window.
-`window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and emits the
-class's circuit.
+scan refuses at the anchor (a Program's n over KO) and the egress never renders. The scan's state rows and the entries
+are the circuit's external ports. A slot's Program hands all its outputs to the scan at its anchor, which carries them
+across windows (`SC_GROUP`), so no Program runs into the next window. `window_circuit(registered, compiled, cls, grain,
+placed=...)` refuses a window the class's slots don't take and emits the class's circuit.
 
 `class_circuit` walks the class Program's nodes in order and lowers each to units at ``grain``, once a slot: node j's units
 of slot 0, then of slot 1 and so on, each allocation's slots side by side in its template (`window_builder`, which holds
@@ -42,14 +41,14 @@ the units, their feeds, gathers and weight reads, and wires them):
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
   aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
-- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut (#4263, CIR-96): each head's Calls (`AttentionHead_v19`'s
+- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut: each head's Calls (`AttentionHead_v19`'s
   body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
   nb = ⌈T / BN⌉), each full block below it `AttnBlock_v5` and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each
   block's running state its predecessor's rows. A block's keys and values are one row a KV group, which its group's heads
   read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
   `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
   `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
-- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way (VLLM-127): its first visited block
+- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way: its first visited block
   `AttnBlockFirst_v1` (FA3's first iteration is FA2's word for word), each full block below it
   `AttnBlock_v4{FIRST=False, CHECK = b >= MASKED_FROM}` and its end `AttnHeadEnd_v1{D, INV=Fa3InvSum_v1}`. `CUTS` names
   the versions cut by key block and the cut of each.
@@ -63,9 +62,13 @@ the units, their feeds, gathers and weight reads, and wires them):
 - `RMSNormTriton_v5`, `RMSNormFusedCuda_v2` and `SiluMul_v2` are one unit each.
 
 The weights record is never one registered parameter: each weight a port reads is its own at the port's row width
-(`window_builder.weight_param`: ``weights/<label>@<words>``, a tied embedding twice, once as its table's rows and once as the
-LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows, by its own name,
-and the window's members take its rows as registered rows (`interface.members`).
+(`window_builder.weight_param`: ``weights/<label>@<words>``), its reads' bases and steps whole rows of it, so each is pinned
+as a root over its own rows, by its own name, and the window's members take its rows as registered rows
+(`interface.members`). An embedding's table is a parameter of its own (`window_builder.table_param`:
+``weights/<label>@<words>/table``, its rows ``row-seg`` leaves), so a tied embedding is registered three times: as its
+table, as the LM head's rows and as ``x0``'s rows at the table's width. Nothing in the circuit ties their roots to one
+another or to the checkpoint: the verifier pins each by name, its root and domain id (`interface.registered_reads`), at the
+committer's registration (`window_weights`).
 
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
 divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
@@ -131,8 +134,8 @@ CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
 
 @dataclass(frozen=True)
 class WindowClass:
-    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (ASK-122:
-    fixed slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
+    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (fixed
+    slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
     ``outputs`` outputs, ``lanes`` of them anchored at each boundary, one every ``every`` scan buckets from the window's
     start (lanes 0: every slot at the window's one boundary). Slots are lane-major: slot ``nb · j + b`` is boundary b's lane j
     (nb = slots / lanes boundaries), anchored at bucket ``every · b``, and the window is ``buckets`` = every · nb buckets. Its
@@ -179,7 +182,7 @@ class WindowClass:
         return SS.scan_class(self.lanes, self.outputs, self.every)
 
 
-#: the class of record, the certifier run of record's envelope at ASK-122's slots (network-accounting took vllm's pick):
+#: the class of record, the network certifier's envelope at these fixed slots:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
@@ -257,6 +260,16 @@ class _Program:
         self.occ: Row | None = None
         self.head: Row | None = None
         self.collect: Row | None = None
+        #: the units a node makes beyond its output rows: each position's `TokenFeed_v1` unit and (at position 0) its
+        #: `SlotRow_v1` unit, None past the class's prompt cap; each token select's chunks, ``x0`` unit and `IO.SlotMask` unit
+        self.tokens: list[tuple[tuple[str, int] | None, tuple[str, int] | None]] = []
+        self.selects: dict[int, tuple[tuple[tuple[str, int], ...], tuple[str, int], tuple[str, int]]] = {}
+        #: each attention cut by key block: its cut's plan (`_plan`) and each Call's first unit, a unit a head
+        self.heads: dict[int, tuple[Any, tuple[tuple[str, int], ...]]] = {}
+        #: the slot's `ScanSlots_v1` unit, each position's `OutCollect_v1` unit and its `SlotEntry_v1` unit
+        self.scan_unit: tuple[str, int] | None = None
+        self.collects: list[tuple[str, int]] = []
+        self.entry_unit: tuple[str, int] | None = None
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -358,19 +371,23 @@ class _Program:
             raise Unexpressible(f"{self.name}: position {p}'s token reads {segs[0][:2]}; a class Program reads its one prompt row "
                                 "at position 0 and every other position's token from its predecessor's select")
         if p >= NP:
+            self.tokens.append((None, None))
             return self.rows(tok.refs)
         tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=p == 0))
         if p == 0:
             stid, su = self.b.unit(self.scan)
             self.b.read(stid, "state", su, (1,), self.anchor * self.scan.bindings["NS"], (0,), SS.SCAN_STATE)
+            self.scan_unit = (stid, su)
             rtid, ru = self.b.unit(bind(IO.SlotRow, NP=NP))
             self.b.feed(rtid, "row", ru, 1, (Row(stid, su, f"o{2 * self.lane}", 2 * (NP + 2)),))
             self.head = Row(stid, su, f"o{2 * self.lane + 1}", 4)
             self.b.feed(tid, "slot", u, 1, (Row(rtid, ru, "o1", 2 * (NP + 1)),))
             self.occ = Row(rtid, ru, "o0", 2)
+            self.tokens.append(((tid, u), (rtid, ru)))
         else:
             self.b.feed(tid, "slot", u, 1, (self.slot,))
             self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
+            self.tokens.append(((tid, u), None))
         self.slot = Row(tid, u, "o1", 2 * (NP + 1))
         return (Row(tid, u, "o0", 2),)
 
@@ -547,6 +564,7 @@ class _Program:
                     self._each(tid, port, u, [(r,) for r in self._block(keys[kind], *x, BN)], NH // KVH)
             calls.append((tid, u))
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
+        self.heads[j] = (plan, tuple(calls))
 
     def _whole_heads(self, j: int, node: Any) -> None:
         """An attention whose version has no per-key-block cut (not in `CUTS`): a unit a head of its own head Definition, its
@@ -599,6 +617,7 @@ class _Program:
         mtid, mu = self.b.unit(bind(IO.SlotMask))
         self.b.feed(mtid, "occ", mu, 1, (self.occ,))
         self.b.feed(mtid, "tok", mu, 1, self.outs[j][0][2:])
+        self.selects[j] = (tuple(parts), (xtid, xu), (mtid, mu))
         self._collect(self.position - 1, Row(mtid, mu, "o0", 2))
 
     def _collect(self, p: int, tok: Row) -> None:
@@ -609,10 +628,12 @@ class _Program:
         self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (self.head if p == 0 else self.collect,))
         self.b.feed(ctid, "tok", cu, 1, (tok,))
         self.collect = Row(ctid, cu, "o0", 2 * (KO + 2))
+        self.collects.append((ctid, cu))
         if p == self.cls.positions - 1:
             etid, eu = self.b.unit(self.entry)
             self.b.feed(etid, "occ", eu, 1, (self.occ,))
             self.b.feed(etid, "state", eu, 1, (self.collect,))
+            self.entry_unit = (etid, eu)
 
 
 FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",
@@ -683,6 +704,17 @@ def _inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) ->
     return out
 
 
+@dataclass(frozen=True)
+class Lowered:
+    """A class circuit with what its lowering knows (`window_rows` fills its units from it): the class Program's function, each
+    slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``) and each template's runs of units by their
+    (slot, step), ``(at, count, slot, step)``."""
+    circuit: IF.Circuit
+    fn: Any
+    programs: tuple[_Program, ...]
+    spans: dict[str, list[tuple[int, int, int, int]]]
+
+
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
                   name: str = NAME) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of
@@ -691,6 +723,11 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     (`window_builder.weight_param`), and ``SCAN_STATE``'s ``cls.buckets`` rows, row a the scan's state row before the
     window's bucket a (`ingress_scan.window_state`'s rows, `scan_state`). A window's circuit is every slot's; ``programs``
     is the first slots only, a probe's census (`class_size`)."""
+    return lower(registered, cls, programs, grain, name).circuit
+
+
+def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME) -> Lowered:
+    """`class_circuit`'s circuit with its lowering (`Lowered`)."""
     programs = cls.slots if programs is None else programs
     if not 1 <= programs <= cls.slots:
         raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")
@@ -715,10 +752,11 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     params = {**b.params, SS.SCAN_STATE: cls.buckets * scan.bindings["NS"]}
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))
-    return IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                      external=(f"{descriptor_id(scan)}/state", f"{descriptor_id(entry)}/o0"),
-                      wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
-                      blocks=IF.Blocks(programs, cls.positions, tuple(_inference(b.spans, programs))))
+    circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
+                         external=(f"{descriptor_id(scan)}/state", f"{descriptor_id(entry)}/o0"),
+                         wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
+                         blocks=IF.Blocks(programs, cls.positions, tuple(_inference(b.spans, programs))))
+    return Lowered(circuit, fn, tuple(progs), b.spans)
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,
@@ -727,8 +765,14 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
     ``placed`` is each request's anchor bucket and the bucket of its last output, in its request order, as the network
     certifier's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
-    end unchecked. A last output past the window's end is the scan's to carry (VLLM-126: a slot's Program hands every output
-    to the scan at its anchor, `SC_GROUP` carries them across windows), so no Program runs into the next window."""
+    end unchecked. A last output past the window's end is the scan's to carry (a slot's Program hands every output to the
+    scan at its anchor, and `SC_GROUP` carries them across windows), so no Program runs into the next window."""
+    takes(compiled, cls, placed)
+    return class_circuit(registered, cls, None, grain, name)
+
+
+def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None) -> None:
+    """Refuse a window ``cls``'s slots don't take (`window_circuit`)."""
     units = [u for u in compiled.requests if u is not None]
     if len(units) > cls.slots:
         raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
@@ -756,8 +800,7 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
         if u.LP > cls.prompt or u.T + 1 > cls.outputs:
             raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
                                 f"{cls.outputs}")
-    return class_circuit(registered, cls, None, grain, name)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "WindowClass", "class_circuit",
-           "class_program", "stop_ids", "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "Lowered", "NAME", "Row", "WindowClass", "class_circuit",
+           "class_program", "lower", "stop_ids", "takes", "window_circuit"]

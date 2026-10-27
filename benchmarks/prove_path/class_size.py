@@ -132,8 +132,8 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
-#: circuits' compositions of the blocks this estimate scaled or interpolated, each staged by C-Flock's `UnitStager` at V3b's
-#: cuts (thread 1792894842.280569, 25 Oct)
+#: the compositions of the blocks this estimate scaled or interpolated, each staged by C-Flock's `UnitStager` at V3b's
+#: cuts
 COMPOSED = ("circuits' compositions r20261025-183214-951f, r20261025-183237-6217 and r20261025-183911-2915 "
             "(art:65bc8cddf39ec0076f17c19b4e13a74ad26554736b531b43fe6063f778cdcaf3)")
 #: the source of a scan slot unit circuit-check lowered whole, of 3 rows in and out
@@ -164,7 +164,7 @@ MEASURED: dict[str, tuple[int, int, str]] = {
                                            "circuit-check --no-cache passed it (3,064 IR gates, past whole lowering's 256); k_log an "
                                            "estimate, not composed: its 3 rows' (rows_k)")),
 }
-#: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where #4263 (r20261025-123346-091b: NVIS 1, 17, 128) and circuits (`COMPOSED`)
+#: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where the heads' run (NVIS 1, 17, 128) and the compositions (`COMPOSED`)
 #: composed it, linear between
 FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 571_031, 12: 843_099, 14: 979_101, 15: 1_047_070,
                 16: 1_115_295, 17: 1_231_456, 24: 1_708_199, 32: 2_252_527, 33: 2_368_688, 34: 2_436_657, 36: 2_573_043,
