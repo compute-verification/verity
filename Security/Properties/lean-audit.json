@@ -9263,7 +9263,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "852e47cac1fab09a458596f3a9831f2823801e145431b9bb0a703c98be8607b1",
+   "digest": "e608173cd2b691930d3d1b92c366b5d463190e9b3574b6c7eab7f628204a7b13",
    "definitions": {
     "NetworkCheck.Period.Audit": "02c93690e1f6eb339d38459c1b23f69748371bb12bac5dcf758cca3052b7e455",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -9289,11 +9289,11 @@
     "NetworkCheck.Period.Scan.free": "ded69637717ef3be5ea9ea32c60a09428bb22c4786c7daff42e64e4e16737d63",
     "NetworkCheck.Period.Scan.ingress": "3f39313a55549509d2ce2a3243b3e652d7a6df6e434b4b87584a7d1bf90bf794",
     "NetworkCheck.Period.Scan.steps": "c0ea25703419094cb77d7a92ae9b49f44855380704e1ba0be3b90df87bf562eb",
-    "NetworkCheck.Period.Scan.terms": "05532bb0fad03b6ef082a7389ed4e7d0e4e346432c05630e32207c4e1c297232",
+    "NetworkCheck.Period.Scan.terms": "fcbca8925d4baa67509409857546fa8d6e1838e818f818861bc311059089cd16",
     "NetworkCheck.Period.atMost": "3df31d5d5297b8a4f0576162646c9449346e9ceb4d2d2f5f49f6fc7693514a84",
     "NetworkCheck.Period.capsTerm": "b0344cf3feee99420207429449a56894f1be391186237460231820aa80faf275",
     "NetworkCheck.Period.clog2": "0b4eb09d5ca828e9a24744a2362203d629b3e35103d57bfb916d321bdfbe2dcc",
-    "NetworkCheck.Period.rowsTerms": "0e2785c0071f3af94beca8663a173c339684b39aeacbfdcf58c0ac5d45ddbdb3",
+    "NetworkCheck.Period.rowsTerms": "9f99b045d2ea9fe7cee37bb9cfd485c62bf85886771d7e0b7ab3c550209aaa66",
     "NetworkCheck.Period.terms": "5f7283158498e9ad83e4b843709e8ac97a8b2d21643f6412b5646c03d9c1f57c"
    },
    "guarantees": ["Properties.NetworkPeriod.clockKBoundsCount", "Properties.NetworkPeriod.rowsKBoundsCount"]
@@ -11392,10 +11392,10 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "Properties.NetworkPeriod": {
-   "digest": "9dafbeaf53ee6b9d96f6bd7348c61e4c209bcd1f4d4652d89f496b1d18e09e1c",
+   "digest": "d25775226acd210867c0f5e10ab324f881ee0b411553629d2c688371eea0ab66",
    "definitions": {
     "Properties.NetworkPeriod.ClockKBoundsCount": "8cdb92caa40b67dd32763dd0bd4b5c1a316280f88dc25339058d7a54a38df555",
-    "Properties.NetworkPeriod.RowsKBoundsCount": "f31363e4e6019b90688f543bcba21924833c5e81ca59494edccfbacbba3f33d7"
+    "Properties.NetworkPeriod.RowsKBoundsCount": "9debf917e441e422d7f1f83f095a76f95446cefb0aee8d4f9c3087aff889fec0"
    },
    "guarantees": ["Properties.NetworkPeriod.clockKBoundsCount", "Properties.NetworkPeriod.rowsKBoundsCount"]
   },

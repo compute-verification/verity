@@ -37,18 +37,18 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   request's entry at its anchor, read and its response ids), the block round's o1 rows; and ``view``, leaf t S_t's
   egress view.
 * **The block round** (`BLOCK`): the toy block (`ProgBlock{N, M}`, N = NP, M the state's bits: o0 the u16 1, o1 its
-  N-bit input ``x`` through two NOTs, and its input ``ids`` read and computed nothing on), one unit a bucket of the
-  group, unit b's ``x`` the Programs' row b, its free input, its ``ids`` a registered read of ``state`` leaf b − 1
-  (S_{b−1}, whose slots hold the prompt ids and sampling fields of the requests anchored at b, as the scan read them
-  off the warden's ingress cells; unit 0 reads leaf 0, since no request is anchored at bucket 0), and its o1 a
-  registered read of ``prog`` leaf b, standing in for the anchored Programs, whose outputs the Programs' row is and
-  whose inputs are those requests. The ``prog`` tree is committed under the binding of the block's o1 frame domain
-  (`block_binding`, over the block's statement's input set `block_set`, bound to the session and the group's ingress
-  heads), so its root is the o1 frame root C-Flock commits under the same salts, and `stage` refuses a block whose o1
-  frame root and domain aren't the tree's: the registration's ``block/o1`` and the honest round's ``scan/prog`` are
-  one root and domain, the tie `NetworkCheck.Period`'s rows form checks (`progTied`), and the block's registration
-  names the honest round's ``scan/state`` at its root and domain, the ids tie it checks (`idsTied`). Proved first;
-  accepted, every o0 opens to 1.
+  N-bit input ``x`` through two NOTs, and its input ``ids`` read and computed nothing on; ``x`` a row-seg/v1 row,
+  `ROW_SCHEMAS`), one unit a bucket of the group, unit b's ``x`` the Programs' row b, its free input, its ``ids`` a
+  registered read of ``state`` leaf b − 1 (S_{b−1}, whose slots hold the prompt ids and sampling fields of the
+  requests anchored at b, as the scan read them off the warden's ingress cells; unit 0 reads leaf 0, since no request
+  is anchored at bucket 0), and its o1 a registered read of ``prog`` leaf b, standing in for the anchored Programs,
+  whose outputs the Programs' row is and whose inputs are those requests. The ``prog`` tree is committed under the
+  binding of the block's o1 frame domain (`block_binding`, over the block's statement's input set `block_set`, bound
+  to the session and the group's ingress heads), so its root is the o1 frame root C-Flock commits under the same
+  salts, and `stage` refuses a block whose o1 frame root and domain aren't the tree's: the registration's ``block/o1``
+  and the honest round's ``scan/prog`` are one root and domain, the tie `NetworkCheck.Period`'s rows form checks
+  (`progTied`), and the block's registration names the honest round's ``scan/state`` at its root and domain, the ids
+  tie it checks (`idsTied`). Proved first; accepted, every o0 opens to 1.
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`): the first unit
   (`IngressScanFirst`, bucket 0), G·T − 1 ingress units (buckets 1 … G·T − 1) and G·T egress units, its members split
   a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``), every unit drawn by the verifier's Lean.
@@ -149,7 +149,7 @@ from verity.ml.circuits.types import Array, Tuple  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
@@ -212,6 +212,10 @@ TEMPLATES = ("first", "ingress", "egress")
 UNREAD = ("ingress",)
 #: the block round's: the toy block (`ProgBlock`), one unit a bucket, whose o1 rows are the scan's Programs' rows
 BLOCK = ("block",)
+#: an input row's schema where it isn't hm96-sha512/row/v2: the block's ``x`` is a row-seg/v1 row, which takes a
+#: compression before its last block at any length, as C-Flock's statement needs of one row (`verity_flock.circuit.
+#: compose`); at the test class every block row is shorter than a block (NP = 352 bits)
+ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 #: each round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every read
 #: held and its unit's ok bit 0; the block first, since the scan reads its outputs
 ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chain": (TEMPLATES, "does not open"),
@@ -816,7 +820,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
         ins, outs = ports_of(cls)[tp]
         sdir = out / tp
         sdir.mkdir(exist_ok=True)
-        st = M.CS.UnitStager(defs[tp], f"unit/scan-{tp}", [(r, M.V2, b, [r]) for r, b in ins],
+        st = M.CS.UnitStager(defs[tp], f"unit/scan-{tp}", [(r, ROW_SCHEMAS.get((tp, r), M.V2), b, [r]) for r, b in ins],
                              [(M.V2, (j,)) for j in range(1 + len(outs))], circuit=sdir / "circuit.txt", bind=bound)
         st.pin
         stagers[tp] = SimpleNamespace(defn=defs[tp], st=st, base=base, n=cnt, out=sdir, ins=ins, outs=outs,
