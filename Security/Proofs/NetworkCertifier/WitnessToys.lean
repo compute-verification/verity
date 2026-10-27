@@ -4,6 +4,7 @@ import Definitions.NetworkCertifier.HorizonLeak
 import Definitions.NetworkCertifier.TapRows
 import Definitions.NetworkCertifier.SampledAudit
 import Definitions.NetworkCertifier.SampledReg
+import Definitions.NetworkCertifier.Schedule
 
 /-!
 # The instances the network certifier's witnesses are stated at
@@ -24,6 +25,11 @@ witnesses):
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
   checks its egress record), one window of ten buckets of four slots, which `fxQueueSched` fits (`fxQueue_fits`).
   `Fits` reads the format's connections and its buckets a window, not its frames' encoding.
+* `fxRate`: the constant-rate Program at one bucket (one window of one bucket, one link of one slot, the one sync value
+  of `syncOne`), and `fxFixed`, it with its clock fixed. Both accept the honest step `fxHonest`
+  (`fxHonest_accepted`). `AccSeqsAt acc` is `AccSeqs` with `acc` in place of the Program's acceptance, and at the
+  verifier that accepts everything, `acceptAll`, one step's sequences are infinitely many
+  (`accSeqsAt_acceptAll_infinite`).
 -/
 
 namespace NetTiming.Witness
@@ -358,5 +364,73 @@ theorem fxQueue_fits : (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueS
       have := fxQueue_bucket c j hj
       omega
     simp [fxRows, h0]
+
+/-! ## The shipped schedule at one bucket -/
+
+/-- One clock-sync value, `δ = 0` and `ρ = 1`. -/
+def syncOne : SyncSet where
+  deltas := {0}
+  rhos := {1}
+  deltas_nonempty := ⟨0, Finset.mem_singleton_self 0⟩
+  rhos_nonempty := ⟨1, Finset.mem_singleton_self 1⟩
+  rhos_pos := fun ρ h => by rw [Finset.mem_singleton.1 h]; decide
+
+/-- `syncOne`'s one value. -/
+def syncOne0 : syncOne.Elem := (⟨0, Finset.mem_singleton_self 0⟩, ⟨1, Finset.mem_singleton_self 1⟩)
+
+/-- **The constant-rate Program at one bucket**: one window of one bucket, one link of one slot, the sync set
+`syncOne`, and one frame `[true]` anchored at bucket 0. -/
+def fxRate : Program 1 1 Unit (Unit × (Fin 1 → syncOne.Elem)) :=
+  constantRate 1 1 syncOne fun _ _ _ => [⟨[true], 0, 0⟩]
+
+/-- `fxRate` with its clock fixed at `syncOne0`: a Program whose clock-sync advice is `Unit`. -/
+def fxFixed : Program 1 1 Unit (Unit × (Fin 1 → Unit)) where
+  rows t ins a ℓ := fxRate.rows t ins (a.1, fun _ => syncOne0) ℓ
+
+/-- The operator, which sends nothing. -/
+def fxOp : ℕ → List (Obs 1 1 1) → Unit := fun _ _ => ()
+
+/-- **The honest certifier's one step at `fxRate`**: the Program's row, jitter class 0, its one status complete. -/
+def fxHonest : List (Obs 1 1 1) :=
+  [⟨fxRate.rows 0 [()] ((), fun _ => syncOne0), 0, fun _ => .complete⟩]
+
+/-- The observation sequences of length `n` with jitter below `D` that the acceptance `acc` passes: `AccSeqs` with
+`acc` in place of the Program's acceptance (`accSeqs_eq_at`). -/
+def AccSeqsAt {L K S : ℕ} (acc : List (Obs L K S) → Prop) (n D : ℕ) : Set (List (Obs L K S)) :=
+  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ acc o}
+
+/-- The verifier that accepts everything. -/
+def acceptAll {L K S : ℕ} (_ : List (Obs L K S)) : Prop := True
+
+theorem accSeqs_eq_at {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In)
+    (n D : ℕ) : AccSeqs P op n D = AccSeqsAt (AcceptedUpTo P op n) n D :=
+  rfl
+
+/-- **`fxHonest` is accepted** at `fxRate` and at `fxFixed`, under the advice `((), syncOne0)`. -/
+theorem fxHonest_accepted : fxHonest ∈ AccSeqs fxRate fxOp 1 1 ∧ fxHonest ∈ AccSeqs fxFixed fxOp 1 1 := by
+  have hj : ∀ x ∈ fxHonest, x.jitter < 1 := by
+    intro x hx
+    simp [fxHonest] at hx
+    simp [hx]
+  have hl : 0 < fxHonest.length := by simp [fxHonest]
+  refine ⟨⟨rfl, hj, ((), fun _ => syncOne0), fun t ht => ?_⟩, ⟨rfl, hj, ((), fun _ => ()), fun t ht => ?_⟩⟩ <;>
+  · obtain rfl : t = 0 := by omega
+    exact ⟨hl, rfl, fun _ => rfl⟩
+
+/-- **At the verifier that accepts everything, one step's sequences are infinitely many**: one link of one slot
+carries any payload. -/
+theorem accSeqsAt_acceptAll_infinite : (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) 1 1).Infinite := by
+  refine Set.infinite_of_injective_forall_mem
+    (f := fun k : ℕ => [(⟨fun _ _ => some (List.replicate k true), 0, fun _ => .complete⟩ : Obs 1 1 1)]) ?_ ?_
+  · intro a b hab
+    have := congrArg (fun o : List (Obs 1 1 1) => o.head?.map fun x => x.rows 0 0) hab
+    simpa using this
+  · intro k
+    simp [AccSeqsAt, acceptAll]
+
+/-- No finite count bounds `AccSeqsAt acceptAll` at one step. -/
+theorem accSeqsAt_acceptAll_not_le (N : ℕ) : ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) 1 1).encard ≤ N := by
+  rw [accSeqsAt_acceptAll_infinite.encard_eq]
+  simp
 
 end NetTiming.Witness
