@@ -82,9 +82,9 @@ roots and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the
 two rows' registrations, under the deployment's key and its one schedule; the scan's Program its descriptor
 (`scan_zk`'s ``joint/program.json``, the generator form's), off which the period check reads the scan's terms (it
 refuses a checker form, whose egress rows are inputs, by name); and beside the loop's audits the scan's block round's
-(`block_audit`), whose o0 is the scan's slot entries, as the rows form's `progTied` asks. A period with a link-window
-the scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved yet, and a ``late`` run's is refused
-before the scan registers it).
+(`block_audit`), whose o1 is the scan's `prog`, as the rows form's `progTied` asks. A period with a link-window the
+scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved yet, and a ``late`` run's is refused before
+the scan registers it).
 
 Layout terms (`layout`): the audit's free inputs (`free_inputs`, from the window's ``circuit.json``: every unit's
 input-row bits, less the rows wires feed or ``external`` names) and its Program (`audit_program`, the window's
@@ -192,8 +192,8 @@ WARDEN_PENDING = "scan_zk.py proves link-window 0 alone (no --window W), so no l
 #: the scan's sampled draw (``SCAN_DRAW``): Lean ``draw --stratified K`` of the window's 2T units
 SCAN_DRAW = 16
 #: what `scan_prove` keeps of a scan's ``--out``: its summary, its honest round's registration, draw and audit record,
-#: and its answers (whose ``audits`` hold the block round's, the compute audit whose o0 is the scan's slot entries)
-#: with the block round's audit record
+#: and its answers (whose ``audits`` hold the block round's, the compute audit whose o1 is the scan's `prog`) with the
+#: block round's audit record
 SCAN_KEEP = ("summary.json", "joint/program.json", "honest/registration.json", "honest/draw.json", "honest/audit.json",
              "answers.json", "block/audit.json")
 
@@ -667,7 +667,7 @@ def scan_window(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tupl
 
 
 def block_audit(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tuple[dict, dict, int, dict] | None:
-    """The scan's block round's compute audit, whose o0 is the scan's slot entries (``answers.json``'s ``audits``,
+    """The scan's block round's compute audit, whose o1 is the scan's `prog` (``answers.json``'s ``audits``,
     `scan_zk.answers`): its registration, its one-stage answer re-decided at ``delta`` as `scan_window`'s is, its free
     inputs and its Program's descriptor; None when the run's scan kept no block round."""
     sp = (sess.get("scan_prove") or {}).get(strategy)

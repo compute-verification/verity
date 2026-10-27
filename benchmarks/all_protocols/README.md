@@ -57,12 +57,12 @@ every machine of a census deployment, the pooled total first and the per-window 
   per window; N2's verdict of record on each link-window (`--zk` behind the Lean firewall); the certified outputs
   checked against the period's registered ones; then `NetworkCheck.Period` (`verity/certifier/v0`,
   `network-period check`) on the period's link-windows and its compute audit, whose free inputs are the window's
-  unregistered input rows (`circuit.json`), and in the rows form the scan's block round's audit, whose o0 is the scan's
-  slot entries (`block_audit`): on acceptance `public.K`, the bits a covert sender in the server can move over the link
-  in the period, except with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's,
-  whose tampered period must reject). `eps` sums its terms' δ (each audit's, and in the rows form each link-window's
-  scan's), so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. Its
-  jitter term is 0 at jitter bound 1, assumed (J), which each answer's row in `summary.json` says (`jitter_term`). The
+  unregistered input rows (`circuit.json`), and in the rows form the scan's block round's audit, whose o1 is the
+  scan's `prog` (`block_audit`): on acceptance `public.K`, the bits a covert sender in the server can move over the link in the
+  period, except with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose
+  tampered period must reject). `eps` sums its terms' δ (each audit's, and in the rows form each link-window's scan's),
+  so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. Its jitter
+  term is 0 at jitter bound 1, assumed (J), which each answer's row in `summary.json` says (`jitter_term`). The
   session stays in the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client
   certificates and out records only, and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what
   the verdict still stands on: the records are the certifier-only path's, not the network certifier's own cells; the
