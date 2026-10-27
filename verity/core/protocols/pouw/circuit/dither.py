@@ -1,6 +1,6 @@
 """Dither's served unit (CMP-176, CMP-172): the Definitions a sampled proof block's proof passes, the layout of a call's
 committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled cells.
-The protocol is Dither v3.2 (`verity/core/protocols/pouw/accel/PROTOCOL.md`), as V31-GPU's prover implements it
+The protocol is Dither v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md`), as V31-GPU's prover implements it
 (`benchmarks/pouw/accel_v31/v31.py`, CMP-159); the guarantee it instantiates is `Pouw.Guarantees.Dither.WorkSoundNoFold`.
 
 **A call** is O = (A + d_A)(B + d_B)ᵀ over the integers: A (m × K int8) is the call's activations, committed in the call's
@@ -138,6 +138,9 @@ class Shape:
             raise ValueError(f"K is below {K_LIMIT} (`K_LIMIT`), not {self.k}")
         if self.L <= 0 or self.L % self.lp:
             raise ValueError(f"L is t L′, a multiple of L′ {self.lp}, not {self.L}")
+        if min(self.L, self.k) > 8 * self.lp:
+            raise ValueError(f"t = min(L, K) / L′ is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
+                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row <= 0 or self.row % 16 or TILE_WORD_BYTES % self.row:
             raise ValueError(f"a row is a multiple of 16 bytes dividing {TILE_WORD_BYTES}, not {self.row}")
 

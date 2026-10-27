@@ -311,6 +311,16 @@ def test_shape_refuses(bad):
         D.Shape(**{**dict(m=128, n=128, k=256, lp=32, L=64), **bad})
 
 
+def test_shape_refuses_t_past_8():
+    """t = min(L, K) / L′ is at most 8: L 8,192 at L′ 256 is refused at K 16,384, and L′ 1,024 passes, as do the default
+    and L ≥ K with L′ ≥ K / 8."""
+    with pytest.raises(ValueError, match="at most 8"):
+        D.Shape(128, 128, 16384, lp=256, L=8192)
+    assert D.Shape(128, 128, 16384, lp=1024, L=8192).t == 8
+    assert D.Shape(128, 128, 4096).t == 8
+    assert D.Shape(128, 128, 4096, lp=512, L=8192).S == 1
+
+
 @pytest.mark.parametrize("defn, params", [(D.PouwDitherBlock, dict(L=48, FIRST=True)),
                                           (D.PouwDitherBlock, dict(L=D.K_LIMIT, FIRST=True)),
                                           (D.PouwDitherLast, dict(K=96, L=40)),
