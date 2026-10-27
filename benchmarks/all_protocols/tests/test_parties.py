@@ -1,7 +1,8 @@
 """The toy's machine for sampled proofs' parties (`verity_all_protocols.parties`), the parties themselves core's:
 
-* core's table holds the challenger, firewall, workers and verifier, and the example configuration places exactly those
-  parties, its channels between them, each ``after`` a message an earlier channel carries;
+* core's table holds the challenger, firewall, workers and verifier, and their configuration
+  (``fixtures/sampled-proofs.toml``) places exactly those parties, its channels between them, each ``after`` a message
+  an earlier channel carries;
 * a configuration listing a component no party knows is refused by name;
 * the product capability runs over exactly the ids it is given, an absent component's case one its own decoders refuse,
   and the commitment binds the listed components' digests under the product's own id (a stand-in ``product``, which
@@ -9,8 +10,8 @@
 * the deployment gives a listening address only to a party that listens for the verifier, and states the coins
   ``simulated`` when every party is here or the challenger shares a prover's machine;
 * a verifier whose listening peers run elsewhere at no address decides nothing (2);
-* opt-in (``VERITY_ALL_PROTOCOLS_TOOLS=tools.json``, `build.sh`'s; minutes): the example configuration with every party on
-  this machine, honest, accepted on the challenger's coins; tampered, rejected; and with the certifier listed but no
+* opt-in (``VERITY_ALL_PROTOCOLS_TOOLS=tools.json``, `build.sh`'s; minutes): that configuration with every party on this
+  machine, honest, accepted on the challenger's coins; tampered, rejected; and with the certifier listed but no
   certifier party, ``certifier: absent`` and the product rejects.
 """
 from __future__ import annotations
@@ -27,13 +28,13 @@ from verity.core.protocols.sampled_proofs import parties as SP_PARTIES
 from verity.core.wire import Message
 from verity_all_protocols import compose as C, parties as P, settings as S
 
-EXAMPLE = P.ROOT / "examples" / "toy_network" / "config.toml"
+CONFIG = Path(__file__).parent / "fixtures" / "sampled-proofs.toml"
 SP, CERT = "verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"
 
 
-def test_the_roles_table_and_the_example_configuration_agree():
+def test_the_roles_table_and_their_configuration_agree():
     assert set(P.ROLES) == {"challenger", "firewall", "workers", "verifier"}
-    config = P.config_of(EXAMPLE)
+    config = P.config_of(CONFIG)
     assert config["protocols"] == ["sampled-proofs"] and "epsilon" not in json.dumps(config)
     assert sorted(p["name"] for p in config["party"]) == sorted(P.ROLES)
     machines = {p["name"]: p["machine"] for p in config["party"]}
@@ -100,7 +101,7 @@ def test_the_product_over_one_listed_component_is_that_components(tmp_path):
 
 
 def test_the_deployment_gives_addresses_to_listeners_and_states_its_coins():
-    config = P.config_of(EXAMPLE)
+    config = P.config_of(CONFIG)
     at = {"challenger": "127.0.0.1:1", "firewall": "127.0.0.1:2", "workers": "127.0.0.1:3"}
     d = P.deployment(config, False, at)
     assert d["protocol"] == SP and d["params"] == {"blocks": 1, "components": ["sampled-proofs"], "coins": "development"}
@@ -116,7 +117,7 @@ def test_the_firewalls_pin_is_a_message_the_verifier_takes(tmp_path):
     exe.write_bytes(b"#!/bin/sh\n")
     exe.chmod(0o755)
     (tmp_path / "tools.json").write_text(json.dumps({"flock-firewall": str(exe)}))
-    pin = P.Machine(P.config_of(EXAMPLE), tmp_path).pin()
+    pin = P.Machine(P.config_of(CONFIG), tmp_path).pin()
     msg = Message("Firewall", {"sha512": pin["sha512"], "sessions": pin["sessions"]})
     registry = SP_PARTIES.MANIFEST.registry
     assert registry.decode(registry.encode(msg)) == msg
@@ -124,7 +125,7 @@ def test_the_firewalls_pin_is_a_message_the_verifier_takes(tmp_path):
 
 
 def test_a_verifier_whose_peers_listen_nowhere_decides_nothing(tmp_path, capsys):
-    config = P.config_of(EXAMPLE)
+    config = P.config_of(CONFIG)
     assert P.run_parties(config, tmp_path, ["verifier"], local=False, at={"workers": "127.0.0.1:9"}) == (None, 2)
     assert "challenger, firewall runs elsewhere and no --at says where it listens" in capsys.readouterr().err
 
@@ -143,10 +144,10 @@ def test_every_role_here_honest_tampered_and_the_certifier_absent(tmp_path):
     """The one test of the parties on the real machine: the challenger's host drawn on by the real audit, and the Lean
     product over the configuration's components."""
     honest, tampered, absent = (tmp_path / x for x in ("honest", "tampered", "absent"))
-    assert P.main([str(EXAMPLE), "--state", str(honest), "--local", "--tools", TOOLS]) == 0
-    assert P.main([str(EXAMPLE), "--state", str(tampered), "--local", "--tools", TOOLS, "--tamper", "0"]) == 1
+    assert P.main([str(CONFIG), "--state", str(honest), "--local", "--tools", TOOLS]) == 0
+    assert P.main([str(CONFIG), "--state", str(tampered), "--local", "--tools", TOOLS, "--tamper", "0"]) == 1
     both = tmp_path / "both.toml"
-    both.write_text(EXAMPLE.read_text().replace('protocols = ["sampled-proofs"]',
+    both.write_text(CONFIG.read_text().replace('protocols = ["sampled-proofs"]',
                                                 'protocols = ["sampled-proofs", "certifier"]'))
     assert tomllib.loads(both.read_text())["protocols"] == ["sampled-proofs", "certifier"]
     assert P.main([str(both), "--state", str(absent), "--local", "--tools", TOOLS]) == 1

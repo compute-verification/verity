@@ -98,6 +98,15 @@ every machine of a census deployment, the pooled total first and the per-window 
   `--of-record` is S1's run of record (below). Every run writes its mode (`of_record` and its exact flags) to
   `$OUT/mode.json`, each window's `period.json` and report (`mode`) and its `ALLP` line, so its evidence says whether it
   counts.
+- `verity_all_protocols/parties.py` and `verity_all_protocols/deployment.py`: step 0's table for `verity run CONFIG`
+  (`tools/verity/cli/verity_cli/run.py`; `examples/toy_network/`), until each protocol's package holds its own parties.
+  `parties.py` is the toy's machine for sampled proofs' core parties (compute-accounting's); its own entry point, which
+  `parties.sh` runs, reads `tests/fixtures/sampled-proofs.toml`. `deployment.py` is what `verity run` reads: what each
+  of the six subprotocols and the toy declare to a configuration (`MANIFESTS`, `TOY`), each subprotocol's parties
+  (`PARTIES`: the network certifier's relay as an entry, around `tie.relay`, and sampled proofs' core parties in one
+  live run, `live`), and the toy's machine for them (`Machine`: `parties.Machine`'s, its serving tied to the relay,
+  and the network certifier's period check around `legs/certifier.py` as the verifier's `component`), whose verifier
+  gives each period's verdict through onsite's `product` over exactly the listed components.
 
 | name | subprotocol | file | owner | state |
 | --- | --- | --- | --- | --- |
