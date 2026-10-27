@@ -66,9 +66,11 @@ server, with the other subprotocols absent.
 ## Demo A's report
 
 `verity_e2e_demo/report.py` renders block records and a measurements file (`verity/demo-a-measurements/v1`) through
-`demo_a.template`; its module docstring is the contract. A measurements file with `sections` renders the M3 fallback
-(`m3_fallback.template`): its `status` is the first line, and every row is one number with its run, its own verdict
-line quoted and its target, whose misses are listed as visible failures. The rendered report goes to the evidence store
-(`research data put --kind demo-a-report --file F --preserve`), never Git.
+`demo_a.template`; its module docstring is the contract. Part 3 is circuit size in AND gates, with no FLOP figure or
+price. A measurements file with `sections` or `proved` renders M3's report (`m3.template`): every row is one number with
+its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is
+DRAWPROVE's run (PRF-172), its VERDICT and PROVEBUNDLE lines verbatim: the first line is the M3 fallback's until all 8
+drawn H200 proof blocks are proved in C-Flock and accepted by Lean, and M3's after. The rendered report goes to the
+evidence store (`research data put --kind demo-a-report/v1 --file F --preserve`), never Git.
 
     python -m verity_e2e_demo.report [RECORD.json ...] --measurements M.json --out FILE

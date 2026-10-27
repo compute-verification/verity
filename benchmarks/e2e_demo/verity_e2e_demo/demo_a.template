@@ -61,15 +61,16 @@ row-slot) and ⟨STEP_S_B1024⟩ s at batch 1,024 (⟨ROW_SLOT_NS_B1024⟩ ns pe
 
 ## 3. Computed from the same theorem and the measured costs, not run
 
-With 1% of compute spent on proving, a deployment of D = ⟨D_GPUS⟩ H200s (⟨DEPLOYMENT_ID⟩, `benchmarks/census/`) has
-at most H faulty ANDs and B leaked bits per week, month and year, at δ = 1%. The adversary's resources are the world's
-compute, ⟨WORLD_FLOP_YEAR⟩ FP8 FLOP a year, so each share is stated against the world's ANDs (at the block's
-⟨BLOCK_ANDS⟩ ANDs per ⟨BLOCK_FLOP⟩ FLOP), with the deployment's beside it:
+Every figure here is circuit size, counted in AND gates. With 1% of compute spent on proving, a deployment of
+D = ⟨D_GPUS⟩ H200s (⟨DEPLOYMENT_ID⟩, `benchmarks/census/`) has at most H faulty AND gates and B leaked bits per week,
+month and year, at δ = 1%. The adversary's resources are the world's compute, ⟨WORLD_GATES_YEAR⟩ AND gates a year, so
+each share is stated against the world's AND gates, with the deployment's beside it (the block's ⟨BLOCK_ANDS⟩ AND gates
+per ⟨BLOCK_GPU_S⟩ H200-seconds). Output bits are the block's ⟨BLOCK_OUTPUT_BITS⟩ per ⟨BLOCK_ANDS⟩ AND gates:
 
 ⟨PERIODS⟩
 
 H and B are the planner's (⟨PLANNER⟩) at 1% of a one-week sampling block with part 2's measured costs, in its
-AND-weighted form: a unit's cost is its circuit size, so the detection budget is counted in ANDs.
+AND-weighted form: a unit's cost is its circuit size, so the detection budget is counted in AND gates.
 
 H and B are pooled totals over the period, by ⟨HORIZON_CITATION⟩, each except with probability
 δ plus ε_ks + ε_bind for each of the period's sampling blocks. The share falls as the period grows, because the sampling

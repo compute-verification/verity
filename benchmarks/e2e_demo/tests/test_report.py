@@ -11,6 +11,8 @@ from pathlib import Path
 import jsonschema
 import pytest
 
+import re
+
 from verity_e2e_demo import block_record as R
 from verity_e2e_demo import report as D
 
@@ -40,7 +42,7 @@ def test_iface_b_records_render_with_placeholders() -> None:
     assert "**What was checked.** A handful: k = 2 units, drawn uniformly over the whole partition (1,024" in out
     assert "at most K = 15,764 bits leaked" in out
     assert "W_cert = 262,144 (128 tiles credited)" in out
-    assert "a deployment of D = 100,000 H200s (dc-12500-machines-600s" in out
+    assert "a deployment of\nD = 100,000 H200s (dc-12500-machines-600s" in out
     assert "| r20261025-203534-186b | computeinstance-e03nth5jqd47azxrz2 | [0, 2) | accept (real) | not run |" in out
     assert "⟨LABEL⟩" in template and "⟨LABEL⟩" not in out
 
@@ -86,8 +88,8 @@ def test_a_measurement_it_may_not_hold_is_refused(doc: dict, why: str) -> None:
 
 def _costed() -> dict:
     doc = _m(PROVING_GPU_S=5400, BLOCK_GPU_S=60, H_A=10, BLOCK_ANDS=1000, PLANNER_PREDICTED_S=6000,
-             BLOCK_OUTPUT_BITS=100, PROVE_S_PER_AND=1e-6, BLOCK_FLOP=200)
-    doc["values"]["WORLD_FLOP_YEAR"] = {"value": 9.4e30, "source": "test", "label": "world-inference-2027"}
+             BLOCK_OUTPUT_BITS=100, PROVE_S_PER_AND=1e-6)
+    doc["values"]["WORLD_GATES_YEAR"] = {"value": 4.7e31, "source": "test", "label": "world-inference-2027"}
     doc["subcircuits"] = [
         {"name": "a", "units": 1000, "ands_per_unit": 20000, "out_bits": 16, "fixed_s": 36, "source": "test"},
         {"name": "b", "units": 250, "ands_per_unit": 500, "out_bits": 16, "fixed_s": 72, "source": "test"}]
@@ -109,7 +111,7 @@ def test_part_3s_h_and_b_are_the_planners_at_one_week() -> None:
     out = D.render([_load("block-record-r2-period0")], _costed())
     assert "budget 6,048 GPU-s = 1% of a one-week sampling block (604,800 H200-s" in out
     assert "a: n 10,080,000, 20,000 ANDs, 16 output bits, fixed 36 GPU-s, k 296,953" in out
-    assert "in its\nAND-weighted form: a unit's cost is its circuit size, so the detection budget is counted in ANDs." in out
+    assert "in its\nAND-weighted form: a unit's cost is its circuit size, so the detection budget is counted in AND gates." in out
     doc = _costed()
     del doc["values"]["PROVE_S_PER_AND"]
     unmeasured = D.render([_load("block-record-r2-period0")], doc)
@@ -119,10 +121,18 @@ def test_part_3s_h_and_b_are_the_planners_at_one_week() -> None:
 
 
 def test_the_world_figure_carries_its_census_label() -> None:
-    doc = _m(WORLD_FLOP_YEAR=9.4e30)
+    doc = _m(WORLD_GATES_YEAR=4.7e31)
     with pytest.raises(ValueError, match="world-inference-2027"):
         D.render([_load("block-record-r2-period0")], doc)
-    assert "compute, ⟨WORLD_FLOP_YEAR⟩ FP8 FLOP a year" in D.render([_load("block-record-r2-period0")])
+    assert "compute, ⟨WORLD_GATES_YEAR⟩ AND gates a year" in D.render([_load("block-record-r2-period0")])
+
+
+def test_part_3_is_circuit_size_in_gates_with_no_flop_or_price() -> None:
+    part3 = D.TEMPLATE.read_text().split("## 3.")[1].split("## What")[0]
+    assert "counted in AND gates" in part3 and not re.search(r"FLOP|\$|price|pricing|cost of", part3, re.I)
+    assert not [n for n in (*D.MEASURED, *D.DERIVED) if "FLOP" in n]
+    out = D.render([_load("block-record-r2-period0")], _costed()).split("## 3.")[1].split("## What")[0]
+    assert "FLOP" not in out and "| H faulty AND gates | share of the world's AND gates |" in out
 
 
 def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
@@ -264,3 +274,47 @@ def test_old_names_inside_a_quoted_verdict_line_are_kept() -> None:
     assert "`Integrity Work Space Comm: reject at window 0`" in out
     with pytest.raises(ValueError, match="says 'integrity'"):
         D.render([], _fallback(what="integrity bound"))
+
+
+def _proved(accepted=(True,) * 8, drawn=tuple(range(101, 109)), ok=True, refused=3, lines=None) -> dict:
+    out = [f"VERDICT {json.dumps({'block': g, 'accepted': a, 'k_log': 27, 'lean': 'ACCEPT', 'm0': a})}"
+           for g, a in zip(drawn, accepted)]
+    out.append("PROVEBUNDLE " + json.dumps({"ok": ok, "negatives": 3, "negatives_refused": refused}))
+    return {**_fallback(), "proved": {"run": "r20261027-013000-abcd", "drawn": list(drawn), "text": "DRAWPROVE.",
+                                      "lines": out if lines is None else lines}}
+
+
+def test_m3_drops_the_fallback_line_only_when_all_eight_are_proved_and_accepted() -> None:
+    out = D.render([], _proved())
+    assert out.splitlines()[0] == D.M3_STATUS and "fallback" not in out.lower()
+    assert "## 1. M3 proper: the drawn H200 proof blocks proved in C-Flock" in out and "## 2. Commit overhead" in out
+    assert "**drawn proof block 108: proved in C-Flock --zk behind the firewall, verified by M0 and Lean:** accepted" in out
+    assert "None: every number above met its target." in out
+
+
+@pytest.mark.parametrize("kw", [{"accepted": (True,) * 7 + (False,)}, {"drawn": tuple(range(101, 108))},
+                                {"ok": False}, {"refused": 2}])
+def test_m3_stays_the_fallback_until_then(kw: dict) -> None:
+    out = D.render([], _proved(**kw))
+    assert out.splitlines()[0] == D.FALLBACK_STATUS
+    assert "None: every number above met its target." not in out.split("## Visible failures")[1]
+
+
+def test_a_drawn_proof_block_with_no_verdict_line_is_a_visible_failure() -> None:
+    doc = _proved()
+    doc["proved"]["lines"] = [x for x in doc["proved"]["lines"] if '"block": 104' not in x]
+    out = D.render([], doc)
+    assert out.splitlines()[0] == D.FALLBACK_STATUS
+    assert ("**drawn proof block 104: proved in C-Flock --zk behind the firewall, verified by M0 and Lean**: no VERDICT "
+            "line against target = accepted. Run r20261027-013000-abcd.") in out.split("## Visible failures")[1]
+
+
+def test_proved_refuses_another_status_and_an_undrawn_block() -> None:
+    with pytest.raises(ValueError, match="the status is"):
+        D.render([], {**_proved(), "status": D.M3_STATUS})
+    doc = _proved()
+    doc["proved"]["lines"].insert(0, 'VERDICT {"block": 999, "accepted": true}')
+    with pytest.raises(ValueError, match="block 999, which the coin didn't draw"):
+        D.render([], doc)
+    with pytest.raises(ValueError, match="needs its run id"):
+        D.render([], {**_proved(), "proved": {"run": "DRAWPROVE", "drawn": [1], "lines": []}})
