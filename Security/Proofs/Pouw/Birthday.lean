@@ -1,4 +1,5 @@
 import Proofs.Pouw.PerCoin
+import Proofs.Pouw.QTree
 
 /-!
 # The birthday bound for an adaptive program against the uniform oracle
@@ -24,20 +25,10 @@ variable {Q R : Type}
 
 namespace QTree
 
-/-- Run `t`, then `f` at its result. -/
-def bind {α β : Type} : QTree Q R α → (α → QTree Q R β) → QTree Q R β
-  | done a, f => f a
-  | query x k, f => query x fun r => bind (k r) f
-
 theorem queries_bind {α β : Type} (H : Q → R) (f : α → QTree Q R β) :
     ∀ t : QTree Q R α, (t.bind f).queries H = t.queries H ++ (f (t.eval H)).queries H
   | done a => by simp [bind, queries, eval]
   | query x k => by simp [bind, queries, eval, queries_bind H f (k (H x))]
-
-theorem calls_bind {α β : Type} (H : Q → R) (f : α → QTree Q R β) :
-    ∀ t : QTree Q R α, (t.bind f).calls H = t.calls H + (f (t.eval H)).calls H
-  | done a => by simp [bind, calls, eval]
-  | query x k => by simp only [bind, calls, eval, calls_bind H f (k (H x))]; omega
 
 /-- **A fresh hit**: some query of `t` against `H`, at a point outside `seen` and the points queried before it,
 answers as one of those points does. -/
@@ -89,21 +80,21 @@ theorem card_fiber_eq (seen : List Q) (ρ : Q → R) {x : Q} (hx : x ∉ seen) (
       ((univ.filter fun H : Q → R => ∀ y ∈ seen, H y = ρ y).filter fun H => H x = r').card := by
   refine Finset.card_nbij' (fun H => Function.update H x r') (fun H => Function.update H x r) ?_ ?_ ?_ ?_
   · intro H hH
-    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq] at hH ⊢
+    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at hH ⊢
     refine ⟨fun y hy => ?_, by simp⟩
-    rw [Function.update_of_ne (fun h => hx (h ▸ hy))]
+    rw [Function.update_of_ne (show y ≠ x from fun h => hx (h ▸ hy))]
     exact hH.1 y hy
   · intro H hH
-    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq] at hH ⊢
+    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at hH ⊢
     refine ⟨fun y hy => ?_, by simp⟩
-    rw [Function.update_of_ne (fun h => hx (h ▸ hy))]
+    rw [Function.update_of_ne (show y ≠ x from fun h => hx (h ▸ hy))]
     exact hH.1 y hy
   · intro H hH
-    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq] at hH
+    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at hH
     simp only [Function.update_idem]
     exact Function.update_eq_self_iff.2 hH.2.symm
   · intro H hH
-    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq] at hH
+    simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at hH
     simp only [Function.update_idem]
     exact Function.update_eq_self_iff.2 hH.2.symm
 
@@ -143,13 +134,14 @@ theorem card_freshHit_le {α : Type} :
             rcases List.mem_append.1 hy with hy | hy
             · exact h y hy
             · rw [List.mem_singleton.1 hy]; exact h x hx⟩
-        have hAA : A' = A := by ext H; simp [A', hA, hagree]
+        have hAA : A' = A := by
+          ext H; simp only [A', hA, Finset.mem_filter, Finset.mem_univ, true_and]; exact hagree H
         have ih' := ih (k (ρ x)) (seen ++ [x]) ρ fun H hH => by
           have h1 := (hagree H).1 hH
           have := hcalls H h1; rwa [h1 x hx] at this
         have hsub : (univ.filter fun H : Q → R => (∀ y ∈ seen, H y = ρ y) ∧ FreshHit H seen (query x k)) ⊆
             univ.filter fun H : Q → R => (∀ y ∈ seen ++ [x], H y = ρ y) ∧ FreshHit H (seen ++ [x]) (k (ρ x)) := by
-          intro H
+          rw [Finset.subset_iff]; intro H
           simp only [Finset.mem_filter, Finset.mem_univ, true_and, FreshHit]
           rintro ⟨hH, (⟨hn, -⟩ | hf)⟩
           · exact absurd hx hn
@@ -180,7 +172,7 @@ theorem card_freshHit_le {α : Type} :
           (∀ y ∈ seen, H y = ρ y) ∧ FreshHit H (seen ++ [x]) (k (H x))
         have hsub : (univ.filter fun H : Q → R => (∀ y ∈ seen, H y = ρ y) ∧ FreshHit H seen (query x k)) ⊆
             E1 ∪ E2 := by
-          intro H
+          rw [Finset.subset_iff]; intro H
           simp only [Finset.mem_filter, Finset.mem_univ, true_and, FreshHit, Finset.mem_union, E1, E2]
           rintro ⟨hH, (⟨-, h⟩ | hf)⟩
           · exact Or.inl ⟨hH, h⟩
@@ -200,7 +192,7 @@ theorem card_freshHit_le {α : Type} :
                 obtain ⟨y, hy, hy'⟩ := List.mem_map.1 (List.mem_toFinset.1 hr)
                 exact ⟨y, hy, (hH y hy).trans hy'⟩
             · intro H hH
-              simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq,
+              simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq,
                 E1] at hH
               obtain ⟨hH, y, hy, hy'⟩ := hH
               exact List.mem_toFinset.2 (List.mem_map.2 ⟨y, hy, (hH y hy).symm.trans hy'⟩)
@@ -221,10 +213,10 @@ theorem card_freshHit_le {α : Type} :
               · intro h
                 refine ⟨fun y hy => ?_, by simpa using h x (List.mem_append_right _ (List.mem_singleton_self x))⟩
                 have := h y (List.mem_append_left _ hy)
-                rwa [Function.update_of_ne (fun e => hx (e ▸ hy))] at this
+                rwa [Function.update_of_ne (show y ≠ x from fun e => hx (e ▸ hy))] at this
               · rintro ⟨h, rfl⟩ y hy
                 rcases List.mem_append.1 hy with hy | hy
-                · rw [Function.update_of_ne (fun e => hx (e ▸ hy))]; exact h y hy
+                · rw [Function.update_of_ne (show y ≠ x from fun e => hx (e ▸ hy))]; exact h y hy
                 · rw [List.mem_singleton.1 hy]; simp
             have ih' := ih (k r) (seen ++ [x]) (Function.update ρ x r) fun H hH => by
               obtain ⟨h1, h2⟩ := (hagree H).1 hH
@@ -277,7 +269,7 @@ theorem pr_collides_le {α : Type} (t : QTree Q R α) (q : ℕ) (ht : ∀ H, t.c
   rw [e1, e2, Finset.card_univ] at hc
   simp only [List.length_nil, mul_zero, zero_add] at hc
   have hsub : (univ.filter fun H : Q → R => Collides H (t.queries H)) ⊆ univ.filter fun H => FreshHit H [] t := by
-    intro H
+    rw [Finset.subset_iff]; intro H
     simp only [Finset.mem_filter, Finset.mem_univ, true_and]
     intro h
     rcases collides_append H t [] (by simpa using h) with ⟨_, h, _⟩ | h
