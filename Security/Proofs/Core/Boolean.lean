@@ -9,7 +9,7 @@ A Boolean circuit's evaluation, read as bits, applies each gate's Boolean operat
 
 namespace Verity.Boolean
 
-theorem eval_toCircuit (B : Circuit) (a : B.toCircuit.Transcript) {g : Fin B.N} (h : (B.op g).isInput = false) :
+theorem eval_toCircuit (B : Circuit) (a : B.toCircuit.Trace) {g : Fin B.N} (h : (B.op g).isInput = false) :
     (B.toCircuit.eval a g).getLsbD 0 = (B.op g).apply fun x => (B.toCircuit.eval a x).getLsbD 0 := by
   rw [B.toCircuit.eval_op a h]
   simp [Circuit.toCircuit]

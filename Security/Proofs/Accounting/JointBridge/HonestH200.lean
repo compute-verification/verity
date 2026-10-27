@@ -95,7 +95,7 @@ def jointRun (n : ℕ) : Accounting.PeriodRun (device n) Unit emptyCircuit (fun 
   win := ⟨0, 1⟩
   schedule := fun _ _ => step n
   fits := fun _ _ => step_fits n
-  transcript := fun _ g => g.elim0
+  trace := fun _ g => g.elim0
   commWithin := fun _ _ => True
   accepts := fun _ _ => True
 

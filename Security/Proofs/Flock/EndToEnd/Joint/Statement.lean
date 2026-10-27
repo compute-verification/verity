@@ -15,7 +15,7 @@ subcircuit and no sum of per-subcircuit worst cases.
 `StratifiedBlock` is such a sampling block: one hidden-output `--zk` session of one table (a stratified draw is a
 one-table session: flock-verify takes only the subset draw at more than one table, `RecordCustodyZKJ`) whose units the
 verifier draws by the live stratified draw (`Flock.Draw.drawOS` at `.stratified`, `Law.execOS`), with every binder of
-`zk_session_soundH_custody` but the prover. Its wrong units are `wrongRegZ` in the committed transcript fixed at
+`zk_session_soundH_custody` but the prover. Its wrong units are `wrongRegZ` in the committed trace fixed at
 registration (`XplurZC`), as `SamplingBlock`'s are.
 
 * `JointStratified`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if flock-verify accepts, the
@@ -138,7 +138,7 @@ noncomputable def sim (τ : Strategy w.game) :=
         (fun ω => drawOkZKH_of_exec w.I (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src
           w.dj w.hCust.2 ω))) τ
 
-/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
+/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed trace fixed at
 registration (`XplurZC`). -/
 noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.n) :=
   wrongRegZ execArith w.P (planAtZKH w.dj w.y₀) (tabAtZKH w.dj w.y₀) w.vb (reg (w.sim τ))

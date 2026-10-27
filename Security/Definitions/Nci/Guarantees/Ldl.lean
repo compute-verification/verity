@@ -29,7 +29,7 @@ The description is the block index and its unregistered input bits: evaluated fr
 values, since the run is the circuit's evaluation. The block size `c` is not used. -/
 def BlockDescription : Prop :=
   ∀ (d : Declaration) (n k : ℕ) (R : Registration d n) (D : Decoder) (t : ℕ)
-    (ext : Fin n → d.D.Transcript → List Bool) (aBlk : ℕ) (inp : d.D.Transcript),
+    (ext : Fin n → d.D.Trace → List Bool) (aBlk : ℕ) (inp : d.D.Trace),
     ReadCap d R.P k → R.Consistent (d.D.eval inp) → Assumptions.EvaluatesBlocks D t R ext aBlk →
       ∀ u, LDL D t (ext u (d.D.eval inp)) ≤ (k + Nat.clog 2 n + aBlk : ℕ)
 
@@ -56,8 +56,8 @@ subcircuit lies whole in its block: that is what makes `ActivationRate` plausibl
 When `e h ≤ 0` the bound is at most `0`. -/
 def FanOutBound : Prop :=
   ∀ (d : Declaration) (n c k : ℕ) (R : Registration d n) {ι A : Type} [DecidableEq A] (M : Products d.D ι A)
-    (e : ℕ) (D : Decoder) (t aBlk : ℕ) (a : Fin n → d.D.Transcript → List Bool) (β Λ T₀ : ℝ)
-    (inp : d.D.Transcript),
+    (e : ℕ) (D : Decoder) (t aBlk : ℕ) (a : Fin n → d.D.Trace → List Bool) (β Λ T₀ : ℝ)
+    (inp : d.D.Trace),
     CKPartition d R.P c k → R.Consistent (d.D.eval inp) → M.FanOut e → 0 < β → 0 < T₀ →
     Assumptions.EvaluatesBlocks D t R a aBlk → Assumptions.ActivationRate β Λ t D R M a (d.D.eval inp) →
       c * β * M.J.card / (T₀ * e * (k + Nat.clog 2 n + aBlk + Λ)) ≤ d.D.size d.D.computed / T₀

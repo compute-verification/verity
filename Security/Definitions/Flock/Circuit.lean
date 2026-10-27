@@ -11,8 +11,8 @@ every computed gate in exactly one of `n` units; the input gates are the input u
 committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of
 another unit reads (`Partition.committed`).
 
-A transcript assigns a bit to every gate; only its committed entries are ever read. Unit `u` is
-**correct** in a transcript `X` when its committed outputs are its gates applied to its committed
+A trace assigns a bit to every gate; only its committed entries are ever read. Unit `u` is
+**correct** in a trace `X` when its committed outputs are its gates applied to its committed
 inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other gate from `X`
 (`Partition.localEval`), and compare with `X` on `u`'s committed gates.
 
@@ -119,7 +119,7 @@ def Correct (X : Fin C.N → Bool) (u : Fin n) : Prop :=
   ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
 
 open Classical in
-/-- The wrong units of a transcript. -/
+/-- The wrong units of a trace. -/
 noncomputable def wrong (X : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u
 

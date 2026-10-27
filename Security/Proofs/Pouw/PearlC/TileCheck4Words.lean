@@ -106,7 +106,7 @@ hold the BF16 words of row `i` of the activations and row `j` of the weights, th
 under `Row4OK` at the two rows, and where the peel's rows exist, `C̃_ij` and `U_ij` are `devFp4Sm120`'s
 ticket and useful value on `pc4Sem`'s `A′` and `B̃` (`form4A`, `form4B`), the bases and the rows' `Ẽ`. -/
 theorem entry4_words {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
-    (hTM : TM ∣ M) (hTN : TN ∣ N) (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript)
+    (hTM : TM ∣ M) (hTN : TN ∣ N) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace)
     (z : Lines4 M N K) (act wt : Codes) (i : Fin M) (j : Fin N)
     (hXT : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_T ops M K N TM TN) (tile_index hTM hTN i.isLt j.isLt).1⟩)
@@ -428,7 +428,7 @@ theorem in4_le_N : in8 M N K ≤ (whole4 ops M K N TM TN).spec.toCircuit.N := by
   rw [whole4_N]; omega
 
 /-- An input gate's value is its assignment's low `inW4` bits. -/
-theorem val_in4 (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {g v : ℕ} (hg : g < in8 M N K)
+theorem val_in4 (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {g v : ℕ} (hg : g < in8 M N K)
     (hgN : g < (whole4 ops M K N TM TN).spec.toCircuit.N) (h : X ⟨g, hgN⟩ = BitVec.ofNat _ v) :
     val X g = v % 2 ^ inW4 M N K g := by
   rw [val_bv X hgN h]
@@ -438,7 +438,7 @@ theorem val_in4 (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {g v : 
   rfl
 
 /-- A tile gate's value is its assignment's low 32 bits. -/
-theorem val_tile4 (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {e a v : ℕ}
+theorem val_tile4 (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {e a v : ℕ}
     (he : e < M / TM * (N / TN)) (ha1 : tile4In K TM TN ≤ a) (ha2 : a < tile4N K TM TN)
     (h : X ⟨_, tile4_ltN ops M K N TM TN he ha1 ha2⟩ = BitVec.ofNat _ v) :
     val X (tile4 M N K TM TN e a) = v % 2 ^ 32 := by
@@ -489,7 +489,7 @@ rows `i` of `act` and `j` of `wt` of finite words whose values are `Row4OK`, whe
 the registered words `tk i j` and `us i j` read as `devFp4Sm120`'s ticket and useful value on `pc4Sem`'s operands. A
 row's gates hold its words' high halves, `pc4Sem`'s BF16 words up to the sign of zero (`zeroSign16_of_wordQ`). -/
 theorem entry4_accepts {M K N nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
-    (hM : 64 ∣ M) (hN : 64 ∣ N) (X : (whole4 ops M K N 64 64).spec.toCircuit.Transcript)
+    (hM : 64 ∣ M) (hN : 64 ∣ N) (X : (whole4 ops M K N 64 64).spec.toCircuit.Trace)
     (z : Lines4 M N K) (act wt tk us : Codes) (i : Fin M) (j : Fin N)
     {T : Finset (Fin (whole4 ops M K N 64 64).spec.toCircuit.N)}
     (hT : ∀ g : Fin (whole4 ops M K N 64 64).spec.toCircuit.N,

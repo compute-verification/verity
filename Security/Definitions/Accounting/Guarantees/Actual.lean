@@ -75,7 +75,7 @@ circuit `A` meets the constraints of `Windows` at the locations and `ω` as ther
 products, of inner dimensions at least `d`, under NCI's two incompressibility assumptions at `(Γ, K)`: every `t` at or
 past the runtime `t_A(P)` is at least `ω (G f(K) / (n K) − 1)`, `f = Nci.readFactor`, so `t_A(P)` is. -/
 def Runtime : Prop :=
-  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (P : Circuit) (S : P.Transcript → Actual.Run L) (v : P.Transcript)
+  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (P : Circuit) (S : P.Trace → Actual.Run L) (v : P.Trace)
     (ℓ : L → L → ℕ) (Φ M : Finset L → ℕ) (ends : E → L × L) (β : E → ℕ)
     (link : Fin (S v).A.N → Fin (S v).A.N → E) (n : ℕ) (X : Fin n → Finset L) (θ : Finset (Fin (S v).A.N))
     (hθ : ∀ a ∈ θ, (S v).A.isInput a = true) (ω Γ : ℕ) (K b_w b_a : ℝ) (G d : ℕ),

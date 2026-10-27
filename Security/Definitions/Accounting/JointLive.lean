@@ -11,10 +11,10 @@ Soundness's rulings on the one theorem's form (26 Oct, LEAN-62):
   the evidence is the last `send`. The game ends in the run `O`, what the verifier of record reads: the bytes sent, the
   coins released and the evidence. A prover's strategy (`Verity.Game.Strategy`) sees each coin only once it is drawn,
   so every byte is a function of the coins released before it, and nothing else.
-* **R4, the claim read off the commitment.** The sampled-proofs claim reads no transcript that is a field of the run.
+* **R4, the claim read off the commitment.** The sampled-proofs claim reads no trace that is a field of the run.
   It reads the openings the runs of the prover's strategy show under the run's commitment (`PeriodLive.opens`): every
-  transcript those openings open to (`OpensTo`) has at most an `ε` share of the circuit's units wrong, where a unit
-  that reads or writes a committed value with no opening to that transcript's value counts as wrong (`unbound`). Two
+  trace those openings open to (`OpensTo`) has at most an `ε` share of the circuit's units wrong, where a unit
+  that reads or writes a committed value with no opening to that trace's value counts as wrong (`unbound`). Two
   openings of one position to two values (`DoubleOpen`), each shown by a run of the strategy with that commitment, are
   the period's `Break`: a collision along the two openings' paths under one root, from two runs of the strategy sharing
   the commitment (the fork form). Every opening the claim reads is in a run of the strategy, so the break is bounded by
@@ -42,23 +42,23 @@ section Opened
 
 variable {C : Verity.Circuit} {n : ℕ}
 
-/-- `X` is a transcript the openings `opens` open to: at every position some opening opens, `X` holds an opened
+/-- `X` is a trace the openings `opens` open to: at every position some opening opens, `X` holds an opened
 value. -/
-def OpensTo (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) : Prop :=
+def OpensTo (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Trace) : Prop :=
   ∀ g, (∃ v, opens g v) → opens g (X g)
 
 open Classical in
 /-- **The units `X` doesn't bind**: those wrong in `X`, and those that read or write a committed value (`Partition.io`)
 with no opening to `X`'s value there. -/
 noncomputable def unbound (P : Verity.Partition C n) (opens : (g : Fin C.N) → BitVec (C.w g) → Prop)
-    (X : C.Transcript) : Finset (Fin n) :=
+    (X : C.Trace) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u ∨ ∃ g ∈ P.io u, ¬ opens g (X g)
 
 /-- **Two openings of one position**, to two values. -/
 def DoubleOpen (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) : Prop :=
   ∃ g v v', opens g v ∧ opens g v' ∧ v ≠ v'
 
-/-- **The integrity claim read off the commitment**, at share `ε`: every transcript the openings `opens` open to has
+/-- **The integrity claim read off the commitment**, at share `ε`: every trace the openings `opens` open to has
 at most an `ε` share of `P`'s units unbound. -/
 def IntegrityHolds (P : Verity.Partition C n) (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (ε : ℝ) : Prop :=
   ∀ X, OpensTo opens X → ((unbound P opens X).card : ℝ) ≤ ε * n

@@ -17,7 +17,7 @@ namespace Nci.SecurityProofs
 open Verity Finset
 
 /-- The values on `R` are determined by the values on `in(R)`. -/
-theorem eval_agree_of_into {D : Circuit} {R : Finset (Fin D.N)} (hR : R ⊆ D.computed) {a b : D.Transcript}
+theorem eval_agree_of_into {D : Circuit} {R : Finset (Fin D.N)} (hR : R ⊆ D.computed) {a b : D.Trace}
     (h : ∀ g ∈ D.into R, D.eval a g = D.eval b g) : ∀ g ∈ R, D.eval a g = D.eval b g := by
   intro g
   induction g using WellFoundedLT.induction with
@@ -50,11 +50,11 @@ theorem card_image_le_of_factor {α β γ : Type} [DecidableEq β] [DecidableEq 
 
 /-- **The counting bound**: the gates of an IU's subset `T` take at most `2^novelReads(R)` distinct values over the runs
 with the baseline at `θv`. -/
-theorem support_le (d : Declaration) (θv : d.D.Transcript) {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed)
+theorem support_le (d : Declaration) (θv : d.D.Trace) {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed)
     (hT : T ⊆ R) : support d θv T ≤ 2 ^ novelReads d R := by
   classical
   set U := d.D.into R \ d.θ
-  let r : d.D.Transcript → (g : U) → BitVec (d.D.w g) := fun a g => d.D.eval a g
+  let r : d.D.Trace → (g : U) → BitVec (d.D.w g) := fun a g => d.D.eval a g
   calc support d θv T ≤ ((admissible d θv).image r).card := by
         unfold support
         refine card_image_le_of_factor fun a ha b hb hab => funext fun g => ?_
@@ -72,7 +72,7 @@ theorem support_le (d : Declaration) (θv : d.D.Transcript) {R T : Finset (Fin d
         rfl
 
 /-- A set of gates takes at most `2^width` distinct values. -/
-theorem support_le_width (d : Declaration) (θv : d.D.Transcript) (T : Finset (Fin d.D.N)) :
+theorem support_le_width (d : Declaration) (θv : d.D.Trace) (T : Finset (Fin d.D.N)) :
     support d θv T ≤ 2 ^ d.D.width T := by
   classical
   calc support d θv T ≤ Fintype.card ((g : T) → BitVec (d.D.w g)) := card_le_univ _
@@ -167,7 +167,7 @@ end Charge
 /-- **What falsifies support form at its rates**: a product of the first multiplication takes at most `2^width` values,
 so `ActivationsSupport` at a cap of at least `b_w + b_a` bounds `b_w + b_a` by that product gate's width. Measured rates
 above a product's support falsify it. -/
-theorem rates_le_width_of_support {D : Declaration} {θv : D.D.Transcript} {c : Chain D.D} {K b_w b_a : ℝ}
+theorem rates_le_width_of_support {D : Declaration} {θv : D.D.Trace} {c : Chain D.D} {K b_w b_a : ℝ}
     (h : Assumptions.ActivationsSupport D θv c K b_w b_a) (hK : b_w + b_a ≤ K) (hL : 0 < c.L) (t : Fin c.N)
     (i : Fin (c.e ⟨0, hL⟩)) (j : Fin (c.d ⟨0, hL⟩)) : b_w + b_a ≤ D.D.w (c.prod ⟨0, hL⟩ t i j) := by
   set g := c.prod ⟨0, hL⟩ t i j
@@ -184,7 +184,7 @@ theorem rates_le_width_of_support {D : Declaration} {θv : D.D.Transcript} {c : 
 
 /-- **Support form gives the draft's incompressibility**: `ActivationsSupport` at cap `K + b_w + b_a`, for any committed
 values of the baseline, gives `ActivationsIncompressible` at cap `K`, for IUs of any size. -/
-theorem activationsIncompressible_of_support {D : Declaration} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
+theorem activationsIncompressible_of_support {D : Declaration} {θv : D.D.Trace} {c : Chain D.D} {Γ : ℕ}
     {K b_w b_a : ℝ} (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (h : Assumptions.ActivationsSupport D θv c (K + b_w + b_a) b_w b_a) :
     Assumptions.ActivationsIncompressible D c Γ K b_w b_a := by
   intro R hR _ hK

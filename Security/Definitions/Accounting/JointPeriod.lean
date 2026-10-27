@@ -7,7 +7,7 @@ import Definitions.Core.Partition
 A period is one window of one node's run, over one circuit (`Verity.Circuit`, core's) and one device
 (`Accounting.Device`, the device model). Five audits decide it, each separately, on its own coins (`Audit`):
 
-* sampled proofs, on the integrity of the circuit's committed transcript: at most a share `ε` of the units of its
+* sampled proofs, on the integrity of the circuit's committed trace: at most a share `ε` of the units of its
   partition are wrong (`Verity.Partition.wrong`);
 * PoUW, on work: the compute account did at least `W` of work at price `p`;
 * PoUS, on space: the capacity account held at least `S` bits of device memory on average;
@@ -15,7 +15,7 @@ A period is one window of one node's run, over one circuit (`Verity.Circuit`, co
 * the network certifier, on communication: what the network certifiers saw the node move is within `K` bits.
 
 The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit draws
-its own coordinate of it (`PeriodRun.own`). The device sees every coin, so the schedule and the committed transcript are
+its own coordinate of it (`PeriodRun.own`). The device sees every coin, so the schedule and the committed trace are
 functions of all of them, and so is each verdict.
 
 Each audit's per-period guarantee (`PeriodRun.Sound`) is stated in the shape of `Accounting.Run.ComputeSoundPerRun`:
@@ -33,7 +33,7 @@ namespace Accounting
 
 /-- The audits that decide a period, one per protocol. -/
 inductive Audit
-  /-- sampled proofs: the integrity of the circuit's committed transcript -/
+  /-- sampled proofs: the integrity of the circuit's committed trace -/
   | sampled
   /-- PoUW: work -/
   | pouw
@@ -64,7 +64,7 @@ structure Certificates where
 
 /-- A period of a node's run on device `d` with accounts `α`, over the circuit `C`, on the coins `(i : I) → Ω i`: the
 partition whose units the integrity claim counts, each audit's coordinate of the coins, each resource's account, the
-period's window, the schedule and the circuit's committed transcript at each value of the coins, the network
+period's window, the schedule and the circuit's committed trace at each value of the coins, the network
 certifier's claim, and each audit's verdict. -/
 structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) {I : Type}
     (Ω : I → Type) where
@@ -82,8 +82,8 @@ structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Ve
   schedule : ((i : I) → Ω i) → Schedule ι α
   /-- every schedule fits the device -/
   fits : ∀ ξ, (schedule ξ).Fits d
-  /-- the circuit's transcript the node committed in the period, at the coins -/
-  transcript : ((i : I) → Ω i) → C.Transcript
+  /-- the circuit's trace the node committed in the period, at the coins -/
+  trace : ((i : I) → Ω i) → C.Trace
   /-- the network certifier's claim at `K`: what the network certifiers saw the node move in the period is within `K`
   bits -/
   commWithin : ℝ → ((i : I) → Ω i) → Prop
@@ -106,7 +106,7 @@ def read (ξ : (i : I) → Ω i) : ℕ := (r.schedule ξ).read r.win (r.acct .ba
 
 /-- The claim an audit certifies at certificates `c` and price `p`, on the run at the coins `ξ`. -/
 def Holds (c : Certificates) (p : Price) : Audit → ((i : I) → Ω i) → Prop
-  | .sampled, ξ => ((r.parts.wrong (r.transcript ξ)).card : ℝ) ≤ c.ε * r.units
+  | .sampled, ξ => ((r.parts.wrong (r.trace ξ)).card : ℝ) ≤ c.ε * r.units
   | .pouw, ξ => c.W ≤ (r.work p ξ : ℝ)
   | .pous, ξ => c.S * r.win.len ≤ (r.held ξ : ℝ)
   | .poub, ξ => c.Q ≤ (r.read ξ : ℝ)

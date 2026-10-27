@@ -44,11 +44,11 @@ noncomputable def LDL (D : Decoder) (t : ℕ) (y : List Bool) : ℕ∞ :=
 the registered values `val` (read only at `θ`) and the partition `P` of `C`'s operation gates into the blocks
 `0, …, n − 1`. Nothing computed later is added to it. -/
 structure Registration (d : Declaration) (n : ℕ) where
-  val : d.D.Transcript
+  val : d.D.Trace
   P : Partition d.D n
 
 /-- The run `X` takes the registered values at `θ`. -/
-def Registration.Consistent {d : Declaration} {n : ℕ} (R : Registration d n) (X : d.D.Transcript) : Prop :=
+def Registration.Consistent {d : Declaration} {n : ℕ} (R : Registration d n) (X : d.D.Trace) : Prop :=
   ∀ g ∈ d.θ, X g = R.val g
 
 /-- **Exactly `c` operation gates in every block**, so that `|C| = c B`: padding counts as gates. -/

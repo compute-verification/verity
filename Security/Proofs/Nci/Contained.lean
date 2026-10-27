@@ -29,7 +29,7 @@ namespace Nci.SecurityProofs
 open Verity Finset
 
 /-- **Support form gives partial-sum incompressibility**: an IU's gates take at most `2^novelReads` values. -/
-theorem partialSumsIncompressible_of_support {D : Declaration} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
+theorem partialSumsIncompressible_of_support {D : Declaration} {θv : D.D.Trace} {c : Chain D.D} {Γ : ℕ}
     {K b_w b_a : ℝ} (h : Assumptions.PartialSumsSupport D θv c Γ K b_w b_a) :
     Assumptions.PartialSumsIncompressible D c Γ K b_w b_a := by
   intro n P hP
@@ -84,7 +84,7 @@ theorem ContainedTraining : Guarantees.ContainedTraining := by
     _ ≤ d.D.size d.D.computed := hF
 
 /-- Support form bounds a set's charge by its novel reads: its values are functions of what it reads. -/
-theorem le_novelReads_of_support {D : Declaration} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
+theorem le_novelReads_of_support {D : Declaration} {θv : D.D.Trace} {R : Finset (Fin D.D.N)} {x : ℝ}
     (hR : R ⊆ D.D.computed) (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ novelReads D R := by
   have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (novelReads D R : ℝ) := by
     rw [Real.rpow_natCast]
@@ -92,7 +92,7 @@ theorem le_novelReads_of_support {D : Declaration} {θv : D.D.Transcript} {R : F
   exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (h.trans hc)
 
 /-- Support form bounds a set's charge by its width: it holds no more values than its bits. -/
-theorem le_width_of_support {D : Declaration} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
+theorem le_width_of_support {D : Declaration} {θv : D.D.Trace} {R : Finset (Fin D.D.N)} {x : ℝ}
     (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ D.D.width R := by
   have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (D.D.width R : ℝ) := by
     rw [Real.rpow_natCast]

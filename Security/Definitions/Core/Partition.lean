@@ -35,16 +35,16 @@ def committed : Finset (Fin C.N) :=
   univ.filter fun g => C.isInput g = true ∨ g ∈ C.outputs ∨ ∃ h, g ∈ C.reads h ∧ P.unit h ≠ P.unit g
 
 /-- `u`'s gates recomputed in order, every other gate read from `X`. -/
-def localEval (X : C.Transcript) (u : Fin n) : C.Transcript :=
+def localEval (X : C.Trace) (u : Fin n) : C.Trace :=
   C.run fun g => if P.unit g = some u then none else some (X g)
 
 /-- **Correctness of a unit**: its committed gates hold what its gates compute from its committed inputs. -/
-def Correct (X : C.Transcript) (u : Fin n) : Prop :=
+def Correct (X : C.Trace) (u : Fin n) : Prop :=
   ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
 
 open Classical in
 /-- The faulty proof blocks of a trace. -/
-noncomputable def wrong (X : C.Transcript) : Finset (Fin n) :=
+noncomputable def wrong (X : C.Trace) : Finset (Fin n) :=
   univ.filter fun u => ¬ P.Correct X u
 
 open Classical in

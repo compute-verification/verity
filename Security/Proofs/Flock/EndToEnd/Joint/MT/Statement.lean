@@ -19,7 +19,7 @@ parts are proved and set up with the session's link points is flock-verify's own
 (`ZkHidden.drawOkZKHJ_of_accepts_stratified`).
 
 `StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its law, as
-`Period`'s `SamplingBlock` is. Its wrong units are `wrongRegZ` in the committed transcript fixed at registration
+`Period`'s `SamplingBlock` is. Its wrong units are `wrongRegZ` in the committed trace fixed at registration
 (`XplurZC`). The bound is `JointStratified`'s, with the same budget and the same confidence set:
 
 * `JointStratifiedMT`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if flock-verify accepts, the
@@ -144,7 +144,7 @@ noncomputable def sim (τ : Strategy w.game) :=
         fun ω R o hacc => drawOkZKHJ_of_accepts_stratified w.I w.ht (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks
           w.St w.hS w.Kd w.pop w.Lb w.src w.dj w.hCust.2 w.hCust.1 ω R o hacc)) τ
 
-/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
+/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed trace fixed at
 registration (`XplurZC`), as in `EndToEndHidden`. -/
 noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.n) :=
   wrongRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))

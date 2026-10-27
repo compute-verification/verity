@@ -5,7 +5,7 @@ import Proofs.Pouw.PearlC.Tile4Circuit
 # Pearl-C4's row units compute their codes, scale bytes, `P_A` and `P_B` (proofs)
 
 For every `ops` (core's primitives as a parameter), on the runs `pc4`'s two row units share (`pre4Runs`) and in a
-transcript whose one unit is correct:
+trace whose one unit is correct:
 
 * **the forming** (`pre4_d`, `d4W`): position `t`'s formed word is one NVF4 firing (`form4`) from `α·x_t` over `e`'s
   32 codes at `a_E = e4m3(β)` against the form basis' row `t` at `24`, each padded with 32 zeros;
@@ -212,10 +212,10 @@ theorem code4V_congr {x y : ℕ → ℕ} {K t : ℕ} (hK : 8 ≤ K) (ht : t < 16
   unfold code4V
   rw [d4W_congr hK (by omega) h, scale4V_congr hK (by omega) h]
 
-/-- **A `pc4` row unit computes its codes**: a table whose runs start with `pc4`'s shared runs, in a transcript whose
+/-- **A `pc4` row unit computes its codes**: a table whose runs start with `pc4`'s shared runs, in a trace whose
 one unit is correct, holds on position `t`'s code output `code4V` of the row's inputs. -/
 theorem rows4_code (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.nIn) {rest : List Run}
-    (hr : T.runs = pre4Runs K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Transcript)
+    (hr : T.runs = pre4Runs K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Trace)
     (hX : (T.spec ops).part.Correct X 0) {t : ℕ} (ht : t < 16 * (K / 16)) (hout : code4 K T.nIn t ∈ T.outs) :
     val X (code4 K T.nIn t) = code4V ops (val X) K t := by
   have hlen := pre4Runs_len K T.nIn
@@ -232,7 +232,7 @@ theorem rows4_code (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.n
 
 /-- **A `pc4` row unit computes its scale bytes**: as `rows4_code`, block `q`'s scale output is `scale4V`. -/
 theorem rows4_scale (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.nIn) {rest : List Run}
-    (hr : T.runs = pre4Runs K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Transcript)
+    (hr : T.runs = pre4Runs K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Trace)
     (hX : (T.spec ops).part.Correct X 0) {q : ℕ} (hq : q < K / 16) (hout : scale4 K T.nIn q ∈ T.outs) :
     val X (scale4 K T.nIn q) = scale4V ops (val X) K q := by
   have hlen := pre4Runs_len K T.nIn
@@ -248,7 +248,7 @@ theorem rows4_scale (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.
   exact scale4V_congr hK hq fun l hl => Rows.val_input ops T X (by omega)
 
 /-- **RowA computes `A′`'s codes** (`rows4_code` at `Pc4RowA_v1{K}`). -/
-theorem row4A_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Transcript)
+theorem row4A_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < 16 * (K / 16)) :
     val X (code4 K (rowIn K false) t) = code4V ops (val X) K t :=
   rows4_code (row4A K) hK (by simp [row4A, rowIn]) rfl X hX ht
@@ -256,7 +256,7 @@ theorem row4A_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.
       (List.mem_map.2 ⟨t, List.mem_range.2 (by omega), rfl⟩)))))
 
 /-- **RowA computes `A′`'s scale bytes** (`rows4_scale` at `Pc4RowA_v1{K}`). -/
-theorem row4A_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Transcript)
+theorem row4A_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) {q : ℕ} (hq : q < K / 16) :
     val X (scale4 K (rowIn K false) q) = scale4V ops (val X) K q :=
   rows4_scale (row4A K) hK (by simp [row4A, rowIn]) rfl X hX hq
@@ -264,7 +264,7 @@ theorem row4A_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit
       (List.mem_map.2 ⟨q, List.mem_range.2 hq, rfl⟩)))))
 
 /-- **RowB computes `B̃`'s codes** (`rows4_code` at `Pc4RowB_v1{K}`). -/
-theorem row4B_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Transcript)
+theorem row4B_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < 16 * (K / 16)) :
     val X (code4 K (rowIn K true) t) = code4V ops (val X) K t :=
   rows4_code (row4B K) hK (by simp [row4B, rowIn]) rfl X hX ht
@@ -272,7 +272,7 @@ theorem row4B_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.
       (List.mem_map.2 ⟨t, List.mem_range.2 (by omega), rfl⟩)))))
 
 /-- **RowB computes `B̃`'s scale bytes** (`rows4_scale` at `Pc4RowB_v1{K}`). -/
-theorem row4B_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Transcript)
+theorem row4B_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) {q : ℕ} (hq : q < K / 16) :
     val X (scale4 K (rowIn K true) q) = scale4V ops (val X) K q :=
   rows4_scale (row4B K) hK (by simp [row4B, rowIn]) rfl X hX hq
@@ -411,10 +411,10 @@ section Sides4
 
 variable {ops}
 
-/-- **RowA computes `P_A`'s words**: at depth `K = 64·nw`, a transcript correct on RowA whose code and scale outputs
+/-- **RowA computes `P_A`'s words**: at depth `K = 64·nw`, a trace correct on RowA whose code and scale outputs
 hold a row `x` of `A′` and whose chain basis' column `q` holds `y` has on `P_A`'s word `q` the BF16 cast of
 `cTilde sm120Nvf4`'s word over `x` and `y`, `y` at `1.0`, wherever it is `some`. -/
-theorem row4A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4A K).spec ops).toCircuit.Transcript)
+theorem row4A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) (x : Row4) (hx : x.1.length = K)
     (hA : ∀ t < K, val X (code4 K (rowIn K false) t) = (x.1.getD t 0).val)
     (hS : ∀ i < K / 16, val X (scale4 K (rowIn K false) i) = (x.2.getD i 0).val) {q : ℕ} (hq : q < 32)
@@ -493,11 +493,11 @@ theorem row4A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4A K).
   simp only [List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at hl
   rw [hKn, hl, hw]
 
-/-- **RowB computes `P_B`'s words**: at depth `K = 64·nw`, a transcript correct on RowB whose code and scale outputs
+/-- **RowB computes `P_B`'s words**: at depth `K = 64·nw`, a trace correct on RowB whose code and scale outputs
 hold a row `x` of `B̃` and whose chain basis' column `q` holds `y` has on `P_B`'s word `q` the BF16 cast of
 `Σ_s Ẽ_s·g_{s,q}` (the FMAs from `+0` of the widened `Ẽ` against `G`'s column `q`) plus the negated word of
 `cTilde sm120Nvf4` over `x` and `y`, `y` at `1.0`, wherever it is `some`. -/
-theorem row4B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4B K).spec ops).toCircuit.Transcript)
+theorem row4B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) (x : Row4) (hx : x.1.length = K)
     (hA : ∀ t < K, val X (code4 K (rowIn K true) t) = (x.1.getD t 0).val)
     (hS : ∀ i < K / 16, val X (scale4 K (rowIn K true) i) = (x.2.getD i 0).val) {q : ℕ} (hq : q < 32)

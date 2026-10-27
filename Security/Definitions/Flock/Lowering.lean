@@ -79,7 +79,7 @@ namespace IsRowsUnit
 variable {P} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
 
 open Classical in
-/-- **The transcript a unit's column values give**: each of the unit's wires carries the value of a
+/-- **The trace a unit's column values give**: each of the unit's wires carries the value of a
 column on it, and every other gate is `false`. -/
 noncomputable def decode (z : Fin R.w → Bool) : Fin C.N → Bool :=
   fun g => if h : ∃ c, I.wire c = g then z (Classical.choose h) else false
@@ -123,7 +123,7 @@ namespace UnitPlace
 
 variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
 
-/-- The transcript a witness gives for a placed unit, read from its block. -/
+/-- The trace a witness gives for a placed unit, read from its block. -/
 noncomputable def decode (pl : UnitPlace P S u) (z : Witness S.m) : Fin C.N → Bool :=
   pl.inst.decode fun c => bit (S.block z pl.o (pl.col c))
 

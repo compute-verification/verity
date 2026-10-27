@@ -744,11 +744,11 @@ section RowWords
 variable {ops : RowOps} (hops : Pc8OpsAgree ops)
 include hops
 
-/-- **RowA's codes and `P_A` row are the protocol's**: a correct RowA transcript holding a row of words, its noise line,
+/-- **RowA's codes and `P_A` row are the protocol's**: a correct RowA trace holding a row of words, its noise line,
 its form basis `F` and its chain basis `Fc` has `quant8`'s codes, and, where the peel's chain words `af` against `Fc`'s
 columns exist, the `P_A` row `paRow?` forms from them and the line's `bf16(E′)`. -/
 theorem row8A_paWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
-    (XA : ((row8A p (128 * nw)).spec ops).toCircuit.Transcript)
+    (XA : ((row8A p (128 * nw)).spec ops).toCircuit.Trace)
     (hX : ((row8A p (128 * nw)).spec ops).part.Correct XA 0) {w : ℕ → ℕ} {e : Fin Params.pi.r → Code}
     {F Fc : Matrix (Fin (128 * nw)) (Fin Params.pi.r) Code} (hx : ∀ l < 128 * nw, val XA l = w l % 2 ^ 32)
     (he : ∀ l < 32, val XA (128 * nw + l) = encCodes e l)
@@ -781,11 +781,11 @@ theorem row8A_paWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
         (fun t => (hb t (q - 32) hq').trans (encCodes_of_lt hq')) hc,
       bf16_word hops (chainWordP?_lt hc) (hpa2 (q - 32) (by omega)), show 32 + (q - 32) = q by omega]
 
-/-- **RowB's codes and `P_B` row are the protocol's**: a correct RowB transcript holding a row of words, its noise line,
+/-- **RowB's codes and `P_B` row are the protocol's**: a correct RowB trace holding a row of words, its noise line,
 its form basis `F`, its chain basis `Fc` and `G` has `quant8`'s codes, and, where the peel's chain words `bf` against
 `Fc`'s columns and `G`'s rows `gL` exist, the `P_B` row `pbRow?` forms from them and the line's `bf16(E′)`. -/
 theorem row8B_pbWords (p : Pipeline) {nw : ℕ} (hnw : 0 < nw)
-    (XB : ((row8B p (128 * nw)).spec ops).toCircuit.Transcript)
+    (XB : ((row8B p (128 * nw)).spec ops).toCircuit.Trace)
     (hX : ((row8B p (128 * nw)).spec ops).part.Correct XB 0) {w : ℕ → ℕ} {e : Fin Params.pi.r → Code}
     {F Fc : Matrix (Fin (128 * nw)) (Fin Params.pi.r) Code} (hx : ∀ l < 128 * nw, val XB l = w l % 2 ^ 32)
     (he : ∀ l < 32, val XB (128 * nw + l) = encCodes e l)
@@ -879,7 +879,7 @@ hold row `i` of the activations, row `j` of the weights, their noise lines, the 
 hypotheses at the two rows, and where the peel's factor rows exist, `C̃_ij` and `U_ij` are the device's ticket and
 useful words on `pc8Sem`'s `A′` and `B̃` (`quant8A`, `quant8B`), the bases' codes and the lines' `bf16(E′)`. -/
 theorem entry8_words (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw)
-    (hTM : TM ∣ M) (hTN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript)
+    (hTM : TM ∣ M) (hTN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace)
     (z : Noise M N K Params.pi.r) (act wt : Codes) (i : Fin M) (j : Fin N)
     (hXT : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_T ops p M K N TM TN) (tile_index hTM hTN i.isLt j.isLt).1⟩)
@@ -1115,7 +1115,7 @@ theorem tileGate_w (p : Pipeline) {K TM TN g : ℕ} (hg : tileIn K TM TN ≤ g) 
   unfold entryGate
   split_ifs <;> rfl
 
-theorem val_bv {S : Spec} (X : S.toCircuit.Transcript) {g : ℕ} (hg : g < S.N) {v : ℕ}
+theorem val_bv {S : Spec} (X : S.toCircuit.Trace) {g : ℕ} (hg : g < S.N) {v : ℕ}
     (h : X ⟨g, hg⟩ = BitVec.ofNat _ v) : val X g = v % 2 ^ (S.gate g).w := by
   rw [val_of_lt X hg, h, BitVec.toNat_ofNat]
 
@@ -1145,7 +1145,7 @@ theorem in8_le_N : in8 M N K ≤ (whole8 ops p M K N TM TN).spec.toCircuit.N := 
   rw [whole8_N]; omega
 
 /-- An input gate's value is its assignment's low `inW8` bits. -/
-theorem val_in8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {g v : ℕ} (hg : g < in8 M N K)
+theorem val_in8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {g v : ℕ} (hg : g < in8 M N K)
     (hgN : g < (whole8 ops p M K N TM TN).spec.toCircuit.N) (h : X ⟨g, hgN⟩ = BitVec.ofNat _ v) :
     val X g = v % 2 ^ inW8 M N K g := by
   rw [val_bv X hgN h]
@@ -1160,7 +1160,7 @@ theorem tile8_lt {e a : ℕ} (he : e < M / TM * (N / TN)) (ha1 : tileIn K TM TN 
   exact (whole8 ops p M K N TM TN).inst_lt (whole8_T ops p M K N TM TN) he ha1 ha2
 
 /-- A tile gate's value is its assignment's low 32 bits. -/
-theorem val_tile8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {e a v : ℕ}
+theorem val_tile8 (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e a v : ℕ}
     (he : e < M / TM * (N / TN)) (ha1 : tileIn K TM TN ≤ a) (ha2 : a < tileN K TM TN)
     (h : X ⟨_, tile8_lt ops p he ha1 ha2⟩ = BitVec.ofNat _ v) : val X (tile8 p M N K TM TN e a) = v % 2 ^ 32 := by
   rw [val_bv X _ h]
@@ -1218,7 +1218,7 @@ of the noise `z` and the registered gates the activations `act`, the weights `wt
 `Row8OK` rows `i` of `act` and `j` of `wt`, under `Noise8OK z` and the named hypothesis at `(i, j)`, the registered
 words `tk i j` and `us i j` read as the device's ticket and useful words on `pc8Sem`'s operands. -/
 theorem entry8_accepts (p : Pipeline) (pr : Prices) {M K N TM TN nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw)
-    (hM : TM ∣ M) (hN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript)
+    (hM : TM ∣ M) (hN : TN ∣ N) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace)
     (z : Noise M N K Params.pi.r) (act wt tk us : Codes) (i : Fin M) (j : Fin N)
     {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)}
     (hT : ∀ g : Fin (whole8 ops p M K N TM TN).spec.toCircuit.N,

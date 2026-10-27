@@ -8,7 +8,7 @@ import Proofs.Pouw.PearlC.PeelFp4Proofs
 `TileCircuit.tile4Spec K TM TN`, `pc4`'s tile template at depth `K` and tile `TM × TN`, evaluates to Pearl-C4's words:
 for each entry `(i, j)`, on inputs holding rows `a` of `A′` and `b` of `B̃` (codes and scale bytes) and the factor rows
 `P_A,i` and `P_B,j`, its two outputs are `C̃ = cTilde sm120Nvf4` over the rows and U's four K16 steps from it
-(`tile4_words`), at every depth and tile (the deployed `64 × 64` at `K = 8192` among them). A transcript whose one unit
+(`tile4_words`), at every depth and tile (the deployed `64 × 64` at `K = 8192` among them). A trace whose one unit
 is correct carries them (`tile4_correct`), and they read back as the record `devFp4Sm120`'s ticket and useful value
 (`tile4_values`, `tile4_devFp4`).
 
@@ -268,9 +268,9 @@ theorem entry4_lt {i j : ℕ} (hi : i < TM) (hj : j < TN) :
   omega
 
 /-- The circuit's values. -/
-abbrev tile4Val (a : (tile4Spec K TM TN).toCircuit.Transcript) : ℕ → ℕ := val ((tile4Spec K TM TN).toCircuit.eval a)
+abbrev tile4Val (a : (tile4Spec K TM TN).toCircuit.Trace) : ℕ → ℕ := val ((tile4Spec K TM TN).toCircuit.eval a)
 
-theorem tile4Val_atom (a : (tile4Spec K TM TN).toCircuit.Transcript) {i j r : ℕ} (hi : i < TM) (hj : j < TN)
+theorem tile4Val_atom (a : (tile4Spec K TM TN).toCircuit.Trace) {i j r : ℕ} (hi : i < TM) (hj : j < TN)
     (hr : r < K / 64) :
     tile4Val K TM TN a (entry4Base K TM TN i j + r) =
       nvf4Word (if r = 0 then 0 else tile4Val K TM TN a (entry4Base K TM TN i j + r - 1))
@@ -293,12 +293,12 @@ theorem tile4Val_atom (a : (tile4Spec K TM TN).toCircuit.Transcript) {i j r : �
   dsimp only
   rw [atom4F_reads]
 
-theorem tile4Val_input (a : (tile4Spec K TM TN).toCircuit.Transcript) {g : ℕ} (hg : g < tile4In K TM TN) :
+theorem tile4Val_input (a : (tile4Spec K TM TN).toCircuit.Trace) {g : ℕ} (hg : g < tile4In K TM TN) :
     tile4Val K TM TN a g = val a g := by
   have hN : g < (tile4Spec K TM TN).N := by show g < tile4N K TM TN; unfold tile4N; omega
   rw [tile4Val, Spec.val_input _ a hN (gate4_input K TM TN hg), val_of_lt _ hN]
 
-theorem tile4Val_peel (a : (tile4Spec K TM TN).toCircuit.Transcript) {i j s : ℕ} (hi : i < TM) (hj : j < TN)
+theorem tile4Val_peel (a : (tile4Spec K TM TN).toCircuit.Trace) {i j s : ℕ} (hi : i < TM) (hj : j < TN)
     (hs : s < 4) :
     tile4Val K TM TN a (entry4Base K TM TN i j + (K / 64 + s)) =
       k16Step (tile4Val K TM TN a (entry4Base K TM TN i j + (K / 64 + s) - 1))
@@ -323,7 +323,7 @@ theorem tile4Val_peel (a : (tile4Spec K TM TN).toCircuit.Transcript) {i j s : �
   · rw [show 17 + (l : ℕ) = (16 + l) + 1 by omega, List.getD_cons_succ, (getD_pair _ _ _ l.isLt).2]
 
 /-- **U's gate**: entry `(i, j)`'s four K16 steps from its `C̃` gate over the factor rows `P_A,i` and `P_B,j`. -/
-theorem tile4Val_uFold (a : (tile4Spec K TM TN).toCircuit.Transcript) {i j : ℕ} (hi : i < TM) (hj : j < TN)
+theorem tile4Val_uFold (a : (tile4Spec K TM TN).toCircuit.Trace) {i j : ℕ} (hi : i < TM) (hj : j < TN)
     (pa pb : List ℕ) (hpa : ∀ q < 64, val a ((TM + TN) * row4 K + 64 * i + q) = pa.getD q 0)
     (hpb : ∀ q < 64, val a ((TM + TN) * row4 K + 64 * TM + 64 * j + q) = pb.getD q 0) :
     tile4Val K TM TN a (u4Gate K TM TN i j) = uFold pa pb (tile4Val K TM TN a (c4Gate K TM TN i j)) := by
@@ -373,7 +373,7 @@ theorem ofFn_getD {α : Type} (L : List α) (d : α) {s n : ℕ} (h : s + n ≤ 
 
 /-- **A firing's inputs**: entry `(i, j)`'s firing `t` reads codes `64t, …` and scale bytes `4t, …` of rows `x` of `A′`
 and `y` of `B̃`, as `chainN` takes them. -/
-theorem fire4_inputs (a : (tile4Spec K TM TN).toCircuit.Transcript) (x y : Row4) {i j : ℕ} (hi : i < TM)
+theorem fire4_inputs (a : (tile4Spec K TM TN).toCircuit.Trace) (x y : Row4) {i j : ℕ} (hi : i < TM)
     (hj : j < TN) (hA : ∀ l < K, val a (i * K + l) = (x.1.getD l 0).val)
     (hSA : ∀ l < K / 16, val a (TM * K + i * (K / 16) + l) = (x.2.getD l 0).val)
     (hB : ∀ l < K, val a (TM * row4 K + j * K + l) = (y.1.getD l 0).val)
@@ -412,7 +412,7 @@ theorem fire4_inputs (a : (tile4Spec K TM TN).toCircuit.Transcript) (x y : Row4)
 
 /-- **`C̃_ij`'s gate**: entry `(i, j)`'s `K/64` firings write `cTilde sm120Nvf4`'s word over rows `x` of `A′` and `y`
 of `B̃`, wherever it is `some`. -/
-theorem tile4Val_chain (a : (tile4Spec K TM TN).toCircuit.Transcript) (x y : Row4) {i j : ℕ} (hi : i < TM)
+theorem tile4Val_chain (a : (tile4Spec K TM TN).toCircuit.Trace) (x y : Row4) {i j : ℕ} (hi : i < TM)
     (hj : j < TN) (hK : 0 < K) (hx : x.1.length = K) (hA : ∀ l < K, val a (i * K + l) = (x.1.getD l 0).val)
     (hSA : ∀ l < K / 16, val a (TM * K + i * (K / 16) + l) = (x.2.getD l 0).val)
     (hB : ∀ l < K, val a (TM * row4 K + j * K + l) = (y.1.getD l 0).val)
@@ -460,7 +460,7 @@ theorem tile4Val_chain (a : (tile4Spec K TM TN).toCircuit.Transcript) (x y : Row
 /-- **The tile unit's words**: on inputs holding rows `x` of `A′` and `y` of `B̃` (codes and scale bytes) and the
 factor rows `P_A,i` and `P_B,j`, entry `(i, j)`'s two outputs are `C̃_ij = cTilde sm120Nvf4` and U's four K16 steps
 from it (`uFold`). -/
-theorem tile4_words (a : (tile4Spec K TM TN).toCircuit.Transcript) (x y : Row4) (pa pb : List ℕ) {i j : ℕ}
+theorem tile4_words (a : (tile4Spec K TM TN).toCircuit.Trace) (x y : Row4) (pa pb : List ℕ) {i j : ℕ}
     (hi : i < TM) (hj : j < TN) (hK : 0 < K) (hx : x.1.length = K)
     (hA : ∀ l < K, val a (i * K + l) = (x.1.getD l 0).val)
     (hSA : ∀ l < K / 16, val a (TM * K + i * (K / 16) + l) = (x.2.getD l 0).val)
@@ -481,9 +481,9 @@ theorem u4Gate_mem {i j : ℕ} (hi : i < TM) (hj : j < TN) : u4Gate K TM TN i j 
   Finset.mem_union_right _ (Finset.mem_image.2 ⟨(i, j), Finset.mem_product.2 ⟨Finset.mem_range.2 hi,
     Finset.mem_range.2 hj⟩, rfl⟩)
 
-/-- A transcript whose one unit is correct holds the circuit's values on every output (core's
+/-- A trace whose one unit is correct holds the circuit's values on every output (core's
 `Verity.Partition.compose`). -/
-theorem tile4_out (X : (tile4Spec K TM TN).toCircuit.Transcript) (hX : (tile4Spec K TM TN).part.Correct X 0) :
+theorem tile4_out (X : (tile4Spec K TM TN).toCircuit.Trace) (hX : (tile4Spec K TM TN).part.Correct X 0) :
     ∀ g ∈ (tile4Spec K TM TN).outs, val X g = tile4Val K TM TN X g := by
   have hw : (tile4Spec K TM TN).part.wrong X = ∅ := by
     ext u
@@ -501,9 +501,9 @@ theorem tile4_out (X : (tile4Spec K TM TN).toCircuit.Transcript) (hX : (tile4Spe
     Verity.Partition.mem_committed_of_output _ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hg⟩)
   rw [tile4Val, val_of_lt _ hlt, val_of_lt _ hlt, (tile4Spec K TM TN).part.compose X X (fun _ _ => rfl) hw _ hg']
 
-/-- **Pearl-C4's tile unit, correct**: a transcript whose one unit is correct carries `C̃_ij` and `U_ij` on entry
+/-- **Pearl-C4's tile unit, correct**: a trace whose one unit is correct carries `C̃_ij` and `U_ij` on entry
 `(i, j)`'s outputs. -/
-theorem tile4_correct (X : (tile4Spec K TM TN).toCircuit.Transcript) (hX : (tile4Spec K TM TN).part.Correct X 0)
+theorem tile4_correct (X : (tile4Spec K TM TN).toCircuit.Trace) (hX : (tile4Spec K TM TN).part.Correct X 0)
     (x y : Row4) (pa pb : List ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN) (hK : 0 < K) (hx : x.1.length = K)
     (hA : ∀ l < K, val X (i * K + l) = (x.1.getD l 0).val)
     (hSA : ∀ l < K / 16, val X (TM * K + i * (K / 16) + l) = (x.2.getD l 0).val)
@@ -527,7 +527,7 @@ variable {K TM TN : ℕ}
 
 /-- **`C̃_ij`'s word is the ticket**: on rows `A i = x` and `B j = y` whose chain `cTilde sm120Nvf4` is `some`, `C̃`'s
 output reads back as `ticket4 sm120Nvf4`, the record `devFp4Sm120`'s ticket. -/
-theorem tile4_ticket {m n : ℕ} (X : (tile4Spec K TM TN).toCircuit.Transcript)
+theorem tile4_ticket {m n : ℕ} (X : (tile4Spec K TM TN).toCircuit.Trace)
     (hX : (tile4Spec K TM TN).part.Correct X 0) (A : Op4 m) (B : Op4 n) (i : Fin m) (j : Fin n) {x y : Row4}
     (hAi : A i = some x) (hBj : B j = some y) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN) (hK : 0 < K)
     (hx : x.1.length = K) (hA : ∀ l < K, val X (ti * K + l) = (x.1.getD l 0).val)
@@ -540,12 +540,12 @@ theorem tile4_ticket {m n : ℕ} (X : (tile4Spec K TM TN).toCircuit.Transcript)
     tile4Val_chain K TM TN X x y hti htj hK hx hA hSA hB hSB hc]
   simp [ticket4, hAi, hBj, hc]
 
-/-- **The tile unit computes Pearl-C4's ticket and useful value**: a transcript whose one unit is correct, on inputs
+/-- **The tile unit computes Pearl-C4's ticket and useful value**: a trace whose one unit is correct, on inputs
 holding rows `A i = x` of `A′` and `B j = y` of `B̃` (codes and scale bytes) and the factor rows `P_A,i`, `P_B,j` that
 U's pinned order forms from them (`PeelFp4Proofs.peelRows4`), has on entry `(ti, tj)`'s outputs `C̃`'s word of value
 `ticket4 sm120Nvf4` and `U`'s of value `peelFp4 sm120Nvf4` at `(i, j)`: the record `devFp4Sm120`'s ticket and useful
 value (`tile4_devFp4`). -/
-theorem tile4_values {m n k : ℕ} (X : (tile4Spec K TM TN).toCircuit.Transcript)
+theorem tile4_values {m n k : ℕ} (X : (tile4Spec K TM TN).toCircuit.Trace)
     (hX : (tile4Spec K TM TN).part.Correct X 0) (A : Op4 m) (B : Op4 n) (FA FB : Matrix (Fin k) (Fin 32) Nib)
     (beA : Matrix (Fin m) (Fin 32) ℕ) (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n) {x y : Row4}
     (hAi : A i = some x) (hBj : B j = some y) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN) (hK : 0 < K)
@@ -570,7 +570,7 @@ theorem tile4_values {m n k : ℕ} (X : (tile4Spec K TM TN).toCircuit.Transcript
   rw [hU, wordQ_uFold, PeelFp4Proofs.peelFp4_eq_rows, hr, Option.bind_some]
 
 /-- `tile4_values` at the record `devFp4Sm120`: its ticket and useful value. -/
-theorem tile4_devFp4 {m n k : ℕ} (X : (tile4Spec K TM TN).toCircuit.Transcript)
+theorem tile4_devFp4 {m n k : ℕ} (X : (tile4Spec K TM TN).toCircuit.Trace)
     (hX : (tile4Spec K TM TN).part.Correct X 0) (A : Op4 m) (B : Op4 n) (FA FB : Matrix (Fin k) (Fin 32) Nib)
     (beA : Matrix (Fin m) (Fin 32) ℕ) (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n) {x y : Row4}
     (hAi : A i = some x) (hBj : B j = some y) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN) (hK : 0 < K)

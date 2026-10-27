@@ -93,7 +93,7 @@ def carried (b : Fin B) : Finset (Fin C.N) := (s.before b).filter fun a => ∃ g
 abbrev Carried (b : Fin B) : Type := (g : s.carried b) → BitVec (C.w g)
 
 /-- **The carried state's committed value**: what the committed trace `X` gives the carried gates. -/
-def carriedValue (X : C.Transcript) (b : Fin B) : s.Carried b := fun g => X g
+def carriedValue (X : C.Trace) (b : Fin B) : s.Carried b := fun g => X g
 
 end Blocks
 

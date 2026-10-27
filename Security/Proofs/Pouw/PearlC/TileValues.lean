@@ -284,10 +284,10 @@ section Tile
 
 variable (p : Pipeline)
 
-/-- **The ticket**: a transcript whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′` and row
+/-- **The ticket**: a trace whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′` and row
 `j` of `B̃`, has `C̃`'s word of value `Accum.chainAt p 4` at `(i, j)` wherever the pinned order's chain is finite, whether
 or not U's factor rows exist. -/
-theorem tile_ticket {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript)
+theorem tile_ticket {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Trace)
     (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code) (i : Fin m) (j : Fin n)
     {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)
@@ -298,12 +298,12 @@ theorem tile_ticket {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * 
   rw [tile_out p TM TN X hX _ (cGate_mem p TM TN _ hti htj), tileVal_chain p TM TN hnw X _ _ hti htj hA hB hc]
   exact (chainWordP_value p 4 _ hc).symm
 
-/-- **The tile unit computes the ticket and the useful value** (L3's steps 4 and 5 for the tile template): a transcript
+/-- **The tile unit computes the ticket and the useful value** (L3's steps 4 and 5 for the tile template): a trace
 whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′`, row `j` of `B̃` and the factor rows
 `P_A,i`, `P_B,j` that U's pinned order forms from them (`peelRowsP`), has on entry `(ti, tj)`'s outputs `C̃`'s word of
 value `Accum.chainAt p 4` and `U`'s of value `peelExactValP p 4` at `(i, j)`: the record `devAt p 4`'s ticket and
 useful value (`tile_devAt`). -/
-theorem tile_values {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript)
+theorem tile_values {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Trace)
     (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code)
     (FA FB : Matrix (Fin (128 * nw)) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) ℕ)
@@ -324,7 +324,7 @@ theorem tile_values {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * 
 /-- `tile_values` at a device record `devAt p 4 pr`: its ticket and useful value, `pearl-c-sm120` v1's
 (`devSm120v1 pr = devAt sm120E4m3 4 pr`) among them. -/
 theorem tile_devAt (pr : Prices) {nw m n TM TN : ℕ} (hnw : 0 < nw)
-    (X : (tileSpec p (128 * nw) TM TN).toCircuit.Transcript) (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
+    (X : (tileSpec p (128 * nw) TM TN).toCircuit.Trace) (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code)
     (FA FB : Matrix (Fin (128 * nw)) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) ℕ)
     (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)

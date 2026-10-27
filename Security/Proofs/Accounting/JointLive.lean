@@ -42,15 +42,15 @@ variable {C : Verity.Circuit} {n : ℕ}
 
 /-- A wrong unit is unbound. -/
 theorem wrong_subset_unbound (P : Verity.Partition C n) (opens : (g : Fin C.N) → BitVec (C.w g) → Prop)
-    (X : C.Transcript) : P.wrong X ⊆ unbound P opens X := by
+    (X : C.Trace) : P.wrong X ⊆ unbound P opens X := by
   classical
   intro u hu
   simp only [Verity.Partition.wrong, Finset.mem_filter, Finset.mem_univ, true_and] at hu
   simp only [unbound, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inl hu
 
-/-- Some transcript the openings open to: at each position an opened value where there is one. -/
-theorem exists_opensTo (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) : ∃ X : C.Transcript, OpensTo opens X := by
+/-- Some trace the openings open to: at each position an opened value where there is one. -/
+theorem exists_opensTo (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) : ∃ X : C.Trace, OpensTo opens X := by
   classical
   refine ⟨fun g => if h : ∃ v, opens g v then h.choose else 0, fun g hg => ?_⟩
   show opens g (if h : ∃ v, opens g v then h.choose else 0)
@@ -58,7 +58,7 @@ theorem exists_opensTo (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) : ∃
   exact hg.choose_spec
 
 /-- **More openings, with no two of one position, bind more.** If every opening of `opens` is one of `opens'` and
-`opens'` has no two openings of one position, every transcript `opens'` opens to is one `opens` opens to, and binds
+`opens'` has no two openings of one position, every trace `opens'` opens to is one `opens` opens to, and binds
 every unit it binds there: the integrity claim at `opens` gives it at `opens'`. A subprotocol's bound over the runs of
 one strategy it plays (the other subprotocols' coins fixed) so carries to the openings of every run of the game. -/
 theorem integrityHolds_mono (P : Verity.Partition C n) {opens opens' : (g : Fin C.N) → BitVec (C.w g) → Prop}

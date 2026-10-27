@@ -23,7 +23,7 @@ protocol's audit:
 * the network certifier: the leak through the network certifiers over a period of sampled audits, each window at
   `δ + ε_ks + ε_bind`, whose count of secrets gives `K`;
 * sampled proofs: the sampled audit's live knowledge soundness, at `δ + ε_ks + δ_link`, read as a bound on the
-  committed transcript's wrong units.
+  committed trace's wrong units.
 
 None of those bridges is stated yet. Given the five per-period guarantees, both statements are proved
 (`Accounting.SecurityProofs.JointPeriod` and `JointHorizon`), by a union bound over the product of the audits' coins.

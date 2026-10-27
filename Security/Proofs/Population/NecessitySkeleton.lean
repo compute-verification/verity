@@ -8,30 +8,30 @@ import Mathlib.Tactic.Abel
 /-!
 # The skeleton theorem: tier 1 gives the sampling certificate, and each tier-1 item is needed
 
-**Tier 1** is: (i) the transcript is committed before the coins, and the draw distribution is fixed before the
-transcript; (ii) local checks; (iii) robust determinacy, which for opaque units is single assignment and acyclicity
+**Tier 1** is: (i) the trace is committed before the coins, and the draw distribution is fixed before the
+trace; (ii) local checks; (iii) robust determinacy, which for opaque units is single assignment and acyclicity
 (`Dataflow.determinate_iff_checked`).
 
-* The probability side. `prob_accepts`: a transcript fixed before the coins passes `k` independent draws with
+* The probability side. `prob_accepts`: a trace fixed before the coins passes `k` independent draws with
   probability `(1 − π(B))^k`, and `0` when an always-proved unit is wrong.
-* `certificate`, **from (i) alone**: for every transcript committed before the coins, the verifier accepts it while
+* `certificate`, **from (i) alone**: for every trace committed before the coins, the verifier accepts it while
   `B ∩ A ≠ ∅` or `π(B) > ε` with probability at most `(1 − ε)^k`.
 * `accepts_local`, **what (ii) buys**: the verdict reads only the always-proved and drawn units' positions.
 * `skeleton`, **tier 1 for a population**: with probability at least `1 − (1 − ε)^k`, an accepted run has `B ∩ A = ∅`,
   `π(B) ≤ ε`, and every egress slot where it differs from the honest run inside the wrong units' cone (by (iii)).
   `integrity_inferred`: drawing by cone egress, `π ∝ E`, at most `ε · Σ_u E(u)` egress slots differ.
-* `inference_iff`, **tier 2**: a bound `g` on a policy's damage holds at confidence `1 − δ` exactly when every transcript
+* `inference_iff`, **tier 2**: a bound `g` on a policy's damage holds at confidence `1 − δ` exactly when every trace
   with damage above `g` and no always-proved unit wrong passes with probability at most `δ`, that is
   `(1 − π(B))^k ≤ δ`. `inferable_of_amp`: an amplification bound `K` gives the bound `K · C · ε`.
-  `not_inferable_of_massless`: a transcript with damage and no draw weight on its wrong units passes with
+  `not_inferable_of_massless`: a trace with damage and no draw weight on its wrong units passes with
   probability one, so no bound below its damage is inferable at any confidence.
 
 **The counterexamples, one family per item.**
-* (i), a transcript after the coins: `adaptive_dodges`, every draw passes with every undrawn unit wrong
-  (`flags_free` meets the hypothesis). A draw after the transcript: `late_draw_dodges`, the point mass on a correct
+* (i), a trace after the coins: `adaptive_dodges`, every draw passes with every undrawn unit wrong
+  (`flags_free` meets the hypothesis). A draw after the trace: `late_draw_dodges`, the point mass on a correct
   unit passes with probability one.
 * (ii), a non-local check: `checksum_untestable`, a decision that reads fewer than `n` positions and accepts every
-  transcript whose `n` values sum to zero accepts every transcript.
+  trace whose `n` values sum to zero accepts every trace.
 * (iii), a cycle: `Dataflow.cycle_two_fixed_points` and `Dataflow.loop_egress` (POP1). A free value: `free_value`, a
   slot no unit writes, copied to the egress by a correct unit, makes the egress arbitrary with no wrong unit, even with
   every unit always proved. Determinacy that isn't robust: `gate_determinate` and `gate_free`, a population with
@@ -103,7 +103,7 @@ theorem sum_good (hπ : Dist π) (chk : U → T → Prop) (σ : T) :
   rw [this]
   linarith
 
-/-- **A transcript fixed before the coins passes** with probability `(1 − π(B))^k` when no always-proved unit is
+/-- **A trace fixed before the coins passes** with probability `(1 − π(B))^k` when no always-proved unit is
 wrong. -/
 theorem prob_accepts (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
     prob π k (fun d => Accepts chk A d σ) = (1 - mass π (bad chk σ)) ^ k := by
@@ -119,10 +119,10 @@ theorem prob_accepts_eq_zero (chk : U → T → Prop) (A : Finset U) (σ : T) (h
   rw [← prob_false π k]
   exact prob_congr π k fun d => by simp only [Accepts, iff_false, not_and]; exact fun h => absurd h hA
 
-/-- **The sampling certificate**, from tier 1's first item alone: for every transcript committed before the coins
+/-- **The sampling certificate**, from tier 1's first item alone: for every trace committed before the coins
 (`σ` does not depend on the draw) and every draw fixed before it (`π`, `A` and `k` do not depend on `σ`), the
 verifier accepts while an always-proved unit is wrong or `π(B) > ε` with probability at most `(1 − ε)^k`. A
-randomized prover is a mixture of such transcripts, so the bound holds for it too. -/
+randomized prover is a mixture of such traces, so the bound holds for it too. -/
 theorem certificate (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) {ε : ℝ} (hε : ε ≤ 1) (σ : T) :
     prob π k (fun d => Accepts chk A d σ ∧ ¬ Certified chk π A ε σ) ≤ (1 - ε) ^ k := by
   have h1e : 0 ≤ 1 - ε := by linarith
@@ -139,9 +139,9 @@ theorem certificate (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) {ε 
 
 /-! ## Tier 2: which damage bounds the certificate supports -/
 
-/-- **Which bounds are inferable**: the damage bound `g` holds at confidence `1 − δ` for every transcript exactly when
-every transcript with damage above `g` and no always-proved unit wrong passes the draw with probability
-`(1 − π(B))^k ≤ δ`. The best inferable bound is the largest damage among transcripts with
+/-- **Which bounds are inferable**: the damage bound `g` holds at confidence `1 − δ` for every trace exactly when
+every trace with damage above `g` and no always-proved unit wrong passes the draw with probability
+`(1 − π(B))^k ≤ δ`. The best inferable bound is the largest damage among traces with
 `(1 − π(B))^k > δ`. -/
 theorem inference_iff (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (dmg : T → ℝ) (g δ : ℝ)
     (hδ : 0 ≤ δ) :
@@ -164,7 +164,7 @@ theorem inference_iff (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (d
       exact hδ
 
 /-- **An amplification bound is a damage bound**: with damage at most `K` times the wrong units' cost, and cost at
-most `C` times the draw weight, an accepted transcript has damage above `K C ε` with probability at most
+most `C` times the draw weight, an accepted trace has damage above `K C ε` with probability at most
 `(1 − ε)^k`. With `π ∝ c`, `C = Σ_u c(u)`. -/
 theorem inferable_of_amp (hπ : Dist π) {chk : U → T → Prop} {A : Finset U} {c : U → ℝ} {dmg : T → ℝ} {K C : ℝ}
     (hK : 0 ≤ K) (hC : 0 ≤ C) (hamp : AmpLe chk A c dmg K) (hc : ∀ u, c u ≤ C * π u) {ε : ℝ} (hε : ε ≤ 1)
@@ -181,7 +181,7 @@ theorem inferable_of_amp (hπ : Dist π) {chk : U → T → Prop} {A : Finset U}
       _ = K * C * ε := (mul_assoc _ _ _).symm
   exact absurd h.2 (not_lt.2 h2)
 
-/-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit wrong and no draw
+/-- **No bound below a weightless damage is inferable**: a trace with no always-proved unit wrong and no draw
 weight on its wrong units passes with probability one. -/
 theorem not_inferable_of_massless (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T)
     (hd : Disjoint (bad chk σ) A) (h0 : mass π (bad chk σ) = 0) :
@@ -207,8 +207,8 @@ theorem accepts_local {Q V : Type} {reads : U → Finset Q} {chk : U → (Q → 
     exact ⟨fun u hu => (hl u σ τ (h u (Or.inl hu))).2 (hA u hu),
       fun i => (hl _ σ τ (h _ (Or.inr ⟨i, rfl⟩))).2 (hd i)⟩
 
-/-- **A dense check is untestable from a bounded read**: if every transcript agrees on `R` with one that the check
-`G` accepts, a decision that reads `R` and accepts every `G` transcript accepts every transcript. -/
+/-- **A dense check is untestable from a bounded read**: if every trace agrees on `R` with one that the check
+`G` accepts, a decision that reads `R` and accepts every `G` trace accepts every trace. -/
 theorem untestable_of_dense {Q V : Type} (G : (Q → V) → Prop) (R : Finset Q) (dec : (R → V) → Prop)
     (hcomp : ∀ τ : Q → V, G τ → dec fun r : R => τ r) (hdense : ∀ σ : Q → V, ∃ τ, G τ ∧ ∀ q ∈ R, τ q = σ q)
     (σ : Q → V) : dec fun r : R => σ r := by
@@ -237,16 +237,16 @@ theorem checksum_dense {n : ℕ} {V : Type} [AddCommGroup V] (R : Finset (Fin n)
   abel
 
 /-- **A non-local check isn't implied by sampled local reads**: a decision that reads fewer than `n` positions and
-accepts every transcript whose `n` values sum to zero accepts every transcript. So a unit whose check is the checksum,
+accepts every trace whose `n` values sum to zero accepts every trace. So a unit whose check is the checksum,
 always proved and read through any fewer than `n` positions, passes when it is wrong. -/
 theorem checksum_untestable {n : ℕ} {V : Type} [AddCommGroup V] (R : Finset (Fin n)) (hR : R.card < n)
     (dec : (R → V) → Prop) (hcomp : ∀ τ : Fin n → V, checksum τ → dec fun r : R => τ r) (σ : Fin n → V) :
     dec fun r : R => σ r :=
   untestable_of_dense checksum R dec hcomp (checksum_dense R hR) σ
 
-/-! ## (i) A transcript after the coins, and a draw after the transcript -/
+/-! ## (i) A trace after the coins, and a draw after the trace -/
 
-/-- **A transcript chosen after the coins dodges the draw**: when every set of units is some transcript's wrong set,
+/-- **A trace chosen after the coins dodges the draw**: when every set of units is some trace's wrong set,
 the strategy that reads the draw passes every draw with every undrawn unit outside `A` wrong. -/
 theorem adaptive_dodges [Fintype U] [DecidableEq U] {chk : U → T → Prop} (hfree : ∀ B : Finset U, ∃ σ, bad chk σ = B)
     (A : Finset U) (k : ℕ) :
@@ -269,8 +269,8 @@ theorem adaptive_card [Fintype U] [DecidableEq U] (A : Finset U) {k : ℕ} (d : 
   have h3 := card_le_univ (A ∪ univ.image d)
   omega
 
-/-- **A draw chosen after the transcript dodges it**: the point mass on a correct unit is a draw distribution, and
-the transcript passes it with probability one, whatever its wrong set. -/
+/-- **A draw chosen after the trace dodges it**: the point mass on a correct unit is a draw distribution, and
+the trace passes it with probability one, whatever its wrong set. -/
 theorem late_draw_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
     (h₀ : chk u₀ σ) (hA : ∀ u ∈ A, chk u σ) (k : ℕ) :
     Dist (fun u => if u = u₀ then (1 : ℝ) else 0) ∧

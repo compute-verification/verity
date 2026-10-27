@@ -48,7 +48,7 @@ namespace Circuit
 variable (C : Circuit)
 
 /-- One run's data: a value for every gate. -/
-abbrev Transcript := (g : Fin C.N) → BitVec (C.w g)
+abbrev Trace := (g : Fin C.N) → BitVec (C.w g)
 
 /-- The non-input gates. -/
 def computed : Finset (Fin C.N) := univ.filter fun g => C.isInput g = false
@@ -77,11 +77,11 @@ termination_by g.val
 decreasing_by all_goals assumption
 
 /-- The circuit's evaluation on the inputs `a`: the honest trace. Only `a`'s values at input gates are read. -/
-def eval (a : C.Transcript) : C.Transcript :=
+def eval (a : C.Trace) : C.Trace :=
   C.run fun g => if C.isInput g then some (a g) else none
 
 /-- The committed inputs of `X` are the values `a` gives the input gates. -/
-def InputsAgree (X a : C.Transcript) : Prop :=
+def InputsAgree (X a : C.Trace) : Prop :=
   ∀ g, C.isInput g = true → X g = a g
 
 /-- `g` feeds `t`: `g = t`, or `g` is read by a gate that feeds `t`. -/
@@ -102,7 +102,7 @@ structure Implementation (C D : Circuit) where
   out : Fin C.N → Fin D.N
   out_mem : ∀ o ∈ C.outputs, out o ∈ D.outputs
   out_w : ∀ o ∈ C.outputs, D.w (out o) = C.w o
-  correct : ∀ (a : D.Transcript) (o : Fin C.N) (ho : o ∈ C.outputs),
+  correct : ∀ (a : D.Trace) (o : Fin C.N) (ho : o ∈ C.outputs),
     (D.eval a (out o)).cast (out_w o ho) =
       C.eval (fun g => if h : C.isInput g = true then (a (inp g)).cast (inp_w g h) else 0) o
 
@@ -118,7 +118,7 @@ structure Containment (C D : Circuit) where
   emb_w : ∀ g, D.w (emb g) = C.w g
   isInput_emb : ∀ g, D.isInput (emb g) = C.isInput g
   reads_emb : ∀ g, C.isInput g = false → D.reads (emb g) = (C.reads g).map ⟨emb, emb_inj⟩
-  op_emb : ∀ g, C.isInput g = false → ∀ v : D.Transcript,
+  op_emb : ∀ g, C.isInput g = false → ∀ v : D.Trace,
     (D.op (emb g) v).cast (emb_w g) = C.op g fun a => (v (emb a)).cast (emb_w a)
   outputs_emb : ∀ o ∈ C.outputs, emb o ∈ D.outputs
 

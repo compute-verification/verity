@@ -724,10 +724,10 @@ theorem formRow_table (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 
     rw [show (16 * q + s) / 16 = q by omega]
     exact (block4_sem hA (hstep q hq)).2 s hs
 
-/-- **RowA's codes and scale bytes are `formRow`'s** in a transcript whose one unit is correct, on inputs holding the
+/-- **RowA's codes and scale bytes are `formRow`'s** in a trace whose one unit is correct, on inputs holding the
 row's BF16 words, `E_A`'s codes and `F_A`'s (`row4A_code`, `row4A_scale`, `formRow_table`). -/
 theorem row4A_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K)
-    (T : ((row4A K).spec ops).toCircuit.Transcript) (hT : ((row4A K).spec ops).part.Correct T 0)
+    (T : ((row4A K).spec ops).toCircuit.Trace) (hT : ((row4A K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
@@ -740,7 +740,7 @@ theorem row4A_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣
 
 /-- **RowB's codes and scale bytes are `formRow`'s**, as `row4A_form` with `E_B`'s codes and `F_B`'s. -/
 theorem row4B_form (hA : Pc4OpsAgree ops) {K : ℕ} (hK : 8 ≤ K) (h16 : 16 ∣ K)
-    (T : ((row4B K).spec ops).toCircuit.Transcript) (hT : ((row4B K).spec ops).part.Correct T 0)
+    (T : ((row4B K).spec ops).toCircuit.Trace) (hT : ((row4B K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F : Fin K → Fin 32 → Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val) {r : Row4}
@@ -808,12 +808,12 @@ section Sides
 
 variable {ops : RowOps}
 
-/-- **RowA's `P_A` row is the FP4 peel's**: at depth `K = 64·nw`, a correct RowA transcript holding a row `X`, its `E_A`
+/-- **RowA's `P_A` row is the FP4 peel's**: at depth `K = 64·nw`, a correct RowA trace holding a row `X`, its `E_A`
 line `e`, the form basis `F` and the chain basis `F_B`, where `formRow` forms `X` to `r` (`row4A_form`'s conditions),
 has on its `Ẽ` outputs and its `P_A` outputs the row `paRow?` forms from the line's `Ẽ` at `e4m3(β)` and the chain
 words `af` of `r` against `F_B`'s columns, wherever they exist (`peelFp4`'s `P_A,i`). -/
 theorem row4A_paWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
-    (T : ((row4A K).spec ops).toCircuit.Transcript) (hT : ((row4A K).spec ops).part.Correct T 0)
+    (T : ((row4A K).spec ops).toCircuit.Trace) (hT : ((row4A K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FB : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)
@@ -852,12 +852,12 @@ theorem row4A_paWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K
 theorem eTilde_lt (e : Fin 32 → Nib) (a : Fin 256) (q : Fin 32) : eTilde e a q < 2 ^ 16 :=
   Nat.or_lt_two_pow (WholeCircuit.bf16WordOf_lt _) (by split <;> norm_num)
 
-/-- **RowB's `P_B` row is the FP4 peel's**: as `row4A_paWords`, a correct RowB transcript holding a row `X`, its `E_B`
+/-- **RowB's `P_B` row is the FP4 peel's**: as `row4A_paWords`, a correct RowB trace holding a row `X`, its `E_B`
 line `e`, the form basis `F`, the chain basis `F_A` and `G`'s rows `gL` has on its `P_B` outputs and its `−Ẽ` outputs
 the row `pbRow?` forms from the line's `Ẽ` at `e4m3(β)`, the chain words `bf` of `r` against `F_A`'s columns and `gL`,
 wherever they exist (`peelFp4`'s `P_B,j`). -/
 theorem row4B_pbWords (hA : Pc4OpsAgree ops) {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw)
-    (T : ((row4B K).spec ops).toCircuit.Transcript) (hT : ((row4B K).spec ops).part.Correct T 0)
+    (T : ((row4B K).spec ops).toCircuit.Trace) (hT : ((row4B K).spec ops).part.Correct T 0)
     {X : Fin K → ℚ} {e : Fin 32 → Nib} {F FA : Matrix (Fin K) (Fin 32) Nib} (hR : Row4OK ops K X)
     (hx : ∀ l < K, ZeroSign16 (val T l) (encRow16 K X l)) (he : ∀ l : Fin 32, val T (K + l) = (e l).val)
     (hf : ∀ (t : Fin K) (l : Fin 32), val T (K + 32 + 32 * t + l) = (F t l).val)

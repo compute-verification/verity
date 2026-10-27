@@ -40,7 +40,7 @@ variable (p : Pipeline)
 
 /-- `tile_devAt` at a depth given as a term equal to `128·nw`. -/
 theorem tile_devAt_of_eq (pr : Prices) {k nw m n : ℕ} (hnw : 0 < nw) (hk : k = 128 * nw)
-    (X : (tileSpec p k TM TN).toCircuit.Transcript) (hX : (tileSpec p k TM TN).part.Correct X 0)
+    (X : (tileSpec p k TM TN).toCircuit.Trace) (hX : (tileSpec p k TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (FA FB : Matrix (Fin k) (Fin 32) Code)
     (beA : Matrix (Fin m) (Fin 32) ℕ) (beB : Matrix (Fin n) (Fin 32) ℕ) (i : Fin m) (j : Fin n) {ti tj : ℕ}
     (hti : ti < TM) (htj : tj < TN) (hA : ∀ l : Fin k, val X (ti * k + l) = (Aq i l).val)
@@ -54,14 +54,14 @@ theorem tile_devAt_of_eq (pr : Prices) {k nw m n : ℕ} (hnw : 0 < nw) (hk : k =
   exact tile_devAt p pr hnw X hX Aq Bq FA FB beA beB i j hti htj hA hB hr hpa hpb
 
 /-- **Pearl-C's tile unit computes the protocol's words.** At `pearlCProtocolDev (devAt p 4 pr) sem ρ`, unit `u` of
-`U` (depth `k = 128·nw`) with activations `act`: a transcript whose tile unit is correct, holding at entry `(ti, tj)`'s
+`U` (depth `k = 128·nw`) with activations `act`: a trace whose tile unit is correct, holding at entry `(ti, tj)`'s
 inputs row `i` of the unit's `A′` and row `j` of its `B̃` (`PearlCSem.unitChain`) and the factor rows `P_A,i`, `P_B,j`
 that U's pinned order forms from them at the bases and noise rows of the unit's useful value (`FA FB beA beB`, any with
 `hU`; the unit's own have it, `unitUsefulDev_eq`), has on that entry's outputs the protocol's ticket and useful value at
 `(i, j)`. -/
 theorem tile_protocol (pr : Prices) (sem : PearlCSem Q R S) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (act : Codes) {nw : ℕ} (hnw : 0 < nw) (hk : (U.layout.shape u).k = 128 * nw)
-    (X : (tileSpec p (U.layout.shape u).k TM TN).toCircuit.Transcript)
+    (X : (tileSpec p (U.layout.shape u).k TM TN).toCircuit.Trace)
     (hX : (tileSpec p (U.layout.shape u).k TM TN).part.Correct X 0)
     (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)
     (hA : ∀ l : Fin (U.layout.shape u).k,
@@ -90,7 +90,7 @@ theorem tile_protocol (pr : Prices) (sem : PearlCSem Q R S) (ρ : ℚ) (H : Q �
 tile unit's outputs, `tile_protocol`'s hypotheses give `TileWordsGood`'s conjunct at `(i, j)`. -/
 theorem tile_words_good (pr : Prices) (sem : PearlCSem Q R S) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (cm : Commit) {nw : ℕ} (hnw : 0 < nw) (hk : (U.layout.shape u).k = 128 * nw)
-    (X : (tileSpec p (U.layout.shape u).k TM TN).toCircuit.Transcript)
+    (X : (tileSpec p (U.layout.shape u).k TM TN).toCircuit.Trace)
     (hX : (tileSpec p (U.layout.shape u).k TM TN).part.Correct X 0)
     (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)
     (hA : ∀ l : Fin (U.layout.shape u).k,
@@ -145,13 +145,13 @@ theorem peelRows4_length {m n k : ℕ} {A : Op4 m} {B : Op4 n} {FA FB : Matrix (
   simpa [colF] using hlen.1.symm
 
 /-- **Pearl-C4's tile unit computes the protocol's words.** At `pearlCProtocolFp4 devFp4Sm120 sem ρ`, unit `u` of `U`
-with activations `act`: a transcript whose tile unit (depth `K`, the unit's) is correct, holding at entry `(ti, tj)`'s
+with activations `act`: a trace whose tile unit (depth `K`, the unit's) is correct, holding at entry `(ti, tj)`'s
 inputs row `i` of the unit's `A′` and row `j` of its `B̃` (`Fp4Sem.unitForm`: codes and scale bytes) and the factor rows
 `P_A,i`, `P_B,j` that U's pinned order forms from them at the bases and `Ẽ` rows of the unit's useful value
 (`FA FB beA beB`, any with `hU`; the unit's own have it, `unitUseful_eq`), has on that entry's outputs the protocol's
 ticket and useful value at `(i, j)`. -/
 theorem tile4_protocol (sem : Fp4Sem Q R S) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes)
-    {K : ℕ} (hk : (U.layout.shape u).k = K) (hK : 0 < K) (X : (tile4Spec K TM TN).toCircuit.Transcript)
+    {K : ℕ} (hk : (U.layout.shape u).k = K) (hK : 0 < K) (X : (tile4Spec K TM TN).toCircuit.Trace)
     (hX : (tile4Spec K TM TN).part.Correct X 0) (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n)
     {x y : Row4} (hAi : (sem.unitForm devFp4Sm120 H s U u act).1 i = some x)
     (hBj : (sem.unitForm devFp4Sm120 H s U u act).2 j = some y) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)
@@ -180,7 +180,7 @@ theorem tile4_protocol (sem : Fp4Sem Q R S) (ρ : ℚ) (H : Q → R) (s : S) (U 
 /-- **A registered entry of Pearl-C4's tile is good**: with the commitment's ticket and useful words at `(i, j)` the
 tile unit's outputs, `tile4_protocol`'s hypotheses give `TileWordsGood`'s conjunct at `(i, j)`. -/
 theorem tile4_words_good (sem : Fp4Sem Q R S) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (cm : Commit)
-    {K : ℕ} (hk : (U.layout.shape u).k = K) (hK : 0 < K) (X : (tile4Spec K TM TN).toCircuit.Transcript)
+    {K : ℕ} (hk : (U.layout.shape u).k = K) (hK : 0 < K) (X : (tile4Spec K TM TN).toCircuit.Trace)
     (hX : (tile4Spec K TM TN).part.Correct X 0) (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n)
     {x y : Row4} (hAi : (sem.unitForm devFp4Sm120 H s U u cm.act).1 i = some x)
     (hBj : (sem.unitForm devFp4Sm120 H s U u cm.act).2 j = some y) {ti tj : ℕ} (hti : ti < TM) (htj : tj < TN)

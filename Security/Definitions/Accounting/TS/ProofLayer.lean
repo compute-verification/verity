@@ -12,7 +12,7 @@ TS model's accounting:
   differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof
   (`ProofLayer.SoundAt`); C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` is this bound for a session, against the
-  committed transcript fixed at registration. The relation also reads the rows link: the proof's input rows are the
+  committed trace fixed at registration. The relation also reads the rows link: the proof's input rows are the
   rows its registered roots open to, and its output rows (the sinks committed after the coin) the Program's on those
   rows and the coin. `Flock.Guarantees.EndToEndRegisteredRows` states that bound for one session. The bridge
   from it to this premise is open: a window's proofs as C-Flock sessions under the window's coins, with `opened` the
@@ -23,7 +23,7 @@ TS model's accounting:
   its seed and its noise has it (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`).
 
 `ProofLayer` is what a window's proofs carry on each path of coins: per round `w < S` and proof `i < n_π`, whether the
-verifier accepted it, the values its opening gives the round's leaves (its session's committed transcript, salts
+verifier accepted it, the values its opening gives the round's leaves (its session's committed trace, salts
 included), and its relation (the public Program it must pass, with the leaves' rows among its outputs). The values the
 round committed (`ProofLayer.committed`) are its proofs' opening on a reference continuation: among the continuations
 of the path's coins before round `w` (`splice`), which share the leaves committed before σ_w, and on which every proof

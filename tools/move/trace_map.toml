@@ -1,0 +1,82 @@
+# The trace rename: what `tools/move/rename.py --map tools/move/trace_map.toml` renames. A circuit's gate values, one
+# value per gate, are its trace; "transcript" is only the messages a protocol's parties exchange.
+#
+# The circuit's gate values, `Verity.Circuit.Transcript := (g : Fin C.N) → BitVec (C.w g)`, become `Verity.Circuit.Trace`,
+# with every Lean name and Lean comment that means them: `Accounting.PeriodRun.transcript` (the circuit's values the node
+# committed in the period) becomes `trace`, and `Flock.Bridge.transcriptOf` (the values the witness opens) `traceOf`.
+# What keeps "transcript": C-Flock's own (`Flock.Transcript`, `FlockSoundness.Discharge.Exec.Transcript`, the proof's
+# internal transcript), PoUW's game (`Pouw.Transcript`, `honestTranscript`, `splitTranscript`, `Adversary.transcript`:
+# the per-unit commitments the prover sends), PoUS's and the firewall's, all protocol messages. Python and the docs are
+# the follow-up's. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
+# `check.py --update --moved` takes.
+#
+# [words] hold the type wherever a circuit qualifies it (`C.Transcript`, `c.D.Transcript`, `spec.toCircuit.Transcript`,
+# `(circuitOf D hU n).Transcript`); no other `Transcript` is reached through a circuit. Each [[words_in]] renames the
+# whole word in files where every use means a circuit's values, or a phrase in a file that also speaks of another
+# transcript.
+
+[words]
+"Circuit.Transcript" = "Circuit.Trace"
+"C.Transcript" = "C.Trace"
+"D.Transcript" = "D.Trace"
+"A.Transcript" = "A.Trace"
+"P.Transcript" = "P.Trace"
+"toCircuit.Transcript" = "toCircuit.Trace"
+").Transcript" = ").Trace"
+
+# The circuit's own files and the period's committed values: every "transcript" there is a circuit's values.
+[[words_in]]
+files = ["Security/Definitions/Core/Circuit.lean", "Security/Definitions/Core/Partition.lean",
+         "Security/Definitions/Core/Blocks.lean", "Security/Definitions/Core/Guarantees/Circuit.lean",
+         "Security/Proofs/Core/Circuit.lean", "Security/Proofs/Core/Boolean.lean",
+         "Security/Definitions/Population/Partition.lean", "Security/Definitions/Population/Necessity.lean",
+         "Security/Proofs/Population/Instance.lean", "Security/Proofs/Population/NecessitySkeleton.lean",
+         "Security/Definitions/Flock/Circuit.lean", "Security/Definitions/Flock/Lowering.lean",
+         "Security/Proofs/Flock/Bridge/CircuitOf.lean",
+         "Security/Definitions/Accounting/JointLive.lean", "Security/Definitions/Accounting/JointPeriod.lean",
+         "Security/Definitions/Accounting/JointBlocks.lean", "Security/Definitions/Accounting/Guarantees/JointLive.lean",
+         "Security/Definitions/Accounting/Guarantees/JointPeriod.lean", "Security/Definitions/Accounting/TS/ProofLayer.lean",
+         "Security/Proofs/Accounting/JointLive.lean", "Security/Proofs/Accounting/JointBridge/HonestH200.lean",
+         "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
+         "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
+         "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+         "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
+         "Security/Proofs/Pouw/PearlC/Block4Sem.lean", "Security/Proofs/Pouw/PearlC/Row4Words.lean",
+         "Security/Proofs/Pouw/PearlC/RowCircuit.lean", "Security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
+         "Security/Proofs/Pouw/PearlC/TileCheck4.lean", "Security/Proofs/Pouw/PearlC/TileCheck4Words.lean",
+         "Security/Proofs/Pouw/PearlC/TileCheck8.lean", "Security/Proofs/Pouw/PearlC/TileCheck8Words.lean",
+         "Security/Proofs/Pouw/PearlC/TileCircuit.lean", "Security/Proofs/Pouw/PearlC/TileProtocol.lean",
+         "Security/Proofs/Pouw/PearlC/TileValues.lean", "Security/Proofs/Pouw/PearlC/WholeCircuit.lean"]
+[words_in.words]
+"transcriptOf" = "traceOf"
+"transcripts" = "traces"
+"Transcripts" = "Traces"
+"transcript" = "trace"
+"Transcript" = "Trace"
+
+# Files that also speak of C-Flock's or PoUW's transcript: the circuit's committed values by phrase.
+[[words_in]]
+files = ["Security/Definitions/Core.lean", "Security/Definitions/Accounting/Assumptions/TS.lean",
+         "Security/Proofs/Flock/EndToEnd/Joint/Statement.lean", "Security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean"]
+[words_in.words]
+"a circuit, its transcripts" = "a circuit, its traces"
+"committed transcript fixed at" = "committed trace fixed at"
+
+# The locks' prose and keys outside their records name the field by its full name.
+[[words_in]]
+files = ["**/lean-audit.json"]
+[words_in.words]
+"Accounting.PeriodRun.transcript" = "Accounting.PeriodRun.trace"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps and tests, changelogs, the rulings), the frozen
+# backends, files whose bytes a digest pins, and the research harness's recorded moves.
+exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]

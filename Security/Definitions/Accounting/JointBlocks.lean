@@ -8,7 +8,7 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
 
 * **Block `b`** is a period of the node's run (`Accounting.PeriodRun`) decided by the five audits, sampled proofs, PoUW,
   PoUS, PoUB and the network certifier, each on its own coordinate of the coins. Every block's schedule and committed
-  transcript are functions of all the coins, so a block may adapt to the coins of the blocks before it.
+  trace are functions of all the coins, so a block may adapt to the coins of the blocks before it.
 * **The wipe that opens block `b`** (`BlockWipe`): the memory challenger fills `fill` bits of the device memory with
   labels derived from a fresh seed and runs timed spot reads. Its verdict, and `kept`, the bits of foreign content
   block `b` can read back from what the wipe leaves beyond the committed carried state, are functions of the coins. Its

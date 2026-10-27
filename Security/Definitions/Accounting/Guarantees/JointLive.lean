@@ -23,7 +23,7 @@ at most the errors summed:
 
 The proofs are `Accounting.SecurityProofs.JointPeriodLive`, `JointHorizonLive` and `JointHorizonBlocksLive`, union
 bounds over the one game at the strategy. These replace `JointPeriod`, `JointHorizon` and `JointHorizonBlocks`, whose
-fixed-other-coins form over a product of coins reads a committed transcript that is a field of the run, once each
+fixed-other-coins form over a product of coins reads a committed trace that is a field of the run, once each
 subprotocol's guarantee is restated over the causal game.
 -/
 

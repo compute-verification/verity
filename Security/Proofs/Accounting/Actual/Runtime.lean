@@ -13,7 +13,7 @@ namespace Accounting.SecurityProofs.Actual
 
 open Verity Nci Finset
 
-theorem exists_le_of_runtime_le {L : Type*} {P : Circuit} (S : P.Transcript → Accounting.Actual.Run L)
+theorem exists_le_of_runtime_le {L : Type*} {P : Circuit} (S : P.Trace → Accounting.Actual.Run L)
     {X : Finset L} {t : ℕ} (h : Accounting.Actual.runtime S X ≤ t) :
     ∃ t' ≤ t, Accounting.Actual.Computes S X t' := by
   by_contra hne

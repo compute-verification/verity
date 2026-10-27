@@ -13,7 +13,7 @@ population `n` (the public file's `pub.n`) give the key program `keyProg D.unrol
 
 * `Verity.Circuit.ofAudit C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), through the
   Boolean profile (`Verity.Boolean.Circuit.toCircuit`): the same gates, one bit each. `Verity.Partition.ofAudit P` is
-  the same partition, and `Verity.Circuit.ofBits xs` a transcript of bits. `Verity.Partition.wrong_ofAudit`: the wrong
+  the same partition, and `Verity.Circuit.ofBits xs` a trace of bits. `Verity.Partition.wrong_ofAudit`: the wrong
   units are the same, so every statement about the game's wrong units is one about core's.
 * `circuitOf D hU n := .ofAudit (keyCircuit D hU n)` and `partsOf D hU n := .ofAudit (keyPartition D hU n)`: the
   parsed file as core's circuit and its `n` units. `circuitOf_eq` and `partsOf_eq` restate the key program's circuit
@@ -90,7 +90,7 @@ theorem Circuit.ofAudit_isInput (g : Fin C.N) : (Circuit.ofAudit C).isInput g = 
 theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset :=
   congrArg List.toFinset (args_coreOp _)
 
-theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
+theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Trace) :
     (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
   congrArg BitVec.ofBool (apply_coreOp _ _)
 
@@ -99,8 +99,8 @@ def Partition.ofAudit {n : ℕ} (P : FlockSoundness.Audit.Partition C n) : Parti
   unit := P.unit
   input_iff g := (P.input_iff g).trans (by rw [Circuit.ofAudit_isInput])
 
-/-- A transcript of bits as core's. -/
-def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Transcript := fun g => BitVec.ofBool (xs g)
+/-- A trace of bits as core's. -/
+def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Trace := fun g => BitVec.ofBool (xs g)
 
 variable {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
 
@@ -338,9 +338,9 @@ noncomputable def partsOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.u
     Verity.Partition (circuitOf D hU n) n :=
   .ofAudit (keyPartition D hU n)
 
-/-- **The transcript the witness opens**, at `circuitOf`'s wires: `openedOf`'s bits. -/
-noncomputable def transcriptOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
-    (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Transcript :=
+/-- **The trace the witness opens**, at `circuitOf`'s wires: `openedOf`'s bits. -/
+noncomputable def traceOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
+    (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Trace :=
   Verity.Circuit.ofBits (openedOf (keyCircuit D hU n) κ val)
 
 section Parsed
@@ -363,14 +363,14 @@ theorem partsOf_wrong (xs : Fin (keyCircuit D hU n).N → Bool) :
 
 /-- **The wrong-units bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
 the sampling statement of the key program at constants `κ`, leaves fewer than `K₀` of `partsOf`'s units wrong in the
-transcript it opens. -/
+trace it opens. -/
 theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (kd K₀ : ℕ) (desc : Claims.Msg)
     (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf (keyPartition D hU n) κ kd desc q roots)
       (partOf (keyPartition D hU n)) w) :
     ((partsOf D hU n).wrong
-      (transcriptOf D hU n κ (w.val H Cm (stmtOf (keyPartition D hU n) κ kd desc q roots)))).card < K₀ := by
-  rw [transcriptOf, partsOf_wrong]
+      (traceOf D hU n κ (w.val H Cm (stmtOf (keyPartition D hU n) κ kd desc q roots)))).card < K₀ := by
+  rw [traceOf, partsOf_wrong]
   exact card_wrong_lt_of_relS _ κ kd K₀ desc q roots H Cm w h
 
 end Parsed

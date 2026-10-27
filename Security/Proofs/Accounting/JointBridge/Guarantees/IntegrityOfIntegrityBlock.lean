@@ -44,8 +44,8 @@ field is a property of the deployed run:
   server-time blocks before `b` are played at the coins they were, which the strategy sees through `ξ`.
 * `accepts_iff`: the period's sampled audit accepts exactly when flock-verify accepts every sampling block of the
   server-time block.
-* `wrong_eq`: the wrong units of the period's partition in its committed transcript are, in number, the block's
-  sampling blocks' wrong units (`SamplingBlock.wrongSet`: `wrongRegZ` in the transcript fixed at registration, over the
+* `wrong_eq`: the wrong units of the period's partition in its committed trace are, in number, the block's
+  sampling blocks' wrong units (`SamplingBlock.wrongSet`: `wrongRegZ` in the trace fixed at registration, over the
   key program's partition). This is the program-from-circuit correspondence (M1: the key program and its partition are
   the circuit `C`'s lowering and `r.parts`), which the bridge PRs land as `Lowers`/`progOf`/`partOf`; until then it is
   this field.
@@ -66,7 +66,7 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
   /-- the sampled audit accepts exactly when flock-verify accepts every sampling block of the server-time block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the period's wrong units are its sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.wrong (r.transcript ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
+  wrong_eq : ∀ ξ, (r.parts.wrong (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
   /-- the partition's units are the block's sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ S.sessions b, (S.W t).n
   /-- every unit of the partition has at least one gate -/

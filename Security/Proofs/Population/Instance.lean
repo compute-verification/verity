@@ -72,8 +72,8 @@ theorem checked_of_ordered (ho : P.Ordered) : P.toDataflow.Checked :=
 theorem ordered_of_inLayoutOrder (hl : P.InLayoutOrder) : P.Ordered :=
   fun g h u v hg hu hv => hl g h u v (C.reads_lt h g hg).le hu hv
 
-/-- A unit's local evaluation of its own gates reads, of the transcript, only in(R). -/
-theorem localEval_congr_into {X Y : C.Transcript} {u : Fin n} (hXY : ∀ g ∈ C.into (P.gates u), X g = Y g) :
+/-- A unit's local evaluation of its own gates reads, of the trace, only in(R). -/
+theorem localEval_congr_into {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ C.into (P.gates u), X g = Y g) :
     ∀ m (g : Fin C.N), g.val = m → P.unit g = some u → P.localEval X u g = P.localEval Y u g := by
   intro m
   induction m using Nat.strong_induction_on with
@@ -88,8 +88,8 @@ theorem localEval_congr_into {X Y : C.Transcript} {u : Fin n} (hXY : ∀ g ∈ C
     simp only [Circuit.into, mem_filter, mem_univ, true_and, mem_gates]
     exact ⟨hxu, g, hu, hx⟩
 
-/-- The population's unit function, on a transcript's committed values, is the partition's local evaluation. -/
-theorem fns_encode {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) (u : Fin n) (s : P.toDataflow.writes u) :
+/-- The population's unit function, on a trace's committed values, is the partition's local evaluation. -/
+theorem fns_encode {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) (u : Fin n) (s : P.toDataflow.writes u) :
     P.fns W u (fun r => P.encode W X r) s = (P.localEval X u s.1.1).setWidth W := by
   unfold fns
   congr 1
@@ -103,7 +103,7 @@ theorem fns_encode {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) (u : F
   simp [encode, hW g]
 
 /-- **A unit is correct in the population exactly when it is correct in the partition.** -/
-theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) (u : Fin n) :
+theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) (u : Fin n) :
     P.toDataflow.Correct (P.fns W) (P.encode W X) u ↔ P.Correct X u := by
   have hinj : ∀ g (x y : BitVec (C.w g)), x.setWidth W = y.setWidth W → x = y := fun g x y h => by
     simpa [hW g] using congrArg (BitVec.setWidth (C.w g)) h
@@ -117,7 +117,7 @@ theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) (u : 
     exact congrArg (BitVec.setWidth W) (h s.1.1 s.1.2 ((P.mem_writes).1 s.2))
 
 /-- **The bridge**: the population's wrong units are the partition's. -/
-theorem wrong_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) :
+theorem wrong_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) :
     P.toDataflow.wrong (P.fns W) (P.encode W X) = P.wrong X := by
   ext u
   simp only [Population.Dataflow.wrong, mem_filter, mem_univ, true_and, P.mem_wrong, P.correct_iff hW X u]
