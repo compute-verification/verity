@@ -38,11 +38,11 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
   deterministic arm runs once.
 - **The reference** is the bf16 model with PyTorch SDPA attention (`F.scaled_dot_product_attention`, causal, GQA),
   never eager: HF's eager bf16 path rounds QKᵀ to bf16 before the scale, and Qwen2.5's q and k biases make the scores
-  large, so its eager bf16 is 15% worse (WikiText-2 at 2K: 7.300 against SDPA's 6.355 and FP32's 6.354, D4-ATTN).
+  large, so its eager bf16 is 15% worse (WikiText-2 at 2K: 7.300 against SDPA's 6.355 and FP32's 6.354).
   The engine's bf16 layers are HF's `LlamaDecoderLayer` / `Qwen2DecoderLayer` with SDPA op for op, with HF's RoPE
   tables (computed on the CPU), and the `hf_reference` gate checks both bit for bit on every layer. TF32 is off.
-- **Batching.** The bf16 reference and calibration streams run 4 consecutive windows per forward, as tonight's
-  harnesses did. Arms run one window per forward, since their coins are drawn per window.
+- **Batching.** The bf16 reference and calibration streams run 4 consecutive windows per forward. Arms run one window
+  per forward, since their coins are drawn per window.
 - **The report** (`report.py`), per (model, set, context): each arm's perplexity as the mean over its seeds with the
   seeds' range, its Δ% against bf16 and against its scope's plain int8 arm, and the significance rule's verdict.
 - **Plain int8**, for each scope: `int8-linears` (rotated, one scale per token and per output row, rounded to ±127),
@@ -105,7 +105,7 @@ offset = 64
 ~~~
 
 `run.py tables steps` lists the built-in steps: each one's parameters, phase, the matmuls it acts on, its docstring's
-first paragraph and the harnesses and notes it comes from (`source=` where it is registered). `run.py steps` prints
+first paragraph and its source (`source=` where it is registered). `run.py steps` prints
 their parameters and docs.
 
 `run.py tables arms` lists every arm in `specs/`: its scope, whether it runs every seed, whether it reads calibration,
@@ -161,7 +161,7 @@ The chain ends in the exact integer product, gated, or the FP32 product when the
 
 Declare `seeded=True` (or a function of the parameters) when the step's effect depends on the seed, so the arm runs
 every seed, and `calib=True` when it reads `mm.run.calib`. A `check=` function refuses bad parameters at parse time.
-`source=` names the harnesses or notes it comes from (`run.py tables steps`' last column).
+`source=` names what the step comes from (`run.py tables steps`' last column).
 Register attention steps with `@attention_step(name, on=("qk", "pv"))`.
 
 ## Gates
@@ -202,7 +202,7 @@ E4M3 weights, activations per token and group of 128), and `int8-channel127-v3` 
 recipe `verity-int8-channel127/v3` makes them: each weight's row codes from its exact float64 dequant (`int8.exact`),
 the LM head int8 too, and kv_b_proj bf16.
 
-The engine (`engine.py`, tonight's layer-wise evaluation) reads one layer's weights at a time from the safetensors with
+The engine (`engine.py`, a layer-wise evaluation) reads one layer's weights at a time from the safetensors with
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer
 before the next is read. So a model of any size fits one GPU, every arm shares one pass over the weights, and
 `accelerate` is never used. More GPUs split the windows: contiguous groups of 4, one process per leased GPU, merged
@@ -219,26 +219,27 @@ put findings about it on labels (`research data label`).
 ## Baseline
 
 The adopted design (dither, w64 peel, psink, kc, SmoothQuant α 0.5, weights ±63), its halves, the design without
-SmoothQuant, and the plain int8 arms, locked in `baseline.json` per point the bench has run. "tonight" is the same arm
-as 16 Oct's harnesses measured it on the same windows (D4-70B's `linears_layerwise.py` on C4, D4-ATTN's `attention.py`
-on WikiText-2), read from their runs' `results.jsonl`.
+SmoothQuant, and the plain int8 arms, locked in `baseline.json` per point the bench has run. The lock's `tonight` is the
+same arm as the harnesses the bench replaced measured it on the same windows (a layer-wise `linears_layerwise.py` on C4,
+`attention.py` on WikiText-2), read from their runs' `results.jsonl`.
 
 Two measurements of an arm reproduce each other when their seed ranges, widened by 0.1% (`methodology.reproduces`,
 `REPRODUCE_FLOOR`), overlap. `run.py baseline RESULTS...` checks new results against the lock that way, and
 `run.py baseline --lock RESULTS...` replaces their points in `baseline.json`. `run.py tables baseline` (or `run.py
 baseline` alone) prints the lock as a table: per point and arm, the bench's perplexity with its seeds' range, its Δ%
-against bf16 and against plain int8, tonight's measurement and method, their Δ%, whether they reproduce, and each
-point's runs. The floor covers what moves a deterministic arm between harnesses:
+against bf16 and against plain int8, the earlier harnesses' measurement and method, their Δ%, whether they reproduce,
+and each point's runs. The floor covers what moves a deterministic arm between harnesses:
 
-- RoPE tables. Tonight's harnesses built them on the GPU (`LlamaRotaryEmbedding(config, device=cuda)`), whose
+- RoPE tables. The earlier harnesses built them on the GPU (`LlamaRotaryEmbedding(config, device=cuda)`), whose
   `inv_freq` differs from the CPU's in 5 of 64 entries. HF's `from_pretrained` computes them on the CPU, as the bench
   does. HF's own `LlamaForCausalLM` (SDPA, 4 windows per forward) is the bench's bf16 end to end on Llama C4 2K, 9.15834,
-  and with GPU-built tables it is tonight's 9.15903 (`r20261016-182515-16e9`).
+  and with GPU-built tables it is the earlier harnesses' 9.15903.
 - Kernel shapes. A bf16 GEMM's rounding depends on its rows: the same model at 1 window per forward is 9.16174
-  (+0.04%). The bench's arms run 1 window per forward; D4-70B's ran 4.
-- The coins. D4-70B drew a linear's coins per batch of 4 windows, the bench per window, so seeded arms agree in
-  distribution, not bit for bit.
-- The reference attention under a linears-only arm: D4-ATTN's were eager (Llama) or FP32 (Qwen2.5), marked.
+  (+0.04%). The bench's arms run 1 window per forward; the earlier linears harness ran 4.
+- The coins. The earlier linears harness drew a linear's coins per batch of 4 windows, the bench per window, so seeded
+  arms agree in distribution, not bit for bit.
+- The reference attention under a linears-only arm: the earlier attention harness's was eager (Llama) or FP32
+  (Qwen2.5), marked.
 
 ## Tests
 

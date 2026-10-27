@@ -755,9 +755,9 @@ def to_grid(v: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None,
 
 
 def dither3(v: torch.Tensor, grid: str, b: torch.Tensor, b2: torch.Tensor) -> torch.Tensor:
-    """FP-NATIVE's design A activations (note:20261019T0525Z-draft-fp-native): the nearest level n moved by d (b + b2 - 1),
-    two fair bits, d the larger of n's two gaps so that n - d and n + d are levels (14, 16, 18 at a binade, not 15, 16,
-    17); at the grid's ends, where n has one neighbour, the three levels step inward (448, 416, 384: RT-FP-7)."""
+    """The three-level dither of activations on a float grid: the nearest level n moved by d (b + b2 - 1), two fair
+    bits, d the larger of n's two gaps so that n - d and n + d are levels (14, 16, 18 at a binade, not 15, 16, 17); at
+    the grid's ends, where n has one neighbour, the three levels step inward (448, 416, 384)."""
     table = torch.tensor(LEVELS[grid], dtype=v.dtype, device=v.device)
     lo, hi = bracket(v, grid)
     n = torch.where(v - lo <= hi - v, lo, hi)
