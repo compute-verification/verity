@@ -327,7 +327,7 @@ class Served:
             rows.append({**d, "spec": r["spec"]})
 
         def bound(s: int, op: str, m: str) -> int:
-            ends = [((e.get("identity") or {}).get("element_range") or [0, 0])[1] for e in store.entries(rid, arrive + s, op, m)[0]]
+            ends = [e["identity"].get("element_range", (0, None))[1] for e in store.entries(rid, arrive + s, op, m)[0]]
             return max((int(x) for x in ends if x is not None), default=0)
 
         return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, op, m, lo, hi), bound)
