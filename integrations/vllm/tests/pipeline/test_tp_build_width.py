@@ -121,8 +121,8 @@ GLM_B32 = [(103, 26), (105, 2), (117, 4), (11, 24), (13, 16), (149, 14), (151, 1
 
 
 def test_a_compose_is_planned_above_its_measured_peak_as_its_requests_grow():
-    """A compose holds every request's Program: GLM-5.3's B32 ranks composed at 128.8 GiB (r20261018-005907-aca0) and B8's passed
-    32.2 GiB before their 250 GB scope killed them (r20261018-074029-94eb), where 1.5x the largest derive plans ~22 GiB."""
+    """A compose holds every request's Program: GLM-5.3's B32 ranks compose at 128.8 GiB and B8's pass
+    32.2 GiB, where 1.5x the largest derive plans ~22 GiB."""
     assert 128.8 * GiB < R.compose_bytes(GLM_B32, GLM_LAYERS) < 2 * 128.8 * GiB
     assert 32.2 * GiB < R.compose_bytes(GLM_B8, GLM_LAYERS) and R.COMPOSE_PEAK_RATIO * R.derive_bytes(245, 22, GLM_LAYERS) < 32.2 * GiB
 
@@ -135,8 +135,8 @@ def test_the_compose_pool_is_sized_by_every_requests_programs(tmp_path, monkeypa
 
 
 def test_the_memory_headroom_is_the_jobs_own_cgroup_chain_and_the_hosts_available(tmp_path):
-    """`research run --queue --mem-gb G` caps the job's own scope, not the mount root: read at the root, the stochastic B8 Build planned
-    its composes from the host's 1.5 TB available and its 250 GB scope OOM-killed them (r20261018-074029-94eb)."""
+    """`research run --queue --mem-gb G` caps the job's own scope, not the mount root: read at the root, a Build plans its composes
+    from the host's 1.5 TB available and its 250 GB scope OOM-kills them."""
     root, proc, meminfo = tmp_path / "cg", tmp_path / "cgroup", tmp_path / "meminfo"
     scope = root / "user.slice" / "app.slice" / "job.scope"
     scope.mkdir(parents=True)
@@ -242,7 +242,7 @@ class _Timed:
         return self.fake(to, lf, cmd)
 
 
-#: GLM-5.3 TP8 B8 I256's manifest at 2 processes (r20261020-084508-06dd): a 4,738 s word check, then 64 components of 356-409 s
+#: GLM-5.3 TP8 B8 I256's manifest at 2 processes: a 4,738 s word check, then 64 components of 356-409 s
 B8_MANIFEST_S = 4738 + 64 * 409 // 2
 
 

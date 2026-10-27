@@ -5,7 +5,7 @@
 # the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound;
 # env/numa.json says which).
 #   research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/share.sh
+#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/exactlin/share.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
 ROOT=${SHARE_ROOT:-$PWD}

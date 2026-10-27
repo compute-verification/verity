@@ -1,4 +1,4 @@
-"""[GEN dense2] the lane's patterns: MORE SPECIFIC recognisers registered ahead of the base ones by the lane's profile modules
+"""MORE SPECIFIC recognisers registered ahead of the base ones by the dense2 profile modules
 (`gen_dense2_phi3_mini`, `gen_dense2_gemma2_2b`).  No base matcher is widened; each pattern here states the extra fact it
 checks and resolves to an already registered body or to a quarantined one.
 
@@ -103,7 +103,7 @@ def _annotate(r: Any, extra: dict[str, Any]) -> Any:
 
 
 def with_dense2_patterns(patterns: list, C: dict[str, Any]) -> list:
-    """The base pattern list with the lane's more specific patterns inserted AHEAD of the base ones they refine."""
+    """The base pattern list with the more specific dense2 patterns inserted AHEAD of the base ones they refine."""
     out: list = []
     for p in patterns:
         if type(p) is AttentionScope:
