@@ -53,7 +53,7 @@ theorem card_unregistered_le (R : Registration) (A : Placed L) (φ : Circuit.Iso
   have hS : A.stateIn X 0 a + A.ingress X (Set.Ici 0) =
       (((A.into (A.region X (Set.Ici 0))).filter fun g => A.x g ∈ X) ∩ a).card +
         ((A.into (A.region X (Set.Ici 0))).filter fun g => A.x g ∉ X).card := by
-    rw [Placed.stateIn, Placed.ingress, Circuit.width_eq_card hw, Circuit.width_eq_card hw]
+    rw [Placed.stateIn, Placed.ingress, Circuit.width_eq_card_of_w hw, Circuit.width_eq_card_of_w hw]
   calc (R.d.unregistered (R.P.gates u)).card
       = ((R.d.unregistered (R.P.gates u)).map φ.e.toEmbedding).card := (card_map _).symm
     _ ≤ _ := card_le_card key
@@ -132,7 +132,7 @@ theorem BlockDescription_honest : Guarantees.FixedMachine.BlockDescription_hones
       revert hg
       revert g
       decide
-    · rw [Placed.stateIn, Circuit.width_eq_card (fun _ => rfl)]
+    · rw [Placed.stateIn, Circuit.width_eq_card_of_w (fun _ => rfl)]
       exact (card_le_card inter_subset_right).trans (card_singleton _).le
   · intro x g hg
     exact absurd hg (notMem_empty g)

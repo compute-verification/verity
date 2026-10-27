@@ -180,7 +180,7 @@ theorem map_mem_into {S : Finset (Fin C.N)} {b : Fin C.N} (hb : b ∈ C.into S) 
 
 end Iso
 
-theorem width_eq_card {C : Circuit} (hw : ∀ g, C.w g = 1) (S : Finset (Fin C.N)) : C.width S = S.card := by
+theorem width_eq_card_of_w {C : Circuit} (hw : ∀ g, C.w g = 1) (S : Finset (Fin C.N)) : C.width S = S.card := by
   simp [width, hw]
 
 end Circuit
