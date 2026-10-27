@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     shape = O.SHAPES["h200"]
-    layout = O.load_layout(a.shared)
+    layout = S.load(a.shared)
     ctx, _ = CM.fixture_secrets(a.run_id)
     salt = CM.fixture_salt(a.run_id)(0)
     tabs = O.stand_in(shape, a.batch, dev, 20261026)
