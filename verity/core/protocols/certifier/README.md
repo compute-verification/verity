@@ -201,7 +201,7 @@ A spec-level reference for network accounting's timing channel:
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
   `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
-  declaration and not a private partition, so it is checked in the clear with no proof unit;
+  declaration and not a private partition, so it is checked in the clear with no proof block;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
