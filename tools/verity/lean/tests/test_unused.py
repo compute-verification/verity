@@ -75,6 +75,21 @@ def test_decide_keeps_by_each_rule(stand_in):
     assert got["frozen"] == ["Prune.B.Old"]
 
 
+def test_what_a_queued_pr_touches_or_imports_is_kept(stand_in):
+    pkg, policy, used, test = stand_in
+    edits = {"4999": {"files": [f"{U.rel(pkg)}/Prune/A/Side.lean", "README.md"], "imports": ["Mathlib.Logic.Basic"]}}
+    got = U.decide(pkg, policy, used, [test], [], edits)
+    assert got["kept"]["Prune.A.Side"] == "queued: #4999 touch or import it"
+    assert got["unused"] == ["Prune.B.Group", "Prune.B.Old"]
+    imports = {"5000": {"files": [], "imports": ["Prune.B.Group"]}}
+    got = U.decide(pkg, policy, used, [test], [], imports)
+    assert got["unused"] == [] and got["kept"]["Prune.A.Side"].startswith("queued: imported by Prune.B.Group")
+    named = {"5001": {"files": [], "imports": [], "names": ["Prune.B.Old", "README.md"]}}
+    got = U.decide(pkg, policy, used, [test], [], named)
+    assert got["kept"]["Prune.B.Old"] == "queued: #5001 touch or import it"
+    assert got["kept"]["Prune.B.Group"].startswith("aggregator: ") and got["unused"] == []
+
+
 def test_syntax_nobody_writes_and_a_local_one_keep_nothing(stand_in):
     pkg, policy, used, test = stand_in
     (pkg / path_of("Prune.A.Main")).write_text(SOURCES["Prune.A.Main"].replace("⟪base⟫", "base"))
