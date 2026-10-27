@@ -322,6 +322,7 @@ class Window:
             return ("p",) + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
         return {"EmbeddingCoordinate_v1": ("tok", "col", "pos"), "RmsSumSqChunks_v1": ("x",),
                 "RmsNormOutSums_v1": ("x", "w", "s"), "RowAbsMax_v1": ("x",), "QuantChunkS8_v1": ("x", "amax"),
+                "RmsNormAbsMax_v1": ("x", "w", "s"), "RmsNormQuantChunk_v1": ("x", "w", "s", "amax"),
                 "QkSoftmaxRowPad_v1": ("q", "k", "n"), "Bf16AddRow_v2": ("a", "b"), "Argmax_v2": ("logits",)}[t]
 
     def _r(self, u: Units) -> int:
@@ -369,6 +370,13 @@ class Window:
             n = self.tables[amax][2].nbytes
             return {"x": lambda: seg(self.src[u.table], 2 * u.nbytes * i, 2 * u.nbytes * (i + 1)),
                     "amax": lambda: seg(amax, n - 2, n)}[port]()
+        if t in ("RmsNormAbsMax_v1", "RmsNormQuantChunk_v1"):
+            op = u.table.rsplit("_", 1)[0]
+            norm = self.src[op + "_quant"][:-len("_norm")]
+            n = 2 * (u.nbytes if u.scale else self.shape.width)
+            return {"x": lambda: seg(self.src[norm], n * i, n * (i + 1)),
+                    "w": lambda: self._registered(norm + "_norm", n * i, n * (i + 1)),
+                    "s": lambda: whole(norm + "_sums"), "amax": lambda: whole(op + "_amax")}[port]()
         if t in ("ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1"):
             qop = self.src[u.name] + "_quant"
             k = self.tables[qop][2].nbytes
