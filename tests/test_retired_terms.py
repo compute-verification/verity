@@ -106,6 +106,7 @@ PENDING: dict[str, str] = {
     "benchmarks/network_traces/transfer_zk.sh": "#4441 adds it",
     "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
     "benchmarks/torch_gpu/p2_stage/README.md": "#4761 adds lines",
+    "benchmarks/verifier_cost/README.md": "#5215 rewrites its lines",
     "integrations/vllm/README.md": "#4773 adds lines",
     "verity/README.md": "#4502 rewrites its lines",
     "verity/core/protocols/certifier/blocks.py": "#4441 adds it",
@@ -117,6 +118,7 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/core/protocols/sampled_proofs/README.md": "#4637 rewrites its lines",
+    "verity/ml/flock/verifier/PROTOCOL.md": "#5139 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
 }
