@@ -1,4 +1,3 @@
-import Definitions.Pous.Accounting.EraseMeets
 import Definitions.Pous.Accounting.GradedMeets
 import Definitions.Pous.Accounting.LemmaA
 import Definitions.Pous.Accounting.Params
@@ -12,7 +11,6 @@ import Definitions.Pous.Model.BandGraph
 import Definitions.Pous.Model.ColumnGame
 import Definitions.Pous.Model.Continuous
 import Definitions.Pous.Model.Dense
-import Definitions.Pous.Model.Digest
 import Definitions.Pous.Model.FreeBlocks
 import Definitions.Pous.Model.Graded
 import Definitions.Pous.Model.HashChain
@@ -26,7 +24,6 @@ import Definitions.Pous.Model.Pebbling
 import Definitions.Pous.Model.PubEncoder
 import Definitions.Pous.Model.SampledAudit
 import Definitions.Pous.Model.Scheme
-import Definitions.Pous.Model.SecureErasure
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.StreamedWipe
 import Definitions.Pous.P2.Cost
