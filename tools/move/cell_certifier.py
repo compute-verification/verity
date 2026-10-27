@@ -89,10 +89,15 @@ NAMES = [
 ]
 #: The class, in Python files only.
 CLASS = [(_B + r"Warden" + _E, "CellCertifier")]
-#: Files that bind the module to the name `warden` and use it by that name, which stays theirs.
+#: Rules of one file, before `NAMES`: a file that binds the module to the name `warden` and uses it by that name, which
+#: stays its own, and the serve script's own name in its log lines and scratch directories.
+_SERVE = [(r'(?<=")warden-serve(?=[: -])', "cell-certifier-serve"), (r'(?<=")warden-publisher"', 'cell-certifier-publisher"')]
 BOUND = {"benchmarks/network_e2e/traces/corpus.py":
-         [(r"network_certifier import warden" + _E, "network_certifier import cell_certifier as warden")]}
+         [(r"network_certifier import warden" + _E, "network_certifier import cell_certifier as warden")],
+         f"{NT}/warden_serve.py": _SERVE, f"{NT}/cell_certifier_serve.py": _SERVE}
 PROSE = [
+    (r"(?<![\w-])warden-serve\b", "cell-certifier-serve"), (r"(?<![\w-])warden-zk\b", "cell-certifier-zk"),
+    (r"(?<![\w-])warden-form\b", "cell-certifier-form"), (r"(?<![\w-])warden-signed\b", "cell-certifier-signed"),
     (r"\bAn active warden\b", "A cell certifier"), (r"\ban active warden\b", "a cell certifier"),
     (r"\bThe active warden\b", "The cell certifier"), (r"\bthe active warden\b", "the cell certifier"),
     (r"\bactive warden\b", "cell certifier"),
@@ -100,10 +105,11 @@ PROSE = [
     (r"\bwarden\b", "cell certifier"),
 ]
 #: What prose never renames: code in backticks, compounds (`warden-run`, `warden.json`), paths, flags and domain tags.
-KEEP = re.compile(r"``[^`]*``|`[^`\n]*`|[\w./-]*warden[\w-]*(?:[./][\w./-]+)|[\w-]+-warden\b|warden-[\w-]+|"
-                  r"[\w.-]+/warden\b|warden/[\w./-]*|--[\w-]+")
-#: The module named alone in backticks, which prose renames.
-TICKED = [(r"`warden`", "`cell_certifier`"), (r"`warden_rows`", "`cell_certifier_rows`")]
+KEEP = re.compile(r"``[^`]*``|`[^`\n]*`|[\w./-]*warden[\w-]*(?:[./][\w./-]+)|[\w-]+-warden\b|"
+                  r"warden-(?!(?:serve|zk|form|signed)\b)[\w-]+|[\w.-]+/warden\b|warden/[\w./-]*|--[\w-]+")
+#: The module in backticks, alone or with one of its names, which prose renames.
+TICKED = [(r"`warden`", "`cell_certifier`"), (r"`warden_rows`", "`cell_certifier_rows`"),
+          *((rf"`warden\.{n}" + _E, f"`cell_certifier.{n}") for n in ("cells", "Shim", "audit", "cell", "read_cell"))]
 
 EXCLUDE = ["archive/**", "tools/move/**", "**/CHANGELOG.md", ".agents/skills/friction/SKILL.md", "**/lean-audit.json",
            "**/*.lean", "**/*.patch", "uv.lock", "**/*.lock", "**/TRUSTED.sha256", "**/lake-manifest.json"]
