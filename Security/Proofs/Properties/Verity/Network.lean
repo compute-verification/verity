@@ -24,7 +24,9 @@ certifier's error at the strategy. Its two lemmas:
   (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`) and the period check's converse
   (`Properties.NetworkCertifier.periodAccepts_of`) carry it. What stays a hypothesis is the proof service's: the
   answers' acceptance (`PeriodRowsProved`, `PeriodWindowsAt`, `PeriodAuditsProved`) and what the prover sent decoding
-  to the period (`NetworkPeriod`).
+  to the period (`NetworkPeriod`). Protocol soundness's honest instance is onsite's (`verity/onsite/v0`), and this is
+  its network component's: M2's certified session (run `r20261026-231429-0fc0`, at 4331ec922a) is the deployment it
+  stands for, where the honest prover was accepted with all 81 link-windows held.
 * nontrivial (`networkComponentBound_nontrivial`): with the compiled component replaced by one that accepts everything
   (`Vocab.NetworkSoundBy`, which at `ComponentAccepts .network` is the target, `Vocab.networkCertifierSound_by`), at
   files that pass the commit phase's check, a strategy whose registration NCI accepts and which sends more than `K`,
@@ -145,7 +147,8 @@ open NetworkBound in
 under the w63 class's schedule, whose every link-window the certifier's device certified under its key, `trusted-host`
 holding, with the scan's honest registrations, and whose scans, at one δ, and audits the proof service accepted), the
 compiled `ComponentAccepts .network` accepts what the prover sent; and where the deployment's honest prover stays
-within `K`, the target's event at it has probability 0, so the target's bound holds there. -/
+within `K`, the target's event at it has probability 0, so the target's bound holds there. The deployment is onsite's
+(`verity/onsite/v0`), M2's certified session `r20261026-231429-0fc0`. -/
 theorem networkComponentBound_honest {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     {Dev : Type} {dev : Dev} {run : Dev → Nat × ByteArray → Except String Lms.Signature} {N W H : Nat} {toy : Bool}
     {I seed : ByteArray} {k : Lms.PrivateKey} {s : Sent} {p : NetworkCheck.Period.Params}
