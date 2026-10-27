@@ -18,10 +18,12 @@ windows of window `t`'s own). Three events carry the failure:
   of its faulty blocks while the identity is undetected and has at most `K` so far (`truncated_sum_ge`), the tail is
   `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow`.
 
-Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped work, and `remote_core` sums the sources.
+Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped work, and `remote_core` sums the
+sources.
 
 The witnesses, `DampenerRemotePeriod_honest` and `DampenerRemotePeriod_nontrivial`, are at constructed instances of one
-window with no faulty proof block and no declared run, where each event holds on every run or on none.
+window with no faulty proof block and no declared run, where each event holds on every run or on none. The `example` at
+the end applies `DampenerRemotePeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
 -/
 
 namespace Nci.SecurityProofs
@@ -76,8 +78,8 @@ section Coords
 
 variable {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
 
-/-- **One coordinate's tower rule**: averaging over the run is averaging, over the run, coordinate `t`'s average with the
-others fixed. -/
+/-- **One coordinate's tower rule**: averaging over the run is averaging, over the run, coordinate `t`'s average with
+the others fixed. -/
 theorem avg_update (t : Fin T) (F : ((t : Fin T) → Ω t) → ℝ≥0∞) :
     avg F = avg fun ξ => avg fun a : Ω t => F (Function.update ξ t a) := by
   classical
@@ -145,11 +147,11 @@ theorem truncated_sum_ge {T : ℕ} (x : Fin T → ℕ) (K : ℕ) (hx : K + 1 ≤
           Finset.sum_congr rfl fun t ht => by simp only [hlt t (Finset.mem_filter.1 ht).2, ↓reduceIte]
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
 
-/-- **The escape tail, one identity.** Under `DampenerRemotePeriod`'s sampled-proofs legs, the runs where no window draws
-a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted before its
-first detection), have probability at most `(1 − q)^(K+1)`. Up to its first detection, the identity's windows each miss
-all their faulty blocks, which, at a weight fixed before each window's coins (its faulty blocks while the identity is
-undetected and has at most `K` escaped so far), is `prCoin_forall_sum_le_pow`. -/
+/-- **The escape tail, one identity.** Under `DampenerRemotePeriod`'s sampled-proofs legs, the runs where no window
+draws a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted
+before its first detection), have probability at most `(1 − q)^(K+1)`. Up to its first detection, the identity's windows
+each miss all their faulty blocks, which, at a weight fixed before each window's coins (its faulty blocks while the
+identity is undetected and has at most `K` escaped so far), is `prCoin_forall_sum_le_pow`. -/
 theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T) {ι : Type}
     [DecidableEq ι] (idW : Fin T → ι) (τw : Fin T → ℝ) (q : ℝ) (K : ℕ) (j : ι)
     (hbadP : ∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ'))
@@ -459,29 +461,44 @@ theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := 
       declaredShare, rhoT, Finset.card_univ, Fintype.card_unit]
     norm_num
 
-/-- **`DampenerRemotePeriod` needs its PoUW leg** (`DampenerRemotePeriod_nontrivial`): one window whose certificate,
-for all of the monitored compute (`C = 1`, `U = 0`), is wrong and accepted on every run, a PoUW verifier that accepts
-every certificate, at `p = 0` and `ε' = 1/2`. The residual counts the wrong capacity, so the run's one counted
-multiplication (`M_r = 1`, `κ = 2`, `MFU₀ = 1`) has compute efficiency 1, above the bound `51/100`, and hardware
-multiple 1, below the overhead bound `100/51`, on every run, while `δ = 0`. -/
-theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontrivial := fun h => by
-  have := h 1 (fun _ => Bool) (fun _ => 1) (fun _ _ => True) 0 (1 / 2) Empty Unit (fun _ => ∅) (fun _ => ∅)
-    (fun _ => ∅) (fun b => b.elim) ∅ (fun _ => ()) (fun _ => 0) (fun _ => 0) (fun _ => 0) 0 0 0 1 1 0 0 2 1 0 0 1
-    (fun _ => 1) (fun _ => 1) (fun _ => 0) (fun _ => 1) (fun _ => 0) Empty (fun i => i.elim) (fun i => i.elim)
-    (fun i => i.elim) 0 1 0 100 1 0 0 le_rfl (by norm_num) (fun _ => zero_le_one) (by simp)
-    (fun _ _ _ _ b => b.elim) (fun _ _ _ _ b => b.elim) zero_le_one le_rfl
-    (fun t ξ => by simpa using prob_uniform_le_one _)
-    (fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h])
-    (fun t t' _ h => absurd h (by rw [Subsingleton.elim t t']; exact lt_irrefl _)) (by simp) one_pos le_rfl
-    (by norm_num) (by simp [Assumptions.TerminalDetection]) (by simp) (fun _ => le_rfl) le_rfl (by simp)
-    two_pos one_pos le_rfl one_pos le_rfl zero_le_one (by norm_num) zero_le_one (fun i => i.elim)
-    (fun i => i.elim) (by simp) (fun _ => Nat.one_pos) (fun _ => by simp) (fun _ => by norm_num)
-    (fun _ => by simp [wrongCapacity]) (fun _ => by norm_num)
-  rw [prob_of_forall_not _ fun ξ hG => by
-    have h2 := hG.2
-    simp only [remoteDampener, hardwareMultiple, efficiency, unmonitoredShare, residualShare, lagShare,
-      declaredShare, rhoT] at h2
-    norm_num at h2] at this
-  norm_num at this
+/-- **`DampenerRemotePeriod` is false without PoUW's per-window bound** (`DampenerRemotePeriod_nontrivial`), at
+`AcceptAll`: the window's certificate is wrong on every run, so PoUW's per-window probability is 1, above `p = 0`. The
+residual counts the wrong capacity, so the run's one counted multiplication (`M_r = 1`, `κ = 2`, `MFU₀ = 1`) has compute
+efficiency 1, above the bound `51/100`, and hardware multiple 1, below the overhead bound `100/51`, on every run, while
+`δ = 0`. -/
+theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontrivial := by
+  refine ⟨le_rfl, by norm_num, fun _ => zero_le_one, by simp, fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim,
+    zero_le_one, le_rfl, fun t ξ => by simpa using prob_uniform_le_one _,
+    fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h],
+    fun t t' _ h => absurd h (by rw [Subsingleton.elim t t']; exact lt_irrefl _), by simp, one_pos, le_rfl,
+    by norm_num, by simp [Assumptions.TerminalDetection], by simp, fun _ => le_rfl, le_rfl, by simp,
+    two_pos, one_pos, le_rfl, one_pos, le_rfl, zero_le_one, by norm_num, zero_le_one, fun i => i.elim,
+    fun i => i.elim, by simp, fun _ => Nat.one_pos, fun _ => by simp, fun _ => by norm_num,
+    fun _ => by simp [wrongCapacity], fun _ => by norm_num, fun h => ?_, ?_⟩
+  · have h1 := h 0 fun _ => true
+    have h2 := prob_add_not (PMF.uniformOfFintype Bool)
+      fun a => Guarantees.AcceptAll.wrong 0 (Function.update (fun _ => true) 0 a)
+    have h3 : prob (PMF.uniformOfFintype Bool)
+        (fun a => ¬ Guarantees.AcceptAll.wrong 0 (Function.update (fun _ => true) 0 a)) = 0 :=
+      prob_of_forall_not _ fun _ h => h trivial
+    linarith
+  · rw [prob_of_forall_not _ fun ξ hG => by
+      have h2 := hG.2
+      simp only [remoteDampener, hardwareMultiple, efficiency, unmonitoredShare, residualShare, lagShare,
+        declaredShare, rhoT, Guarantees.AcceptAll.M, Guarantees.AcceptAll.W] at h2
+      norm_num at h2]
+    norm_num [Guarantees.AcceptAll.ks]
+
+/-! `DampenerRemotePeriod_nontrivial`'s conjuncts are `DampenerRemotePeriod`'s premises as it states them at
+`AcceptAll`: with PoUW's per-window bound they give the conclusion the last conjunct refutes. -/
+
+open Guarantees.AcceptAll in
+example (h5 : ∀ (t : Fin 1) (ξ : Fin 1 → Bool),
+    prob (PMF.uniformOfFintype Bool) (fun a => wrong t (Function.update ξ t a)) ≤ 0) : False := by
+  obtain ⟨h1, h2, h3, h4, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23,
+    h24, h25, h26, h27, h28, h29, h30, h31, h32, h33, h34, h35, h36, h37, -, hnot⟩ := DampenerRemotePeriod_nontrivial
+  exact hnot (DampenerRemotePeriod 1 (fun _ => Bool) c wrong 0 (1 / 2) Empty Unit bad drawn detected win ∅ idW τw w
+    ks 0 0 0 1 1 0 0 2 1 0 0 1 W M Mu Mr Mx Empty r d Th 0 1 0 100 1 0 0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13
+    h14 h15 h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29 h30 h31 h32 h33 h34 h35 h36 h37)
 
 end Nci.SecurityProofs
