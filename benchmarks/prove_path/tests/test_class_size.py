@@ -69,8 +69,8 @@ def test_v19s_heads_are_key_blocks():
 
 
 def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
-    s = CZ.size({"Gemm_v2{K=2048,N=1}": 3, "SlotMask_v1{}": 1}, times=2)
-    assert (s["units"], s["ands"], s["m"]) == (8, 6 * 1_053_595 + 2 * 32, math.ceil(math.log2(6 * 2**24 + 2 * 2**22)))
+    s = CZ.size({"Gemm_v2{K=2048,N=1}": 3, "OutCollect_v1{KO=64,FIRST=true}": 1}, times=2)
+    assert (s["units"], s["ands"], s["m"]) == (8, 6 * 1_053_595 + 2 * 155, math.ceil(math.log2(6 * 2**24 + 2 * 2**22)))
     ands, k, src = CZ.measured("AttnBlockFirst_v1{D=64,NVIS=72,BN=128}")
     assert (ands, k) == (round(4_526_991 + (5_664_223 - 4_526_991) * 8 / 16), 25) and "interpolated" in src
     assert CZ.measured("AttnBlockFirst_v1{D=64,NVIS=17,BN=128}")[:2] == (1_231_456, 24)
@@ -79,15 +79,15 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
     assert [CZ.rows_k(r) for r in (3, 8, 9, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257)] == [
         22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27, 27, 28]
     with pytest.raises(ValueError, match=r"no measured ANDs or k_log at Llama-3.2-1B for Gemm_v2\{K=4096,N=16\}, Foo_v1\{\}"):
-        CZ.size({"Gemm_v2{K=4096,N=16}": 1, "SlotMask_v1{}": 1, "Foo_v1{}": 1})
+        CZ.size({"Gemm_v2{K=4096,N=16}": 1, "SlotEntry_v1{KO=64,IDB=17,NP=1024}": 1, "Foo_v1{}": 1})
     monkeypatch.setitem(CZ.MEASURED, "Foo_v1{}", (1, CZ.rows_k(257), "a unit of 257 rows"))
     with pytest.raises(ValueError, match=r"Foo_v1\{\} \(2\^28\): an instance needs a block past 2\^27 bits"):
         CZ.size({"Gemm_v2{K=2048,N=1}": 4, "Foo_v1{}": 2})
     assert [CZ.measured(f"TokenFeed_v1{{NP={n},FIRST=false}}")[:2] for n in (1024, 2048)] == [(62, 23), (62, 24)]
-    assert [CZ.measured(lab)[:2] for lab in ("ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}", "SlotMask_v1{}",
+    assert [CZ.measured(lab)[:2] for lab in ("ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}",
                                              "OutCollect_v1{KO=64,FIRST=true}", "OutCollect_v1{KO=64,FIRST=false}",
                                              "SlotEntry_v1{KO=64,IDB=17,NP=1024}")] == [
-        (120, 24), (32, 22), (155, 22), (2_141, 22), (5_676, 22)]
+        (120, 24), (155, 22), (2_141, 22), (5_676, 22)]
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():

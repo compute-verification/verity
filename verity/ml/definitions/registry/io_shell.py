@@ -30,9 +30,7 @@ carry chain is the test. Each outputs its token and the next position's slot. A 
 from the scan state row (`boolean_io_shell.ScanSlots_v2`), so a window places only the later positions'.
 
 A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
-is occupied is a private word of its ingress row. `SlotMask_v1` is a slot's output at a position: the token selected there
-while the slot is occupied (its occupancy word's low bit is 1), else `EMPTY`, which is no token id, so an empty slot's
-outputs are masked by its occupancy word wherever they are read.
+is occupied is a private word of its ingress row, which its entry reads (`SlotEntry_v1`, all zero for an empty slot).
 
 The network certifier's scan carries the slots: the Programs at a boundary read their slots from the scan's
 state row before it (a registered row of NS u16 words, its fields bit-packed least significant bit first), and hand their
@@ -56,7 +54,6 @@ renders no output past KO − 1 (`egress.computed`), so such a record fails visi
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
   TokenFeed{NP,FIRST}        (slot: NP + 1 i32[, sel: i32]) -> (tok: i32, slot: NP + 1 i32)
-  SlotMask                   (occ: i32, tok: i32) -> i32
   ScanSlots{NS,NP,...}       (state: NS u16 bits) -> (tok: i32 bits, slot: NP + 1 i32 bits, occ: i32 bits, head: 2 i32 bits)
                              a lane (`boolean_io_shell`)
   OutCollect{KO,FIRST}       (head: 2 i32 | state: KO + 2 i32, tok: i32) -> KO + 2 i32
@@ -273,27 +270,6 @@ def TokenFeed(B, S, slot, sel=None):
     return Coll(ret, concat([tok.refs, left.refs, *[x.refs for x in ids[1:]], o.word(0).refs]))
 
 
-#: an empty slot's output at every position: no token id, every id being below V ≤ 2^31
-EMPTY = 0xFFFFFFFF
-
-
-def mask_sig(S):
-    return (("occ", WORDS.I32), ("tok", WORDS.I32)), WORDS.I32
-
-
-def mask_reference(occ: int, tok: int) -> int:
-    """`SlotMask_v1`'s function on i32 encodings."""
-    return tok if occ & 1 else EMPTY
-
-
-@composite("SlotMask", 1, [], mask_sig,
-           conformance="a slot's egress at a position: the token served there, none for an empty slot")
-def SlotMask(B, S, occ, tok):
-    """A slot's output at a position: ``tok`` while ``occ``'s low bit is 1, else `EMPTY` (the module docstring)."""
-    o = word_ops(B)
-    return o.isel(B.call(bit_at(32), occ, o.word(0)), tok, o.word(EMPTY))
-
-
 M32 = 0xFFFFFFFF
 #: a 32-bit word as its bits, least significant first (the Boolean form of an i32)
 BITS32 = Array(32, BIT)
@@ -461,4 +437,4 @@ def SlotEntry(B, S, occ, state):
     return Coll(ret, concat([b.refs for b in bits] + ([broadcast(*B.call(const(1, 0)).refs[0], pad)] if pad else [])))
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, SlotMask, OutCollect, SlotEntry]
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry]

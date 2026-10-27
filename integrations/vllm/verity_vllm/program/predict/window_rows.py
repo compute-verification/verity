@@ -15,9 +15,9 @@ A unit its node's lowering filled holds its rows of that value (`_Program.outs`)
 function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
-  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `SlotMask_v1` the token or
-  `io_shell.EMPTY` and its `OutCollect_v1` that collected on from the lane's head
-  (`io_shell.collect_reference`), and the last position's `SlotEntry_v1` the slot's entry (`io_shell.entry_reference`);
+  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `OutCollect_v1` the select
+  collected on from the lane's head (`io_shell.collect_reference`), and the last position's `SlotEntry_v1` the slot's entry
+  (`io_shell.entry_reference`);
 - each token select's chunks the first maximum above -inf of their logits and its index (`chunk_best`), and its ``x0``
   unit ``logits[0]``;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
@@ -447,8 +447,8 @@ class Rows:
             if feed is not None:
                 self._put(*feed, "o0", _i32([t]), EVALUATED)
                 self._put(*feed, "o1", _i32(S.carried[p]), EVALUATED)
-        masked = []
-        for j, (chunks, x0, mask) in P.selects.items():
+        picks = []
+        for j, (chunks, x0) in P.selects.items():
             logits = S.operand(nodes[j].args[0])
             if logits.dtype.itemsize != 2:
                 raise ValueError(f"node {j}: logits of {logits.dtype}, not bf16 words")
@@ -462,16 +462,15 @@ class Rows:
             if lo != len(logits):
                 raise ValueError(f"node {j}: chunks of {lo} logits, not its {len(logits)}")
             self._put(*x0, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
-            masked.append(IO.mask_reference(S.row[0], int(S.values[j][0][0])))
-            self._put(*mask, "o0", _i32(masked[-1:]), EVALUATED)
-        self._scan(P, S, masked)
+            picks.append(int(S.values[j][0][0]))
+        self._scan(P, S, picks)
         for j, (plan, calls) in P.heads.items():
             self._heads(nodes[j], plan, calls, S)
 
-    def _scan(self, P: Any, S: Slot, masked: Sequence[int]) -> None:
+    def _scan(self, P: Any, S: Slot, picks: Sequence[int]) -> None:
         """The slot's scan units: its `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan
         state row at its anchor (its lane's row the slot's, refused by name where it isn't), each position's `OutCollect_v1`
-        its masked select collected on from the lane's head, and its `SlotEntry_v1` its entry of the scan's Programs' row."""
+        its select collected on from the lane's head, and its `SlotEntry_v1` its entry of the scan's Programs' row."""
         tid, u = P.scan_unit
         for k, lane in enumerate(_lanes(P, self.state, IO.scan_reference)):
             for i, v in enumerate(lane):
@@ -480,7 +479,7 @@ class Rows:
         if row != S.row:
             raise ValueError(f"{P.name}: its slot's row isn't lane {P.lane}'s of the scan state row at bucket {P.anchor}")
         KO = P.cls.outputs
-        for p, ((ctid, cu), tok) in enumerate(zip(P.collects, masked, strict=True)):
+        for p, ((ctid, cu), tok) in enumerate(zip(P.collects, picks, strict=True)):
             a = IO.collect_reference(a, tok, KO, p == 0)
             self._put(ctid, cu, "o0", _i32(a), EVALUATED)
         e = P.entry.bindings

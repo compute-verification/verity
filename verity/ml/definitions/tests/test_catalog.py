@@ -26,6 +26,8 @@ COUNT += 3  # io_shell's `ScanSlots_v2` (boolean_io_shell's), `OutCollect_v1` an
 
 COUNT -= 1  # io_shell's `SlotRow_v1`, which `ScanSlots_v2` gives the first position's slot in place of
 
+COUNT -= 1  # io_shell's `SlotMask_v1`, since a slot's entry is all zero when it is empty
+
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
 
 COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1

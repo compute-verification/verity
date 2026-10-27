@@ -14,12 +14,12 @@ A slot's request comes from the network certifier's scan: boundary b's Programs 
 its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and its head (its prompt's
 length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
 prompt cap (the prompt's id below its length, else the previous position's select), and past it the previous position's
-select. Each select is masked by the slot's occupancy word (`io_shell.SlotMask_v1`, `io_shell.EMPTY` for an empty slot) and
-collected (`io_shell.OutCollect_v1`, from the prompt's last position on). The last position makes the slot's entry of the scan's
-Programs' row (`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the model's first stop id, that one kept,
-`stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot; a request the class can't hold (a
-prompt past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses
-at the anchor and the egress never renders. The state rows and the entries are the circuit's external ports. A slot's Program
+select. Each select is collected (`io_shell.OutCollect_v1`, from the prompt's last position on). The last position makes the
+slot's entry of the scan's Programs' row (`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the model's
+first stop id, that one kept, `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot (the
+entry reads the occupancy word, so no select is masked on the way); a request the class can't hold (a prompt past ``prompt``
+ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses at the anchor and the
+egress never renders. The state rows and the entries are the circuit's external ports. A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
 next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and
 emits its circuit.
@@ -78,7 +78,7 @@ lowering's own state (a node's output rows are runs).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head,
-token select, mask and collector after it are that position's, a slot's `ScanSlots_v2` unit its first position's and
+token select and collector after it are that position's, a slot's `ScanSlots_v2` unit its first position's and
 its entry its last's. An allocation's units are one entry, its slots' runs at one step side by side (the slot
 digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps (`_inference`).
 
@@ -259,9 +259,9 @@ class _Program:
         self.head: Row | None = None
         self.collect: Row | None = None
         #: the units a node makes beyond its output rows: each position's `TokenFeed_v1` unit, None at the first (the scan
-        #: unit's) and past the class's prompt cap; each token select's chunks, ``x0`` unit and `IO.SlotMask` unit
+        #: unit's) and past the class's prompt cap; each token select's chunks and ``x0`` unit
         self.tokens: list[tuple[str, int] | None] = []
-        self.selects: dict[int, tuple[tuple[tuple[str, int], ...], tuple[str, int], tuple[str, int]]] = {}
+        self.selects: dict[int, tuple[tuple[tuple[str, int], ...], tuple[str, int]]] = {}
         #: each attention cut by key block: its cut's plan (`_plan`) and each Call's first unit, a unit a head
         self.heads: dict[int, tuple[Any, tuple[tuple[str, int], ...]]] = {}
         #: the slot's `ScanSlots_v2` unit, each position's `OutCollect_v1` unit and its `SlotEntry_v1` unit
@@ -623,14 +623,11 @@ class _Program:
         self.outs[j] = [(0, 2, Row(ctid, cu, "o0", 2))]
         if self.occ is None or self.head is None:
             raise Unexpressible(f"{node.fn.id}: a token select before its Program's first position's token")
-        mtid, mu = self.b.unit(bind(IO.SlotMask))
-        self.b.feed(mtid, "occ", mu, 1, (self.occ,))
-        self.b.feed(mtid, "tok", mu, 1, self.outs[j][0][2:])
-        self.selects[j] = (tuple(parts), (xtid, xu), (mtid, mu))
-        self._collect(self.position - 1, Row(mtid, mu, "o0", 2))
+        self.selects[j] = (tuple(parts), (xtid, xu))
+        self._collect(self.position - 1, Row(ctid, cu, "o0", 2))
 
     def _collect(self, p: int, tok: Row) -> None:
-        """Position p's masked select ``tok`` into the slot's `io_shell.OutCollect_v1` chain, and at its last its entry."""
+        """Position p's select ``tok`` into the slot's `io_shell.OutCollect_v1` chain, and at its last its entry."""
         KO = self.cls.outputs
         ctid, cu = self.b.unit(bind(IO.OutCollect, KO=KO, FIRST=p == 0))
         self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (self.head if p == 0 else self.collect,))

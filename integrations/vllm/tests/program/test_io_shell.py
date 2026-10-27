@@ -1,7 +1,7 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
-Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, a slot's `SlotMask_v1`, and the
-network certifier's scan state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`)."""
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network
+certifier's scan state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`)."""
 from __future__ import annotations
 
 import json
@@ -147,16 +147,6 @@ def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
     # `bind`'s cache keys FIRST=1 as FIRST=True, so once a class circuit in this process has bound its feed at NP = 2 (as
     # `window_weights.WEIGHTS_CLASS`'s does) `bind` returns that one unrefused: the rule is checked on its own.
     assert X.feed_refuse({"NP": 2, "FIRST": 1}) and X.feed_refuse({"NP": 2, "FIRST": True}) is None
-
-
-def test_an_empty_slot_outputs_no_token():
-    """`SlotMask_v1` passes the select through while the occupancy word's low bit is 1 and otherwise outputs `EMPTY`, which no
-    token id is, at every occupancy word and token tried."""
-    mask = bind(X.SlotMask)
-    for occ in (0, 1, 2, 3, 0x80000000, 0xFFFFFFFF):
-        for tok in (0, 5, 128255, 0xFFFFFFFF):
-            assert _run(mask, [occ], [tok]) == [X.mask_reference(occ, tok)] == [tok if occ & 1 else X.EMPTY]
-    assert X.EMPTY >= 1 << 31
 
 
 def _run(fn, *rows):
