@@ -900,10 +900,11 @@ every one at one root and domain, and an audit `wired` to the scan's `prog` has 
 The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
 audit's Programs read is the chain of the scan's transitions. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   match (stateEntries reg)[0]? with
   | some e => match e.getObjValD "root", e.getObjValD "domain" with
     | .str root, .str dom =>
-      let atRoot := fun (o : Json) => o.getObjValD "root" == .str root && o.getObjValD "domain" == .str dom
+      let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
       (stateEntries reg).all atRoot && (audits.zip regs).any fun (a, r) =>
         wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
     | _, _ => false
