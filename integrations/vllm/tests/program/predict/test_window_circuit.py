@@ -357,7 +357,7 @@ def test_the_window_forms_its_members_each_read_port_a_table_of_its_weights_rows
     check of the same rows is `test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width`."""
     circuit, ids = window
     ms = IF.members(circuit, 64)
-    assert sum(m.n for m in ms) == sum(n for _, n in circuit.templates) and len(ms) == 132
+    assert sum(m.n for m in ms) == sum(n for _, n in circuit.templates) and len(ms) == 139
     gemm = [m for m in ms if m.template == ids["Gemm_v2{K=64,N=8}"]]
     assert gemm and all(dict(m.tables)["w"] <= m.n for m in gemm)
 
