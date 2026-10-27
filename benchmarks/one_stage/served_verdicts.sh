@@ -43,7 +43,7 @@
 #     failed before its judge) leaves the wipe missing, one served elsewhere stays missing, and one whose answer rejects
 #     makes the record reject: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
-#     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
+#     record ($OUT/record/block-record.json), composed `undecided` until the Lean check answers.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
@@ -389,4 +389,4 @@ TPY=$TREE/.venv/bin/python
 rec=${PIPESTATUS[0]}
 measure
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
-[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
+[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && grep -q '"composed": "\(undecided\|accept\)"' "$OUT/verdicts.txt"

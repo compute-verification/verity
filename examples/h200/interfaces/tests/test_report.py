@@ -17,7 +17,7 @@ from verity_e2e_demo import block_record as R
 from verity_e2e_demo import report as D
 
 FIXTURES = Path(__file__).parent / "fixtures"
-SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 SECTIONS = ["# Demo A: one H200, one block", "## 1. Ran and proved, on one H200, one block", "### Visible failures",
             "## 2. Measured on the demo: the inputs to the scaling claim",
             "## 3. Computed from the same theorem and the measured costs, not run", "## What the demo didn't show",

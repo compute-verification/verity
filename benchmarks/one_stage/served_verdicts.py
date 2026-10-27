@@ -352,7 +352,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     dev = dev if dev["development"] else {}
     bad = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") not in ("accept", "missing"))
     if bad:
-        composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows) else "pending"
+        composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows) else "undecided"
         line = {"composed": composed, "by": bad, "verdicts": verdicts, "missing": missing, "block_record": None,
                 "why": "block_record carries an accepted subprotocol's certificate only", **dev}
         return report, None, line

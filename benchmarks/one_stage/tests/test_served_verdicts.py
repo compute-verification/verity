@@ -1,6 +1,6 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
-with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
+with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to an undecided
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
 composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
 and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE.parent))
 import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
-SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 _SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
@@ -102,12 +102,12 @@ def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
 
 
-def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
+def test_sampled_proofs_alone_composes_to_an_undecided_block_record(tmp_path):
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {}
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
-    assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
+    assert (line["composed"], line["record_missing"]) == ("undecided", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
     assert line["missing"] == {"PoUW": "VLLM-33 G1", "the bandwidth audit": "VLLM-33 G2", "PoUS": "MEM-94",
                                "the network certifier": "NET-83", "the wipe": "MEM-96"}
     assert report["protocols"]["work"] == {"verdict": "missing", "owner": "vllm-serve-arms", "issue": "VLLM-33 G1",
@@ -156,7 +156,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
-    assert rc == 0 and line["check"] == {} and line["composed"] == "pending"
+    assert rc == 0 and line["check"] == {} and line["composed"] == "undecided"
     if case == "accept":
         assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw"]
         assert rec["legs"]["wipe"]["server"] == "vy-dc-h200" and rec["legs"]["wipe"]["quantity"]["value"] == 4096
@@ -206,7 +206,7 @@ def _gate(calls: list):
 
 def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing(tmp_path, monkeypatch, capsys):
     """``pouw``: the window's session fetched from the gate with the ledger and pins, held by the challenger check; it
-    accepts, its row in the record stays missing with its document (it credits nothing), the record composes pending, and
+    accepts, its row in the record stays missing with its document (it credits nothing), the record composes undecided, and
     the pieces' line says it is a development run's."""
     calls, seen = [], []
     monkeypatch.setattr(S, "_gate_out", _gate(calls))
@@ -228,7 +228,7 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     row = S.piece_row("work", tmp_path / "pieces")
     assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.DEV_WHY, "accept")
     _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
-    assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
+    assert line["composed"] == "undecided" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
     assert BR.check(rec) == {}
     env = {"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""}
     got = S.pieces(d, 1, tmp_path / "again", env=env)
