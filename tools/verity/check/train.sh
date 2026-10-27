@@ -63,7 +63,7 @@ tell() {
   if [ "$rc" -ne 0 ]; then
     { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${deferred:+ --deferred $deferred} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
-    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --machine \
+    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --report \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
   fi
   rm -f "$why" "$why.post"
