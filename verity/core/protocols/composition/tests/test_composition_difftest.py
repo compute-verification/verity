@@ -110,7 +110,7 @@ PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "cas
                 for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
 
 #: A recorded component's kinds of case (`periods.build`), accepted ones first and thrice.
-KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken-params", "broken-evidence"]
+KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", "broken-params", "broken-evidence"]
 
 
 def kinds(C) -> list[str]:

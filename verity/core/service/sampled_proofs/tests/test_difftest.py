@@ -832,10 +832,10 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
-    checked proof units. The population's strata are `partition.strata`'s, each unit a replay unit of one proof unit, its
+    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
     gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
     (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    units are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
+    blocks are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -1104,8 +1104,8 @@ def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
     order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
     `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a law whose drawn count varies
-    (`service.count_varies`: `shapes`), and the
-    receipt; `select`: the draw from the source's bytes (`select`), its coins what `coin_source` says (`_coins_hold`:
+    (`service.count_varies`: `shapes`), a program whose units read stratum by stratum are not its N in order
+    (`partition.in_order`: `population-order`), and the receipt; `select`: the draw from the source's bytes (`select`), its coins what `coin_source` says (`_coins_hold`:
     code `coins`); `deliver`: one or more sessions, each matching
     `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the draw's proved units unless
     given, its acceptance the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
@@ -1152,6 +1152,8 @@ def run(j):
         return {"codes": list(codes), "step": "register"}
     if service.count_varies(law):
         return {"codes": ["shapes"], "step": "register"}
+    if not P.in_order(p["program"], p["query"], n):
+        return {"codes": ["population-order"], "step": "register"}
     receipt = _receipt(rec, j["challenger"], j["received"])
     try:
         derived = DR.derive(p["program"], p["query"], law, p["work_table"])
@@ -3030,7 +3032,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
     slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
-    the input class's are every gate of the program once; and the checked proof units are the drawn units' slots and
+    the input class's are every gate of the program once; and the checked proof blocks are the drawn units' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
@@ -3552,3 +3554,21 @@ def test_the_run_refuses_a_count_that_varies(pieces):
     assert service.count_varies({"law": "bernoulli", "p": "1/2"})
     assert not any(service.count_varies(law) for law in ({"law": "bernoulli", "p": "0/1"}, {"law": "bernoulli", "p": "1/1"},
                                                          {"k": 2, "law": "subset"}, {"k": 2, "law": "work"}))
+
+
+def test_the_run_refuses_a_population_out_of_order(pieces):
+    """A registration whose program's units, read stratum by stratum, are not its N units in order is refused at its
+    registration (`population-order`, `Slots.popOk`), Lean's the Python's whole: `SETUPS[4]` puts PAIR's units 0, 3 and 4
+    in one stratum ahead of TRIPLE's 1 and 2, and `SETUPS[5]`'s Calls put PAIR's units 0 and 4 ahead of the Fork's. The
+    sampled audit's knowledge soundness reads slot `u` as unit `u`. Programs whose strata are blocks in order go on."""
+    source = hashlib.shake_256(b"run").hexdigest(600)
+    for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True), (SETUPS[2], True), (SETUPS[6], True)):
+        assert P.in_order(s.program, s.query, s.population) is ok, s.templates
+        case = _run_case(_v1_audit("subset", s), source, 2, ["credited"])
+        out = run(copy.deepcopy(case))
+        assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), out
+        if ok:
+            assert out.get("codes") != ["population-order"], out
+        else:
+            assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
+    assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)

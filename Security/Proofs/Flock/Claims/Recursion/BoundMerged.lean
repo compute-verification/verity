@@ -465,14 +465,16 @@ theorem Bound.PrBadGood_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c,
       (InnerRejects H D (Inner.ofFlock Bd.deploy decI) DO decO P x)
   linarith
 
-/-- `P_O`'s aborting run records only calls that `E_O`'s witnesses there record, or those witnesses' calls collide
-(`CallsLogColl`). -/
-theorem Bound.innerFO_vLog_sub (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
-    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+/-- `P_O`'s aborting run records only calls among those `cl` searches at its draw, or those collide
+(`CallsLogCollBy`). -/
+theorem Bound.innerFO_vLog_subBy (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
+    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
+    {cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)}
+    (hL : CallsLogCollBy H D (Inner.ofFlock Bd.deploy decI) DO cl)
     (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) :
     (∀ e ∈ (Bd.innerFO decI H D DO decO P x decC ω d).vLog,
-      e ∈ D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) ∨
-      ∃ u v, findColl (D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) =
+      e ∈ cl x d.1 ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) ∨
+      ∃ u v, findColl (cl x d.1 ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) =
         some (u, v) ∧ Collision H u v := by
   by_cases hk : Bd.keepDO decI H D DO decO P x ω d = true
   · have hk' : (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).isSome = true ∧
@@ -495,16 +497,35 @@ theorem Bound.innerFO_vLog_sub (decC : Msg → Msg → Coin) (hdec : ∀ x c, de
     · exact Or.inr h
   · exact Or.inl fun e he => by simp [Bound.innerFO, hk, abortTrace] at he
 
-/-- **`B` at `P_O`'s aborting runs finds only collisions `B_I` finds**: each kept run's calls are recorded by `E_O`'s
-witnesses at the draw it extends to, or those recorded calls collide (`CallsLogColl`), and an aborted run makes none;
-`B`'s fork of the inner coins extends to `B_I`'s fork of the compiled verifier's (`extend_forkCoins`,
-`unifMap_bAbort`). -/
-theorem Bound.PrBAbort_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
+/-- `P_O`'s aborting run records only calls that `E_O`'s witnesses there record, or those witnesses' calls collide
+(`CallsLogColl`). -/
+theorem Bound.innerFO_vLog_sub (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
-    (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] [Nonempty Ω] :
+    (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) :
+    (∀ e ∈ (Bd.innerFO decI H D DO decO P x decC ω d).vLog,
+      e ∈ D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) ∨
+      ∃ u v, findColl (D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) =
+        some (u, v) ∧ Collision H u v :=
+  Bound.innerFO_vLog_subBy (cl := fun x _ ws => D.calls x ws) decC hdec hV hL ω d
+
+/-- **`B` at `P_O`'s aborting runs finds only collisions among the calls `cl` searches at `B_I`'s fork**: each kept
+run's calls are among those at the draw it extends to, or those collide (`CallsLogCollBy`), and an aborted run makes
+none; `B`'s fork of the inner coins extends to `B_I`'s fork of the compiled verifier's (`extend_forkCoins`,
+`unifMap_bAbort`). -/
+theorem Bound.PrBAbort_le_by (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
+    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
+    {cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)}
+    (hL : CallsLogCollBy H D (Inner.ofFlock Bd.deploy decI) DO cl)
+    (ht : ∀ (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x),
+      ∀ e ∈ cl x d.1 ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD []), H e.1 = e.2)
+    (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] [Nonempty Ω] (hk : 0 < Bd.DE.V.k (xI D x)) :
     PrBAbort H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) ≤
-      PrBI H D (Inner.ofFlock Bd.deploy decI) DO decO P x := by
+      Pr (fun s : Fin (Bd.DE.V.k (xI D x)) × Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) ×
+          (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
+        ∃ u v, findColl (cl x s.2.2.1 ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1
+            (s.2.2.1, s.2.2.2.2.1)).getD []) ++
+          cl x (fork s.1 s.2.2.1 s.2.2.2.1) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1
+            (fork s.1 s.2.2.1 s.2.2.2.1, s.2.2.2.2.2)).getD [])) = some (u, v) ∧ Collision H u v) := by
   have hn : Bd.DE.V.k (xI D x) ≤ D.V.k x := hR x
   have hcoll : ∀ (j : Fin (Bd.DE.V.k (xI D x))) (ω : Ω) (ρ ρ' : Fin (Bd.DE.V.k (xI D x)) → Coin)
       (a a' : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x),
@@ -512,24 +533,25 @@ theorem Bound.PrBAbort_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, 
           (Bd.keepAO decI H D DO decO P x) ω (ρ, a)).vLog ++
         (abortRun H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x) (Bd.keepAO decI H D DO decO P x) ω
           (forkCoins j ρ ρ', a')).vLog)).isSome →
-      ∃ u v, findColl (D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
+      ∃ u v, findColl (cl x (extend ρ a.1) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
           (extend ρ a.1, a.2)).getD []) ++
-        D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
+        cl x (fork j.val (extend ρ a.1) (extend ρ' a'.1)) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
           (fork j.val (extend ρ a.1) (extend ρ' a'.1), a'.2)).getD [])) = some (u, v) ∧ Collision H u v := by
     intro j ω ρ ρ' a a' h
     rw [Bound.abortRun_eqO decC hn, Bound.abortRun_eqO decC hn] at h
     rw [extend_forkCoins]
-    have htrue : ∀ p ∈ D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
+    have htrue : ∀ p ∈ cl x (extend ρ a.1) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
           (extend ρ a.1, a.2)).getD []) ++
-        D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
+        cl x (extend (forkCoins j ρ ρ') a'.1) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
           (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []), H p.1 = p.2 :=
-      fun p hp => (List.mem_append.1 hp).elim (calls_true hT hN0 ω _ p) (calls_true hT hN0 ω _ p)
-    have hsome : (findColl (D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
+      fun p hp => (List.mem_append.1 hp).elim (ht ω (extend ρ a.1, a.2) p)
+        (ht ω (extend (forkCoins j ρ ρ') a'.1, a'.2) p)
+    have hsome : (findColl (cl x (extend ρ a.1) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
           (extend ρ a.1, a.2)).getD []) ++
-        D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
+        cl x (extend (forkCoins j ρ ρ') a'.1) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
           (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []))).isSome := by
-      rcases Bound.innerFO_vLog_sub decC hdec hV hL ω (extendDraw (ρ, a)) with h1 | ⟨u, v, huv, -⟩
-      · rcases Bound.innerFO_vLog_sub decC hdec hV hL ω (extendDraw (forkCoins j ρ ρ', a')) with
+      rcases Bound.innerFO_vLog_subBy decC hdec hV hL ω (extendDraw (ρ, a)) with h1 | ⟨u, v, huv, -⟩
+      · rcases Bound.innerFO_vLog_subBy decC hdec hV hL ω (extendDraw (forkCoins j ρ ρ', a')) with
           h2 | ⟨u, v, huv, -⟩
         · exact findColl_isSome_of_sub H htrue (fun p hp => (List.mem_append.1 hp).elim
             (fun hp => List.mem_append_left _ (h1 p hp)) fun hp => List.mem_append_right _ (h2 p hp)) h
@@ -539,71 +561,61 @@ theorem Bound.PrBAbort_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, 
           (Option.isSome_iff_exists.2 ⟨_, huv⟩)
     obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hsome
     exact ⟨u, v, huv, findColl_spec H _ htrue u v huv⟩
-  unfold PrBAbort PrBI
+  unfold PrBAbort
+  simp only [hk, ↓reduceDIte]
+  unfold Finder.Pr
+  refine (Pr_mono fun s hs => ?_).trans_eq
+    ((unifMap_bAbort (Ω := Ω) (C := (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) hn).Pr _)
+  obtain ⟨u, v, huv, -⟩ := hs
+  exact hcoll s.1.1 s.1.2.1 s.1.2.2.1 s.1.2.2.2 s.2.1 s.2.2 (Option.isSome_iff_exists.2 ⟨(u, v), huv⟩)
+
+/-- **`B` at `P_O`'s aborting runs finds only collisions `B_I` finds**: `PrBAbort_le_by` at the recorded calls
+(`CallsLogColl`), true where `E_O` gives witnesses and where it gives up (`calls_true`). -/
+theorem Bound.PrBAbort_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
+    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
+    (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] [Nonempty Ω] :
+    PrBAbort H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) ≤
+      PrBI H D (Inner.ofFlock Bd.deploy decI) DO decO P x := by
+  unfold PrBI
   by_cases hk : 0 < Bd.DE.V.k (xI D x)
   · have hk' : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI D x) := hk
-    simp only [hk, hk', ↓reduceDIte]
-    unfold Finder.Pr
-    refine (Pr_mono fun s hs => ?_).trans_eq
-      ((unifMap_bAbort (Ω := Ω) (C := (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) hn).Pr _)
-    obtain ⟨u, v, huv, -⟩ := hs
-    exact hcoll s.1.1 s.1.2.1 s.1.2.2.1 s.1.2.2.2 s.2.1 s.2.2 (Option.isSome_iff_exists.2 ⟨(u, v), huv⟩)
+    simp only [hk', ↓reduceDIte]
+    exact Bound.PrBAbort_le_by (cl := fun x _ ws => D.calls x ws) decC hdec hV hL
+      (fun ω d => calls_true hT hN0 ω d) hR hk
   · have hk' : ¬ 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI D x) := hk
+    unfold PrBAbort
     simp only [hk, hk', ↓reduceDIte, le_refl]
 
-/-- **Two draws forked at inner round `j`, with witnesses, whose openings differ at `j`, are a collision `Be`'s fork
-finds.** A rejecting inner view is one among its witnesses' calls (`InnerAcceptsColl`). Inner views that differ at
-message `j` are `ForksBind`'s. Inner views that agree at message `j` are accepted `IVStar` runs on one commit string:
-before the last round its rows differ at some commit string, opened two ways (`opens_coll`, `Binds`), among the runs'
-calls, which the witnesses record (`CallsLogColl`); at the last round `final` reads one message, so they open alike. -/
-theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
-    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+/-- **The binding core of `fork_collO`, over the calls `cl` searches**: `fork_collO_core` with the runs' calls among
+`cl`'s at each draw, or those colliding (`CallsLogCollBy`). -/
+theorem Bound.fork_collO_coreBy {Q : Prop} (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
+    {cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)}
+    (hT : ∀ (ω : Ω) r c ws, EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω r c ws →
+      ∀ e ∈ cl x r ws, H e.1 = e.2)
+    (hL : CallsLogCollBy H D (Inner.ofFlock Bd.deploy decI) DO cl)
     (j : ℕ) (hj : j < Bd.DE.V.k (xI D x))
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x ×
-      (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
-    (h : (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1)).isSome = true ∧
-      (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)).isSome = true ∧
-      Bd.oMsg decI H D DO decO P x t.1 (t.2.1, t.2.2.2.1) j ≠
-        Bd.oMsg decI H D DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) j) :
-    forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := by
-  obtain ⟨hg₁, hg₂, hne⟩ := h
-  obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hg₁
-  obtain ⟨ws', hws'⟩ := Option.isSome_iff_exists.1 hg₂
+      (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) {ws ws' : List Flock.Wit}
+    (hws : eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) = some ws)
+    (hws' : eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) = some ws')
+    (hacc₁ : (D.innerView H x t.2.1 ws).out = .acc) (hacc₂ : (D.innerView H x (fork j t.2.1 t.2.2.1) ws').out = .acc)
+    (hraw : ((D.innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] =
+      ((D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j [])
+    (hne : Bd.oMsg decI H D DO decO P x t.1 (t.2.1, t.2.2.2.1) j ≠
+      Bd.oMsg decI H D DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) j)
+    (hlift : ∀ l : List (Msg × Msg), (∀ p ∈ l, p ∈ cl x t.2.1 ws ++ cl x (fork j t.2.1 t.2.2.1) ws') →
+      (findColl l).isSome → Q) : Q := by
   have hE₁ : EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 t.2.1 t.2.2.2.1 ws := eoGives_of_some hws
   have hE₂ : EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' :=
     eoGives_of_some hws'
-  have htrue : ∀ p ∈ D.calls x ws ++ D.calls x ws', H p.1 = p.2 := fun p hp =>
-    (List.mem_append.1 hp).elim (hT decO x Ω P t.1 _ _ ws hE₁ p) (hT decO x Ω P t.1 _ _ ws' hE₂ p)
-  have hlift : ∀ l : List (Msg × Msg), (∀ p ∈ l, p ∈ D.calls x ws ++ D.calls x ws') → (findColl l).isSome →
-      forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := by
-    intro l hsub hs
-    have hl₁ : ((EO D (Inner.ofFlock Bd.deploy decI) DO decO).eval H P x t.1 t.2.1 t.2.2.2.1).1.getD [] = ws := by
-      rw [hE₁.2]; rfl
-    have hl₂ : ((EO D (Inner.ofFlock Bd.deploy decI) DO decO).eval H P x t.1 (fork j t.2.1 t.2.2.1)
-        t.2.2.2.2).1.getD [] = ws' := by
-      rw [hE₂.2]; rfl
-    unfold forkColl
-    rw [hl₁, hl₂]
-    obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (findColl_isSome_of_sub H htrue hsub hs)
-    exact ⟨u, v, huv, findColl_spec H _ htrue u v huv⟩
-  have hleft : (∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v) →
-      forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := fun ⟨_, _, huv, _⟩ =>
+  have htrue : ∀ p ∈ cl x t.2.1 ws ++ cl x (fork j t.2.1 t.2.2.1) ws', H p.1 = p.2 := fun p hp =>
+    (List.mem_append.1 hp).elim (hT t.1 _ _ ws hE₁ p) (hT t.1 _ _ ws' hE₂ p)
+  have hleft : (∃ u v, findColl (cl x t.2.1 ws) = some (u, v) ∧ Collision H u v) → Q := fun ⟨_, _, huv, _⟩ =>
     hlift _ (fun p hp => List.mem_append_left _ hp) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
-  have hright : (∃ u v, findColl (D.calls x ws') = some (u, v) ∧ Collision H u v) →
-      forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := fun ⟨_, _, huv, _⟩ =>
-    hlift _ (fun p hp => List.mem_append_right _ hp) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
-  rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hE₁ with hacc₁ | hc₁
-  swap
-  · exact hleft hc₁
-  rcases hA decO Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂ with hacc₂ | hc₂
-  swap
-  · exact hright hc₂
-  by_cases hraw : ((D.innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] =
-      ((D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j []
-  swap
-  · exact hFk decO Ω P j t ⟨ws, ws', hE₁, hE₂, hraw⟩
+  have hright : (∃ u v, findColl (cl x (fork j t.2.1 t.2.2.1) ws') = some (u, v) ∧ Collision H u v) → Q :=
+    fun ⟨_, _, huv, _⟩ =>
+      hlift _ (fun p hp => List.mem_append_right _ hp) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
   have hv₁ := hV decO x Ω P t.1 t.2.1 t.2.2.2.1 ws hE₁
   have hv₂ := hV decO x Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂
   have haccI₁ : (run H (replay ((D.innerView H x t.2.1 ws).msgs.map Prod.fst)) Bd.IVStar (xI D x) ()
@@ -670,8 +682,8 @@ theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock B
     rcases hL decO x Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂ with hs₂ | hc₂
     swap
     · exact hright hc₂
-    have hpm : p ∈ D.calls x ws ++ D.calls x ws' := List.mem_append_left _ (hs₁ p hp₁)
-    have hqm : q ∈ D.calls x ws ++ D.calls x ws' := List.mem_append_right _ (hs₂ q hq₂)
+    have hpm : p ∈ cl x t.2.1 ws ++ cl x (fork j t.2.1 t.2.2.1) ws' := List.mem_append_left _ (hs₁ p hp₁)
+    have hqm : q ∈ cl x t.2.1 ws ++ cl x (fork j t.2.1 t.2.2.1) ws' := List.mem_append_right _ (hs₂ q hq₂)
     obtain ⟨u', v', huv', -⟩ := findColl_of_coll H htrue (List.mem_map.2 ⟨p, hpm, rfl⟩)
       (List.mem_map.2 ⟨q, hqm, rfl⟩) hc
     exact hlift _ (fun p hp => hp) (Option.isSome_iff_exists.2 ⟨_, huv'⟩)
@@ -681,6 +693,74 @@ theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock B
     rw [hms, hf'] at hf
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf)
     exact hne (hfO₁.trans hfO₂.symm)
+
+/-- **The binding core of `fork_collO`**: two draws forked at inner round `j`, with witnesses `ws`, `ws'` whose inner
+views accept and agree at message `j` but open it differently, show a collision among the calls their witnesses record,
+which any `Q` that such a collision gives (`hlift`) inherits. The views are accepted `IVStar` runs on one commit string:
+before the last round its rows differ at some commit string, opened two ways (`opens_coll`, `Binds`), among the runs'
+calls, which the witnesses record (`CallsLogColl`); at the last round `final` reads one message, so they open alike. -/
+theorem Bound.fork_collO_core {Q : Prop} (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (j : ℕ) (hj : j < Bd.DE.V.k (xI D x))
+    (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x ×
+      (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) {ws ws' : List Flock.Wit}
+    (hws : eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) = some ws)
+    (hws' : eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) = some ws')
+    (hacc₁ : (D.innerView H x t.2.1 ws).out = .acc) (hacc₂ : (D.innerView H x (fork j t.2.1 t.2.2.1) ws').out = .acc)
+    (hraw : ((D.innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] =
+      ((D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j [])
+    (hne : Bd.oMsg decI H D DO decO P x t.1 (t.2.1, t.2.2.2.1) j ≠
+      Bd.oMsg decI H D DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) j)
+    (hlift : ∀ l : List (Msg × Msg), (∀ p ∈ l, p ∈ D.calls x ws ++ D.calls x ws') → (findColl l).isSome → Q) : Q :=
+  Bound.fork_collO_coreBy (cl := fun x _ ws => D.calls x ws) hB hV (fun ω r c ws hg => hT decO x Ω P ω r c ws hg) hL
+    j hj t hws hws' hacc₁ hacc₂ hraw hne hlift
+
+/-- **Two draws forked at inner round `j`, with witnesses, whose openings differ at `j`, are a collision `Be`'s fork
+finds.** A rejecting inner view is one among its witnesses' calls (`InnerAcceptsColl`). Inner views that differ at
+message `j` are `ForksBind`'s. Inner views that agree at message `j` are `fork_collO_core`'s. -/
+theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (j : ℕ) (hj : j < Bd.DE.V.k (xI D x))
+    (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x ×
+      (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
+    (h : (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1)).isSome = true ∧
+      (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)).isSome = true ∧
+      Bd.oMsg decI H D DO decO P x t.1 (t.2.1, t.2.2.2.1) j ≠
+        Bd.oMsg decI H D DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) j) :
+    forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := by
+  obtain ⟨hg₁, hg₂, hne⟩ := h
+  obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hg₁
+  obtain ⟨ws', hws'⟩ := Option.isSome_iff_exists.1 hg₂
+  have hE₁ : EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 t.2.1 t.2.2.2.1 ws := eoGives_of_some hws
+  have hE₂ : EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' :=
+    eoGives_of_some hws'
+  have htrue : ∀ p ∈ D.calls x ws ++ D.calls x ws', H p.1 = p.2 := fun p hp =>
+    (List.mem_append.1 hp).elim (hT decO x Ω P t.1 _ _ ws hE₁ p) (hT decO x Ω P t.1 _ _ ws' hE₂ p)
+  have hlift : ∀ l : List (Msg × Msg), (∀ p ∈ l, p ∈ D.calls x ws ++ D.calls x ws') → (findColl l).isSome →
+      forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := by
+    intro l hsub hs
+    have hl₁ : ((EO D (Inner.ofFlock Bd.deploy decI) DO decO).eval H P x t.1 t.2.1 t.2.2.2.1).1.getD [] = ws := by
+      rw [hE₁.2]; rfl
+    have hl₂ : ((EO D (Inner.ofFlock Bd.deploy decI) DO decO).eval H P x t.1 (fork j t.2.1 t.2.2.1)
+        t.2.2.2.2).1.getD [] = ws' := by
+      rw [hE₂.2]; rfl
+    unfold forkColl
+    rw [hl₁, hl₂]
+    obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (findColl_isSome_of_sub H htrue hsub hs)
+    exact ⟨u, v, huv, findColl_spec H _ htrue u v huv⟩
+  rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hE₁ with hacc₁ | ⟨_, _, huv, _⟩
+  swap
+  · exact hlift _ (fun p hp => List.mem_append_left _ hp) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
+  rcases hA decO Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂ with hacc₂ | ⟨_, _, huv, _⟩
+  swap
+  · exact hlift _ (fun p hp => List.mem_append_right _ hp) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
+  by_cases hraw : ((D.innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] =
+      ((D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j []
+  swap
+  · exact hFk decO Ω P j t ⟨ws, ws', hE₁, hE₂, hraw⟩
+  exact Bound.fork_collO_core hB hV hT hL j hj t hws hws' hacc₁ hacc₂ hraw hne hlift
 
 /-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: it misses `P_O` at some inner round `j`, at most as
 `√(Pr[two draws forked at j open round j differently])` (`Pr_plur_fork`), a collision `Be`'s fork at `j` finds
