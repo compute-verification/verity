@@ -84,7 +84,8 @@ def _lean_here(file: str) -> int:
     path = (ROOT / file if (ROOT / file).is_file() else Path(file)).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
-        raise SystemExit(f"verity lean try: {file} is not a .lean file in a Lake package (no {' or '.join(LAKEFILES)} above it)")
+        raise SystemExit(f"verity lean try: {file} is not a .lean file in a Lake package (a directory with a "
+                         f"{' or '.join(LAKEFILES)})")
     where = pkg.relative_to(ROOT) if pkg.is_relative_to(ROOT) else pkg
     lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
     if not Path(lake).is_file():
