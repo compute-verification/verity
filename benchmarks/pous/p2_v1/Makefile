@@ -1,4 +1,4 @@
-# P2 v1's GPU library (p2v1.cu): decode on ../p2_gpu/p2dec.cu's tuned squaring with per-block v1 keys, and encode by two roots.
+# P2 v1's GPU library (p2v1.cu): the tuned decode of ../p2_gpu/p2dec.cu with per-block v1 keys, and encode by two roots.
 # CGBN = NVlabs/CGBN at ../p2_gpu/CGBN.commit; CGBN's host pass includes gmp.h (libgmp-dev's, or INC="-I <dir of a gmp.h>",
 # such as gmpy2's wheel's, where nothing may be installed on the system).
 # ARCH is the device's: sm_89 for the RTX 4090 and the L40S, sm_120 for the RTX PRO 6000.
