@@ -60,10 +60,11 @@ from its description alone (`declared_count`), before the committer writes its m
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
 and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
-``weights/<label>@<words>``, whose root of record the served model's weights record states (``--pins RECORD``:
-`verity_vllm.program.predict.window_circuit.weights_record`'s ``registered_roots``, from the checkpoint's pinned shards
-before the run), and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary
-table has no root of record, so its reads stay free.
+``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
+window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
+`verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
+and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has no root,
+so its reads stay free.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -311,16 +312,19 @@ def pin_arg(s: str) -> tuple[str, str]:
 
 def pins_of(pin: Iterable[tuple[str, str]], files: Iterable[str] = ()) -> dict[str, str]:
     """The verifier's pins, ``{param: root}``: each ``--pin NAME=ROOT`` and each ``--pins FILE``'s, a JSON ``{param: root}``
-    or a weights record of record whose ``registered_roots`` they are (vLLM's `window_circuit.weights_record`, each weight's
-    ``weights/<label>@<words>``). Refused (ValueError) where two name one parameter, a record isn't of record, or a root
-    isn't hex digits."""
+    or a registration of values ``{program, values: {param: entry}}`` (or a list of them) whose entries' roots they are,
+    each entry held to its domain as the audit's ``--registered`` holds it (`pinned`): vLLM's committer's weights
+    registration (`window_weights.weights_registration`, each weight's ``weights/<label>@<words>``). Refused (ValueError)
+    where two name one parameter, a root isn't hex digits, or the file is a weights record, which states each weight's
+    shape and no root."""
     out = list(pin)
     for f in files:
         doc = json.loads(Path(f).read_text())
-        if isinstance(doc, Mapping) and "registered_roots" in doc:
-            if doc.get("of_record") is not True:
-                raise ValueError(f"{f}: a weights record not of record (of_record {doc.get('of_record')!r}) pins nothing")
-            doc = doc["registered_roots"]
+        if isinstance(doc, Mapping) and ("registered_entries" in doc or "registered_roots" in doc):
+            raise ValueError(f"{f}: a weights record states each weight's shape, not its root: pin the committer's "
+                             "registration of its weights")
+        if isinstance(doc, list) or (isinstance(doc, Mapping) and "values" in doc):
+            doc = {p: e["root"] for p, e in pinned(doc).items()}
         if not isinstance(doc, Mapping):
             raise ValueError(f"{f}: pins are {{param: root}}, not {type(doc).__name__}")
         out += list(doc.items())
@@ -795,8 +799,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="a registered parameter, by "
                    "the record's name for it, and the root the verifier fixed for it before the run (repeatable; none: every "
                    "registered read is free)")
-    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a weights "
-                   "record of record's registered_roots (vLLM's window_circuit.weights_record), with --pin's (repeatable)")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
+                   "registration of values {program, values} (vLLM's committer's weights registration, "
+                   "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
     a = ap.parse_args(argv)
