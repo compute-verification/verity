@@ -14,7 +14,7 @@ for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [
 PY=${PY:-python3}
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
-export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D PYTHONDONTWRITEBYTECODE=1
+export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1
 export SHA512_ROWS_BUILD=${SHA512_ROWS_BUILD:-$HOME/.cache/verity/sha512_rows}
 git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$O/commit.txt"
 { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'

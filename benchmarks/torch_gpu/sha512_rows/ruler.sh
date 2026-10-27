@@ -18,7 +18,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH
-export D=benchmarks/pouw/commit_gpu I=benchmarks/hash/intpipe X=benchmarks/torch_gpu/sha512_rows PY=python3 PYTHONPATH=.
+export D=benchmarks/pouw/commit_gpu I=benchmarks/hash/intpipe X=benchmarks/torch_gpu/sha512_rows PY=python3 PYTHONPATH=.:tools/config
 W=$(mktemp -d /dev/shm/sha512imad.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
