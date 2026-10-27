@@ -980,8 +980,7 @@ def test_a_new_swallowing_handler_is_refused_naming_it_and_the_fix_and_one_that_
                         "(tools/s.py 1 -> 2; tools/t.py 0 -> 1): Re-raise; or record the outcome in your area's typed record or "
                         "log, saying what was caught and what the code did instead; or narrow it away: test for the case you "
                         "expect (`path.exists()`, `d.get(k)`) and let the rest raise, since a narrower handler that still "
-                        "swallows still counts, and so does `contextlib.suppress(E)`, which is `except E: pass` (why: "
-                        "integrations/vllm/tests/lint/README.md (Recorded outcomes)). If the file "
+                        "swallows still counts (why: integrations/vllm/tests/lint/README.md (Recorded outcomes)). If the file "
                         f"moved, move its entry in the same change: `python3 {REPO_SILENT_LINT} --move OLD NEW`."), c["why"]
     assert c["fix"] == ["tools/s.py:6 except ValueError: pass", "tools/t.py:5 except ValueError: continue"]
     assert "tools/t.py: 1 found, 0 allowed" in (_silent_lint(silent_linted) or "")

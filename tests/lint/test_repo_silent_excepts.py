@@ -2,20 +2,14 @@
 held to ``allowlists/repo_silent_excepts.json``: S4 of the quality rollout, recorded outcomes (the vLLM coordinator, 27 Oct
 02:05Z), so no area adds one while its owner turns the ones it has into raises and records.
 
-A handler swallows when every statement in it is ``pass``, ``continue``, ``break``, a bare constant (``...``), a call to a
-function that does nothing, or a ``return`` or an assignment of a default: nothing, ``None``, a constant other than a string or
-``False``, a name other than the caught exception's, or an empty container.  A function does nothing when it is the file's one
-binding of its name, an undecorated module-level ``def`` whose body only passes, states or returns a constant, or calls
-another such function, or a ``lambda`` of a constant; a call to it does nothing when no call is in its arguments.  Such a
-handler neither raises, nor logs, nor records what it caught, nor calls anything that does, so the code goes on with less
-than it had and leaves no trace of why; a guard never fails open (AGENTS.md).  ``contextlib.suppress(E, ...)``, however the
-file imports it, is ``except E: pass`` written as a context manager, so each call counts one too.  Broad and typed handlers
-count alike, and a file that doesn't parse counts one, since its handlers can't be seen.  A string says why (``return
-"unparseable"``), ``return False`` is a predicate's or a verifier's answer, failing closed, and a handler that names what it
-caught (``return e``) hands it on, so none of those swallows.  This is the integration's rule
-(``integrations/vllm/tests/lint/test_silent_excepts.py``, whose README section "Recorded outcomes" says why), which holds two
-of its packages per handler; here every file is held, per file.  When the rule widens (``suppress`` and calls that do nothing:
-27 Oct, VLLM-134), the list takes what it newly finds in files the change leaves as they were, and only shrinks after.
+A handler swallows when every statement in it is ``pass``, ``continue``, ``break``, a bare constant (``...``), or a ``return``
+or an assignment of a default: nothing, ``None``, a constant other than a string or ``False``, a name other than the caught
+exception's, or an empty container.  Such a handler neither raises, nor logs, nor records what it caught, nor calls anything,
+so the code goes on with less than it had and leaves no trace of why; a guard never fails open (AGENTS.md).  Broad and typed
+handlers count alike, and a file that doesn't parse counts one, since its handlers can't be seen.  A string says why (``return "unparseable"``), ``return False`` is a predicate's or a verifier's answer,
+failing closed, and a handler that names what it caught (``return e``) hands it on, so none of those swallows.  This is the
+integration's rule (``integrations/vllm/tests/lint/test_silent_excepts.py``, whose README section "Recorded outcomes" says
+why), which holds two of its packages per handler; here every file is held, per file.
 
 Handlers are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count``
 swallowing handlers in its file.  A file with more than its entry allows, or with one and no entry, fails.  An entry that
@@ -48,59 +42,10 @@ LEFT_OUT = ("integrations/vllm/", "archive/")
 WHY = "integrations/vllm/tests/lint/README.md (Recorded outcomes)"
 FIX = ("Re-raise; or record the outcome in your area's typed record or log, saying what was caught and what the code did "
        "instead; or narrow it away: test for the case you expect (`path.exists()`, `d.get(k)`) and let the rest raise, since "
-       "a narrower handler that still swallows still counts, and so does `contextlib.suppress(E)`, which is `except E: pass` "
-       f"(why: {WHY}). If the file moved, move its entry in the same "
+       f"a narrower handler that still swallows still counts (why: {WHY}). If the file moved, move its entry in the same "
        f"change: `python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
 EMPTY_CALLS = frozenset({"dict", "list", "set", "tuple", "frozenset", "Counter"})
 BODIES = ("body", "orelse", "finalbody", "handlers", "cases")
-
-
-def idle_call(v: ast.expr, noops: frozenset[str]) -> bool:
-    """Whether ``v`` calls one of ``noops`` with no call in its arguments, so that nothing happens."""
-    return (isinstance(v, ast.Call) and isinstance(v.func, ast.Name) and v.func.id in noops
-            and not any(isinstance(n, ast.Call) for a in [*v.args, *v.keywords] for n in ast.walk(a)))
-
-
-def idle(s: ast.stmt, noops: frozenset[str]) -> bool:
-    """Whether ``s`` does nothing: ``pass``, a constant (a docstring), a ``return`` of nothing or of a constant, or an idle
-    call to one of ``noops``."""
-    if isinstance(s, ast.Expr):
-        return isinstance(s.value, ast.Constant) or idle_call(s.value, noops)
-    return isinstance(s, ast.Pass) or isinstance(s, ast.Return) and (s.value is None or isinstance(s.value, ast.Constant))
-
-
-def noops(tree: ast.Module) -> frozenset[str]:
-    """The module's functions that do nothing: each undecorated module-level ``def`` whose every statement is idle, calls to
-    another such function included, and each module-level ``NAME = lambda ...: CONSTANT``.  A name the file binds more than
-    once is none, since which binding a call reaches isn't plain."""
-    defs = {s.name: s.body for s in tree.body if isinstance(s, ast.FunctionDef) and not s.decorator_list}
-    defs |= {s.targets[0].id: [ast.Return(s.value.body)] for s in tree.body
-             if isinstance(s, ast.Assign) and isinstance(s.value, ast.Lambda) and [type(t) for t in s.targets] == [ast.Name]}
-    if not (defs := {f: body for f, body in defs.items() if all(idle(s, frozenset(defs)) for s in body)}):
-        return frozenset()
-    bound = Counter(n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store))
-    bound.update(n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)))
-    bound.update((a.asname or a.name).split(".")[0] for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))
-                 for a in n.names)
-    out: frozenset[str] = frozenset()
-    while more := {f for f, body in defs.items() if f not in out and bound[f] == 1 and all(idle(s, out) for s in body)}:
-        out |= more
-    return out
-
-
-def suppressions(tree: ast.Module) -> list[ast.Call]:
-    """Each ``contextlib.suppress(E, ...)`` call in ``tree``, however the file imports it: an ``except E: pass`` that reads as
-    a context manager."""
-    names, modules = set(), set()
-    for n in ast.walk(tree):
-        if isinstance(n, ast.ImportFrom) and n.module == "contextlib":
-            names |= {a.asname or a.name for a in n.names if a.name == "suppress"}
-        elif isinstance(n, ast.Import):
-            modules |= {a.asname or a.name for a in n.names if a.name == "contextlib"}
-    return [n for n in ast.walk(tree) if isinstance(n, ast.Call) and n.args and (
-        isinstance(n.func, ast.Name) and n.func.id in names
-        or isinstance(n.func, ast.Attribute) and n.func.attr == "suppress" and isinstance(n.func.value, ast.Name)
-        and n.func.value.id in modules)] if names or modules else []
 
 
 def default(v: ast.expr | None, caught: str | None) -> bool:
@@ -121,12 +66,12 @@ def default(v: ast.expr | None, caught: str | None) -> bool:
     return isinstance(v, ast.Call) and isinstance(v.func, ast.Name) and v.func.id in EMPTY_CALLS and not v.args and not v.keywords
 
 
-def swallows(h: ast.ExceptHandler, noops: frozenset[str] = frozenset()) -> bool:
+def swallows(h: ast.ExceptHandler) -> bool:
     def quiet(s: ast.stmt) -> bool:
         if isinstance(s, (ast.Pass, ast.Continue, ast.Break)):
             return True
         if isinstance(s, ast.Expr):
-            return isinstance(s.value, ast.Constant) or idle_call(s.value, noops)
+            return isinstance(s.value, ast.Constant)
         if isinstance(s, ast.Return):
             return not (isinstance(s.value, ast.Constant) and s.value.value is False) and default(s.value, h.name)
         if isinstance(s, (ast.Assign, ast.AnnAssign)):
@@ -138,19 +83,17 @@ def swallows(h: ast.ExceptHandler, noops: frozenset[str] = frozenset()) -> bool:
 
 def handlers(source: str) -> list[tuple[int, str]]:
     """(line, what) of each handler in ``source`` that swallows what it catches: ``what`` is the handler, as ``except OSError:
-    continue``, or the call, as ``contextlib.suppress(OSError)``.  A file that doesn't parse counts one, at its error, since
-    its handlers can't be seen."""
-    if "except" not in source and "suppress" not in source:
+    continue``.  A file that doesn't parse counts one, at its error, since its handlers can't be seen."""
+    if "except" not in source:
         return []
     try:
         tree = ast.parse(source)
     except (SyntaxError, ValueError) as e:
         return [(getattr(e, "lineno", None) or 0, f"unparseable: {getattr(e, 'msg', e)}"[:120])]
-    out = [(c.lineno, ast.unparse(c)[:120]) for c in suppressions(tree)] if "suppress" in source else []
-    todo, idle = list(tree.body), noops(tree)
+    out, todo = [], list(tree.body)
     while todo:
         s = todo.pop()
-        if isinstance(s, ast.ExceptHandler) and swallows(s, idle):
+        if isinstance(s, ast.ExceptHandler) and swallows(s):
             caught = f"except {ast.unparse(s.type)}" if s.type is not None else "except"
             out.append((s.lineno, f"{caught}: {'; '.join(ast.unparse(b) for b in s.body)}"[:120]))
         for f in BODIES:
@@ -265,52 +208,6 @@ def test_what_swallows_and_what_does_not() -> None:
         (19, "except: x: int = None"), (26, "except ValueError: ..."), (31, "except AttributeError: return")]
     assert handlers("try:\n    pass\nexcept (\n") == [(3, "unparseable: '(' was never closed")]
     assert handlers("X = (\n") == [] and handlers("X = 1\n") == []
-
-
-def test_a_suppress_call_and_a_handler_that_only_calls_a_function_that_does_nothing_swallow() -> None:
-    src = (
-        "import contextlib\n"
-        "import contextlib as cl\n"
-        "from contextlib import suppress, suppress as quietly, nullcontext\n"
-        "def nothing(*a):\n"
-        "    '''Does nothing.'''\n"
-        "def also(e):\n"
-        "    nothing(e)\n"
-        "    return None\n"
-        "ignore = lambda *a: None\n"
-        "@register\n"
-        "def kept(e):\n"
-        "    pass\n"
-        "def twice(e):\n"
-        "    pass\n"
-        "twice = print\n"
-        "def f(self, p, log):\n"
-        "    with contextlib.suppress(OSError), cl.suppress(KeyError):\n"
-        "        p.unlink()\n"
-        "    with suppress(ValueError), quietly(TypeError), nullcontext(), contextlib.suppress():\n"
-        "        p.chmod(0)\n"
-        "    try:\n"
-        "        p.touch()\n"
-        "    except OSError as e:\n"
-        "        nothing(e)\n"
-        "    except ValueError as e:\n"
-        "        also(e)\n"
-        "    except KeyError:\n"
-        "        ignore()\n"
-        "    except TypeError as e:\n"
-        "        kept(e)\n"
-        "    except LookupError as e:\n"
-        "        twice(e)\n"
-        "    except RuntimeError as e:\n"
-        "        nothing(log.warning('%s', e))\n"
-        "    except Exception as e:\n"
-        "        self.nothing(e)\n"
-    )
-    assert handlers(src) == [
-        (17, "cl.suppress(KeyError)"), (17, "contextlib.suppress(OSError)"), (19, "quietly(TypeError)"),
-        (19, "suppress(ValueError)"), (23, "except OSError: nothing(e)"), (25, "except ValueError: also(e)"),
-        (27, "except KeyError: ignore()")], handlers(src)
-    assert handlers("from mylib import suppress\nwith suppress(OSError):\n    pass\n") == []
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:

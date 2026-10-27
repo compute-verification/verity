@@ -9,6 +9,8 @@ Checked today, against ``allowlists/typed_records.json``:
   outside ``verity_vllm/records/``, where each record's ``SCHEMA`` is its one owner.  A module-level constant named
   ``*_TAG`` or ``*_DOMAIN`` (``DOMAIN_TAG = "verity-vllm/step-rows/v1"``) is a hash's domain-separation tag, which reads
   like a schema id but names no record, so its literal is skipped: a tag stays a plain literal, its bytes in one place.
+  The stale check still sees the tags listed before the skip, until a second change deletes their entries: the ratchet
+  gate judges a lint change by the lint its base has, so a narrowing lands in two steps.
 
 Not linted: ``x.get(k, [])`` and ``x[k] if k in x else []`` (the same read, rarer), and subscripts of an untyped record.
 """
@@ -49,9 +51,10 @@ def tag_ids(tree: ast.Module) -> frozenset[int]:
                              for t in (s.targets if isinstance(s, ast.Assign) else [s.target])))
 
 
-def file_violations(src: str, rel: str) -> list[R.Violation]:
+def file_violations(src: str, rel: str, tags: bool = False) -> list[R.Violation]:
+    """The violations in ``src``; with ``tags``, a domain-separation tag's literal too (the stale check's view)."""
     tree = R.parse_src(src)
-    skip = R.docstring_ids(tree) | tag_ids(tree)
+    skip = R.docstring_ids(tree) | (frozenset() if tags else tag_ids(tree))
     out: list[R.Violation] = []
     for node, symbol in R.walk(tree):
         if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
@@ -63,10 +66,10 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
 
 
 @lru_cache(maxsize=None)
-def scan() -> tuple[R.Violation, ...]:
+def scan(tags: bool = False) -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():
-        out += file_violations(R.source(p), R.rel(p))
+        out += file_violations(R.source(p), R.rel(p), tags)
     return tuple(out)
 
 
@@ -78,7 +81,7 @@ def test_no_new_violations() -> None:
 
 
 def test_allowlist_has_no_stale_entries() -> None:
-    R.assert_no_stale(NAME, scan(), RULE)
+    R.assert_no_stale(NAME, scan(tags=True), RULE)
 
 
 def test_detectors_on_examples() -> None:
