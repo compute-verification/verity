@@ -86,8 +86,6 @@ FORMAT = "verity/registration/v1"
 FORMAT_V2 = "verity/registration/v2"
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
-# The window domain's former name; nothing in the tree reads it.
-SERVED_DOMAIN = WINDOW_DOMAIN
 KINDS = ("served", "stand-in")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
