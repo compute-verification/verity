@@ -2,26 +2,29 @@ import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# `SampledKSLivePub`'s honest and nontrivial lemmas (LEAN-66)
+# `SampledKSLivePub`'s honest and nontrivial lemmas
 
 * **Honest** (`sampledKSLivePub_honest`): the hypotheses of `SampledKSLivePub` on the analysis' parameters hold at the
-  deployed ones (`Bridge.kDep`, `ρ = 1/2`, `M = R_w = 2^192`, `t' ≥ 0`), and there `deltaPub < 1`
+  deployed ones (`Bridge.kDep`, `ρ = 1/2`, `M = R_w = 2^192`, `t' ≥ 0`), and there `deltaPubR < 1`
   (`Flock.SecurityProofs.DeltaPubDeployed`).
 * **The failing instance, constructed** (`Bridge.toy_exceeds`): a two-gate circuit (an input and its negation, the
   negation returned) in one unit, drawn by a draw of size 1 (`n = k_d = K₀ = 1`), under a commitment with no rows, so
-  that nothing opens and every value the extractor names fails the claim. There, for every game and every strategy,
-  `Pr[accept ∧ ¬ RelS] = 1 > deltaPub` when the verifier accepts everything. It is built by hand at the model level
+  that nothing opens and every claims value fails the claim. There, for every game and every strategy,
+  `Pr[accept ∧ ¬ RelS] = 1 > deltaPubR` when the verifier accepts everything. It is built by hand at the model level
   (`FlockSoundness.Audit.Circuit`, `Bridge.commitDep`), with no premise.
-* **The transfer** (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_not`): at any circuit whose commitment opens nothing,
-  a computed output fails the claim for every witness when every unit is drawn; and an event that never holds has
-  probability 1 under every strategy. V2's, V3's and V4's `_nontrivial` read the instance through these.
+* **The transfer** (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_forall`): at any circuit whose commitment opens
+  nothing, a computed output fails the claim for every witness when every unit is drawn; and an event that holds at no
+  outcome has probability 1 under every strategy.
 * **Nontrivial** (`sampledKSLivePub_nontrivial`): `SampledKSLivePubAll`, `SampledKSLivePub` at the verifier that
-  accepts everything, is false at any setting of its file-level fields whose circuit has no port and computes a
-  returned output, with every unit drawn. `¬ RelS` is proved there, for every run. What stays a binder is what only the
-  files or a named assumption give: the parses `hD` and `hpub` (`Flock.Desc.parse` and `HmOut.loadPublic` read the files
-  through `Lean.Json.parse`, a `partial def` the kernel can't unfold, so no proof exhibits a file that parses), the draw
-  setup `y₀` and the records' custody `hCust` (set up from those files; custody is the named assumption
-  `live-verifier`), A3, and the finders' `TableCRZAt`/`LinkCRZCAt` (the named assumption `ecr/sha-512`).
+  accepts everything and owns every registered read, is false at any setting of its file-level fields whose circuit has
+  no port and computes a returned output, with every unit drawn. `¬ RelS` is proved there, for every run. What stays a
+  binder is what only the files or a named assumption give: the parses `hD` and `hpub` (`Flock.Desc.parse` and
+  `HmOut.loadPublic` read the files through `Lean.Json.parse`, a `partial def` the kernel can't unfold, so no proof
+  exhibits a file that parses), the draw setup `y₀` and the records' custody `hCust` (set up from those files; custody
+  is the named assumption `live-verifier`), A3, the finders' `TableCRZAt`, `LinkCRZCAt` and `RowsCRZC` (the named
+  assumption `ecr/sha-512`) and the registered reads' finder's `StrictCR.Finder.CR` (`cr/sha-512`). Each finder premise
+  bounds its finder's chance of a SHA-512 collision by its cost, and `deltaPubR` carries those costs, so a premise is
+  not made true by a large budget without `deltaPubR ≥ 1`.
 -/
 
 namespace Flock.Bridge
@@ -132,21 +135,22 @@ theorem not_relS_unopened {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : Floc
   rw [pa_zero P (faulty_mem P κ n desc q roots H Cm hCm w hg hu)] at h'
   linarith
 
-/-- `deltaPub < 1` at the deployed parameters (`Flock.SecurityProofs.DeltaPubDeployed`). -/
-theorem deltaPub_lt_one {n kd K₀ W : ℕ} {t' v : ℝ} (h0 : 0 < n) (hK : K₀ ≤ n) (hn : n ≤ K₀ * kd) (hW : W ≤ 2 ^ 40)
-    (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 80) (hv0 : 0 ≤ v) (hv : v ≤ 2 ^ 80) :
-    deltaPub n kd K₀ kDep (2 * (t' + v)) (t' + v) t' (2 ^ 192) (2 ^ 192) W (1 / 2) < 1 := by
+/-- `deltaPubR < 1` at the deployed parameters (`Flock.SecurityProofs.DeltaPubDeployed`). -/
+theorem deltaPubR_lt_one {n kd K₀ W : ℕ} {t' v qR : ℝ} (h0 : 0 < n) (hK : K₀ ≤ n) (hn : n ≤ K₀ * kd)
+    (hW : W ≤ 2 ^ 40) (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 80) (hv0 : 0 ≤ v) (hv : v ≤ 2 ^ 80) (hR0 : 0 ≤ qR)
+    (hR : qR ≤ 2 ^ 128) :
+    deltaPubR n kd K₀ kDep (2 * (t' + v)) (t' + v) t' (2 ^ 192) (2 ^ 192) W (1 / 2) qR < 1 := by
   have h := Flock.SecurityProofs.DeltaPubDeployed
   unfold Flock.Guarantees.DeltaPubDeployed at h
-  exact h.2.2 n kd K₀ W t' v h0 hK hn hW ht0 ht hv0 hv
+  exact h.2.2 n kd K₀ W t' v qR h0 hK hn hW ht0 ht hv0 hv hR0 hR
 
 open FlockSoundness FlockSoundness.Game in
 /-- **An event that never holds fails with probability 1**, under every strategy of every game: so it exceeds any
 `x < 1`. -/
-theorem exceeds_of_not {α : Type} {G : Game α} (s : Strategy G) {R : Prop} (hR : ¬ R) {x : ℝ} (hx : x < 1) :
-    ENNReal.ofReal x < prob (fun _ => True ∧ ¬ R) G s := by
-  have h1 : prob (fun _ => True ∧ ¬ R) G s = 1 :=
-    le_antisymm (prob_le_one _ _ _) ((prob_true _ _).symm.le.trans (prob_mono (fun _ _ => ⟨trivial, hR⟩) _ _))
+theorem exceeds_of_forall {α : Type} {G : Game α} (s : Strategy G) {R : α → Prop} (hR : ∀ a, ¬ R a) {x : ℝ}
+    (hx : x < 1) : ENNReal.ofReal x < prob (fun a => True ∧ ¬ R a) G s := by
+  have h1 : prob (fun a => True ∧ ¬ R a) G s = 1 :=
+    le_antisymm (prob_le_one _ _ _) ((prob_true _ _).symm.le.trans (prob_mono (fun a _ => ⟨trivial, hR a⟩) _ _))
   rw [h1]
   exact ENNReal.ofReal_lt_one.2 hx
 
@@ -171,32 +175,34 @@ theorem toy_ioSum_le : ioSum toyPartition ≤ 2 ^ 40 := by
     _ ≤ 2 ^ 40 := by simp [toyCircuit]
 
 /-- **The toy fails the claim for every witness**: its commitment has no rows, so nothing opens, and its one unit
-returns the negation, a committed value. Every value the extractor names (`xv`) is wrong. -/
+returns the negation, a committed value. Every claims value (`xv`) is wrong. -/
 theorem toy_not_relS (κ : Fin toyCircuit.N → Option Bool) (desc : Claims.Msg) (q : Claims.Sampling.Query)
     (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (c : Flock.Circuit) (nl : ℕ) (xv : Fin toyCircuit.N → Bool)
     {δ : ℝ} (hδ : 0 ≤ δ) :
     ¬ Claims.Sampling.RelS H (commitDep toyCircuit (fun _ => none) c nl roots) δ
-      (stmtOf toyPartition κ 1 desc q roots) (partOf toyPartition) (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) :=
+      (stmtOf toyPartition κ 1 desc q roots) (partOf toyPartition)
+      (witRows toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) :=
   not_relS_unopened toyPartition κ 1 rfl desc q roots H (commitDep toyCircuit (fun _ => none) c nl roots)
     (commitDep_opens_none toyCircuit (fun _ => none) (fun _ => rfl) c nl H roots)
-    (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) hδ (g := ⟨1, by decide⟩)
+    (witRows toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) hδ (g := ⟨1, by decide⟩)
     (by decide) rfl
 
 open FlockSoundness FlockSoundness.Game in
 /-- **The constructed failing instance**: at the toy, a draw of size 1 (`n = k_d = K₀ = 1`) and the deployed
 parameters, for every game and every strategy, the verifier that accepts everything accepts a failing claim with
-probability 1, above `deltaPub`: at any `δ ≥ 0` (the guarantee's is `0` there), per-run time `t'` and opening cost `v`
-up to `2^80`. -/
+probability 1, above `deltaPubR`: at any `δ ≥ 0` (the guarantee's is `0` there), any claims values at each outcome,
+per-run time `t'` and opening cost `v` up to `2^80`, and registered reads' budget `q_R` up to `2^128`. -/
 theorem toy_exceeds {α : Type} {G : Game α} (s : Strategy G) (κ : Fin toyCircuit.N → Option Bool) (desc : Claims.Msg)
     (q : Claims.Sampling.Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (c : Flock.Circuit) (nl : ℕ)
-    (xv : Fin toyCircuit.N → Bool) {δ : ℝ} (hδ : 0 ≤ δ) {t' v : ℝ} (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 80) (hv0 : 0 ≤ v)
-    (hv : v ≤ 2 ^ 80) :
-    ENNReal.ofReal (deltaPub 1 1 1 kDep (2 * (t' + v)) (t' + v) t' (2 ^ 192) (2 ^ 192) (ioSum toyPartition) (1 / 2)) <
-      prob (fun _ => True ∧ ¬ Claims.Sampling.RelS H (commitDep toyCircuit (fun _ => none) c nl roots) δ
+    (xv : α → Fin toyCircuit.N → Bool) {δ : ℝ} (hδ : 0 ≤ δ) {t' v qR : ℝ} (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 80)
+    (hv0 : 0 ≤ v) (hv : v ≤ 2 ^ 80) (hR0 : 0 ≤ qR) (hR : qR ≤ 2 ^ 128) :
+    ENNReal.ofReal
+        (deltaPubR 1 1 1 kDep (2 * (t' + v)) (t' + v) t' (2 ^ 192) (2 ^ 192) (ioSum toyPartition) (1 / 2) qR) <
+      prob (fun a => True ∧ ¬ Claims.Sampling.RelS H (commitDep toyCircuit (fun _ => none) c nl roots) δ
         (stmtOf toyPartition κ 1 desc q roots) (partOf toyPartition)
-        (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv)) G s :=
-  exceeds_of_not s (toy_not_relS κ desc q roots H c nl xv hδ)
-    (deltaPub_lt_one (n := 1) (kd := 1) (K₀ := 1) one_pos le_rfl (by norm_num) toy_ioSum_le ht0 ht hv0 hv)
+        (witRows toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots (xv a))) G s :=
+  exceeds_of_forall s (fun a => toy_not_relS κ desc q roots H c nl (xv a) hδ)
+    (deltaPubR_lt_one (n := 1) (kd := 1) (K₀ := 1) one_pos le_rfl (by norm_num) toy_ioSum_le ht0 ht hv0 hv hR0 hR)
 
 end Flock.Bridge
 
@@ -204,129 +210,195 @@ namespace Flock.Guarantees
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
-  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **`SampledKSLivePub`'s parameter hypotheses hold as deployed**: `1 ≤ k`, `1 ≤ R_w`, `1 ≤ M`, `ρ < 1`,
-`rateM1 k ≤ ρ` and `0 ≤ t'`, at `k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2` and `t' = 2^80`; there `deltaPub < 1`
+`rateM1 k ≤ ρ` and `0 ≤ t'`, at `k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2` and `t' = 2^80`; and there
+`deltaPubR < 1` at `v ≤ 2^80`, `q_R ≤ 2^128`, at most `2^40` committed wires and `K₀ ≤ n ≤ K₀·k_d`
 (`Flock.SecurityProofs.DeltaPubDeployed`). -/
 theorem sampledKSLivePub_honest :
     1 ≤ Bridge.kDep ∧ 1 ≤ (2 ^ 192 : ℕ) ∧ 1 ≤ (2 ^ 192 : ℕ) ∧ (1 / 2 : ℝ) < 1 ∧
-      rateM1 Bridge.kDep ≤ 1 / 2 ∧ (0 : ℝ) ≤ 2 ^ 80 :=
-  ⟨Bridge.one_le_kDep, Nat.one_le_two_pow, Nat.one_le_two_pow, by norm_num, Bridge.rateM1_kDep, by positivity⟩
+      rateM1 Bridge.kDep ≤ 1 / 2 ∧ (0 : ℝ) ≤ 2 ^ 80 ∧
+      ∀ (n kd K₀ W : ℕ) (v qR : ℝ), 0 < n → K₀ ≤ n → n ≤ K₀ * kd → W ≤ 2 ^ 40 → 0 ≤ v → v ≤ 2 ^ 80 → 0 ≤ qR →
+        qR ≤ 2 ^ 128 →
+        Bridge.deltaPubR n kd K₀ Bridge.kDep (2 * (2 ^ 80 + v)) (2 ^ 80 + v) (2 ^ 80) (2 ^ 192) (2 ^ 192) W (1 / 2) qR <
+          1 :=
+  ⟨Bridge.one_le_kDep, Nat.one_le_two_pow, Nat.one_le_two_pow, by norm_num, Bridge.rateM1_kDep, by positivity,
+    fun n kd K₀ W v qR h0 hK hn hW hv0 hv hR0 hR =>
+      Bridge.deltaPubR_lt_one h0 hK hn hW (by positivity) le_rfl hv0 hv hR0 hR⟩
 
 open Classical in
-/-- **`SampledKSLivePub` at the verifier that accepts everything**: its statement with `LiveAcceptsZK I o` replaced by
-`True`. -/
+/-- **`SampledKSLivePub` at the verifier that accepts everything**: its statement with `LiveAcceptsZKR I own o`
+replaced by `True`, and the claims' values the registrant's rows at every registered read (`OwnReadsHJ`, the verdict's
+ownership of the reads, replaced by `True`). -/
 def SampledKSLivePubAll : Prop :=
   ∀ (n : ℕ) (Reg : Type)
+    -- F's registered roots: registered before the statement and its coin
+    (own : Array Flock.Registered.Port)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
+    -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    -- the registrant's opening of `own`'s roots at the session's registered reads
+    (rd : FlockSoundness.Registered.ReadsX
+      (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
+      (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
+    -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hρk : rateM1 k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (v : ℝ)
+    -- one opening's verification, and the registered reads' finder's budget, in SHA-512 evaluations
+    (v qR : ℝ)
+    -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
+    let G := auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let wo : vb.Pos → vb.Opening := fun p => ((p, rd.wv p, rd.ws p) : vb.Opening)
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => Discharge.ZkHidden.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
+    -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
+    -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
+    -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
+    -- the claims' values: the registrant's row's bit at a registered read, which every verdict owns, and the
+    -- evaluation on the extracted plurality's inputs at every other wire
+    let vreg : Reg × Finset (Fin n) × Discharge.Exec.Transcript → Fin Cc.N → Bool := fun _ g =>
+      if rd.isRead (vb.pos g) then
+        vb.bit (vb.val (wo (vb.pos g))) g
+      else Cc.eval Xr g
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
+    -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
     (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
+    -- ecr/sha-512 for the prover's link finders
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
       k Rw M t' →
+    -- ecr/sha-512 for the rows finders, at the registrant's openings
+    RowsCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) rd.isRead wo k Rw t' →
+    -- cr/sha-512 for the registered reads' finder: one play of the audit, and the extractor's pair at an off read
+    (StrictCR.oneRun G τ fun o => rd.pick o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port)).CR H512 qR →
     prob (fun _ => True ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
-        (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) t' M Rw (Bridge.ioSum P) ρ)
+          (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o)))
+        G τ ≤
+      ENNReal.ofReal (Bridge.deltaPubR n kd K₀ k (2 * (t' + v)) (t' + v) t' M Rw (Bridge.ioSum P) ρ qR)
 
 open Classical in
-/-- **`SampledKSLivePub`'s nontrivial lemma** (LEAN-66): `SampledKSLivePub` at the verifier that accepts everything is
-false at any setting of its file-level fields whose circuit has no port (so its commitment opens nothing) and returns a
-computed gate, with every unit drawn (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires, and the deployed parameters
-(`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`, `t', v ≤ 2^80`). There the extractor's values fail the claim at every run
-(`Bridge.not_relS_unopened`), so `Pr[accept ∧ ¬ RelS] = 1`, while `deltaPub < 1`. The toy (`Bridge.toy_exceeds`) is
-such a circuit, built by hand; the binders left are the files' parses, the draw setup, the records' custody, A3 and
-the finders' `ecr/sha-512`. -/
+/-- **`SampledKSLivePub`'s nontrivial lemma**: `SampledKSLivePub` at the verifier that accepts everything is false at
+any setting of its file-level fields whose circuit has no port (so its commitment opens nothing) and returns a computed
+gate, with every unit drawn (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires, and the deployed parameters
+(`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`, `t', v ≤ 2^80`, `q_R ≤ 2^128`). There every claims witness fails the
+claim at every run (`Bridge.not_relS_unopened`), so `Pr[accept ∧ ¬ RelS] = 1`, while `deltaPubR < 1`. The toy
+(`Bridge.toy_exceeds`) is such a circuit, built by hand, and `Bridge.toyDesc` such a circuit file; the binders left
+are the files' parses, the draw setup, the records' custody, A3 and the finders' premises. -/
 theorem sampledKSLivePub_nontrivial :
   ∀ (n : ℕ) (Reg : Type)
+    -- F's registered roots: registered before the statement and its coin
+    (own : Array Flock.Registered.Port)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
+    -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    -- the registrant's opening of `own`'s roots at the session's registered reads
+    (rd : FlockSoundness.Registered.ReadsX
+      (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
+      (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
+    -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (t' v : ℝ)
+    -- one opening's verification, and the registered reads' finder's budget, in SHA-512 evaluations
+    (t' v qR : ℝ)
+    -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
+    let G := auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let wo : vb.Pos → vb.Opening := fun p => ((p, rd.wv p, rd.ws p) : vb.Opening)
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => Discharge.ZkHidden.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+    let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
+    let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
+    -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
+    let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
+      (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
+        ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
+    -- the registration's frame-v3 roots, over the public file's rows
+    let roots := Bridge.rootsOf D.unroll pub n
+    let Cd := Bridge.commitDep Cc rows D.unroll n roots
+    -- the circuit's constants, public
+    let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     kd = n → 1 ≤ K₀ → D.unroll.ports.size = 0 → (∃ g ∈ Cc.outputs, (Cc.op g).isInput = false) →
-    Bridge.ioSum P ≤ 2 ^ 40 → 0 ≤ t' → t' ≤ 2 ^ 80 → 0 ≤ v → v ≤ 2 ^ 80 →
+    Bridge.ioSum P ≤ 2 ^ 40 → 0 ≤ t' → t' ≤ 2 ^ 80 → 0 ≤ v → v ≤ 2 ^ 80 → 0 ≤ qR → qR ≤ 2 ^ 128 →
     (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
       Bridge.kDep (2 ^ 192) (2 ^ 192) t' →
+    RowsCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) rd.isRead wo Bridge.kDep (2 ^ 192)
+      t' →
+    (StrictCR.oneRun G τ fun o => rd.pick o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port)).CR H512 qR →
     ¬ SampledKSLivePubAll := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb
-    src hA3 hTags hCust K₀ hK₀ τ t' v q L P vb σ Cc hkdn hK1 hports hout hW ht0 htv hv0 hv hCR hLink hAll
+  intro n Reg own I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _
+    Lb src hA3 hTags hCust K₀ hK₀ τ t' v qR q L G P vb wo σ Xr δ Cc rows roots Cd κ hkdn hK1 hports hout hW ht0 htv hv0
+    hv hR0 hR hCR hLink hRows hReg hAll
   obtain ⟨g, hg, hgi⟩ := hout
   obtain ⟨hk, hRw, hM, hρ, hρk, -⟩ := sampledKSLivePub_honest
-  have h := hAll n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N
-    Ω Lb src hA3 hTags hCust Bridge.kDep (2 ^ 192) (2 ^ 192) hk hRw hM (1 / 2) hρ hρk t' ht0 K₀ hK₀ τ v q hCR hLink
+  have h := hAll n Reg own I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd wr
+    dg N Ω Lb src hA3 hTags hCust Bridge.kDep (2 ^ 192) (2 ^ 192) hk hRw hM (1 / 2) hρ hρk t' ht0 K₀ hK₀ τ v qR q hCR
+    hLink hRows hReg
   have hr : ∀ g : Fin Cc.N,
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map
         (fun r => (⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩ : Bridge.RowAt)) =
@@ -341,8 +413,8 @@ theorem sampledKSLivePub_nontrivial :
   have hn : n ≤ K₀ * kd := by
     rw [hkdn]
     exact Nat.le_mul_of_pos_left n hK1
-  have hlt := Bridge.deltaPub_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW ht0 htv hv0 hv
-  exact not_le.2 (Bridge.exceeds_of_not τ (Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _
+  have hlt := Bridge.deltaPubR_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW ht0 htv hv0 hv hR0 hR
+  exact not_le.2 (Bridge.exceeds_of_forall τ (fun _ => Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _
     (Bridge.commitDep_opens_none Cc _ hr D.unroll n _ _) _ (by positivity) hg hgi) hlt) h
 
 end Flock.Guarantees

@@ -100,7 +100,7 @@ def SampledKSLiveV2 : Prop :=
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => Discharge.ZkHidden.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
     -- the deployed commitment's layout: the game's rows, read off the circuit file
@@ -249,7 +249,7 @@ theorem _root_.Flock.Bridge.sampledKSLiveV2_of_xr (hX : Bridge.SampledKSLiveXr) 
     ⟨acceptsZK_of_R ho.1, (hC P kd K₀ hkd1 hkd _ _ κ desc q roots _ ho.2).trans
       ((Finset.card_le_card (hsub o)).trans (Finset.card_map _).le)⟩
   have hcount := zk_flock_countC_rowsC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb canon rd.isRead wo
-    (loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀)
+    (Discharge.ZkSession.loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀)
       (placeZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU))
     (Discharge.Layout.keyProg_readsOwn D.unroll hU n _) hcan hRw hM hρ hr
     (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) ht' (min K₀ (n - kd + 1)) σ
@@ -259,8 +259,8 @@ theorem _root_.Flock.Bridge.sampledKSLiveV2_of_xr (hX : Bridge.SampledKSLiveXr) 
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
       (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
         hCust.1
-        fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ _ _ hcount).trans ?_)
-  have hmiss := Tables.execOS_subset_miss_le kd hkd Lb src hA3 (min K₀ (n - kd + 1))
+        fun _ => Discharge.ZkHidden.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ _ _ hcount).trans ?_)
+  have hmiss := Discharge.Tables.execOS_subset_miss_le kd hkd Lb src hA3 (min K₀ (n - kd + 1))
   rw [Law.subset_miss hkd hK₁, Bridge.choose_min_count hkd1 hkd] at hmiss
   have hks := ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hTab
   unfold rowsBoundZC
