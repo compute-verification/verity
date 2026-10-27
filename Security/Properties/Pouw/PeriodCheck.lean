@@ -82,7 +82,7 @@ period that Lean doesn't evaluate here: the checks hash with SHA-512 (the ledger
 the windows' Merkle trees) and read C-Flock's verdicts, which `native_decide` would be needed to run. The compiled
 verifier evidences them: `test_period_difftest` has `pouw-period` accept the honest periods `credit_cases` serves, as
 the Python verifier does. `Proofs.Properties.Pouw.PeriodCheck.honestAccepts` proves the check accepts a period that
-meets them. -/
+meets them and whose windows are in the form the period's guarantee covers (`PouwCheck.Period.form` is `none`). -/
 
 /-- **A window's circuit, hex-decoded**, as `periodCredit` reads its `descriptor`. -/
 def descriptorOf (descriptor : Json) : Option ByteArray :=

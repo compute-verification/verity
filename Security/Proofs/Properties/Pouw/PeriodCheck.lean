@@ -6,7 +6,7 @@ import Properties.Pouw.PeriodCheck
 By unfolding `Credit.periodCredit`: each of its steps before the loop over the windows accepts (`bind_eq_ok`), and the
 loop yields every window it doesn't refuse with that window's credited calls appended (`forIn_append`), so the period's
 credited calls are its windows', one list a window, in order. `acceptMeans` is that at the check, whose accept is
-`periodCredit`'s; `neverUndecided` reads the check's two arms.
+`periodCredit`'s once its form step (`Period.form`) passes; `neverUndecided` reads the check's three arms.
 -/
 
 namespace Properties.Pouw.PeriodCheck
@@ -109,19 +109,23 @@ theorem acceptMeans : AcceptMeans := by
   change Period.check p c e = .accept pc prof at h
   unfold Period.check at h
   split at h
-  · rename_i pc' hpc
-    simp only [Core.Outcome.accept.injEq] at h
-    obtain ⟨h1, h2⟩ := h
-    subst h1
-    subst h2
-    exact ⟨rfl, rfl, periodCreditMeans _ _ _ _ _ _ _ hpc⟩
   · cases h
+  · split at h
+    · rename_i pc' hpc
+      simp only [Core.Outcome.accept.injEq] at h
+      obtain ⟨h1, h2⟩ := h
+      subst h1
+      subst h2
+      exact ⟨rfl, rfl, periodCreditMeans _ _ _ _ _ _ _ hpc⟩
+    · cases h
 
 theorem neverUndecided : NeverUndecided := by
   intro p c e r h
   change Period.check p c e = .undecided r at h
   unfold Period.check at h
-  split at h <;> cases h
+  split at h
+  · cases h
+  · split at h <;> cases h
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {a : α} {f : α → Except ε β} (hx : x = .ok a) :
     x >>= f = f a := by
@@ -190,10 +194,12 @@ theorem periodCredit_honest (key ledger pins main : Json) (name : String) (windo
   · rename_i hws'
     exact (hws' ws hws).elim
 
-/-- **The period check accepts an honest period** (`AcceptMeans`'s honest lemma, a completeness theorem): with its
-`n` windows credited, `n` the evidence's. -/
+/-- **The period check accepts an honest period** (`AcceptMeans`'s honest lemma, a completeness theorem): one whose
+windows are in the form its guarantee covers (`Period.form`) is accepted with its `n` windows credited, `n` the
+evidence's. -/
 theorem honestAccepts (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (ws : List Json) (K T : Nat)
-    (k : SampledProofs.Challenger.ChallengerKey) (hws : windowsOf e.windows = some ws)
+    (k : SampledProofs.Challenger.ChallengerKey) (hf : Period.form p.name e.windows = none)
+    (hws : windowsOf e.windows = some ws)
     (hl : LedgerVerifies p.key c.ledger p.name ws K T k)
     (hw : ∀ q ∈ ws.zipIdx, WindowVerifies k p.key c.ledger e.pins p.main p.name K T q.2 q.1) :
     ∃ pc, Period.protocol.check p c e = .accept pc { period := p.name, windows := pc.windows.length } ∧
@@ -205,7 +211,7 @@ theorem honestAccepts (p : Period.Params) (c : Period.Commitment) (e : Period.Ev
   refine ⟨pc, ?_, hlen.symm⟩
   change Period.check p c e = _
   unfold Period.check
-  rw [hpc]
+  rw [hf, hpc]
   rfl
 
 theorem refuses : Refuses := by
