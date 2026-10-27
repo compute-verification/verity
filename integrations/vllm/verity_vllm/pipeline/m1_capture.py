@@ -27,7 +27,6 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
   Invariants: the two lengths stay distinct per request (executed = served + LAG only on an EOS stop before the cap) and are functions
     of the served tokens + the attested lag, never of the trace; LAG is None (unattested) when the engine does not report it -- no default;
     the warm-up runs on throwaway prompts and is never part of the record; nothing observed from the run goes into spec_tokens.json.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations

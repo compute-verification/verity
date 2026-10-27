@@ -1,4 +1,4 @@
-"""[TP-12] One rank's picks for the cross-rank collective-output pass (`check.match.xrank_collectives`), from the COMMITTED bytes.
+"""One rank's picks for the cross-rank collective-output pass (`check.match.xrank_collectives`), from the COMMITTED bytes.
 
 Every member is opened and verified against this rank's run root (the reader of the value check and the sampled replay); a member
 that does not verify is a pick without bytes, named, which the driver's check fails.  Per pick: the rank's partial rows and the rows
