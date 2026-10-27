@@ -63,10 +63,10 @@ ROOT_SCHEMA = "frame-v3-sha512/root/v1"
 MAX_SCHEMA = 64
 
 ROW_SPEC = np.dtype([("a", "<u8"), ("a_stride", "<u8"), ("b", "<u8"), ("b_stride", "<u8"), ("a_len", "<u4"), ("b_len", "<u4"),
-                     ("nbytes", "<u4"), ("a16", "<u4"), ("mid", "<u8", (8,))])
+                     ("nbytes", "<u4"), ("a16", "<u4"), ("mid", "<u8", (8,)), ("kw", "<u8", (80,))])
 LEAF_ROW = np.dtype([("rank", "<u8"), ("position", "<u8"), ("did", "<u4"), ("salt_row", "<u4"), ("q", "<u4"), ("pad_", "<u4"),
                      ("mid", "<u8", (8,)), ("tail", "<u8", (16,))])
-assert ROW_SPEC.itemsize == 112 and LEAF_ROW.itemsize == 224
+assert ROW_SPEC.itemsize == 752 and LEAF_ROW.itemsize == 224
 
 u32, u64, vp = ctypes.c_uint32, ctypes.c_uint64, ctypes.c_void_p
 
