@@ -25,7 +25,7 @@ flops = { value = 1.58312e16, unit = "FLOP/s", low = 7.9152e15, high = 1.58312e1
 memory = { value = 9.024e12, unit = "bit", source = "8 x 141 GB HBM3e (NVIDIA H200 datasheet)", status = "datasheet" }
 hosts = { value = 1, unit = "server", source = "one DGX H200", status = "datasheet" }
 host_memory = { value = 1.6e13, unit = "bit", source = "NVIDIA DGX H200 datasheet: 2 TB system memory", status = "datasheet" }
-host_ops = { value = 7.471e14, unit = "op/s", source = "CMP-165 HOST-PEAK (r20261027-022455-9f7c, comment ef5af72b): our H200 servers' 2 x Xeon 8468 at the AMX ceiling (1,024 INT8 MACs a cycle a core, measured on vy-nebius-1) and max turbo incl. PCT, 4.7% of the GPUs' FP8 rate (the DGX datasheet's 8480C at base gave 4.5875e14)", status = "measured" }
+host_ops = { value = 4.5875e14, unit = "op/s", source = "2 x Xeon Platinum 8480C (DGX H200 datasheet): 112 cores x 2,048 INT8 AMX ops per cycle x 2.0 GHz base (2.9% of the GPUs' FP8 rate)", status = "derived" }
 links = { value = 4.8e12, unit = "bit/s", low = 3.2e12, high = 4.8e12, source = "NVIDIA DGX H200 datasheet: 8 x ConnectX-7 at 400 Gb/s and 2 dual-port BlueField-3 at up to 400 Gb/s a port; low: the compute fabric alone", status = "datasheet" }
 
 [location.b200-hgx]
@@ -54,7 +54,7 @@ flops = { value = 8e15, unit = "FLOP/s", low = 4e15, high = 8e15, source = "benc
 memory = { value = 6.597069766656e12, unit = "bit", source = "benchmarks/census/hardware.json rtx-pro-6000-server memory_bytes x 8 GPUs", status = "datasheet" }
 hosts = { value = 1, unit = "server", source = "one server", status = "declared" }
 host_memory = { value = 1.52e13, unit = "bit", source = "benchmarks/nci/tiers.py DEFAULTS host_gb 1900", status = "declared" }
-host_ops = { value = 1.0453e15, unit = "op/s", source = "CMP-165 HOST-PEAK (r20261027-022153-5141, comment ef5af72b): two Xeon 6776Ps at the AMX ceiling (1,024 INT8 MACs a cycle a core, measured on vy-nebius-1) and max turbo incl. PCT, 13.1% of the GPUs' FP8 rate (12.8% without PCT; tiers' 3.6 GHz figure gave 11.8%)", status = "measured" }
+host_ops = { value = 9.437184e14, unit = "op/s", source = "benchmarks/nci/tiers.py host_share: two Xeon 6776Ps, 128 cores x 2,048 INT8 AMX ops per cycle x 3.6 GHz (11.8% of the GPUs' FP8 rate)", status = "derived" }
 links = { value = 3.2e12, unit = "bit/s", source = "benchmarks/nci/tiers.py DEFAULTS nic", status = "declared" }
 
 # Four DGX H200s whose certifiers sit on the rack's uplinks only: the servers' links to each other are seen by none.
@@ -64,7 +64,7 @@ flops = { value = 6.33248e16, unit = "FLOP/s", low = 3.16608e16, high = 6.33248e
 memory = { value = 3.6096e13, unit = "bit", source = "4 x location.h200-hgx memory", status = "derived" }
 hosts = { value = 4, unit = "server", source = "4 DGX H200s", status = "derived" }
 host_memory = { value = 6.4e13, unit = "bit", source = "4 x location.h200-hgx host_memory", status = "derived" }
-host_ops = { value = 2.9884e15, unit = "op/s", source = "4 x location.h200-hgx host_ops", status = "derived" }
+host_ops = { value = 1.835e15, unit = "op/s", source = "4 x location.h200-hgx host_ops", status = "derived" }
 links = { value = 1.92e13, unit = "bit/s", low = 3.2e12, high = 1.92e13, source = "the servers' NICs all uplinked, 4 x location.h200-hgx links; low: a 4:1 oversubscribed uplink", status = "assumed" }
 
 # Fleets, the inventory: the monitored locations and the dark leaves. MFU is what a construction gets of the peak (dense FP8).
