@@ -176,12 +176,11 @@ def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[byte
 
 
 def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> MerkleTree:
-    """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts drawn as one
-    keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce, which is RFC
-    8439's stream (`ml.windows.rows.chacha20`) with the counter's high word, 0 below 2^32 blocks, first in its nonce.
-    The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call."""
-    from verity.ml.windows.rows import chacha20
-    y = chacha20(key, bytes(4) + nonce.to_bytes(8, "little"), len(values) * HM96_SALT)
+    """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts computed as one
+    keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce
+    (`hm96.batch.salts`). The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call."""
+    from verity.ml.commitments.hm96 import batch
+    y = batch.salts(key, nonce, np.arange(len(values)))
     rows = {i: v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)}
     return MerkleTree(rows_domain(binding, owner, len(values), HM96), rows, lambda _: ROW_SCHEMA)
 
