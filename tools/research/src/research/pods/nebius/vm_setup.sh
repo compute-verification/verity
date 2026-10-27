@@ -87,11 +87,12 @@ apt-get update -q
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
 # The trust store (INF-314): the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
 # kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel
-# package moves under a run. `research deploy drift` lists a node that still trusts a distrusted root.
+# package moves under a run. Strict: a whitelist that isn't only raises its packages' priority and upgrades everything else
+# too. `research deploy drift` lists a node that still trusts a distrusted root.
 apt-get install -y -q --only-upgrade ca-certificates 'libnss3*'
 cat > /etc/apt/apt.conf.d/52vy-trust <<'EOF'
 Unattended-Upgrade::Package-Whitelist { "ca-certificates"; "libnss3"; };
-Unattended-Upgrade::Package-Whitelist-Strict "false";
+Unattended-Upgrade::Package-Whitelist-Strict "true";
 EOF
 systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
 UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
