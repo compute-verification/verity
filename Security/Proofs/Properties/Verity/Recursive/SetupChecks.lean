@@ -217,7 +217,7 @@ each part's circuit is V\*'s statement's of its index (`partsVStar`). -/
 theorem readX_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
     (hr : readXPre x = some r) (hparts : ∀ s p, r.w.parts[s]? = some p → PartSetup r st x ms s p) :
     readX x = some r ∧
-      ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.bindings r.w.parts vs = true := by
+      ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.parts vs = true := by
   have hrx : readX x = some r := readX_of_sessions hr fun s p hp => by
     obtain ⟨i, h, j, tags0, tags, circuitB, pubB, partition, program, registered, bindings, rows, draw, spec, sts,
       hi, hm, hsp, hhm, hset, hregs, hfull, hc, hscope⟩ := hparts s p hp
@@ -336,14 +336,15 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     obtain ⟨hhm, hrd⟩ := hdraw
     try dsimp only at hst
     split at hst
-    · rename_i spec sts hb
+    · rename_i spec sts hb0
       have hlaw : ProvedScope.drawLaw true T false (some d) = .ok () := by
         cases hl : ProvedScope.drawLaw true T false (some d) with
         | error e => simp [hl, Except.map] at hst
         | ok u => rfl
-      obtain ⟨⟨⟩, hprog, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hinn, hb⟩ := bind_ok hb
-      obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hprog, hb1⟩ := bind_ok hb0
+      obtain ⟨⟨⟩, hinn, hb2⟩ := bind_ok hb1
+      obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb2
+      clear hb0 hb1 hb2 hst hv
       subst hT
       cases complete <;> simp only [Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at hb
       on_goal 2 => obtain ⟨⟨⟩, hcomp, hb⟩ := bind_ok hb
