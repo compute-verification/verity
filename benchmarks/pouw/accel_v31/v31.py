@@ -954,7 +954,9 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     for r in rows:
         ms = r["arms"]
         variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
-                   + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else ""))
+                   + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
+                   + (f" c{r['copies']}" if r.get("copies", 2) != 2 else "") + (" lstr" if r.get("lstr") else "")
+                   + (f" rot{r['sha_rot']}" if r.get("sha_rot") else ""))
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
