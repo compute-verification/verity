@@ -92,9 +92,10 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   sudo -n nvidia-smi -i "$U" -lgc "$LOCK,$LOCK" > "$O/lock.txt" 2>&1; echo "lock rc $?" >> "$O/rc.txt"
   trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1; nvidia-smi -i $U -q -d CLOCK > $O/clock-after.txt 2>&1" EXIT
   # a lock this card resolves below LOCK (vy-dc-h200 put -lgc 1980,1980 at 1830, r20261027-040452-3d4d): unlocked, if the
-  # boost holds LOCK under load, else the lock as it resolves
+  # boost holds LOCK under load, else the lock as it resolves. Within 1% is held: on the RTX PRO 6000 NVML reads the lock
+  # 0.4% low (-lgc 2085,2085 at 2077).
   locked=$(probe) free=n/a mode=locked
-  if [ "${locked:-0}" -lt "$LOCK" ]; then
+  if [ "${locked:-0}" -lt $((LOCK * 99 / 100)) ]; then
     sudo -n nvidia-smi -i "$U" -rgc >> "$O/lock.txt" 2>&1
     free=$(probe)
     if [ "${free:-0}" -ge "$LOCK" ]; then mode=boost; else
