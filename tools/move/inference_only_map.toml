@@ -1,0 +1,31 @@
+# Security's `Nci` area becomes `InferenceOnly`: what `tools/move/rename.py --map tools/move/inference_only_map.toml`
+# renames. The namespace `Nci` and every module under `Definitions.Nci`, `Proofs.Nci`, `Properties.Nci`,
+# `Properties.NciDesc` and `Proofs.Properties.Nci`, with their files, in Lean and in everything that names them.
+# `NciCheck` (the code package, renamed on its own), the Python directories `nci/` and `rho`'s `Nci` family kind keep
+# their names. Declarations keep their place in the locks' records: `rename.py --moves` prints the map that
+# `check.py --update --moved` takes. It reruns on a later tree, so a branch carried across it runs it again after merging.
+
+[words]
+"Properties/NciDesc" = "Properties/InferenceOnlyDesc"
+"Properties.NciDesc" = "Properties.InferenceOnlyDesc"
+
+# `Nci` as a whole word only, so that `NciCheck` stands.
+[[words_in]]
+files = ["*"]
+words = { "Nci" = "InferenceOnly" }
+
+[keep_in]
+"benchmarks/rho/rho/families.py" = ["Nci"]
+"benchmarks/rho/tests/test_families.py" = ["Nci"]
+"benchmarks/rho/pyproject.toml" = ["Nci"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps and tests, changelogs, the rulings), the frozen
+# backends, files whose bytes a digest pins, and the research harness's recorded moves.
+exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py"]
