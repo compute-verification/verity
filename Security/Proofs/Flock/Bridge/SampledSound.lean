@@ -159,14 +159,14 @@ noncomputable abbrev Cd := Bridge.commitDep A.Cc A.rows D.unroll n A.roots
 noncomputable abbrev κ (_A : LiveAt n D hU kd K₀ desc) : Fin _A.Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
 
 /-- **The rewinding finders' budget at `τ`**: two runs of `τ` and the two conflicting openings verified. -/
-noncomputable def qF (τ : Strategy A.G) : ℝ := 2 * A.t' τ + 2 * A.v
+noncomputable def qF (τ : Strategy A.G) : ℝ := 2 * (A.t' τ + A.v)
 
 /-- **The self-clash finder's budget at `τ`**: one run of `τ` and one further verification. -/
 noncomputable def qS (τ : Strategy A.G) : ℝ := A.t' τ + A.v
 
 /-- **The collision-resistance premises at a strategy**, each a bound on the probability that a finder C-Flock builds
 from `τ` outputs a SHA-512 collision, at that finder's cost as a function of `τ`'s: each table's knowledge finders, at
-most `q²/2^513` at the budget `q = qF τ = 2 t' τ + 2v` or `qS τ = t' τ + v` (cr/sha-512, `SHA512CRStrict`); each
+most `q²/2^513` at the budget `q = qF τ = 2 (t' τ + v)` or `qS τ = t' τ + v` (cr/sha-512, `SHA512CRStrict`); each
 committed position's link finder, at most its expected cost over `2^256`, its cost `t' τ` per run of `τ` it plays, so
 at most `t' τ · (1 + k)` per trial (ecr/sha-512, `SHA512CRExpected`; `expect_cT_leZC`). -/
 def CR (τ : Strategy A.G) : Prop :=
@@ -200,7 +200,7 @@ theorem ks (q : Claims.Sampling.Query) (τ : Strategy A.G) (hCR : A.CR τ) :
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ A.k (A.qF τ) (A.qS τ) (A.t' τ) A.M A.Rw (Bridge.ioSum A.P) A.ρ) :=
   Flock.SecurityProofs.SampledKSLivePub n A.Reg A.I A.ht D A.hD hU A.pub A.hpub A.hpt A.hscope A.hrows A.hdup A.hroots
     desc A.qr A.hpop kd A.hkd A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 A.hTags A.hCust A.k A.Rw A.M
-    A.hk A.hRw A.hM A.ρ A.hρ A.hρk (A.t' τ) (A.ht' τ) K₀ A.hK₀ τ (A.qF τ) (A.qS τ) q hCR.1 hCR.2
+    A.hk A.hRw A.hM A.ρ A.hρ A.hρk (A.t' τ) (A.ht' τ) K₀ A.hK₀ τ A.v q hCR.1 hCR.2
 
 open Classical in
 /-- **The units the fixed extractor's transcript has wrong** at `τ`: the wire values the witness `witDep` builds from

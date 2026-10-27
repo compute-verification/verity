@@ -54,7 +54,7 @@ theorem deltaPub_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.u
   have hv0 := A.hv
   have e82 : (2 : ℝ) ^ 82 = 4 * 2 ^ 80 := by norm_num
   exact Flock.Bridge.deltaPub_le_deployed n kd K₀ _ hW
-    (show 0 ≤ 2 * A.t' τ + 2 * A.v by linarith) (show 2 * A.t' τ + 2 * A.v ≤ 2 ^ 82 by linarith)
+    (show 0 ≤ 2 * (A.t' τ + A.v) by linarith) (show 2 * (A.t' τ + A.v) ≤ 2 ^ 82 by linarith)
     (show 0 ≤ A.t' τ + A.v by linarith) (show A.t' τ + A.v ≤ 2 ^ 82 by linarith) h0 ht
 
 /-- Equal circuits, unit counts, partitions, openings and transcripts have as many unbound units. -/
