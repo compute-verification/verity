@@ -53,8 +53,8 @@ def lifted_workload(requests: Sequence[Any], eos: Sequence[int], *, lag: int, bo
 
 
 def workload_program(reqs: Sequence[Any], lag: int, **kw: Any) -> Any:
-    """GP-01's compose, with the declared LAG passed as the `Workload_v1` static when the tree carries moe's R17-1 unit (lane/r17-moe
-    a96a2071b: `WorkloadProgram(lag=)` required, the lag in the workload digest — DP-pad-02 (b)); on a tree before it the compose has
+    """GP-01's compose, with the declared LAG passed as the `Workload_v1` static when the tree carries the lag unit
+    (`WorkloadProgram(lag=)` required, the lag in the workload digest); on a tree before it the compose has
     no lag parameter and none is passed.  The signature is INSPECTED, never guessed: the same call composes the same Program the Build did."""
     import inspect
     from verity_vllm.program import workload as W

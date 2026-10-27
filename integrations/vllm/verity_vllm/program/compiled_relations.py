@@ -1,4 +1,4 @@
-"""P_compiled relations (R15 compiled, DECISIONS-2 §7 S1): the numerics of every Inductor-generated kernel of the production compiled
+"""P_compiled relations: the numerics of every Inductor-generated kernel of the production compiled
 Llama execution, read from the kernel sources (verity_vllm/ops/compiled_s2_checkpoints.py records the S2 evidence: each relation
 reproduces the implementation's materialized outputs bit-for-bit on every launch of the B1 row, r15_2249_s2_checkpoints/S1-S2.md).
 
@@ -10,7 +10,7 @@ RoPETriton (q and k in one kernel, bf16 cos|sin table, f32 math, one rounding). 
 (`_triton_sum_models`): the one exact on every S2 launch is "8 contiguous positions per thread, xor-butterfly over 32 lanes, then over 8
 warps" (labels `r0=2048 warps=8 chunk=8 sep|fma`; sep/fma coincide on bf16-derived data).
 
-[R16 compiled] The norm relation OF RECORD is the literal Triton transcription of the generated source launched with the executed config
+The norm relation OF RECORD is the literal Triton transcription of the generated source launched with the executed config
 (compiled_norm_literal.py, labels `triton-literal XBLOCK=.. R0_BLOCK=.. warps=.. (executed)`); the torch model set stays as witnesses.
 
 Argument roles per kernel (`ROLES`: hook arg index -> role; `WEIGHT_ARGS`: registered inputs, committed by reference only) are read off
@@ -76,7 +76,7 @@ def pointer_arity(signature: list[str] | None) -> int | None:
 
 def roles_of(kernel: str, signature: list[str] | None = None, *, arity: int | None = None) -> tuple[dict[int, str], set[int]]:
     """(arg index -> role, weight arg indices) of a launch of `kernel`.  With the kernel's signature (or its pointer arity) the entry of that
-    arity is returned -- none for that arity = UNMODELLED ({}, set()).  Without a signature the name's single entry is returned (the R15
+    arity is returned -- none for that arity = UNMODELLED ({}, set()).  Without a signature the name's single entry is returned (the Llama
     callers: every Llama kernel name has exactly one arity); a name with several arities and no signature is unmodelled too (never a guess)."""
     k = kernel_key(kernel)
     if k is None:

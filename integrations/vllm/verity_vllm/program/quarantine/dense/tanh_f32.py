@@ -9,7 +9,7 @@ Evidence that the stand-in is exact where the lane uses it: both uses take a *bf
 stand-in-based bodies on every non-NaN word (65,282 / 65,282 and 65,282 / 65,282; NaN inputs give the kernels' 0x7FFF).  CUDA's
 `tanhf` (<= 2 ulp) is therefore not distinguishable from RN32(tanh) through either bf16 output on the whole input domain.
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.TanhF32Rn`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+The Definition lives in the accepted registry (`verity.ml.definitions.registry.dense.TanhF32Rn`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations

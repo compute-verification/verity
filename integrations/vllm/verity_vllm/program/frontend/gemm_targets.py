@@ -1,7 +1,5 @@
 """Registered GEMM *target specializations* of vLLM's batch-invariant `matmul_kernel_persistent` (pinned vLLM d9105ea80).
 
-[R13 lane ampere — fix `B-AMPERE-GEMM-TILE` (F-hw-01/13, F-hw-10/11)]
-
 One record per registered target arch family, read by every consumer through the `TargetProfile`
 (`TargetProfile.gemm_target()`): Bet A's construction (`verity_vllm.program.frontend.rules.vllm_bindings.gemm_pins_for` — the launch a
 GEMM node must show), the eager Match resolver (`verity_vllm.observe.fold.patterns.GemmLaunch` / `gen_llama_patterns.GemmLaunchTuned` —
@@ -28,10 +26,10 @@ What a record says
   launch on the model's GEMM shapes incl. M tails, bit-exact against `cpu_model.gemm_model` under the single ascending
   chain of the target's own instruction model) that admitted the record.
 
-Registered: `ada` (cc 8.9, vLLM family "ada": the tuned sm_89 table — R10/R11 Tier A on the RTX 4090 / L40S captures),
-`ampere` (cc 8.0, vLLM family None: default tiling for every shape — R13 correspondence on the A100) and `hopper` (cc 9.0, vLLM
-family "hopper": the tuned sm_90 table; on sm_90 Triton lowers `tl.dot` to `wgmma`, a DIFFERENT k16 step (`HopperBF16WgmmaDot16`),
-so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper) and `blackwell_consumer` (cc 12.0, the RTX PRO 6000: vLLM family None, so a
+Registered: `ada` (cc 8.9, vLLM family "ada": the tuned sm_89 table, admitted on the RTX 4090 / L40S captures),
+`ampere` (cc 8.0, vLLM family None: default tiling for every shape, admitted by the correspondence on the A100) and `hopper` (cc 9.0,
+vLLM family "hopper": the tuned sm_90 table; on sm_90 Triton lowers `tl.dot` to `wgmma`, a DIFFERENT k16 step
+(`HopperBF16WgmmaDot16`), so the Definition is `Gemm_v2{K,N,DOT}`) and `blackwell_consumer` (cc 12.0, the RTX PRO 6000: vLLM family None, so a
 Triton launch takes the default tiling; vLLM's linear layers run that launch at every M (`linear_batch_invariant`), while other bf16
 matmuls stay on cuBLASLt with split-K disabled; the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is Hopper's, so the Definition is `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`).
 `blackwell` (cc 10.0, the B200) is registered for served Builds only (`batch_invariant_refusal`): its k16 steps, cuBLAS's

@@ -20,7 +20,7 @@ _LAG_STATIC_RE = re.compile(r"^Workload_v1\{.*,lag=(\d+)\}$", re.S)  # the LAST 
 
 
 def lag_from_header(header: dict) -> tuple[int, str]:
-    """R17-1 (SPEC v0.5 A2.2; RULING 21 before it): the record's ATTESTATION of the lag — the RESOLVED `SchedulerConfig.async_scheduling`
+    """SPEC v0.5 A2.2: the record's ATTESTATION of the lag — the RESOLVED `SchedulerConfig.async_scheduling`
     in `profile.engine_kwargs` (True → 1, False → 0), read through the same function GP-01 / GM-01 read (`eos_lag_rows_declared`), from nowhere
     else; an absent or non-boolean attestation is refused by name (never a default of 0 or 1).  Returns `(lag, field)`; the field
     string goes into the report.  This is the attested side; the DECLARED side is `declared_lag_of_row` and the two must agree (R0)."""
@@ -38,14 +38,14 @@ def lag_from_header(header: dict) -> tuple[int, str]:
 
 
 def declared_lag_of_row(workload_program: dict | None) -> tuple[int | None, str | None]:
-    """R17-1 (SPEC v0.5 A2.1): the lag the Build DECLARED as a static of the Program of record, read from the row's
-    `workload_program.json` — moe's `lag.value` / `stop_rule.lag` (M-0015), else GP-01's `stop_rule.eos_lag_rows` (the field the
-    pre-M-0015 Build wrote from `applicability.engine.async_scheduling`).  Returns `(lag, field)`; `(None, None)` when the Build
+    """SPEC v0.5 A2.1: the lag the Build DECLARED as a static of the Program of record, read from the row's
+    `workload_program.json` — moe's `lag.value` / `stop_rule.lag`, else GP-01's `stop_rule.eos_lag_rows` (the field an older
+    Build wrote from `applicability.engine.async_scheduling`).  Returns `(lag, field)`; `(None, None)` when the Build
     declared none — then the lifted tool's R0 is never ok (a Program with no lag declared is not a lifted Program of record).
     Nothing is read from a trace and nothing is defaulted.
 
     Sources, all of one artifact and all required to agree: the DIGEST-BOUND static `lag=<n>` in the Program's spec id (`workload_fn` =
-    `Workload_v1{requests=…,shared=…,lag=n}`; rev F-r17-02: the static lives in the spec-id string, the Root wrapper's bindings are `{}`),
+    `Workload_v1{requests=…,shared=…,lag=n}`: the static lives in the spec-id string, the Root wrapper's bindings are `{}`),
     and the sidecar fields `lag.value` / `stop_rule.lag` / `stop_rule.eos_lag_rows` moe's GP-01 writes from the same `wl.lag`.  A sidecar
     edited against the digest (or a digest against the sidecar) is "the declaration disagrees with itself", refused by name — the field
     reported first is the digest-bound one when present."""
@@ -76,7 +76,7 @@ def lifted_vu_use_document(query: Any, program: Any, verdict: Any, *, w_max_lift
                            fam: Any = None, histogram_max_sets: int = N_OUT_HISTOGRAM_MAX_SETS) -> tuple[dict, dict]:
     """SPEC v0.5 A5: the (query document, use document) of a LIFTED VU-partition use — `query_artifact.vu_use_document` with the use
     configuration `{"kind": "vu-partition-lifted", "w_max": w_max_lifted, "rules_version": "lifted-v1", "w_max_active_reference": 32}`
-    and (revb M-0042, B1's condition) a `width_summary` {w_max_lifted, max_seen (the validator's), n_out histogram (the boundary
+    and a `width_summary` {w_max_lifted, max_seen (the validator's), n_out histogram (the boundary
     module's; `fam` = the evaluated family, else the query is evaluated here)}.  The query document is unchanged in shape (no kind, no
     w_max: it binds the query to Lift(P)'s digest).  `gates.gate_G8` refuses this document by name (`use.kind != "vu-partition"`): a
     lifted verdict never reads as an active-reference G8 pass."""

@@ -132,7 +132,7 @@ class CollectiveBus:
         return [r for r in range(self.world) if r != self.rank]
 
     def _peers_of(self, kind: str, x: torch.Tensor, out_shape: tuple) -> list[torch.Tensor] | None:
-        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  [lane vllm-tp-n] the flat peer
+        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  The flat peer
         input list is `k*(world-1) + j`: at world 2 exactly the old one-peer-per-collective layout (`peers_<k>`), so world-2 Program
         parameter names and digests are unchanged."""
         k = self.cursor

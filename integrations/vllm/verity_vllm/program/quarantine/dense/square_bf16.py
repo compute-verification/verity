@@ -3,7 +3,7 @@ residual: `ir.ops.rms_norm`).  ATen's CUDA `pow_tensor_scalar_kernel` special-ca
 (one FMUL, RN); the widening is a Transparent noop, so the definition reads the bf16 source (wave-1 probe `pow2_f32`:
 `aten.pow(x, 2) == x * x` on 2^20 f32 samples).
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.SquareBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+The Definition lives in the accepted registry (`verity.ml.definitions.registry.dense.SquareBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
