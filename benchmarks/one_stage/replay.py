@@ -1209,22 +1209,27 @@ def a3(run: Run) -> Iterator[Case]:
                           session_roots=session_roots if with_roots else None, served=served)
 
 
-#: A commit on main whose `benchmarks/one_stage/a4_layout.json` is every A4 era's (the file never changed)
+#: the checkout whose history holds every A4 run's commit
 REPO = Path(__file__).resolve().parents[2]
+#: A4's layouts of record, found by file name in an A4 run's commit: the file never changed, and has left the tree since
+A4_LAYOUT = "a4_layout.json"
 
 
 def a4_layout(run: Run, name: str) -> tuple[dict, str]:
     """The layout of record `name` as the run read it: `pod.sh`'s `LAYOUT_FILE` in the served directory, else
-    `benchmarks/one_stage/a4_layout.json` at the run's commit."""
+    `a4_layout.json` at the run's commit, wherever that commit's tree holds it."""
     file = run.pod_args().get("LAYOUT_FILE")
     if file:
         return json.loads(tar_member(run, "inputs/served.tar", Path(file).name))[name], f"inputs/served.tar's {file}"
     commit = run.commit()
-    p = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/one_stage/a4_layout.json"],
-                       capture_output=True, text=True) if commit else None
+    tree = subprocess.run(["git", "-C", str(REPO), "ls-tree", "-r", "--name-only", commit],
+                          capture_output=True, text=True, check=False) if commit else None
+    found = [f for f in tree.stdout.splitlines() if os.path.basename(f) == A4_LAYOUT] if tree and tree.returncode == 0 else []
+    p = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:{found[0]}"],
+                       capture_output=True, text=True) if len(found) == 1 else None
     if p is None or p.returncode != 0:
-        raise Missing(f"benchmarks/one_stage/a4_layout.json at {commit} (git history)")
-    return json.loads(p.stdout)[name], f"benchmarks/one_stage/a4_layout.json at {commit[:9]}"
+        raise Missing(f"{A4_LAYOUT} at {commit} (git history)")
+    return json.loads(p.stdout)[name], f"{found[0]} at {commit[:9]}"
 
 
 def a4_member_layouts(s, n: int, row_map: dict | None) -> dict[str, dict[str, tuple[str, int]]]:
