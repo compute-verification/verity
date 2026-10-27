@@ -3,9 +3,9 @@ import Proofs.Flock.Bridge.PubAvg
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
 /-!
-# `SampledKSLiveV2` with a public error
+# `Bridge.SampledKSLiveXr` with a public error
 
-`SampledKSLiveV2` bounds `Pr[flock-verify accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run: its
+`Bridge.SampledKSLiveXr` bounds `Pr[flock-verify accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run: its
 knowledge finders' collision probabilities (`ksAvgPrZ`) and its link finders' (`linkPrZC`). `SampledKSLivePub` states
 it in the additive form `δ + f(Pr[B^τ])`: a public error `δ` (`Bridge.deltaPub`) plus a loss `f` (`Bridge.lossPub`) in
 the probability that one finder `B^τ` built from the prover (`Bridge.pubFinder`) outputs a SHA-512 collision, with no
@@ -29,11 +29,11 @@ $$\delta = \binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{2^{-203}}{1-\rho}
   f(p) = \frac{(2\cdot 25638 + 2^{14} + 2)\sqrt p + p + \sqrt{kp}}{1-\rho} + \frac{W p}{1-\rho},$$
 `δ` a function of `n`, `k_d`, `K₀`, the analysis' `k`, `R_w`, `M`, `ρ` and the circuit's partition. `B^τ` runs one of
 C-Flock's finders at its own budget: a rewinding knowledge finder at `2(t' + v)`, the self-clash finder at `t' + v`, a
-link finder at `t'` per run of the prover (`SampledKSLiveV2`'s: the prover's per-run time `t'` and one opening's
+link finder at `t'` per run of the prover (`Bridge.SampledKSLiveXr`'s: the prover's per-run time `t'` and one opening's
 verification `v`). `f` is read at `J²·K·Pr[B^τ]`: `K` counts each table's slots, every committed position and one, and
 `J²` is the price of the averaged premise, one factor `J` from the sum over the tables, which `√(J²p) = J√p` folds
-under the square roots. The rate hypothesis reads only `k` (`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan,
-and every other hypothesis, named assumption included, is `SampledKSLiveV2`'s.
+under the square roots. The rate hypothesis reads only `k` (`rateM1 k ≤ ρ`) where `Bridge.SampledKSLiveXr`'s reads the plan,
+and every other hypothesis, named assumption included, is `Bridge.SampledKSLiveXr`'s.
 -/
 
 namespace Flock.Guarantees
@@ -51,7 +51,7 @@ noncomputable def _root_.Flock.Bridge.ioSum {C : FlockSoundness.Audit.Circuit} {
   ∑ u, (P.io u).card
 
 /-- **The sampled audit's public error `δ`**: the draw's miss, the knowledge term's constant at C-Flock ZK's parameters
-(`ksClosedM1`'s `2^-203`), and the link term's waits at `W` commit strings, each over `1 − ρ` where `SampledKSLiveV2`
+(`ksClosedM1`'s `2^-203`), and the link term's waits at `W` commit strings, each over `1 − ρ` where `Bridge.SampledKSLiveXr`
 has it. It reads no prover. -/
 noncomputable def _root_.Flock.Bridge.deltaPub (n kd K₀ k M Rw W : ℕ) (ρ : ℝ) : ℝ :=
   ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + 2 ^ (-(203 : ℝ)) / (1 - ρ) +
@@ -64,7 +64,7 @@ noncomputable def _root_.Flock.Bridge.lossPub (k W : ℕ) (ρ p : ℝ) : ℝ :=
   ((2 * 25638 + 2 ^ 14 + 2) * Real.sqrt p + p + Real.sqrt (k * p)) / (1 - ρ) + (W : ℝ) * p / (1 - ρ)
 
 open Classical in
-/-- **The sampled audit's knowledge soundness, live, in the additive form.** `SampledKSLiveV2`'s setting and named
+/-- **The sampled audit's knowledge soundness, live, in the additive form.** `Bridge.SampledKSLiveXr`'s setting and named
 assumptions, at a rate cap `ρ < 1` with `2^23/(ek) ≤ ρ` (`rateM1`): for every live prover,
 $$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
   \mathrm{deltaPub}(n, k_d, K_0, k, M, R_w, W, \rho) + \mathrm{lossPub}(k, W, \rho, J^2 K\cdot\Pr[B^\tau]),$$
@@ -218,8 +218,8 @@ theorem _root_.Flock.Bridge.boundPr_le_pub {n mPts : ℕ} {Reg : Type} {I : Inpu
   unfold Bridge.deltaPub Bridge.lossPub
   ring
 
-/-- **`SampledKSLiveV2`'s error is at most `δ + f(J²·K·Pr[B^τ])`** (`Bridge.boundPr_le_pub`). -/
-theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
+/-- **`Bridge.SampledKSLiveXr`'s error is at most `δ + f(J²·K·Pr[B^τ])`** (`Bridge.boundPr_le_pub`). -/
+theorem sampledKSLivePub_of (h : Bridge.SampledKSLiveXr) : SampledKSLivePub := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
     hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' K₀ hK₀ τ v q L P vb σ Xr δ Cc rows roots Cd κ B
   have hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ := fun S R j =>
@@ -232,4 +232,4 @@ end Flock.Guarantees
 
 /-- **The sampled audit's knowledge soundness, live, in the additive form** (`Flock.Guarantees.SampledKSLivePub`). -/
 theorem Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub :=
-  Flock.Guarantees.sampledKSLivePub_of Flock.SecurityProofs.SampledKSLiveV2
+  Flock.Guarantees.sampledKSLivePub_of Flock.Bridge.sampledKSLiveXr

@@ -361,7 +361,9 @@ theorem sampledKSLiveV2_honest {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Fi
 
 open Classical in
 /-- **`SampledKSLiveV2`'s nontrivial lemma**: at the verifier that accepts everything, V2's conclusion fails.
-At any setting of its file-level fields whose circuit has no port and returns a computed gate, with every unit drawn
+At any setting of its file-level fields whose circuit has no port and returns a computed gate, with a registrant who
+opens no registered read (so the rows term is `0`, `rowsPrZC_noReads`, and the claims' values are the evaluation on
+the extracted plurality's inputs), with every unit drawn
 (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires and the deployed parameters (`sampledKSLiveV2_honest`), V2's
 additive bound is below `Pr[True ∧ ¬ RelS] = 1` (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_not`) at every prover
 whose finder `B^τ` (at a per-run time `t'` and a verification `v`) has `J²·K·Pr[B^τ] ≤ 2^-200`: there the bound is at
@@ -378,6 +380,9 @@ theorem sampledKSLiveV2_nontrivial :
     (desc : Claims.Msg) (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (rd : FlockSoundness.Registered.ReadsX
+      (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
+      (Discharge.ZkReg.rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -392,6 +397,7 @@ theorem sampledKSLiveV2_nontrivial :
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let wo : vb.Pos → vb.Opening := fun p => ((p, rd.wv p, rd.ws p) : vb.Opening)
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
@@ -407,7 +413,10 @@ theorem sampledKSLiveV2_nontrivial :
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
+    let vreg : Fin Cc.N → Bool := fun g =>
+      if rd.isRead (vb.pos g) then vb.bit (vb.val (wo (vb.pos g))) g else Cc.eval Xr g
     kd = n → 1 ≤ K₀ → D.unroll.ports.size = 0 → (∃ g ∈ Cc.outputs, (Cc.op g).isInput = false) →
+    (∀ p, ¬ rd.isRead p) →
     Bridge.ioSum P ≤ 2 ^ 40 →
     (nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx dj y₀ P vb L) *
         (Bridge.pubFinder dj y₀ P vb Bridge.kDep (2 ^ 192) (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ)
@@ -415,13 +424,22 @@ theorem sampledKSLiveV2_nontrivial :
     ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgPrZ execArith hs512 (planZHJ dj y₀) Bridge.kDep (reg σ) (cont σ) +
         linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb Bridge.kDep (2 ^ 192) (2 ^ 192) (1 / 2)
-          (reg σ) (cont σ) <
+          (reg σ) (cont σ) +
+        rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo Bridge.kDep (1 / 2) (reg σ)
+          (cont σ) <
       prob (fun _ => True ∧
           ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
-            (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+            (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots vreg))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope desc kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust K₀ hK₀ τ
-    t' v q L P vb σ Xr δ Cc rows roots Cd κ hkdn hK1 hports hout hW hB
+  intro n Reg I ht D hD hU pub hpub hpt hscope desc kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust K₀ hK₀
+    τ t' v q L P vb wo σ Xr δ Cc rows roots Cd κ vreg hkdn hK1 hports hout hnr hW hB
+  have hnr' : rd.isRead = fun _ => False := funext fun p => propext ⟨hnr p, False.elim⟩
+  have hrows0 : rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo Bridge.kDep (1 / 2) (reg σ)
+      (cont σ) = 0 := by
+    rw [hnr']
+    exact rowsPrZC_noReads execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb wo Bridge.kDep (1 / 2) (reg σ) (cont σ)
+  have hv : vreg = Cc.eval Xr := funext fun g => if_neg (hnr _)
+  rw [hrows0, add_zero, hv, ← Bridge.witDep_eq_witRows]
   obtain ⟨g, hg, hgi⟩ := hout
   have hr : ∀ g : Fin Cc.N, rows g = none := by
     intro g

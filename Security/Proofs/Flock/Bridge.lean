@@ -10,6 +10,7 @@ import Proofs.Flock.Bridge.Assembly
 import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.RowsC
+import Proofs.Flock.Bridge.Rows
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.KSLive
 import Proofs.Flock.Bridge.Public
@@ -24,15 +25,16 @@ import Proofs.Flock.Bridge.Assumptions.ToySetup
 import Proofs.Flock.Bridge.HiddenModelWitness
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
-of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
-the sampled statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 ports) and the constants `κ` and
-`canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every target it takes), and
-`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its file preconditions read off the
-verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
+of `SampledKSLive` is recorded. `KSLive`: `Flock.Bridge.sampledKSLiveXr : Flock.Bridge.SampledKSLiveXr`, the sampled
+statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 ports) and the constants `κ` and `canonAt`, with
+the claims at the extracted values, proved (`Flock.Bridge.assemblyTargetC` with every target it takes);
+`Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`, the claims at the registrant's rows, from the
+count curve at the rows link (`Rows`, `RowsC`); and `Flock.SecurityProofs.SampledKSLiveV3 :
+Flock.Guarantees.SampledKSLiveV3`, V2 with its file preconditions read off the verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
 (`Flock.Bridge.lowers`).
 `FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`), at any claims values
 that are the evaluation on its wires (`Flock.Bridge.faultyRows`). `Public`:
-`Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` in the additive form
+`Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `Bridge.SampledKSLiveXr` in the additive form
 `δ + f(J²·K·Pr[B^τ])`: `Flock.Bridge.deltaPub`, a function of the public parameters, plus `Flock.Bridge.lossPub` at
 `J²·K` times the collision probability of `B^τ`, the uniform mixture of C-Flock's `K` finders (`PubFinder`), `J` the
 plan's tables (the averaged premise, `PubAvg`). `PublicDeployed`:
