@@ -24,7 +24,7 @@ import pytest
 
 from verity_all_protocols import compose as C, parties as P
 
-EXAMPLE = P.ROOT / "examples" / "toy-network" / "config.toml"
+EXAMPLE = P.ROOT / "examples" / "toy_network" / "config.toml"
 SP, CERT = "verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"
 
 

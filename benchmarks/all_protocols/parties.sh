@@ -17,7 +17,7 @@ git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main 
 SECONDS=0; bash benchmarks/all_protocols/build.sh $W/build || exit $?
 cp $W/build/binaries.sha256 $W/build/tools.json $O/; echo "build ${SECONDS}s" | tee $O/seconds.txt
 PY="env PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $REPO/.venv/bin/python"
-CONFIG=examples/toy-network/config.toml
+CONFIG=examples/toy_network/config.toml
 sed 's/^protocols = \["sampled-proofs"\]$/protocols = ["sampled-proofs", "certifier"]/' $CONFIG > $W/both.toml
 grep -q '"certifier"' $W/both.toml || exit 3
 for c in honest:$CONFIG: tampered:$CONFIG:0 absent:$W/both.toml:; do

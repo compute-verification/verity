@@ -1,4 +1,4 @@
-# toy-network
+# toy_network
 
 The toy (`integrations/torch_loop`, a W8A8 MLP on CPU) served and audited by sampled proofs, with the network
 certifier to join. `config.toml` is the example's one Verity artifact: the subprotocols it runs (`protocols`), the
@@ -18,14 +18,14 @@ every role, on this machine).
 ~~~text
 git clone https://github.com/compute-verification/verity && cd verity && git fetch origin main
 uv sync --all-packages --extra torch-cpu
-verity run examples/toy-network/config.toml --local
+verity run examples/toy_network/config.toml --local
 ~~~
 
 Until `verity run` is in the tree, the roles' own entry point runs the same thing:
 
 ~~~text
 PYTHONPATH=benchmarks/all_protocols uv run python -m verity_all_protocols.parties \
-    examples/toy-network/config.toml --state STATE --local
+    examples/toy_network/config.toml --state STATE --local
 ~~~
 
 The first run builds what the roles run into `STATE/build` (`benchmarks/all_protocols/build.sh`: C-Flock's

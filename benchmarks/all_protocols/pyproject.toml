@@ -13,8 +13,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `benchmarks/network_traces`: the communication leg's certifier session (its plan, its stub and its records).
 # `benchmarks/e2e_demo/verity_e2e_demo` and its block record's period-0 fixture: the schema and `block_record` the
 # certifier leg's `block_leg` is held to (CMP-95 item 6; its test skips until they are in the tree).
-# `examples/toy-network`: the configuration the sampled-proofs roles' tests read (`test_parties`).
-inputs = ["verity", "benchmarks/all_protocols/legs", "integrations/torch_loop", "examples/toy-network",
+# `examples/toy_network`: the configuration the sampled-proofs roles' tests read (`test_parties`).
+inputs = ["verity", "benchmarks/all_protocols/legs", "integrations/torch_loop", "examples/toy_network",
           "benchmarks/prove_path/records_audit.py",
           "benchmarks/one_stage", "benchmarks/census/deployments.json", "benchmarks/network_traces",
           "benchmarks/e2e_demo/verity_e2e_demo", "benchmarks/e2e_demo/tests/fixtures/block-record-r2-period0.json",
