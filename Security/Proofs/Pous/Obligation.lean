@@ -205,7 +205,9 @@ theorem ObligationWide320_nontrivial :
   haveI : Nonempty (Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
     (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).nonemptyΩ
   haveI : Nonempty (Fin (2 ^ 19)) := ⟨⟨0, by norm_num⟩⟩
-  rw [pr_eq_one fun _ => trivial]
+  have h1 : pr (fun _ : Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × Unit × (Fin 320 → Fin (2 ^ 19)) => True) = 1 :=
+    pr_eq_one fun _ => trivial
+  rw [h1]
   exact not_le.2 (pow_lt_one₀ zero_le (ENNReal.inv_lt_one.2 ENNReal.one_lt_two) (by norm_num))
 
 end Pous.SecurityProofs
