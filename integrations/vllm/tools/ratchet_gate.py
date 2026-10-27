@@ -402,6 +402,14 @@ def lint_selection(touched: list[str]) -> list[str] | None:
                   | ({RUFF_LINT} if {RUFF_CONFIG, PYPROJECT} & set(touched) else set()))
 
 
+def drop_worktree(tree: Path) -> None:
+    """Remove the lints' worktree. Cleanup decides no verdict: when git won't remove it (26 Oct on drive's pod: "Directory not
+    empty"), the directory goes by hand and git forgets it."""
+    if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
+        shutil.rmtree(tree, ignore_errors=True)
+        subprocess.run(["git", "worktree", "prune"], capture_output=True)
+
+
 def base_lints(c: Change, slugs: list[str] | None, after: dict[str, list]) -> tuple[list[str], list[dict]]:
     """(the lints run, their failures): the base's lint code run on the change's tree against its allowlists."""
     if not git("ls-tree", "--name-only", c.lo, "--", LINT).strip():
@@ -417,10 +425,10 @@ def base_lints(c: Change, slugs: list[str] | None, after: dict[str, list]) -> tu
                 git("-C", str(tree), "checkout", "-q", c.lo, "--", RUFF_CONFIG)
             for p in (tree / LINT / "allowlists").glob("*.json"):
                 p.write_text(json.dumps({"entries": after.get(slug(p.name), [])}))
-            r = subprocess.run([*python, "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d,
-                               capture_output=True, text=True)
+            r = subprocess.run([*python, "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d, capture_output=True,
+                               text=True, env={**os.environ, "RUFF_CACHE_DIR": str(Path(d) / "ruff-cache")})
         finally:
-            git("worktree", "remove", "--force", str(tree))
+            drop_worktree(tree)
     try:
         doc = json.loads(r.stdout)
         return doc["ran"], doc["failures"]
