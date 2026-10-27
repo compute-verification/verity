@@ -138,7 +138,7 @@ def slotAt {m : ℕ} (l : ℕ) : TabIx m → Option (TabIx l)
   | .inr x => some (.inr x)
 
 /-- Table `j` of the plan after draw `ω`. -/
-abbrev tabOf (R : Reg) (ω : L.Ω) (j : Fin (nTab I)) : Fin (planZHJ dj y₀ (L.draw ω) R).length :=
+noncomputable abbrev tabOf (R : Reg) (ω : L.Ω) (j : Fin (nTab I)) : Fin (planZHJ dj y₀ (L.draw ω) R).length :=
   Fin.cast (planZHJ_length dj y₀ (L.draw ω) R).symm j
 
 /-- **Table `j`'s slot-`s` knowledge finder after draw `ω`**: `tabComp`'s, where table `j` has slot `s` (C-Flock ZK's
