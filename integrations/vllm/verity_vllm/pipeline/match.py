@@ -2,7 +2,7 @@
 
     verity-vllm match --config-id ID --profile NAME --workload PATH --case B0|B1 --out RUN_DIR \\
         --phase gpu|cpu|all [--python-gpu PY] [--python-cpu PY] [--snapshot-steps 0,1,2,3] [--max-num-seqs 8] \\
-        [--laptop] [--dry-run] [--tier-c] [--skip STAGES] [--checkpoints PATH] [--checkpoint-dir DIR_OR_GLOB] \\
+        [--laptop] [--dry-run] [--skip STAGES] [--checkpoints PATH] [--checkpoint-dir DIR_OR_GLOB] \\
         [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed S]
 
 GPU phase (the pod's torch venv, Python 3.11):
@@ -21,13 +21,9 @@ CPU phase (Python 3.12, torch-free; pod or laptop):
     compare           verity_vllm.check.fold_compare -> RUN_DIR/compare.json (tokens, boundary, subcircuits, structure)
     fold, fold_2      this module's fold worker in two separate processes -> RUN_DIR/fold_summary.json, fold_summary_2.json
     fold_other        (with --other-log) a second capture's digest -> RUN_DIR/fold_summary_other.json (G6 detail only)
-    root_policy       verity_vllm.check.root_policy -> RUN_DIR/root_policy.json
     golden            verity_vllm.properties.golden --check -> RUN_DIR/golden.json
-    wiring            verity_vllm.check.operand_provenance -> RUN_DIR/wiring.json (G5: exhaustive operand provenance, D82)
-    replay_a          verity_vllm.check.replay.replay --tier a --k 10 [--jobs N] -> RUN_DIR/replay_a.json (G4 bodies; G5 sampled VUs + served tokens)
-    replay_chain      verity_vllm.check.replay.replay --tier chain -> RUN_DIR/replay_chain.json (G5 chaining smoke test)
-    replay_b_step<N>  (with --full-replay) verity_vllm.check.replay.replay --tier b --step N -> replay_b_step<N>.json (diagnostic only)
-    replay_c          (with --tier-c) verity_vllm.check.replay.replay --tier c -> RUN_DIR/replay_c.json (diagnostic only)
+    root_policy, wiring, replay_a, replay_chain
+                      no command: stage names a `--skip` still gives (the row's does), recorded as skipped; unskipped they run nothing
     gates             in-process: gates.evaluate_gates -> RUN_DIR/gates.json; card -> RUN_DIR/card.json, RUN_DIR/CARD.md,
                       <cards-dir>/<config_id>.json
 
@@ -36,7 +32,7 @@ log, cmd, reason} in RUN_DIR/stages.json; a failed stage never aborts later inde
 skipped with the log as evidence).  `--dry-run` prints the exact command lines and runs nothing.  `--skip a,b` skips
 stages or groups (`replay`, `census`, `nonint`, `fold`, `compare`, `resolve`, `root_policy`, `golden`, `capture`,
 `control`, `gates`).  `--laptop`: every stage is watched (RSS above --max-rss-gb, default 1.5, or wall above
---stage-timeout, default 180 s, kills it), replay gets `--max-arg-leaves 4000000`.
+--stage-timeout, default 180 s, kills it).
 
 Internal: `--worker fold --log LOG --profile NAME --out fold_summary.json [--no-program]` folds a log in this process
 and writes the `gates.FOLD_SUMMARY_SCHEMA` summary.
@@ -70,17 +66,14 @@ DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: a
 DEFAULT_TIER_B_STEPS = "0,1,2,3"       # --full-replay (diagnostic): prefill + three decode steps
 DEFAULT_K = 10                         # tier a: instances per (specialization, regime) stratum (D82; gate minimum TIER_A_K)
 DEFAULT_CHAINS = 3                     # tier chain: connected slices replayed with computed intermediate values
-DEFAULT_PARALLEL_REPLAY = 4            # replay stages are independent processes; the pod has the cores, the laptop runs them serially
+DEFAULT_PARALLEL_REPLAY = 4            # run.json's `parallel_replay` (1 with --laptop)
 DEFAULT_CHECKPOINTS = "manifests/checkpoints.json"
 SNAPSHOT_CAP_FLOOR = 32 << 20          # m1_capture's per-tensor snapshot cap of record until R16 (D87)
 SNAPSHOT_ROW_BYTES_FALLBACK = 64 << 10  # per-token activation row bound when no HF config is readable: 2 x I x bf16 for I <= 16384
-LAPTOP_MAX_ARG_LEAVES = 4_000_000
 LAPTOP_MAX_RSS_GB = 1.5
 LAPTOP_STAGE_TIMEOUT_S = 180.0
 
 GPU_STAGES = ("capture", "control", "census", "nonint")
-CPU_STAGES = ("resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "fold_other", "root_policy", "golden",
-              "wiring", "replay_a", "replay_chain", "replay_b", "replay_c", "gates")
 SKIP_GROUPS = {
     "replay": {"replay_a", "replay_chain", "replay_b", "replay_c"},
     "census": {"census", "census_reconcile"},
@@ -89,9 +82,7 @@ SKIP_GROUPS = {
 }
 #: Stages whose module may be missing in a worktree (a sibling lane's / the integrator's); a missing module is recorded
 #: as `missing_module`, not run.
-OPTIONAL_MODULES = {"root_policy": "verity_vllm.check.root_policy", "golden": "verity_vllm.properties.golden", "replay_a": "verity_vllm.check.replay.replay",
-                    "replay_chain": "verity_vllm.check.replay.replay", "replay_b": "verity_vllm.check.replay.replay", "replay_c": "verity_vllm.check.replay.replay",
-                    "wiring": "verity_vllm.check.operand_provenance"}
+OPTIONAL_MODULES = {"golden": "verity_vllm.properties.golden"}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -145,8 +136,7 @@ class Plan:
         return out
 
     def skipped(self, stage: str) -> bool:
-        base = "replay_b" if stage.startswith("replay_b_step") else stage
-        return stage in self.skip or base in self.skip
+        return stage in self.skip
 
     # paths ---------------------------------------------------------------------------------------------
 
@@ -226,58 +216,20 @@ class Plan:
             if not a.other_log:
                 return None
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile, "--out", str(self.p("fold_summary_other"))] + MC
-        if stage == "root_policy":
-            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "root-policy", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
-                 "--out", str(self.p("root_policy"))]
-            g = self.safetensors_glob()
-            if g:
-                c += ["--safetensors", g]
-            cs = self.snapshots / "cos_sin_cache.npy"
-            return c + (["--cos-sin", str(cs)] if cs.exists() else [])
         if stage == "golden":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out", str(self.p("golden"))]
-        if stage == "wiring":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "operand-provenance", "--log", str(self.log), "--profile", a.profile, "--out", str(self.p("wiring"))]
-        if stage == "replay_a":
-            return self._replay(["--tier", "a", "--k", str(a.k), "--seed", str(a.seed), "--jobs", str(a.replay_a_jobs)], self.p("replay_a"))
-        if stage == "replay_chain":
-            return self._replay(["--tier", "chain", "--chains", str(a.chains), "--seed", str(a.seed)], self.p("replay_chain"))
-        if stage.startswith("replay_b_step"):
-            n = int(stage[len("replay_b_step"):])
-            return self._replay(["--tier", "b", "--step", str(n)], run / G.replay_b_rel(n))
-        if stage == "replay_c":
-            return self._replay(["--tier", "c", *(["--seed", str(a.seed)] if a.seed is not None else [])], self.p("replay_c")) if a.tier_c else None
         return None
-
-    def _replay(self, tier: list[str], out: Path) -> list[str]:
-        c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "replay", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", self.a.profile, *tier]
-        budget = self.a.replay_budget_leaves if self.a.replay_budget_leaves is not None else (LAPTOP_MAX_ARG_LEAVES if self.laptop else None)
-        if budget is not None:
-            c += ["--max-arg-leaves", str(budget)]
-        return c + ["--out", str(out)]
-
-    def _hf_snapshot_dir(self) -> str:
-        """The HF cache snapshot directory (or glob) of the profile's model when no --checkpoint-dir is given."""
-        repo = (profile_config(self.a.profile) or {}).get("model")
-        home = Path(os.environ.get("HF_HOME") or (Path.home() / ".cache" / "huggingface"))
-        base = home / "hub" / f"models--{str(repo or 'unknown').replace('/', '--')}" / "snapshots"
-        try:
-            snaps = sorted(p for p in base.iterdir() if p.is_dir()) if base.exists() else []
-        except OSError:
-            snaps = []
-        return str(snaps[-1]) if len(snaps) == 1 else str(base / "*")
 
     def stage_list(self, phase: str) -> list[str]:
         gpu = list(GPU_STAGES) if phase in ("gpu", "all") else []
         cpu: list[str] = []
         if phase in ("cpu", "all"):
+            # root_policy, wiring, replay_a and replay_chain have no command: they stay so that a `--skip` naming them
+            # records the skip it always has in stages.json (the row's does)
             cpu = ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2"]
             if self.a.other_log:
                 cpu.append("fold_other")
-            cpu += ["root_policy", "golden", "wiring", "replay_a", "replay_chain"] + [f"replay_b_step{n}" for n in self.tier_b_steps]
-            if self.a.tier_c:
-                cpu.append("replay_c")
-            cpu.append("gates")
+            cpu += ["root_policy", "golden", "wiring", "replay_a", "replay_chain", "gates"]
         return gpu + cpu
 
 
@@ -586,36 +538,33 @@ class Options:
     python_gpu: str | None = option("--python-gpu", default=None, help="the pod's torch venv python (default: sys.executable)")
     python_cpu: str | None = option("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
     snapshot_steps: str = option("--snapshot-steps", default=DEFAULT_SNAPSHOT_STEPS, help="contiguous from 0, or `all` = every step of the workload (default all)")
-    full_replay: bool = option("--full-replay", default=False, action="store_true", help="also run the tier-b full-step replays (diagnostic only since D82; never gating)")
-    tier_b_steps: str = option("--tier-b-steps", default=DEFAULT_TIER_B_STEPS, help="with --full-replay: steps replayed by tier b (default 0,1,2,3; must be snapshot steps)")
-    chains: int = option("--chains", type=int, default=DEFAULT_CHAINS, help="tier chain: connected slices replayed with computed intermediates (G5)")
+    full_replay: bool = option("--full-replay", default=False, action="store_true", help="run.json's sampling.full_replay (no stage reads it)")
+    tier_b_steps: str = option("--tier-b-steps", default=DEFAULT_TIER_B_STEPS, help="with --full-replay: run.json's tier_b_steps (default 0,1,2,3; must be snapshot steps)")
+    chains: int = option("--chains", type=int, default=DEFAULT_CHAINS, help="run.json's sampling.chains (no stage reads it)")
     no_verify_weights: bool = option("--no-verify-weights", default=False, action="store_true", help="skip the checkpoint sha verification at engine build (root policy weight identity then fails)")
-    parallel: int | None = option("--parallel", type=int, default=None, help="concurrent replay stages (default 4; 1 with --laptop)")
-    replay_budget_leaves: int | None = option("--replay-budget-leaves", type=int, default=None, help="replay --max-arg-leaves (tier a/chain evaluate oversize instances at a child unit or skip them). Default: none on the pod, 4e6 with --laptop")
+    parallel: int | None = option("--parallel", type=int, default=None, help="run.json's parallel_replay (default 4; 1 with --laptop)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     max_tokens: int | None = option("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
     snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; D87: a " "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
     snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton " "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a " "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
     checkpoints: str = option("--checkpoints", default=DEFAULT_CHECKPOINTS)
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (root_policy, compare --safetensors)")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (compare --safetensors)")
     hf_config: str | None = option("--hf-config", default=None, help="HF config.json for per-field C provenance (analytic.config_of)")
     family: str | None = option("--family", default=None, help="hand-authored family reference name (default Serve_v4 in the card)")
     log: str | None = option("--log", default=None, help="reuse an existing raw log instead of RUN_DIR/capture/log.jsonl.gz")
     snapshots: str | None = option("--snapshots", default=None, help="its snapshots dir (default: the log's directory)")
     other_log: str | None = option("--other-log", default=None, help="a second capture of the same workload (G6 detail: cross-capture digest)")
     control_tokens: str | None = option("--control-tokens", default=None, help="reuse an existing control run's tokens.json instead of RUN_DIR/control/tokens.json")
-    laptop: bool = option("--laptop", default=False, action="store_true", help="laptop budget: RSS/wall watchdog, replay --max-arg-leaves")
+    laptop: bool = option("--laptop", default=False, action="store_true", help="laptop budget: RSS/wall watchdog")
     max_rss_gb: float | None = option("--max-rss-gb", type=float, default=None, help="kill a stage above this RSS (default 1.5 with --laptop)")
     stage_timeout: float | None = option("--stage-timeout", type=float, default=None, help="kill a stage above this wall time in s (default 180 with --laptop)")
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the exact command lines, run nothing")
-    tier_c: bool = option("--tier-c", default=False, action="store_true", help="also run the tier-c replay")
     skip: str = option("--skip", default="", help="comma list of stages/groups to skip")
     keep_traces: bool = option("--keep-traces", default=False, action="store_true", help="census: keep the per-step Chrome traces")
     cards_dir: str = option("--cards-dir", default="out/gen/cards")
-    k: int = option("--k", type=int, default=DEFAULT_K, help="tier a instances per (specialization, regime) stratum (gate minimum TIER_A_K)")
-    replay_a_jobs: int = option("--replay-a-jobs", type=int, default=1, help="replay_a's forked workers (replay --jobs): the same seed gives the same sample and report")
-    seed: int | None = option("--seed", type=int, default=None, help="the replay sample's seed (replay_a, replay_chain: required when they run)")
+    k: int = option("--k", type=int, default=DEFAULT_K, help="run.json's sampling.k (no stage reads it)")
+    seed: int | None = option("--seed", type=int, default=None, help="run.json's sampling.seed (no stage reads it)")
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
     persist_dir: str | None = option("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
     program_dir: list[str] | None = option("--program-dir", action="append", default=None, help="the Build's Program dir(s) the Match compares against; the fold binds the top-p select under the construction they declare (sampling_event.program_sampler_construction)")
@@ -655,8 +604,6 @@ def main(a: Options) -> int:
 
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
-    if a.seed is None and (sampled := [st for st in stages if st in ("replay_a", "replay_chain") and not plan.skipped(st)]):
-        raise UsageError(f"--seed is required to run {' and '.join(sampled)} (the replay sample is drawn from it)")
     max_rss = a.max_rss_gb if a.max_rss_gb is not None else (LAPTOP_MAX_RSS_GB if plan.laptop else None)
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)
 
@@ -685,30 +632,12 @@ def main(a: Options) -> int:
     if a.phase in ("gpu", "all"):
         GL.acquire()                 # a leased row's GPU phase: its GPU from here to the exit (`row_stages.SingleRow.match`); nothing reads the device before
     t_phase = time.time()
-    stages = _batch_replays(stages, plan.parallel)
     if a.phase == "cpu":
         try:
             write_realized(plan)             # D87: an existing capture's realized shape is in run.json before the gates / card read it
         except Exception as e:  # noqa: BLE001
             print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
     for st in stages:
-        if isinstance(st, list):
-            # a batch of independent replay stages run concurrently (pod: many cores; each process ~1 GB)
-            import concurrent.futures as cf
-            todo = [x for x in st if not plan.skipped(x) and plan.cmd(x) is not None]
-            for x in st:
-                if plan.skipped(x):
-                    recs.append({"stage": x, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"})
-            print(f"[replay] running {len(todo)} replay stages with parallel={plan.parallel}: {todo}", file=sys.stderr)
-            with cf.ThreadPoolExecutor(max_workers=plan.parallel) as ex:
-                futs = {ex.submit(run_stage, x, plan.cmd(x), logs / f"{x}.log", max_rss_gb=max_rss, timeout_s=timeout): x for x in todo}
-                for fut in cf.as_completed(futs):
-                    rec = fut.result()
-                    print(f"[{rec['stage']}] {rec['status']} in {rec['seconds']} s", file=sys.stderr)
-                    recs.append(rec)
-                    save_stages(plan.run, recs)
-            save_stages(plan.run, recs)
-            continue
         if plan.skipped(st):
             recs.append({"stage": st, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"})
             save_stages(plan.run, recs)
@@ -728,8 +657,7 @@ def main(a: Options) -> int:
         cmd = plan.cmd(st)
         if cmd is None:
             continue
-        base = "replay_b" if st.startswith("replay_b_step") else st
-        mod = OPTIONAL_MODULES.get(base)
+        mod = OPTIONAL_MODULES.get(st)
         py = cmd[0]
         if mod and module_available(py, mod) is False:
             recs.append({"stage": st, "status": "missing_module", "returncode": None, "seconds": 0.0, "log": None, "cmd": shlex.join(cmd),
@@ -757,8 +685,7 @@ def main(a: Options) -> int:
         EXP.write_experiment(plan.run, repo=Path.cwd(), spec_note=spec_note)   # D88: the Experiment index over the run directory
     except Exception as e:  # noqa: BLE001 - informational
         print(f"[experiment] not written: {type(e).__name__}: {e}", file=sys.stderr)
-    flat = [x for st in stages for x in (st if isinstance(st, list) else [st])]
-    bad = [r for r in recs if r["stage"] in flat and r["status"] not in ("ok", "skipped")]
+    bad = [r for r in recs if r["stage"] in stages and r["status"] not in ("ok", "skipped")]
     return 1 if bad else 0
 
 
@@ -791,25 +718,6 @@ def _defaults_from_run_dir(a: Options) -> None:
         rel = Path(a.workload)
         if not rel.is_absolute() and not rel.exists():
             raise UsageError(f"workload {a.workload} not found in this checkout")
-
-
-def _batch_replays(stages: list[str], parallel: int) -> list:
-    """Group consecutive replay stages into one list when parallel > 1 (they are independent processes)."""
-    if parallel <= 1:
-        return list(stages)
-    out: list = []
-    batch: list[str] = []
-    for st in stages:
-        if st.startswith("replay_"):
-            batch.append(st)
-        else:
-            if batch:
-                out.append(batch if len(batch) > 1 else batch[0])
-                batch = []
-            out.append(st)
-    if batch:
-        out.append(batch if len(batch) > 1 else batch[0])
-    return out
 
 
 def _workload_doc(path: str | None) -> dict | None:
@@ -945,9 +853,9 @@ def _max_rss_gb() -> float:
 def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None, sampler_construction: str | None = None, registered_values: bool = False) -> tuple[dict, Any]:
     """Fold one log: the `gates.FOLD_SUMMARY_SCHEMA` document and the live `FoldResult` (for `persist_program`).  `moe_construction`: the workload's
     DECLARED construction, which a profile without a `with_moe_construction` hook cannot fold (FAILS by name); `sampler_construction` and `registered_values`: the Programs' (`--program-dir`)."""
-    from verity_vllm.check.fold_compare import load_profile, summarize
+    from verity_vllm.check.fold_compare import load_profile
     from verity_vllm.observe.events import Root, RunHeader
-    from verity_vllm.observe.fold.fold import fold
+    from verity_vllm.observe.fold.fold import fold, summarize
     from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.fold.patterns.sampling import with_sampler_construction
     from verity_vllm.observe.log import read_log
@@ -1045,7 +953,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
     memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
     the operand `Refs` as runs) -- and `accesses.jsonl.gz` the full memory-access journal (alloc / root / read / write /
-    move / token with event ids) that `provenance.py` checks.  With these three files a checker can locate every
+    move / token with event ids).  With these three files a checker can locate every
     operand and result of every instance in the trusted record without importing the profile's patterns."""
     import dataclasses
     import gzip
@@ -1140,7 +1048,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     if acc:
         p = run_dir / "accesses.jsonl.gz"
         # [COORD R17-28 F1, mprof] the journal is 22 % of the fold stage at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
-        # Match-pipeline stage reads it (provenance.py / verify_lane.sh / gen_adversarial do, offline).  Under row_pod's MATCH_PIPELINE=shared
+        # Match-pipeline stage reads it (the regression fixtures pin it).  Under row_pod's MATCH_PIPELINE=shared
         # it is compressed at level 1 (same lines, ~4x less compressor time, a larger file); unset = level 9 as before.
         level = 1 if os.environ.get("MATCH_PIPELINE", "") == "shared" else 9
         with gzip.open(p, "wt", compresslevel=level) as f:

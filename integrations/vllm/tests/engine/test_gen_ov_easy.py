@@ -223,12 +223,9 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
         c = cmds[st]
         assert c[c.index("--case") + 1] == "B7" and "--engine-arg=gpu_memory_utilization=0.95" in c, (st, c)
     assert "--verify-weights" in cmds["capture"]
-    for st in ("resolve", "compare", "fold", "root_policy", "wiring", "replay_a", "replay_chain"):
+    for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == "derived_B7", (st, c)
-    assert not any(st.startswith("replay_b_step") for st in cmds)
-    rp = cmds["root_policy"]
-    assert rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"                 # 4 shards: model-0000{1..4}-of-00004.safetensors
 
 
 # ---------------------------------------------------------------------------------------------------------

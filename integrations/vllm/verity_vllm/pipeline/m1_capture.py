@@ -55,12 +55,12 @@ ACCEPTED_TOKENS = va.ACCEPTED_TOKENS   # the B0 request's accepted tokens (kept 
 
 def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
     """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
-    table is a derived weight computed on the GPU (vLLM `_compute_cos_sin_cache`, CUDA cosf/sinf); compare.py reads the
-    `cos_sin` field from this file."""
+    table is a derived weight computed on the GPU (vLLM `_compute_cos_sin_cache`, CUDA cosf/sinf); the one-stage audit reads the
+    `cos_sin` field from this file (`benchmarks/one_stage/a11.py`)."""
     import numpy as np
     import torch
 
-    from verity_vllm.check.root_policy import analytic_table_of_buffer   # the one by-name recognition of the two analytic-table buffers
+    from verity_vllm.acquire.plan import analytic_table_of_buffer   # the one by-name recognition of the two analytic-table buffers
 
     buf = None
     for name, b in engine.model.named_buffers():
@@ -72,10 +72,9 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
     dtype = str(buf.dtype).removeprefix("torch.")
     if buf.dtype != torch.bfloat16:
         # [r8 E-cleanup, fp16 (d) `cos_sin_cache` root] a served-fp16 model's table is float16: it used to be silently NOT observed
-        # (root_policy then fails "no captured cos_sin_cache.npy", which reads as a capture defect).  Observe it in its own dtype
-        # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers (compare / replay / root_policy's bf16
-        # analytic check) take bf16 words -- and label it; the bf16 path below is unchanged.  The frozen validator still has no
-        # fp16 analytic table.
+        # (a reader then found no captured cos_sin_cache.npy, which reads as a capture defect).  Observe it in its own dtype
+        # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers take bf16 words -- and label it; the bf16
+        # path below is unchanged.  There is still no fp16 analytic table.
         if buf.dtype != torch.float16:
             return None
         words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
@@ -95,12 +94,12 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
 def dump_normalizer(engine: "va.Engine", out: Path) -> Path | None:
     """[ADAPTER lane cov-dense 2026-09-17] Gemma-2's `model.normalizer` (0-d bf16 buffer `torch.tensor(hidden_size ** 0.5)`,
     no checkpoint tensor) as its one uint16 word -> DIR/normalizer.npy, the same observation `dump_cos_sin` makes of the other
-    analytic-table root: root_policy (`analytic.check_normalizer`) compares the runtime's word with bf16(sqrt(H)).  Models
+    analytic-table root, whose rule (`analytic.check_normalizer`) is bf16(sqrt(H)).  Models
     without the buffer (Llama, Qwen, Phi-3, ...) write nothing."""
     import numpy as np
     import torch
 
-    from verity_vllm.check.root_policy import analytic_table_of_buffer
+    from verity_vllm.acquire.plan import analytic_table_of_buffer
 
     for name, b in engine.model.named_buffers():
         if analytic_table_of_buffer(name) == "normalizer":

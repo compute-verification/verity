@@ -28,11 +28,9 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3, sha512
   clocks read before and after, then `collect.py`.
 - The BLAKE3 sibling arm (`served-commit-rows-blake3`, `arms.py`): circuits' rows arm under the committer's research scheme
   `rows-blake3` (`verity_vllm.commit.step_rows_b3`, `native_rows_b3.cu`: the same step, keyed BLAKE3 in every hash position;
-  it never serves, and stays off main under the one-hash rule, so the arm and its checks run only from a branch that carries it,
-  with `ARMS` naming it and `CHECK_TESTS` adding `check_b3.py` and `check_hfirst.py`). `job.sh` names it to a copy of `prof.sh`
-  with its one case line added. `check_b3.py` holds the scheme and its
-  kernels to the hash lane's hm96-blake3 reference: `ref/hm96_ref.py` and `ref/check.py` are verbatim copies of
-  `benchmarks/hash/intpipe/` at `cursor/verity-hash-15ad` 4369ae628.
+  it never serves, and stays off main under the one-hash rule, so the arm runs only from a branch that carries it and its checks
+  (the scheme and its kernels against the hash lane's hm96-blake3 reference, `benchmarks/hash/intpipe/hm96_ref.py`), with `ARMS`
+  naming it and `CHECK_TESTS` adding the checks). `job.sh` names it to a copy of `prof.sh` with its one case line added.
 - What-if arm (a) (`served-commit-rows-whatif-q`, `arms.py`): the rows arm with the post-RoPE q out of the Commit, as if q norm
   and RoPE ran in the attention unit's prologue; k, v and qkv stay committed. Its roots are no scheme's and it never serves; run
   it in its own labeled run (`SWEEP=what-if ARMS=stock,stock-prof,served-commit-rows,served-commit-rows-whatif-q
