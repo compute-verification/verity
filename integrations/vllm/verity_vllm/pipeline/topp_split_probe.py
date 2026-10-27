@@ -1,6 +1,6 @@
 """GPU-truth fixture for `TopPMask_v1{V,S}` (`verity.ml.definitions.registry.topp_split`) across EVERY split geometry the vLLM
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
-test uses (F-stoch-01 follow-up: the model was fitted at S=32 only).
+test uses.
 
   produce (pod, torch venv):   verity-vllm topp-split-probe produce --out DIR [--record fstoch01_rows.npz]
   check   (any venv, no torch): verity-vllm topp-split-probe check --dir DIR [--record fstoch01_rows.npz]
@@ -8,14 +8,14 @@ test uses (F-stoch-01 follow-up: the model was fitted at S=32 only).
 Cases are REGENERATED on the CPU from the manifest (seed / V / kind / params), so the fixture ships only the kernel's outputs:
 `keep` bits (the masked row is `where(keep, x_in, -inf)` -- the mask kernel stores the loaded fp32 x for kept lanes), the stats
 buffer, the per-slice scalar chain of the instrumented mask kernel (M, Z, pivot_logit, dup, numkeep, numdup, num_preceding, fin) and
-one bit per lane saying WHICH of the two per-thread Z values that lane's thread held (`z_group`, the F-stoch-01 root cause).
+one bit per lane saying WHICH of the two per-thread Z values that lane's thread held (`z_group`).
 
 Kinds:
   random     bf16-valued randn * 3 rows (the first validation's shape) at V in {1024, 3000, 4096, 128256};
   ties       a head of distinct large logits + a plateau of k IDENTICAL logits at lanes spread over the splits, both Z groups and
              (for S >= 2) straddling split boundaries (s*slice_len - 1, s*slice_len) + a small-mass tail; p chosen so the top-p
              boundary falls INSIDE the plateau (numkeep < numdup: the kernel's duplicate budget is exercised) at several offsets;
-  record     the 3 preserved F-stoch-01 rows (bf16 logits -> the real `apply_temperature` kernel) at every S (needs --record).
+  record     the 3 preserved rows of ``--record`` (bf16 logits -> the real `apply_temperature` kernel) at every S (needs --record).
   drain      the REAL `_apply_topp_split` entry on a stacked batch of `ties` rows at B = 64, 18, 17, 9, 8, 7, 6, 5, 4, 3, 2, 1 and
              both sides of every live-count boundary of splits_for(B, num_sm) at the device's SM count (`drain_batches`; 142 SMs adds
              35/36, 188 adds 11/12, 23/24, 47/48) -- every row must equal the constexpr-S model at that S.

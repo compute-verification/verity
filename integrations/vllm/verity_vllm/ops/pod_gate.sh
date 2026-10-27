@@ -20,6 +20,7 @@ if [ $# -gt 0 ]; then ROWLIST=("$@"); else ROWLIST=(); for d in "$ROWS"/*/; do R
 for ROW in "${ROWLIST[@]}"; do
   RD=$ROWS/$ROW; WL=workloads/$ROW.json
   [ -d "$RD" ] || { echo "[pod_gate] $ROW: no row dir $RD"; RC=1; continue; }
+  "${PY%/*}/verity-vllm" workload-file "$WL" > /dev/null || { echo "[pod_gate] $ROW: workload $WL not fetched or not its digest"; RC=1; continue; }
   [ -f "$WL" ] || { echo "[pod_gate] $ROW: no workload $WL"; RC=1; continue; }
   O=$OUT/$ROW; S=$SCRATCH/$ROW; mkdir -p "$O" "$S"
   read -r B MODEL REV MML <<< "$($PY - "$WL" <<'EOF'

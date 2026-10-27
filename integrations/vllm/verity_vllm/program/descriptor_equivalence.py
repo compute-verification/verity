@@ -34,7 +34,7 @@ from typing import Any, Iterator
 
 from verity.ml.circuits.codec import decode_program, program_digest
 from verity.ml.circuits.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided
 
