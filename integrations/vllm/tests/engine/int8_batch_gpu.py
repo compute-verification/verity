@@ -1,4 +1,4 @@
-"""VLLM-87's conformance on one GPU: `engine.int8_ops.paged_attention` and `window_attention` (one kv_quant_batch or
+"""The batched int8 attention's conformance on one GPU: `engine.int8_ops.paged_attention` and `window_attention` (one kv_quant_batch or
 kv_quant_window_batch and one window_rows_batch, on CUDA the Triton kernels of `int8_attention_triton`) against
 `int8_attention.reference_paged` (the per-request, per-KV-head reference) on random batches, word for word: the served output
 on the GPU (from the paged caches, and from a credited read's packed rows) against the reference on the GPU and on the CPU,

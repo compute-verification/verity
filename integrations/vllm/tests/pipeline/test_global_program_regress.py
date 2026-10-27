@@ -713,9 +713,8 @@ def test_a_placeholder_row_after_the_verified_eos_is_not_activity_the_record_fai
     """DP-pad-02 / F-pad-16 (exec M-0140 on cp-r1): with async scheduling vLLM computes ONE more step for a request after its EOS and
     samples a token there (504 on the pod).  That row is in the engine's sampler batch but it is not the Program's lag-0 activity
     (a_r = 2).  Contract: (1) GM-01 FAILS the record at G6 by name (execution past EOS, n_r 3 > a_r 2) so the S check never certifies
-    it; (2) the S check ALONE reports no problem -- the pinned launch's S is the registered one whatever the batch (CIR-87 (1)), so
-    only G6's activity pinning sees the row.  Under R17-1 (DP-pad-02
-    (b) as Daniel ruled it; supersedes the ruling-21 reader) the placeholder rule is the PROGRAM'S declared LAG, which the record's
+    it; (2) the S check ALONE reports no problem -- the pinned launch's S is the registered one whatever the batch, so
+    only G6's activity pinning sees the row.  The placeholder rule is the PROGRAM'S declared LAG, which the record's
     attestation must agree with: this Program declares LAG 0 (the toy preamble attests async_scheduling False), so the record is a lag-0
     execution and the contract above stands; the LAG-1 Program on the attested-True reading of the same record is the next test."""
     gpd, oracle = TGM.assemble([TGM.R0, R1_PLACEHOLDER], tmp_path, lag=0)

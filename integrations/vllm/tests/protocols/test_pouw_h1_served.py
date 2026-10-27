@@ -1,6 +1,6 @@
 """`protocol_options.pouw_h1_served`: an H1 window that mixes K, served under compute accounting's window Program
 (`h1window.program` on vllm's 32 × 32 tile, one template per K), registers its tables as its calls are recorded: each
-step's A table of K ``a/<K>@<s>`` (VLLM-77: M slot rows of each of the step's calls of K, call after call, each row its
+step's A table of K ``a/<K>@<s>`` (M slot rows of each of the step's calls of K, call after call, each row its
 codes then its f32 s_a) at the step's last call of K, each call's z table ``zy@<c>`` (one z/y record a unit, in tile
 order), and the weights' ``b/<K>`` (each linear's rows once, codes then s_w), as ``hm96-sha512/row/v2`` trees whose rows
 and roots recompute here from the served tensors, under domains bound to the window's open root. Each root is in the
@@ -10,7 +10,7 @@ manifest row of the call that completes it, so its round's root commits it befor
 other call's unit reads them; a read opened with another row is refused. A weight that changes, blocks that aren't one
 per linear, an odd K, n off C and a served call with no z/y record register nothing; a second window reusing the first's
 key is refused (R7-held). Every window of a period declares one Program (the period's prefix), its call tables its own
-through their window-bound domains, and its ``b/<K>`` the period's registered weights (VLLM-71), which a window serving
+through their window-bound domains, and its ``b/<K>`` the period's registered weights, which a window serving
 another code or s_w is refused for. A stand-in tile unit of the zy unit's parameter shape (`h1zy.ROW` rows, its `h1zy.RECORD`, a
 receipt sink and ``ok``) keeps the Program small."""
 from __future__ import annotations
@@ -538,7 +538,7 @@ def test_a_replayed_windows_values_are_refused_through_their_window_bound_domain
 
 
 def test_the_periods_weights_are_registered_once_and_every_window_registers_them():
-    """VLLM-71: each K's ``b/<K>`` is K's linears' rows in order, each its K codes then its f32 s_w, registered once under
+    """Each K's ``b/<K>`` is K's linears' rows in order, each its K codes then its f32 s_w, registered once under
     the period's declared Program with no window and salts from the period's key; `Weights.root` is
     `credit.weights_root` of their roots, and every window of the period registers those same entries, its open root
     over that root."""
@@ -559,7 +559,7 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
 
 
 def test_the_periods_weights_under_the_registrations_key_are_the_auditors_registration():
-    """VLLM-72: the auditor registers a model's b/<K> with core's `weights.weights_roots` (infra's ``model-register``)
+    """The auditor registers a model's b/<K> with core's `weights.weights_roots` (``model-register``)
     under its own salt key, and the served path registers the served rows under that key (``model-key``,
     `register_weights`): the same rows, salts and domains, so each K's root, entry and the weights' root are the
     registration's."""
@@ -577,7 +577,7 @@ def test_the_periods_weights_under_the_registrations_key_are_the_auditors_regist
 
 @pytest.mark.parametrize("edit", ["s_w", "code"])
 def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
-    """VLLM-71: a window serves the weights its period registered before its salt. One row's s_w, or one code, other than
+    """A window serves the weights its period registered before its salt. One row's s_w, or one code, other than
     the period's refuses the window at the call that completes its K (`Served.commit`, `Weights.matches`: vllm's own
     check), with no table from then on, and `trees` says why."""
     ws = _weights()
@@ -841,7 +841,7 @@ def test_zy_words_are_record_words_of_the_records_split():
 
 
 def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts_in_call_order():
-    """VLLM-81: GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
+    """GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
     share K = 16, then o: each step's A table of K is still its calls' rows in call order, registered at the call that
     completes it (q's, the last of K to come, not k's, the last in call order), and the producer is handed, then asked,
     that step's calls of K in call order there, each receipt table after the roots its units' seeds take."""
@@ -950,7 +950,7 @@ def _vector_rows(case: str, k: int, rows: int) -> tuple[np.ndarray, np.ndarray]:
 
 @pytest.mark.parametrize("case", VECTORS, ids=[c[0] for c in VECTORS])
 def test_the_served_paths_chunk_leaves_are_kernels_vectors(case):
-    """kernels' two SPLITK vectors (#3467) through the served path's own code: ``a/14336@0`` (64 rows, n = 4) is
+    """Two SPLITK test vectors through the served path's own code: ``a/14336@0`` (64 rows, n = 4) is
     `Served.a_words` of the rows over a 64-slot table, committed as `Served` commits a step's A table (at call 0's A
     nonce, `nonce`, binding the window), and ``b/6144`` (64 rows, n = 2) is `register_weights`' ``b/<K>`` (at `B_NONCE`,
     binding none); each has the vectors' leaves, words, domain and root."""

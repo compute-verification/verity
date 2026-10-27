@@ -1567,7 +1567,7 @@ def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
 
 @pytest.mark.slow
 def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_same_scheduler(memory, tmp_path):
-    """R17-1 / DP-pad-02 (b) (Daniel, BRIEF s4; supersedes the ruling-21 reader): LAG is the workload Program's DECLARED specialization
+    """LAG is the workload Program's DECLARED specialization
     parameter (mock: `lag=`; GP-01: the Workload_v1 `lag` static from TargetProfile.lag()).  vLLM's async scheduling computes ONE more row
     for a request after its EOS sample (input = the EOS, sample discarded by the driver): under LAG 1 that row is active internal
     computation -- its VUs required, its sampled token NOT a served output.  G6 consumes the Program's lag and nothing else; the record's

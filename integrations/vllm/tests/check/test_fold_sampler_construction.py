@@ -222,7 +222,7 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
                           "--b", str(run), "--out", str(tmp_path / "match_compare.json")], cwd=VLLM_DIR, env=env, capture_output=True, text=True)
     assert cmp.returncode == 0, cmp.stderr[-3000:]
     res = json.load(open(tmp_path / "match_compare.json"))
-    # #101's Build predates SiluMul_v2 (#820) and binds SiluMul_v1; the fold binds the record target's vocabulary's silu_mul (v2)
+    # row 101's Build predates SiluMul_v2 and binds SiluMul_v1; the fold binds the record target's vocabulary's silu_mul (v2)
     assert res["histogram_diff_T_normalised"] == {"SiluMul_v1{I=8192}": [4592, 0], "SiluMul_v2{I=8192}": [0, 4592]}, res["histogram_diff_T_normalised"]
 
 

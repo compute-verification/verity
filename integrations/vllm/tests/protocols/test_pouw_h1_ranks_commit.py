@@ -1,4 +1,4 @@
-"""`protocol_options.pouw_h1_ranks` with ``served`` and ``commit`` (ROOTS1 across tensor-parallel ranks, VLLM-81 item 2): the
+"""`protocol_options.pouw_h1_ranks` with ``served`` and ``commit`` (ROOTS1 across tensor-parallel ranks): the
 Commit runs on every rank, each rank's tap ships what it acquired, and the holder's one `pouw_h1_served.Served` and
 `pouw_h1_commit.CommitTap` register each step's A table of K over both ranks' calls and its AROW over both ranks' sites, so
 core's ROOTS1 steps (`pouw_h1_gpu.core_verdict`, the GPU run's check) tie the window. One rank's call handed other codes

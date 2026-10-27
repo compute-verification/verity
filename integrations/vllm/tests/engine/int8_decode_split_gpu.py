@@ -1,4 +1,4 @@
-"""VLLM-49 on one GPU: the exact-int8 engine of `--role` (v1 `LLAMA31_8B_INT8`, its LM head BF16; v2 `LLAMA31_8B_INT8_V2`, its LM
+"""On one GPU: the exact-int8 engine of `--role` (v1 `LLAMA31_8B_INT8`, its LM head BF16; v2 `LLAMA31_8B_INT8_V2`, its LM
 head int8) on the one request of a row's workload (`--workload`, its `prompt_token_ids`): its greedy tokens, and its decode step's
 kernel time under torch's profiler, split by where each kernel was launched:
 

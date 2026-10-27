@@ -352,7 +352,7 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
 
 
 class _GateSession:
-    """Session `SID` of infra's gate `gate` (`challenger_host.Gate`, its ledger under `KEY`), reserved with `families`
+    """Session `SID` of the challenger gate `gate` (`challenger_host.Gate`, its ledger under `KEY`), reserved with `families`
     and, once the gate opens it (`open`, the install's pouw setting ``gate``), served by `challenger` on a socket pair
     with its record and close signed under `KEY` at the gate's next leaves, as serve.py's are. `end` has the gate end it
     over its ``out/`` once its client has closed it; `tree` is its tree as the gate's ``fetch`` gives it."""
@@ -405,7 +405,7 @@ def _ended(gate):
 
 
 def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_complete(tmp_path, monkeypatch):
-    """CMP-81: the install's session, reserved with the salt coin alone and opened on salt epoch 0's root R over the
+    """The install's session, reserved with the salt coin alone and opened on salt epoch 0's root R over the
     weights' root W, ends closed and complete with that one coin released, and the verifier holds the pass to it
     (`session_reason`'s Pearl-C branch): the one session the ledger opened on R, which it recomputes from W and the
     pass's ``pass_index``, read through the gate's fetch. The manifest head names it by its `SESSION_KEYS` alone, with

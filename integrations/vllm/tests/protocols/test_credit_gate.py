@@ -216,7 +216,7 @@ def _circuit() -> str:
     return hashlib.sha512(_descriptor()).hexdigest()
 
 
-#: the prover's own weights key, which salted its b/<K> before the auditor's registration (VLLM-71)
+#: the prover's own weights key, which salted its b/<K> before the auditor's registration
 WKEY = bytes(range(32, 64))
 #: each K's circuit file's SHA-512 as a period-open commits them (``circuit_files``), and the live template's
 FILES = {f"k{K}": hashlib.sha512(b"the k64 template's circuit file").hexdigest(),
@@ -236,7 +236,7 @@ def _rows(edit=None):
 
 
 def _registry(edit=None) -> CH.Registry:
-    """The auditor's model registry (infra's, in process) holding `CH.MODEL`'s registration under the period's circuit:
+    """The auditor's model registry (in process) holding `CH.MODEL`'s registration under the period's circuit:
     its checkpoint `_rows` of `edit`, committed under the auditor's own salt key (the gate's ``model-register``)."""
     reg = CH.Registry()
     codes, scales = _rows(edit)
@@ -417,7 +417,7 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
 
 
 def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing(monkeypatch):
-    """CMP-52: a claim instance names where coins come from, not who holds them. The harness's coins, held in the
+    """A claim instance names where coins come from, not who holds them. The harness's coins, held in the
     serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier of record's claim instance
     names their source; a window is credited only on the auditor host's session (the int8 arm's test above)."""
     from verity.core.protocols.pouw import verifier
@@ -636,7 +636,7 @@ def _verifier(units, reject=(), seen=None, opened=lambda port: True):
 
 
 def test_a_window_with_no_served_tables_credits_nothing(periodic):
-    """PRF-132: the gate-passed call's manifest row carries its credit bit and its z root under calls_root, but a window
+    """The gate-passed call's manifest row carries its credit bit and its z root under calls_root, but a window
     with no served trees registers no A table and no ``b/<K>`` of its period's weights and has no Commit in its engine,
     so core's credit refuses it before the draw (`credit.window`'s ``commit``, ROOTS1) and it credits nothing."""
     auditor = periodic(1, files=FILES)
@@ -652,7 +652,7 @@ def test_a_window_with_no_served_tables_credits_nothing(periodic):
 
 
 def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carries_proof_files(periodic):
-    """VLLM-71, VLLM-72 and PRF-132: a served window whose b/<K> it registered at install under the auditor's
+    """A served window whose b/<K> it registered at install under the auditor's
     registration's key (`model-key`) registers the registration's ``b/<K>`` entries, its open root over their root (the
     one the period's ``--model`` open signed), its round-0 request table and its session; its evidence
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its drawn calls' statements
@@ -724,7 +724,7 @@ def _one_row(xq):
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
-    """ROOTS1 (VLLM-73), by core's credit (`credit._arow`): H1 handed every A code zero (the RT4 A = 0 probe) or one A
+    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the RT4 A = 0 probe) or one A
     row off the codes the Commit acquired at the linear's row_quant, or the Commit acquired an input id other than the
     prompt's (round 0's ids table is the prompt's, fixed before the salt), each with an honest Commit, whose record
     registers its own tree for those rows. The serving process credits nothing (`pouw_h1_commit.UNTIED`); a prover
@@ -826,12 +826,12 @@ def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor)
 
 @pytest.mark.parametrize("edit", ["s_w", "code", "own-key", "unsigned"])
 def test_a_window_whose_b_rows_are_not_its_periods_is_refused(periodic, tmp_path, edit):
-    """VLLM-71 and VLLM-72, by core's credit (`credit.window`, #3201): a period opened with ``--model`` signs the
+    """By core's credit (`credit.window`): a period opened with ``--model`` signs the
     auditor's registration of the model, and a window whose served b/<K> differ from that registration's is refused
     (``weights``), though the window is consistent all through (its open root over its own served weights' root) and
     every drawn session is accepted: the registration's checkpoint has one row's s_w, or one code, other than the ones
     the window serves (the window's rows salted with the registration's key, so only the rows differ), or the window
-    salted the served rows with the prover's own key (VLLM-71's, before the registry). A window in a period whose open
+    salted the served rows with the prover's own key (as the served path did before the registry). A window in a period whose open
     names no model, so signs no weights' root, is refused too."""
     reg = _registry(None if edit in ("own-key", "unsigned") else edit)
     auditor = periodic(1, model=edit != "unsigned", files=FILES, registry=reg)
@@ -853,7 +853,7 @@ def test_a_window_whose_b_rows_are_not_its_periods_is_refused(periodic, tmp_path
 
 @pytest.mark.parametrize("edit", ["s_w", "code"])
 def test_a_window_serving_other_weights_than_the_registration_refuses_itself(periodic, edit):
-    """VLLM-72, the prover's own check: the served path registers its b/<K> at install from the served linear under the
+    """The prover's own check: the served path registers its b/<K> at install from the served linear under the
     registration's key (`Served`'s ``registry``, the lane's ``model-key``), and when they fold to another root than the
     registration's (its checkpoint has one row's s_w, or one code, other than the served one) the window registers no
     table and credits nothing, naming why."""
@@ -868,9 +868,9 @@ def test_a_window_serving_other_weights_than_the_registration_refuses_itself(per
 
 
 def test_a_period_opened_with_a_bare_weights_root_is_refused_at_the_open(tmp_path):
-    """VLLM-72: a period's weights' root is the auditor's registration, never the prover's. The gate's ``period-open``
-    with ``--weights-root`` the prover's own root (its served b/<K> under its own key, VLLM-71's) is refused before
-    anything is signed, by the in-process ledger and gate alike (infra's `models.opened`); naming the registration's
+    """A period's weights' root is the auditor's registration, never the prover's. The gate's ``period-open``
+    with ``--weights-root`` the prover's own root (its served b/<K> under its own key) is refused before
+    anything is signed, by the in-process ledger and gate alike (`models.opened`); naming the registration's
     own root signs it with its model, as ``--model`` does."""
     M = CH.models()
     own = SV.register_weights(_circuit(), [(64, K)], {0: _rows()}, WKEY).root().hex()
@@ -889,7 +889,7 @@ def test_a_period_opened_with_a_bare_weights_root_is_refused_at_the_open(tmp_pat
 
 
 def test_the_in_process_gate_registers_the_model_and_hands_the_lane_its_key():
-    """VLLM-72: `challenger_host.Gate` has infra's model registry verbs. ``model-register`` commits the checkpoint's
+    """`challenger_host.Gate` has the model registry's verbs. ``model-register`` commits the checkpoint's
     b/<K> under a fresh auditor key; ``model-key`` gives the lane that key, under which the served path's own
     registration of the same rows (`register_weights`) is the registration, root for root; ``period-open --model``
     signs its weights' root and model, which core's credit reads (`credit.committed_weights`). A model it has no
@@ -949,13 +949,13 @@ def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
 
 
 def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_credit(periodic, tmp_path):
-    """PRF-132: core's `credit.window` verifies each drawn call's statement itself (`proofs.verify`, here a stand-in that
+    """Core's `credit.window` verifies each drawn call's statement itself (`proofs.verify`, here a stand-in that
     reports what it was handed) on the circuit file the period's open committed for its K, against the ``--registered``
     file credit builds from the window's entries (the call tables' domains bound to the window's open root, the
     weights' to none), and credits the gate-passed call only when every drawn unit's session is accepted and each
     round's live@<s> proves its step's served rows: none, a rejected one, another circuit's descriptor, or no live
     evidence refuses the whole window. The closed period's credit
-    (`period_credit`) is that window's, its period opened with ``--model`` (VLLM-72: the auditor's registration, whose
+    (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
     key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     k = PHC.draw_k(LAYOUT)
@@ -1009,7 +1009,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
 
 
 def test_a_period_open_without_draw_k_is_refused(periodic):
-    """PRF-132: the proof service commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
+    """The proof service commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
     opened without one leaves its windows no K to be drawn with, so the window, the period's reading and its credit are
     each refused (``budget``), and a window in no period has no committed K either."""
     auditor = periodic(None, files=FILES)
@@ -1030,7 +1030,7 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
 
 
 def test_a_window_in_no_period_has_no_committed_k(auditor):
-    """PRF-132: a window whose session the auditor's ledger holds in no period is drawn with no K any open committed."""
+    """A window whose session the auditor's ledger holds in no period is drawn with no K any open committed."""
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None
     out = _credit(auditor, _record(run))
@@ -1039,7 +1039,7 @@ def test_a_window_in_no_period_has_no_committed_k(auditor):
 
 
 def test_the_drawn_set_from_a_fixed_coin_is_cores():
-    """PRF-132: the units vllm's verifier reads as drawn (`drawn_of`) are core's (`credit.drawn`, and
+    """The units vllm's verifier reads as drawn (`drawn_of`) are core's (`credit.drawn`, and
     `core_check.work_units` over `credit.strata` under the work law at K), over the layout core reads from the declared
     Program's descriptor (`credit.layout_of`, which `pouw_h1_served.declared_layout` is without building it): the
     population is the units of ``h1window.program(linears, calls, m, tile)`` in its order, one stratum per K, on the
@@ -1067,7 +1067,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
 
 
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
-    """PRF-132: the proof service sizes the K a period's open commits (`draw_k`) for the share of a window's work it
+    """The proof service sizes the K a period's open commits (`draw_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
     that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
     0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""
@@ -1105,7 +1105,7 @@ def _two_window_period(tmp_path):
 
 
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
-    """PRF-132: a period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
+    """A period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
     close's order. Presented out of order, with one missing, with one past the close, or with a window not its own, the
     period is refused, by `period_reason` and by `period_credit` before any window is read."""
     ledger, sessions, (a, b) = _two_window_period(tmp_path)
@@ -1126,7 +1126,7 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
 
 
 def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
-    """PRF-132: the credit bit is under calls_root and so under the draw root the draw coin followed: flipping it after
+    """The credit bit is under calls_root and so under the draw root the draw coin followed: flipping it after
     the draw is refused, whether the draw root is left (it is no longer over the manifest) or recomputed (it is no longer
     the one root the challenger's log shows its draw coin followed); the honest record gets past them to its proofs."""
     auditor = periodic(1, files=FILES)

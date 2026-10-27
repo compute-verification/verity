@@ -1,5 +1,5 @@
-"""The Commit's coins from the auditor host's challenger (`verity_vllm.pipeline.commit_coins`, VLLM-17 under CIR-72): one
-session a Commit, reserved through infra's gate before any root, opened on its first run's root of record, and each
+"""The Commit's coins from the auditor host's challenger (`verity_vllm.pipeline.commit_coins`): one
+session a Commit, reserved through the gate before any root, opened on its first run's root of record, and each
 run's coins opened after that run's root; the verifier holds them to the one session the auditor's signed ledger opened
 for the Commit's root (`challenger.ledger_head`, `challenger.pinned_session`), run from a commit the host's pins log
 records on the verifier's first-parent history of main, ended closed, and to the roots the challenger's signed release log shows it received.

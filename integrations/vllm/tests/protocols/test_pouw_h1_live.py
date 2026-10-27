@@ -1,4 +1,4 @@
-"""VLLM-85: the live unit's tables on the served path (`pouw_h1_live`). With the Commit a window registers round 0's request
+"""The live unit's tables on the served path (`pouw_h1_live`). With the Commit a window registers round 0's request
 headers ``requests@0`` and each round's slot table ``slots@<s>`` as values of the live Program, under its round roots, and
 each round's ``live@<s>`` (`PouwLiveSlots_v2{T}`) accepts its slot table at m_s, the step's scheduled rows, and refuses any
 other m. Under CUDA graphs m_s is the scheduler's rows, not the graph's padded size."""

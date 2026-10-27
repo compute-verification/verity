@@ -8,7 +8,7 @@ partition: ``{"program": its program_digest, "partition": the digest of its Q_te
 its templates by ascending K, the object core's credit verifies a statement under (`credit.partition_of`). The file's
 SHA-512 is what the period-open commits for ``k<K>``, and core's credit refuses a statement whose circuit file hashes
 to anything else (`proofs.verify`'s ``circuit_sha512``). Until the verifier derives the circuit from the descriptor
-itself (PRF-133), that tie rests on this lowering being the auditor's.
+itself, that tie rests on this lowering being the auditor's.
 
 With ``--live T,S`` the manifest's ``files`` also holds ``live``: the SHA-512 of the circuit file of the window's live
 Program's template, `live.template_v2(T)` bound to `live.program_v2(T, S, PREFIX)` (PREFIX the declared Program's,

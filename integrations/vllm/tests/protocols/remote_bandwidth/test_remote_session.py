@@ -707,7 +707,7 @@ def test_a_failing_test_leaves_no_verifier_process(tmp_path):
     """A pytest whose tests fail with the Lean verifier's process live (the verifier's session raising on the test's
     thread, its registration raising on `lockstep`'s verifier thread, which hung the suite while the prover waited on
     the socket, and the run's first step raising) finishes, and leaves no `remote-audit-verifier` child, running or
-    unreaped, to the test after them (VLLM-78)."""
+    unreaped, to the test after them."""
     (tmp_path / "test_failing.py").write_text(FAILING)
     r = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist",
                         f"--junitxml={tmp_path / 'report.xml'}", str(tmp_path / "test_failing.py")],

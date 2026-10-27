@@ -1,4 +1,4 @@
-"""VLLM-20 on one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served on the eager
+"""On one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served on the eager
 int8_exact row with PoUW's H1 + fx1 (``pouw:eps1-sm120-h1fx1``, `protocol_options.pouw_h1`), checked on the host.
 
 One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw-h1-calls.json`):
@@ -21,8 +21,8 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             live coin, and every served row's slot names its request (`h1_settings`: the engine's runner and the window's
             round coins; `requests_check`), one entry a served request and no served row without one.
 
-``--workload fill`` serves `pouw_h1.FILL` instead (VLLM-52, PERIOD-PATH's ask 1): 64 one-token prompts (`fill_prompts`) under
-VLLM-31's static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
+``--workload fill`` serves `pouw_h1.FILL` instead: 64 one-token prompts (`fill_prompts`) under
+the static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
 so all 64 prefill at step 0 and decode together for the 16 served steps of an S = 18 window. Without the option it serves
 the 64 and then the first alone (the 1-sequence row); with it, the 64 in one window (`<out>/pouw-h1-calls.json`) and the
 first alone in a second (`<out>/solo/`). It records each window's step rows against the declaration (`Static.check`), its
@@ -30,7 +30,7 @@ u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at line
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 
 ``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor host's
-challenger, in the session infra's gate reserved for the window (``--session``, the gate's reserve answer), which the
+challenger, in the session the challenger gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
 (`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one session a window, so the fill
 workload serves only the 64's window. With ``--peer NAME`` in place of ``--session`` each window the run serves reserves
@@ -53,14 +53,14 @@ batch, so it admits per round; the fill workload admits in round 0 only.
 ``--served`` (fill) commits each call's A and z/y tables and the weights' B as its window Program's registered values
 (`pouw_h1_served.Served`, the pouw setting ``served``), under the round roots, which the commitment carries, and records
 the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--model M --circuit C`` (and ``--gate``) the
-weights' ``b/<K>`` are the period's (`pouw_h1_served.Weights`, VLLM-72): the gate's ``model-key --model M --circuit C``
+weights' ``b/<K>`` are the period's (`pouw_h1_served.Weights`): the gate's ``model-key --model M --circuit C``
 answers the auditor's registration of M under the period's circuit C and its salt key (`model_key_of`), and the served
 model's rows are registered under that key before the salt, the window refused unless they fold to the registration's
-weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
+weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against the challenger gate.
 ``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
 one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
-its registration's seconds a step (``registered_s``, VLLM-76), the part of them inside `pouw_h1_registered.commit`
-(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy, VLLM-79). The period's declared Program and its digest are
+its registration's seconds a step (``registered_s``), the part of them inside `pouw_h1_registered.commit`
+(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
@@ -373,7 +373,7 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
                 **kw: Any) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
     the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
-    session a window, `pouw_h1_challenger`) in the `session` infra's gate reserved for it, which `gate` opens on the
+    session a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate` opens on the
     window's open root, else held in this process, which no verifier trusts and which credits nothing (a measurement)."""
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "gate": gate, "runner": eng.runner, "rows": rows,
@@ -392,7 +392,7 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     that admitted it, recorded before that round's coin, at a first slot naming it (`pouw_h1_requests.request_reason`), every slot
     of every step naming the request its row is, under a round no later than its step (`slot_reason`), the log against the
     coins (`rounds_reason`), no served row without an entry (``gaps``), and each call's A table under its round's root
-    (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live (VLLM-85): their
+    (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live: their
     leaves open in each round's ``live@<s>``, so ``live`` holds each round's verdict (`pouw_h1_live.verdicts`, its unit's
     circuit evaluated on its statement) in place of the openings."""
     from verity_vllm.protocols.pouw.h1 import live as LV
@@ -555,7 +555,7 @@ def fill_prompts(tokenizer: Any, n: int) -> list[int]:
 
 
 def generate_static(llm: Any, prompts: list[int], max_tokens: int) -> list[dict[str, Any]]:
-    """Greedy one-token prompts under VLLM-31's static schedule (``ignore_eos``: every request runs to its cap)."""
+    """Greedy one-token prompts under the static schedule (``ignore_eos``: every request runs to its cap)."""
     from vllm import SamplingParams
     outs = llm.generate([{"prompt_token_ids": [t]} for t in prompts],
                         SamplingParams(temperature=0.0, max_tokens=max_tokens, seed=0, ignore_eos=True), use_tqdm=False)
@@ -1375,7 +1375,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
                      pins: list[str] | None = None, main: list[str] | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
-    every head infra published of the auditor's signed ledger, `pins` every head of the host's pins log (infra's
+    every head the gate published of the auditor's signed ledger, `pins` every head of the host's pins log (the host's
     ``pins.jsonl``, the gate's ``pins``; none refuses every session: `pouw_h1_challenger.pins_head`) and `main` the
     auditor's own first-parent history of main (none refuses every session, as `challenger.pinned_session` refuses
     it). With `window_file` (the window's ``{root}``) `directory` is

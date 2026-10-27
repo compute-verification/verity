@@ -341,7 +341,7 @@ def _folded_routed(rank: int):
 
 @pytest.mark.parametrize("rank", RANKS)
 def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole(rank):
-    """The flat Compute (VLLM-14): the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
+    """The flat Compute: the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
     rank r's whole [M, N] partial in row order -- the per-row instances' parts, regrouped -- and whose peer part canonicalises as a rank
     Program's read of each whole `peers_<k>` Input."""
     _f, per_row = _folded(rank)

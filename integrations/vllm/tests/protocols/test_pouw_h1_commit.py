@@ -1,13 +1,13 @@
-"""`protocol_options.pouw_h1_commit` (ROOTS1, VLLM-73): with the Commit in H1's serving engine (`acquire.h1_commit.attach`:
+"""`protocol_options.pouw_h1_commit` (ROOTS1): with the Commit in H1's serving engine (`acquire.h1_commit.attach`:
 the int8 source at each linear's Int8RowQuant_v1 site and the step-input port, on a rows-sha512 committer whose acquires a
 `CommitTap` sees, refused under any other scheme or run root), its record
-registers each step's A table of K ``a/<K>@<s>`` (VLLM-77: both linears' rows, call after call) as its AROW of the
+registers each step's A table of K ``a/<K>@<s>`` (both linears' rows, call after call) as its AROW of the
 step and K and each round's input-ids table ``ids@<s>`` as its step's input ids, the window's own trees, and calls_root
 binds the record. A window whose served A is all zero codes, or one A row off the rows the Commit acquired, or whose
 step table holds its calls' rows shifted by a call, or whose Commit ids aren't its prompts, each with an honest Commit,
 credits nothing (`UNTIED`); core's credit refuses each at ``arow`` (here and `test_credit_gate`). The window here is a
 two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`), or a linear and a MoE layer's routed experts
-(VLLM-80, `MoEModel`), whose calls' rows the Commit acquires under their H1 names, an idle expert's as its zero rows."""
+(`MoEModel`), whose calls' rows the Commit acquires under their H1 names, an idle expert's as its zero rows."""
 from __future__ import annotations
 
 import hashlib
@@ -416,7 +416,7 @@ def _offset(blocks):
     (_offset, "a-link", f"registered A value h1/a/64@0 has {3 * ROWS} rows, not the {2 * ROWS} the window's layout gives it"),
 ], ids=["rotated", "offset"])
 def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp_path, monkeypatch, lay, at, why):
-    """VLLM-77: a step's A table of K holds its calls of K's rows call after call, the j-th from row M·j, and a unit reads
+    """A step's A table of K holds its calls of K's rows call after call, the j-th from row M·j, and a unit reads
     its call's rows at that offset. The window lays step s's table out shifted by a call, every row the served one: call 1's
     rows at row 0 and call 0's at row M (rotated), or each call's a call late behind an empty block (offset), with an
     honest Commit, which registers its own rows in call order at another root, so the serving process credits nothing.
@@ -468,7 +468,7 @@ def _experts(name):
 
 
 def test_each_routed_expert_calls_rows_are_the_commits_and_an_idle_experts_its_zero_rows(tmp_path, monkeypatch):
-    """VLLM-80: a MoE layer's routed experts are no modules, and the Commit acquires each expert call's Int8RowQuant_v1
+    """A MoE layer's routed experts are no modules, and the Commit acquires each expert call's Int8RowQuant_v1
     rows under the call's H1 name (`acquire.h1_commit.H1Source`), every expert at every step as `int8_experts.forward`
     calls them, an expert no row routed to as its zero rows. Its record registers each step's A table of K = 64 (the
     linear and the gate_ups) and of K = I (the downs) as their `credit.commit_rows`, the window's own trees; core's

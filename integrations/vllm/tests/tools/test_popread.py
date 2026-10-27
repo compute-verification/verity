@@ -275,7 +275,7 @@ def test_served_moe_calls_take_the_step_plans_expert_gemm_once_per_routed_pair()
 
 
 def _prefix_form(producers: int, warm: int) -> dict:
-    """Daniel's circuit-native prefix form (20:56Z) at C = 2 cached rows: one static pool of prompt KV pages.  Each producer computes
+    """The circuit-native prefix form at C = 2 cached rows: one static pool of prompt KV pages.  Each producer computes
     its page and its own row and samples a token.  Each warm request computes only its own row; its prefix-match unit compares its
     first C prompt ids with each candidate producer's and outputs a page mask, and its attention reads every candidate page and
     selects by the mask inside the unit.  One more request shares only the weights."""

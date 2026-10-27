@@ -1,14 +1,14 @@
-"""The first served H1 window end to end against a challenger gate: rehearsed against infra's gate on the serving node
+"""The first served H1 window end to end against a challenger gate: rehearsed against a local challenger gate on the serving node
 (`local_gate.py`), and the same script run live against vy-challenger-1's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
 fetched run on any CPU.
 
 **What it does.** Builds the window's declared Program first, on CPU (`build_program`: `pouw_h1_served.declared` for
 `pouw_h1.FILL` over Llama-3.1-8B, no window's prefix; its descriptor's SHA-512 is its `program_digest`, the period's
 circuit), unless ``--program DIR`` names a ``--program-only`` run's. With ``--served`` the period's weights are the
-auditor's registration of `MODEL` under that circuit (VLLM-72): each K's ``b/<K>`` committed from the published
+auditor's registration of `MODEL` under that circuit: each K's ``b/<K>`` committed from the published
 checkpoint under the auditor's own salt key, their root W. Against the local gate the rehearsal registers it first, as
 vy-admin does (`register_model`: ``admin model-register --model MODEL --circuit DIGEST --descriptor FILE --checkpoint
-DIR``, DIR ``--checkpoint``); on vy-challenger-1 that registration is infra's. It builds each stratum's
+DIR``, DIR ``--checkpoint``); on vy-challenger-1 vy-admin makes that registration. It builds each stratum's
 circuit file with the auditor's lowering (`pouw_h1_circuits.build`: K's template lowered as ``h1_prove/stage.py``
 lowers it, bound to the Program and its partition), unless ``--circuits DIR`` names a built directory. Then it opens
 the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit DIGEST --draw-k K --model MODEL
@@ -67,7 +67,7 @@ its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 sn
 Each stratum's circuit file is the long CPU step at the 32 × 32 tile, so build it once as its own run and send it with
 ``--circuits DIR``: ``python -m tests.protocols.pouw_h1_circuits --program PROGRAM_DIR --out $OUT``.
 
-**The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (INF-170, on
+**The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (on
 vy-nebius-2), the auditor's pin (art:d12f85becc), the declared Program's ``window-program.meta.json`` sent (a
 ``--program-only`` run's, or a rehearsal's ``out/program/``, as rehearsal r20261021-024645-c83a's, digest b9f82db9…),
 its circuit files' directory (``--circuits``), and no ``--tree``:
@@ -235,7 +235,7 @@ def _poll_end(gate: Gate, session: str) -> dict[str, Any]:
 
 def register_model(gate: Gate, checkpoint: str, pdir: Path, circuit: str, scratch: Path) -> dict[str, Any]:
     """The local gate's registration of `MODEL` under the period's `circuit`, as vy-admin makes it on vy-challenger-1
-    (``admin model-register``, infra's `auditor.model_register`): the pinned checkpoint in `checkpoint` committed under
+    (``admin model-register``, `auditor.model_register`): the pinned checkpoint in `checkpoint` committed under
     a fresh auditor key for the declared Program's descriptor (`program_bytes`, written to `scratch`). ``ok`` when the
     registry has it under the circuit; its answer carries the roots, never the key."""
     desc = scratch / "window-program.json"

@@ -1,12 +1,12 @@
-"""RT4-INT's findings on H1's coins from the auditor host's challenger (#2940 @ 79c0a054b1, VLLM-55), from the witnesses at
-367b7e552b, each now the refusal its fix intends; RT4-INT-23 is infra's (a signed close), sealed under its ledger.
+"""RT4-INT's findings on H1's coins from the auditor host's challenger, each now the refusal its fix intends; RT4-INT-23's
+fix is the challenger's signed close, sealed under its ledger.
 
-* RT4-INT-17: a window is held to the one session infra's challenger gate opened for its Commit's root, in the gate's
+* RT4-INT-17: a window is held to the one session the challenger gate opened for its Commit's root, in the gate's
   signed v2 ledger (`pouw_h1_challenger.session_reason`, `Ledger`, core's check), ended closed and complete under the
   coin commitment the gate's answer gave it, which the serving side checked before its first coin; its tree is read
   through the gate's ``fetch`` and sealed by its end entry. Two sessions for one root, a reused session, a key off the ledger's pin, leaves
   out of order, a record leaf outside its session, a two-step open off its reserve and two published heads that don't
-  extend one another are refused, and so is a tampered byte of infra's own v2 head. A period (`period_reason`) is its
+  extend one another are refused, and so is a tampered byte of the gate's own v2 head. A period (`period_reason`) is its
   lane's windows between its signed period-open and period-close: one with no close, an incomplete one, an accepted
   window outside it and a window of it abandoned after its coins are refused.
 * RT4-INT-19: the window's draw coin opens once, after a root over the manifest, the last receipts and every round's root
@@ -16,8 +16,8 @@
   takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
 * RT4-INT-22: a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * RT4-INT-23: the release log, the only evidence that a round's coin followed its root, was an unsigned file; roots
-  chosen after every coin passed once the log was rewritten to name them. The challenger's signed close (#2946) now
-  signs it and the auditor's ledger seals the close, and infra's v2 end entry seals the log itself: a rewritten log is
+  chosen after every coin passed once the log was rewritten to name them. The challenger's signed close now
+  signs it and the auditor's ledger seals the close, and the gate's v2 end entry seals the log itself: a rewritten log is
   refused either way.
 """
 from __future__ import annotations
@@ -54,11 +54,11 @@ PRIVATE, KEY = CH.challenger_key(1, H=5)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
 #: two H1 windows' sessions, reserved on the gate before it opens them
 SA, SB = CH.session_id(0xa), CH.session_id(0xb)
-#: infra's v2 head (art:fbe4bcb48b, 31 entries: v1 opens, one-step v2 opens, then periods infra-smoke-20261020a to d,
+#: the gate's v2 head (art:fbe4bcb48b, 31 entries: v1 opens, one-step v2 opens, then periods infra-smoke-20261020a to d,
 #: c's and d's windows two-step) and seven of its sessions' trees as the gate's ``fetch`` gave them; registered
 #: (fixtures/artifacts.json), fetched by `research data fetch-fixtures`
 SMOKE = Path(__file__).parent / "fixtures" / "challenger_periods"
-#: the SHA-512 of the challenger key infra's gate signed tonight's ledger with (its 09:55Z note); a verifier reads its
+#: the SHA-512 of the challenger key the gate signed its ledger with; a verifier reads its
 #: pin from config, never from code
 SMOKE_PIN = ("27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3a"
              "e065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc")
@@ -572,14 +572,14 @@ def test_a_challenger_off_the_answers_commitment_is_refused_before_its_first_coi
 
 def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     """RT4-INT-17 on the gate's own bytes (vy-challenger-1's v2 head, art:fbe4bcb48b, and seven sessions as its fetch gave
-    them), through core's check: the head verifies under the key its sessions' key.json holds and tonight's pin, v1
+    them), through core's check: the head verifies under the key its sessions' key.json holds and the pin, v1
     entries then v2, and binds a window by its root; session s20261020T110845Z-1355 ended closed and complete under the
     commitment its end entry records (`held`), s20261020T105232Z-1281 (a hello without the secret),
     s20261020T105206Z-9738 (before ends recorded their commitment) and s20261020T114752Z-9e52 (a salt after a root not
     its window's) are refused windows. Its periods: infra-smoke-20261020a and b closed complete, each with one window,
     whose hellos.jsonl its end seals; c's two-step windows bind their reserves, one complete and one killed (refused);
     d's one window was reserved and never opened (refused). Every session of the head predates the challenger's signed
-    close (#2946), its challenger.json the gate's status and its release log's times floats, so core reads none of them
+    close, its challenger.json the gate's status and its release log's times floats, so core reads none of them
     as a session of record: 1355's end seals no close or refused hellos, a's period commits no cap or circuit, and b's
     and c's windows carry no signed close. Every open of the head also predates the host's pins log (RT4-INT-40), so b's
     and c's windows, which core's ledger check passes, are refused for it first: with no pins log, and with one, since
@@ -852,7 +852,7 @@ def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():
 
 def test_the_order_of_roots_and_coins_is_signed_by_the_challengers_close_and_a_rewrite_of_it_is_refused(tmp_path, monkeypatch):
     """RT4-INT-23: roots chosen after every coin, with a draw opened after a root over them, are refused against the
-    honest log, and so is a log rewritten to name them, which the challenger's signed close (#2946) no longer signs."""
+    honest log, and so is a log rewritten to name them, which the challenger's signed close no longer signs."""
     host = _Session(tmp_path, monkeypatch, SA, leaf=2, seed=15, reserved=True)
     weights, requests = hashlib.sha512(b"the weights' root").digest(), hashlib.sha512(b"round 0's requests").digest()
     opened = PS.window_open_root(weights, requests, SA).hex()

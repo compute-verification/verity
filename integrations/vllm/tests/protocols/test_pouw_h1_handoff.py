@@ -179,7 +179,7 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
 
 
 def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path, monkeypatch):
-    """PRF-131: the served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
+    """The served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
     its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G

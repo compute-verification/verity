@@ -217,10 +217,10 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
 
 
 def test_fill_declares_every_served_step_full_and_serve_h1_is_119_of_1152():
-    """`FILL` (VLLM-52): 64 one-token prompts at cap 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
-    the 16 served steps carries 64 rows and u = 16/18, PERIOD-PATH's ask 1; the engine runs all 64 in flight with no prefix
+    """`FILL`: 64 one-token prompts at cap 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
+    the 16 served steps carries 64 rows and u = 16/18; the engine runs all 64 in flight with no prefix
     cache. SERVE-H1's 5 prompts (`tests/engine/int8_exact_gpu.PROMPTS`, 44 tokens with BOS under the int8 Llama-3.1-8B's
-    tokenizer, r20261020-011113-6876) at the same cap are 44 + 15 x 5 rows: today's 119/1152."""
+    tokenizer, r20261020-011113-6876) at the same cap are 44 + 15 x 5 rows: 119/1152."""
     assert PH.FILL.schedule() == [64] * 16 + [0, 0] and PH.FILL.u == Fraction(16, 18)
     assert PH.FILL.engine_args() == {"max_num_seqs": 64, "max_num_batched_tokens": 64, "enable_chunked_prefill": True,
                                      "enable_prefix_caching": False}
@@ -1062,7 +1062,7 @@ def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, re
 
 
 def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monkeypatch):
-    """VLLM-60: a served window's salt coin opens after its own open root, `salt.window_open_root` of its weights' root,
+    """A served window's salt coin opens after its own open root, `salt.window_open_root` of its weights' root,
     its round-0 request table's root (committed before the salt, round 0's ``requests``) and its session, the root the
     auditor's ledger opened that session on (`core_check.salt`). Refused: a session the ledger opened on another window's
     root, on the bare weights' root or on another session's open root, whatever its salt followed; a session opened on its
@@ -1103,7 +1103,7 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
 
 
 def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(tmp_path, monkeypatch):
-    """`pouw_h1_window.open_session`, Pearl-C's device run's live coins (VLLM-95, CMP-81): the gate opens the reserved
+    """`pouw_h1_window.open_session`, Pearl-C's device run's live coins: the gate opens the reserved
     session on salt epoch k's root R over the weights' root W (`salt.epoch_open_root`), its commitment read from
     ``status`` when the open answers none, the challenger is reached on the answer's port once it accepts connections
     (`wait` between refusals), its coins are the salt coin alone (`window.SALT_FAMILIES`), and that coin opens after R,
@@ -1153,7 +1153,7 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
 
 
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):
-    """VLLM-60: a window's open root binds the session the auditor's signed reserve entry names (S, `core_check.salt`), so
+    """A window's open root binds the session the auditor's signed reserve entry names (S, `core_check.salt`), so
     a session the ledger opened on the window's own open root without reserving it first is refused, its salt and every
     other coin following the window's own roots."""
     a = _host(tmp_path, monkeypatch, name="a", seed=1, session=CH.session_id(0xa))

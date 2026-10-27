@@ -1,4 +1,4 @@
-"""A row of record is done only at its public cap (Daniel's ruling on ASK-39): its file declares ``sampling.ignore_eos`` and every
+"""A row of record is done only at its public cap: its file declares ``sampling.ignore_eos`` and every
 request a ``max_tokens``, and a row file, the row precheck and GP-01 refuse it by name otherwise, before any GPU time.  A research
 row keeps its EOS stops, and the generator writes each as before.  What makes a row of record is the circuit database's index
 (``config.RECORDS``)."""
