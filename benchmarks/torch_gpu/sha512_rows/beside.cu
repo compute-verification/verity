@@ -303,24 +303,26 @@ DEV void body(const Params& p) {
         acc_fence<NA>(d);
         if (lane == 0) mbar_arrive(empty0 + 8 * (s == 0 ? STAGES - 1 : s - 1));
         // n128 x 2 puts columns 128.. in d[64 ..]: accumulator 4 q + i is column 8 q + 2 (x % 4) + i % 2 in both forms
-        const int rl = wl * 64 + 16 * (x / 32) + (x % 32) / 4, row = tm * TM + rl, c0 = 2 * (x % 4);
+        // the bases hold the tile's and the lane's columns, so each q's offset is an immediate: offsets the compiler could
+        // hoist out of the tile loop would take 64 registers beside the accumulators
+        const int rl = wl * 64 + 16 * (x / 32) + (x % 32) / 4, row = tm * TM + rl, c0 = tn * BN + 2 * (x % 4);
         const float r0 = p.sa[row], r1 = p.sa[row + 8];
-        uint32_t* y0 = reinterpret_cast<uint32_t*>(p.y + (size_t)row * p.N + tn * BN);
-        uint32_t* y1 = reinterpret_cast<uint32_t*>(p.y + (size_t)(row + 8) * p.N + tn * BN);
-        uint32_t* o0 = reinterpret_cast<uint32_t*>(otile + rl * TSTRIDE);
-        uint32_t* o1 = reinterpret_cast<uint32_t*>(otile + (rl + 8) * TSTRIDE);
+        const float* sw = p.sw + c0;
+        uint32_t* y0 = reinterpret_cast<uint32_t*>(p.y + (size_t)row * p.N + c0);
+        uint32_t* y1 = reinterpret_cast<uint32_t*>(p.y + (size_t)(row + 8) * p.N + c0);
+        uint32_t* o0 = reinterpret_cast<uint32_t*>(otile + rl * TSTRIDE + 4 * (x % 4));
+        uint32_t* o1 = reinterpret_cast<uint32_t*>(otile + (rl + 8) * TSTRIDE + 4 * (x % 4));
         if (handoff) mbar_wait(tempty, (j & 1) ^ 1);
 #pragma unroll
         for (int q = 0; q < NA / 4; q++) {
-          const int c = c0 + 8 * q;
-          const float2 cw = *reinterpret_cast<const float2*>(p.sw + tn * BN + c);
+          const float2 cw = *reinterpret_cast<const float2*>(sw + 8 * q);
           const uint32_t w0 = words(d[4 * q], d[4 * q + 1], r0, cw.x, cw.y);
           const uint32_t w1 = words(d[4 * q + 2], d[4 * q + 3], r1, cw.x, cw.y);
-          y0[c / 2] = w0;
-          y1[c / 2] = w1;
+          y0[4 * q] = w0;
+          y1[4 * q] = w1;
           if constexpr (OT) {
-            o0[c / 2] = w0;
-            o1[c / 2] = w1;
+            o0[4 * q] = w0;
+            o1[4 * q] = w1;
           }
         }
         if (handoff) mbar_arrive(tfull);
