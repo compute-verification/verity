@@ -11,8 +11,10 @@ W commitment, the verification tree, the epoch id and the keys, which are counte
 `verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. It is pinned by `vectors.json` beside it
 (`VECTORS_SHA512`).
 
-- `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
-  and the store's shape (blocks per segment, segments).
+- `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile and the store's shape (blocks per segment, segments). A
+  registered store's are core's `P2Params` (`Params.of`), `DEPLOYMENT` the certificate's (`p2-2054B`: 2,054 bytes of each
+  2,056-byte block); the wire also takes the reduced-width conformance profiles no registered scheme produces, as
+  `PousCheck.Wire.Params` does. `vector_params` is the map vectors'.
 - `setup_salt`, `expand_prefix`: the post-commitment salt and the key prefix, which frames the model commitment and a
   32-byte salt where the registered scheme's frames its 24-byte salt alone.
 - `stream`, `keys`, `keys_after`: the per-block `K` and `t` after a prefix (`schemes.p2.stream` and `sha512_keys_indexed`:
@@ -26,7 +28,7 @@ W commitment, the verification tree, the epoch id and the keys, which are counte
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from verity.core.protocols.pous.schemes import p2 as P2
@@ -64,7 +66,7 @@ SALT_BYTES = 32
 K_AUDIT = P2.CERT_K
 """The deployment audit's challenges."""
 DELTA_NS = P2.DELTA_NS
-MAX_RTT_ALLOWANCE_NS = P2.RTT_ALLOWANCE_CAP_NS
+RTT_ALLOWANCE_CAP_NS = P2.RTT_ALLOWANCE_CAP_NS
 """Δ and the most round-trip allowance the operating point permits: the cap, so
 that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
 (v1 permitted 1 ms)."""
@@ -72,14 +74,14 @@ that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chipl
 
 @dataclass(frozen=True)
 class Params:
-    """A width, its prime, the payload profile (whole bytes, the leading two bytes of every block zero) and the store."""
+    """A width, its prime, the payload profile (whole bytes, the leading bytes of every block zero) and the store."""
 
     w: int
     c0: int
     payload_bytes: int
-    blocks_per_segment: int = 1 << 16
-    segments: int = 8
-    profile: str = "p2-2054B"
+    blocks_per_segment: int
+    segments: int
+    profile: str
 
     def __post_init__(self) -> None:
         if self.w < 8 or self.w % 32 or self.c0 < 1 or self.c0 % 4 != 1 or self.p % 4 != 3:
@@ -88,6 +90,11 @@ class Params:
             raise ValueError("a payload is fewer bytes than a block")
         if self.p <= 1 << 8 * self.payload_bytes:
             raise ValueError("every payload is below p")
+
+    @classmethod
+    def of(cls, params: P2.P2Params) -> Params:
+        """A registered store's: core's width, prime, payload profile and shape."""
+        return cls(params.w, params.c0, params.payload_bytes, params.blocks_per_segment, params.segments, params.profile)
 
     @property
     def p(self) -> int:
@@ -113,7 +120,16 @@ class Params:
                 "blocks_per_segment": self.blocks_per_segment, "segments": self.segments}
 
 
-DEPLOYMENT = Params(16_448, 21_065, 2_054)
+DEPLOYMENT = Params.of(P2.P2Params(*P2.POINT, segments=P2.CERT_BLOCKS // P2.POINT[2]))
+"""The registered store the certificate is at: 2^19 blocks, in 8 segments."""
+
+
+def vector_params(w: int, c0: int) -> Params:
+    """A map vector's parameters at `(w, c0)`: `DEPLOYMENT`, or `DEPLOYMENT` at a reduced width with a payload of
+    `n − 1` bytes (the map vectors read no profile or store)."""
+    if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0):
+        return DEPLOYMENT
+    return replace(DEPLOYMENT, w=w, c0=c0, payload_bytes=w // 8 - 1)
 
 
 def setup_salt(source: bytes, params: Params, model: bytes) -> bytes:
@@ -238,8 +254,8 @@ def conformance(full_encode: bool = False) -> dict[str, object]:
     doc = json.loads(raw)
     checks = {"file_sha512": hashlib.sha512(raw).hexdigest() == VECTORS_SHA512}
     for v in doc["vectors"]:
-        w, c0 = int(v["w"]), int(v["c0"])
-        params = Params(w, c0, 2054 if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0) else w // 8 - 1)
+        w = int(v["w"])
+        params = vector_params(w, int(v["c0"]))
         model, n = bytes.fromhex(v["model_commitment"]), params.width_bytes
         salt = setup_salt(bytes.fromhex(v["source"]), params, model)
         k, t, attempt = keys(salt, params, model, int(v["segment"]), int(v["block"]))
@@ -250,7 +266,6 @@ def conformance(full_encode: bool = False) -> dict[str, object]:
             ok = ok and encode(params, m, k, t) == c
         checks[v["id"]] = ok
     for s in doc["sigma_rejection_vectors"]:
-        w, c0 = int(s["w"]), int(s["c0"])
-        params = Params(w, c0, 2054 if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0) else w // 8 - 1)
+        params = vector_params(int(s["w"]), int(s["c0"]))
         checks[s["id"]] = sigma(params, int(s["r"], 16), int(s["K"], 16)) == int(s["sigma"], 16)
     return {"passed": all(checks.values()), "vector": str(VECTORS.name), "checks": checks}

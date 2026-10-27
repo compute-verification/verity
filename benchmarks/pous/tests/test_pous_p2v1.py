@@ -144,8 +144,8 @@ def test_params_refuse_a_modulus_below_the_payload():
     R, _, _ = _p2()
     for c0 in ((1 << 32) + 5, (1 << 32) - 3, (1 << 32) - (1 << 24) + 1):
         with pytest.raises(ValueError, match="payload"):
-            R.Params(32, c0, 3)
-    assert R.Params(32, 5, 3).p == (1 << 32) - 5
+            R.Params(32, c0, 3, 1, 1, "p2-3B")
+    assert R.Params(32, 5, 3, 1, 1, "p2-3B").p == (1 << 32) - 5
 
 
 def test_the_tree_and_the_audit_derivation_are_the_specs():
@@ -184,15 +184,15 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
 
 
 def test_the_spec_rtt_cap_is_the_schemes():
-    """The arm's Δ and RTT cap are the ones `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
-    judges against the cap whose `Δ + RTT` the certificate admits."""
+    """The arm's Δ and RTT cap are read from `verity`'s P2 scheme, so `rtt_allowance_within_spec` judges against the
+    cap whose `Δ + RTT` the certificate admits."""
     from verity.core.protocols.pous import audit
     from verity.core.protocols.pous.schemes import p2
 
     R, _, _ = _p2()
-    assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (p2.DELTA_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
+    assert (R.DELTA_NS, R.RTT_ALLOWANCE_CAP_NS) == (p2.DELTA_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
     assert p2.DELTA_NS == audit.DEADLINE_NS
-    assert R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS + 1_000
+    assert R.DELTA_NS + R.RTT_ALLOWANCE_CAP_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.RTT_ALLOWANCE_CAP_NS + 1_000
 
 
 def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):

@@ -43,7 +43,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.DEPLOYMENT
 ROW, PAYLOAD = PARAMS.block_bytes, PARAMS.payload_bytes     # 2,056 and 2,054
 SALT_BYTES = 24
 

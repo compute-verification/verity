@@ -254,10 +254,6 @@ def toy_store(doc: dict | None = None) -> Store:
     return build(shape, doc["layout"]["params"]["blocks_per_segment"])
 
 
-def _ref(params: P2Params) -> reference.Params:
-    return reference.Params(params.w, params.c0, params.payload_bytes, params.blocks_per_segment, params.segments)
-
-
 def decode_block(params: P2Params, prefix: bytes, i: int, block: bytes) -> bytes:
     """Block `i`'s payload, `params.payload_bytes` bytes: `reference.decode` under `reference.keys_after(prefix, …)`."""
     nb, pb = params.block_bytes, params.payload_bytes
@@ -689,7 +685,7 @@ class GpuEncoder:
 
         torch.cuda.set_device(device)
         self.torch, self.params = torch, params
-        self.K = Kernels(lib, "", _ref(params), expand_prefix(params, salt))
+        self.K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
         self.name = torch.cuda.get_device_name(device)
 
     def encode(self, s: int, w_seg: bytes) -> tuple[bytes, dict[str, Any]]:
@@ -925,7 +921,7 @@ def _decoder(params: P2Params, salt: bytes, lib: str | None) -> Any:
 
     from p2_v1.gpu import Kernels
 
-    K = Kernels(lib, "", _ref(params), expand_prefix(params, salt))
+    K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
     n, nb, pb, p = params.blocks_per_segment, params.block_bytes, params.payload_bytes, params.p
     p_row = torch.frombuffer(bytearray(p.to_bytes(nb, "big")), dtype=torch.uint8)
 
@@ -1008,7 +1004,7 @@ def spot_cmd(a: argparse.Namespace) -> int:
 
         from p2_v1.gpu import Kernels
 
-        gpu = (torch, Kernels(a.p2_lib, "", _ref(params), prefix))
+        gpu = (torch, Kernels(a.p2_lib, "", reference.Params.of(params), prefix))
     rng = random.SystemRandom()
     rows: list[dict[str, Any]] = []
     for _ in range(a.count):

@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import math
 
+from verity.core.protocols.pous.schemes.p2 import DELTA_NS
+
 PAYLOAD = 2054
 MAC_PER_MMA = 16 * 8 * 32
 TAU_F_NS = 2060.845 / 5.7
 COOP = 2716.7 / 778.5
-DELTA_NS = 500_000
 W0 = 16_448
 
 MEASURED = {
