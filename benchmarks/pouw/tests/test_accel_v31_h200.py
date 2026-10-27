@@ -186,6 +186,17 @@ def test_a_served_order_step_is_against_its_variants_fill_bench_lines(tmp_path, 
     assert ("summary: 8b served order served L 4096 L' 512 row 16384 served1-gemm1-L4096 N 64: step 0.224 s, gamma_u "
             "1.400, hashing hidden 69.2%; fill-bench's step at N 64 0.230 s; serial 0.282 s (hashing 0.083 s), gamma_u "
             "against these lines' wgl 0.160 s") in out
+    assert h200_step.unsplit("served1-gemm1-row16384-gsm80-gsms0_64_80-gcalls32-item200-gsmby4096x14336:80-L4096") == (
+        "served1-gemm1-row16384-gsmby4096x14336:80-L4096")
+    h = tmp_path / "fill-step-served1-gemm1-gsm80-gsms0_64-gcalls32-L4096.jsonl"
+    h.write_text(step("qkv,o,gu,down*32", calls) + "\n")
+    so = h200_step.served_order(h200_step.step_rows([str(h)]), h200_step.rows([str(f)]))
+    assert so[0]["ref_variant"] == "served1-gemm1-L4096" and so[0]["n"][64]["gamma_u"] == pytest.approx(1.4)
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f), str(h)])
+    assert h200_step.main() == 0
+    assert ("served1-gemm1-gsm80-gsms0_64-gcalls32-L4096 N 64: step 0.224 s, gamma_u 1.400, hashing hidden 69.2%; "
+            "fill-bench's step at N 64 0.230 s; serial 0.282 s (hashing 0.083 s), gamma_u against "
+            "served1-gemm1-L4096's wgl 0.160 s") in capsys.readouterr().out
 
 
 def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, capsys):

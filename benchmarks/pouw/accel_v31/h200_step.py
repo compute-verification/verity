@@ -27,8 +27,9 @@ split's sum less the step, over its hashing), and the step with each call's best
 `v31 fill-step`'s lines (`"fill_step": true`, run.sh's FILL_STEPS) time a step's calls in served order: each shape's calls
 on its own two copies, every commit beside the later calls' compute, as far behind as its shape's two copies allow, for
 each N of its splits (`step_gN`). The model is the one whose calls its shapes' are; gamma_u is against wgmma.linear's step
-from the same variant's fill-bench lines (at its L', L and ROW), the hashing hidden is their serial split less the step,
-over its hashing, and beside it is their step at that N (each shape's calls back to back).
+from the same variant's fill-bench lines (at its L', L and ROW; else from the one variant that differs only in gsm, gsms,
+gcalls and item, which move only the overlapped arms), the hashing hidden is their serial split less the step, over its
+hashing, and beside it is their step at that N (each shape's calls back to back).
 
     python3 h200_step.py BENCH.jsonl ... [STEP.jsonl ...] [--wgmma 3.06]
 """
@@ -36,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 LAYERS = 52
@@ -70,16 +72,27 @@ def step_rows(paths: list[str]) -> list[dict]:
     return out
 
 
+def unsplit(variant: str) -> str:
+    """A variant without the knobs that move only its overlapped arms (gsm, gsms, gcalls, item): fill-bench's serial
+    arms and wgl run on every SM whatever they are."""
+    return "-".join(t for t in variant.split("-") if not re.match(r"(gsms?|gcalls|item)\d", t))
+
+
 def served_order(steps_: list[dict], lines: list[dict], m: int = 16384, wg: dict[str, float] = WGMMA) -> list[dict]:
     """Each fill-step line's model (None: its shapes' calls are no model's at M m) and for each N it timed: the step, the
-    SMs, gamma_u (against the same variant's fill-bench wgl, else wg's), the hashing hidden (their serial split less the
-    step, over its hashing) and their step at that N (`apart`, each shape's calls back to back)."""
+    SMs, gamma_u (against its variant's fill-bench wgl, else wg's), the hashing hidden (their serial split less the step,
+    over its hashing) and their step at that N (`apart`, each shape's calls back to back). Its variant's fill-bench lines
+    are those of the same variant, else of the one variant that is the same `unsplit` (`ref_variant`)."""
     out = []
     for r in steps_:
         calls = {(s["n"], s["k"]): s["calls"] for s in r["shapes"]}
         model = next((x for x, c in MODELS.items() if c == calls and all(s["m"] == m for s in r["shapes"])), None)
         key = (r["lp"], r["L"], r["row"], bool(r.get("o")), r.get("variant", ""))
-        fb = fill_steps(lines, m, MODELS[model]).get(key) if model else None
+        fbs = fill_steps(lines, m, MODELS[model]) if model else {}
+        if key not in fbs:
+            near = [k for k in fbs if k[:4] == key[:4] and unsplit(k[4]) == unsplit(key[4])]
+            key = near[0] if len(near) == 1 else key
+        fb = fbs.get(key)
         sp = split_steps(lines, m, MODELS[model]).get(key) if model else None
         wgl = fb["s"]["wgl"] if fb else None
         ref = wgl or wg.get(model)
@@ -94,7 +107,8 @@ def served_order(steps_: list[dict], lines: list[dict], m: int = 16384, wg: dict
             per[g["n"]] = {"step": step, "sms": tuple(g["sms"]), "mhz": a.get("mhz") or None,
                            "gamma_u": step / ref if ref else None, "apart": apart,
                            "hidden": (serial - step) / fb["hashing"] if fb and fb["hashing"] else None}
-        out.append({"model": model, "key": key, "spec": r["step"], "ref": ref, "wgl": wgl, "serial": serial,
+        out.append({"model": model, "key": (r["lp"], r["L"], r["row"], bool(r.get("o")), r.get("variant", "")),
+                    "ref_variant": key[4] if fb else None, "spec": r["step"], "ref": ref, "wgl": wgl, "serial": serial,
                     "hashing": fb["hashing"] if fb else None, "steady": r.get("steady"), "n": per})
     return out
 
@@ -273,6 +287,8 @@ def main() -> int:
         for v in so:
             lp, L, row, o, var = v["key"]
             rn = "these lines' wgl" if v["wgl"] else "wgmma's"
+            if v["ref_variant"] and v["ref_variant"] != var:
+                rn = f"{v['ref_variant']}'s wgl" if v["wgl"] else rn
             against = f", gamma_u against {rn} {v['ref']:.3f} s" if v["ref"] else ""
             for n, x in v["n"].items():
                 gu = f", gamma_u {x['gamma_u']:.3f}" if x["gamma_u"] else ""
