@@ -127,8 +127,8 @@ reaches them through `AcceptedRunsAreProgramRuns` (`Accepted.lean`). The calibra
   `EncardAccSeqsWithinLeConstantRateV1Whole`, `EncardDecodableWithinLeCompiledV1Whole`,
   `EncardDecodableWithinLeCompiledPerWindowV1Whole`. That `ChargeCount_v2`'s circuit computes the Lean charge is
   circuit-check's, not proved here.
-- **The network certifier's channel bound** (`Warden.lean`), what the client sees of the server side: `WardenViewEqClientView`, `EncardWardenViewsLe`,
-  `EncardWardenDecodableLe`, under `trusted-host`.
+- **The network certifier's channel bound** (`Warden.lean`), what the client sees of the server side:
+  `WardenViewEqClientView`, `EncardWardenViewsLe`, `EncardWardenDecodableLe`, under `trusted-host`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`, `SampledAuditInstance.lean`):
   `SampledAuditAccepted`, under `Claims.Sampling.KS`.
 - **The leak bound under a sampled audit** (`SampledCharge.lean`, `SampledLeak.lean`, `SampledLeakReg.lean`):
