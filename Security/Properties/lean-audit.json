@@ -3612,11 +3612,11 @@
     "outcome": "accept"
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
-    "function": "Attest.check",
+    "function": "Attest.accepts",
     "outcome": "accept"
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
-    "function": "Attest.check",
+    "function": "Attest.accepts",
     "outcome": "accept"
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree": {

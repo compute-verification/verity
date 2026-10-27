@@ -14,9 +14,10 @@ commits every sampling block's records, each a byte string, as the leaves of one
 block, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs the root once
 (`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger drew, the link,
 the period's index and the record count) and returns the `SignedPeriod`, which goes to the prover only, as witness. The
-prover opens the records a proof reads (`SignedPeriod.read`), and the proof runs `Attest.check` (Lean, this
-directory's ``lean/``, package ``core_attest``): two LMS verifications for the two HSS levels, then each read's path to
-the root.
+party's lower key and the identity's certificate of it are public: every liveness record shows them in the clear. The
+prover opens the records a proof reads (`SignedPeriod.read`); the verifier checks the certificate in the clear
+(`Attest.checkKey`), and the proof runs `Attest.check` (Lean, this directory's ``lean/``, package ``core_attest``): the
+root's LMS signature under the lower key, then each read's path to the root. `Attest.accepts` is both.
 
 The party signs for one attachment at a time: `Period` starts its attachment on the signer (`lms.PartyKey.start`, which
 records it on the key's leaf state before any signature of it), so a restart within the attachment signs nothing more
@@ -135,8 +136,9 @@ class Read:
 
 @dataclass(frozen=True)
 class SignedPeriod:
-    """A closed period as the prover receives it, witness only: the period's attachment, link and index, its records in
-    order, their root and the party's two-level signature of the root (bytes)."""
+    """A closed period as the prover receives it: the period's attachment, link and index, its records in order, their
+    root and the party's two-level signature of the root (bytes). The signature's lower key and certificate are public
+    (`Attest.PartyKey`); the rest of it, the records and the root are witness."""
 
     attachment: bytes
     link: str

@@ -1,6 +1,6 @@
 """`verity.core.attest`: the period tree held to `verity.ml.commitments.merkle`, and a party's period under a small HSS key
 (H = 4): its liveness records verify in the clear, its signed root and each record's opening are what
-`Attest.check` accepts (here the Python it is held to), every misuse is refused, a block's liveness record is signed
+`Attest.accepts` accepts (here the Python it is held to), every misuse is refused, a block's liveness record is signed
 before its records are appended, and a restart within the attachment signs nothing more of it."""
 from __future__ import annotations
 
@@ -66,11 +66,14 @@ def party(tmp_path) -> lms.PartyKey:
 
 
 def _accepts(party: lms.PartyKey, s: A.SignedPeriod, reads: list[A.Read]) -> bool:
-    """`Attest.check`, in the Python it is held to."""
+    """`Attest.accepts`, in the Python it is held to: the lower key's certificate in the clear (`Attest.checkKey`), then
+    the root's signature under the lower key and each read's opening (`Attest.check`)."""
     sig = lms.HssSignature.decode(SMALL, s.signature)
+    if not lms.verify_certificate(SMALL, party.identity, DEPLOYMENT, "memory-challenger", sig.lower, sig.certificate):
+        return False
     m = lms.period_root_message(sig.lower[:16], DEPLOYMENT, "memory-challenger", s.attachment, s.link, s.period, s.count,
                                 s.root)
-    return (lms.hss_verify(SMALL, party.identity, DEPLOYMENT, "memory-challenger", sig, m)
+    return (lms.verify(SMALL, sig.lower, m, sig.signature)
             and all(A.verify_opening(s.root, s.count, r.position, r.record, r.path) for r in reads))
 
 
