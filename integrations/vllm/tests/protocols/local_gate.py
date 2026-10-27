@@ -128,6 +128,7 @@ def init(d: Path, argv: list[str]) -> int:
     (d / "host" / "sessions").mkdir()
     (d / "units").mkdir()
     (d / "host" / "peers").write_text(f"{a.peer} localhost\n")
+    (d / "host" / "coin-ports").write_text(f"{a.peer} {a.ports}\n")
     cfg = {"tree": str(tree), "commit": a.commit, "params": [int(x) for x in a.params.split(",")], "peer": a.peer,
            "ports": [int(x) for x in a.ports.split("-")], "coins": a.coins, "name": a.name}
     if a.coins == "lean":
@@ -163,8 +164,9 @@ def unit(d: Path, session: str) -> int:
     os.dup2(os.open(os.devnull, os.O_WRONLY), 1)
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
     argv = A.serve_argv(host, session, body)
-    i = argv.index("--peer")
-    del argv[i:i + 4]
+    if "--peer" in argv:
+        i = argv.index("--peer")
+        del argv[i:i + 4]
     argv += ["--params", ",".join(map(str, cfg["params"])), "--keygen-workers", "4"]
     if cfg["coins"] == "stub":
         os.environ["COINS_LOG"] = str(d / "units" / f"{session}.coins")

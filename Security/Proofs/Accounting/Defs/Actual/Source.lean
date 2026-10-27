@@ -1,7 +1,7 @@
 import Definitions.Accounting.Physical
 
 /-!
-# Ingress by source (trusted)
+# Ingress by source
 
 `ingress X I` counts every gate placed outside `X` that `A[X, I]` reads, wherever it was placed. The bandwidth audit's
 guarantee on the actual circuit (B3 in `note:console/20261012T0645Z-draft-actual-circuit-model`) is about one source:
