@@ -1,5 +1,5 @@
-"""What each SASS base opcode does, as diff_menu.py classifies it against A7's menu: can it form a multiply (head a fresh
-product), does it write a word, and which menu route (if any) prices it.
+"""What each SASS base opcode does, as diff_menu.py classifies it against A7's menu: can it form a multiply (head a
+fresh product), does it write a word, and which menu route (if any) prices it.
 
 A7 (`SheetSemantics`) says no unit outside the menu heads a fresh committed word (NoSum) and a side unit costs at least
 its per-word vector (SideUnits). A committed word is a fresh s32: the running sum of 32 int8 products of noised operands.

@@ -15,8 +15,9 @@ routes outside the scope (target 2), against design A's honest row (fpx_design's
 
 A tensor route is priced at two operand layouts: `shared` (every accumulator of an instruction useful, the most a tile
 can do) and `per-cell` (an operand that depends on its cell serves one accumulator a k-slot in its row and one in its
-column, so at most min(M, N) useful products a k-slot: Proposition Q's layout fact). Everything else is in the cheater's favour: operands free, the shift free, any one-sided product free, products
-on lanes one instruction each in the cheapest class that holds them, and the fold design A's own.
+column, so at most min(M, N) useful products a k-slot: Proposition Q's layout fact). Everything else is in the cheater's
+favour: operands free, the shift free, any one-sided product free, products on lanes one instruction each in the
+cheapest class that holds them, and the fold design A's own.
 
 Run from the repository root: `python benchmarks/pouw/rt2_fp/shift_price.py [--json OUT]`.
 """

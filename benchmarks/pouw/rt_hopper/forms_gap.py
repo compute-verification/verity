@@ -214,8 +214,9 @@ def rs_fit() -> None:
 
 
 def menu() -> None:
-    """The form escape beyond RS: each form the census prices at s8's rate offered beside the honest form at the census's
-    lane default, at IGMMA's joint lines by its MACs, and at its fit once read; then every fitted form at once."""
+    """The form escape beyond RS: each form the census prices at s8's rate offered beside the honest form at the
+    census's lane default, at IGMMA's joint lines by its MACs, and at its fit once read; then every fitted form at
+    once."""
     with tempfile.TemporaryDirectory() as t:
         for kind in SIBLINGS:
             for scale in (None, 1.0, "fit"):
@@ -231,9 +232,9 @@ def menu() -> None:
 
 
 def menu_fp() -> None:
-    """The form escape's FP forms: each FP kind offered beside the honest form at the lane default, at IGMMA's joint lines
-    by its MACs, by its tensor time (where the s8 siblings' fits fell, at 0.8-1.0 of it) and at 0.8 of that, and at its
-    fit once timed; then the untimed ones at once beside every fitted form, and each kind's break-even."""
+    """The form escape's FP forms: each FP kind offered beside the honest form at the lane default, at IGMMA's joint
+    lines by its MACs, by its tensor time (where the s8 siblings' fits fell, at 0.8-1.0 of it) and at 0.8 of that, and
+    at its fit once timed; then the untimed ones at once beside every fitted form, and each kind's break-even."""
     fitted = {k: "fit" for k, f in FIT.items() if f[4] is not None}
     with tempfile.TemporaryDirectory() as t:
         for kind, (_, _, n256, tt) in FP.items():
@@ -262,7 +263,8 @@ def menu_fp() -> None:
 
 
 def b1_fit() -> None:
-    """The form escape's b1 branch: BGMMA offered at splits 8 and 64 with its joint lines at SS's, and at its fit once read."""
+    """The form escape's b1 branch: BGMMA offered at splits 8 and 64 with its joint lines at SS's, and at its fit once
+    read."""
     with tempfile.TemporaryDirectory() as t:
         for split in (8, 64):
             for scale in (1.0, "fit"):

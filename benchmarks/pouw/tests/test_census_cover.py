@@ -1,11 +1,11 @@
 """Census cover: no instruction of a bit-exact program the tree carries is free at a headline statement's certificate.
 
-Bit-exact folds on the H200, the B200 and sm_120 broke FOLD-OPT at π* the same way: a bit-exact fold issued an instruction the
-statement's machine has no class for, or one whose class has no coefficient on π*'s row, so the Lean priced it at 0 and
-the fold came in under ♭'s. Here that is a failure. For every headline statement the exporters write (`lean_headline.py`,
-and `lean_headline_dc.py` where it exists), on the statement's vector and at its certificate π*, every instruction of
-every bit-exact program the tree carries for that device maps to one of the vector's classes priced above 0 at π*
-(Σ_r π*_r·c_kr > 0). The programs:
+Bit-exact folds on the H200, the B200 and sm_120 broke FOLD-OPT at π* the same way: a bit-exact fold issued an
+instruction the statement's machine has no class for, or one whose class has no coefficient on π*'s row, so the Lean
+priced it at 0 and the fold came in under ♭'s. Here that is a failure. For every headline statement the exporters write
+(`lean_headline.py`, and `lean_headline_dc.py` where it exists), on the statement's vector and at its certificate π*,
+every instruction of every bit-exact program the tree carries for that device maps to one of the vector's classes priced
+above 0 at π* (Σ_r π*_r·c_kr > 0). The programs:
 
 - every table of census-class counts in the device's data: the honest kernels' profiles, the designs (folds,
   `[fold_routes]`, fillers, baselines, operand floors) and `headline.toml`;
@@ -283,8 +283,8 @@ UNOWNED = "none yet: compute-accounting's coordinator"
 #: on them. The witnesses are census_cover_sass.json's runs: cpw_routes (RTX PRO 6000), rt3_dc (H200 and B200), and
 #: red_generic (its H200 and B200 SASS).
 CLOSING: dict[tuple[str, str], tuple[str, str]] = {
-    # sm_120, unclassed. On DS-120, the sheet's CATCH_ALL["sm_120"] (A2's NOROW, 1 at DS_issue) covers each; the measured
-    # reading (VF3r-16 at JI3s_0, VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.
+    # sm_120, unclassed. On DS-120, the sheet's CATCH_ALL["sm_120"] (A2's NOROW, 1 at DS_issue) covers each; the
+    # measured reading (VF3r-16 at JI3s_0, VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.
     ("sm_120", "STG.E.64"): (RT3_120, "cpw_routes modes 2 and 7's state-word stores; facet_break uc's stg64"),
     ("sm_120", "STS.64"): (RT3_120, "facet_break uc's sts64 probe"),
     ("sm_120", "ST.E.128"): (RT3_120, "facet_break uc's st128 probe, a generic store"),

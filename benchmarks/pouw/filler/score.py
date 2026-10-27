@@ -4,7 +4,7 @@
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
   python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v4] [--coins]  score a measured run's out dir
-  python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X [--noise]    the TP score of tpcomm.sh out dirs (v5)
+  python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X [--noise]    TP score of tpcomm.sh out dirs (v5)
   python3 benchmarks/pouw/filler/score.py defer-fit [--T 4096] [--json]               the deferred pass's calibration
   python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
@@ -628,8 +628,8 @@ def _text(p: Path) -> str | None:
 
 def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: str | None,
               facts_from: str | None = None) -> dict:
-    """The TP score (filler-scorer/v5): tpcomm.sh's out dirs (the TP suite), read together. The filler is read at v5's entry
-    (`scoring.filler_entry_v5`) from the TP build's program and fold facts at `scoring.TP_FILLER` (`listings`: the
+    """The TP score (filler-scorer/v5): tpcomm.sh's out dirs (the TP suite), read together. The filler is read at v5's
+    entry (`scoring.filler_entry_v5`) from the TP build's program and fold facts at `scoring.TP_FILLER` (`listings`: the
     tpcomm binary's nvdisasm; None reads the filler at the floor), with the declared noise and fold; each (TP, B, L) at
     `scoring.tp_entry`; the gates are `scoring.tp_gates`, each out dir's DRAM (ncu, `scoring.TP_NCU_KERNEL`) and clocks
     (application clocks at their default, every rep's clock read), and the whole kernel's MACs, served and filler,

@@ -13,7 +13,8 @@ as main's kernels state them:
   W' = W + c + U in s8. This is the form fpx_design's sm_120 arms read as H1.
 
 For each, the largest E4M3 integer and the largest integer UE4M3 block scale whose g1 operands fit, and whether g1's
-grids are "all even above 16" (fpx_design's card-scope remark). Run: `python benchmarks/pouw/rt2_fp/g1_check.py [--json OUT]`.
+grids are "all even above 16" (fpx_design's card-scope remark).
+Run: `python benchmarks/pouw/rt2_fp/g1_check.py [--json OUT]`.
 """
 from __future__ import annotations
 

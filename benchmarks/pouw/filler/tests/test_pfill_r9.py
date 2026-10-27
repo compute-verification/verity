@@ -161,8 +161,8 @@ def _adversarial_keys(rng: np.random.Generator, n: int) -> list[int]:
 
 
 def test_r9_key_check_is_p2ffs(build):
-    """pf_key_ok_r9 (host build) and pfill_ref.key_ok_r9 agree with the r9 twin's key_ok_r9 on random keys and on keys built
-    at the edges of its int8 window, which it both accepts and rejects; the default keys pass."""
+    """pf_key_ok_r9 (host build) and pfill_ref.key_ok_r9 agree with the r9 twin's key_ok_r9 on random keys and on keys
+    built at the edges of its int8 window, which it both accepts and rejects; the default keys pass."""
     rng = np.random.default_rng(1117)
     lib = build(R.S8, "-DPFILL_LI")
     rand = [int(x) for x in rng.integers(0, 1 << 32, 1500, dtype=np.uint64)] + [0x9E3779B9, 0x7F4A7C15]

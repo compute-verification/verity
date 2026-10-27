@@ -745,7 +745,8 @@ static void exact() {
   if constexpr (F::EX != 0) exact_int<F>();
 }
 
-// The least bound moves with the loop's length (IMMA.16832 at 8 warps: 5.16 at R = 32, 4.54 at 48, 5.19 at 64), so R and U each vary, every loop under ~200 instructions.
+// The least bound moves with the loop's length (IMMA.16832 at 8 warps: 5.16 at R = 32, 4.54 at 48, 5.19 at 64), so R
+// and U each vary, every loop under ~200 instructions.
 template <class F, int NW>
 static void sweep() {
   mixu<F, 24, LANE_MIX, NW, 2>(); mixu<F, 24, LANE_MIX, NW, 3>(); mixu<F, 24, LANE_MIX, NW, 4>();

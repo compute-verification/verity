@@ -88,13 +88,14 @@ def _price(x, lam: dict, n: dict) -> Fraction:
 
 def test_folds_meet_fold_opt_at_pi_star():
     """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
-    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*, and on the H200
-    a premise only about folds off the cheater's menu, which holds every counted fold known: at the (I3) twin's π* li-bulk's trimmed W = ∞ member is that menu's cheapest. Every class a fold issues prices above 0 at
-    each π* (the stores carry the JI90 lines measured). ♭'s fold meets it, and so does ♭'s fold
-    with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. On the B200 that
-    fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked: at 1/20 issue + 19/20 IMAD
-    on the sheet and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ*. On the H200 it falsifies FOLD-OPT at
-    no certificate: N_w times a menu route with its multiplies as IMAD.WIDE prices at most it on every row."""
+    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*, and on the H200 a
+    premise only about folds off the cheater's menu, which holds every counted fold known: at the (I3) twin's π*
+    li-bulk's trimmed W = ∞ member is that menu's cheapest. Every class a fold issues prices above 0 at each π* (the
+    stores carry the JI90 lines measured). ♭'s fold meets it, and so does ♭'s fold with each IMAD (its one IMAD-pipe
+    class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. On the B200 that fold is why FOLD-OPT at every
+    certificate (`FoldOptFolded`) is not asked: at 1/20 issue + 19/20 IMAD on the sheet and 1/20 I + 19/20 UP on the
+    measured rows it prices below N_w·φ*. On the H200 it falsifies FOLD-OPT at no certificate: N_w times a menu route
+    with its multiplies as IMAD.WIDE prices at most it on every row."""
     for fam in H.FAMILIES:
         s = H.reading(fam, fam.sheet).data
         pipe = dict(zip(s.classes, s.sheet["pipe"]))

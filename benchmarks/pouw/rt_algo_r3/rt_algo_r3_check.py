@@ -562,7 +562,8 @@ COMPRESSION_S = 89.6e-9 / 612
 
 def serve_b(T: int) -> dict:
     """Hashing time a token over plain time at T tokens a step: per unit, J10-R, and J10-R without σ_R's 32 key blocks a
-    unit, the terms the joint-PoUW shared model counts (it reports 2.92 per unit, 0.188 shared at T = 256, 0.736 at 64)."""
+    unit, the terms the joint-PoUW shared model counts (it reports 2.92 per unit, 0.188 shared at T = 256, 0.736 at
+    64)."""
     tot = {"per_unit": 0.0, "j10": 0.0, "j10_noise": 0.0}
     for K, N in LLAMA_CALLS:
         g = gen_cost(T, N, K)

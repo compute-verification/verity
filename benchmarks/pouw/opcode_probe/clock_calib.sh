@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The clock ceiling's reading C: the auditor-side measurement uncertainty of timing a known-length reference kernel with the
-# auditor's own clock. Builds and gates probes/power.cu outside the lease, then under one gpu-lease
+# The clock ceiling's reading C: the auditor-side measurement uncertainty of timing a known-length reference kernel with
+# the auditor's own clock. Builds and gates probes/power.cu outside the lease, then under one gpu-lease
 # (clock_calib_lease.sh) runs a reference kernel of known cycle count REPS times at several lengths, timed by the host's
 # steady_clock (the auditor's clock, with no trust in the chip), and reports the jitter = u. From a pushed commit:
 #

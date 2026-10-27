@@ -71,10 +71,10 @@ def test_checked_designs_skip_no_product_only_vector_work(name):
 
 def test_the_designs_reproduce_skips_figures():
     """Corollary D3's ε_skip, P in one block and every served output free: A's 0.327% at 8B 2K on VF3q-16 with vsum's
-    sums (SPEC §2.9's vector, its peel at the checked kernels' apv_l7qs) and 0.292% with vfold's, the served V producer of
-    every peel, and each design's on VF3r-16, the vector of record, whose ♭ is about 10% cheaper, each at
-    its own ♭ (dither-2s-fill's filler takes ♭ from 17.221 to 34.000 and halves its share). Dither-1S binds at 8B 32K decode: QKᵀ's one-sided strip is 2L of its
-    d = 128 products a word."""
+    sums (SPEC §2.9's vector, its peel at the checked kernels' apv_l7qs) and 0.292% with vfold's, the served V producer
+    of every peel, and each design's on VF3r-16, the vector of record, whose ♭ is about 10% cheaper, each at its own ♭
+    (dither-2s-fill's filler takes ♭ from 17.221 to 34.000 and halves its share). Dither-1S binds at 8B 32K decode:
+    QKᵀ's one-sided strip is 2L of its d = 128 products a word."""
     two = design("dither-2s")
     for sums, eps in (("vsum", 0.0032750), ("vfold", 0.0029227)):
         q = E.design_skip(replace(two, sums=sums), vector="VF3q-16")
@@ -124,8 +124,8 @@ def test_a_skip_at_another_vector_is_eps_budgets_number_there():
 
 def test_each_device_prices_its_own_floor_and_the_same_skippable_work():
     """♭ on each device's own Π (`prices`): SPEC's 19.049 and 19.183 on VF3q-16, the LI designs' 5.961 (H200) and 4.035
-    (B200), and each variant's own, dither-2s-fill's with its 4.5 filler instructions a word. The peel's
-    tail is Π's price of the checked kernels' instructions where that exceeds 1.57 of ♭'s MACs, as on the H200 and B200, whose
+    (B200), and each variant's own, dither-2s-fill's with its 4.5 filler instructions a word. The peel's tail is Π's
+    price of the checked kernels' instructions where that exceeds 1.57 of ♭'s MACs, as on the H200 and B200, whose
     mma.sync m16n8k32 takes 5.98 and 7.85 SMSP-cycles. The checked leaves' vector work is the same cycles on every
     device (a vector instruction is one issue cycle on each Π), so only B_♭ moves it."""
     assert E.prices("dither-c-peel", vector="VF3q-16").mma == pytest.approx(19.049, abs=1e-3)
@@ -217,9 +217,9 @@ def test_h1_under_the_floor_credit_is_specs_table(monkeypatch):
 
 
 def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
-    """By honest time (γ's input), the checked kernels' apv_l7qs: the tail at 2.8 mainloop MACs a strip product, the sums a
-    one-hot P row frees, and the served epilogue. Checked downstream, the cheater pays the 4th IMMA and the epilogue and
-    still skips the sums; at the model's tail with no sums, H1's 0.193% (8B 2K) comes back."""
+    """By honest time (γ's input), the checked kernels' apv_l7qs: the tail at 2.8 mainloop MACs a strip product, the
+    sums a one-hot P row frees, and the served epilogue. Checked downstream, the cheater pays the 4th IMMA and the
+    epilogue and still skips the sums; at the model's tail with no sums, H1's 0.193% (8B 2K) comes back."""
     d, m, c = design("dither-c-peel"), "llama-3.1-8b", 2048
     free, chk = E.summary(m, c, "prefill", d), E.summary(m, c, "prefill", d, checked=True)
     assert chk.eps_time < free.eps_time and chk.gamma == free.gamma

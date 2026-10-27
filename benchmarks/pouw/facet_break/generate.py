@@ -577,10 +577,10 @@ RT_PIPE = (("fmuli", "axi"), ("fmuli", "dp4ai"), ("axi", "dp4ai"), ("fmuli", "im
 
 
 def targeted_rt() -> list[dict]:
-    """The `rt` batch beside IMMA.16832 (H1+fx1's binding form): the ceiling of the FMA-pipe lanes at 2-6 accumulators and
-    1-4 warps a SMSP around honest's 16-20 lane ops a MMA; unroll 2 and 4 and placements 1-3 on 2-4 accumulators; the
-    FMA lane beside the uniform datapath, then FMA, ALU and uniform in turn, at 2-4 accumulators; and two dispatch pipes
-    (FMA, ALU, IMAD) at 2-4 accumulators across the binding ratio."""
+    """The `rt` batch beside IMMA.16832 (H1+fx1's binding form): the ceiling of the FMA-pipe lanes at 2-6 accumulators
+    and 1-4 warps a SMSP around honest's 16-20 lane ops a MMA; unroll 2 and 4 and placements 1-3 on 2-4 accumulators;
+    the FMA lane beside the uniform datapath, then FMA, ALU and uniform in turn, at 2-4 accumulators; and two dispatch
+    pipes (FMA, ALU, IMAD) at 2-4 accumulators across the binding ratio."""
     i = "i16832"
     out: list[dict] = []
     for lane in RT_CEIL:
@@ -623,8 +623,8 @@ RT2_LANES = ("fmuli", "faddi", ("ffmai", "uaxi"), ("fmuli", "uaxi"), ("faddi", "
 
 
 def targeted_rt2() -> list[dict]:
-    """The `rt2` batch beside IMMA.16832: the FMA-pipe lanes alone and beside the uniform datapath at unroll 2, 4 and 8 on
-    2-4 accumulators, 2 warps a SMSP, from the MMA end of JI3s_13 (64 lane ops a 8 MMAs) to JI3s_0's (160); and the
+    """The `rt2` batch beside IMMA.16832: the FMA-pipe lanes alone and beside the uniform datapath at unroll 2, 4 and 8
+    on 2-4 accumulators, 2 warps a SMSP, from the MMA end of JI3s_13 (64 lane ops a 8 MMAs) to JI3s_0's (160); and the
     lanes after each MMA's group (placement 3) at unroll 4."""
     i = "i16832"
     out: list[dict] = []

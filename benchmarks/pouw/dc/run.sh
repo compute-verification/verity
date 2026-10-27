@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The data-centre probes on one GPU: the probes (M3 on sm_90a, M4 on sm_100a), the scalar pipes, and the Dither GEMM gate and
-# bench. From a pushed commit, on a 1x H200 or 1x B200 node:
+# The data-centre probes on one GPU: the probes (M3 on sm_90a, M4 on sm_100a), the scalar pipes, and the Dither GEMM
+# gate and bench. From a pushed commit, on a 1x H200 or 1x B200 node:
 #
 #   research run --on <node> --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90|sm100

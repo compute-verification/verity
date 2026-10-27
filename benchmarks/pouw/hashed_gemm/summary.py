@@ -1,5 +1,6 @@
-"""run.sh's summary: the gates (the device's and hgref.py's), the per-call ratio to plain cuBLASLt of each arm at each linear
-(with the flush, per 8 calls, and steady, calls 1..7), against the earlier 2.40x at o_proj, and ncu's counters at o_proj.
+"""run.sh's summary: the gates (the device's and hgref.py's), the per-call ratio to plain cuBLASLt of each arm at each
+linear (with the flush, per 8 calls, and steady, calls 1..7), against the earlier 2.40x at o_proj, and ncu's counters at
+o_proj.
 python3 summary.py OUT_DIR"""
 from __future__ import annotations
 

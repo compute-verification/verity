@@ -1209,8 +1209,8 @@ def certified_v5(e: dict, which: str = "active") -> dict:
 SERVED_V5 = {"fraction": 0.9, "status": "proved (modelled served component)",
              "source": "decision 29 (Theorem K, c = 1 at φ = 0.9, the dither X = ⌊x/s⌋ + b) and decision 36 (decode's "
                        "deferred edit at T = 4096, prefill's per-stage live coins)"}
-#: the edited GEMM ÷ plain cuBLASLt int8: edited:e_l2q 0.640 ms at o_proj (m 8192, n = k = 4096), duo receipts at L = 32;
-#: 1.478-1.50x with the quantizer on both sides
+#: the edited GEMM ÷ plain cuBLASLt int8: edited:e_l2q 0.640 ms at o_proj (m 8192, n = k = 4096), duo receipts
+#: at L = 32; 1.478-1.50x with the quantizer on both sides
 EGEMM = 1.570
 #: decode's deferred noised pass (at T = DEFER_T tokens a sub-round): the model's unit of pass time is its
 #: served MACs at DEFER_OF_PEAK of the int8 peak, the compute-bound plateau of 0.97 µs a token-layer,
@@ -1513,7 +1513,7 @@ def score_v5(stats: dict, filler_fraction: float, coins: float = PREFILL_COINS) 
     return out
 
 
-# ---- filler-scorer/v5: the TP score -------------------------------------------------------------------------------------------
+# ---- filler-scorer/v5: the TP score ------------------------------------------------------------------------------------------
 
 #: The TP suite: Llama-3.1-70B decode under tensor parallelism on
 #: GPUs of one NUMA node, at (TP, B, L); TP 2 can't hold B 128 at 8K (its KV wraps)
@@ -1623,9 +1623,10 @@ def tp_gates(sets: list[dict], entries: dict, pf: dict | None) -> dict:
 
 
 def tp_score(entries: list[dict]) -> dict:
-    """The TP score over the TP entries present, per GPU: the mean of their coverage weighted by TP × wall time (`tp_entry`'s
-    ``time``), in its filler and served parts, beside v4's form (served plain at 0.225, weighted by v4's own wall time,
-    ``time_v4``); per TP as well. Missing `TP_SUITE` entries are listed, and the TP score needs them all."""
+    """The TP score over the TP entries present, per GPU: the mean of their coverage weighted by TP × wall time
+    (`tp_entry`'s ``time``), in its filler and served parts, beside v4's form (served plain at 0.225, weighted by v4's
+    own wall time, ``time_v4``); per TP as well. Missing `TP_SUITE` entries are listed, and the TP score needs them
+    all."""
     def mean(es, k):
         w = [e["time_v4" if k == "coverage_v4_form" else "time"] for e in es]
         return sum(e[k] * x for e, x in zip(es, w)) / sum(w) if es else None

@@ -390,8 +390,8 @@ def test_pins_of_another_format_are_refused(tmp_path):
 
 
 # ---- sm_90a ---------------------------------------------------------------------------------------------------------------
-# `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes, by the sm_90a pin's ptxas. The shipped 13.0.1-sm_90a
-# entry is ieee_pin.cu's, from its numeric run on the H200.
+# `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes, by the sm_90a pin's ptxas. The shipped
+# 13.0.1-sm_90a entry is ieee_pin.cu's, from its numeric run on the H200.
 
 
 @pytest.fixture

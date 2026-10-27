@@ -49,29 +49,29 @@
 constexpr uint32_t DITHER_TAG = 7;
 using MLW = ML<128, 128, 32, 3>;
 
-// The fold's scalar-only dial: the served GEMM's tensor pipe is already busy with the
-// useful IMMA, so the mandatory per-word work must ride the idle scalar issue, not filler MMAs. EG_ROUNDS absorbs each
-// committed word's four s32 limbs R times through the XOR-in(13,19) fold (RK == XIN/XIN64/XIN13), no extra MMAs, so R is
-// the one cost parameter and the tensor time is untouched. EG_ROUNDS == 1 (the default) is byte-identical to the fold of
-// record. The loop runs #pragma unroll 1 so the SASS op-count is constant across R (one dial); the honest kernel pins a
-// fixed R and lets ptxas unroll it. PROFILE sweeps the knee; FOLD measures correctness and cost a round once.
+// The fold's scalar-only dial: the served GEMM's tensor pipe is already busy with the useful IMMA, so the mandatory
+// per-word work must ride the idle scalar issue, not filler MMAs. EG_ROUNDS absorbs each committed word's four s32
+// limbs R times through the XOR-in(13,19) fold (RK == XIN/XIN64/XIN13), no extra MMAs, so R is the one cost parameter
+// and the tensor time is untouched. EG_ROUNDS == 1 (the default) is byte-identical to the fold of record. The loop runs
+// #pragma unroll 1 so the SASS op-count is constant across R (one dial); the honest kernel pins a fixed R and lets
+// ptxas unroll it. PROFILE sweeps the knee; FOLD measures correctness and cost a round once.
 #ifndef EG_ROUNDS
 #define EG_ROUNDS 1
 #endif
 static_assert(EG_ROUNDS >= 1 && EG_ROUNDS <= 64, "EG_ROUNDS in 1..64");
 
 // The receipt kinds beyond fgemm.cu's DUO, TB4, TB4C, TB2W and TB1W (NONE: no receipts). DUO64: duo on every second
-// running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: the r9 XOR-in fold (pfill.cuh's NC 4
-// under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
+// running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: the r9 XOR-in fold (pfill.cuh's NC
+// 4 under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
 // accumulator's four words, tile t into chain t % 4. XIN64: XIN on the odd steps' running sums only (as DUO64). XIN and
-// XIN64 are timing references, not receipts: rotl 7 puts a bad merge ratio at ±128, an int8 ratio, at the step boundary.
-// XIN13, the served candidate: the r9 XOR-in, y = (rotl(y, 13) ^ d0) a0
-// + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 (receipt_folds_r9.xorin_step), keys under key_ok_r9, chain c of thread ctid
-// of tile t starting at pfill's y = pos = (32 w + lane) 4 + c with the output's warps numbered in order (w = 16 t +
-// warp, so pos = (t NCT + ctid) 4 + c). Negative, so fgemm.cu's is_tb is false for them
+// XIN64 are timing references, not receipts: rotl 7 puts a bad merge ratio at ±128, an int8 ratio, at the step
+// boundary. XIN13, the served candidate: the r9 XOR-in, y = (rotl(y, 13) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1
+// + d3 (receipt_folds_r9.xorin_step), keys under key_ok_r9, chain c of thread ctid of tile t starting at pfill's y =
+// pos = (32 w + lane) 4 + c with the output's warps numbered in order (w = 16 t + warp, so pos = (t NCT + ctid) 4 + c).
+// Negative, so fgemm.cu's is_tb is false for them
 constexpr int DUO64 = -1, XIN = -2, XIN64 = -3, XIN13 = -4;
-// XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words
-// mix32(seed ^ (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (the r9 reference draws them per tile from a SHA block;
+// XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words mix32(seed ^
+// (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (the r9 reference draws them per tile from a SHA block;
 // either way two registers); XIN13's the first two that pass key_ok_r9
 __host__ __device__ inline bool xin_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;

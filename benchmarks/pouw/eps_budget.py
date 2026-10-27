@@ -19,8 +19,8 @@ The designs are the registry's (benchmarks/pouw/machine_model/data/designs/, `ma
 noised as its design's `[noise]` names, a leaf of the registry's NOISE, and priced per component in executed int8
 products and honest seconds, with γ (`products`, `parts`, `summary`, `skip_table`, `component_table`). A checked leaf's
 vector work that only the served output needs is priced in checked_strip's tensor–scalar model (`TS_EPS`, `pv_ts`), and
-`pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. The peel's P·V is priced at the checked kernels'
-measured kernel (apv_l7qs): its tail a strip product, its sums and its served epilogue. Under the floor credit
+`pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. The peel's P·V is priced at the checked
+kernels' measured kernel (apv_l7qs): its tail a strip product, its sums and its served epilogue. Under the floor credit
 (Corollary D3, SPEC §2.9; `floor_skip`) ε_skip is the skippable work at its device's issue-model price over the floor
 program's bound B_♭, with ♭ priced on the device's own Π (`prices`), and honest's time above those prices is γ's. A
 design's ε_skip (`design_skip`) is the most over the models, contexts and phases under the floor credit, on sm_120 and
@@ -440,8 +440,8 @@ TS_CHEAT = {"co32c": ts_time(1, 4 * TS_FOLD), "cohalf": ts_time(6, 5 * 4 * TS_FO
 @dataclass(frozen=True)
 class Prices:
     """A design's floor-credit prices on a device's Π, SMSP-cycles: ♭ a 4096-MAC MMA, and adopted P·V's tail a strip
-    product as Π prices the checked kernels' instruction counts (APV_TAIL, or the device's own in SASS), whole and without
-    the 4th IMMA."""
+    product as Π prices the checked kernels' instruction counts (APV_TAIL, or the device's own in SASS), whole and
+    without the 4th IMMA."""
     vector: str
     mma: float
     tail: float

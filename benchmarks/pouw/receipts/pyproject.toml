@@ -6,6 +6,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Nothing outside this directory: the reference is stdlib only, the r9 twin is vendored under tests/fixtures (pinned by its
-# sha256), and the header tests build conform_host.cpp with the system's g++ (and nvcc where it is installed).
+# Nothing outside this directory: the reference is stdlib only, the r9 twin is vendored under tests/fixtures (pinned by
+# its sha256), and the header tests build conform_host.cpp with the system's g++ (and nvcc where it is installed).
 inputs = []

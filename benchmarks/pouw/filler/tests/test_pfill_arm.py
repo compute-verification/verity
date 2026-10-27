@@ -1,6 +1,6 @@
-"""The proved-filler scorer arms (benchmarks/pouw/filler/pfill_arm.py) meet the filler arm contract, and place the filler as
-FILL v1 does at every suite point; pfill_proved.py's readings are the scorer's arithmetic with only the filler's
-certified fraction changed."""
+"""The proved-filler scorer arms (benchmarks/pouw/filler/pfill_arm.py) meet the filler arm contract, and place the
+filler as FILL v1 does at every suite point; pfill_proved.py's readings are the scorer's arithmetic with only the
+filler's certified fraction changed."""
 
 from __future__ import annotations
 

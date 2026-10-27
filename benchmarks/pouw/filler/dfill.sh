@@ -8,10 +8,10 @@
 #     --send benchmarks/pouw/filler/dfill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dfill.sh"'
 #
 # DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2[:KIND]] ...", KIND as DFILL_KIND), DF_BLS and
-# DF_CO_BLS ("B:L ...", for split and co arms), DF_ARMS2 with DF_BLS2 (a second set), DF_S (steps a tile), DF_REPS,
-# NCU (0|1), DF_NCU ("W:NC ...", the configs ncu reads), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in
-# the same lease, into fill.jsonl), DF_NVCC (more nvcc flags: pfill.cuh's filler is the default; -DDFILL_V1 builds FILL v1's). An empty
-# DF_ARMS runs no arms.
+# DF_CO_BLS ("B:L ...", for split and co arms), DF_ARMS2 with DF_BLS2 (a second set), DF_S (steps a tile), DF_REPS, NCU
+# (0|1), DF_NCU ("W:NC ...", the configs ncu reads), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in
+# the same lease, into fill.jsonl), DF_NVCC (more nvcc flags: pfill.cuh's filler is the default; -DDFILL_V1 builds FILL
+# v1's). An empty DF_ARMS runs no arms.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
