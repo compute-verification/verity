@@ -107,6 +107,7 @@ ROWS_REFUSALS = {
     "rows-delta": ("is not the period's", "is not the period's"),
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
     "rows-prog-untied": ("is no compute audit's output",) * 2,
+    "rows-ids-untied": ("a tied audit's ids aren't the scan's",) * 2,
 }
 
 
@@ -114,8 +115,8 @@ def test_the_rows_form_refuses_what_it_must(server):
     """A link-window missing one of its records' certificates, one the warden left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
-    other than its 2T units, and a scan whose `prog` is no compute audit's output: Lean and the mirror each refuse
-    every one at that check."""
+    other than its 2T units, a scan whose `prog` is no compute audit's output, and one whose tied audit computed on ids
+    other than the scan's state: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -145,6 +146,57 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
         with pytest.raises(D.Mismatch) as x:
             D.replay(PORT, build("rows-prog-untied", n, small=True), server)
         assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+
+
+def test_an_audit_whose_ids_arent_the_scans_state_is_refused(server, monkeypatch):
+    """The audit the scan's `prog` is an output of computes on its requests' prompt ids and sampling fields as a
+    registered read of the scan's state, so the rows form refuses, in Lean and in the mirror and by name, each way a
+    link-window's ids tie can fail (`PC.IDS_UNTIES`): the audit's `scan/state` entry at another root (its block read
+    another prompt id or sampling field, rows of another tree) or domain, none or one under another name, the scan's
+    own entry absent or under another name, a second audit tied to the `prog` with no entry, and the scan's entry's
+    root not a string; and a mirror that skips the tie accepts what Lean refuses."""
+    untie, why = PC.IDS_UNTIES, "a tied audit's ids aren't the scan's"
+    for u in untie:
+        monkeypatch.setattr(PC, "IDS_UNTIES", (u,))
+        for n in range(3):
+            case = build("rows-ids-untied", n, small=n % 2 == 0)
+            assert why in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and why in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "IDS_UNTIES", untie)
+    monkeypatch.setattr(PC, "_ids_tied", lambda audits, reg: True)
+    for n in range(2):
+        with pytest.raises(D.Mismatch) as x:
+            D.replay(PORT, build("rows-ids-untied", n, small=True), server)
+        assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+
+
+def test_ids_tied_is_leans_on_its_guards():
+    """`_ids_tied` is Lean's `idsTied` on its `#guard`s: the block whose o1 is the scan's `prog` names the scan's state
+    by port or by value; refused where it names it at another root or domain, under another name or not at all, where
+    the scan names none or one whose root is no string, and where a second audit the `prog` is an output of names
+    none; an audit not tied doesn't count."""
+    def e(k, p, r, d):
+        return {k: p, "root": r, "domain": d}
+
+    def reg(roots, registered=()):
+        return PC.Registration({"roots": list(roots), "registered": list(registered)}, b"")
+
+    scan, out = reg([e("port", PC.PROG, "p", "d"), e("port", PC.STATE, "s", "t")]), e("port", "block/o1", "p", "d")
+    assert PC._ids_tied([reg([out, e("port", PC.STATE, "s", "t")])], scan)
+    assert PC._ids_tied([reg([out], [e("value", PC.STATE, "s", "t")])],
+                        reg([e("port", PC.PROG, "p", "d")], [e("value", PC.STATE, "s", "t")]))
+    assert PC._ids_tied([reg([out, e("port", PC.STATE, "s", "t")]), reg([e("port", "other/o1", "q", "d")])], scan)
+    for audits, s in [([reg([out, e("port", PC.STATE, "x", "t")])], scan),
+                      ([reg([out, e("port", PC.STATE, "s", "x")])], scan),
+                      ([reg([out, e("port", "block/ids", "s", "t")])], scan),
+                      ([reg([out, e("value", PC.STATE, "s", "t")])], scan),
+                      ([reg([out])], scan),
+                      ([reg([out, e("port", PC.STATE, "s", "t")])], reg([e("port", PC.PROG, "p", "d")])),
+                      ([reg([out, e("port", PC.STATE, "s", "t")])],
+                       reg([e("port", PC.PROG, "p", "d"), e("port", PC.STATE, 7, "t")])),
+                      ([reg([out, e("port", PC.STATE, "s", "t")]), reg([e("port", "other/o2", "p", "d")])], scan)]:
+        assert not PC._ids_tied(audits, s), (audits, s)
 
 
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server, monkeypatch):

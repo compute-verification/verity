@@ -121,9 +121,12 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
   for another window's rows is refused); its Programs' row is a compute audit's output (`progTied`): its `scan/prog`
   entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) in the `roots` of an audit's
-  registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's for that
-  registration's digest, accepted with one level of the scan's 2T units drawn `subset:k` or stratified, and its
-  `bound`;
+  registration, so a scan whose `prog` the prover committed alone is refused; the ids each audit it is tied to computed
+  on are the scan's (`idsTied`): the audit's registration names a `scan/state` entry at the root and domain of the
+  scan's registration's `scan/state` entry, the state whose slots hold each request's prompt ids and sampling fields as
+  the scan read them off the warden's ingress cells, so an audit whose block read another prompt id or sampling field
+  (another tree's rows, at another root) is refused; and the answer is one-stage's for that registration's digest,
+  accepted with one level of the scan's 2T units drawn `subset:k` or stratified, and its `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
@@ -176,9 +179,10 @@ renders the audit's outputs, so the bits the prover chose of its inputs are the 
 What it doesn't check: the proof's public row against the certificates' digests and the output word, which N2's
 verifier of record checks inside the answer (`LinkWindows.verify`, with C-Flock's Lean verifier on the `--zk` proof);
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
-rows (each signs its salted record, witness) and the scan's statements against its registration, which one-stage's
-verifier of record checks inside the answer, and each connection's cap against its lane (the parameters' `cells`; the
-network certifier holds a lane to `egress_cells`); and that the audits' answers are the sampled-proofs component's own,
+rows (each signs its salted record, witness) and the scan's and the audits' statements against their registrations
+(which port reads `scan/prog` or `scan/state`), which one-stage's verifier of record checks inside each answer, and each
+connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to `egress_cells`); and
+that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
 -/
 
@@ -775,6 +779,26 @@ def tiedAudits (audits : Array Registration) (reg : Registration) : Array Nat :=
 /-- The scan's Programs' row is a compute audit's output: some audit is tied to it (`tiedAudits`). -/
 def progTied (audits : Array Registration) (reg : Registration) : Bool := !(tiedAudits audits reg).isEmpty
 
+/-- The scan's state in a registration: the entry of its `roots` whose port, or of its `registered` whose value, is
+`scan/state`. Leaf t is S_t, whose slots hold each admitted request's prompt ids and its sampling fields (max_tokens,
+seed, temperature, top_p) as the scan read them off the warden's ingress cells (`ingress_scan`). -/
+def stateName : String := "scan/state"
+
+/-- The ids the audits tied to the scan computed on are the scan's: its registration has a `scan/state` entry
+(`stateName`) whose root and domain are strings, and each audit it is tied to (`tiedAudits`) has a `scan/state` entry
+at the root and domain of one of them. The audit's statement reads its requests' ids and sampling fields as a registered
+read of the state (a request anchored at A, slot j of S_{A−1}), so a block that computed on another prompt id or
+sampling field committed rows of another tree, at another root. -/
+def idsTied (audits : Array Registration) (reg : Registration) : Bool :=
+  let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
+  let state := fun (j : Json) => (entries j "roots").filter (·.getObjValD "port" == .str stateName) ++
+    (entries j "registered").filter (·.getObjValD "value" == .str stateName)
+  let scan := (state reg.record).filterMap fun e => match e.getObjValD "root", e.getObjValD "domain" with
+    | .str root, .str dom => some (root, dom)
+    | _, _ => none
+  !scan.isEmpty && (tiedAudits audits reg).all fun i => ((audits[i]?.map (state ·.record)).getD #[]).any fun o =>
+    scan.any fun (root, dom) => o.getObjValD "root" == .str root && o.getObjValD "domain" == .str dom
+
 /-- The certified records of the rows form's link-window: the requests' (ingress), responses' (egress) and fails'. -/
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
@@ -809,6 +833,9 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   unless progTied audits reg do
     refuse s!"{what}: the scan's prog is no compute audit's output: its {progName} entry's root and domain are no \
       output port's of an audit's registration"
+  unless idsTied audits reg do
+    refuse s!"{what}: a tied audit's ids aren't the scan's: an audit the scan's prog is an output of names no \
+      {stateName} entry at the root and domain of the scan's registration's"
   let (prof, pub) ← answered what reg x.answer
   let f ← factsOf what prof pub
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
@@ -1019,5 +1046,28 @@ def protocol : Core.Protocol where
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
   outputPort "u/o1x" || outputPort "u/o٣" || outputPort "u/prog" || outputPort "")
+-- the ids tie: the scan's prog at (p, d) and its state at (s, t); the block, whose o1 is the prog, names the state by
+-- port or by value; refused where it names it at another root or not at all, where the scan names none or one whose
+-- root is no string, and where a second audit the prog is an output of names none; an audit not tied doesn't count
+#guard
+  let e := fun (k p r d : String) => Json.mkObj [(k, .str p), ("root", .str r), ("domain", .str d)]
+  let reg := fun (roots registered : List Json) =>
+    ({ record := Json.mkObj [("roots", .arr roots.toArray), ("registered", .arr registered.toArray)],
+       digest := .empty } : Registration)
+  let scan := reg [e "port" progName "p" "d", e "port" stateName "s" "t"] []
+  let out := e "port" "block/o1" "p" "d"
+  let seven := Json.mkObj [("port", .str stateName), ("root", toJson (7 : Nat)), ("domain", .str "t")]
+  idsTied #[reg [out, e "port" stateName "s" "t"] []] scan &&
+    idsTied #[reg [out] [e "value" stateName "s" "t"]]
+      (reg [e "port" progName "p" "d"] [e "value" stateName "s" "t"]) &&
+    idsTied #[reg [out, e "port" stateName "s" "t"] [], reg [e "port" "other/o1" "q" "d"] []] scan &&
+    !idsTied #[reg [out, e "port" stateName "x" "t"] []] scan &&
+    !idsTied #[reg [out, e "port" stateName "s" "x"] []] scan &&
+    !idsTied #[reg [out, e "port" "block/ids" "s" "t"] []] scan &&
+    !idsTied #[reg [out, e "value" stateName "s" "t"] []] scan &&
+    !idsTied #[reg [out] []] scan &&
+    !idsTied #[reg [out, e "port" stateName "s" "t"] []] (reg [e "port" progName "p" "d"] []) &&
+    !idsTied #[reg [out, e "port" stateName "s" "t"] []] (reg [e "port" progName "p" "d", seven] []) &&
+    !idsTied #[reg [out, e "port" stateName "s" "t"] [], reg [e "port" "other/o2" "p" "d"] []] scan
 
 end NetworkCheck.Period

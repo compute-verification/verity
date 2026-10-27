@@ -45,7 +45,12 @@ egress). A link-window passes when:
  window's rows is refused;
 - the scan's registration has a `scan/prog` entry, in its `roots` or `registered`, at the root and domain of an output
  port `<unit>/o<j>` (j ≥ 1) in a compute audit's registration's `roots`: the scan's Programs' rows are that audit's
- outputs, and a scan whose `prog` is no audit's output is refused by name;
+  outputs, and a scan whose `prog` is no audit's output is refused by name;
+- each audit the scan's `prog` is an output of has a `scan/state` entry, in its `roots` or `registered`, at the root and
+  domain of the scan's registration's `scan/state` entry: the state whose slots hold each request's prompt ids and
+  sampling fields (max_tokens, seed, temperature, top_p) as the scan read them off the warden's ingress cells, which
+  the audit's block reads as a registered read (a request anchored at A, slot j of S_{A−1}), so an audit that computed
+  on another prompt id or sampling field, rows of another tree, is refused by name (`idsTied`);
 - one-stage accepted the scan with one level drawn subset or stratified, and a bound `b` on faulty proof blocks.
 
 With one schedule the schedules term is 0. Each link-window's scan adds its free inputs, faulty sets,
