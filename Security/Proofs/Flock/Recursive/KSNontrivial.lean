@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.Recursion.VCallsAt
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.LamDeployed
 import Proofs.Flock.Claims.Witnesses.RecursionLin2
+import Proofs.Flock.Claims.Recursion.Assumptions.FalseInScope
 
 /-!
 # `RecursiveKS` at the verifier that accepts everything (LEAN-66's `nontrivial`)
@@ -14,17 +15,18 @@ round with no SHA-512 call; it computes nothing, so its record holds no call and
 (`RecAt.acceptAll`). The parser, the inner view, the numbers, `IVStar`, the bound record, the outer record, the caps and
 the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
 
-* **The nontrivial lemma** (`recursiveKSAt_nontrivial`): `RecursiveKSAtAll` is false wherever a dense statement in the
-  deployed scope has no witness. The silent prover is accepted on every run and nothing is extracted, so
-  `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each at a large enough `M` and `R`;
-  and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2` (`κ_lt_half_of_lamLin2`). The general
-  form is `not_ksLin2On_acceptAll`, at any compiled record and statement with no witness and `κ < 1/2`.
-* **Why its premises stay premises** (`recursiveKSAtAll_of_readX_none`): the bound's right-hand side is at least `κ`,
-  whatever the verifier (`ksLin2On_of_one_le_κ`). At a statement whose bytes don't read (`RecDeploy.readX x = none`),
-  `κ` is the inner Flock's at the empty inner statement, which sets up no table, so `κ ≥ e⁰ = 1` and the bound holds
-  at every verifier there (`ksLin2On_acceptAll_readX_none`). The deployed parser reads a statement only through
-  `jsonOf` (`Lean.Json.Parser.anyCore`, a `partial def`, which the kernel can't unfold), so no proof exhibits a
-  statement that reads, and the nontrivial lemma takes one as its premise.
+* **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `KSLin2On` at accept-all is false at every
+  brings, from one named assumption, `RecDeploy.FalseInScope`: a false dense compiled statement in the deployed scope.
+  The silent prover is accepted on every run and nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder
+  term is `0`; the tails are below `1/4` each at a large enough `M` and `R`; and `λ₂ ≥ 100` there
+  (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2` (`κ_lt_half_of_lamLin2`). The general form is
+  `not_ksLin2On_acceptAll`, at any compiled record and statement with no witness and `κ < 1/2`.
+* **Why the statement is a named assumption** (`recursiveKSAtAll_of_readX_none`): the bound's right-hand side is at
+  least `κ`, whatever the verifier (`ksLin2On_of_one_le_κ`). At a statement whose bytes don't read
+  (`RecDeploy.readX x = none`), `κ` is the inner Flock's at the empty inner statement, which sets up no table, so
+  `κ ≥ e⁰ = 1` and the bound holds at every verifier there (`ksLin2On_acceptAll_readX_none`). The deployed parser reads
+  a statement only through `jsonOf` (`Lean.Json.Parser.anyCore`, a `partial def`, which the kernel can't unfold), so no
+  statement can be built in Lean that it reads, and the nontrivial lemma takes one, witnessed by a fixture.
 -/
 
 namespace Claims.Recursion
@@ -78,10 +80,10 @@ theorem ksLin2On_of_one_le_κ [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecA
   have hC := mul_nonneg (by positivity : (0 : ℝ) ≤ 4 * (Cp.width (xI (D.record Bd.IVStar) x) : ℝ))
     (add_nonneg (PrFCI_nonneg H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M)
       (by positivity : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1)))
-  have hF := mul_nonneg (by norm_num : (0 : ℝ) ≤ 4)
-    (add_nonneg (Pr_nonneg _ : 0 ≤ PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R)
-      (by positivity : (0 : ℝ) ≤ (((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) : ℝ) + 1) /
-        ((R : ℝ) + 1)))
+  have hF0 : 0 ≤ PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R := Pr_nonneg _
+  have hF : 0 ≤ 4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
+      (((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) : ℝ) + 1) / ((R : ℝ) + 1)) :=
+    mul_nonneg (by norm_num) (add_nonneg hF0 (by positivity))
   have hD := mul_nonneg (βdev2_nonneg (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x)
     (add_nonneg (PrFdevV_nonneg H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M)
       (by positivity : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1)))
@@ -188,7 +190,8 @@ namespace RecDeploy
 open Claims (Msg)
 
 theorem parse_of_readX_none {x : Msg} (h : readX x = none) : parse x = none := by
-  simp only [parse, RecScope.parseOf, RecScope.parseBytes, decodeR, h, Option.map_none, Option.filter_none]
+  simp only [parse, Flock.RecScope.parseOf, Flock.RecScope.parseBytes, decodeR, h, Option.map_none,
+    Option.filter_none]
 
 theorem nS_of_readX_none {x : Msg} (h : readX x = none) : nS x = 0 := by
   simp only [nS, h]
@@ -318,91 +321,64 @@ theorem recursiveKSAtAll_of_readX_none (hJ : ∀ x, RecDeploy.readX x = none) (r
     (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) :
     RecursiveKSAtAll rd final rest wE w b aux nOf hd recRest := by
-  intro decI hdI decO hdO x _ Ω _ _ P M R
-  exact RecDeploy.ksLin2On_acceptAll_readX_none _ _ _ _ _ _ _ _ _ _ _ _ _ decI hdI decO hdO x (hJ x) Ω P M R
-
-/-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKSAt` is false at the verifier that accepts everything
-wherever a dense statement has no witness and is in the deployed scope, `PlainIn` at its inner statement and `PartIn` at
-each staged V\* part, with at most `2^16` parts and `2^56` inner setup inputs. There `λ₂ ≥ 100`
-(`RecDeploy.lamLin2_deployed_ge_dep`), so `κ < 1/2`, while the accepting verifier's `Pr[accept ∧ ¬extract]` is `1`.
-The premises are all of the statement: no proof exhibits one at the deployed parser, which reads only through `jsonOf`
-(`recursiveKSAtAll_of_readX_none`). -/
-theorem recursiveKSAt_nontrivial (rd : Msg → Option FinalP)
-    (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
-    (rest : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE w : Msg → ℝ)
-    (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) {x : Msg}
-    (hD : RecDeploy.DenseAt x)
-    (hR : ∀ v, ¬ Claims.Recursion.R
-      ((RecDeploy.recBoundAt _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
-        (RecDeploy.DeployedR.layR rest)).record
-        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
-          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
-          RecDeploy.rowInDeployed final w).IVStar)
-      (Claims.Recursion.Inner.ofFlock
-        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
-          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
-          RecDeploy.rowInDeployed final w).deploy Claims.GS.plainDecodeRD) x v)
-    {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    (hin : FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts)
-    (hO : ∀ j < RecDeploy.nS x, ∃ i spec' sts',
-      RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts')
-    (hn : RecDeploy.nS x ≤ 2 ^ 16) (hS : (RecDeploy.innerSetupIns (RecDeploy.xIOf x)).length ≤ 2 ^ 56) :
-    ¬ RecursiveKSAtAll rd final rest wE w b aux nOf hd recRest :=
-  RecDeploy.not_ksLin2On_acceptAll _root_.Flock.Readable.relation _root_.Flock.Readable.relation
+  have h := RecDeploy.ksLin2On_acceptAll_readX_none _root_.Flock.Readable.relation _root_.Flock.Readable.relation
     { b with tr := RecDeploy.recTr aux nOf hd recRest } (RecDeploy.DeployedR.layR rest) (FlockDeploy.nextR rd)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR RecDeploy.rowInDeployed
-    final w FlockDeploy.KS.CpDep RecDeploy.DenseAt x hD hR
+    final w FlockDeploy.KS.CpDep
+  intro decI hdI decO hdO x _
+  exact h decI hdI decO hdO x (hJ x)
+
+/-- **The compiled relation at a statement is the inner Flock's at its inner statement**: a witness of `x` in the
+compiled record's relation is one of `xIOf x` in Flock's. -/
+theorem flockR_of_R (b : RecDeploy.Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin)
+    (F : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
+    (dec : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) {x : Msg} {v : Claims.Flock.Wit}
+    (h : Claims.Recursion.R ((RecDeploy.recBoundAt _root_.Flock.Readable.relation b L).record IV)
+      (Claims.Recursion.Inner.ofFlock F dec) x v) :
+    Claims.Flock.R F.parse (RecDeploy.xIOf x) v := by
+  obtain ⟨s, hs, -, hR⟩ := h
+  have hs' : RecDeploy.parse x = some s := hs
+  have hx : RecDeploy.xIOf x = s.inner := by simp [RecDeploy.xIOf, hs']
+  rw [hx]
+  exact hR
+
+/-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKS`'s conclusion, `KSLin2On` at the deployed values, is
+false at the verifier that accepts everything (`RecAt.acceptAll`), at every brings, given one false dense compiled
+statement in the deployed scope (`RecDeploy.FalseInScope`, a named assumption witnessed by a fixture). The coin-server
+record is the statement's. The accepting verifier, the brings, the deployed decoders (`FlockDeploy.listWithin_plainTrim`,
+`Claims.GS.listWithin_zkDecodeRD`), the silent prover and the cutoffs `M`, `R` are built here: the silent prover is
+accepted on every run and nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are
+below `1/4` each; and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. -/
+theorem recursiveKS_nontrivial (h : RecDeploy.FalseInScope) :
+    ∃ (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
+      (recRest : Msg → List (Msg × Out) → List UInt8), ∀ b : RecDeploy.Brings,
+      ¬ Claims.Recursion.KSLin2On FlockDeploy.sha512
+        (RecDeploy.recBoundAt _root_.Flock.Readable.relation
+          { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+          (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).acceptAll
+        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+          RecDeploy.DeployedR.wR)
+        (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt := by
+  obtain ⟨x, aux, nOf, hd, recRest, s, spec, sts, hD, hR, hin, hO, hn, hS⟩ := h
+  refine ⟨aux, nOf, hd, recRest, fun b => ?_⟩
+  have hO' : ∀ j < RecDeploy.nS x, ∃ i spec' sts', RecDeploy.PartIn
+      (RecDeploy.staged ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } : RecDeploy.Brings).st
+        x (RecDeploy.pick ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } :
+          RecDeploy.Brings).st x j) j) i spec' sts' := hO
+  exact RecDeploy.not_ksLin2On_acceptAll _root_.Flock.Readable.relation _root_.Flock.Readable.relation
+    { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+    (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+    (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols RecDeploy.DeployedR.wER
+    FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wR FlockDeploy.KS.CpDep
+    RecDeploy.DenseAt x hD (fun v hv => hR v (flockR_of_R _ _ _ _ _ hv))
     (Claims.Recursion.κ_lt_half_of_lamLin2
-      (RecDeploy.lamLin2_deployed_ge_dep _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
-        (RecDeploy.DeployedR.layR rest) (FlockDeploy.nextR rd)
-        (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
-        RecDeploy.rowInDeployed final w Claims.GS.plainDecodeRD hin hO hn hS (n := 0) (by norm_num) (v := 0)
-        (by norm_num)))
-
-/-- **`RecursiveKS` at the verifier that accepts everything**: `RecursiveKSAtAll` at the deployed reader, for every
-other field of the brings and every record the coin server keeps. -/
-def RecursiveKSAll : Prop :=
-  ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
-    RecursiveKSAtAll RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.OpenRows.elemR RecDeploy.DeployedR.wER
-      RecDeploy.DeployedR.wR (RecDeploy.deployedB b) aux nOf hd recRest
-
-/-- **A false statement in the deployed scope**, `recursiveKS_nontrivial`'s premise: brings, a coin-server record and
-a dense statement with no witness in the relation, in the deployed scope as `RecDeploy.lamLin2_deployed_ge_dep` takes
-it (`PlainIn` at its inner statement, `PartIn` at each staged V\* part, at most `2^16` parts and `2^56` inner setup
-inputs). A statement of the deployment, not a claim: no proof exhibits one at the deployed parser, which reads only
-through `jsonOf` (`recursiveKSAtAll_of_readX_none`). -/
-def FalseInScope : Prop :=
-  ∃ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) (x : Msg)
-    (s : FlockDeploy.Ins) (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt),
-    RecDeploy.DenseAt x ∧
-    (∀ v, ¬ Claims.Recursion.R
-      ((RecDeploy.recBoundAt _root_.Flock.Readable.relation
+      (RecDeploy.lamLin2_deployed_ge_dep _root_.Flock.Readable.relation
         { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
-        (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).record
-        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
-          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
-          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
-          RecDeploy.DeployedR.wR).IVStar)
-      (Claims.Recursion.Inner.ofFlock
-        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
-          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
-          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
-          RecDeploy.DeployedR.wR).deploy Claims.GS.plainDecodeRD) x v) ∧
-    FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts ∧
-    (∀ j < RecDeploy.nS x, ∃ i spec' sts',
-      RecDeploy.PartIn (RecDeploy.staged (RecDeploy.deployedB b).st x (RecDeploy.pick (RecDeploy.deployedB b).st x j) j)
-        i spec' sts') ∧
-    RecDeploy.nS x ≤ 2 ^ 16 ∧ (RecDeploy.innerSetupIns (RecDeploy.xIOf x)).length ≤ 2 ^ 56
-
-/-- **`RecursiveKS`'s nontrivial lemma, at the guarantee** (LEAN-66): `RecursiveKS` is false at the verifier that
-accepts everything wherever the deployment has a false statement in scope (`FalseInScope`). -/
-theorem recursiveKS_nontrivial (h : FalseInScope) : ¬ RecursiveKSAll := by
-  obtain ⟨b, aux, nOf, hd, recRest, x, s, spec, sts, hD, hR, hin, hO, hn, hS⟩ := h
-  exact fun hK => recursiveKSAt_nontrivial RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.OpenRows.elemR
-    RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR (RecDeploy.deployedB b) aux nOf hd recRest hD hR hin hO hn hS
-    (hK b aux nOf hd recRest)
+        (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+        (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+        RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+        RecDeploy.DeployedR.wR Claims.GS.plainDecodeRD hin hO' hn hS (n := 0) (by norm_num) (v := 0) (by norm_num)))
 
 end Flock.Guarantees
