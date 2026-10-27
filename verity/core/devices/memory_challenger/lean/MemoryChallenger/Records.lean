@@ -1,7 +1,7 @@
 import Flock.Hm96
 import Flock.HmRow
 import Randomness
-import MemoryChallenger.FrameV3
+import Flock.FV3
 
 /-!
 # The memory challenger's records and coins
@@ -48,8 +48,8 @@ def beN (n x : Nat) (what : String) : E ByteArray :=
 def blockDigest (block : ByteArray) : ByteArray := Sha512.hash (HmRow.rowPrefixV2 (8 * block.size) ++ block)
 
 /-- `_domain(tag, session, count)`: binding the first 32 bytes of `SHA-512(tag ‖ session)`, owner −1 (the boundary). -/
-def domain (tag session : ByteArray) (count : Nat) : FrameV3Sha512.Domain :=
-  .make ((Sha512.hash (tag ++ session)).extract 0 32) (-1) count
+def domain (tag session : ByteArray) (count : Nat) : FV3.Sha512.Domain :=
+  .make ((Sha512.hash (tag ++ session)).extract 0 32) (-1) 0 count
 
 /-! ## Coins -/
 
@@ -100,7 +100,7 @@ def CoinTree.make (session : ByteArray) (blocks : Nat) (indices : Array Nat) (ke
   checkKey key
   let d := domain COIN_BINDING session indices.size
   let hm ← (Array.range indices.size).mapM fun j => coinLeaf key session j indices[j]! salts[j]!
-  let levels := FrameV3Sha512.levels d ((Array.range hm.size).map fun j => d.leaf j j COIN_SCHEMA hm[j]!)
+  let levels := d.levels ((Array.range hm.size).map fun j => d.leaf j j COIN_SCHEMA hm[j]!)
   pure ⟨session, blocks, indices, key, salts, levels, levels.back!.getD 0 ByteArray.empty⟩
 
 /-- `derive(source, COIN_DOMAIN, {"session", "blocks", "k"})` and its `uniform(blocks, j)` for `j < k`: the indices.
@@ -123,7 +123,7 @@ def CoinTree.draw (source session : ByteArray) (blocks k : Nat) (key : ByteArray
 def CoinTree.k (t : CoinTree) : Nat := t.indices.size
 
 def CoinTree.opening (t : CoinTree) (j : Nat) : CoinOpening :=
-  ⟨j, t.indices[j]!, t.salts[j]!, FrameV3Sha512.path t.levels j⟩
+  ⟨j, t.indices[j]!, t.salts[j]!, FV3.Sha512.path t.levels j⟩
 
 /-! ## The session -/
 
@@ -144,7 +144,7 @@ def verifyCoin (c : SessionCommitment) (o : CoinOpening) : Bool :=
   o.j < c.k && o.index < c.blocks &&
     match coinLeaf c.coinKey c.session o.j o.index o.salt with
     | .error _ => false
-    | .ok leaf => FrameV3Sha512.verifyOpening (domain COIN_BINDING c.session c.k) c.coinRoot c.k o.j leaf COIN_SCHEMA o.path
+    | .ok leaf => (domain COIN_BINDING c.session c.k).verifyOpening c.coinRoot c.k o.j leaf COIN_SCHEMA o.path
 
 /-- One round's record. -/
 structure Round where
@@ -166,7 +166,7 @@ def Round.value (r : Round) : E ByteArray := do
 def recordsRoot (session : ByteArray) (rounds : Array Round) : E ByteArray := do
   let d := domain RECORD_BINDING session rounds.size
   let values ← rounds.mapM Round.value
-  pure (FrameV3Sha512.root d ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
+  pure (d.root ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
 
 private def hex4 (n : Nat) : String :=
   let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
