@@ -150,9 +150,8 @@ python3 ../../../tools/verity/lean/check.py .                      # Verity's Le
 
 **Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Definitions/NetworkCertifier/Assumptions.lean`,
 `../../Definitions/NetworkCertifier/Guarantees.lean` and their `AdviceString`, `AdviceV1` and `Warden` modules under `../../Definitions/NetworkCertifier/Assumptions/` and
-`../../Definitions/NetworkCertifier/Guarantees/`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
-as `docs/…` and `internal/…` name network accounting's project store, where the covert-capacity note
-(`docs/network-transparency/timing-channel.md`) and the reviews live.
+`../../Definitions/NetworkCertifier/Guarantees/`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. The docstrings'
+`docs/network-transparency/timing-channel.md` is the covert-capacity note, which is kept outside this repository.
 
 **The audit.** `tools/verity/lean/check.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
