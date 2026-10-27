@@ -53,10 +53,9 @@ session's coins over ssh to that port of P's loopback, where the draw's client c
 run's witness are the auditor's, so the draw never runs on the served node, which is the prover's: a ``--coin-peer``
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
 node with no line is refused, so until P has one the chain draws on the verifier's coins. ``--main`` is the verifier's
-copy of main's first-parent history, fetched from the tree's origin by default as n2_advised_zk.sh does;
-``--challenger-key`` is infra's challenger-key/v1 record (labelled ``challenger-key current``), a path or a name under
-the run's inputs/. CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``,
-``--peer``) themselves.
+copy of main's first-parent history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does;
+``--challenger-key`` is infra's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run.
+CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
 The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate directory there):
 
@@ -64,9 +63,9 @@ The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate dir
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 180m \\
       --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 python3 \\
-      benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART --eos-ids 128001,128008,128009 \\
-      --draw 8 --coins gate --challenger-key challenger-key.json
+      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 bash -c \\
+      'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
+      --eos-ids 128001,128008,128009 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
 (``--coins verifier``, without ``--send`` and ``--challenger-key``, until vy-nebius-cpu-2 has its coin-ports line);
 
@@ -346,14 +345,10 @@ def first_parent(tree: Path, dest: Path) -> Path:
     return dest
 
 
-def input_file(name: Path) -> Path:
-    """`name`, else the run's inputs/ file of that name."""
-    if name.is_file():
-        return name
-    sent = Path(os.environ.get("RESEARCH_RUN_DIR", "")) / "inputs" / name
-    if os.environ.get("RESEARCH_RUN_DIR") and sent.is_file():
-        return sent
-    raise Refused(f"no file {name}, nor one of that name under the run's inputs/: send it with --send")
+def input_file(path: Path, what: str) -> Path:
+    if not path.is_file():
+        raise Refused(f"no {what} {path}: send it with the run (--send) and give its path under the run's inputs/")
+    return path
 
 
 def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
@@ -373,10 +368,10 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused("--coins gate needs --challenger-key, infra's challenger-key/v1 record (challenger-key current)")
     if not a.key.is_file():
         raise Refused(f"no gate key {a.key}: the draw runs on the node that holds the lane's gate key, {AUDITOR}")
-    main = input_file(a.main) if a.main else first_parent(TREE, Path(os.environ.get("OUT") or a.keep / a.run) /
-                                                          "scan-main.txt")
+    key = input_file(a.challenger_key, "challenger key record")
+    main = input_file(a.main, "--main") if a.main else first_parent(TREE, a.keep / a.run / "scan-main.txt")
     return ["--draw", str(a.draw), "--challenger", f"gate:{a.gate}", "--main", str(main), "--peer", a.coin_peer,
-            "--challenger-key", str(input_file(a.challenger_key)), "--gate-key", str(a.key)]
+            "--challenger-key", str(key), "--gate-key", str(a.key)]
 
 
 def chain(a: argparse.Namespace) -> int:

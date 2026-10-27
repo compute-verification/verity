@@ -175,9 +175,7 @@ def _gate_chain(tmp_path, monkeypatch, peer):
     (here / "leak_guard.py").write_text("")
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
-    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
-    (tmp_path / "run" / "inputs").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "run" / "inputs" / "challenger-key.json").write_text("{}")
+    (tmp_path / "challenger-key.json").write_text("{}")
     (tmp_path / "gate-key").write_text("")
     (tmp_path / "main.txt").write_text("abc\n")
     buf = io.BytesIO()
@@ -189,7 +187,7 @@ def _gate_chain(tmp_path, monkeypatch, peer):
     (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
     (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
     return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",
-            "--challenger-key", "challenger-key.json", "--key", str(tmp_path / "gate-key"),
+            "--challenger-key", str(tmp_path / "challenger-key.json"), "--key", str(tmp_path / "gate-key"),
             "--main", str(tmp_path / "main.txt")]
 
 
@@ -198,7 +196,7 @@ def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node
     assert SS.main(argv) == 0
     scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
     assert scan == ["--draw", "8", "--challenger", f"gate:{SS.GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
-                    SS.AUDITOR, "--challenger-key", str(tmp_path / "run" / "inputs" / "challenger-key.json"),
+                    SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
                     "--gate-key", str(tmp_path / "gate-key")]
     for peer in ("vy-dc-h200-2", "vy-nebius-1"):
         argv = _gate_chain(tmp_path, monkeypatch, "vy-nebius-1")
