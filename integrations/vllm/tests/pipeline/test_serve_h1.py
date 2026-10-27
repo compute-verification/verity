@@ -96,6 +96,29 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     srv.src.uninstall()
 
 
+def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout_credit_reads_from_it(tmp_path, monkeypatch):
+    """``h1/window-program.json.gz`` is the descriptor whose SHA-512 is the server's Program digest (serve.json's
+    ``program``), and its meta's layout is the one core's credit reads from those bytes, so a period-open can commit the
+    digest and the circuit files built from that directory."""
+    import gzip
+    import hashlib
+
+    from verity.core.protocols.pouw import credit as CR
+    from verity.ml.circuits.codec import program_digest
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    srv = _Server(monkeypatch)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
+    body = gzip.decompress((tmp_path / "h1" / SH.PROGRAM).read_bytes())
+    meta = json.loads((tmp_path / "h1" / SH.PROGRAM_META).read_text())
+    assert hashlib.sha512(body).hexdigest() == arm.digest == program_digest(arm.program) == meta["program_digest"]
+    assert body == SV.descriptor(arm.program) and meta["bytes"] == len(body)
+    assert (meta["rows"], meta["steps"]) == (ROWS, STEPS) and arm.describe()["program_file"] == f"h1/{SH.PROGRAM}"
+    layout, why = CR.layout_of(body)
+    assert why is None and json.loads(json.dumps(layout)) == meta["layout"]
+    srv.src.uninstall()
+
+
 class _GateAuditor(_Auditor):
     """`test_commit_coins._Auditor` answering ``status`` as infra's gate does, with the session's open and end entries;
     `settle` (the arm's wait between polls) ends each session whose client has closed it, as serve.py's exit does."""
