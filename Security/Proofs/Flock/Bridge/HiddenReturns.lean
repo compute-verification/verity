@@ -10,7 +10,7 @@ row, a port (`ports_pos_of_outsOf`): `HmRow.check` puts every word a copy return
 (`Layout.check_out`), and `HmOut.checkRows` gives each such word its output row (`HiddenExec.outBitRow_ne_none`).
 
 So no circuit file the verifier parses this way has no port and returns a gate (`outputs_noPort`). The structural
-premises of `sampledKSLivePub_nontrivial` and `sampledKSLiveV2_nontrivial` (no port, a computed returned gate) are
+premises of `sampledKSLiveV2_nontrivial` (no port, a computed returned gate) are
 never met together with their parse `hD`, `hscope` and an untyped statement, and `toyDesc` is no descriptor
 `Desc.parse` reads (`toyDesc_unparsed`).
 -/
