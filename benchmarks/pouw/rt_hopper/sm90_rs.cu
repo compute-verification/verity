@@ -1,16 +1,16 @@
-// RT-HOPPER-1 on the H200 (sm_90a): does a wgmma form other than the honest's run faster beside the LI fold? The census
-// prices IGMMA_S8_N256_RS (A from registers) and IGMMA_U8S8_N256 on DC-90's joint rows JI90_0/JI90_1 at a lane
+// The form escape on the H200 (sm_90a): does a wgmma form other than the honest's run faster beside the LI fold? The
+// census prices IGMMA_S8_N256_RS (A from registers) and IGMMA_U8S8_N256 on DC-90's joint rows JI90_0/JI90_1 at a lane
 // instruction's default, 64x under the honest SS form's measured lines, so the model lets a cheater run either at the
 // issue bound. These loops are ../dc/probes/sm90_wgmma.cu's, templated on the form: each form alone (wait_group 1), the
 // honest LI-CP-W loop (wgli_redux: 4 wgmma, LI's 256 LOP3 + 256 IMAD, 4 checkpoints of 4 LOP3 and one redux.sync.xor,
 // then wait), and the interleaved IMAD and LOP3 points. The RS form's A fragment is loop-invariant, the cheater's best
-// case (no delivery). wgli_true (RT-HOPPER-8) is the honest loop folding the wgmma's own accumulators, after each
-// wait, wgli_pp the same loop with its warpgroups ordered (ping-pong: the next warpgroup's barrier is arrived after the
-// wait), wgli_pp2 with the barrier arrived right after the commit, and wgli_db one warpgroup double-buffering two N128
-// accumulators (fold one while the other's wgmma runs). The b1 form (BGMMA m64n256k256 and.popc), which the census
-// also prices on JI90 at the lane default, runs alone, beside the LI fold and at the IMAD and LOP3 points, so its joint
-// coefficients can be fitted as RS's were. Built and gated by ../opcode_probe/probe.py; rs.sh builds it on a CPU node
-// and times it on the H200, rs.py reads it.
+// case (no delivery). wgli_true is the honest loop folding the wgmma's own accumulators, after each wait, wgli_pp the
+// same loop with its warpgroups ordered (ping-pong: the next warpgroup's barrier is arrived after the wait), wgli_pp2
+// with the barrier arrived right after the commit, and wgli_db one warpgroup double-buffering two N128 accumulators
+// (fold one while the other's wgmma runs). The b1 form (BGMMA m64n256k256 and.popc), which the census also prices on
+// JI90 at the lane default, runs alone, beside the LI fold and at the IMAD and LOP3 points, so its joint coefficients
+// can be fitted as RS's were. Built and gated by ../opcode_probe/probe.py; rs.sh builds it on a CPU node and times it
+// on the H200, rs.py reads it.
 #include "../opcode_probe/probe.cuh"
 #include "../dc/dc.cuh"
 #include "../dc/probes/lanes.cuh"
@@ -125,7 +125,7 @@ DC_DEV void wg_mix(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
 }
 
-// The receipt's LI fold (RT-HOPPER-8): the 8 chains and their multipliers, N/2 pairs of a step's accumulators folded in
+// The receipt's LI fold: the 8 chains and their multipliers, N/2 pairs of a step's accumulators folded in
 // (y = (y ^ d0 ^ k) * a + d1: one LOP3 and one IMAD a pair), and a segment's checkpoint (the 8 chains XORed by 4 LOP3
 // and reduced by one redux.sync.xor).
 struct Li {
@@ -157,7 +157,7 @@ struct Li {
   DC_DEV uint32_t sink() const { return cp ^ y[0] ^ y[7]; }
 };
 
-// wgli_true: the honest LI-CP-W loop with the receipt's data dependence (RT-HOPPER-8). A committed word at L = 32 is a
+// wgli_true: the honest LI-CP-W loop with the receipt's data dependence. A committed word at L = 32 is a
 // k32 prefix, which is the wgmma's accumulator and readable only after its wait, so each step issues one wgmma, waits,
 // LI-folds that step's 128 words and checkpoints. A warpgroup's fold can't overlap its own wgmma, only another
 // warpgroup's: _w2 has 2 warpgroups a CTA (wgli_redux's), _w3 has 3. Same instructions a MMA as wgli_redux.

@@ -29,7 +29,7 @@ X_SASS = [["IADD3"], ["IDP"], ["HFMA2"], ["MOV"], ["SEL"], ["FFMA"], ["LDG"], ["
 m_idx = {n: i for i, n in enumerate(M_NAME)}
 x_idx = {n: i for i, n in enumerate(X_NAME)}
 
-A_MMA = 9.781  # JI2: 9.781 SMSP-cycles a MMA + 1 for every other instruction (note:20261015T1814Z §12)
+A_MMA = 9.781  # JI2: 9.781 SMSP-cycles a MMA + 1 for every other instruction
 
 # A warp body whose static instruction count is NOT the dynamic issued count: warp-vote reconvergence and divergent
 # branches make loops_from_text (which counts every instruction between the back-edge and its target) over-estimate.
