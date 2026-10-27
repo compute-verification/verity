@@ -7,7 +7,7 @@ import Definitions.Nci.Assumptions.CoverPartialSum
 /-!
 # The cover theorem's partial-sum tightening: the guarantees
 
-Daniel's covering bound (`Nci.Guarantees.CoveringBound`) and the fan-out bounds count a block's products as a
+The covering bound (`Nci.Guarantees.CoveringBound`) and the fan-out bounds count a block's products as a
 rectangle, tokens (or values) times parameters, which is `k²`-sized. A matrix multiplication's products are a cube (`Cube`): output row, input column and token, whose shadows
 are weights, activations and output entries. By Loomis–Whitney a block that uses `p` weights and `Q` activations at
 tokens it reads little of, and contributes to `Y` entries there, computes at most `√(p Q Y)` products there, so a block
