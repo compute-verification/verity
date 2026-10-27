@@ -49,7 +49,7 @@ V*'s bridge (`Flock.Assumptions.VBridge`), one of five holds:
   shape in range: `Recursion.recursive_sound_compiled_fast100`) as its inner term.
 
 It needs `VBridge` in full, which a protocol whose last round isn't committed (candidate 3 today) doesn't give. Its
-event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which LEAN-19 found nearly empty (see
+event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which is nearly empty (see
 `RecursiveSound`); the knowledge form is `Claims.Recursion.KS`. -/
 def RecursiveSoundExec : Prop :=
   ∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
@@ -105,7 +105,7 @@ reaches has every session accepting, having read at some position a row other th
 and the developer's give a SHA-512 collision, `rowCommit`'s extractor's pair), or Lean's verifier accepts `st` and
 every session of V* while the registered private circuit's hidden statement fails with probability at most
 `RecursiveSoundExec`'s bound. It needs `VBridge` in full, which candidate 3 today doesn't give; its event is nearly
-empty as `RecursiveSound`'s is (LEAN-19). -/
+empty as `RecursiveSound`'s is. -/
 def RecursiveRanRegisteredExec : Prop :=
   ∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}

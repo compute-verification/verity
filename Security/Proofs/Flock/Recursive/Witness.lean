@@ -30,7 +30,7 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
   (`_hr := hr_inv_exp zr`).
 
 On the F1 gate (`test_lean_witness.py`) the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
-verifier of record's `--zk` identity with the OS's masks #1677 put in it, which the gate's sessions were proved with. So
+verifier of record's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
 the gate is witnessed under today's identity.
 -/
 

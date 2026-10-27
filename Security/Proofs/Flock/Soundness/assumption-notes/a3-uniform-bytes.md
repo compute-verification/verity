@@ -69,6 +69,6 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
     (the kernel logs `uninitialized urandom read`). The same nodes report `entropy_avail` 256 of 256: seeded.
   - A `seed-injection` build (the selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20:
     no record from such a build is evidence for a theorem that takes A3.
-- **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform (8 Oct ruling), and the
+- **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform, and the
   lock's `shape.conjectures`, the one place a falsification test is recorded, holds mathematical conjectures only. What
   checks it is the citation of `io.cpp` and `random.c`, re-read at every toolchain bump and on any platform but Linux.

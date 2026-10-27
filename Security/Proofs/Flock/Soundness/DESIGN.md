@@ -66,9 +66,9 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
   the leaves under every serving root registered before the draw, and `Q_s` the leaves the sampled units open.
   - `log2 √(2·N_s·Q_s)` is 17.4 to 34.0 over the study's audits, so this term exceeds the Flock proof term by up to
     2^17.
-  - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for a #23-sized
-    audit. SHA-512 serving roots are therefore required for the audit composition. With SHA-256 roots the tree term is
-    `t·2^-101.3` for a #101-sized audit with per-value leaves.
+  - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for the study's
+    audit 23. SHA-512 serving roots are therefore required for the audit composition. With SHA-256 roots the tree term
+    is `t·2^-101.3` for its audit 101, with per-value leaves.
 
 ## 2. The compiled theorem: its terms, its number, its proof
 

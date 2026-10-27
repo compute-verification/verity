@@ -23,7 +23,8 @@ here, and its theorem is below it.
   `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw `partDraw` of part `j`.
 
 The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per draw, registration and table: at one table
-it is `DecodesOn`'s, which [wave2-dec-zl] discharges for #828's tables, and its coin half is [wave2-plays-coin]'s.
+it is `DecodesOn`'s, which `decodesOn_exec` (`Discharge/DecodeZL`) discharges for the plain headline's tables, and its
+coin half is `decodesOnOfRuns`'s.
 -/
 
 namespace FlockSoundness.Discharge.Tables

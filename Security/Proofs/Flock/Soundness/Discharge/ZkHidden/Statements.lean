@@ -8,20 +8,20 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 ZkExec's acceptance statements and ZkLink's `TablesAtZKLive` take `hh : I.tags.hiddenOutputs = false`: they are about
 `Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, PROTOCOL §16.13) `Stmt.setupTables`
 calls `Stmt.setupHidden`. Each statement here is one of them for the sessions production `--zk` writes, as HiddenExec's
-are for the public path (#869). Where the original names `setupH`, this one names `setupOne` (without `hh`) or
+are for the public path. Where the original names `setupH`, this one names `setupOne` (without `hh`) or
 `setupHidden` (under `hh = true`); otherwise the conclusion is the original's.
 
 * `AcceptsZKSetupOne`, `AcceptsZKOneAny`, `AcceptsZKRetainedAny`: ZkExec's `AcceptsZKSetupH`, `AcceptsZKOne`,
   `AcceptsZKRetained` without `hh`.
-* `TablesAtZKHLive`: ZkLink's `TablesAtZKLive` under `hh = true`, at `tablesAtZKH`, with #869's `TableAtHOfAccepts`
-  hypotheses on the circuit (`HmOut.parse` accepts it, at the `--zk` tags; its unit returns the outputs).
-  `TablesAtZKHLiveI` is it without the unit returning the outputs.
+* `TablesAtZKHLive`: ZkLink's `TablesAtZKLive` under `hh = true`, at `tablesAtZKH`, with HiddenExec's
+  `TableAtHOfAccepts` hypotheses on the circuit (`HmOut.parse` accepts it, at the `--zk` tags; its unit returns the
+  outputs). `TablesAtZKHLiveI` is it without the unit returning the outputs.
 * `AcceptsZKAcceptedH`: lp-zkbind's `acceptsZK_accepted` (the placement every `--zk` table's binding is read at) for
-  one hidden-output table, with #869's `AcceptedH` for `Placed.Accepted`.
+  one hidden-output table, with HiddenExec's `AcceptedH` for `Placed.Accepted`.
 * `ZkSchedOK`: the half of `TablesAtZKLive` that reads no setup: at any statement `Zk.shapeOk` passes, `Zk.schedule`'s
   schedule and `t_pad` have the facts `DrawSetupZK` and `DrawSetupZKH` record.
 
-`zk_flock_countC_execOS_crH` (`Count.lean`) is #874's `zk_flock_countC_execOS_cr` at the hidden-output plan.
+`zk_flock_countC_execOS_crH` (`Count.lean`) is `zk_flock_countC_execOS_cr` at the hidden-output plan.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
