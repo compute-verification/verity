@@ -28,8 +28,9 @@ gives `Verified` (`verified_of_not_heldBy`) and the bound holds at any acceptanc
 (`lineHeldAtComponentBy_record`). The nontrivial witness therefore replaces the verdict and the record with an
 accept-all's as well.
 
-The toy instance (`Toy`) is a node of four windows at four windows a draw, so no draw (`Node.draws` 0), one block,
-two groups a stretch, and one link-charged stretch of span 10 credited `10 · (1 − 0)` blocks held.
+The toy instance (`Toy`) is a node whose parameters have no window (`Node.windows` 0) at four windows a draw, so no
+draw (`Node.draws` 0), one block and two groups a stretch, whose recorded summary has four windows of one block each and
+one link-charged stretch of span 10 credited `10 · (1 − 0)` blocks held.
 -/
 
 deriving instance DecidableEq for RemoteAudit.Line.Group
@@ -483,6 +484,7 @@ theorem toy_paced {Ω : Type} (ver : Node → Record → Prop) :
   · show released (groupsBy Toy.sum Toy.node Toy.rec) Toy.node.windows a ≤
       released (groupsBy Toy.sum Toy.node Toy.rec) Toy.node.windows b
     unfold released
+    apply le_of_eq
     rw [show Toy.node.windows - 1 = 0 from rfl, Nat.min_zero, Nat.min_zero]
   · change g ≤ 0 at hg
     obtain rfl := Nat.le_zero.1 hg
