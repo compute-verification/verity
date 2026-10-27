@@ -104,6 +104,7 @@ def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapp
 PORTS = {
     "SampledProofs.OneStageZk.protocol": ("sampled-proofs", "verity/sampled-proofs/one-stage/v2"),
     "PouwCheck.protocol": ("pouw", "verity/pouw/v1"),
+    "PouwCheck.Period.protocol": ("pouw", "verity/pouw/period/v1"),
     "NetworkCheck.Check.protocol": ("certifier", "verity/network-certificate/v4"),
     "NetworkCheck.Period.protocol": ("certifier", "verity/certifier/v0"),
     "PousCheck.RunProtocol.protocol": ("pous", "verity/pous/p2/v4/run"),

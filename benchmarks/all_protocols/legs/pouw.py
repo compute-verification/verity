@@ -6,8 +6,10 @@ reference the difftest holds to the Lean `pouw-check`). With ``VERITY_POUW_CHECK
 Lean answers too and must agree with it byte for byte. It returns the canonical answer {commitment, profile, protocol,
 public, reason, verdict}, and writes into the directory ``out``:
 
-* ``pouw.case.json``: the case, ``{"commitment": hex, "evidence": hex, "params": JSON}``, what ``pouw-check serve`` and a
-  composition's component case read;
+* ``pouw.window-case.json``: the case, ``{"commitment": hex, "evidence": hex, "params": JSON}``, what ``pouw-check serve``
+  reads. Onsite's work component is the period's credit (``verity/pouw/period/v1``, `PouwCheck.Period`), whose case is
+  a period of the auditor's ledger and its windows, which this leg doesn't make; so it writes no ``pouw.case.json``, and
+  the composed verdict waits on work (``work has no case for its port``) rather than handing onsite a window's case;
 * ``pouw.answer.json``: the answer's canonical line;
 * ``pouw.detail.json``: what the loop served (units, K, MACs, max_tokens), labelled not certified; the certified work W
   (the accepted window's ``work.credited``, MACs); ε at each δ of `QUOTE_DELTAS`, what the window's draw establishes
@@ -158,7 +160,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict:
         if lean != line:
             raise RuntimeError(f"pouw-check and core_check disagree on the period:\n  lean   {lean}\n  python {line}")
     out.mkdir(parents=True, exist_ok=True)
-    (out / "pouw.case.json").write_text(CC.line(c) + "\n")
+    (out / "pouw.window-case.json").write_text(CC.line(c) + "\n")
     (out / "pouw.answer.json").write_text(line + "\n")
     evidence = period_dir / H1_DIR / "answer.json"
     w = (answer["public"] or {}).get("work")

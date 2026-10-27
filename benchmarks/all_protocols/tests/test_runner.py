@@ -145,7 +145,7 @@ def test_a_failing_leg_is_an_error_and_the_others_still_run(tmp_path):
 
 
 PORTS = sorted(C.PORTS, key=lambda x: C.PORTS[x][1])
-EVERY_PORT = [x for x in PORTS if x != "NetworkCheck.Check.protocol"]
+EVERY_PORT = [x for x in PORTS if x not in ("NetworkCheck.Check.protocol", "PouwCheck.protocol")]
 
 
 def test_onsite_decides_once_every_component_is_a_port(tmp_path):
@@ -219,7 +219,7 @@ def test_onsite_accepting_while_an_outside_audit_is_undecided_is_undecided(tmp_p
 
 def test_the_table_names_every_onsite_component_once():
     onsite = C.onsite_components()
-    assert onsite == ["NetworkCheck.Period.protocol", "PousCheck.RunProtocol.protocol", "PouwCheck.protocol",
+    assert onsite == ["NetworkCheck.Period.protocol", "PousCheck.RunProtocol.protocol", "PouwCheck.Period.protocol",
                       "RemoteAudit.Protocol.protocol", "SampledProofs.OneStageZk.protocol",
                       "MemoryChallenger.WipeProtocol.protocol"], "onsite's components changed"
     named = sorted(e.component for e in T.TABLE if e.onsite)
