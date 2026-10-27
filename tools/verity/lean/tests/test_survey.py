@@ -415,6 +415,34 @@ def test_a_lemma_written_bare_outside_its_namespace_cites_its_module(stand_in):
         assert (got["kept"].get("Proofs.A.Side") == f"cited: a Lean comment of {SPEC} cites it") == cited, text
 
 
+def test_a_module_whose_path_s_end_a_file_outside_writes_is_held(stand_in):
+    """A test opens `Pins.lean` through a directory it joins from parts, and names it only in its docstring, by the end
+    of its path: held for its owner, not deleted."""
+    root, policy, usage = stand_in
+    pins, reader = "Proofs.Pouw.PearlC.Cap.Pins", "verity/core/protocols/pouw/tests/test_cap_lean.py"
+    usage["usage"]["modules"][pins] = {"constants": 1, "used": 0, "by": None, "refs": []}
+    write(root, {source(pins): "theorem capPin_sm120 : 1 = 1 := by decide\n", reader: (
+        '"""Lean\'s integer form of the cap circuit\'s tests (`Security/Proofs/Pouw/PearlC/Cap/IntForm.lean`) against the\n'
+        'scheme: each kernel-checked pin in `Cap/Pins.lean` is what Python computes at that shape."""\n'
+        "from pathlib import Path\n\n"
+        'CAP = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Pouw" / "PearlC" / "Cap"\n'
+        'PINS = (CAP / "Pins.lean").read_text()\n')})
+    got = decide(root, policy, usage, [TEST, reader])
+    assert got["kept"][pins] == f"suffix: {reader} writes its path's end, `Cap/Pins.lean`"
+    assert pins in decide(root, policy, usage, [TEST, reader], doubts=False)["unused"]
+
+    def why(path: str, text: str, *more: str) -> str:
+        write(root, {path: text})
+        return decide(root, policy, usage, [TEST, path, *more])["kept"].get(pins, "")
+
+    assert why("tools/x.py", "# from `PearlC/Cap/Pins.lean`\n").endswith("`PearlC/Cap/Pins.lean`")
+    assert why("tools/x.py", "# from `Pins.lean`\n") == ""
+    assert why("verity/README.md", "The pins are `Cap/Pins.lean`'s.\n") == ""
+    assert why(f"{PKG}/Pouw/README.md", "The pins are `Cap/Pins.lean`'s.\n") == ""
+    write(root, {"tools/Cap/Pins.lean": "theorem own : True := trivial\n"})
+    assert why("tools/x.py", "# from `Cap/Pins.lean`\n", "tools/Cap/Pins.lean") == ""
+
+
 def test_declared_and_opened_read_names_off_namespaces(tmp_path):
     src = ("namespace A.B\nsection S\ntheorem x : True := trivial\nend S\n@[simp] private lemma hidden : True := trivial\n"
            "protected noncomputable def y := 1\ninstance : Inhabited Nat := ⟨0⟩\n"
