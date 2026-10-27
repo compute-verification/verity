@@ -11,7 +11,8 @@ from typing import Any, Callable, Iterable, Sequence
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
-from verity_vllm.program.kernels.rows import EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATORS
+from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex, const_word, node_runs
 from verity_vllm.check.replay.opening import CommittedStore
@@ -74,7 +75,7 @@ def _lifetime(engine_step: int, ring_slots: int | None) -> str:
 def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict[str, Any]:
     """[FLUSH-03 fact of record] per (request, step, MoE layer) with BOTH planes committed: the committed `up` bytes differ
     from the committed `down` bytes.  Before FLUSH-03 the gather collector committed the same layer's down plane under the up name (vLLM's
-    TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the block's two
+    TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the layer's two
     GEMM launches the staged up view was read after the w2 launch had overwritten it -- 22/22 same-layer pairs identical
     on the int-1 OLMoE records).  The comparison is over the COMMON PREFIX of the two request-local slices (min(len) bytes): when
     2I == H (OLMoE) that is the whole plane; when the widths differ the alias would still show as identical leading bytes (one base pointer,
@@ -207,17 +208,21 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     for r in pi.rows:
         fam = RM.spec_family(r["spec"])
         if fam in NOT_YET:
-            _not_ev(NOT_YET[fam], why_class(NOT_YET[fam]), fam, domain=True)
-            not_ev_fam[fam] += 1
             if addresses is not None:
                 try:
-                    _addr(pi.describe(r), fam, r["spec"], why_class(NOT_YET[fam]), NOT_YET[fam])
-                except Exception:  # noqa: BLE001  -- a NOT_YET row the address rule cannot describe is still counted above
-                    pass
+                    d = pi.describe(r)
+                except Exception as e:  # noqa: BLE001
+                    # its identity would be missing from the reconciliation unseen: a mapping fault by name, not the family's domain label
+                    _not_ev(f"{fam} row address unmodelled (the manifest address rule raised: {type(e).__name__}: {e})"[:240], "mapping", fam)
+                    not_ev_fam[f"{fam} (address unmodelled)"] += 1
+                    continue
+                _addr(d, fam, r["spec"], why_class(NOT_YET[fam]), NOT_YET[fam])
+            _not_ev(NOT_YET[fam], why_class(NOT_YET[fam]), fam, domain=True)
+            not_ev_fam[fam] += 1
             continue
         d = pi.describe(r)
         if d is not None and d.get("plane_error"):
-            # [MAN-06f v3] a fused-MoE block row whose row -> plane slice mapping the Program does not support (inconsistent geometry, an
+            # [MAN-06f v3] a fused-MoE layer row whose row -> plane slice mapping the Program does not support (inconsistent geometry, an
             # ordinal outside the plane, a name index that disagrees with Program order): NAMED, class `mapping` -- a fault of the record's
             # Program shape, never a guess at another pair's words and never carried on a PASS.
             _not_ev(f"MoE plane row -> plane slice mapping failed: {d['plane_error']}", "mapping", fam)
@@ -278,7 +283,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     return vus, not_ev, not_ev_fam
 
 
-#: [COORD R17-27 / Daniel, verbatim] the scope of the class -- on the rule, on every record that carries it, in the C2 schema doc
+#: the scope of the class, verbatim on the rule, on every record that carries it, and in the C2 schema doc
 NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the "
                       "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
                       "there is no not-required-because-not-executed category.")
@@ -300,22 +305,9 @@ EXECUTED_PREFIX_RULE = ("R17-1: a request that served a_r < cap tokens (its serv
                         "the record's query_checks fail by name. " + NOT_EXECUTED_SCOPE)
 
 
-def _continuation_rule() -> Callable[..., dict[str, Any]] | None:
-    """Continuation_v1's `executed_prefix_by_rule(served, cap=, A=, eos=)` (pad, `verity_vllm.program.lifting.continuation`) when the unit is on
-    the tree -- the ONE mechanism revb S-r17b-20 (R3) asks for: the not-executed class = {t : r_t = 0} of the recurrence over the served
-    list.  None when the unit is not on this tree (the caller then records the arithmetic as the mechanism BY NAME, never silently)."""
-    try:
-        from verity_vllm.program.lifting.continuation import executed_prefix_by_rule  # type: ignore[import-not-found]
-    except Exception:
-        return None
-    return executed_prefix_by_rule
-
-
 MECH_RECURRENCE = "recurrence(Continuation_v1): n_exec = |{t : r_t = 1}| over the served list (first EOS stops; A = LAG); min(a_r + LAG, cap) is the CHECK"
 MECH_ARITH_NO_SERVED = ("arithmetic(a_r, LAG): n_exec = min(a_r + LAG, cap) -- the served list was not supplied, the class is not derived from r_t "
                         "(revb S-r17b-20 R3 open on this record: pass served= / eos_ids=)")
-MECH_ARITH_NO_RULE = ("arithmetic(a_r, LAG): n_exec = min(a_r + LAG, cap) -- the served list was supplied but verity_vllm.program.lifting.continuation (Continuation_v1, "
-                      "pad R17-32) is not on this tree: the class is not derived from r_t (revb S-r17b-20 R3 open on this tree)")
 
 
 def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive: int = 0, eos_declared: bool | None = None,
@@ -334,8 +326,8 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     [ONE mechanism] with `served` (the request's served token ids of record) and `eos_ids` (the Program's
     declared EOS ids) the class is DERIVED FROM r_t: `rule` (default Continuation_v1's `executed_prefix_by_rule`) runs the recurrence over
     the served list, `n_exec = |{t : r_t = 1}|`, and the arithmetic `min(a_r + LAG, cap)` is demoted to a CHECK (a disagreement is a fault
-    by name); the rule's own problems (served past the first EOS, F-pm-24, over the cap) are faults.  Without `served` -- or on a tree
-    without the unit -- the arithmetic is the mechanism and is NAMED as such in `mechanism` (never silently the same thing)."""
+    by name); the rule's own problems (served past the first EOS, F-pm-24, over the cap) are faults.  Without `served` the arithmetic is
+    the mechanism and is NAMED as such in `mechanism` (never silently the same thing)."""
     a_r, lag, cap, arrive = int(a_r), int(lag), int(cap), int(arrive)
     faults: list[str] = []
     if account_missing:
@@ -353,25 +345,22 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     n_exec = cap if a_r >= cap else min(a_r + lag, cap)                        # the arithmetic: the mechanism without a served list, else the CHECK
     mechanism, by_rule = MECH_ARITH_NO_SERVED, None
     if served is not None:
-        rule = rule or _continuation_rule()
-        if rule is None:
-            mechanism = MECH_ARITH_NO_RULE
-        else:
-            served_l = [int(t) for t in served]
-            if len(served_l) != a_r:
-                faults.append(f"served list of {len(served_l)} token(s) != a_r {a_r} ({a_r_source}): the recurrence would run over another prefix than the record's")
-            if lag in (0, 1):
-                blk = rule(served_l, cap=cap, A=lag, eos=[int(e) for e in (eos_ids or ())])
-                by_rule = {k: blk.get(k) for k in ("executed_prefix_len", "eos_step", "lag_steps", "first_eos_index", "served_past_first_eos", "cap_exhausted", "eos_stop", "problems")}
-                for pr in blk.get("problems") or []:
-                    faults.append(f"Continuation_v1 rule: {pr}")
-                if not blk.get("problems") and len(served_l) == a_r:
-                    n_rule = int(blk["executed_prefix_len"])
-                    if n_rule != n_exec:
-                        faults.append(f"the arithmetic min(a_r + LAG, cap) = {n_exec} disagrees with the recurrence |{{t : r_t = 1}}| = {n_rule} (R3: the rule is the mechanism, "
-                                      "the arithmetic the check)")
-                    n_exec = n_rule
-                mechanism = MECH_RECURRENCE
+        rule = rule or executed_prefix_by_rule
+        served_l = [int(t) for t in served]
+        if len(served_l) != a_r:
+            faults.append(f"served list of {len(served_l)} token(s) != a_r {a_r} ({a_r_source}): the recurrence would run over another prefix than the record's")
+        if lag in (0, 1):
+            blk = rule(served_l, cap=cap, A=lag, eos=[int(e) for e in (eos_ids or ())])
+            by_rule = {k: blk.get(k) for k in ("executed_prefix_len", "eos_step", "lag_steps", "first_eos_index", "served_past_first_eos", "cap_exhausted", "eos_stop", "problems")}
+            for pr in blk.get("problems") or []:
+                faults.append(f"Continuation_v1 rule: {pr}")
+            if not blk.get("problems") and len(served_l) == a_r:
+                n_rule = int(blk["executed_prefix_len"])
+                if n_rule != n_exec:
+                    faults.append(f"the arithmetic min(a_r + LAG, cap) = {n_exec} disagrees with the recurrence |{{t : r_t = 1}}| = {n_rule} (R3: the rule is the mechanism, "
+                                  "the arithmetic the check)")
+                n_exec = n_rule
+            mechanism = MECH_RECURRENCE
     if a_r < cap and eos_declared is not True:
         faults.append(f"a_r {a_r} < cap {cap} but served token a_r-1 is not asserted a declared EOS id (eos_declared={eos_declared}): "
                       "an early stop the Program's stop rule does not explain -- not-executed(R17-1) is NOT applicable, FAIL by name")
@@ -415,10 +404,10 @@ def _stratum_spec(fam: str, spec: str, statics: dict[str, Any]) -> str:
     """The spec as the STRATUM key.  An attention row's spec carries its history length T (one value per token of
     the request), so 'spec incl. shape' would make every attention row of the run its own stratum -- an exhaustive replay of the family
     (~0.1 ms x T per row; B8 1024/128: 8 x 32k rows x up to 1152 committed reads each), not a sample.  The stratum keeps the numerical
-    MECHANISM the length selects -- NB = ceil(T / BN), the number of key blocks visited, and `last=full|partial`: whether
-    the last block is FULL (T mod BN == 0: no masked lane) or PARTIAL (masked lanes -> exact zeros through exp2 and the lane sums) -- three
-    chains (single block / multi-block / partial last block) that NB alone does not keep apart: measured on llama L40S B8 256/32, 32 of 80
-    NB-only strata mixed the one full-block row (T = 128) with 127 partial ones, so the full-block chain was picked with probability
+    MECHANISM the length selects -- NB = ceil(T / BN), the number of key tiles visited, and `last=full|partial`: whether
+    the last tile is FULL (T mod BN == 0: no masked lane) or PARTIAL (masked lanes -> exact zeros through exp2 and the lane sums) -- three
+    chains (single tile / multi-tile / partial last tile) that NB alone does not keep apart: measured on llama L40S B8 256/32, 32 of 80
+    NB-only strata mixed the one full-tile row (T = 128) with 127 partial ones, so the full-tile chain was picked with probability
     per_stratum / 128 where the spec-as-stratum key had made it certain.  The phase axis keeps prefill / first-decode / mid / last:
     `Attention_v2{NB=9,last=partial,NH=..,...}` x request x phase x module x lifetime; <= +1 stratum per formerly mixed stratum.  Every
     other family's spec is its own key (Gemm{K,N}, RMSNorm{N}, ... carry no per-row length)."""

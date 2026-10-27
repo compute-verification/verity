@@ -10,11 +10,14 @@ from __future__ import annotations
 import pytest
 
 from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_rows, b8_manifest, b8_stream, commit
-from verity_vllm.commit import binding as B
-from verity_vllm.check import executed_prefix as EP
+from verity_vllm.commit import binding as B, executed_prefix as EP
+from verity_vllm.check import executed_prefix as EPL
 from verity_vllm.check.replay.linkage import linkage_horizon
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 EOS = 50279
+#: the identity coverage `commit.binding.coverage_check` writes, which a binding's execution extent sits beside
+COVERED = {"ok": True, "expected_n": 64, "bound_n": 64, "missing_n": 0, "ambiguous_n": 0}
 
 
 def _served(lens: dict[str, int], eos_last: set[str] = frozenset()) -> dict[str, list[int]]:
@@ -288,10 +291,10 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     from verity_vllm.check.replay import population as POP
     e = _mixed_epr()
     # tokens.json absent, global_match.json present: exactly #39's record after the move
-    acct = EP.load_match_account(_match_account(tmp_path, write_tokens=False))
+    acct = EPL.load_match_account(_match_account(tmp_path, write_tokens=False))
     assert acct["tokens"] is None and acct["global_match"] is not None
-    link = EP.link_to_match_account(e, acct, order=ORDER, declared_lag=1)
-    binding = {"coverage": {"match_account_link": link}}
+    link = EPL.link_to_match_account(e, acct, order=ORDER, declared_lag=1)
+    binding = {"coverage": COVERED | {"match_account_link": link}}
     f = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert f["r0"]["account_missing"] == ["tokens.json"] and f["r1"]["account_missing"] == ["tokens.json"]
     assert "G6 lengths_by_request" in f["r0"]["a_r_source"] and f["r0"]["a_r_source"].endswith("Match account leg(s) NOT beside the Commit: tokens.json")
@@ -304,11 +307,11 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     assert any("a_r is not linked" in x for x in rec["faults"]) and any("LAG rule not attested" in x for x in rec["faults"])   # still fail-closed
     assert rec["account_missing"] == ["tokens.json"] and rec["mechanism"].startswith("not classified")
     # no Match record at all: both legs named; a complete record: none, and no such fault
-    none = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": EP.link_to_match_account(e, EP.load_match_account(None), order=ORDER, declared_lag=1)}},
+    none = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)}},
                                     {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert none["r0"]["account_missing"] == ["tokens.json", "global_match.json"]
-    full = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
-    ff = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": full}}, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
+    full = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
+    ff = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": full}}, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert ff["r0"]["account_missing"] == [] and "NOT beside" not in ff["r0"]["a_r_source"]
     ok = POP.executed_prefix_of_record("r0", **EP.facts_accepted_by(POP.executed_prefix_of_record, ff)["r0"])
     assert ok["faults"] == [] and ok["account_missing"] == []
@@ -320,9 +323,9 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
     in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's legs,
     eos_declared by F-pm-24, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
     e = _mixed_epr()
-    link = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
+    link = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
     assert link["ok"] and link["lag_attested"] is True and link["tokens_json"]["served_by_request"] == {"r0": 11, "r1": 32}
-    binding = {"coverage": {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop({"entries": []}, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
+    binding = {"coverage": COVERED | {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop({"entries": []}, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
     stop = {"eos": [EOS], "lag": 1, "declared_lag": 1}
     f = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, stop)
     assert f["r0"] == {"a_r": 11, "a_r_source": f["r0"]["a_r_source"], "lag": 1, "cap": 32, "arrive": 0, "eos_declared": True, "served_len_commit": 11,
@@ -333,11 +336,11 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
     assert EP.executed_prefix_facts(e, binding, {"result": False}, {"r0": 0, "r1": 0}, stop)["r0"]["linked"] is False
     # committed rows of r0 past its prefix -> rows_past_stop counts them
     bm = {"entries": [{"kind": "leaf", "identity": {"request_id": "r0", "step": s}} for s in (12, 13, 14)]}
-    binding2 = {"coverage": {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop(bm, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
+    binding2 = {"coverage": COVERED | {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop(bm, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
     assert EP.executed_prefix_facts(e, binding2, {"result": True}, {"r0": 0, "r1": 0}, stop)["r0"]["rows_past_stop"] == 3
     # NO Match record beside the Commit: a_r is the Commit's own count, labelled, and linked is False; an undeclared LAG is -1 (out of domain)
-    nolink = EP.link_to_match_account(e, EP.load_match_account(None), order=ORDER, declared_lag=1)
-    f0 = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": nolink}}, {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": None, "declared_lag": None})
+    nolink = EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)
+    f0 = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": nolink}}, {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": None, "declared_lag": None})
     assert f0["r0"]["a_r"] == 11 and f0["r0"]["a_r_source"].startswith("the Commit's OWN served tokens") and f0["r0"]["linked"] is False
     assert f0["r0"]["lag_attested"] is False and f0["r0"]["lag"] == -1
     # [reqval M-0585 / revb R3] with this run's served list the facts carry `served` + `eos_ids` (the recurrence's inputs); a consumer whose
@@ -386,9 +389,10 @@ def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_len
         lens = g6_lens if g6_lens is not None else {"rec-r0": {"served_output_len": 11, "executed_prefix_len": 12, "cap": 32, "cap_exhausted": False},
                                                      "rec-r1": {"served_output_len": 32, "executed_prefix_len": 32, "cap": 32, "cap_exhausted": True}}
         lag = g6_lag if g6_lag is not None else {"declared": 1, "record_attests": 1, "tokens_json_lag": 1, "exercised": True, "variable_lag": False}
-        gm = {"verdict": gm_verdict, "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
+        gm = {"schema": GM_SCHEMA, "verdict": gm_verdict, "reasons": [], "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
               "requests": [{"request_id": "rec-r0", "workload_request_id": U0, "index": 0}, {"request_id": "rec-r1", "workload_request_id": U1, "index": 1}],
-              "checks": [{"id": "G6", "status": "PASS" if gm_verdict == "PASS" else "FAIL", "lengths_by_request": lens, "lag": lag}]}
+              "checks": [{"id": "G6", "what": "chronology", "status": "PASS" if gm_verdict == "PASS" else "FAIL", "problems": [], "n_problems": 0,
+                          "lengths_by_request": lens, "lag": lag}]}
         (row / "global_match.json").write_text(json.dumps(gm))
     return str(row / "match")
 
@@ -396,18 +400,18 @@ def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_len
 def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_same_attempt(tmp_path):
     """[R17-27 (a)] the Commit's served count is linked: tokens.json served == Commit served, the same two lengths, GM-01 PASS, G6 agrees."""
     e = _mixed_epr()
-    acc = EP.load_match_account(_match_account(tmp_path))
+    acc = EPL.load_match_account(_match_account(tmp_path))
     assert acc["tokens"] is not None and acc["global_match"] is not None and acc["notes"] == []
-    L = EP.link_to_match_account(e, acc, order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1)
     assert L["ok"] and L["required"] and L["reduced_requests"] == ["r0"] and L["problems"] == [], L
     assert L["tokens_equal"] is True and L["tokens_json"]["tokens_equal"] == {"r0": True, "r1": True} and L["tokens_json"]["lag"] == 1
     # [rev S-r17-23 (c)] with the Commit's served lists the equality is the FULL generated_token_ids list: the same length + last token but
     # one interior id different -> not one serving transcript, first differing position named
     same_len = _served({"r0": 11, "r1": 32}, {"r0"}); same_len["r0"] = list(same_len["r0"]); same_len["r0"][4] = 99
-    Lf = EP.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=same_len)
+    Lf = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=same_len)
     assert not Lf["ok"] and Lf["tokens_json"]["tokens_equal"] == {"r0": False, "r1": True} and Lf["tokens_json"]["tokens_equal_rule"] == "full generated_token_ids list"
     assert any("first differing position 4" in p and "not one serving transcript" in p for p in Lf["problems"]), Lf["problems"]
-    assert EP.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=_served({"r0": 11, "r1": 32}, {"r0"}))["ok"]
+    assert EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=_served({"r0": 11, "r1": 32}, {"r0"}))["ok"]
     assert L["global_match"]["verdict"] == "PASS" and L["global_match"]["requests_linked"] == ["r0", "r1"]
     assert "active-reference implementation classification only" in L["classification"] and "tau(e) = bot" in L["classification"]
 
@@ -415,15 +419,15 @@ def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_sa
 def test_the_committers_own_count_is_never_sufficient_by_itself(tmp_path):
     """[R17-27 (a)] no Match account beside a REDUCED prefix -> problem by name; the same with no reduction is recorded, not a problem."""
     e = _mixed_epr()
-    L = EP.link_to_match_account(e, EP.load_match_account(None), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert not L["ok"] and L["required"]
     assert any("on the committer's own served count alone" in p and "(R17-27 (a))" in p for p in L["problems"]), L["problems"]
     # tokens.json present but no global_match.json: linked to the served output only, not to the Match account -> problem
-    L2 = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path, write_gm=False)), order=ORDER, declared_lag=1)
+    L2 = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path, write_gm=False)), order=ORDER, declared_lag=1)
     assert not L2["ok"] and any("GM-01's account (global_match.json) is not beside" in p for p in L2["problems"]), L2["problems"]
     # every request ran its cap: nothing was placed on the committer's word -> a missing account is a note, ok stays True
     full = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 32, "r1": 32}), caps={"r0": 32, "r1": 32}, eos_of_record=[EOS], lag=1)
-    L3 = EP.link_to_match_account(full, EP.load_match_account(None), order=ORDER, declared_lag=1)
+    L3 = EPL.link_to_match_account(full, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert L3["ok"] and not L3["required"] and L3["notes"] == ["no --match-dir: the Match record of this attempt is not beside the Commit"]
 
 
@@ -431,25 +435,25 @@ def test_a_transcript_that_is_not_the_matchs_or_an_unattested_lag_breaks_the_lin
     e = _mixed_epr()
     # (a) the Match served 12 tokens for r0 where the Commit served 11 -> not one serving transcript
     d = _match_account(tmp_path / "a", served=_served({"r0": 12, "r1": 32}, {"r0"}))
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and L["tokens_json"]["tokens_equal"]["r0"] is False and any("not one serving transcript" in p for p in L["problems"]), L["problems"]
     # (b) tokens.json attests LAG 0 under a Program declaring LAG 1 -> lag not attested on the record (its executed_prefix_len 11 != 12 too)
     d = _match_account(tmp_path / "b", tj_lag=0)
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and any("lag not attested on the record" in p and "(R17-27 (b))" in p for p in L["problems"]), L["problems"]
     assert any("executed_prefix_len 11 != this rule's 12" in p for p in L["problems"]), L["problems"]
     # GM-01 FAILED -> the account this prefix must be linked to did not pass
     d = _match_account(tmp_path / "c", gm_verdict="FAIL")
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and any("GM-01 verdict 'FAIL'" in p for p in L["problems"]), L["problems"]
     # G6's account carries other lengths for r0 -> not the same account
     d = _match_account(tmp_path / "d", g6_lens={"rec-r0": {"served_output_len": 11, "executed_prefix_len": 11, "cap": 32, "cap_exhausted": False},
                                                  "rec-r1": {"served_output_len": 32, "executed_prefix_len": 32, "cap": 32, "cap_exhausted": True}})
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and any("G6 executed_prefix_len 11 != this rule's 12" in p for p in L["problems"]), L["problems"]
     # G6 reports variable lag -> no constant-lag placement is linkable
     d = _match_account(tmp_path / "e", g6_lag={"declared": 1, "record_attests": 1, "tokens_json_lag": 1, "exercised": True, "variable_lag": True})
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and any("VARIABLE LAG" in p for p in L["problems"]), L["problems"]
 
 

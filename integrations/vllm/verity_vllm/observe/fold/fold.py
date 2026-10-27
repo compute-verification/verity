@@ -12,7 +12,7 @@ Implemented by lane L4.  Contract:
 
 Root parameters (in order):
     prompt  : one `Array(LP_r, I32)` per request (in `header.workload["requests"]` order) from `Root(role="prompt_token")`;
-    weights : `verity_vllm.program.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
+    weights : `verity.ml.definitions.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
               events through `profile.weight_field(name)`; a Root whose field is None is a Note: nothing is written
               under its view, so a later read of it is Unresolved (raised under an accepted profile) — the M1 log's
               120 per-layer fp8 `_k/_v/_q/_prob_scale` fp32 scalars are such roots and nothing reads them;
@@ -93,8 +93,8 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
-from verity_vllm.program.registry import b1
-from verity_vllm.program.replay import replayer
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.replay import replayer
 from verity.ml.circuits.types import Array, Record, Type, Value
 from verity.ml.circuits.types import Tuple as TupleT
 
@@ -193,8 +193,7 @@ class FoldResult:
     #: the memory-access journal (D82: exhaustive provenance).  Every read and write the fold made, in order, as plain
     #: dicts: {"seq", "event", "step", "kind": "alloc"|"free"|"root"|"read"|"write", "view": ViewDesc|None, "alloc": int,
     #: "rows": [row indices]|None (GatherMany), "refs": [(space, idx, lo, hi), ...] (reads: what the memory model
-    #: answered; writes: what was stored), "what": str}.  An independent checker (`verity_vllm/check/operand_provenance.py`) replays
-    #: the allocs/writes with its own last-writer map and must reproduce every read's refs.
+    #: answered; writes: what was stored), "what": str}.
     accesses: list[dict] = field(default_factory=list)
     #: [R17 D90] tensor-parallel rank log: {"rank", "world"} (None on a TP1 log); one record per collective the fold executed
     #: ({step, k, kind, site, rows, N, rank, world, event, own_view, fields:[{request, param, field, ordinal, rows, offset}]}); and the
@@ -471,7 +470,7 @@ class _Fold:
 
     def _journal(self, kind: str, view: ViewDesc | None, refs: Refs | None, *, alloc: int | None = None, rows: list | None = None,
                  what: str = "", event: int | None = None) -> None:
-        """Append one memory access to `accesses` (D82), its refs the `Refs` read (expanded by a reader, `memory.access_runs`; VLLM-14)."""
+        """Append one memory access to `accesses` (D82), its refs the `Refs` read (expanded by a reader, `memory.access_runs`)."""
         self.accesses.append({"seq": len(self.accesses), "event": event if event is not None else self.cur_event, "step": self.cur_step,
                               "kind": kind, "view": view, "alloc": alloc if alloc is not None else (view.alloc if view is not None else None),
                               "rows": rows, "refs": refs, "what": what})
@@ -968,7 +967,7 @@ class _Fold:
         # A primary claims the whole subtree (min = the root) and `also`/`before` members claim nothing, so every
         # pre-existing pattern still stamps `root.id`; a D70 Group part that claims its own nested op (a scope such
         # as `vllm.moe_forward` whose intermediates are only snapshotted under the nested kernels' event ids) is
-        # stamped with that op, so `SnapshotStore.find(view, at=event)` in compare/replay/vu_query reaches its snapshot.
+        # stamped with that op, so `SnapshotStore.find(view, at=event)` (`fold_compare.Values`) reaches its snapshot.
         event = min(c.consumed) if c.consumed else root.id
         outs: list[tuple[Coll, dict]] = []
         for i, colls in enumerate(rows):

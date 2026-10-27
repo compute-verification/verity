@@ -3548,8 +3548,8 @@ def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
 def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatch):
     """INF-58: the H200s stop after 2 h idle with their disks kept, and `research run --on` brings one back: a machine whose registry
     entry names its nebius_instance_id and whose ssh doesn't answer is started through the API, then waited for."""
-    answers = iter([1, 1, 1, 0])
-    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
+    answers, ran = iter([1, 1, 1, 0, 0]), []
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: ran.append(argv) or subprocess.CompletedProcess(argv, next(answers)))
     calls, t = [], [0.0]
 
     def nebius(*args):
@@ -3562,6 +3562,7 @@ def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatc
     m = {"name": "vy-glm53-eu", "nebius_instance_id": "computeinstance-x"}
     assert remote.wake(m, ["ssh"], nebius=nebius, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
     assert calls == ["get", "start"] and t[0] == 3 * remote.WAKE_POLL_S
+    assert ran[-1] == ["sh", "-c", remote.TRUST_UPGRADE], "a woken VM upgrades its trust store before the run (INF-314)"
     assert remote.wake({"name": "vy-nebius-2"}, ["ssh"], nebius=nebius) is None, "no instance id: nothing to wake"
     monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, 1))
     with pytest.raises(remote.Refused, match="didn't answer in 15 min"):
@@ -3578,7 +3579,7 @@ def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatc
             raise json.JSONDecodeError("Expecting value", "computeoperation-x", 0)
         return nebius(*args)
 
-    answers = iter([1, 0])
+    answers = iter([1, 0, 0])
     monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
     assert remote.wake(m, ["ssh"], nebius=plain_start, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
 
@@ -3590,3 +3591,10 @@ def test_a_run_names_the_agent_that_sent_it_a_worker_its_own_conversation():
         "https://cursor.com/agents/bc-worker"
     assert remote.sender({"RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == "https://cursor.com/agents/bc-coord"
     assert remote.sender({}) is None
+
+
+def test_node_1s_jobs_default_to_the_image_built_from_sky_gpu_dockerfile():
+    """build.sh tags an image by its Dockerfile's hash and pods never pull it: a default naming another hash finds no image."""
+    tag = "verity-sky-gpu:" + hashlib.sha256((NEBIUS / "image" / "sky-gpu.Dockerfile").read_bytes()).hexdigest()[:16]
+    for name in ("dispatch.py", "n1_lease.py", "n1_custody.sh"):
+        assert re.findall(r"verity-sky-gpu:[0-9a-f]+", (NEBIUS / name).read_text()) == [tag], f"{name}: set its default to {tag}"

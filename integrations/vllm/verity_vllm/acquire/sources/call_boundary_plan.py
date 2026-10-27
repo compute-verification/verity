@@ -282,7 +282,7 @@ def _plan_request(p: Plan, manifest: Mapping[str, Any], rid: str, ids: Sequence[
 def _definition(spec: str) -> tuple[Any, list[Any]]:
     """The registered Definition a Call's spec names and its parameters."""
     from verity.ml.circuits.evaluation.reference import signature_of
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.manifest.format import spec_family
     from verity_vllm.query.program_view import spec_statics
 
@@ -355,7 +355,7 @@ class _Context:
         if str(r.get("form") or "call") != "call":
             raise Uncovered(f"Call {cid} ({spec}) is a {r.get('form')} row")
         if spec not in self.plan.definitions:
-            from verity_vllm.program.kernels import kernel_registry, rows
+            from verity.ml.definitions.numerics import kernel_registry, rows
 
             try:
                 d, params = _definition(spec)
@@ -650,7 +650,7 @@ def of_json(doc: Mapping[str, Any]) -> Plan:
 def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray],
                       shared: dict | None = None) -> dict[str, np.ndarray]:
     """Target name -> its [R, f * width] words ([1, f * width] for a step-shared target): `tpl` over R rows, level by level, one
-    `evaluate_batch` per (level, Definition) over every row (a registered row kernel of `verity_vllm.program.kernels.rows` where one is,
+    `evaluate_batch` per (level, Definition) over every row (a registered row kernel of `verity.ml.definitions.numerics.rows` where one is,
     the reference for the rest and for what a kernel declines; a `plan.kernel_only` Definition by its row kernel alone, a declined
     instance a ValueError).  `operands[k]` = forward argument k's [R * per_row, elems] words; `weight(name)` = a weight field's words, read
     as a broadcast view (never copied per row); `shared` = the step-shared Values by form, kept across steps by the caller (weights and
@@ -671,7 +671,7 @@ def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.
          weight: Callable[[str], np.ndarray]) -> dict[int, np.ndarray]:
     """Position -> [R, leaves] of the Calls of `recipes` over R rows; `sv` the step-shared Values ("s") they read."""
     from verity.ml.circuits.evaluation import evaluate_batch
-    from verity_vllm.program.kernels import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
+    from verity.ml.definitions.numerics import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
 
     vals: dict[int, np.ndarray] = {}
 
@@ -705,8 +705,8 @@ def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
     from verity.ml.circuits.evaluation import kernels
     from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
     from verity.ml.circuits.evaluation.reference import signature_of, statics_of
-    from verity_vllm.program.kernels.kernel_registry import Declined, instance
-    from verity_vllm.program.kernels.rows import KERNEL
+    from verity.ml.definitions.numerics.kernel_registry import Declined, instance
+    from verity.ml.definitions.numerics.rows import KERNEL
 
     params, ret = signature_of(d)
     statics = statics_of(d)

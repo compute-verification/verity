@@ -1,7 +1,7 @@
 """padrev's adversarial tests for lane `pad`'s stage DENSE B1, Program side (lane/r16-pad fdebefec8) — **padded baseline
 (experimental)**.  Attack A5 (the 32-bit cap dropping the lifted bit) on the PAD-02 leaf layout, T-1 refusals, the exact-count
 arithmetic against the Program's own arity for EVERY `a_r`, and the PAD-03 deletion rule as a function — on the TINY shape (the
-laptop is at its memory/disk cap; pad's own suite measures the real B0 shape).  Skips on a tree without `verity_vllm.program.registry.lifted`.
+laptop is at its memory/disk cap; pad's own suite measures the real B0 shape).  Skips on a tree without `verity.ml.definitions.registry.lifted`.
 """
 
 from __future__ import annotations
@@ -14,11 +14,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-L = pytest.importorskip("verity_vllm.program.registry.lifted")
-pytest.importorskip("verity_vllm.program.registry.lifted", reason="pad's module").leaf_words  # DENSE B1 additions present?
+L = pytest.importorskip("verity.ml.definitions.registry.lifted")
+pytest.importorskip("verity.ml.definitions.registry.lifted", reason="pad's module").leaf_words  # DENSE B1 additions present?
 
 from verity.ml.circuits import Program  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
 from tests.program.test_serve3 import LP, TINY  # noqa: E402
 
 RNG = np.random.default_rng(20260920)
@@ -69,7 +69,7 @@ def test_a_one_word_per_leaf_reader_misreads_a_mixed_width_lifted_store_and_the_
     """The attack in full: a store of leaves of widths [32, 16, 1, 32, 32] holding ⊥, Active, Active(1), Active(max), INV.  The
     lifted reader (offsets from `leaf_words`) round-trips exactly.  A legacy one-word-per-leaf reader reads the ⊥ as Active(0) and
     then every later leaf from the wrong offset; the ONLY thing that stops it is the size check `len(words) == Σ leaf_words(w)` —
-    which is therefore a required field of a lifted binding map (F-pad-06 condition for the record stage)."""
+    which is therefore a required field of a lifted binding map (F-pad-06 condition for the record phase)."""
     widths = [32, 16, 1, 32, 32]
     leaves = [L.enc_bot(32), L.enc_active(16, 0xBEEF), L.enc_active(1, 1), L.enc_active(32, (1 << 32) - 1), L.inv(32)]
     flat = [wd for w, x in zip(widths, leaves) for wd in L.pack_leaf(w, x)]

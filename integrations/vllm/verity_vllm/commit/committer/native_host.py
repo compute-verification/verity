@@ -54,6 +54,9 @@ from verity_vllm import settings
 from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
+from verity_vllm.commit.committer import weights_rows
+from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY
+from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
@@ -64,7 +67,7 @@ GPU_CHUNK_BYTES = 256
 DEFAULT_CHUNK = 4096
 
 # the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
-# CompiledGraphSource.wrap_model); TP rank committers (engine/rank_worker.py) have no plan yet and keep it
+# CompiledGraphSource.wrap_model); TP rank committers (pipeline/tp/rank_worker.py) have no plan yet and keep it
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",
@@ -112,27 +115,6 @@ class TensorMeta:
     dev_off: int = 0                                             # arena staging: byte offset of this tensor in its device block
     stream_off: int = -1                                         # packed mode: byte offset of this tensor in the step's packed stream
     dev_block: Any = field(default=None, repr=False)             # arena staging: the device block (released after D2H)
-
-
-@dataclass
-class _StepJob:
-    step: int
-    metas: list[TensorMeta]
-    event: Any
-    t_step_end: float = 0.0
-    backlog: int = 0
-    blocks: list = field(default_factory=list)
-    arena: Any = None                       # arena staging: current device block
-    cursor: int = 0                         # arena staging: bytes used in `arena`
-    overflow: list = field(default_factory=list)   # arena staging: (block, used_bytes) of earlier, filled blocks of this step
-    stream: Any = None                      # packed mode: memoryview of the whole packed step stream (pinned host copy)
-    stream_handle: Any = None               # fast path: raw cudaStream_t of the compute stream (cached per step)
-    arena_ptr: Any = None                   # fast path: data_ptr of job.arena (cached)
-    host_pre: Any = None                    # inline-D2H: pinned host block already receiving the packed step (issued on the compute stream)
-    acq_s: float = 0.0                      # fast path: serving-thread seconds inside the hooks (acquisition + memcpy issue), this step
-    acq_bytes: int = 0
-    deferred_dst: list = field(default_factory=list)   # batched acquisition: arena views awaiting the step-end _foreach_copy_
-    deferred_src: list = field(default_factory=list)   # ... and their (held) sources
 
 
 class _DeviceArena:
@@ -228,6 +210,9 @@ RETAIN_MODES = ("device", "host", "none", "sample")
 HIDDEN_M1_PREFIXES = ("fa2.m1/", "fa3.m1/")
 TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # [R14 TP-03] <module path>/part_rank<r>: the rank-local input of that module's collective
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
+#: bound only on the sampling steps whose batch takes vLLM's split top-p path (a row with top_p < 1), so traffic that mixes it with greedy
+#: rows binds it on some steps; a derived-S Program's manifest requires it at every sampling event (`sampler_splits`)
+STEP_DEPENDENT_NAMES = frozenset({SPLITS_IDENTITY})
 
 
 def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
@@ -288,7 +273,7 @@ class GcPauses:
 
     `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
     sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
-    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce (r20261017-193316-4d59).  Collections never touch a value."""
+    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce.  Collections never touch a value."""
 
     def __init__(self, min_s: float = 1e-3) -> None:
         self.min_s = min_s
@@ -466,7 +451,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
       kept    = raw - hidden                               retain=host with the hidden family excluded: what stays on host (0 for retain=none)
       learn   = learn budget                               the learning steps' transient host windows; the pool keeps their capacity
       replay  = levels + learn + picks x chunk             openings-after-release runs on a FRESH pool that grows like the run's; picks =
-                                                           3 x openings + 64 (after-release + both in-run stages' deferred picks), 256 B each
+                                                           3 x openings + 64 (after-release + both in-run phases' deferred picks), 256 B each
       slack   = engine growth after admission              measured +3,539 MiB (RSS 2,218 -> 5,757 MiB, B1) + pool rounding -> 6 GiB
       pairs   = levels + kept + learn once, for pairs >= 2   a second pair allocates its frozen pool while torch's pinned-host cache still
                                                            holds the first pair's frozen + replay blocks: B1 PAIRS=3 bounded-x (in-process
@@ -533,7 +518,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
         phases["later_pair_replay"] = phase_replay + carry          # pairs >= 1: the residual is already in phase_replay; + the carried pool pages
     peak_phase = max(phases, key=phases.get)
     bound = phases[peak_phase] + int(slack_bytes) + pairs_extra
-    # [R17-29 planner, Daniel M-0309] the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
+    # the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
     # the largest host term, and -- separately -- the largest single materialization of the stream (the whole-step plane the bound keeps
     # OFF the host under retain-exclude, opened by replay), with its step / tokens / bytes from the declared schedule
     _terms = {"engine": int(engine_rss_bytes), "levels": levels, "kept": kept, "learn": learn, "replay": replay, "slack": int(slack_bytes), "pairs": pairs_extra,
@@ -738,7 +723,7 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
+class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     name = "native_host"
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
@@ -772,6 +757,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self._hooks = hooks.Hooks()
         self._cur: _StepJob | None = None
         self._step_index = 0
+        self._init_views()
         self._q: queue.Queue = queue.Queue()
         self._done: dict[int, StepCommitment] = {}
         self._levels: dict[int, list[list[bytes]]] = {}
@@ -1091,17 +1077,18 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     # ------------------------------------------------------------------ lifecycle
 
     def register_weights(self) -> dict:
-        """Registered input: every parameter + buffer hashed once (chunked pos_leaf leaves, per-tensor subtree, fold of subtree roots).
-        Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
+        """Registered input: every parameter + buffer hashed once (vllm-v1: chunked pos_leaf leaves, per-tensor subtree, fold of subtree
+        roots, SHA-256; rows-sha512: `weights_rows`, SHA-512).  Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
         t0 = time.perf_counter()
-        # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
-        # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
-        # construction below is untouched.  device-checked computes both and refuses a mismatch (validation runs record the equality).
+        # host (default) | device | device-checked: device hashes the same leaves into the same per-tensor tree on the GPU, rows-sha512's
+        # rows by native_rows.cu (`weights_rows`), vllm-v1's pos_leaf leaves over self.chunk-byte pieces by native_leafhash.cu (`leafhash`);
+        # the weights tree over the tensor roots is built the same either way.  device-checked computes both and refuses a mismatch.
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
         LH = None
-        if mode != "host":
+        WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key(getattr(self, "weights_tree", None))) if self.rows else None
+        if mode != "host" and WR is None:
             from verity_vllm.commit.committer import leafhash as LH  # noqa: N812
             LH.ext()                                          # JIT once; a build failure here fails the registration by name, not silently host
         roots, names, n_bytes, checked = [], [], 0, 0
@@ -1114,7 +1101,11 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             src = p.detach().contiguous().reshape(-1)          # 0-dim buffers (e.g. scales) -> 1 element
             flat = src.view(torch.uint8) if src.dtype != torch.uint8 else src
             nb = int(flat.numel())
-            if mode == "host" or not flat.is_cuda:
+            entry = [name, _dtype_name(p), list(p.shape), nb]
+            if WR is not None:
+                r, c = WR.root(len(roots), entry, flat, mode)
+                checked += c
+            elif mode == "host" or not flat.is_cuda:
                 host = flat.cpu()                    # blocking D2H, once
                 mv = memoryview(host.numpy()).cast("B")
                 leaves = self._hash_leaves(mv)
@@ -1129,14 +1120,14 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
                     checked += 1
             roots.append(r)
             n_bytes += nb
-            names.append([name, _dtype_name(p), list(p.shape), nb])
-        root = scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots)
+            names.append(entry)
         # the tree under the root, kept off the record: a deferred replay opens the weight fields it consumes against it (replay bundle)
-        self.weights_tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root.hex(), "chunk": self.chunk,
-                             "geo_digest": self._geo_digest.hex()}
-        self.weights = {"root": root.hex(), "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
+        self.weights_tree = WR.tree(names, roots) if WR is not None else {
+            "names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots).hex(),
+            "chunk": self.chunk, "geo_digest": self._geo_digest.hex()}
+        self.weights = {"root": self.weights_tree["root"], "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
                         "label": "measured; once per process, excluded from steady state", "hash": mode, "chunk": self.chunk,
-                        **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
+                        "scheme": self.commit_scheme, **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
         return self.weights
 
     def attach_source(self, src: Any) -> None:
@@ -1237,7 +1228,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self._step_index = 0
         self.spans = Spans(scheme.NAME)
         self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
-        self.pool.reset()
+        self._reset_views()
         self.errors = []
 
     def close(self) -> None:
@@ -1248,7 +1239,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     # ------------------------------------------------------------------ acquisition (serving thread)
 
     def _begin_step(self) -> None:
-        self._cur = _StepJob(self._step_index, [], None)
+        self._cur = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
         self._step_index += 1
         for src in self.sources:
             src.on_step_begin()
@@ -1287,6 +1278,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         job.event.record(torch.cuda.current_stream())
         job.t_step_end = time.perf_counter()
         job.backlog = self._q.qsize()
+        self.staged_bytes += int(job.acq_bytes)
         self.spans.add("acquisition", time.perf_counter() - t0, step=job.step)
         if self.footprint is not None:
             self.footprint.event("end_step", step=job.step, used=int(job.cursor), backlog=job.backlog)
@@ -1542,7 +1534,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     def _acquire_impl(self, name: str, t: Any, job: _StepJob) -> None:
         t0 = time.perf_counter()
         if self._rt is not None and t.is_contiguous():
-            return self._acquire_fast(name, t, job, t0)
+            return self._acquire_by_cudart(name, t, job, t0)
         src = t.detach()
         if not src.is_contiguous():
             src = src.contiguous()          # a device copy: counted under acquisition (bytes noted)
@@ -1585,10 +1577,10 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self.spans.add("acquisition", (t1 - t0) + (time.perf_counter() - t2), step=job.step)
         self.spans.add("movement", t2 - t1, step=job.step, nbytes=nbytes)
 
-    # ---- fast acquisition: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered on the
-    # compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).  Bit
-    # semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
-    def _acquire_fast(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
+    # ---- acquisition by libcudart: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered
+    # on the compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).
+    # Bit semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
+    def _acquire_by_cudart(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
         nbytes = t.numel() * t.element_size()
         if nbytes == 0:
             return
@@ -1806,13 +1798,17 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             job = self._q.get()
             if job is self._stop:
                 return
-            try:
-                self._commit_step(job)
-            except Exception as e:  # noqa: BLE001
-                self.errors.append(f"worker step {job.step}: {e!r}"[:300])
-                for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
-                    self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
-                self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
+            self._absorb_job(job)
+
+    def _absorb_step(self, job: _StepJob) -> None:
+        """Worker: commit ``job`` into this committer (or window view); a step that raises is recorded failed, its blocks released."""
+        try:
+            self._commit_step(job)
+        except Exception as e:  # noqa: BLE001
+            self.errors.append(f"worker step {job.step}: {e!r}"[:300])
+            for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
+                self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
+            self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
     #   nocopy  : hooks + metadata + arena bookkeeping, no D2D snapshot launch      noworker: worker discards the step (no D2H, no hashing)
@@ -1952,8 +1948,9 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     def finalize(self) -> RunCommitment:
         t0 = time.perf_counter()
         self._end_step()
-        # wait for the worker to drain the queue (root-ready delay = this wait + the run-root fold)
+        # wait for the worker to drain the queue (root-ready delay = this wait + the run-root fold); a detached window's, to end it
         with self.spans.span("wait"):
+            self.wait_absorbed()
             while len(self._done) < self._step_index:
                 time.sleep(0.0005)
         steps = [self._done[s] for s in range(self._step_index)]
@@ -2103,7 +2100,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
         cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
-        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what a source commits that no module produced (KV slots)
+        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources), STEP_DEPENDENT_NAMES)   # what no module produced (KV slots)
         moe_of = self._moe_layer_of()
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
@@ -2494,7 +2491,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             # R10a / R10b (norm kernel interiors): DECLARED treatment only.  Every interior fp32 value of fused_add_rms_norm_kernel (squares,
             # cub block-reduction partials, variance/N, rsqrtf, x*rstd) and of the layer-0 Triton _rms_norm_kernel is a deterministic function
             # of the BOUND source row (the token's residual/embedding bf16 row, R2e / R2b) and the registered weight row under the pinned
-            # kernel's fixed reduction order = the registry's exact model (`verity_vllm/program/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
+            # kernel's fixed reduction order = the registry's exact model (`verity/ml/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
             # conformant).  So the derived-value route applies with a ROW-sourced phi: opening = source-row leaf(s) + weight opening + op-by-op
             # replay; no interior word needs a leaf.  The verifier for that multi-source phi is NOT implemented in this lane -> the checker
             # reports 'derived-declared', never secure.  Alternative = M1-style export of 47.6 MB/request (not built).

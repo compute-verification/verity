@@ -56,7 +56,6 @@ from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
-KEY_BYTES = 32
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
 SALT_DOMAIN = b"verity/store/salt/v0\0"
 
@@ -143,23 +142,20 @@ def _node(dom: Any, leaves: int, level: int, index: int, leaf: Callable[[int], b
 
 
 @dataclass(frozen=True)
-class TagReceipt:
-    """A bandwidth audit `Tag` (``ro-blake3/v1``, ``ro-sha512/v1``) as a receipt that binds only the block."""
+class KindReceipt:
+    """The driver's receipt of a registration's kind (`rb.KINDS`: sketch-sha512, its default, or block-sha512) of the
+    block alone, under the whole pass seed: `rb.receipter`'s, at the kind's default rows."""
 
-    tag: Any
+    name: str = rb.DEFAULT
+    receipt_bytes: int = rb.DIGEST_BYTES
     binds: tuple[str, ...] = ()
 
-    @property
-    def name(self) -> str:
-        return self.tag.name
-
-    @property
-    def receipt_bytes(self) -> int:
-        return self.tag.tag_bytes
+    def __post_init__(self) -> None:
+        rb.receipt_kind(self.name)
 
     def keyed(self, seed: bytes):
-        k = self.tag.keyed(seed[:KEY_BYTES])
-        return lambda j, block, z=None: k(j, block)
+        r = rb.receipter(self.name, seed)
+        return lambda j, block, z=None: r(j, block)
 
 
 @dataclass(frozen=True)

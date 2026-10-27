@@ -102,7 +102,7 @@ _define_once("kv_prefix(Tensor prefix) -> ()", "kv_prefix", lambda prefix: None)
 # reads from its request-owned `splits` Input, not a static.  [registered S] The Build passes `splits=None` and `S` = the registered
 # split count SplitsFor_v1(1, num_SMs) (`topp_geometry.registered_splits`), at which every served event runs (`engine.topp_pin`).
 # Not a vLLM op: a stand-in with an explicit schema like `unified_cache_pad`; the frontend rule `GumbelTopPTokenSelect[vllm]` binds it
-# to `GumbelTopPTokenSelect_v1{V}` (verity_vllm.program.registry.sampling; S its 6th operand).
+# to `GumbelTopPTokenSelect_v1{V}` (verity.ml.definitions.registry.sampling; S its 6th operand).
 _define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
              "gumbel_topp_token_select",
              lambda logits, seed, temperature, top_p, pos, splits, S=None: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))

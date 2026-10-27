@@ -16,11 +16,11 @@ from verity_flock.class_statement import UnitStager
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.registry import boolean_moe as BMOE
-from verity_vllm.program.registry import boolean_sigma as SG
-from verity_vllm.program.registry import boolean_tp_allreduce as BTA
-from verity_vllm.program.registry import moe as M
-from verity_vllm.program.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import boolean_moe as BMOE
+from verity.ml.definitions.registry import boolean_sigma as SG
+from verity.ml.definitions.registry import boolean_tp_allreduce as BTA
+from verity.ml.definitions.registry import moe as M
+from verity.ml.definitions.registry import tp_allreduce as TA
 
 TOPK, WORLD, W, w = 3, 4, 8, 2
 NH, CAP = W // w, 3

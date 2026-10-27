@@ -11,6 +11,8 @@ import json
 import os
 import sys
 import types
+from collections.abc import Iterator
+from unittest import mock
 
 import pytest
 
@@ -24,10 +26,13 @@ def _digest(doc: object) -> str:
 
 
 @pytest.fixture
-def env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
-    for k in list(os.environ):
-        monkeypatch.delenv(k)
-    return monkeypatch
+def env() -> Iterator[pytest.MonkeyPatch]:
+    """An empty environment, the process's restored whole after the test: the code under test writes settings straight into
+    `os.environ` (`settings.put`, as `commit.staging_environ` does), which no `MonkeyPatch` records.  The test's own `MonkeyPatch`
+    is undone inside that, since one undone after it (the function's `monkeypatch`) would delete what a test set that the process
+    holds too (PATH, HOME)."""
+    with mock.patch.dict(os.environ, clear=True), pytest.MonkeyPatch.context() as mp:
+        yield mp
 
 
 @pytest.fixture(scope="module")
@@ -119,7 +124,8 @@ def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.M
 def engine():
     pytest.importorskip("torch")
     from verity_vllm.acquire.sources import compiled_source
-    from verity_vllm.check import fold_compare, kernel_identity
+    from verity_vllm.check import fold_compare
+    from verity_vllm.engine import kernel_identity
     from verity_vllm.check.replay import driver
     from verity_vllm.engine import build, code_identity, engine_profile
     from verity_vllm.engine.profiles import dense_generic

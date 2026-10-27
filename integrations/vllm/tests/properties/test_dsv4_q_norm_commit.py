@@ -1,5 +1,5 @@
 """`TritonBlockRMSNorm_v1` at DeepSeek-V4's q norm against rows the H200 committed (`fixtures/dsv4_q_norm_commit_20261021.json`:
-DeepSeek-V4-Pro B1 attempt 3's Commit r20261021-092814-0b1c, read by r20261021-180952-300c): the Definition and its row kernel give
+a DeepSeek-V4-Pro B1 Commit): the Definition and its row kernel give
 every committed output, and the epilogue in two roundings (`eps + mul(scale_a(sum), rcp(N))`, the PTX as written) misses each
 fixture row the fixture says it misses, by as many words, so the rows keep telling ptxas's FFMA apart from it."""
 from __future__ import annotations
@@ -14,11 +14,11 @@ import numpy as np
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import rows
-from verity_vllm.program.kernels.dsa_norm_rows import block_rmsnorm_rows
-from verity_vllm.program.registry import dsa_norm
-from verity_vllm.program.registry.prims import bits_of
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import rows
+from verity.ml.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
+from verity.ml.definitions.registry import dsa_norm
+from verity.ml.definitions.registry.prims import bits_of
 from verity_vllm.query.manifest import format as RM
 
 FIXTURE = json.loads((Path(__file__).with_name("fixtures") / "dsv4_q_norm_commit_20261021.json").read_text())

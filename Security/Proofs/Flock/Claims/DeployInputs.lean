@@ -29,7 +29,7 @@ session's statement (`Stmt.setupTables`), each table's registered reads (`checkR
 (`checkIdentifier` without `--identifier`), `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk` under `--zk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, and the draw's law (`ProvedScope.drawLaw`). It refuses a statement without
 hm96-sha512 rows, which `verifyCmd` sets up on its compression circuit and then always refuses (such a session has no
-draw, `drawLaw zk tags none`); the deployed form does not carry `--comp`.
+draw, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
 -/
 
 namespace FlockDeploy
@@ -223,7 +223,7 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.registered (RecCoins.Source.atC3 none none none) (RecSetup.c3 none none))
   sts.forM (RecVStar.checkPubRows · s.registered none none)
-  if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags r.draw
+  if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags false r.draw
   pure (spec, sts)
 
 /-- The statement's inputs, for the verifier that is masked exactly when `zk`: a statement of the other verifier does not

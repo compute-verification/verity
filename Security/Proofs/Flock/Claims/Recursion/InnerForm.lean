@@ -184,7 +184,8 @@ theorem files_stmt {f : RecCoins.Files} {spec : SessionSpec} {st : Stmt}
 /-- **Flock's plain verifier sets the inner statement up as its files do**: where the setup's checks accept what the
 verifier reads of a compiled statement (`RecScope.accepts`), it holds the inner statement's files (`filesOf`), and
 Flock's plain verifier (`FlockDeploy.setupOf false`) sets the inner statement up as one table at the `m`, `k_log` and
-region count, and with the points, that the files set it up at (`RecCoins.Files.stmt`): `RecSetup.checkForm` holds the
+region count, and with the points, that the files set it up at (`RecCoins.Files.stmt`), reading it at the files' tags
+(`RecCoins.innerTags`) and with no public inputs: `RecSetup.checkForm` holds the
 inner statement to a `Tags.circuitPlainLeaves` statement on the coin server's coins with no lookup table, at a draw of
 every one of the files' units in order (`checkForm_ok`); the plain verifier's statement check gives one table and no
 public inputs (`check_plain`); so both are one hidden-output table (`files_stmt`), and the full draw keeps the files'
@@ -192,7 +193,8 @@ numbers (`drawn_full`). -/
 theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧
-      st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.regions.size = st'.regions.size ∧ spec.points = spec'.points := by
+      st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.regions.size = st'.regions.size ∧ spec.points = spec'.points ∧
+      s.read.tags = RecCoins.innerTags ∧ s.read.publicInputs = none := by
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
   obtain ⟨⟨-, ⟨u, hsh⟩⟩, hheld⟩ := ha
@@ -243,7 +245,7 @@ theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
   have hh : RecCoins.innerTags.hiddenOutputs = true := rfl
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okH hh hsetup with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc, -⟩
   · obtain ⟨e1, e2, e3⟩ := drawn_full hst' hst hD hpr
-    exact ⟨_, spec', st', s, _, st, hfs, hstm, hset, e1, e2, e3, by rw [hspec']; rfl⟩
+    exact ⟨_, spec', st', s, _, st, hfs, hstm, hset, e1, e2, e3, by rw [hspec']; rfl, z2, hpi⟩
   · omega
 
 end RecDeploy

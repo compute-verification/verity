@@ -17,8 +17,9 @@ session has four steps:
 
 1. **Open.** The challenger claims the session id in its `SessionLog` (one session an id) and publishes the
    `WipeCommitment`: the server, the session, `N`, `k`, the batch size, the deadline a batch and the declared memory tiers,
-   whose sizes add up to the fill.
+   whose sizes add up to at least the fill.
 2. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
+   `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.
 3. **Challenge.** Once the fill is complete the challenger draws its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
@@ -113,7 +114,8 @@ def draw_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: i
 @dataclass(frozen=True, slots=True)
 class WipeParams:
     """`labels` (`N`), the `k` challenges revealed `batch` at a time, each batch's deadline `limit_ns`, and the memory
-    tiers inside the boundary as `(name, bytes)`, whose total the fill covers exactly."""
+    tiers inside the boundary as `(name, bytes)`, whose total holds the fill: what they declare past it (`outside_bits`)
+    is memory the fill doesn't reach, which the bound counts in full."""
 
     labels: int
     k: int
@@ -126,9 +128,14 @@ class WipeParams:
             raise ValueError("a wipe has labels, 1 <= batch <= k < 2^32 challenges and a positive deadline")
         if not self.tiers or any(b <= 0 for _, b in self.tiers) or len({t for t, _ in self.tiers}) != len(self.tiers):
             raise ValueError("a wipe declares its tiers, each named once with a positive size")
-        if sum(b for _, b in self.tiers) != self.labels * LABEL_BYTES:
-            raise ValueError(f"the tiers total {sum(b for _, b in self.tiers)} bytes, but the fill is "
-                             f"{self.labels * LABEL_BYTES}: the fill covers every declared tier exactly")
+        if sum(b for _, b in self.tiers) < self.labels * LABEL_BYTES:
+            raise ValueError(f"the tiers total {sum(b for _, b in self.tiers)} bytes, less than the fill's "
+                             f"{self.labels * LABEL_BYTES}: the declared tiers hold the fill")
+
+    @property
+    def outside_bits(self) -> int:
+        """`R`: the declared memory the fill doesn't reach, in bits."""
+        return 8 * sum(b for _, b in self.tiers) - self.labels * LABEL_BITS
 
     @property
     def covered(self) -> bool:
@@ -274,6 +281,17 @@ class Challenger:
             yield start, labels(self.key, start, count)
             self.filled = start + count
         self.fill_end_ns = self.clock()
+
+    def fill_by(self, send: Callable[[bytes, int], Any]) -> Any:
+        """`fill`'s labels streamed by `send(K, N)`, which returns once it has sent the last; once only. Returns what
+        `send` returns. The answers are checked against this module's `label` whatever `send` streamed."""
+        if self.fill_start_ns is not None:
+            raise RuntimeError("the fill streams once")
+        self.fill_start_ns = self.clock()
+        out = send(self.key, self.params.labels)
+        self.filled = self.params.labels
+        self.fill_end_ns = self.clock()
+        return out
 
     def challenge(self) -> tuple[int, ...]:
         """Reveal the next batch's indices and read its send time; the coins are drawn at the first batch."""

@@ -17,7 +17,7 @@ from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.program import Program
 from verity_vllm.program.predict.build import build_program
-from verity_vllm.program.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
+from verity.ml.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 WGMMA = "HopperBF16WgmmaDot16_v1"

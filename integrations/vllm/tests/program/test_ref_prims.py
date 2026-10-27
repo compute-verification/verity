@@ -1,7 +1,7 @@
-"""Lane NUMERIC: the reference-mode kinds of `verity_vllm/program/registry/ref_prims.py`.
+"""Lane NUMERIC: the reference-mode kinds of `verity/ml/definitions/registry/ref_prims.py`.
 
 Three layers, kept separate (brief boundary 5 — semantics vs evidence):
-  1. **definition consistency** — the numpy twins equal the gate-by-gate IR evaluation of the registered bodies on
+  1. **definition consistency** — the numpy twins equal the gate-by-gate circuit evaluation of the registered bodies on
      small shapes (the body is the definition; the twin is a testing aid);
   2. **conformance vs torch CPU over a stated, seeded random domain** — agreement statistics (exact-word fraction, max
      ulp distance in the output dtype) are *measured and recorded* to `docs/data/ref-prims/<kind>-<DT>.json`, labelled
@@ -30,14 +30,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import codec  # noqa: E402
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
-from verity_vllm.program.registry import prims as P  # noqa: E402
-from verity_vllm.program.registry import ref_prims as R  # noqa: E402
-from verity_vllm.program.kernels import ref_prims_twins
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.ml.circuits.evaluation import evaluate_call
+from verity.ml.circuits.program import Program
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import ref_prims as R
+from verity.ml.definitions.numerics import ref_prims_twins
 
 torch = pytest.importorskip("torch")
 F = torch.nn.functional
@@ -57,7 +57,7 @@ _ST = CompositeDefinition("Standalone", 1, ("FN",), lambda S: S.FN.signature(), 
 
 
 def gates(spec, *arrays) -> tuple[np.ndarray, int]:
-    """Evaluate one call of `spec` on encodings through the IR oracle; returns (output words, gate count)."""
+    """Evaluate one call of `spec` on encodings through the reference evaluator; returns (output words, gate count)."""
     prog = Program(bind(_ST, FN=spec))
     circ = prog.circuit
     call = [c for c in circ.root_calls() if not c.is_primitive][0]

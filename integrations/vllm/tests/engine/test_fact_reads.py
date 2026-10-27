@@ -12,7 +12,8 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from verity_vllm.engine import build, engine_profile, rank_worker, run_facts
+from verity_vllm.engine import build, engine_profile, run_facts
+from verity_vllm.pipeline.tp import rank_worker
 
 
 def _module(name: str, **attrs) -> ModuleType:

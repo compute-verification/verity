@@ -26,7 +26,7 @@ def _allocate(mb: int) -> int:
 
 def test_a_target_s_peak_is_its_own():
     """A 600 MiB target's peak shows it, and the small target after it, in the same single job, does not inherit it: a worker
-    that outlived the first kept its 600 MiB under the second's peak (the 104 GiB plateaus in the first heavy.json)."""
+    that outlived the first would keep its 600 MiB under the second's peak."""
     got = {x: (peak, start) for x, _, peak, start in cli.parallel(_allocate, [600, 1], jobs=1)}
     (big, big_start), (small, small_start) = got[600], got[1]
     assert big - big_start >= 0.55
@@ -76,8 +76,8 @@ def _pid(_: int) -> int:
 
 
 def test_a_budget_granted_mid_run_admits_what_now_fits(monkeypatch, tmp_path):
-    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and the four SHA-512 targets still ran
-    one at a time under the share it left beside pytest.  `parallel` asks a callable budget again at each admission, so once
+    """When pytest ends long before circuit-check does, the targets still queued would run one at a time under the share
+    it was given beside pytest.  `parallel` asks a callable budget again at each admission, so once
     check.py grants the slot (`granted_gb`, ``--mem-gb-file``) the targets still queued start together."""
     asked, picked, admit = [], [], cli.admit
 
@@ -119,8 +119,8 @@ def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path,
 
 
 def test_a_cgroups_inactive_page_cache_counts_as_left(tmp_path):
-    """r20261021-101535-85fb on vy-nebius-cpu-3: a user slice at 462 of its 463 GiB, 278 GiB of it page cache, left a budget of
-    ~0, and the targets ran one at a time at 0.06 a second. The kernel reclaims inactive_file at the limit; active_file it may
+    """A user slice at 462 of its 463 GiB, 278 GiB of it page cache, would leave a budget of ~0, and the targets would run one
+    at a time. The kernel reclaims inactive_file at the limit; active_file it may
     still need, and without a memory.stat nothing is taken off."""
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc/meminfo").write_text(f"MemAvailable: {380 << 20} kB\n")
@@ -158,7 +158,7 @@ def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):
 
 
 def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
-    """CIR-21: inside slot.py's slot (CHECK_SLOT_MEM_GB) a raw `circuit-check` without `--mem-gb` budgets the slot's mem=, not
+    """Inside slot.py's slot (CHECK_SLOT_MEM_GB) a raw `circuit-check` without `--mem-gb` budgets the slot's mem=, not
     the machine's MemAvailable; `--mem-gb` still wins, and outside a slot nothing changes."""
     monkeypatch.setattr(cli, "_rss_gb", lambda: 0.0)
     monkeypatch.setattr(cli, "memory_gb", lambda root=None: 1500)
@@ -170,10 +170,10 @@ def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
 
 
 def test_a_circuit_check_in_an_xdist_worker_keeps_to_the_worker_s_share(monkeypatch):
-    """r20261018-024149-8607: suites.py sizes the suite's xdist workers at `worker_gb` each from a memory every worker shares, so a
+    """suites.py sizes the suite's xdist workers at `worker_gb` each from a memory every worker shares, so a
     circuit-check a test starts budgets that worker's share (conftest.py's `worker_slot_gb`), or the slot's when smaller, never
-    the slot or the cgroup the others share; outside xdist nothing is set.  A worker holding the 25 GiB catalog leaves its
-    targets the rest of its share, one job."""
+    the slot or the cgroup the others share; outside xdist nothing is set.  A worker holding 25 GiB leaves its targets the rest
+    of its share, one job."""
     from conftest import WORKER_GB, worker_slot_gb
 
     worker = {"PYTEST_XDIST_WORKER": "gw3"}
@@ -186,3 +186,20 @@ def test_a_circuit_check_in_an_xdist_worker_keeps_to_the_worker_s_share(monkeypa
     monkeypatch.setattr(cli, "memory_gb", lambda root=None: 900)
     monkeypatch.setenv(cli.SLOT_MEM_ENV, str(worker_slot_gb(worker, 32)))
     assert cli.budget_gb(None) == 7.0 and cli.auto_jobs() == 1
+
+
+def test_the_catalog_s_build_keeps_to_what_the_session_s_workers_were_given(monkeypatch):
+    """The xdist worker that builds the catalog (conftest.py's `_budget`) budgets its bindings' processes the workers' shares,
+    `worker_gb` each, less what each holds as it waits: not the slot's mem=, which `check`'s suites running beside this one
+    share, and never more than the slot or the memory leaves; outside xdist, `cli.budget_gb`."""
+    from conftest import _budget
+
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 0.5)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 900)
+    four = {"PYTEST_XDIST_WORKER": "gw0", "PYTEST_XDIST_WORKER_COUNT": "4"}
+    assert _budget({**four, cli.SLOT_MEM_ENV: "480"}, 8) == 30.0 and _budget(four, 8) == 30.0
+    assert _budget({**four, cli.SLOT_MEM_ENV: "20"}, 8) == 18.0
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 10)
+    assert _budget(four, 8) == 10.0
+    monkeypatch.setenv(cli.SLOT_MEM_ENV, "320")
+    assert _budget({cli.SLOT_MEM_ENV: "320"}, 8) == cli.budget_gb(None) == 10

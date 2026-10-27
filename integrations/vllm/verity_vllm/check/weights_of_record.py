@@ -57,6 +57,7 @@ from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, row
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
+PARAM = "weights"                                   # the Program parameter (a struct) the record is of, and the window circuit's registered value
 
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
@@ -236,8 +237,8 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
     elif name == "normalizer" or name.endswith(".normalizer"):
         # Gemma-2's embedding normalizer (dense M-0619 preflight on the real Gemma-2-2B Program: the ONE unresolved field of 316): a
         # non-persistent 0-d buffer `torch.tensor(hidden_size ** 0.5)` created at the served dtype in vLLM's Gemma2Model.__init__ -- no
-        # checkpoint tensor, a function of config.json's hidden_size alone.  The frozen root policy already classifies it with the
-        # rotary table (root_policy.ANALYTIC_TABLES["normalizer"]) and pins its value EXACTLY: the Python float sqrt(H) rounded once
+        # checkpoint tensor, a function of config.json's hidden_size alone.  It is an analytic table like the rotary table
+        # (`acquire.plan.analytic_table_of_buffer`), and its value is pinned EXACTLY: the Python float sqrt(H) rounded once
         # (nearest-even) to bf16 (analytic.normalizer_word).  Composed here from config.json, so the served buffer is compared like a
         # weight, not left unpinned; any other declared width / shape has no rule -> unresolved (fail closed).
         if bits != 16 or list(shape) not in ([], [1]):
@@ -310,7 +311,7 @@ def rank_composer(*, checkpoint_dir: str, checkpoints_manifest: str | None = Non
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
     """(field, shape, value bits) for every field of the Program's `weights` struct parameter, in declaration order."""
     from verity_vllm.check.replay.index import parse_struct
-    wparam = next((t for n, t in inst.get("params", []) if n == "weights"), None)
+    wparam = next((t for n, t in inst.get("params", []) if n == PARAM), None)
     if not wparam or not str(wparam).startswith("{"):
         return []
     return [(name, shape, bits) for name, _count, shape, bits in parse_struct(str(wparam))]
@@ -342,8 +343,8 @@ def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: Che
       * attention kv-cache scales `attn._{k,v,q,prob}_scale`: without kv-cache quantization (kv_cache_dtype auto) vLLM creates them as
         f32 1.0 -- pinned EXACTLY (digest of the f32 word); any other kv_cache_dtype has its scales in the checkpoint (then `compose`
         finds them) or is left unpinned BY NAME with the dtype in the why (never assumed).
-      * the rotary table `rotary_emb.cos_sin_cache` [MAX_POS, ROT] bf16: the frozen root policy's analytic table (root_policy
-        ANALYTIC_TABLES['cos_sin'] = analytic.check_cos_sin, gate I9) -- the served words must round from values within the fp32
+      * the rotary table `rotary_emb.cos_sin_cache` [MAX_POS, ROT] bf16: an analytic table (`acquire.plan.analytic_table_of_buffer`,
+        checked by analytic.check_cos_sin, gate I9) -- the served words must round from values within the fp32
         pipeline's error bound of the analytic function of config.json (theta, D/ROT, MAX_POS, rope_scaling); there is no byte digest
         (CUDA libm != numpy libm at the last bf16 ulp), so the field is pinned 'analytic' and `check` runs the bound on the served
         words.  A rope_scaling type without an analytic table stays unpinned by name.
@@ -485,9 +486,11 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto",
-                      fields: list[tuple[str, list[int], int]] | None = None) -> dict[str, Any]:
+                      fields: list[tuple[str, list[int], int]] | None = None,
+                      on_field: Callable[[str, np.ndarray], None] | None = None) -> dict[str, Any]:
     """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list.
-    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`)."""
+    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`); `on_field(field, words)`
+    is given each field it digests, its raw words row-major as digested."""
     t0 = time.perf_counter()
     inst, res = program["instances"], program.get("result") or {}
     tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
@@ -537,6 +540,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
             continue
         b = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)      # arr.tobytes()'s bytes, not copied again
         n_bytes += b.nbytes
+        if on_field is not None:
+            on_field(field, arr)
         out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": hashlib.sha256(b).hexdigest(),
                            "pinned": True, **note})
     root = root_of_fields(out_fields)
@@ -864,7 +869,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
 def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_manifest: str | None, argv: list[str] | None, *,
                           supersedes: str | None = None) -> dict[str, Any]:
     """[Record repairs are LOGGED DERIVATIONS] the provenance line of a record written by this CLI: tool, the code that
-    ran it (the repo's HEAD when this file sits in a git tree, else null), the SOURCE FILES the derivation read (the Program's instances.json.gz
+    ran it (the repo's HEAD when this file sits in a git tree, else null, with `code_source` naming what failed), the SOURCE FILES the derivation read (the Program's instances.json.gz
     + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (row_pod moves a
     stale / pre-MAN-09c record aside before re-deriving).  Informational: never read by check() -- the digests are the evidence."""
     import subprocess
@@ -872,6 +877,7 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
 
     code = None
     code_source = None
+    unread: list[str] = []
     try:
         # the release tree on a pod has no .git: ship.sh's EXPORT.json names the shipped commit (experiment.code_version reads it first,
         # then git); the int-1 wave-1 records carried code null for that reason (exec r16_0413 build_request/weights_of_record.json)
@@ -881,15 +887,19 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
         code, code_source = cv.get("commit") or None, cv.get("source")
         if code and cv.get("dirty_patch_sha256"):
             code_source = f"{code_source} (dirty patch {str(cv['dirty_patch_sha256'])[:12]})"
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         code = None
+        unread.append(f"code_version raised {type(e).__name__}: {e}")
     if code is None:
         try:
             here = os.path.dirname(os.path.abspath(__file__))
             code = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5).stdout.strip() or None
             code_source = "git" if code else None
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             code = None
+            unread.append(f"git rev-parse raised {type(e).__name__}: {e}")
+    if unread:
+        code_source = (f"git ({'; '.join(unread)})" if code else f"unreadable: {'; '.join(unread)}")[:240]
     return {"tool": "verity_vllm.check.weights_of_record", "code": code, "code_source": code_source, "at": _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
             "sources": {"program_dir": os.path.abspath(program_dir), "program_files": ["instances.json.gz", "result.json"],
                         "checkpoint_dir": os.path.abspath(checkpoint_dir), "checkpoints_manifest": os.path.abspath(checkpoints_manifest) if checkpoints_manifest else "repo default"},

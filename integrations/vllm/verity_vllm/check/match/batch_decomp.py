@@ -53,6 +53,7 @@ import time
 from dataclasses import dataclass
 
 from verity_vllm import settings
+from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
@@ -104,6 +105,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     # GM-01's peak RSS (87 GB on cp-dev1) for nothing
     with _Phase(run_prof, "fold_load") if profiling else _NoPhase():
         B = oracle if oracle is not None else ops.load_oracle(oracle_dir, "oracle")
+        if oracle is None:
+            CF.fold_in_form(B, derived_dirs)
     if profiling:
         run_prof["fold_preloaded"] = oracle is not None
         run_prof["fold_instances"] = len(B.inst)
@@ -220,7 +223,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
 
     res = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
            "log": log_path, "n_requests_header": len(reqs), "n_output_sequences": len(per_req), "engine_steps": len(steps),
-           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in,
+           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in, "fold_form": getattr(B, "fold_form", None),
                       # [R16 global, F-fp8-GM1] the shared weights as a node RANGE (contiguous after the request-owned parameters)
                       "weights_input_nodes": {"n": len(weights_nodes), "first": min(weights_nodes), "last": max(weights_nodes),
                                               "request_owned_inputs": len(reqs) + len(seed_node_of)},

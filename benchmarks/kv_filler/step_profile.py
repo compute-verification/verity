@@ -186,7 +186,7 @@ def main() -> int:
     import torch
     import vllm
     from torch.profiler import ProfilerActivity, profile
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
@@ -202,7 +202,7 @@ def main() -> int:
               enforce_eager=False, gpu_memory_utilization=a.mem,
               compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": capture})
     eng = llm.llm_engine
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
                        if "embed_tokens" not in n)
     if stack:

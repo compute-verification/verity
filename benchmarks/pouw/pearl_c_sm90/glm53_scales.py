@@ -95,7 +95,7 @@ def header(url: str) -> tuple[str, int, dict]:
     """The shard's final URL (the Hub's redirect, resolved once), its data start and its header."""
     for t in range(6):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": "bytes=0-7"}), timeout=120) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": "bytes=0-7"}), timeout=120) as r:  # noqa: S310  (BASE's https URL)
                 final, n = r.geturl(), struct.unpack("<Q", r.read())[0]
             break
         except OSError:
@@ -130,7 +130,7 @@ def scale_stats(s: np.ndarray) -> dict:
 
 def weight_stats(w: np.ndarray, s: np.ndarray) -> dict:
     from verity_vllm.check.fp8_ue8m0 import requant
-    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32
+    from verity.ml.definitions.numerics.fp8_twins import np_e4m3_to_f32
     N, K = w.shape
     full = np.repeat(np.repeat(s, G, axis=0), G, axis=1)[:N, :K].astype(np.float64)
     code = np_e4m3_to_f32(w).astype(np.float64)

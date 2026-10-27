@@ -312,7 +312,7 @@ def test_the_rows_native_evaluation_is_the_registered_definition():
     three scales, a row of subnormals and a zero row."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import pouw_rows
+    from verity.ml.definitions.registry import pouw_rows
     rng = np.random.default_rng(1)
     d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)
     for scale in (1e-3, 1.0, 50.0, 1e-39, 0.0):
@@ -473,9 +473,9 @@ def test_an_a_strip_that_is_not_the_quantized_input_is_rejected(world):
 
 @pytest.mark.parametrize("scheme", ["ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"])
 def test_every_other_scheme_stays_refused_beside_sampled_proofs(scheme):
-    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
     assert any("no Definition" in r for r in PO.refusals(ctx))
-    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
     assert PO.refusals(ok) == ()
 
 

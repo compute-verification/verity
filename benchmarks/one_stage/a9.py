@@ -94,7 +94,7 @@ def pick(res, kind: str, step: int, layer: int):
 
 def units_of(spec):
     """The Call's coordinate unit: the word `_v1` and the Boolean `_v2` at the Call's statics."""
-    from verity_vllm.program.registry import boolean_fp8_moe as B, fp8_moe_experts as X
+    from verity.ml.definitions.registry import boolean_fp8_moe as B, fp8_moe_experts as X
     s = dict(spec.bindings)
     w = K.family(spec.id) == DOWN
     st = {k: s[k] for k in ("E", "K", "G", "KB", "SWAP")}
@@ -182,7 +182,7 @@ def cut(s: dict, xq, sx, e: int, w, ws, cap: np.ndarray, coords: list[int], n_sa
     """The w13 coordinate cut where the static pair form's own body cuts it (`boolean_fp8_moe._pair_coordinate`): one
     `GatherE4m3x{E}_v2` unit per weight (the multiplexer tree over the expert id's bits, an e4m3 out) and one
     `MoeExpertFp8BlockCoordinate_v4` unit on the row they select (a bf16 out), each as `check_unit` records it."""
-    from verity_vllm.program.registry import boolean_fp8_moe as BFM, fp8_moe as FM, fp8_moe_experts as X
+    from verity.ml.definitions.registry import boolean_fp8_moe as BFM, fp8_moe as FM, fp8_moe_experts as X
     E, Kd, G = s["E"], s["K"], s["G"]
     picks = [(n, k) for n in (coords[0], coords[-1]) for k in (0, 1, Kd // 2, Kd - 1)]
     gather = check_unit(X.gather_e4m3(E), BFM.gather_e4m3(E).bind(), [[e & 0xFFFFFFFF, *w[:, n, k].tolist()] for n, k in picks],
@@ -197,8 +197,8 @@ def cut(s: dict, xq, sx, e: int, w, ws, cap: np.ndarray, coords: list[int], n_sa
 def launch(res, store, vals, kind: str, step: int, a) -> dict:
     """One launch's records (module docstring) and, when they all hold, its units' rows and outputs; for a w13 launch whose
     coordinate unit is over M0's block, its cut's units (`cut`) under ``_cut``."""
-    from verity_vllm.program.kernels import fp8_moe_rows as FR
-    from verity_vllm.program.registry.fp8 import weight_blocks
+    from verity.ml.definitions.numerics import fp8_moe_rows as FR
+    from verity.ml.definitions.registry.fp8 import weight_blocks
     m = pick(res, kind, step, a.layer)
     if m is None:
         return {"staged": False, "why": f"no {kind} Call at step {step} in layer {a.layer}"}
@@ -266,7 +266,7 @@ def main() -> int:
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     doc: dict = {"row": a11.ROW, "rank": 0, "layer": a.layer, "registry_errors": load_registry()[1]}
     res, store, weights, vals, fold_s = a11.fold_values(Path(a.values), a.profile, Path(a.roles) if a.roles else None,
                                                      weights_cls=ShareWeights)

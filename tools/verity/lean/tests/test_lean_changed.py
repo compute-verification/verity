@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -181,6 +182,61 @@ def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_pa
     assert LC.damaged(tmp_path / "none") == []
 
 
+def torn(lib: Path, name: str) -> Path:
+    """A module whose `.olean` was written after its `.hash`, the trace and the `.hash` still agreeing: what a build killed
+    after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash` (TOP-90 row 54)."""
+    t = module(lib, name)
+    h = lib / f"{name}.olean.hash"
+    os.utime(h, ns=(10**18, 10**18))
+    os.utime(lib / f"{name}.olean", ns=(10**18 + 1, 10**18 + 1))
+    return t
+
+
+def test_an_output_newer_than_its_hash_is_half_written_and_loses_every_hash_with_its_trace(tmp_path):
+    """Lake reads an import's hash from its `.hash` without hashing the `.olean`, so a module rebuilt against the torn one
+    records the old hash for the new bytes; the trace alone going would leave the `.hash` that a `.ltar` restore keeps."""
+    tree = tmp_path / "tree"
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    good = module(lib, "P/Good")
+    os.utime(lib / "P" / "Good.olean", ns=(10**18, 10**18))
+    os.utime(lib / "P" / "Good.olean.hash", ns=(10**18, 10**18))
+    bad = torn(lib, "P/Torn")
+    ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
+    ir.mkdir(parents=True)
+    (ir / "Torn.c").write_text("c")
+    (ir / "Torn.c.hash").write_text("cc")
+    (ir / "Good.c.hash").write_text("cc")
+    assert LC.damaged(lib) == [bad], "an output written after its `.hash`; one written at the same time is not"
+    said = []
+    LC.repair(tree, ["pkg"], {}, None, said.append)
+    assert not bad.exists() and not list(lib.glob("P/Torn.*.hash")) and not (ir / "Torn.c.hash").exists()
+    assert (lib / "P" / "Torn.olean").exists() and (ir / "Torn.c").exists(), "the outputs stay for Lake to replace"
+    assert good.exists() and (lib / "P" / "Good.olean.hash").exists() and (ir / "Good.c.hash").exists()
+    assert any("1 module(s) half-written by an earlier build, rebuilt: P/Torn" in s for s in said)
+
+
+def test_a_module_without_a_trace_loses_the_hash_files_it_kept(tmp_path):
+    """compute-accounting, 26 Oct 09:49Z: cpu-5's `build-0` held `W1.olean` rewritten at 09:08, its `.hash` from 07:47 and
+    no `W1.trace`, as a `repair` that dropped only the trace left it; `damaged` reads only traces, so it went unflagged,
+    and the next `.ltar` restore would have kept the stale `.hash` beside a new trace."""
+    tree = tmp_path / "tree"
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    good = module(lib, "P/Good")
+    module(lib, "P/W1").unlink()
+    ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
+    ir.mkdir(parents=True)
+    for name in ("W1", "Good"):
+        (ir / f"{name}.c").write_text("c")
+        (ir / f"{name}.c.hash").write_text("cc")
+    assert LC.damaged(lib) == [], "no trace to read"
+    said = []
+    LC.repair(tree, ["pkg"], {}, None, said.append)
+    assert not list(lib.glob("P/W1.*.hash")) and not (ir / "W1.c.hash").exists()
+    assert (lib / "P" / "W1.olean").exists() and (ir / "W1.c").exists(), "the outputs stay for Lake to replace"
+    assert good.exists() and (lib / "P" / "Good.olean.hash").exists() and (ir / "Good.c.hash").exists()
+    assert any("1 module(s) without a trace kept their .hash files, dropped: P/W1" in s for s in said)
+
+
 def test_a_tree_left_mid_way_is_repaired_and_said_so_and_a_clean_run_clears_the_mark(fast, tmp_path, monkeypatch):
     _, tree, _ = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
@@ -256,7 +312,7 @@ def trying(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "sandboxed", lambda: False)
     monkeypatch.setattr(LC.shutil, "which", lambda _: str(lake))
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
-    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0}
+    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": ""}
 
     def link(pkg, t, deps, links, log=print, copy=False):
         calls["link"].append((pkg, copy))
@@ -265,7 +321,7 @@ def trying(tmp_path, monkeypatch):
 
     def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None):
         calls["build"].append((pkg, t, targets, sandbox, cmd))
-        return (calls["lean_rc"] if cmd else calls["deps_rc"]), ""
+        return (calls["lean_rc"], calls["lean_text"]) if cmd else (calls["deps_rc"], "")
 
     monkeypatch.setattr(LC, "link", link)
     monkeypatch.setattr(LC, "build", build)
@@ -286,6 +342,27 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
     assert LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--tree", str(tree)]) == 1
     with pytest.raises(SystemExit):
         LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--records", "Sec"])
+
+
+def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):
+    """cpu-5's `build-0`, 26 Oct: `Proofs.Pouw` failed there with `W1BudgetAbort` replayed beside a fresh
+    `TTOutW1RowSeed`, each built against another `W1`, while it elaborated from source everywhere else."""
+    tree, calls = trying
+    proofs = tree / "Sec" / "Proofs" / ".lake" / "build" / "lib" / "lean"
+    sec = tree / "Sec" / ".lake" / "build" / "lib" / "lean"
+    stale, fresh, other = module(proofs, "Proofs/Pouw/W1BudgetAbort"), module(sec, "Defs/RowSeed"), module(proofs, "P/Other")
+    calls["lean_rc"] = 1
+    calls["lean_text"] = ("Flock/X.lean:1:0: error: import Proofs.Pouw.W1BudgetAbort failed, environment already contains "
+                          "'Pouw.PearlC.W1.Instr.exec.eq_10' from Defs.RowSeed\n")
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1, "lean's status, unchanged"
+    assert not stale.exists() and not fresh.exists() and other.exists()
+    assert not list(proofs.glob("Proofs/Pouw/W1BudgetAbort.*.hash")) and not list(sec.glob("Defs/RowSeed.*.hash"))
+    assert any("import clash between Proofs.Pouw.W1BudgetAbort and Defs.RowSeed" in s for s in said)
+    calls["lean_text"] = "Flock/X.lean:3:0: error: unknown identifier 'x'\n"
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
+    assert other.exists() and not any("clash" in s for s in said), "any other error forgets nothing"
 
 
 def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):
@@ -320,6 +397,49 @@ def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(try
     monkeypatch.setattr(LC, "link", lambda *a, **k: False)
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
     assert calls["build"] == [] and any("--records Sec/Proofs" in s for s in said)
+
+
+def test_build_builds_the_files_modules_on_the_slot_tree_and_reports_each_files_first_error_as_json(trying, tmp_path,
+                                                                                                     monkeypatch, capsys):
+    """The ready mark's preflight reads `--build`'s last line: a Lean error at a position in a tracked file fails that file,
+    named from the repository's root, whichever package of the build's closure holds it."""
+    tree, calls = trying
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    (LC.ROOT / "Sec" / "Proofs" / "Flock" / "Y.lean").write_text("import Proofs.Flock.X\n")
+    monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: ["Sec/Proofs/Flock/X.lean", "Sec/Proofs/Flock/Y.lean",
+                                                                   "Sec/Defs/A.lean"])
+    calls["deps_rc"] = 1
+    monkeypatch.setattr(LC, "build", lambda pkg, t, lake_, targets=None, sandbox=True, cmd=None: (
+        calls["build"].append((pkg, targets)) or 1,
+        "✖ [3/9] Building Proofs.Flock.Y\nerror: ././../Proofs/Flock/Y.lean:2:4: unknown identifier 'foo'\n  more\n"
+        "error: ./../Defs/A.lean:1:0: unexpected token\nerror: ././../Proofs/Flock/Y.lean:5:0: a later one\n"
+        "error: Lean exited with code 1\n"))
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean", "Sec/Proofs/Flock/Y.lean", "Elsewhere/Z.lean"]) == 1
+    assert calls["build"] == [("Sec/Proofs", ["+Proofs.Flock.X", "+Proofs.Flock.Y"])] and calls["run"] == []
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert doc["built"] == {"Sec/Proofs": 1} and doc["failed"] == {
+        "Sec/Proofs/Flock/Y.lean": "error: ././../Proofs/Flock/Y.lean:2:4: unknown identifier 'foo'",
+        "Sec/Defs/A.lean": "error: ./../Defs/A.lean:1:0: unexpected token"}
+    assert list(doc["skipped"]) == ["Elsewhere/Z.lean"] and not (tree / LC.DIRTY).exists()
+
+
+def test_build_builds_nothing_off_a_node_or_where_the_node_keeps_no_dependencies(trying, tmp_path, monkeypatch, capsys):
+    """An agent VM has no Lean slots, and a node without the package's dependencies would fetch Mathlib cold: both are
+    skipped with why, so the preflight notes them instead of refusing."""
+    _, calls = trying
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "absent")
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 2
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert "not a node" in doc["skipped"]["*"] and calls["build"] == [] and calls["link"] == []
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    monkeypatch.setattr(LC, "link", lambda *a, **k: False)
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 2
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert "Mathlib" in doc["skipped"]["Sec/Proofs"] and doc["built"] == {} and calls["build"] == []
+    with pytest.raises(SystemExit):
+        LC.main(["--build", "Sec/Proofs/Flock/X.lean", "--try", "Sec/Proofs/Flock/X.lean"])
 
 
 def test_module_of_reads_the_packages_src_dir(trying):

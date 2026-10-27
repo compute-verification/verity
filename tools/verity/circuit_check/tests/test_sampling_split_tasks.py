@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_tasks.json"
-PKG = "verity_vllm.program.registry."
+PKG = "verity.ml.definitions.registry."
 #: every module of the family, before and after the split; a Definition belongs to the family when one of them constructs it
 FAMILY_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry",
                   "sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins", "sampling_vocab")

@@ -20,16 +20,16 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import deferred_rows as DRW
-from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 
 from tests.pipeline import served_rope as SR
 from tests.pipeline.served_rope import D, HEADS, LAW, ROPE
 
 
 def _commit(tmp_path) -> dict:
-    """The deferred Commit's output dir and row dir, and the world that served it."""
+    """An old record's deferred Commit (vllm-v1, by name): its output dir and row dir, and the world that served it."""
     pytest.importorskip("torch")
-    return SR.commit(tmp_path)
+    return SR.commit(tmp_path, commit_scheme="vllm-v1")
 
 
 def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_served_values(tmp_path):
@@ -121,6 +121,13 @@ def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_served_win
     assert refused(deferred) == refused(hook) == []
     assert refused(dict(deferred, **DRW.stand_in(root, man, "vllm-v1"))) == ["of", "link"]
     assert refused(dict(hook, commitment="vllm-v1")) == ["commitment"]
+
+    # the record's weights were registered under rows-sha512 as well: a SHA-512 tree, the one the hook's rows were opened against
+    wroot = r.row["commit"]["weight_registration"]["root"]
+    tree = json.loads((bundle / "weights" / "tree.json").read_text())
+    assert (tree["scheme"], tree["root"], len(bytes.fromhex(wroot))) == (step_rows.NAME, wroot, DRW.SERVED_ROOT)
+    assert DRW.source(hook, root, man, r.commitment, wroot)["weights_sha512"] is True
+    assert [k for k, v in DRW.source(hook, root, man, r.commitment, "ab" * 32).items() if not v] == ["weights_sha512"]
 
 
 def test_the_audits_source_check_takes_a_served_window_only_over_a_sha512_run_root_of_record():

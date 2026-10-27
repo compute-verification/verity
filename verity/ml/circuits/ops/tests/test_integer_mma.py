@@ -26,13 +26,13 @@ from verity.ml.circuits.silicon.term import term_value
 
 SAT, WRAP, U8S8 = BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP, BLACKWELL_SM120_U8S8_M16N8K32
 
-# Run r20261015-071801-6d3c (the library-kernel probe's edge case): every entry of A is 127 and every entry of B is
+# The library-kernel probe's edge case: every entry of A is 127 and every entry of B is
 # sign * 127, zero incoming accumulator, the device word of one output: (k, sign) -> s32 value.
 DEVICE_EDGE = {(133_120, 1): 2_147_092_480, (133_120, -1): -2_147_092_480, (133_152, 1): 2_147_483_647}
 
 P, N = 0x7F, 0x81  # +127 and -127 as s8 codes; 0x81 is 129 as u8
 
-# Run r20261015-084000-06d8 (the IMMA probe's structured.json, the .satfinite forms): one mma.sync whose products run
+# The IMMA probe's structured tiles (the .satfinite forms): one mma.sync whose products run
 # past s32 and come back, B all 0x7F.  (a_dtype, A codes, C) -> the device's D.
 DEVICE_CLAMP = {
     ("s8", (P,) + (N,) * 31, S32_MAX): 2_146_999_777,               # first+: a clamp after each product gives S32_MAX - 499,999
@@ -143,6 +143,9 @@ def test_u8s8_sibling_wraps_the_exact_dot() -> None:
 
 
 @pytest.mark.parametrize("iid, model", [("sm90.wgmma.m64n8k32.s8", HOPPER_SM90_S8_K32), ("sm90.mma.m16n8k32.s8", HOPPER_SM90_S8_K32),
+                                        ("sm90.wgmma.m64n64k32.s8", HOPPER_SM90_S8_K32),
+                                        ("sm90.wgmma.m64n128k32.s8", HOPPER_SM90_S8_K32),
+                                        ("sm90.wgmma.m64n256k32.s8", HOPPER_SM90_S8_K32),
                                         ("sm100.tcgen05.mma.s8", BLACKWELL_SM100_S8_K32),
                                         ("sm100.mma.m16n8k32.s8", BLACKWELL_SM100_S8_K32)])
 def test_the_datacenter_cards_compute_the_sm120_step(iid, model) -> None:

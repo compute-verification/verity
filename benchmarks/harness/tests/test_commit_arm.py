@@ -138,7 +138,7 @@ def test_each_arm_commits_the_deployed_scheme_or_refuses(monkeypatch, scheme):
 
 
 def _vllm(path: str):
-    """A ``vllm.LLM`` as far as `committer_engine` reads it: the in-process runner (`get_model_runner`'s path) and the model
+    """A ``vllm.LLM`` as far as `committer_engine` reads it: the in-process runner (`handle.model_runner`'s path) and the model
     config; the LLM and its runner."""
     runner = SimpleNamespace(model=object())
     runner.get_model = lambda: runner.model

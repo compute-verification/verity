@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from tests.properties import dsv4_marlin_capture_gpu as X
-from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 E, K, N, SMS = 8, 256, 128, 3
@@ -421,7 +421,7 @@ def test_a_case_s_records_read_its_two_runs(tmp_path, M: int) -> None:
 
 
 def test_two_align_draws_split_a_case_into_unmoved_and_moved_pairs(tmp_path) -> None:
-    """Run r20261014-065141-a1ec: decode460 and hot1024 were NO-GO on the v2 whole-output comparison at zero word mismatches
+    """decode460 and hot1024 were NO-GO on the v2 whole-output comparison at zero word mismatches
     against the twin, because `moe_align_block_size` places a multi-block expert's pairs across its blocks in atomic arrival order
     and a pair's words read its block's k-slice schedule (the capture's module docstring, Replay determinism).  Two runs whose
     aligns placed one expert's pairs differently must still check out: the pairs both placed alike are held to each other
@@ -527,7 +527,7 @@ def test_the_replay_relaunches_the_recorded_call(monkeypatch) -> None:
 
 
 def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) -> None:
-    """Run r20261013-205619-ce5e's edge8 (8 tokens routed over the edge experts 0..7 only, both launches at 64/128/4 on 132 SMs) was
+    """A run's edge8 (8 tokens routed over the edge experts 0..7 only, both launches at 64/128/4 on 132 SMs) was
     NO-GO on determinism alone, every word equal to the twin's: an edge expert's +inf scale byte on a +-0 code writes NaN words, and
     `torch.equal` on the bf16 outputs is false wherever one stands, so it called the two runs different whatever they wrote.
     `case_launches` compares the runs' words as bits (`same_words`): equal words are deterministic, and a word one bit off, a NaN's

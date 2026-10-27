@@ -220,3 +220,101 @@ def test_cover_says_whether_a_part_run_reads_the_forged_coin(capsys, kind, parts
     assert LV.main(["--cover", kind, *parts]) == rc
     out = capsys.readouterr().out
     assert ("not covered by the parts run" in out) == bool(rc)
+
+
+# `flock-verify rec-compose`'s rule (`RecCompose.check`, whose #guards are `Flock/Test/RecCompose.lean`), for the wiring:
+# one log per V* statement, every VERDICT accepted at the SHA-512 of the one rows file.
+COMPOSER = r'''
+import hashlib, json, sys
+a = sys.argv[1:]
+assert a[0] == "rec-compose", a
+flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows")}
+logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.values()]
+digest = hashlib.sha512(open(flags["--rec-rows"], "rb").read()).hexdigest()
+n = json.load(open(flags["--rec-inner"]))["n"]
+parts, ok = [], True
+for f in logs:
+    vs = [json.loads(ln[8:]) for ln in open(f).read().splitlines() if ln.startswith("VERDICT ")]
+    ok = ok and bool(vs) and all(v.get("accepted") is True and v.get("rec_rows_sha512") == digest for v in vs)
+    parts.append(vs[0].get("rec_part") if vs else None)
+ok = ok and sorted(parts, key=str) == list(range(n))
+print("REC-COMPOSE " + json.dumps({"accepted": ok, "parts": len(logs)}))
+sys.exit(0 if ok else 1)
+'''
+
+
+def _composer(d: Path, n: int, rows: bytes = b'{"ports":{}}') -> tuple[str, str]:
+    """A stand-in `rec-compose` binary and 85's files beside the logs: ``rec-inner.json``, ``rows.json`` and V*'s ``n``
+    statements in ``rec-statements.txt``. The rows file's SHA-512."""
+    import hashlib
+
+    (d / "compose.py").write_text(COMPOSER)
+    binary = d / "flock-verify"
+    binary.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{d / "compose.py"}" "$@"\n')
+    binary.chmod(0o755)
+    (d / "rec-inner.json").write_text(json.dumps({"n": n}))
+    (d / "rows.json").write_bytes(rows)
+    statements = [[f"s{j}", 1] for j in range(n)]
+    (d / "rec-statements.txt").write_text(f"RECVSTAR {json.dumps({'statements': statements})}\n")
+    return str(binary), hashlib.sha512(rows).hexdigest()
+
+
+def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True) -> None:
+    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part and the rows it checked."""
+    v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j, "rec_rows_sha512": digest}
+    (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
+    (d / f"time-{name}.txt").write_text(f"\tExit status: {rc}\n")
+    (d / f"own-{name}.txt").write_text("--rec-rows rows.json")
+
+
+def test_honest_parts_compose(tmp_path, capsys):
+    """Every V* part accepted at the one rows file composes, and the step passes on Lean's composition."""
+    binary, h = _composer(tmp_path, 3)
+    for j, p in enumerate(("L0", "alg-p0", "cap")):
+        _vpart(tmp_path, p, j, h)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and out[-2] == 'lean compose: REC-COMPOSE {"accepted": true, "parts": 3}'
+
+
+def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
+    """Each part accepting alone is not enough: a part verified against another rows file (the prover's per-part rows) has
+    another digest, and the composition refuses, so the step fails."""
+    binary, h = _composer(tmp_path, 3)
+    _vpart(tmp_path, "L0", 0, h)
+    _vpart(tmp_path, "alg-p0", 1, h)
+    _vpart(tmp_path, "cap", 2, "ab" * 64)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+    assert out[-1] == "lean: 3/3 accepted: the step fails"
+
+
+def test_a_staged_rows_file_with_other_rows_is_refused(tmp_path, capsys):
+    """Every part checked against one file, but not the one staged: the composition reads the staged file's digest."""
+    binary, h = _composer(tmp_path, 2)
+    for j, p in enumerate(("L0", "cap")):
+        _vpart(tmp_path, p, j, h)
+    (tmp_path / "rows.json").write_bytes(b'{"ports":{"acc0":{}}}')
+    assert LV.main(["--compose", binary, str(tmp_path), "L0", "cap"]) == 1
+
+
+def test_a_forgery_in_its_parts_place_must_not_compose(tmp_path, capsys):
+    """A forgery of a V* part, put in that part's place, is refused by the composition; one the composition would accept
+    fails the step."""
+    binary, h = _composer(tmp_path, 2)
+    _vpart(tmp_path, "L0", 0, h)
+    _vpart(tmp_path, "cap", 1, h)
+    _vpart(tmp_path, "forged-sum-L0", 0, h, rc=1, accepted=False)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "cap", "forged-sum-L0"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and any(ln.startswith("lean compose forged-sum-L0: REC-COMPOSE") and "FAILS" not in ln for ln in out)
+
+
+def test_a_run_of_some_parts_is_not_composed(tmp_path, capsys):
+    """``LEVELS`` picks some of V*'s parts: there is no recursive statement to compose, and the step says so."""
+    binary, h = _composer(tmp_path, 3)
+    _vpart(tmp_path, "L3", 0, h)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L3"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and "lean compose: 1 of V*'s 3 parts run, so the recursive statement is not composed" in out
