@@ -160,6 +160,9 @@ MEASURED: dict[str, tuple[int, int, str]] = {
                                                         "estimate, not composed: its 9 rows' (rows_k), the state row 149,648 bits")),
     "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
     "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
+    "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, ("C-Flock's lowering (ir_lower) in r20261026-224516-d171, whose "
+                                           "circuit-check passed it (3,064 IR gates, past whole lowering's 256); k_log an "
+                                           "estimate, not composed: its 3 rows' (rows_k)")),
 }
 #: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where #4263 (r20261025-123346-091b: NVIS 1, 17, 128) and circuits (`COMPOSED`)
 #: composed it, linear between
