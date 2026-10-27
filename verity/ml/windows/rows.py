@@ -552,8 +552,11 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
         _JOB.clear()
     roots: dict[str, bytes] = {}
     bc: dict[str, bytes] = {}
+    by: dict[str, list[tuple[int, bytes, bytes]]] = {}
+    for q, s, node, b in res:
+        by.setdefault(q, []).append((s, node, b))
     for p, j in ports.items():
-        mine = sorted((s, node, b) for q, s, node, b in res if q == p)
+        mine = sorted(by.get(p, ()))
         size = min(chunk, _width(j["count"]))
         roots[p] = _Frame(j["domain_id"]).reduce([node for _, node, _ in mine], 0, (size - 1).bit_length())
         if j["kind"] == "row":
