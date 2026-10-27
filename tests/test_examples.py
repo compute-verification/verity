@@ -52,6 +52,14 @@ def test_a_document_fault_is_named():
     _says(old, "level is retired", "add run, one of moved", "add proof, one of none")
 
 
+def test_a_file_with_the_retired_level_reads_as_its_two_axes(tmp_path):
+    d = tmp_path / "examples" / "toy"
+    d.mkdir(parents=True)
+    (d / "example.toml").write_text('protocol = "pous"\nworkload = "none"\nlevel = 1\n')
+    (ex,) = E.examples(tmp_path)
+    assert (ex.data["run"], ex.data["proof"], "level" in ex.data) == ("runs", "none", False)
+
+
 def test_each_run_step_needs_its_evidence():
     assert not E.problems(_ex(), ROOT)
     _says(_ex("runs"), "run runs: add a run of record")
