@@ -410,7 +410,7 @@ def ChainDenseMeets111 : Prop :=
 /-! ### The band with grace `t` (`Definitions.Pous.Model.Graded`, `Definitions.Pous.Accounting.GradedMeets`)
 
 The game's requirements on the protocol are in
-`Security/Definitions/Pous/Model/Graded.lean` and `PROTOCOL.md`, "The graded audit". -/
+`Security/Definitions/Pous/Model/Graded.lean`. -/
 
 /-- **Unconditional: the band store with up to `t` late answers, at every segment count from 1 to 2^64.** For every `N`
 with `1 ≤ N ≤ 2^64`, every `d ≥ 5`, every hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` and
@@ -487,7 +487,7 @@ Red team: GO. -/
 
 /-- **Under the memory challenger's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole
 band segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
-(`PROTOCOL.md`, "Isolation over the whole graded window"), as counts and as a bound.
+(the cap PoUS's `audit.AUDIT_CAP` enforces), as counts and as a bound.
 1. **The counts.** Re-encoding a segment of `chainBand (2^9) d` from `W` costs `R(d) = rebuildCalls (2^9) d` sequential
    `Π₂` calls: `R(5) = 3,057`, `R(12) = 6,578`, and `R(d) ≥ 3,057` for every `d ≥ 5`. The rounds of each row `(t, k)`
    of `BandGradedMeetsFamily` last under `gradedRoundSpan 5 D_late k t ≤ 240·6 + 3·13 = 1,479` call-times when

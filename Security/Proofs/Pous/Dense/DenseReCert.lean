@@ -289,7 +289,7 @@ theorem seg_hard_needs_hD :
 /-! ### Piece 3: alignment with the implementation's per-segment tagged domains
 
 The reference codec domain-separates each segment `s` by `tag_s = salt ‖ u64 s` — a **192-bit** salt then `u64 s`, exactly
-`chainDense`'s 256-bit salt slot (`chainDense B ℓ 512 (dom tag_s)`, `PROTOCOL.md`) — whereas `segScheme` keys the oracle by
+`chainDense`'s 256-bit salt slot (`chainDense B ℓ 512 (dom tag_s)`, PoUS's README) — whereas `segScheme` keys the oracle by
 the **global** block index. These are the *same* domain separation. `segIndexEquiv` shows the global index is exactly the
 `(segment, block)` pair (a bijection), and `tag_injective` shows distinct segments get distinct tags (for `N ≤ 2^64`, from
 `u64` alone). Then `domainSep_equiv` shows the per-segment tagged keying `(s, i) ↦ (tag_s, i)` is the global-index keying

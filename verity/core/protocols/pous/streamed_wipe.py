@@ -1,5 +1,5 @@
 """The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
-`PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee.
+Its game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, and its guarantees `Pous.Guarantees.StreamedWipe*`.
 
 The memory challenger, the auditor's device on a machine the prover doesn't control, fills every memory tier of one
 server with labels it derives itself, then reveals `k` indices drawn on live coins after the fill and checks each answer
@@ -28,7 +28,7 @@ session has four steps:
    (`close`), and the records root is the frame-v3-sha512 root of the batch records.
 
 A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖
-answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
+answers)` (96 bytes).  The guarantee (Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
 cover yet, so `verdict` refuses it.  `verdict` is what a verifier checks of a signed session; its public output is the
 verdict and the egress the network certifier counted, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
