@@ -5,26 +5,28 @@ import Proofs.Flock.Soundness.CROnly.Link
 /-!
 # Sampled proofs' finder: C-Flock's collision finders as one `Claims.Finder`
 
-`SampledDeploy.cr` asks that the vocabulary's finder premise (`Vocab.FinderCR .sampled`: the finder `B^τ` outputs a
-SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls) give C-Flock's
-(`LiveAt.CR τ`: each of the finders C-Flock builds from `τ` meets its own premise). `B^τ` is built from those finders,
-the ones `LiveAt.CR` names (`TableCRZAt`, `LinkCRZCAt`), and no others:
+The vocabulary's finder premise (`Vocab.FinderCR .sampled`: the finder `B^τ` outputs a SHA-512 collision with
+probability at most the published `ε_cr` at the strategy's calls) is about one finder. `B^τ` is built from the finders
+C-Flock's premises name (`TableCRZAt`, `LinkCRZCAt`), and no others:
 
-* each table's knowledge finders after each draw (`SessCRZ`'s: the rewinding finders at `qF τ = 2 (t' τ + v)`, the
-  self-clash finder at `qS τ = t' τ + v`), and each committed position's link finder (`LinkCRZC`'s), each as a
-  `Claims.Finder` on its strategy's coin tape (`Game.tapeFinder`, with the finder's success);
-* `B^τ` (`LiveAt.crFinder τ extra`) is their uniform mixture with one more finder `extra` (`Claims.Finder.mix`): it
-  picks one of the `k = card (Ix τ)` uniformly with its own coins and runs it. Each, `extra` included (`extra_le`),
-  succeeds at most `k` times as often as `B^τ` (`le_mix`), and `B^τ` costs what they do (`crFinder_cost_le`). `extra`
-  is the vocabulary's replay finder in a deployment, so that one finder bounds both the play's collision event and
-  C-Flock's premises; `Claims.Finder.null` where nothing else is needed. `card_Ix_le` bounds `k` by the draws, the
+* each table's knowledge finders (`SessCRZ`'s: the rewinding finders at `qF τ = 2 (t' τ + v)`, the self-clash finder at
+  `qS τ = t' τ + v`), and each committed position's link finder (`LinkCRZC`'s), each as a `Claims.Finder` on its
+  strategy's coin tape (`Game.tapeFinder`, with the finder's success);
+* a table's finder is indexed by the table and its kind (`TabIx lvMax`, level slots past a table's levels finding
+  nothing), never by the draw: it draws `ω` with its own coins, uniformly as the law does, and runs that draw's finder
+  (`tabMix`, a `Claims.Finder.mix` over the draw). A link finder already reads the draw inside its trial;
+* `B^τ` (`LiveAt.crFinder τ extra`) is the uniform mixture of all of them and one more finder `extra`: it picks one of
+  the `k = card Ix` uniformly with its own coins and runs it. Each, `extra` included (`extra_le`), succeeds at most `k`
+  times as often as `B^τ` (`le_mix`), and `B^τ` costs what they do (`crFinder_cost_le`). `extra` is the vocabulary's
+  replay finder in a deployment, so that one finder bounds both the play's collision event and C-Flock's premises;
+  `Claims.Finder.null` where nothing else is needed. `k` has no factor of the draws: `card_Ix_le` bounds it by the
   tables, their levels and the committed positions, with no strategy in the bound.
 
-`LiveAt.CR_of_crFinder`: where `B^τ` succeeds with probability at most `β`, and `k β` is at most each kind's bound
-(`qF τ²/2^513`, `qS τ²/2^513`, and `t' τ / 2^256` for the link finders), `LiveAt.CR τ` holds. A link finder plays `τ`
-at least once, so its expected cost is at least `t' τ` (`linkCost_ge`). `Verity.SampledDeploy.cr_of` gives
-`SampledDeploy`'s `cr` field at a vocabulary whose sampled finder is `crFinder` at the parse, with the three
-inequalities at `β = crBound θ .sampled (cost σ)`.
+Where `B^τ` succeeds with probability at most `β`, each table finder's success averaged over the draw is at most `k β`
+(`tabCRAvg_of_crFinder`, `TabCRAvg`), and each link finder meets `LinkCRZC`'s premise where `k β ≤ t' τ / 2^256`
+(`linkCR_of_crFinder`; a link finder plays `τ` at least once, so its expected cost is at least `t' τ`, `linkCost_ge`).
+The table premise C-Flock's knowledge bound reads (`LiveAt.CR`'s first part) is per draw; one finder gives it only
+averaged over the draw, since bounding any one draw's finder by the mixture costs the number of draws.
 -/
 
 namespace Flock.Guarantees.LiveAt
@@ -140,21 +142,53 @@ noncomputable def linkComp (τ : Strategy A.G) (c : A.LinkPos) : Claims.Finder :
     (fun x => ⌈finderCost (rdTZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ))
       (cont (A.sim τ)) c.1) (cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ)) x⌉₊))
 
-/-- **The finders at `τ`**: every table's knowledge finders after every draw, every link finder, and one more
-(`none`). -/
-abbrev Ix (τ : Strategy A.G) : Type :=
-  Option ((Σ ω : A.L.Ω, Σ j : Fin (A.tsAt τ ω).length, TabIx ((A.tsAt τ ω).get j).sch.levels.length) ⊕ A.LinkPos)
+/-- The most levels a table's schedule has, at any draw and table. -/
+noncomputable def lvMax : ℕ :=
+  Finset.univ.sup fun p : Finset (Fin n) × Fin (nTab A.I) => (tableZHJ A.dj A.y₀ p.1 p.2).sch.levels.length
 
-instance instFiniteIx (τ : Strategy A.G) : Finite (A.Ix τ) := by
+theorem tsAt_length (τ : Strategy A.G) (ω : A.L.Ω) : (A.tsAt τ ω).length = nTab A.I :=
+  planZHJ_length _ _ _ _
+
+/-- Table `j` of the plan after draw `ω`. -/
+abbrev tabOf (τ : Strategy A.G) (ω : A.L.Ω) (j : Fin (nTab A.I)) : Fin (A.tsAt τ ω).length :=
+  Fin.cast (A.tsAt_length τ ω).symm j
+
+/-- Slot `s` of the table kinds at `m` levels, at a table of `l` levels: the same kind, where the table has that
+level. -/
+def slotAt {m : ℕ} (l : ℕ) : TabIx m → Option (TabIx l)
+  | .inl (r, ℓ) => if h : ℓ.val < l then some (.inl (r, ⟨ℓ.val, h⟩)) else none
+  | .inr x => some (.inr x)
+
+/-- **Slot `s` of table `j` after draw `ω`**: that table's finder of that kind, and `Claims.Finder.null` at a level
+slot past the table's levels. -/
+noncomputable def tabAt (τ : Strategy A.G) (ω : A.L.Ω) (j : Fin (nTab A.I)) (s : TabIx A.lvMax) : Claims.Finder :=
+  match slotAt ((A.tsAt τ ω).get (A.tabOf τ ω j)).sch.levels.length s with
+  | some s' => A.tabComp τ ω (A.tabOf τ ω j) s'
+  | none => Claims.Finder.null
+
+/-- **Slot `s` of table `j`, the draw inside**: draws `ω` with its own coins, uniformly as the law does, and runs
+`tabAt τ ω j s`. -/
+noncomputable def tabMix (τ : Strategy A.G) (j : Fin (nTab A.I)) (s : TabIx A.lvMax) : Claims.Finder :=
+  Claims.Finder.mix fun ω : A.L.Ω => A.tabAt τ ω j s
+
+theorem tabMix_Pr (τ : Strategy A.G) (j : Fin (nTab A.I)) (s : TabIx A.lvMax) :
+    (A.tabMix τ j s).Pr Verity.sha512Msg = Claims.Ex fun ω : A.L.Ω => (A.tabAt τ ω j s).Pr Verity.sha512Msg :=
+  Claims.Finder.mix_Pr _ _
+
+/-- **The finders**: each table's finder of each kind (the draw inside), every link finder, and one more (`none`).
+None is indexed by the draw. -/
+abbrev Ix : Type := Option ((Fin (nTab A.I) × TabIx A.lvMax) ⊕ A.LinkPos)
+
+instance instFiniteIx : Finite A.Ix := by
   classical
   infer_instance
 
-noncomputable instance instFintypeIx (τ : Strategy A.G) : Fintype (A.Ix τ) := Fintype.ofFinite _
+noncomputable instance instFintypeIx : Fintype A.Ix := Fintype.ofFinite _
 
 /-- C-Flock's finders at `τ`, and `extra`. -/
-noncomputable def crFam (τ : Strategy A.G) (extra : Claims.Finder) : A.Ix τ → Claims.Finder
+noncomputable def crFam (τ : Strategy A.G) (extra : Claims.Finder) : A.Ix → Claims.Finder
   | none => extra
-  | some (.inl ⟨ω, j, i⟩) => A.tabComp τ ω j i
+  | some (.inl (j, s)) => A.tabMix τ j s
   | some (.inr c) => A.linkComp τ c
 
 /-- **Sampled proofs' finder `B^τ`**: one of C-Flock's finders at `τ` and `extra`, picked uniformly with its own coins,
@@ -162,40 +196,48 @@ run on its own coins. -/
 noncomputable def crFinder (τ : Strategy A.G) (extra : Claims.Finder) : Claims.Finder :=
   Claims.Finder.mix (A.crFam τ extra)
 
-/-- **The number of finders at `τ`, at no strategy**: where every table's schedule, at every draw, has at most `lv`
-levels, `k = card (Ix τ)` is at most `2 lv + 6` per table per draw, one per committed position, and one for `extra`. -/
-theorem card_Ix_le (τ : Strategy A.G) {lv : ℕ}
+/-- **The number of finders**: where every table's schedule, at every draw, has at most `lv` levels, `k = card Ix` is
+at most `2 lv + 6` per table, one per committed position, and one for `extra`. No draw, strategy or count of draws is
+in the bound. -/
+theorem card_Ix_le {lv : ℕ}
     (hlv : ∀ (S : Finset (Fin n)) (j : Fin (nTab A.I)), (tableZHJ A.dj A.y₀ S j).sch.levels.length ≤ lv) :
-    Fintype.card (A.Ix τ) ≤ Fintype.card A.Ω * (nTab A.I * (2 * lv + 6)) + Fintype.card A.vb.Pos + 1 := by
+    Fintype.card A.Ix ≤ nTab A.I * (2 * lv + 6) + Fintype.card A.vb.Pos + 1 := by
   classical
-  have e : Fintype.card (A.Ix τ) = Fintype.card (Option ((Σ ω : A.L.Ω, Σ j : Fin (A.tsAt τ ω).length,
-      TabIx ((A.tsAt τ ω).get j).sch.levels.length) ⊕ A.LinkPos)) := Fintype.card_congr (Equiv.refl _)
-  rw [e, Fintype.card_option, Fintype.card_sum, Fintype.card_sigma]
-  refine Nat.add_le_add_right (Nat.add_le_add ?_ ?_) 1
-  · refine (Finset.sum_le_sum (g := fun _ => nTab A.I * (2 * lv + 6)) fun ω _ => ?_).trans (le_of_eq ?_)
-    · have hl : (A.tsAt τ ω).length = nTab A.I := planZHJ_length _ _ _ _
-      rw [Fintype.card_sigma]
-      refine (Finset.sum_le_sum (g := fun _ => 2 * lv + 6) fun j _ => ?_).trans (le_of_eq ?_)
-      · have hle : ((A.tsAt τ ω).get j).sch.levels.length ≤ lv := by
-          have hg : (A.tsAt τ ω).get j = tableZHJ A.dj A.y₀ (A.L.draw ω) (Fin.cast hl j) := List.get_ofFn _ _
-          rw [hg]
-          exact hlv _ _
-        generalize ((A.tsAt τ ω).get j).sch.levels.length = l at hle ⊢
-        simp only [TabIx, Fintype.card_sum, Fintype.card_prod, Fintype.card_fin, Fintype.card_unit]
-        omega
-      · rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul, hl]
-    · rw [Finset.sum_const, Finset.card_univ, smul_eq_mul]
-      all_goals rfl
-  · convert Fintype.card_subtype_le _
+  have e : Fintype.card A.Ix = Fintype.card (Option ((Fin (nTab A.I) × TabIx A.lvMax) ⊕ A.LinkPos)) :=
+    Fintype.card_congr (Equiv.refl _)
+  have hm : A.lvMax ≤ lv := Finset.sup_le fun p _ => hlv p.1 p.2
+  have hT : Fintype.card (TabIx A.lvMax) = 2 * A.lvMax + 6 := by
+    simp only [TabIx, Fintype.card_sum, Fintype.card_prod, Fintype.card_fin, Fintype.card_unit] <;> omega
+  rw [e, Fintype.card_option, Fintype.card_sum, Fintype.card_prod, Fintype.card_fin, hT]
+  have hL : Fintype.card A.LinkPos ≤ Fintype.card A.vb.Pos := by convert Fintype.card_subtype_le _
+  have hN : nTab A.I * (2 * A.lvMax + 6) ≤ nTab A.I * (2 * lv + 6) := Nat.mul_le_mul_left _ (by omega)
+  exact Nat.add_le_add_right (Nat.add_le_add hN hL) 1
 
 /-- **`extra` succeeds at most `k` times as often as `B^τ`.** -/
 theorem extra_le (τ : Strategy A.G) (extra : Claims.Finder) :
-    extra.Pr Verity.sha512Msg ≤ Fintype.card (A.Ix τ) * (A.crFinder τ extra).Pr Verity.sha512Msg :=
+    extra.Pr Verity.sha512Msg ≤ Fintype.card A.Ix * (A.crFinder τ extra).Pr Verity.sha512Msg :=
   Claims.Finder.le_mix Verity.sha512Msg (A.crFam τ extra) none
 
 theorem strictComp_cost_le (Fd : StrictCR.Finder StrictCR.Pair) (q : ℝ) {b : ℕ} (h : ⌈q⌉₊ ≤ b)
     (x : (strictComp Fd q).S) : (strictComp Fd q).cost x ≤ b :=
   Game.tapeFinder_cost_le _ _ _ _ b (fun _ => h) x
+
+theorem tabComp_cost_le (τ : Strategy A.G) (ω : A.L.Ω) (j : Fin (A.tsAt τ ω).length)
+    (s : TabIx ((A.tsAt τ ω).get j).sch.levels.length) {b : ℕ} (hF : ⌈A.qF τ⌉₊ ≤ b) (hS : ⌈A.qS τ⌉₊ ≤ b) :
+    ∀ x, (A.tabComp τ ω j s).cost x ≤ b := by
+  rcases s with ⟨r, ℓ⟩ | r | r | _ | _
+  · exact strictComp_cost_le _ _ hF
+  · exact strictComp_cost_le _ _ hF
+  · exact strictComp_cost_le _ _ hF
+  · exact strictComp_cost_le _ _ hF
+  · exact strictComp_cost_le _ _ hS
+
+theorem tabAt_cost_le (τ : Strategy A.G) (ω : A.L.Ω) (j : Fin (nTab A.I)) (s : TabIx A.lvMax) {b : ℕ}
+    (hF : ⌈A.qF τ⌉₊ ≤ b) (hS : ⌈A.qS τ⌉₊ ≤ b) : ∀ x, (A.tabAt τ ω j s).cost x ≤ b := by
+  unfold tabAt
+  split
+  · exact A.tabComp_cost_le τ ω _ _ hF hS
+  · exact fun _ => Nat.zero_le _
 
 /-- **`B^τ`'s cost on every coin** is at most `b` where the rewinding and self-clash budgets are, every link finder's
 run is, and `extra`'s cost is. -/
@@ -206,13 +248,9 @@ theorem crFinder_cost_le (τ : Strategy A.G) (extra : Claims.Finder) {b : ℕ} (
         (cont (A.sim τ)) c) (cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ)) x ≤ b)
     (x : (A.crFinder τ extra).S) : (A.crFinder τ extra).cost x ≤ b := by
   refine Claims.Finder.mix_cost_le _ b (fun i => ?_) x
-  rcases i with _ | ⟨ω, j, ⟨r, ℓ⟩ | r | r | _ | _⟩ | c
+  rcases i with _ | ⟨j, s⟩ | c
   · exact hE
-  · exact strictComp_cost_le _ _ hF
-  · exact strictComp_cost_le _ _ hF
-  · exact strictComp_cost_le _ _ hF
-  · exact strictComp_cost_le _ _ hF
-  · exact strictComp_cost_le _ _ hS
+  · exact Claims.Finder.mix_cost_le _ b fun ω => A.tabAt_cost_le τ ω j s hF hS
   · exact Game.tapeFinder_cost_le _ _ _ _ b (fun _ => Nat.ceil_le.mpr (hL c.1 _))
 
 /-- A link trial plays `τ` at least once: its cost is at least `t' τ`. -/
@@ -238,30 +276,38 @@ theorem linkCost_ge (τ : Strategy A.G) (c : A.vb.Pos) (x : TrialOutZC FlockLeve
   · exact le_add_of_le_of_nonneg h1 (CROnly.loopCost_nonneg _ (fun e => (A.ht' τ).trans (A.cTZC_ge τ e)) _)
   · simpa using h1
 
-/-- **C-Flock's premises from the threshold.** Where `B^τ` (`crFinder τ extra`, any `extra`) outputs a SHA-512 collision with probability
-at most `β`, and `k β` (`k = card (Ix τ)`) is at most each kind's bound (`qF τ²/2^513` for the rewinding finders, `qS τ²/2^513` for the
-self-clash finder, `t' τ/2^256` for the link finders), every finder `LiveAt.CR τ` names meets its premise. -/
-theorem CR_of_crFinder (τ : Strategy A.G) (extra : Claims.Finder) {β : ℝ}
+/-- **The table finders' premise, averaged over the draw**: each table's finder of each kind outputs a SHA-512 collision
+with probability at most `β`, averaged over the draw (uniformly, as the law draws). -/
+def TabCRAvg (τ : Strategy A.G) (β : ℝ) : Prop :=
+  ∀ j s, Claims.Ex (fun ω : A.L.Ω => (A.tabAt τ ω j s).Pr Verity.sha512Msg) ≤ β
+
+/-- **The link finders' premise** (`LiveAt.CR`'s second part). -/
+def LinkCR (τ : Strategy A.G) : Prop :=
+  LinkCRZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) A.k A.Rw
+    A.M (A.t' τ)
+
+/-- Each of `B^τ`'s finders succeeds at most `k β` where `B^τ` succeeds at most `β`. -/
+theorem crFam_le (τ : Strategy A.G) (extra : Claims.Finder) {β : ℝ}
+    (hB : (A.crFinder τ extra).Pr Verity.sha512Msg ≤ β) (i : A.Ix) :
+    (A.crFam τ extra i).Pr Verity.sha512Msg ≤ Fintype.card A.Ix * β :=
+  (Claims.Finder.le_mix Verity.sha512Msg (A.crFam τ extra) i).trans
+    (mul_le_mul_of_nonneg_left hB (Nat.cast_nonneg _))
+
+/-- **The table premise from the threshold, averaged over the draw.** Where `B^τ` (`crFinder τ extra`, any `extra`)
+outputs a SHA-512 collision with probability at most `β`, every table finder of every kind does, averaged over the
+draw, with probability at most `k β` (`k = card Ix`). -/
+theorem tabCRAvg_of_crFinder (τ : Strategy A.G) (extra : Claims.Finder) {β : ℝ}
+    (hB : (A.crFinder τ extra).Pr Verity.sha512Msg ≤ β) : A.TabCRAvg τ (Fintype.card A.Ix * β) := fun j s =>
+  (A.tabMix_Pr τ j s).symm.trans_le (A.crFam_le τ extra hB (some (.inl (j, s))))
+
+/-- **The link premise from the threshold.** Where `B^τ` outputs a SHA-512 collision with probability at most `β` and
+`k β ≤ t' τ / 2^256`, every link finder meets `LinkCRZC`'s premise. -/
+theorem linkCR_of_crFinder (τ : Strategy A.G) (extra : Claims.Finder) {β : ℝ}
     (hB : (A.crFinder τ extra).Pr Verity.sha512Msg ≤ β)
-    (hbF : Fintype.card (A.Ix τ) * β ≤ A.qF τ ^ 2 / 2 ^ (513 : ℝ))
-    (hbS : Fintype.card (A.Ix τ) * β ≤ A.qS τ ^ 2 / 2 ^ (513 : ℝ))
-    (hbL : Fintype.card (A.Ix τ) * β ≤ A.t' τ / 2 ^ (256 : ℝ)) :
-    A.CR τ := by
-  have hfam : ∀ i, (A.crFam τ extra i).Pr Verity.sha512Msg ≤ Fintype.card (A.Ix τ) * β := fun i =>
-    (Claims.Finder.le_mix Verity.sha512Msg (A.crFam τ extra) i).trans
-      (mul_le_mul_of_nonneg_left hB (Nat.cast_nonneg _))
-  unfold Flock.Guarantees.LiveAt.CR
-  refine ⟨fun ω j => ⟨fun r hr ℓ hℓ => ?_, fun r hr => ?_, fun r hr => ?_, ?_, ?_⟩, ?_⟩
-  · have hr' : r < 2 := Finset.mem_range.1 hr
-    obtain ⟨hℓ1, hℓ2⟩ := Finset.mem_Icc.1 hℓ
-    obtain ⟨ℓ', rfl⟩ : ∃ ℓ', ℓ = ℓ' + 1 := ⟨ℓ - 1, by omega⟩
-    exact strictCR_of _ _ (hfam (some (.inl ⟨ω, j, .inl (⟨r, hr'⟩, ⟨ℓ', Nat.lt_of_succ_le hℓ2⟩)⟩))) hbF
-  · exact strictCR_of _ _ (hfam (some (.inl ⟨ω, j, .inr (.inl ⟨r, Finset.mem_range.1 hr⟩)⟩))) hbF
-  · exact strictCR_of _ _ (hfam (some (.inl ⟨ω, j, .inr (.inr (.inl ⟨r, Finset.mem_range.1 hr⟩))⟩))) hbF
-  · exact strictCR_of _ _ (hfam (some (.inl ⟨ω, j, .inr (.inr (.inr (.inl ())))⟩))) hbF
-  · exact strictCR_of _ _ (hfam (some (.inl ⟨ω, j, .inr (.inr (.inr (.inr ())))⟩))) hbS
-  · intro c hc
-    exact expectedCR_of _ _ _ _ _ (A.linkCost_ge τ c) (hfam (some (.inr ⟨c, hc⟩))) hbL
+    (hbL : Fintype.card A.Ix * β ≤ A.t' τ / 2 ^ (256 : ℝ)) : A.LinkCR τ := by
+  unfold LinkCR
+  intro c hc
+  exact expectedCR_of _ _ _ _ _ (A.linkCost_ge τ c) (A.crFam_le τ extra hB (some (.inr ⟨c, hc⟩))) hbL
 
 end Flock.Guarantees.LiveAt
 
@@ -271,11 +317,11 @@ open Accounting Core
 
 variable {ι α : Type} [Fintype α] {d : Device ι}
 
-/-- **`SampledDeploy`'s `cr` field.** At a vocabulary whose sampled finder, at registered files that parse, is
-`crFinder` at the session's strategy and some `extra` (`hfinder`), and whose published `ε_cr` at the strategy's calls, times the number
-`k` of C-Flock's finders at it, is at most each kind's bound (`hbF`, `hbS`, `hbL`), the vocabulary's finder premise gives
-C-Flock's. -/
-theorem SampledDeploy.cr_of (V : Vocab d α) (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
+/-- **What the vocabulary's finder premise gives C-Flock.** At a vocabulary whose sampled finder, at registered files
+that parse, is `crFinder` at the session's strategy and some `extra` (`hfinder`): every table finder succeeds, averaged
+over the draw, at most `k ε_cr` (`k = card Ix`, `ε_cr` the published bound at the strategy's calls), and where
+`k ε_cr ≤ t' τ / 2^256` (`hbL`) every link finder meets its premise. -/
+theorem SampledDeploy.crAvg_of (V : Vocab d α) (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
     (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
@@ -284,26 +330,24 @@ theorem SampledDeploy.cr_of (V : Vocab d α) (kd : ByteArray → ℕ) (desc : By
       V.parsed F = some r → Claims.Finder)
     (hfinder : ∀ θ F c σ r hr, V.Registered θ F →
       V.finder .sampled θ F c σ = (A θ F c σ r hr).crFinder (τOf θ F c σ r hr) (extra θ F c σ r hr))
-    (hbF : ∀ θ F c σ r hr, Fintype.card ((A θ F c σ r hr).Ix (τOf θ F c σ r hr)) *
-        V.crBound θ .sampled (V.cost θ F c σ) ≤ (A θ F c σ r hr).qF (τOf θ F c σ r hr) ^ 2 / 2 ^ (513 : ℝ))
-    (hbS : ∀ θ F c σ r hr, Fintype.card ((A θ F c σ r hr).Ix (τOf θ F c σ r hr)) *
-        V.crBound θ .sampled (V.cost θ F c σ) ≤ (A θ F c σ r hr).qS (τOf θ F c σ r hr) ^ 2 / 2 ^ (513 : ℝ))
-    (hbL : ∀ θ F c σ r hr, Fintype.card ((A θ F c σ r hr).Ix (τOf θ F c σ r hr)) *
-        V.crBound θ .sampled (V.cost θ F c σ) ≤ (A θ F c σ r hr).t' (τOf θ F c σ r hr) / 2 ^ (256 : ℝ)) :
+    (hbL : ∀ θ F c σ r hr, Fintype.card (A θ F c σ r hr).Ix * V.crBound θ .sampled (V.cost θ F c σ) ≤
+      (A θ F c σ r hr).t' (τOf θ F c σ r hr) / 2 ^ (256 : ℝ)) :
     ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
-      (hr : V.parsed F = some r), V.Registered θ F →
-      V.FinderCR .sampled θ F c σ → (A θ F c σ r hr).CR (τOf θ F c σ r hr) := by
+      (hr : V.parsed F = some r), V.Registered θ F → V.FinderCR .sampled θ F c σ →
+      (A θ F c σ r hr).TabCRAvg (τOf θ F c σ r hr)
+          (Fintype.card (A θ F c σ r hr).Ix * V.crBound θ .sampled (V.cost θ F c σ)) ∧
+        (A θ F c σ r hr).LinkCR (τOf θ F c σ r hr) := by
   intro θ F c σ r hr hreg hcr
   have hB : ((A θ F c σ r hr).crFinder (τOf θ F c σ r hr) (extra θ F c σ r hr)).Pr sha512Msg ≤
       V.crBound θ .sampled (V.cost θ F c σ) := by
     rw [← hfinder θ F c σ r hr hreg]
     exact hcr
-  exact (A θ F c σ r hr).CR_of_crFinder _ _ hB (hbF θ F c σ r hr) (hbS θ F c σ r hr) (hbL θ F c σ r hr)
+  exact ⟨(A θ F c σ r hr).tabCRAvg_of_crFinder _ _ hB, (A θ F c σ r hr).linkCR_of_crFinder _ _ hB (hbL θ F c σ r hr)⟩
 
 /-- **`SampledDeploy`'s `finder_ge` field.** At a vocabulary whose sampled finder, at registered files that parse, is
-`crFinder` with the play's replay finder of `col` in its spare slot (`hfinder`, `cr_of`'s at that `extra`), and where
-`kMax θ` is at least the number of C-Flock's finders (`hk`), the replay finder succeeds at most `kMax θ` times as often
-as the vocabulary's finder (`extra_le`). -/
+`crFinder` with the play's replay finder of `col` in its spare slot (`hfinder`, `crAvg_of`'s at that `extra`), and
+where `kMax θ` is at least the number of C-Flock's finders (`hk`, from `LiveAt.card_Ix_le`), the replay finder succeeds
+at most `kMax θ` times as often as the vocabulary's finder (`extra_le`). -/
 theorem SampledDeploy.finder_ge_of (V : Vocab d α) (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
@@ -313,7 +357,7 @@ theorem SampledDeploy.finder_ge_of (V : Vocab d α) (kd : ByteArray → ℕ) (de
     (hfinder : ∀ θ F c σ r hr, V.Registered θ F →
       V.finder .sampled θ F c σ = (A θ F c σ r hr).crFinder (τOf θ F c σ r hr)
         (V.replayFinder θ F c σ (col θ F c) (V.cost θ F c σ)))
-    (hk : ∀ θ F c σ r hr, Fintype.card ((A θ F c σ r hr).Ix (τOf θ F c σ r hr)) ≤ kMax θ) :
+    (hk : ∀ θ F c σ r hr, Fintype.card (A θ F c σ r hr).Ix ≤ kMax θ) :
     ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed),
       V.parsed F = some r → V.Registered θ F →
       (V.replayFinder θ F c σ (col θ F c) (V.cost θ F c σ)).Pr sha512Msg ≤
