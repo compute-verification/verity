@@ -633,7 +633,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     network-accounting/20261025T2250Z-finding-warden-form-k's generator reading: log2 #Ss = 0, the fail cell's
     position log2(egress_cells + 1) a connection, the scan's ``prog`` rows its free inputs (T·NP a link-window as
     registered, an entry's 33 + KO·IDB bits a request if ``prog`` were an input only at its anchored entries,
-    `ingress_scan.entry_layout`), no faulty term with
+    `ingress_scan.entry_layout`; tied, they are a compute audit's outputs and the audit's free inputs, which the rows
+    form's K doesn't count yet, so they are counted here as the scan's), no faulty term with
     every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
     import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
@@ -694,7 +695,10 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "and the server can't move an admission (not met today)",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
+                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum",
+                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so Lean's scan term "
+                "counts none of its T·NP bits; this K counts them as the scan's, since the audit's free inputs are in "
+                "no term of the rows form's K yet"]}
 
 
 #: each reading of the scan's free inputs, as the report labels it

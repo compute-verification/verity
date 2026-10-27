@@ -267,6 +267,9 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
   Each entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused),
   so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
+  Tied (NET-92: `NetworkCheck.Period`'s `progTied`, scan_zk's block round), these rows are a compute audit's outputs
+  and the scan's own free term is 0: the bits are that audit's free inputs (the toy block's `x`), which the rows form's
+  K doesn't count yet, so this reading counts them as the scan's.
 - No faulty term with every unit drawn, and D_j = 1.
 
 The two forms:

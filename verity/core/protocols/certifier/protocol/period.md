@@ -43,8 +43,11 @@ egress). A link-window passes when:
  bound schedule's digest, its domain the session's, and its head is signed under the deployment key in the session;
 - the scan's registration holds both rows' roots and domains in its `roots` or `registered`, so an answer for another
  window's rows is refused;
+- the scan's registration has a `scan/prog` entry, in its `roots` or `registered`, at the root and domain of an output
+ port `<unit>/o<j>` (j ≥ 1) in a compute audit's registration's `roots`: the scan's Programs' rows are that audit's
+ outputs, and a scan whose `prog` is no audit's output is refused by name;
 - one-stage accepted the scan with one level drawn subset or stratified, and a bound `b` on faulty proof blocks.
 
-With one schedule the schedules term is 0. Each link-window's scan adds its free inputs, faulty sets, `16 · b` and
-`Dj^k`, as an audit does, and the public lists those terms under `scans`. `eps` is the union of the audits' and the
-scans' δ.
+With one schedule the schedules term is 0. Each link-window's scan adds its free inputs (none: it registers its rows,
+and its `prog` is a compute audit's output), faulty sets, `16 · b` and `Dj^k`, as an audit does, and the public lists
+those terms under `scans`. `eps` is the union of the audits' and the scans' δ.

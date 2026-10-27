@@ -34,8 +34,16 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   one registration, the scan's buckets 0 … G·T − 1 from the empty state, T a link-window's.
 * **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
   tree's root in the registration), G·T leaves each: ``state``, leaf t S_t; ``prog``, leaf t the Programs' row t (each
-  request's entry at its anchor, read and its response ids, standing in for the anchored Programs' outputs); and
-  ``view``, leaf t S_t's egress view.
+  request's entry at its anchor, read and its response ids), the block round's o1 rows; and ``view``, leaf t S_t's
+  egress view.
+* **The block round** (`BLOCK`): the toy block (`ProgBlock{N}`, N = NP: o0 the u16 1, o1 its N-bit input ``x``
+  through two NOTs), one unit a bucket of the group, unit b's ``x`` the Programs' row b, its free input, and its o1 a
+  registered read of ``prog`` leaf b, standing in for the anchored Programs, whose outputs the Programs' row is. The
+  ``prog`` tree is committed under the binding of the block's o1 frame domain (`block_binding`, over the block's
+  statement's input set `block_set`, bound to the session and the group's ingress heads), so its root is the o1 frame
+  root C-Flock commits under the same salts, and `stage` refuses a block whose o1 frame root and domain aren't the
+  tree's: the registration's ``block/o1`` and the honest round's ``scan/prog`` are one root and domain, the tie
+  `NetworkCheck.Period`'s rows form checks (`progTied`). Proved first; accepted, every o0 opens to 1.
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`): the first unit
   (`IngressScanFirst`, bucket 0), G·T − 1 ingress units (buckets 1 … G·T − 1) and G·T egress units, its members split
   a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``), every unit drawn by the verifier's Lean.
@@ -53,12 +61,14 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   group, the warden's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
   W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
   certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
-  reject naming the members Lean refused.
+  reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o1 is the
+  scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs G·T·NP and no steps).
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
   reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
-  alone differs from the warden's row. Its honest round alone is proved, expected refused by Lean's registered reads
-  ("does not open") at the egress members of its FAIL buckets (`rounds_of`, `targets`), every other member held, and
-  its answer is that refusal, so the period check rejects the link-windows by name.
+  alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
+  refused by Lean's registered reads ("does not open") at the egress members of its FAIL buckets (`rounds_of`,
+  `targets`), every other member held, and its answer is that refusal, so the period check rejects the link-windows by
+  name.
 * **Negatives**, chain's and tampered's refused by Lean's registered reads ("does not open"), unread's by its unit's ok
   bit. ``chain``: the same Program on a state tree with S_A and S_{A+1} swapped (leaves A and A + 1): ingress unit A's
   o1, the S_A it computes, doesn't open leaf A. ``tampered``: an egress-only Program of G·T units, one egress row's
