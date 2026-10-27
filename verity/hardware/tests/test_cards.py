@@ -57,7 +57,7 @@ def test_derived_numbers(sku: str) -> None:
 
 
 def test_the_numbers_quoted_to_other_lanes() -> None:
-    """The firmware ceilings and host peaks MODEL-COVER and HOST-PEAK posted (CMP-165), which other lanes read."""
+    """The firmware ceilings and host peaks other code quotes."""
     server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
     assert [value(server, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [2430, 12481, 600]
     assert [value(h200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1980, 3201, 700]
