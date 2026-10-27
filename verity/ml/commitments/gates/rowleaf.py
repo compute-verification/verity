@@ -26,13 +26,12 @@ pin the gates.
 """
 from __future__ import annotations
 
-from functools import lru_cache
-from types import SimpleNamespace
-from typing import Callable, Sequence
+from typing import Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ZERO, const_bits
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
@@ -117,24 +116,6 @@ def outer_hash(C, n_bits: int, d: Sequence[Sequence]) -> list[list]:
 
 
 # --- traced Definitions ------------------------------------------------------------------------------------------------------
-
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
 
 def _sig_segment(S):
     _check_segment(S.M)
