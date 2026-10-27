@@ -227,5 +227,5 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
 
 
 def _profile_of_101() -> str:
-    from verity_vllm.engine.profiles import profile_module_for_case
+    from verity_vllm.observe.fold.profiles import profile_module_for_case
     return profile_module_for_case(json.load(open(VLLM_DIR / "workloads" / f"{ROW_101}.json"))["case"])

@@ -28,8 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import replay as RP
-
+from ._replay import RP
 from .shape import PV_K, Shape, forms
 
 DEFINITION, PENDING = "definition", "pending-definition"

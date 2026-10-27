@@ -399,6 +399,49 @@ def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(try
     assert calls["build"] == [] and any("--records Sec/Proofs" in s for s in said)
 
 
+def test_build_builds_the_files_modules_on_the_slot_tree_and_reports_each_files_first_error_as_json(trying, tmp_path,
+                                                                                                     monkeypatch, capsys):
+    """The ready mark's preflight reads `--build`'s last line: a Lean error at a position in a tracked file fails that file,
+    named from the repository's root, whichever package of the build's closure holds it."""
+    tree, calls = trying
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    (LC.ROOT / "Sec" / "Proofs" / "Flock" / "Y.lean").write_text("import Proofs.Flock.X\n")
+    monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: ["Sec/Proofs/Flock/X.lean", "Sec/Proofs/Flock/Y.lean",
+                                                                   "Sec/Defs/A.lean"])
+    calls["deps_rc"] = 1
+    monkeypatch.setattr(LC, "build", lambda pkg, t, lake_, targets=None, sandbox=True, cmd=None: (
+        calls["build"].append((pkg, targets)) or 1,
+        "✖ [3/9] Building Proofs.Flock.Y\nerror: ././../Proofs/Flock/Y.lean:2:4: unknown identifier 'foo'\n  more\n"
+        "error: ./../Defs/A.lean:1:0: unexpected token\nerror: ././../Proofs/Flock/Y.lean:5:0: a later one\n"
+        "error: Lean exited with code 1\n"))
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean", "Sec/Proofs/Flock/Y.lean", "Elsewhere/Z.lean"]) == 1
+    assert calls["build"] == [("Sec/Proofs", ["+Proofs.Flock.X", "+Proofs.Flock.Y"])] and calls["run"] == []
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert doc["built"] == {"Sec/Proofs": 1} and doc["failed"] == {
+        "Sec/Proofs/Flock/Y.lean": "error: ././../Proofs/Flock/Y.lean:2:4: unknown identifier 'foo'",
+        "Sec/Defs/A.lean": "error: ./../Defs/A.lean:1:0: unexpected token"}
+    assert list(doc["skipped"]) == ["Elsewhere/Z.lean"] and not (tree / LC.DIRTY).exists()
+
+
+def test_build_builds_nothing_off_a_node_or_where_the_node_keeps_no_dependencies(trying, tmp_path, monkeypatch, capsys):
+    """An agent VM has no Lean slots, and a node without the package's dependencies would fetch Mathlib cold: both are
+    skipped with why, so the preflight notes them instead of refusing."""
+    _, calls = trying
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "absent")
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 2
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert "not a node" in doc["skipped"]["*"] and calls["build"] == [] and calls["link"] == []
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    monkeypatch.setattr(LC, "link", lambda *a, **k: False)
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 2
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert "Mathlib" in doc["skipped"]["Sec/Proofs"] and doc["built"] == {} and calls["build"] == []
+    with pytest.raises(SystemExit):
+        LC.main(["--build", "Sec/Proofs/Flock/X.lean", "--try", "Sec/Proofs/Flock/X.lean"])
+
+
 def test_module_of_reads_the_packages_src_dir(trying):
     root = LC.ROOT
     assert LC.module_of("Sec/Proofs", "Sec/Proofs/Flock/X.lean") == "Proofs.Flock.X"

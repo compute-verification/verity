@@ -2,7 +2,8 @@
 prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/remote-bandwidth/v0`,
 `RemoteAudit.Protocol` in `lean/`).
 
-`run(node, store, coins)` plays every party in one process, in the protocol's order:
+`run(node, store, coins)` plays every party in one process (the verifier's side, `session`, against the prover in its
+process, `Local`), in the protocol's order:
 
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
    verifier draws the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
@@ -21,9 +22,11 @@ receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `B
 them: the bound `Properties.RemoteAudit.Component.LineHeldAtComponent` proves (`PublishedEps`), not the draws a session
 made, min(s, U) of a draw's U receipts, which can be fewer.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records, the
-coins fresh from the OS. The prover and the verifier run on the one node, so the run exercises the code and the reads of
-a store in one process's memory, not a remote node's.
+`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records. The
+verifier and its challenger are a party of their own (`verifier_party`) on `period.json`'s `challenger_host`, with coins
+fresh from that host's OS, and the prover runs on the node. `trusted-host`'s premise, that they run on a machine
+the prover doesn't control, holds only when the challenger host isn't the node, and the leg says which
+(`verifier_party.placement`). The prover reads a store in its process's memory, not a remote node's.
 """
 
 from __future__ import annotations
@@ -31,14 +34,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import secrets
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from verity.ml.commitments.identity import canonical_json_bytes
 
@@ -110,6 +112,14 @@ def registration_json(r: audit.Registration) -> dict[str, Any]:
             "receipt": r.receipt, "rows": r.rows}
 
 
+def registration_of(doc: Any) -> audit.Registration:
+    """`registration_json`'s inverse."""
+    c = doc["codec"]
+    return audit.Registration(bytes.fromhex(doc["node"]), doc["blocks"], bytes.fromhex(doc["payload_root"]),
+                              bytes.fromhex(doc["codec_seed"]), codec.Codec(codec.FIELDS[c["field"]], c["rounds"], c["masked"]),
+                              doc["receipt"], doc["bind"], doc["layout"], doc["rows"])
+
+
 def opening_json(o: audit.Opening) -> dict[str, Any]:
     return {"block": o.block.hex(), "digest": o.digest.hex(), "leaf": o.leaf.hex(), "leaf_salt": o.leaf_salt.hex(),
             "pass": o.pass_index, "payload_path": [x.hex() for x in o.payload_path], "payload_salt": o.payload_salt.hex(),
@@ -166,6 +176,49 @@ class Period:
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
 
 
+class Prover(Protocol):
+    """The prover as the verifier's side of a session sees it: in its process (`Local`) or across a socket
+    (`verifier_party`)."""
+
+    def register(self) -> tuple[int, bytes]:
+        """The store's block count and its payload root, for the verifier to register."""
+
+    def hold(self, registration: audit.Registration, commitment: C.LiveCommitment) -> None:
+        """The registration and the session's coin commitment, before any challenge."""
+
+    def run(self, challenge: C.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+        """Pass i of window t under `challenge`, after the root `previous`: its root."""
+
+    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
+        """Window t's drawn receipts `(pass, position)` opened."""
+
+
+class Local:
+    """The prover in the verifier's process: `store` packed into blocks (`payloads`), committed under salts from
+    `entropy`, and read through `cheat` (the honest store when None)."""
+
+    def __init__(self, node: str, store: bytes, *, cheat: Callable[[audit.Store], audit.Store] | None = None,
+                 entropy: Callable[[int], bytes] = os.urandom) -> None:
+        self.name, self.blocks, self.cheat, self.entropy = node.encode(), payloads(store), cheat, entropy
+        self.salts = [entropy(receipts.SALT_BYTES) for _ in self.blocks]
+        self.made: dict[tuple[int, int], audit.Pass] = {}
+
+    def register(self) -> tuple[int, bytes]:
+        return len(self.blocks), audit.payload_tree(self.name, self.blocks, self.salts).commitment.root
+
+    def hold(self, registration: audit.Registration, commitment: C.LiveCommitment) -> None:
+        honest = audit.Store(registration, self.blocks, self.salts)
+        self.prover = audit.Prover(self.cheat(honest) if self.cheat else honest, None, commitment, entropy=self.entropy)
+
+    def run(self, challenge: C.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+        ps = self.prover.run(challenge, i, previous)
+        self.made[t, i] = ps
+        return ps.root
+
+    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
+        return [self.prover.open(self.made[t, i], q) for i, q in draws]
+
+
 def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
         window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
         cheat: Callable[[audit.Store], audit.Store] | None = None, verify: int | None = None,
@@ -175,17 +228,26 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
     secret for the period. `cheat` turns the honest prover's store into the one it reads, and `verify` stops the log
     after that many windows are verified (None: all), for a period that ends undecided. `clock` is the verifier's in
     ns, and `sleep_until(clock, t)` waits for it to reach t."""
+    return session(node, Local(node, store, cheat=cheat, entropy=entropy), coins, windows=windows, passes=passes,
+                   samples=samples, window_ns=window_ns, deadline_ns=deadline_ns, codec_=codec_, verify=verify,
+                   clock=clock, sleep_until=sleep_until)
+
+
+def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
+            window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
+            verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
+            sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
+    """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
+    registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
     name = node.encode()
-    blocks = payloads(store)
-    salts = [entropy(receipts.SALT_BYTES) for _ in blocks]
-    reg = audit.register(coins, name, len(blocks), audit.payload_tree(name, blocks, salts).commitment.root, codec_)
-    honest = audit.Store(reg, blocks, salts)
+    n, root = prover.register()
+    reg = audit.register(coins, name, n, root, codec_)
     params = audit.Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=passes, window_ns=window_ns,
                           codec=reg.codec, receipt=reg.receipt, rows=reg.rows)
     held, not_before = _Held(), clock()
     challenger = C.local(reg.digest, 0, windows, _Stream(coins, name), clock=lambda: held.now / 1e9)
     s = audit.Session(params, reg, None, challenger, not_before_ns=not_before, clock=held)
-    prover = audit.Prover(cheat(honest) if cheat else honest, None, s.commitment, entropy=entropy)
+    prover.hold(reg, s.commitment)
     events: list[dict[str, Any]] = []
 
     def call(event: dict[str, Any], fn: Callable[[], Any], at: int | None = None) -> Any:
@@ -196,20 +258,20 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
         return fn()
 
     challenge = call({"kind": "start"}, s.start)
-    previous, step, made = reg.digest, -1, {}
+    previous, step = reg.digest, -1
     for t in range(windows):
         for i in range(passes):
-            ps = prover.run(challenge, i, previous)
-            made[t, i], previous, step = ps, ps.root, step + 1
-            call({"kind": "receive", "t": t, "i": i, "root": ps.root.hex(), "runs": None, "change": None, "step": step},
-                 lambda: s.receive(t, i, ps.root, None, change=None, step=step))
+            root = prover.run(challenge, t, i, previous)
+            previous, step = root, step + 1
+            call({"kind": "receive", "t": t, "i": i, "root": root.hex(), "runs": None, "change": None, "step": step},
+                 lambda: s.receive(t, i, root, None, change=None, step=step))
         challenge = call({"kind": "boundary"}, s.boundary, s.next_boundary_ns())
     for t in range(windows if verify is None else verify):
         d = s.deadline(t)
         draws = call({"kind": "close", "t": t}, lambda: s.close(t), None if s.windows[t].final else d + 1)
         if isinstance(draws, audit.Verdict):
             break
-        opened = [prover.open(made[t, i], q) for i, q in s.windows[t].draws]
+        opened = prover.open(t, s.windows[t].draws)
         v = call({"kind": "verify", "t": t, "openings": [opening_json(o) for o in opened]}, lambda: s.verify(t, opened))
         if not v.accepted:
             break
@@ -244,27 +306,39 @@ def records(period_dir: str | os.PathLike, skip: tuple[str, ...] = ("answers",))
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): `run` on the period's
-    records with fresh coins. With `remote-audit-protocol` among the period's tools the Lean answers (the verifier of
-    record) and must agree with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and
-    `out/bandwidth.json`."""
-    tools = json.loads((Path(period_dir) / "period.json").read_text()).get("tools") or {}
+    """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): the session on the
+    period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
+    (`verifier_party.Party.of`; on this node by default, as a process of its own, with its own coins) and the prover
+    here. With `remote-audit-protocol` among the period's tools the Lean answers (the verifier of record) and must agree
+    with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
+    ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
+    `bandwidth.json` and in an accepted answer's profile (`placement`)."""
+    from . import verifier_party  # noqa: PLC0415  (it imports this module)
+
+    doc = json.loads((Path(period_dir) / "period.json").read_text())
+    tools = doc.get("tools") or {}
+    party = verifier_party.Party.of(doc, node)
     store = records(period_dir)
     t = time.monotonic()
-    period = run(node, store, secrets.token_bytes(64))
+    period, side = verifier_party.period_with(party, verifier_party.request_of(node), store)
     seconds = round(time.monotonic() - t, 2)
+    where = verifier_party.placement(node, party.host)
     answer_, lean = period.answer, None
     if "remote-audit-protocol" in tools:
         lean = serve(tools["remote-audit-protocol"], [period.case])[0]
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer_.items() if k != "reason"}:
             raise RuntimeError(f"remote-audit-protocol answered {lean}, the Python {answer_}")
         answer_ = lean
+    if answer_["profile"] is not None:
+        answer_ = answer_ | {"profile": answer_["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)
     (out / "bandwidth.case.json").write_text(json.dumps(period.case, sort_keys=True))
     (out / "bandwidth.json").write_text(json.dumps({"answer": answer_, "eps": str(period.eps), "lean": lean,
+                                                    "placement": where | {"reported_host": side["host"]},
                                                     "q_bytes": period.q_bytes, "seconds": seconds,
                                                     "store_bytes": len(store)}, sort_keys=True, indent=1))
     return answer_
 
 
-__all__ = ["DELTA", "PROTOCOL", "Period", "answer", "certified", "leg", "payloads", "records", "run", "serve"]
+__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "certified", "leg", "payloads", "records",
+           "registration_json", "registration_of", "run", "serve", "session"]

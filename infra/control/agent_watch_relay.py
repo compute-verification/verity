@@ -77,6 +77,8 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "worker_idle": "went idle at {at}; if it didn't report back, resume it with Task",
        "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task",
        "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
+       "no_step": "has shown nothing (no note, no push, nothing streamed) since {since} ({hours} h) after its two silent rings: "
+                  "stop it and archive it, or resume it",
        "run_ended": "ended rc={rc} after {after} on {node}",
        "stalled": "streamed nothing for {minutes} min since {since}, its agent not moving either (a hung call or a suspended "
                   "VM); the watch {action}",
@@ -87,7 +89,7 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "workers_failed": "stopped within {minutes} min",
        "held_unread": "did nothing itself for {minutes} min since {since} while a worker it waits on streamed, so its "
                       "follow-ups sat unread ({reason}); the watch {action}"}
-TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
+TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
