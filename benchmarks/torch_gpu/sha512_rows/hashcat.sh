@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# hashcat's SHA-512 kernels against sha512x.cuh's default compression on one leased GPU, in one lease at one locked SM clock
-# (HASH-24). hashcat (HC_TAG, default v7.1.2) is built from its source in scratch. Its benchmark (`hashcat -b`: the mask
+# hashcat's SHA-512 kernels against sha512x.cuh's default compression on one leased GPU, in one lease at one locked SM
+# clock. hashcat (HC_TAG, default v7.1.2) is built from its source in scratch. Its benchmark (`hashcat -b`: the mask
 # ?a?a?a?a?a?a?a, a 7-byte candidate, and for -m 1710 the self-test salt's 12 bytes, so one SHA-512 block a candidate) runs
 # -m 1700 and -m 1710 each with its optimized kernel (-O, what `hashcat -b` runs by default) and its pure one, at -w 3
 # (the benchmark's default), and -m 1700 -O at -w 4. Ours: commit_gpu's raw rate (`commit_gpu sha`, sha_rate: each thread
@@ -8,7 +8,7 @@
 # force-included (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
 # hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
 # honest chain and -O's shape at each CTA size in SHAPES, in whole waves of the CTAs an SM holds (commit_gpu's sha launches
-# 8 CTAs of 256 an SM, 3 resident, a partial last wave; r20261027-044217-d499: whole waves gain the honest chain 1%).
+# 8 CTAs of 256 an SM, 3 resident, a partial last wave).
 # cwd = the source tree's root. Outside the lease: the builds and reference.py's cases. The lease: the SM clock locked at
 # LOCK_MHZ (default 1980) and reset on exit, nvidia-smi every 200 ms, the checks, one warm-up a hashcat setting (its kernel
 # build, Accel/Loops/Thr/Vec and the mask), then ROUNDS rounds with every arm interleaved. After it: the SASS pipe mix of
