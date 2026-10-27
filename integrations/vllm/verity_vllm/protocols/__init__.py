@@ -254,6 +254,18 @@ class Composition:
             raise ValueError(f"no bindable option {name!r} in {list(self.entries)}")
         opt.commits.update(commitment)
 
+    def unhook(self) -> None:
+        """Every option's hooks off the model, newest first, each release left to `close` (which may run on another thread,
+        the model touched no more).  The first error is raised once every option's hooks were tried."""
+        err: BaseException | None = None
+        for opt in reversed(self.installed):
+            try:
+                opt.hooks.uninstall()
+            except BaseException as e:  # noqa: BLE001
+                err = err or e
+        if err is not None:
+            raise err
+
     def close(self) -> None:
         """Close every option, newest first.  Idempotent; an option whose close raises does not keep the older ones
         installed (the first error is raised once all are closed)."""

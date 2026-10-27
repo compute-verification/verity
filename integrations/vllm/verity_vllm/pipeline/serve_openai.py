@@ -80,7 +80,9 @@ it is written before the pending seals too, and its ``final`` is true only once 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
-through infra's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+through infra's gate (`serve_h1.GateSessions`) before its window opens; without them they are in-process, and no window
+credits anything. Each H1 window's release runs off the engine loop while the next window serves, and the stop waits
+for every one (`serve_h1.H1Windows.drain`) before ``final``.
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
 bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -702,7 +704,8 @@ def main(opts: Options) -> int:
 
         if opts.protocols:
             arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
+                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts),
+                               closer=SH.worker("h1-release"))
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -788,6 +791,11 @@ def main(opts: Options) -> int:
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
+        if arm is not None:
+            if sealer is None:
+                stopped(False)
+            print(f"SERVE-OPENAI stopping: {arm.summary()['releasing']} H1 windows still releasing", flush=True)
+            arm.drain()
         watchdog.stop()
         summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
