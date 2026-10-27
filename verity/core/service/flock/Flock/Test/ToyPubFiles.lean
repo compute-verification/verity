@@ -2,7 +2,9 @@
 A toy `verify --zk` session's files and what they parse to: one unit of `toy-copy`, whose input port `x` and output port
 `y` are rows of 64 words, and whose one computed output bit is `x`'s bit 0 (`y`'s bit 0; its other fifteen output bits
 are zero). `circuitFile` is V*'s emission of that unit (`VStar.emitCircuit`, as `RecVStar.circuitFile` emits a unit),
-`publicFile` one instance's public file (unit 0, zero rows, its outputs hidden), `draw` a `subset` draw of that one unit.
+`publicFile` one instance's public file (unit 0, zero rows, its outputs hidden), `draw` a `subset` draw of that one unit,
+and `progDesc` and `progQuery` a registration's program and query of one unit (`SampledProofs.ToyPop` checks its
+population).
 
 `circuit` and `public` state what the files parse to: every field the analysis reads is written out (the unit net's
 rows, the ports, the copies, the leaves), and the rest (the circuit's digests, its META, its ranges and wires, the
@@ -154,5 +156,14 @@ def root (q : Nat) : ByteArray :=
 def draw : Json :=
   norm (Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson (1 : Nat)), ("k", Lean.toJson (1 : Nat)),
     ("units", Json.arr #[Lean.toJson (0 : Nat)])])
+
+/-- A program descriptor of one unit: one instance of a one-gate template (an 8-bit xor of its two inputs), its
+`verity-ir/descriptor/v1` bytes as the codec writes them (`population_program` of one member). -/
+def progDesc : ByteArray := "{\"annotations\":{},\"callees\":[\"ToyPopXor8_v1\",\"Input8_v1\",\"ToyPopPair_v0\"],\"definitions\":{\"Input8_v1\":{\"form\":\"primitive\",\"id\":\"Input8_v1\",\"params\":[],\"ret\":[\"Value\",8]},\"Root[TemplateInstances_v1{template='ToyPopPair_v0',N=1}]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":2}],\"axes\":[0],\"fn\":2,\"form\":\"batch\",\"n\":1,\"out\":3}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,1]},\"ret_type\":[\"Array\",1,[\"Value\",8]]},\"form\":\"composite\",\"id\":\"Root[TemplateInstances_v1{template='ToyPopPair_v0',N=1}]_v1\"},\"ToyPopPair_v0\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",8]]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",8]},\"form\":\"composite\",\"id\":\"ToyPopPair_v0\"},\"ToyPopXor8_v1\":{\"form\":\"primitive\",\"id\":\"ToyPopXor8_v1\",\"params\":[[\"a\",[\"Value\",8]],[\"b\",[\"Value\",8]]],\"ret\":[\"Value\",8]}},\"program_fn\":\"TemplateInstances_v1{template=\\\"ToyPopPair_v0\\\",N=1}\",\"root\":\"Root[TemplateInstances_v1{template='ToyPopPair_v0',N=1}]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",8],[\"Array\",2,[\"Value\",8]],[\"Array\",1,[\"Array\",2,[\"Value\",8]]],[\"Array\",1,[\"Value\",8]]]}".toUTF8
+
+/-- The template query that makes `progDesc`'s one instance its population's one unit. -/
+def progQuery : Json :=
+  Json.mkObj [("name", Json.str "Q_template_instance"), ("params", Json.mkObj [("template", Json.str "ToyPopPair_v0")]),
+    ("version", Lean.toJson (0 : Nat))]
 
 end Flock.Test.ToyPubFiles
