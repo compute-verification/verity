@@ -1,6 +1,7 @@
 """numpy models of the training step's blocks, each composed of its Definitions' models (`torch_kernels`, `mla_check.bmm_rows`):
 `registry.torch_attention`'s `EagerAttentionTorch_v1` and its backward on one sequence, `registry.torch_loss`'s
-`LogSoftmaxRow_v1` and `LogSoftmaxNllBackwardRow_v1` on rows, and `registry.torch_embedding`'s `EmbeddingBackwardTied_v1`.
+`LogSoftmaxRow_v1` and `LogSoftmaxNllBackwardRow_v1` on rows, and `registry.torch_embedding`'s `EmbeddingBackwardTied_v1` and
+`EmbeddingTorch_v1`.
 Their tests hold each block to its model word for word. `MODELS` are the same models by family, as `program_walk` calls them:
 the statics, then each argument's words with the call's members first (`program_walk.Model`)."""
 from __future__ import annotations
@@ -13,7 +14,7 @@ from verity.ml.definitions.registry import mla_check as MK
 
 from . import torch_kernels as TK
 
-__all__ = ["MODELS", "attention", "attention_backward", "heads", "row", "row_backward", "tied", "tokens"]
+__all__ = ["MODELS", "attention", "attention_backward", "embedding", "heads", "row", "row_backward", "tied", "tokens"]
 
 
 def heads(x, H: int, D: int) -> np.ndarray:
@@ -82,6 +83,12 @@ def tied(t, g, w) -> np.ndarray:
     return TK.bf16_add(w, TK.embedding_dense_backward(t, g, range(w.shape[0])))
 
 
+def embedding(t, w) -> np.ndarray:
+    """`EmbeddingTorch_v1`: the rows of w (V, H) at the M ids t, (M, H); 0x7FFF for an id outside [0, V)."""
+    t, V = np.asarray(t, np.uint32), w.shape[0]
+    return np.where((t < V)[:, None], w[np.minimum(t, V - 1)], np.uint64(0x7FFF)).astype(w.dtype)
+
+
 def _each(f: Callable[..., Any]) -> Callable[..., Any]:
     """A one-member model ``f(statics, *args)`` applied to each member, its outputs stacked member first."""
     def model(S: dict, *args: np.ndarray) -> Any:
@@ -96,4 +103,5 @@ MODELS: dict[str, Callable[..., Any]] = {
     "LogSoftmaxRow_v1": lambda S, x, t: row(x, t),
     "LogSoftmaxNllBackwardRow_v1": lambda S, x, t, mx, ls, g: row_backward(x, t, mx, ls, g),
     "EmbeddingBackwardTied_v1": _each(lambda S, t, g, w: tied(t, g, w)),
+    "EmbeddingTorch_v1": _each(lambda S, t, w: embedding(t, w)),
 }

@@ -3,8 +3,8 @@
 for every (entry, feature) of a few small vocabularies: an entry with 25 tokens in a row (three partials of the sort path, and
 a run across a 32-token chunk), entries spread over the tokens, an entry no token has, and gradients with NaN, ±inf, -0, a
 subnormal and the bf16 extremes. The models then match torch's CPU embedding backward in f32 to bf16 rounding: the CPU kernel
-adds each token in position order, without partials or a bf16 rounding per chunk. The CUDA kernels themselves are
-`test_torch_training_gpu.py`'s."""
+adds each token in position order, without partials or a bf16 rounding per chunk. The forward is its rows' gather, 0x7FFF
+outside the vocabulary. The CUDA kernels themselves are `test_torch_training_gpu.py`'s."""
 from __future__ import annotations
 
 import numpy as np
@@ -124,6 +124,20 @@ def test_the_tied_gradient_is_the_lm_heads_plus_each_entrys_row() -> None:
     _same(got, TB.MODELS["EmbeddingBackwardTied_v1"](st, t[None], g[None], w[None]))
 
 
+def test_the_forward_is_the_rows_at_the_ids() -> None:
+    """Ids 0 and V - 1, repeats, and two outside [0, V): V itself and 2^32 - 1 (-1 as an i32), each 0x7FFF."""
+    rng = np.random.default_rng(7)
+    V, F = 37, 5
+    t = np.array([0, V - 1, 3, 3, V, 0xFFFFFFFF, 20], np.uint32)
+    w = TK.bf16(np.asarray(rng.normal(0, 1, (V, F)), np.float32).view(np.uint32))
+    w[3, 0], w[V - 1, 4] = 0x7FC1, 0x8000
+    st = dict(M=len(t), V=V, H=F)
+    got = evaluate_words(bind(TE.EmbeddingTorch, **st), t[None], w[None])
+    want = TB.MODELS["EmbeddingTorch_v1"](st, t[None], w[None])
+    _same(got, want)
+    assert (want[0, 4:6] == 0x7FFF).all() and (want[0, :4] == w[[0, V - 1, 3, 3]]).all()
+
+
 @pytest.mark.parametrize("M", [200, 3100])
 def test_the_models_match_torch_to_rounding(M) -> None:
     """torch's CPU backward of an f32 embedding on the same gradients sums each entry's tokens in position order. Each bf16
@@ -151,6 +165,7 @@ def test_the_models_match_torch_to_rounding(M) -> None:
     (TE.EmbeddingBackwardFeatureChunk, {"N": 33}), (TE.EmbeddingBackwardFeatureChunk, {"N": 0}),
     (TE.EmbeddingBackwardSortRun, {"N": 0}), (TE.EmbeddingBackwardEntry, {"M": 70, "H": 0}),
     (TE.EmbeddingBackwardTied, {"M": 0, "V": 8, "H": 4}), (TE.EmbeddingBackwardTied, {"M": 70, "V": True, "H": 4}),
+    (TE.EmbeddingTorch, {"M": 4, "V": 0, "H": 4}),
 ], ids=lambda a: getattr(a, "name", repr(a)))
 def test_bind_refuses_statics_outside_the_kernels_range(d, statics) -> None:
     with pytest.raises(ValueError, match="refuses this binding"):

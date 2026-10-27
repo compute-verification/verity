@@ -23,6 +23,8 @@ COUNT = 1261
 COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
 COUNT += 6  # the step's blocks: `torch_attention`'s 2, `torch_loss`'s 2 rows, `torch_embedding`'s entry and tied
 
+COUNT += 1  # `torch_embedding`'s forward, `EmbeddingTorch_v1`
+
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merges with any other change to the count
 
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7 (CIR-117)

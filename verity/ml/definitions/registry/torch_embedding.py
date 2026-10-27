@@ -1,4 +1,4 @@
-"""``nn.Embedding``'s backward in training, as Boolean Definitions: the gates of torch 2.13/2.14's CUDA
+"""``nn.Embedding`` in training as Boolean Definitions: its forward, and its backward, the gates of torch 2.13/2.14's CUDA
 ``embedding_dense_backward`` (Embedding.cu, EmbeddingBackwardKernel.cu; the two versions' kernels are the same) on bf16
 gradients, for one vocabulary entry v and one feature, every NaN of an f32 operation the GPU's 0x7FFFFFFF and every rounding to
 bf16 F2FP's, none flushed. smollm2-135m has no ``pad_token_id``, so ``padding_idx`` is -1 and no row is skipped. A token id is
@@ -13,6 +13,7 @@ the int64 id's low 32 bits; the forward's gather asserts every id is below V, so
     EmbeddingBackwardEntry_v1{M, H}        (v: U32, t: Array<M, U32>, g: Array<H, Array<M, BF16>>) -> Array<H, BF16>
     EmbeddingBackwardTied_v1{M, V, H}      (t: Array<M, U32>, g: Array<M, Array<H, BF16>>, w: Array<V, Array<H, BF16>>)
                                            -> Array<V, Array<H, BF16>>
+    EmbeddingTorch_v1{M, V, H}             (t: Array<M, U32>, w: Array<V, Array<H, BF16>>) -> Array<M, Array<H, BF16>>
 
 **Above 3072 indices** (training's B·S = 4096), ``embedding_dense_backward_cuda`` stable-sorts the ids (``radix_sort_pairs`` of
 (id, position)), so each entry's segment lists its tokens in position order. Under ``use_deterministic_algorithms(True)`` the
@@ -38,6 +39,8 @@ M / 32 chunks, the last of M mod 32 tokens.
 embedding's output gradient g, committed token-major, transposed by `Transpose_v1` tiles of at most 128 x 128
 (`torch_attention.transpose`), each entry's row with its id a constant of the circuit, then c10's bf16 ``+`` of the LM head's
 dW w and that row, `Bf16AddF2fp_v2` on each word (autograd adds the two uses' gradients, the LM head's first).
+`EmbeddingTorch{M, V, H}` is the forward, ``index_select`` of the weight's rows by the M ids: `boolean_gather.Embedding_v2{V, H}`
+on each id, the weight shared. torch device-asserts on an id outside [0, V), where the gather selects 0x7FFF.
 """
 from __future__ import annotations
 
@@ -54,11 +57,12 @@ from verity.ml.circuits.refs import Coll, Explicit, concat
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 
+from . import boolean_gather as BGA
 from .torch_attention import GPU_SHAPES, GPU_STEP, ON_GPU, transpose
 
 __all__ = ["EmbeddingBackwardEntry", "EmbeddingBackwardFeature", "EmbeddingBackwardFeatureChunk", "EmbeddingBackwardSortEnd",
-           "EmbeddingBackwardSortRun", "EmbeddingBackwardSortStep", "EmbeddingBackwardTied", "EmbeddingBackwardTorch", "kernel",
-           "plus_zero_bf16"]
+           "EmbeddingBackwardSortRun", "EmbeddingBackwardSortStep", "EmbeddingBackwardTied", "EmbeddingBackwardTorch",
+           "EmbeddingTorch", "kernel", "plus_zero_bf16"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -263,4 +267,19 @@ EmbeddingBackwardTied = CompositeDefinition(
         "each of the V entries, then Bf16AddF2fp_v2 of the LM head's dW w and each entry's row",
     conformance="exact-model-tested; against numerics.torch_blocks' model (tests/test_torch_embedding.py), whose tied add is "
                 f"the GPU's on every word of {GPU_STEP}: {ON_GPU}",
+    refuse=_refuse_all("M", "V", "H"))
+
+
+def _forward(B, S, t, w):
+    return B.batch(bind(BGA.Embedding, V=S.V, H=S.H), t, w, axes=(0, None))
+
+
+EmbeddingTorch = CompositeDefinition(
+    "EmbeddingTorch", 1, ("M", "V", "H"),
+    lambda S: ((("t", Array(_statics(S, "M", 1, M_MAX).M, U32)),
+                ("w", Array(_statics(S, "V", 1, M_MAX).V, Array(_statics(S, "H", 1, M_MAX).H, BF16)))),
+               Array(S.M, Array(S.H, BF16))), _forward,
+    doc="the embedding's forward over M tokens, index_select of w's rows: boolean_gather.Embedding_v2 on each id, w shared; an "
+        "id outside [0, V), where torch device-asserts, selects 0x7FFF",
+    conformance=f"exact-model-tested; every word of its output at M = 256 in {GPU_STEP}: {ON_GPU}",
     refuse=_refuse_all("M", "V", "H"))
