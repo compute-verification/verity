@@ -18,7 +18,8 @@ scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each named
   premise of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap).
 
-    uv run python benchmarks/rho/periods.py     # Markdown on stdout; with $OUT (or --out), periods.md and periods.json
+    uv run python benchmarks/rho/periods.py                # Markdown on stdout
+    research run -- python benchmarks/rho/periods.py --out "$OUT"   # and periods.md and periods.json in its $OUT
 """
 
 from __future__ import annotations
@@ -26,7 +27,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 from pathlib import Path
 
 import run
@@ -228,7 +228,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", action="append", help=f"scenario names (default: {', '.join(SCENARIOS)})")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
-    ap.add_argument("--out", default=os.environ.get("OUT"), help="write periods.md and periods.json here ($OUT)")
+    ap.add_argument("--out", help="write periods.md and periods.json here (under `research run`, \"$OUT\")")
     args = ap.parse_args()
     reg = Registry.load()
     if args.set:
