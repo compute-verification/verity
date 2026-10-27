@@ -266,6 +266,8 @@ vllm's reading of bbee's records over 6cd9 (r20261026-040530-d82e and r20261026-
   T = 32 buckets of 100 ms, and egress_cells = 65;
 - its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
+- the scan's registered form at this head, its slot entries (a739 registered a Programs' row a bucket, 143,360 bits
+  a link-window);
 - every unit drawn.
 
 The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T2250Z-finding-warden-form-k):
@@ -273,23 +275,26 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
 - log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
   connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
   schedule: it enters the compute audit's terms, which go into JointPeriod.
-- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
-  32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
+- The free inputs are the scan's slot entries (`prog`, `scan_zk.slot_entries`): NR·T / EVERY = 8 entries of
+  NE = 1,136 bits, 9,088 bits a link-window as registered today, or 33 + KO·IDB = 1,121 bits a request if `prog` is
+  an input only at its anchored entries.
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   which the certifier doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
 
-Each `prog` entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is
-refused), so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request. Unless the
-scan's `prog` is a compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), that
-bit is the prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the
-link-window by name (`wired`); the block round's `prog` is the toy block's `o1`, which it refuses there. With it wired,
-a slot's Program still reads the requests from its own registered `SCAN_STATE`, which nothing ties to the scan's state
-yet, so the check refuses every rows-form period of a link-window, last, by name (`untied`), and the rows form
-publishes no K yet.
-Tied (NET-92: `NetworkCheck.Period`'s `progTied`, scan_zk's block round), these rows are a compute audit's outputs
-and the scan's own free term is 0: the bits are that audit's free inputs (the toy block's `x`), which the rows form's
+Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
+reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
+outside due and occupied slots, so a link-window's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
+compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
+prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the link-window by
+name (`wired`). The block round's `prog` is the o0 of scan_zk's `SlotEntry_v1` stand-in, which passes there: `wired`
+reads the Definition's id, not its body, so the stand-in's entries, read bit included, are still the prover's. A
+slot's Program reads the requests from its own registered `SCAN_STATE`, which nothing ties to the scan's state yet, so
+the check refuses every rows-form period of a link-window, last, by name (`untied`), and the rows form publishes no K
+yet.
+Tied (NET-92: `NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
+and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
-tied audit's inputs; K is unchanged in what it bounds, 143,872 bits a link-window at w63.
+tied audit's inputs; K is unchanged in what it bounds, 9,088 bits a link-window at w63.
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
@@ -308,27 +313,27 @@ The scale:
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
-| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
-| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,368 |
-| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,368 |
-| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
-| year | 1,000 | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 143,368 |
+| week | 1 | 1.72·10^9 (8.7%) | 1.72·10^9 (8.71%) | 1.72·10^9 (8.69%) | 9,096 |
+| week | 1,000 | 1.72·10^12 (86.9×) | 1.72·10^12 (86.9×) | 1.72·10^12 (86.9×) | 9,096 |
+| month | 1 | 7.37·10^9 (37.3%) | 7.37·10^9 (37.3%) | 7.37·10^9 (37.3%) | 9,096 |
+| month | 1,000 | 7.37·10^12 (373×) | 7.37·10^12 (373×) | 7.37·10^12 (373×) | 9,096 |
+| year | 1 | 8.96·10^10 (4.53×) | 8.96·10^10 (4.53×) | 8.96·10^10 (4.53×) | 9,096 |
+| year | 1,000 | 8.96·10^13 (4,534×) | 8.96·10^13 (4,534×) | 8.96·10^13 (4,534×) | 9,096 |
 
-As registered today, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
-monitoring period.
+As registered today, K stays under the size of the weights for one machine's week (8.7%) and month (37.3%), and passes
+it within one machine-year and for 1,000 machines over any period, so the record's K is vacuous there.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering, LEAN-49)**, bits, and the share of
 the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
-| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |
-| month | 1 | 1.22·10^9 (6.15%) | 1.22·10^9 (6.16%) | 1.22·10^9 (6.15%) | 1,501 |
-| month | 1,000 | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1,501 |
-| year | 1 | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1,501 |
-| year | 1,000 | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1,501 |
+| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,503 |
+| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,503 |
+| month | 1 | 1.22·10^9 (6.16%) | 1.22·10^9 (6.17%) | 1.22·10^9 (6.16%) | 1,503 |
+| month | 1,000 | 1.22·10^12 (61.6×) | 1.22·10^12 (61.6×) | 1.22·10^12 (61.6×) | 1,503 |
+| year | 1 | 1.48·10^10 (74.9%) | 1.48·10^10 (74.9%) | 1.48·10^10 (74.9%) | 1,503 |
+| year | 1,000 | 1.48·10^13 (749×) | 1.48·10^13 (749×) | 1.48·10^13 (749×) | 1,503 |
 
 This second table is what the generator-form lowering would give if it registers `prog` everywhere but its anchors
 (ONE-TAP is on it). It is not the record's number.
@@ -342,10 +347,10 @@ K also rests on these conditions:
 - The jitter term is 0 at D_j = 1, assumed (J), which the certifier doesn't meet: an offset the prover chooses within
   a bucket reaches the client.
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
-  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
-  a machine-week either way.
+  anchored table's machine-week is 1.01% of the weights and its machine-year 52.3%; as registered today they are 8.7%
+  and 4.53× either way.
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriod's sum. The tied
-  audit's (the toy block's) are the link-window's free inputs above.
+  audit's (the `SlotEntry_v1` stand-in's) are the link-window's free inputs above.
 
 **`stubbed`.**
 - NET-71: the units read the records through a stand-in until the rows form (#4452) and the generator-form lowering

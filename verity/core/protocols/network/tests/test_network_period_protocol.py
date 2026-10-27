@@ -461,8 +461,8 @@ def test_the_rows_forms_bound_counts_what_it_says():
     bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
     one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances
     committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; at w63's
-    class with the egress tie (T = 32, every unit drawn), K the toy block's free inputs, 32 · 4,496 = 143,872 bits; and
-    eps over the scans' δ alone."""
+    class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs, 8 · 1,136 = 9,088 bits;
+    and eps over the scans' δ alone."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0)])
@@ -473,10 +473,10 @@ def test_the_rows_forms_bound_counts_what_it_says():
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
     assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0)])["K"] == 0
-    w63 = dataclasses.replace(p, audits=(PC.Audit(32 * 4496, 0, "", 32, 4496),), cells=(), jitter=1,
+    w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
                               scan=PC.Scan(32, 0, 300, 512))
-    tied = public(w63, [Facts(32, 32, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 32 * 4496)])
-    assert (tied["scans"][0]["free"], tied["K"]) == (143872, 143872)
+    tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136)])
+    assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
                   [(Facts(1, 1, Fraction(1, 15), 0), 0)] * 2)["eps"] == "2/15"
