@@ -33,7 +33,7 @@ DIGESTS = {
 
 
 def written(layout: L.Layout) -> bytes:
-    """A layout file as commit_slots writes one: ``_layout_json``'s output, compact, then a newline."""
+    """The file ``commit_slots/step.py export`` writes: ``_layout_json``'s output, compact, then a newline."""
     return (json.dumps(L.to_json(layout), separators=(",", ":")) + "\n").encode()
 
 
