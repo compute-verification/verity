@@ -29,10 +29,6 @@ def ceil_pow2(n: int) -> int:
     return 1 << max(0, (n - 1).bit_length())
 
 
-def is_zero(C, bits):
-    return NOT(or_reduce(C, bits))
-
-
 def select(C, s, x, y):
     """``s ? x : y`` for equal-length words (one AND per bit that differs)."""
     return mux(C, s, x, y)
