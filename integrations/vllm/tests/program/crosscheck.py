@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll

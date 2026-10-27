@@ -97,17 +97,21 @@ def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: st
 SERVED_ROOT = 64
 
 
-def source(window: dict[str, Any], run_root: str, bundle_manifest_sha256: str, commitment: str) -> dict[str, bool]:
+def source(window: dict[str, Any], run_root: str, bundle_manifest_sha256: str, commitment: str,
+           weights_root: str | None = None) -> dict[str, bool]:
     """A registration's ``window`` held to the verifier's record, its run root ``run_root`` (hex) and ``commitment`` (`of_record`'s),
     each check by name; the one-stage audit's (A5's) source check.  Either kind names the record's commitment as the scheme its values
     were read under.  A ``stand-in``'s run, ``of`` and ``link`` are `stand_in`'s over the run root, the digest of the bundle's
     manifest and the commitment.  A ``served`` window (the in-Commit hook's, `serving_rows.readers`: serving's own commitment, made
     before any draw) has the run root as its run, which is a SHA-512 root (``sha512``: a ``vllm-v1`` root's is refused), and carries
-    no stand-in link."""
+    no stand-in link; given the record's committed ``weights_root`` (hex), the weights its rows read were registered under SHA-512
+    too (``weights_sha512``: a vllm-v1 registration's 32-byte root is refused)."""
     want = stand_in(run_root, bundle_manifest_sha256, commitment)
     named = {"run": window.get("run") == run_root, "commitment": window.get("commitment") == commitment}
     if window.get("kind") == "served":
-        return {"kind": True, **named, "sha512": len(run_root) == 2 * SERVED_ROOT, "link": "of" not in window and "link" not in window}
+        return {"kind": True, **named, "sha512": len(run_root) == 2 * SERVED_ROOT,
+                **({"weights_sha512": len(weights_root) == 2 * SERVED_ROOT} if weights_root is not None else {}),
+                "link": "of" not in window and "link" not in window}
     return {"kind": window.get("kind") == "stand-in", **named, "of": window.get("of") == want["of"], "link": window.get("link") == want["link"]}
 
 
