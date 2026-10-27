@@ -4,9 +4,10 @@ import Proofs.Pouw.ShaRealize
 # An honest prover meets `ShaRealize`'s realization (block I)
 
 The realization premise isn't empty on the provers it is for. On a toy accelerator model whose device premises hold
-(`toyG_premises`), the honest prover of a no-fold round on `k` rounds registered at one instance `a` (`honest`), over
-any digest set `D` (SHA-512's `2^512` values among them), is accepted on every oracle and every coin
-(`honest_accepted`) and has a `Realization` at every cap `Q`, query budget 1, schedule 1, advice of 0 bits and
+(`toyG_premises`), the honest prover of a no-fold protocol of `k` sampling blocks, each registrable at one instance `a`
+alone (`honest`), over any digest set `D` (SHA-512's `2^512` values among them), is accepted on every oracle and every
+coin (`honest_accepted`) and has a `Realization` at every selection and cap `Q`, query budget 1, schedule 1, advice of
+0 bits and
 walk-and-log cost 0 (`honest_realization`). So `extract_of_realization` applies to it, at `ξ = 0` and
 `κ_x = (1 + 3k)/|D|` (`honest_extractAdvAt`).
 
@@ -14,8 +15,8 @@ walk-and-log cost 0 (`honest_realization`). So `extract_of_realization` applies 
   uses its program's cost of it and makes as many oracle calls, each using one unit (G3), and nothing is imported.
 * `toyNF D`: one word (`n = n' = nb = L = s = 1`), no noise, the oracle a table `Word ⊕ (D × D) → D` (leaves and
   nodes), the root the leaf's hash and the opening its check.
-* `honest a k`: every round computes the registered instance's word (cost 1) and hashes it (cost 1), and its answer
-  opens it at no cost. Its words program is the walk over its one logged query, so the walk costs nothing beyond its
+* `honest a k`: every sampling block's commit phase commits `a` at no cost, its work computes `a`'s word (cost 1) and
+  hashes it (cost 1), and its answer opens it at no cost. Its words program is the walk over its one logged query, so the walk costs nothing beyond its
   work.
 
 It doesn't show `ShaRealize`, a realization for every prover: `toyG`'s programs read the oracle table as data, so
@@ -115,10 +116,12 @@ variable {D} (a : (noFoldRound (toyNF D)).Inst) (k : ℕ)
 /-- The honest word at the instance `a`. -/
 def word : Word := noFoldWord (toyNF D) a 0 0 0
 
-/-- **The honest prover** on rounds registered at `a`: computes the word and hashes it (cost 2), and opens it. -/
+/-- **The honest prover** on sampling blocks registrable at `a` alone: its commit phase commits `a` (cost 0), its work
+computes the word and hashes it (cost 2), and its answer opens it. -/
 def honest : Prover toyG (noFoldRound (toyNF D)) k where
   St := Unit
   start := ()
+  commit _ := (fun _ => ((), a), 0)
   work _ := (fun p => ((), (toyNF D).merkle p.1 fun _ _ _ => word a), 2)
   absorb _ _ _ := ()
   answer _ := (fun _ _ => (word a, ()), 0)
@@ -126,8 +129,8 @@ def honest : Prover toyG (noFoldRound (toyNF D)) k where
 omit [Inhabited D] in
 /-- The honest prover is accepted on every oracle and every coin. -/
 theorem honest_accepted (o : (noFoldRound (toyNF D)).Orc) (x : Fin k → (toyNF D).Draw × (toyNF D).Chk) :
-    (honest a k).Accepted (fun _ => a) o x :=
-  fun _ _ => ⟨rfl, rfl⟩
+    (honest a k).Accepted (fun _ => {a}) o x :=
+  fun _ => ⟨Set.mem_singleton a, fun _ => ⟨rfl, rfl⟩⟩
 
 omit [Inhabited D] in
 /-- The verifier's check is the Merkle path check, along the empty position. -/
@@ -160,10 +163,10 @@ theorem walk_log (x : Fin k → (toyNF D).Draw × (toyNF D).Chk) (w : Fin k) (u 
   obtain ⟨⟨_, _, hi⟩, _⟩ := Classical.choose_spec hw
   exact congrArg some ((toyE D).leaf_inj hi).symm
 
-/-- **The honest prover has a realization** at every cap `Q`, query budget 1, schedule 1, advice of 0 bits, and
-walk-and-log cost 0. -/
-theorem honest_realization (Q : ℝ) :
-    Realization toyG (toyNF D) k (fun _ => a) Q (toyE D) (Equiv.refl _) id (fun _ => []) (fun _ => []) 0 0
+/-- **The honest prover has a realization** at every selection `sel` and cap `Q`, query budget 1, schedule 1, advice
+of 0 bits, and walk-and-log cost 0. -/
+theorem honest_realization (sel : (noFoldRound (toyNF D)).Chk → Prop) (Q : ℝ) :
+    Realization toyG (toyNF D) k (fun _ => {a}) sel Q (toyE D) (Equiv.refl _) id (fun _ => []) (fun _ => []) 0 0
       (honest a k) 1 (fun _ => 1) 0 := by
   refine ⟨log a k, Unit, fun _ _ _ => (), fun _ => (fun _ _ _ _ => word a, 1),
     fun _ => (fun p => (toyNF D).merkle p.1 p.2.2, 1), ⟨fun _ => 0, fun _ _ _ => rfl⟩, fun _ _ _ _ _ => rfl,
@@ -171,7 +174,7 @@ theorem honest_realization (Q : ℝ) :
     fun _ _ _ _ _ _ _ _ _ hy => ⟨0, (List.mem_singleton.mp hy).symm⟩, ?_⟩
   · intro _ _ _ _
     show ∑ _ : Fin k, (((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ)) ≤
-      ∑ _ : Fin k, ((2 : ℕ) : ℝ) + ((k : ℝ) * 0 + ((1 : ℕ) : ℝ) * 0)
+      ∑ _ : Fin k, (((0 : ℕ) : ℝ) + ((2 : ℕ) : ℝ)) + ((k : ℝ) * 0 + ((1 : ℕ) : ℝ) * 0)
     norm_num
   · intro _ _ _
     show (0 : ℝ) + 0 ≤ 0
@@ -179,23 +182,24 @@ theorem honest_realization (Q : ℝ) :
   · intro _ x _ u _ _ w _
     exact (congrArg (fun t => Option.getD t 0) (walk_log a k x w u)).symm
 
-/-- **`extract_of_realization` applies to the honest prover** at every cap `Q`, advice of 0 bits, `ξ = 0` and
-`κ_x = (1 + 3k)/|D|`. -/
-theorem honest_extractAdvAt (Q : ℝ) :
-    ExtractAdvAt toyG (noFoldRound (toyNF D)) k (fun _ => a) Q 0 (fun _ => 0)
+/-- **`extract_of_realization` applies to the honest prover** at every selection `sel` and cap `Q`, advice of 0 bits,
+`ξ = 0` and `κ_x = (1 + 3k)/|D|`. -/
+theorem honest_extractAdvAt (sel : (noFoldRound (toyNF D)).Chk → Prop) (Q : ℝ) :
+    ExtractAdvAt toyG (noFoldRound (toyNF D)) k (fun _ => {a}) sel Q 0 (fun _ => 0)
       (((1 + 3 * k : ℕ) : ℝ) / Fintype.card D) (honest a k) := by
   have h := extract_of_realization (toyE D) (Equiv.refl _) id (fun _ => []) (fun _ => []) toy_hopens (honest a k)
-    (honest_realization a k Q)
+    (honest_realization a k sel Q)
   have hκ : 1 * 1 + ∑ _ : Fin k, 1 * (2 * 1 + 1) = 1 + 3 * k := by simp [mul_comm]
   convert h using 2
   · simp
   · rw [hκ]
 
 /-- At SHA-512's digests, `κ_x = (1 + 3k)/2^512`. -/
-theorem honest_extractAdvAt_sha512 (a : (noFoldRound (toyNF (Fin (2 ^ 512)))).Inst) (Q : ℝ) :
-    ExtractAdvAt toyG (noFoldRound (toyNF (Fin (2 ^ 512)))) k (fun _ => a) Q 0 (fun _ => 0)
+theorem honest_extractAdvAt_sha512 (a : (noFoldRound (toyNF (Fin (2 ^ 512)))).Inst)
+    (sel : (noFoldRound (toyNF (Fin (2 ^ 512)))).Chk → Prop) (Q : ℝ) :
+    ExtractAdvAt toyG (noFoldRound (toyNF (Fin (2 ^ 512)))) k (fun _ => {a}) sel Q 0 (fun _ => 0)
       (((1 + 3 * k : ℕ) : ℝ) / 2 ^ 512) (honest a k) := by
-  have h := honest_extractAdvAt a k Q
+  have h := honest_extractAdvAt a k sel Q
   rwa [Fintype.card_fin, Nat.cast_pow, Nat.cast_ofNat] at h
 
 end Pouw.SecurityProofs.ShaRealize.Witness
