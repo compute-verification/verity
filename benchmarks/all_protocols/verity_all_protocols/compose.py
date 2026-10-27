@@ -45,10 +45,8 @@ OUT_BITS = 16
 #: what `horizon_leak`'s K rests on until its two per-window inputs are discharged
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
-#: K's jitter term, the periods' own at their jitter bound (1, so 0 bits): J (`NetTiming.JitterBounded`) assumes it.
-#: Both paths release each egress bucket at a time fixed before it is made (`active.Proxy(paced=…)`,
-#: `warden.Warden(paced=…)`), and J at that bound is not met until a run shows the written buckets tell a receiver no
-#: more than an idle one
+#: K's jitter term, the periods' own at their jitter bound (1, so 0 bits): J (`NetTiming.JitterBounded`) assumes it,
+#: and the certifier doesn't meet J at that bound: an offset the prover chooses within a bucket reaches the client
 JITTER = "assumed (J)"
 
 
