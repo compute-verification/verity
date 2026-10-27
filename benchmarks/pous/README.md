@@ -27,8 +27,9 @@ scheme's certified parameters.
   into the `measured` preset. Publish with `research data put --kind pous-explorer/v1 --file F --preserve`.
 - `served_piece.sh` runs `served_piece.py`, PoUS's piece of the composed served run (`benchmarks/one_stage/served_verdicts.sh`,
   `POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'`). It holds one period over the served checkpoint's linears, as
-  P2's `C*` on the card the window served on, with the memory challenger on the auditor's host. It writes a core answer
-  under a hiding commitment, and keeps the run's witness on the node.
+  P2's `C*` on the card the window served on, with the memory challenger on the auditor's host, at 320 challenges by
+  default (`--rounds`), where an accepted run certifies `⌊ρ·|C|⌋` at `2^-20` (`p2.wide320_certificate`); the check takes
+  about 1.3 s a challenge. It writes a core answer under a hiding commitment, and keeps the run's witness on the node.
 
 Implementations:
 

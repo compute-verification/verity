@@ -9,7 +9,7 @@
 # minutes, default 40, and MEM_GB GiB of host memory, default 32; in the caller's lease when GPU_LEASE_UUID is set):
 # served_piece.py with vLLM's venv (PY, default /workspace/cp/venv312/bin/python), the snapshot under HF_HOME (default
 # /workspace/hf) and the memory challenger on vy-auditor-2. POUS_ARGS adds served_piece.py's options (--node, --private,
-# --challenger-*, --trusted-sha512, --device). Logs: DIR/build.log and DIR/pous.log (its stderr). Exit: served_piece.py's
+# --rounds, --challenger-*, --trusted-sha512, --device). Logs: DIR/build.log and DIR/pous.log (its stderr). Exit: served_piece.py's
 # (0 accept, 1 another answer, 2 no answer made), 3 when the library doesn't build.
 set -uo pipefail
 SERVE_DIR=${1:?usage: served_piece.sh SERVE_DIR WINDOW DIR}; WINDOW=${2:?WINDOW}; DIR=${3:?DIR}
