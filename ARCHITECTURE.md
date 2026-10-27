@@ -37,9 +37,8 @@ Each layer may depend on the layers below it (the import rules: `AGENTS.md`, "Ma
 ~~~text
 integrations/vllm, examples/, benchmarks/ (with the census)
 ---------------------------------------------------------------------------
-verity/core/: the verifiers, trusted           archive/
-  protocols: profile, sampled_proofs,          kept, not developed:
-  pouw, pous, certifier; claims                gkr, direct, sp1, vole
+verity/core/: the verifiers, trusted
+  protocols: profile, sampled_proofs, pouw, pous, certifier; claims
   Lean, the verifier of record, C-Flock's in service/flock
 Security/: the definitions, models and proofs of the guarantees (nci among them)
 ---------------------------------------------------------------------------
@@ -86,7 +85,7 @@ An integration makes Verity work end to end with a real system, and to Verity it
 
 ## Documentation
 
-- Specifications: the [program format](verity/ml/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/ml/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/ml/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`Security/`) with each one's README as its outline (a protocol's `PROTOCOL.md` remains only until its Lean covers it), and [C-Flock's verifier](verity/ml/flock/verifier/PROTOCOL.md).
+- Specifications: the [program format](verity/ml/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/ml/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/ml/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`Security/`) with each one's README as its outline (a protocol's `PROTOCOL.md` remains only until its Lean covers it), and C-Flock's verifier, stated in Lean (`verity/core/service/flock/`), with [its outline](verity/ml/flock/verifier/PROTOCOL.md).
 - Each component's README; [AGENTS.md](AGENTS.md) for contributors and agents (the map, the rules, how a change lands); the skills under [`.agents/skills/`](.agents/skills/).
 
 ## Glossary
@@ -155,6 +154,9 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Assumed memory capacity** M_s: server s's capacity over every tier (HBM, host RAM, disks), with |state(s, t)| ≤ M_s, a public parameter of the physical model. The wipe's operating point is a parameter of the model too: at each wipe tick a server keeps at most 5 GB (4×10^10 bits) of prior content, plus its egress E, and that one term is the serving block's residue k_S, so a server is not drawn as its GPUs only. The wipe certifies HBM only so far; its statement per server, over every tier, is not yet made.
 - **Guarantee** (security guarantee): a proved `Prop` in which named assumptions imply a conclusion, such as the network certifier's bound on what a covert sender carries out. A package laid out under the four names (`AGENTS.md`, "Lean") states each as a `def G : Prop` in its `Guarantees` and proves it in `SecurityProofs.G`; the lock records its statement. A theorem is a guarantee when something relies on it as proved: a ledger row, a published table, the docs site, a claim id in `verity.core.claims` (which names the kinds Table 1 cites), or code that reads its result; a mention in prose, a PR, a test or an internal table doesn't make one.
 - **Protocol soundness**: the composed protocol's soundness guarantee, `Verity.Soundness`: when the verifier of record accepts, the monitoring period's claims hold, except with probability δ. Never "the one theorem": AGENTS.md's rule "Soundness is one theorem" is a requirement on it, not its name.
+- **Deployment**: a verifier of record taken as one value, its registered components and NCI's registration check, such as onsite or remote. Protocol soundness is stated per deployment. It is not the configuration that assigns roles to machines.
+- **Fixed finder** and **fixed forger**: explicit constructions from the prover's strategy that output a SHA-512 collision, or an LMS forgery under a device's registered key. The assumptions `ecr/sha-512` and `euf-cma/lms-sha512-n64` apply only to them, and several finders combine as a uniform mixture, never by picking the best one. Their success is the Break term ([`GLOSSARY.md`](GLOSSARY.md)), charged in the bound and never assumed away.
+- **Honest lemma** and **nontrivial lemma**: a guarantee's two companions. The honest lemma shows the guarantee's hypotheses hold at the honest deployed instance, constructed rather than assumed; the nontrivial lemma shows the guarantee fails for a verifier that accepts everything.
 - **Assumption**: a named `Prop` that guarantees take as a hypothesis and nothing proves, stated once with its rationale in its area's `Definitions/<Area>/Assumptions` (C-Flock's in `Proofs/Flock/Soundness/Assumptions` until its spec is extracted) and listed by name in its package's lock; the Lean check admits no other unproved fact. One about a primitive has a claim id `property/instance` in `verity.core.claims`, such as `cr/sha-512`. Proving an assumption removes it from every guarantee that took it.
 - **Trusted computing base (TCB)**: what a guarantee's conclusion about the running system depends on beyond its assumptions: each spec, and the code implementing it for every role, verifier and prover, reference and fast. It is trusted, not certified: code that doesn't implement its spec degrades security, soundness for the auditor or zero knowledge and completeness for the developer. The *assurance TCB* makes "proved" and "passed `check`" believable: Lean's kernel and toolchain, the pinned Mathlib and ArkLib, the Lean check (`tools/verity/lean/`), `check`'s gates, and upstream's Rust verifier through lean-agreement.
 - **Frontend** and **integration**: a frontend is anything that hands Verity a circuit, a translator from PyTorch, JAX or ONNX or a whole integration (the vLLM integration's `verity_vllm.program.frontend` is an embedded Torch-to-circuit translator; there is no standalone one). An integration makes Verity work end to end with a real system, and Verity knows nothing of what it serves (Architecture, "Integrations"); vLLM's (`integrations/vllm`) is the only one so far.

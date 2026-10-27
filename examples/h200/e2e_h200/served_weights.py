@@ -1,4 +1,4 @@
-"""The demo's seeded weights and their registration root (CMP-95 interface 1): one deterministic generator from a seed to
+"""The demo's seeded weights and their registration root: one deterministic generator from a seed to
 every tensor of a decoder of any `Shape` (the H200 demo's frozen shape `H200`, Phase 1's CPU model `PHASE1`), and the
 registration of those tensors as core's registered values (``one_stage.registered``), computed in parallel.
 
@@ -98,15 +98,15 @@ class Shape:
     #: ``tok``'s row format: ``hm96-sha512/row/v2``, the rows the demo's proofs cover (proofs, 26 Oct 00:39Z);
     #: ``hm96-sha512/row-seg/v1`` is ``EmbeddingRead_v1``'s
     tok_schema: str = REG.SCHEMA_V2
-    #: ``tok``'s rows: ``"coordinate"`` (H, V), a coordinate over the tokens (proofs, 26 Oct 01:55Z, CMP-95 option (a)),
+    #: ``tok``'s rows: ``"coordinate"`` (H, V), a coordinate over the tokens (the default),
     #: or ``"token"`` (V, H), a token's embedding
     tok_rows: str = "coordinate"
 
 
-#: the H200 demo's frozen shape (compute-accounting, 25 Oct 23:00Z); a linear's row the 8,192 codes a FAMILIES ``wrow``
+#: the H200 demo's frozen shape; a linear's row the 8,192 codes a FAMILIES ``wrow``
 #: part reads
 H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 8192)
-#: Phase 1's CPU model (ALLP-XFMR, CMP-92): its linears read whole 128-code rows, its down projection in K = 128 parts
+#: Phase 1's CPU model (`transformer`): its linears read whole 128-code rows, its down projection in K = 128 parts
 PHASE1 = Shape("cmp92-phase1-h128-l2", 128, 2, 2, 64, 2, 512, 256, 32, 128)
 #: the smallest shape the tests commit whole
 TINY = Shape("tiny-h32-l1", 32, 1, 2, 16, 1, 64, 256, 8, 16)
