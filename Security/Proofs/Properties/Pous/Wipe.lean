@@ -302,8 +302,99 @@ theorem check_accept {schemes : Schemes} {p : WipeProtocol.Params} {c : Streamed
         exact ⟨_, h1⟩
       · cases h
 
+/-- What `exactly` accepts is what its decoder decoded. -/
+theorem exactly_decodes {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
+    (h : MemoryChallenger.exactly f enc j = .ok a) : f j = .ok a := by
+  unfold MemoryChallenger.exactly at h
+  cases hf : f j with
+  | error e => simp [hf, bind, Except.bind] at h
+  | ok a0 =>
+    cases hc1 : Flock.canon (enc a0) with
+    | error e => simp [hf, hc1, bind, Except.bind] at h
+    | ok s1 =>
+      cases hc2 : Flock.canon j with
+      | error e => simp [hf, hc1, hc2, bind, Except.bind] at h
+      | ok s2 =>
+        by_cases hne : s1 = s2
+        · subst hne
+          simp [hf, hc1, hc2, bind, Except.bind, pure, Except.pure] at h
+          subst h
+          rfl
+        · simp [hf, hc1, hc2, hne, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+
+theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => first | cases h | simp [bind, Except.bind] at h
+  | ok a => exact ⟨a, rfl, h⟩
+
+/-- A commitment `StreamedWipe.Commitment.ofJson` decodes has parameters `Params.check` passes. -/
+theorem commitment_ofJson_check {j : Lean.Json} {c : StreamedWipe.Commitment}
+    (h : StreamedWipe.Commitment.ofJson j = .ok c) : c.params.check = .ok () := by
+  unfold StreamedWipe.Commitment.ofJson at h
+  simp only [bind, Except.bind] at h
+  repeat (split at h; next => cases h)
+  split at h
+  · rename_i hp
+    repeat (split at h; next => cases h)
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact hp
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+
+theorem commitment_ofJson_check' {j : Lean.Json} {c : StreamedWipe.Commitment}
+    (h : StreamedWipe.Commitment.ofJson j = .ok c) : c.params.check = .ok () := by
+  unfold StreamedWipe.Commitment.ofJson at h
+  try dsimp only at h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  try dsimp only at h
+  split at h
+  · rename_i hp
+    obtain ⟨_, -, h⟩ := bind_ok h
+    obtain ⟨_, -, h⟩ := bind_ok h
+    cases h
+    exact hp
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+
+/-- Parameters `Params.check` passes have at least one read: `1 ≤ batch ≤ k`. -/
+theorem params_check_k {q : StreamedWipe.Params} (h : q.check = .ok ()) : 0 < q.k := by
+  by_cases hc : (q.labels < 1 || q.batch < 1 || q.batch > q.k || q.k ≥ 2 ^ 32 || q.limitNs == 0) = true
+  · unfold StreamedWipe.Params.check at h
+    rw [if_pos hc] at h
+    simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or] at hc
+    omega
+
+theorem params_check_k' {q : StreamedWipe.Params} (h : q.check = .ok ()) : 0 < q.k := by
+  rcases Nat.eq_zero_or_pos q.k with hk | hk
+  · exfalso
+    revert h
+    unfold StreamedWipe.Params.check
+    rcases Nat.eq_zero_or_pos q.batch with hb | hb
+    · simp [hb, throw, throwThe, MonadExceptOf.throw, bind, Except.bind]
+    · simp [hk, hb, throw, throwThe, MonadExceptOf.throw, bind, Except.bind]
+  · exact hk
+
+/-- **A commitment the protocol decodes has at least one read**: `decodeCommitment` decodes it with
+`StreamedWipe.Commitment.ofJson`, whose `Params.check` refuses `k < batch` and `batch < 1`. -/
+theorem decodeCommitment_k {bytes : ByteArray} {c : StreamedWipe.Commitment}
+    (h : WipeProtocol.decodeCommitment bytes = .ok c) : 0 < c.params.k := by
+  unfold WipeProtocol.decodeCommitment at h
+  cases hj : Core.canonicalJson bytes with
+  | error e => simp [hj, bind, Except.bind] at h
+  | ok j =>
+    simp only [hj, bind, Except.bind] at h
+    exact params_check_k (commitment_ofJson_check (exactly_decodes h))
+
 theorem wipeSurvivorBound : WipeSurvivorBound := by
-  intro schemes p c e egressMib eps foreignBits k memoryBits r profile h hk0 ι d C B s b _ τ κ prf count A hfill hA
+  intro schemes p bytes c e egressMib eps foreignBits k memoryBits r profile hdec h ι d C B s b _ τ κ prf count A
+    hfill hA
+  have hk0 := decodeCommitment_k hdec
   obtain ⟨egress, hc⟩ := check_accept h
   obtain ⟨-, rfl, rfl, rfl⟩ := certify_certified hc
   obtain ⟨hr, hs⟩ := ratio_samples hk0

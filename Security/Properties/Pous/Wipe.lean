@@ -23,10 +23,11 @@ label, as the memory challenger signs it, and the certifiers' count of the egres
   (`NetTiming.Guarantees.SampledLeakAccepted`).
 
 The strategy is arbitrary, its fill any bits of the store up to `memory_bits`. The state the fill leaves out
-(`Verity.Wipe.unfilled`) is counted beside `foreign_bits`, as `SurvivorBound` counts it. The commitment has at least one
-read, as every commitment `StreamedWipe.Commitment.ofJson` decodes has (`Params.check`: `1 ≤ batch ≤ k`); `check`
-itself certifies a commitment of no reads, where the bound fails. Proved from `Pous.Guarantees.StreamedWipeMeetsReads`
-at `r = ratio k` (`Proofs.Properties.Pous.Wipe`).
+(`Verity.Wipe.unfilled`) is counted beside `foreign_bits`, as `SurvivorBound` counts it. The commitment is the one its
+bytes decode to (`WipeProtocol.decodeCommitment`, the protocol's decoder), whose `Params.check` refuses fewer reads than
+a batch (`1 ≤ batch ≤ k`): `check` alone accepts a commitment of no reads, where `ratio 0 = 1` doesn't meet the sampling
+condition and the bound fails. Proved from `Pous.Guarantees.StreamedWipeMeetsReads` at `r = ratio k`
+(`Proofs.Properties.Pous.Wipe`).
 
 * `WipeSurvivorBoundHonest`: an honest session's parameters of at most `MAX_READS` reads with no egress are certified
   at the published pair, and the honest strategy (`honest`: the labels written into the store, each read answered from
@@ -41,17 +42,18 @@ namespace MemoryChallenger.Properties
 open Verity
 open scoped ENNReal
 
-/-- **An accepted, certified wipe meets the survivor bound at the pair it publishes.** When `check` accepts the signed
-session `e` of the commitment `c`, of at least one read, and publishes it certified, with `egress_mib`, `eps`,
-`foreign_bits` and `memory_bits`, every strategy `τ` of a device for `c`'s labels and reads whose fill is at most
+/-- **An accepted, certified wipe meets the survivor bound at the pair it publishes.** When the bytes `bytes` decode to
+the commitment `c` and `check` accepts the signed session `e` of `c` and publishes it certified, with `egress_mib`,
+`eps`, `foreign_bits` and `memory_bits`, every strategy `τ` of a device for `c`'s labels and reads whose fill is at most
 `memory_bits`, with the labels `prf` of the challenger's key, every count `count` of the egress by the network
 certifiers and every set `A` of at most `2^(egress_mib MiB)` egress strings, meets `SurvivorBound foreign_bits` on the
 observed event at `eps` plus the PRF's advantage against the adversary's distinguisher plus `δ_net` at `A`. -/
 def WipeSurvivorBound : Prop :=
-  ∀ (schemes : Schemes) (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
-    (egressMib : Int) (eps : Core.Ratio) (foreignBits k memoryBits r : Nat) (profile : StreamedWipe.Params × Int),
+  ∀ (schemes : Schemes) (p : WipeProtocol.Params) (bytes : ByteArray) (c : StreamedWipe.Commitment)
+    (e : WipeProtocol.Evidence) (egressMib : Int) (eps : Core.Ratio) (foreignBits k memoryBits r : Nat)
+    (profile : StreamedWipe.Params × Int),
+    WipeProtocol.decodeCommitment bytes = .ok c →
     WipeProtocol.check schemes p c e = .accept ⟨true, egressMib, eps, foreignBits, k, memoryBits, r⟩ profile →
-    0 < c.params.k →
     ∀ {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B)
       [NeZero c.params.labels] (τ : Accounting.Wipe.Strategy d s b c.params.labels c.params.k) {κ : ℕ}
       (prf : Pous.Bits κ → Accounting.Wipe.Labels c.params.labels) (count : (Fin τ.egress → Bool) → ℕ)
