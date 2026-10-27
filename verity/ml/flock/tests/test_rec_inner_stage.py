@@ -1,4 +1,4 @@
-"""The recursive session's inner statement as `pod/rec_inner.py stage` writes it: bound to the `verity/partition/v1` object
+"""The recursive session's inner statement as `benchmarks/flock_pod/rec_inner.py stage` writes it: bound to the `verity/partition/v1` object
 beside it (`partition.json`, over `program.json`), which the Lean verifier needs to set the inner statement up at all
 (`verify --rec-inner-partition`, V*'s check 5; `rec-inner --partition`)."""
 from __future__ import annotations

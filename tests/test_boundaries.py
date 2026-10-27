@@ -126,10 +126,6 @@ ML_IMPORTS_CORE = {
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
                                              "core imports them from there, and this entry goes",
-    "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
-                                  "do (the rec_* entry), and moves with them in the follow-up to T2",
-    "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
-                                    "`one_stage.partition`, as rec_inner does, and moves with it in the follow-up to T2",
     "ml/flock/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
                                                         "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
                                                         "entry), and moves with them in the follow-up to T2",
@@ -192,7 +188,6 @@ BENCHMARKS_IMPORTERS = {
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
     # C-Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
     **dict.fromkeys((
-        "benchmarks/flock_pod/gemm_hill.py", "benchmarks/flock_pod/read_gadget.py", "benchmarks/flock_pod/rec_inner.py",
         "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
         "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
@@ -210,6 +205,11 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/tests/test_stage_typed.py", "verity/ml/flock/tests/test_typed_statement.py",
         "verity/ml/flock/tests/tmpl_statement.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s templates, generator, input sets and lowerings"),
+    # C-Flock's tests of the pod scripts' Python, which test_gemm_hill.py and test_class_statement.py also load
+    **dict.fromkeys((
+        "verity/ml/flock/tests/test_pod_lean_verdicts.py", "verity/ml/flock/tests/test_rec_full_draw.py",
+        "verity/ml/flock/tests/test_rec_inner_stage.py",
+    ), "proofs: the pod scripts' Python (`benchmarks/flock_pod`: lean_verdicts, rec_inner)"),
     **dict.fromkeys((
         "tools/verity/circuit_check/src/circuit_check/checks.py", "tools/verity/circuit_check/src/circuit_check/sidecars.py",
         "tools/verity/circuit_check/src/circuit_check/targets.py", "tools/verity/circuit_check/tests/test_circuit_check.py",

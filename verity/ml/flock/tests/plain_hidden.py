@@ -1,5 +1,5 @@
 """A plain hidden-output session's statement (PROTOCOL.md §16.15): the fixture of `test_lean_plain_hidden.py`, staged by
-`pod/91-plain-hidden.sh`, which proves it in one loopback session without `--zk` under a subset draw.
+`benchmarks/flock_pod/91-plain-hidden.sh`, which proves it in one loopback session without `--zk` under a subset draw.
 
 The program (`program`) is `N` RoPE d64 template instances, instance `i` reading row `i` of `x` and of `cs`, under
 `Q_template_instance` v0. `stage` writes, under `out`, the hidden-output circuit bound to that program and its partition
