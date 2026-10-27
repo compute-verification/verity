@@ -232,7 +232,7 @@ def test_f16_14_module_path_with_line_number_in_data_section_is_decoded(tmp_path
     assert S["commit_pass"] is True
 
 
-# ---- [R16 compiled, Daniel DECISIONS-3 autotune rule + rev F-r16-22] ---------------------------------------------------------------------
+# ---- [compiled: the autotune rule] ------------------------------------------------------------------------------------------------------
 POI = "triton_poi_fused_1"                                       # pointwise (RoPE) -- config independence structural
 RED = "triton_red_fused__to_copy_embedding_rms_norm_t_0"        # reduction (norm) -- the config sets the summation order
 OTHER_CFG = {"kwargs": {"XBLOCK": 512, "R0_BLOCK": 1024}, "num_warps": 8, "num_stages": 1}

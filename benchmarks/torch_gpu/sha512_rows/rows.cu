@@ -40,6 +40,12 @@ struct Sx {
 };
 struct Pouw {
   static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sha::compress(st, w); }
+  static __host__ __device__ __forceinline__ void kw(u64* st, const u64* kw) {   // the block is K + W's first 16, less K
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = kw[i] - sx::kconst()[i];
+    sha::compress(st, w);
+  }
 };
 using D = Sx<SX_V, SX_ROLL>;
 
@@ -52,7 +58,7 @@ __global__ void __launch_bounds__(SXR_THREADS) k_row_setup(RowSpec* rows, u32 G)
 }
 
 // a thread a (row g, slot s), t = j S + s with g = order[j]: a warp's rows are one row of the table in consecutive slots, and
-// blocks start in `order` (the longest rows first, so the last wave is short rows); x stays at (g, s)
+// CTAs start in `order` (the longest rows first, so the last wave is short rows); x stays at (g, s)
 template <class C>
 __global__ void __launch_bounds__(SXR_THREADS, SXR_MINB) k_rows(const RowSpec* __restrict__ rows, const u32* __restrict__ order,
                                                                 u32 G, u32 S, u64* __restrict__ x) {
@@ -72,8 +78,8 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G
   if (t < G) leaf_setup<D>(rows[t], dids, schema, schema_len);
 }
 
-// T in shared memory (a block's 64 KB, loaded once), then each thread's salt words (48 KB a block; word w of thread j at
-// w SXR_THREADS + j, so a warp's loads of a word are in 32 banks); the leaves grid-stride over resident blocks; MINB blocks
+// T in shared memory (a CTA's 64 KB, loaded once), then each thread's salt words (48 KB a CTA; word w of thread j at
+// w SXR_THREADS + j, so a warp's loads of a word are in 32 banks); the leaves grid-stride over resident CTAs; MINB CTAs
 // an SM caps the registers (1: as many as it wants, 2: 128)
 template <int MINB>
 __global__ void __launch_bounds__(SXR_THREADS, MINB) k_leaves(const __grid_constant__ LeafArgs a) {

@@ -12,10 +12,11 @@ import time
 import pytest
 
 import research.queue as Q
-from research.queue import DRIVE_FLAGS, PR, DriveFlags, Member, QueueError
+from research.queue import DRIVE_FLAGS, PR, DriveFlags, Member, QueueError, label_target
 from research.stale import DAY_S, close_comment, stale_prs
+from research.store import vocab
 from test_queue import World, _git
-from test_queue_drive import Harness, _check
+from test_queue_drive import Harness
 
 T0 = 1_800_000_000.0                                    # drive's clock, injected
 DAY = int(DAY_S)
@@ -181,10 +182,13 @@ def test_after_a_landing_the_owner_of_each_unmarked_pr_stacked_on_it_hears_once_
     _git(world.origin, "update-ref", "refs/pull/4/head", gh.prs[4].head)
     gh.put(5, world.change({"e.txt": "5\n"}), ready=False)                                           # not stacked
     h = _driven(world, monkeypatch, stale_days=0)
+    h.d.reviews = lambda n, head: world.store.labels(label_target(n, head), key=vocab.REVIEWED)
+    h.d.ready_by = lambda n, head: None
+    assert Q.baseline(h.q, _git(world.origin, "rev-parse", "main"), "ci") == 0
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 3]
-    _check(world, monkeypatch, h.q.chain()[0].commit)
-    assert h.tick().startswith("landed #1")
+    world.store.add_label(label_target(1, h1), vocab.REVIEWED, "land", "reviewer")
+    assert h.tick().startswith("landed #1"), world.logs
     tip = _git(world.origin, "rev-parse", "main")
     assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2",
                                f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}; merge main into #4"]
