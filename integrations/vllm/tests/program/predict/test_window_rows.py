@@ -176,10 +176,10 @@ def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
     assert WR.chunk_best(np.array([ninf, inf], dtype=np.uint16)) == (inf, 1)
 
 
-def _served(low, s, T: int, pruned: int = PRUNED):
+def _served(low, s, T: int, pruned: int = PRUNED, also: tuple[int, ...] = ()):
     """Slot ``s``'s values as a request's served rows (`Served`): its prompt's positions in prefill, but for the last
-    ``pruned`` nodes of a position at its last prompt position only, and ``T`` decode steps, each member's elements by row
-    under op ``op<k>``."""
+    ``pruned`` nodes of a position and the nodes ``also`` at its last prompt position only, and ``T`` decode steps, each
+    member's elements by row under op ``op<k>``, op by op."""
     nodes, pos, lp = low.fn.body.nodes, WR.positions(low.fn), s.row[1]
     K = len(nodes) // (max(pos) + 1)
     rows, store = [], {}
@@ -187,7 +187,7 @@ def _served(low, s, T: int, pruned: int = PRUNED):
         fields = WR._fields(nodes[k].fn)
         names = ["out"] if len(fields) == 1 else [str(i) for i in range(len(fields))]
         members = [(m, f.leaves, "x") for m, f in zip(names, fields)]
-        prefill = [lp - 1] if k >= K - pruned else list(range(lp))
+        prefill = [lp - 1] if k >= K - pruned or k in also else list(range(lp))
         for step, ps in [(0, prefill), *((d, [lp - 1 + d]) for d in range(1, T + 1))]:
             for r, p in enumerate(ps):
                 rows.append({"spec": descriptor_id(nodes[p * K + k].fn), "step": step, "op_path": f"op{k}", "members": members,
@@ -241,9 +241,37 @@ def test_a_served_value_is_the_nodes_value_and_the_rest_are_computed(window):
         WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(other, _read(store)))
     with pytest.raises(ValueError, match="the served request's 4 prompt ids, its slot row's 3"):
         WR.Slot(low.fn, CLASS, SLOTS[1], weights, served)
-    swapped = [d for d in rows if d["step"] == 0] + sorted((d for d in rows if d["step"] == 1), key=lambda d: d["op_path"])
-    with pytest.raises(ValueError, match="step 1's 32 rows are not the prefill's 32 ops in its order"):
-        WR.Served(swapped, _read(store))
+    dropped = [d for d in rows if (d["op_path"], d["step"]) != ("op2", 1)]
+    with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('op2', .*\) \(1 ops\)"):
+        WR.Served(dropped, _read(store))
+    twice = rows + [{**d} for d in rows if (d["op_path"], d["step"]) == ("op2", 1)]
+    with pytest.raises(ValueError, match=r"step 1: op \('op2', .*\) served at two rows"):
+        WR.Served(twice, _read(store))
+
+
+def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
+    """A Build's prefill runs position by position and prunes a node that isn't the last of a position's (the last layer's
+    query side, its keys and values kept for the cache), so an op's first row can come after a later node's: its ops are
+    read in the order of its last prompt position's rows, the node order, and each decode step's rows by op in whatever
+    order they come. A node pruned at an earlier prompt position is computed."""
+    low, _f, _t, weights, slots = window
+    s0, K = slots[0], 32
+    mid, lp = K - PRUNED - 2, s0.row[1]
+    rows, store = _served(low, s0, T=1, also=(mid,))
+    pruned = {mid, *range(K - PRUNED, K)}
+
+    def at(d):
+        k = int(d["op_path"][2:])
+        return (lp - 1 if k in pruned else int(d["row"]), k)
+
+    interleaved = sorted((d for d in rows if d["step"] == 0), key=at) + [d for d in rows if d["step"] == 1][::-1]
+    assert [d["op_path"] for d in interleaved].index(f"op{mid}") > [d["op_path"] for d in interleaved].index(f"op{mid + 1}")
+    served = WR.Served(interleaved, _read(store))
+    assert [v[0]["op_path"] for v in served.prefill] == [f"op{k}" for k in range(K)]
+    assert [d["op_path"] for d in served.decode[0]] == [f"op{k}" for k in range(K)]
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
+    assert got.source == [WR.COMPUTED if p < lp - 1 and k in pruned else WR.SERVED for p in range(5) for k in range(K)]
+    assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
 
 
 def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
