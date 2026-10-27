@@ -1,4 +1,4 @@
-"""No new gate family under the retired ``veritor.*`` prefix (CIR-12, circuits, 14 Oct 2026; README.md "Older names stay...").
+"""No new gate family under the retired ``veritor.*`` prefix (the Glossary's "Older names").
 
 The existing ids are grandfathered: their spellings are baked into the ``*_FAMILY_DIGEST`` pins, fixtures and recorded
 runs, so they stay exactly as declared in ``targets/target.py``. A new family takes a fresh id outside ``veritor.*``;

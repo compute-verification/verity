@@ -305,7 +305,22 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
         got = json.loads(capsys.readouterr().out)
         assert got == RA.declared_count(doc, 1687, pins=dict(RA.pin_arg(p) for p in pins), roots=roots)
         assert got["free"] == (0 if pins and roots == PIN_A else inputs), (pins, reg)
-    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64]):
+    entry = {"value": "a", "root": PIN_A["a"], "leaves": 1, "words": 4, "domain": REG.domain("p", "a", 4, 1).domain_id.hex()}
+    (tmp_path / "pins.json").write_text(json.dumps(PIN_A))
+    (tmp_path / "registration.json").write_text(json.dumps({"program": "p", "values": {"a": entry}}))
+    (tmp_path / "other-domain.json").write_text(json.dumps({"program": "q", "values": {"a": entry}}))
+    shape = {k: v for k, v in entry.items() if k != "root"}
+    (tmp_path / "record.json").write_text(json.dumps({"of_record": True, "registered_entries": {"a": shape}}))
+    for f in ("pins.json", "registration.json"):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", "--pins", str(tmp_path / f),
+                        "--registration", str(tmp_path / "core.json")]) == 0
+        assert json.loads(capsys.readouterr().out)["free"] == 0
+    with pytest.raises(ValueError, match="a weights record states each weight's shape, not its root"):
+        RA.pins_of((), [str(tmp_path / "record.json")])
+    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64],
+                ["--pin", "a=" + "ab" * 64, "--pins", str(tmp_path / "pins.json")], ["--pins", str(tmp_path / "record.json")],
+                ["--pins", str(tmp_path / "other-domain.json")]):
         with pytest.raises(SystemExit):
             RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
     with pytest.raises(ValueError, match="counted from its members"):
