@@ -220,6 +220,20 @@ def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
     assert ingress_verdicts([faulted[0], *faulted], 3) == ["duplicate", "status:delivery-refused", "no-verdict"]
 
 
+def test_an_honest_window_is_complete_so_the_issuer_refuses_nothing_honest(tmp_path):
+    """Honest runs close every window complete, egress and ingress at either timing, so the issuer, which certifies
+    only a complete record, certifies every window and refuses none."""
+    signer = signers.signer(tmp_path)
+    egress = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
+    late = ingress_run([[0, 0, 0, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
+    issuer = Issuer(signer, SESSION)
+    for records, direction in ((egress, EGRESS), (early, INGRESS), (late, INGRESS)):
+        assert all(r.status.complete for r in records)
+        assert len(certify_all(issuer, records, direction)) == len(records)
+    assert issuer.refused == []
+
+
 def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
     """Moving a certificate to another window, link or direction, editing its head, signing with another key or
     forging the signature is a `signature` violation, and only in that window."""
