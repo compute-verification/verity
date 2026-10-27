@@ -14026,7 +14026,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCheck.Json": {
@@ -14058,7 +14059,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
-    "Properties.Pouw.Strata.strataTile"
+    "Properties.Pouw.Strata.strataTile",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCheck.Opening": {
@@ -14156,7 +14158,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
-    "Properties.Pouw.Strata.strataTile"
+    "Properties.Pouw.Strata.strataTile",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCheck.Period": {
@@ -14438,7 +14441,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCommit.Rows": {
@@ -14520,7 +14524,8 @@
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
-    "Properties.Pouw.Window.kPrimeServed"
+    "Properties.Pouw.Window.kPrimeServed",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwWindow.Grid": {
@@ -14589,7 +14594,8 @@
     "Properties.Pouw.Window.padRefuses",
     "Properties.Pouw.Window.pointEnumerates",
     "Properties.Pouw.Window.pointRefuses",
-    "Properties.Pouw.Window.workAtRefuses"
+    "Properties.Pouw.Window.workAtRefuses",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwWindow.Json": {
@@ -14625,7 +14631,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
-    "Properties.Pouw.Strata.strataTile"
+    "Properties.Pouw.Strata.strataTile",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwWindow.Length": {
@@ -17397,7 +17404,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.ChallengerRecord": {
@@ -17444,7 +17452,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.ChallengerSession": {
@@ -17611,7 +17620,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Draw": {
@@ -17957,7 +17967,8 @@
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
-    "Properties.SampledProofs.noAcceptAfterHalt"
+    "Properties.SampledProofs.noAcceptAfterHalt",
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Record": {
