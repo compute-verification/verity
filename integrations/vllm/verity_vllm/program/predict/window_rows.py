@@ -45,7 +45,8 @@ from verity.ml.windows import interface as IF
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
-from .window_builder import WEIGHTS, table_param, weight_param
+from . import window_weights as WW
+from .window_builder import WEIGHTS
 from .window_circuit import SLOT_ROWS, Lowered, WindowClass, _spans
 
 #: a unit's source, its runs' label: its node's served value, the class Program's value at a node the engine didn't compute,
@@ -55,6 +56,9 @@ SERVED, COMPUTED, EVALUATED = range(3)
 
 #: a weight's elements [lo, hi) in its leaves' unsigned width: ``weights(label, lo, hi)``
 Weights = Callable[[str, int, int], np.ndarray]
+#: the salt nonce of window 0's slot rows under the committer's key, each next window's the next: above every weight
+#: parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
+SLOT_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
 
 
 def positions(fn: Any) -> list[int]:
@@ -238,6 +242,19 @@ def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
 
 
+def _sites(ops: Sequence[tuple[str, tuple[str, ...]]]) -> dict[tuple[str, tuple[str, ...]], tuple[str, tuple[str, ...], int]]:
+    """Each of a step's ops, in Program order, -> its site: its op path less its last ``/`` part (a call boundary's fx node,
+    which counts on over the request's steps, `query.manifest.bind`), its members' names, and its ordinal among the step's
+    ops there."""
+    seen: dict[tuple[str, tuple[str, ...]], int] = {}
+    out = {}
+    for op, members in ops:
+        at = (op.rsplit("/", 1)[0], members)
+        out[(op, members)] = (*at, seen.get(at, 0))
+        seen[at] = seen.get(at, 0) + 1
+    return out
+
+
 @dataclass
 class Served:
     """One request's served values by class node: its Program's rows as `ProgramIndex.describe` gives them, each with its
@@ -247,8 +264,9 @@ class Served:
     The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
     computes them all, which is the class Program's node order within a position however the prefill interleaves the
-    others. Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by op. A row whose spec isn't its
-    class node's descriptor id is refused by name."""
+    others. Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
+    boundary's op path names an fx node numbered over the request's steps. A row whose spec isn't its class node's
+    descriptor id is refused by name."""
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
@@ -272,17 +290,20 @@ class Served:
         for (op, _), v in zip(order, self.prefill):
             if [int(d["row"]) for d in v] not in (list(range(self.LP)), [0]):
                 raise ValueError(f"{op}: prefill rows {[d['row'] for d in v]}, not one a prompt position nor the last one's")
+        site = _sites(order)
+        sites = set(site.values())
         self.decode = []
         for s in range(1, len(steps)):
             by: dict[tuple[str, tuple[str, ...]], Mapping[str, Any]] = {}
             for d in steps[s]:
                 if by.setdefault(_op(d), d) is not d:
                     raise ValueError(f"step {s}: op {_op(d)} served at two rows")
-            if missing := [o for o in order if o not in by]:
+            at = {v: by[o] for o, v in _sites(list(by)).items()}
+            if missing := [o for o in order if site[o] not in at]:
                 raise ValueError(f"step {s}: none of the prefill's op {missing[0]} ({len(missing)} ops)")
-            if extra := [o for o in by if o not in ops]:
+            if extra := [_op(d) for v, d in at.items() if v not in sites]:
                 raise ValueError(f"step {s}: op {extra[0]}, which the prefill never computes ({len(extra)} ops)")
-            self.decode.append([by[o] for o in order])
+            self.decode.append([at[site[o]] for o in order])
 
     @classmethod
     def of_record(cls, pi: Any, store: Any, rid: str, arrive: int) -> Served:
@@ -327,8 +348,9 @@ class Served:
 class Rows:
     """Every unit's output rows of ``lowered``'s circuit (module docstring) as u16 words by template and output, with each
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
-    registered values by parameter (`weight_values` and `slot_rows_value`), of which an embedding read opens its table's
-    (its ``rows``, ``salts`` and ``path``). Refused unless every unit's every row is filled once."""
+    registered values by parameter (`window_weights.weight_values` with their rows kept, and `slot_rows_value`), of which
+    an embedding read opens its table's (its ``rows``, ``salts`` and ``path``). Refused unless every unit's every row is
+    filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
         if len(slots) != len(lowered.programs):
@@ -486,36 +508,16 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def weight_values(circuit: IF.Circuit, program: str, fields: Callable[[str], np.ndarray], key: bytes,
-                  nonce: int = 0) -> dict[str, G.Registered]:
-    """Every weight parameter ``circuit`` reads registered, committed once before a period's first window's coins and held
-    across its windows: a weight's parameter (`window_builder.weight_param`) its words in rows of the reading port's
-    (``row/v2``), a table's (`window_builder.table_param`) its rows (``row-seg``), each under the committer's secret
-    ``key`` (`pouw.h1.registered.commit`), the i-th parameter in name order at salt nonce ``nonce + i``, so the verifier
-    learns only each weight's size and hiding root. ``fields(label)``: a weight's elements in their unsigned width."""
-    out = {}
-    params = circuit.registered.params if circuit.registered else {}
-    for i, name in enumerate(sorted(n for n in params if n != SLOT_ROWS)):
-        body = name[len(WEIGHTS) + 1:] if name.startswith(f"{WEIGHTS}/") else ""
-        label, _, words = body.removesuffix("/table").rpartition("@")
-        table = body.endswith("/table")
-        if not words.isdigit() or name != (table_param if table else weight_param)(label, int(words)):
-            raise ValueError(f"{name}: no weight's registered parameter nor the slot rows")
-        w = np.ascontiguousarray(fields(label)).view("<u2")
-        if w.size != params[name]:
-            raise ValueError(f"{name}: weight {label} of {w.size} words, its parameter's {params[name]}")
-        out[name] = H1R.commit(program, name, w.reshape(-1, int(words)), key, nonce + i, keep_rows=True,
-                               schema=G.SCHEMA_SEG if table else G.SCHEMA_V2)
-    return out
-
-
-def slot_rows_value(program: str, slot_rows: Sequence[Sequence[int]], key: bytes, nonce: int, *,
+def slot_rows_value(program: str, slot_rows: Sequence[Sequence[int]], key: bytes, index: int, *,
                     window: str) -> G.Registered:
     """`SLOT_ROWS`: the slots' rows (``row/v2``), a per-window value under the window's root ``window``, committed under
-    the committer's secret ``key`` at salt nonce ``nonce``, which no other value under ``key`` takes."""
-    return H1R.commit(program, SLOT_ROWS, np.concatenate([_i32(r) for r in slot_rows]), key, nonce, keep_rows=True,
-                      window=window)
+    the committer's secret ``key`` at salt nonce `SLOT_NONCE` plus the window's ``index``, which no other value under
+    ``key`` takes."""
+    if not 0 <= index < 1 << 32:
+        raise ValueError(f"window {index}: a window's index is a u32")
+    return H1R.commit(program, SLOT_ROWS, np.concatenate([_i32(r) for r in slot_rows]), key, SLOT_NONCE + index,
+                      keep_rows=True, window=window)
 
 
-__all__ = ["COMPUTED", "EVALUATED", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "slot_rows_value",
-           "weight_values"]
+__all__ = ["COMPUTED", "EVALUATED", "Rows", "SERVED", "SLOT_NONCE", "SOURCES", "Served", "Slot", "positions",
+           "slot_rows_value"]

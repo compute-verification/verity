@@ -5,8 +5,6 @@ attention), with random weights registered under a committer's key.
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
@@ -16,6 +14,7 @@ from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
+from verity_vllm.program.predict import window_weights as WW
 
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
@@ -33,8 +32,8 @@ SLOTS = ([1, 4, 17, 3, 250, 9], [1, 3, 5, 77, 42, 0])
 PRUNED = 3
 EMBED = "model.embed_tokens.weight"
 TABLE = WB.table_param(EMBED, 64)
-#: the committer's secret key, and the slot rows' salt nonce past every weight parameter's
-KEY, SLOT_NONCE = bytes(range(32)), 1 << 20
+#: the committer's secret key
+KEY = bytes(range(32))
 
 
 def _bf16(x) -> np.ndarray:
@@ -60,16 +59,21 @@ def _weights(fn) -> dict[str, np.ndarray]:
     return out
 
 
+def _registered():
+    """TINY at its exact-int8 checkpoint on the H200."""
+    phi = S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": {**S.TINY, "quantization_config": dict(INT8_EXACT_QUANT)}},
+                target={**H200, "int8_exact": "linears"})
+    return S.Registered.of(phi, default_seed=7)
+
+
 @pytest.fixture(scope="module")
 def window():
     """The class circuit lowered, its weights, its registered values under `KEY` (each weight's parameter and the slot
     rows, as `Rows` and `Window` take them) and each slot's `Slot`."""
-    phi = S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": {**S.TINY, "quantization_config": dict(INT8_EXACT_QUANT)}},
-                target={**H200, "int8_exact": "linears"})
-    low = WC.lower(S.Registered.of(phi, default_seed=7), CLASS, None, GRAIN)
+    low = WC.lower(_registered(), CLASS, None, GRAIN)
     fields = _weights(low.fn)
-    values = {**WR.weight_values(low.circuit, PROGRAM, fields.__getitem__, KEY),
-              WC.SLOT_ROWS: WR.slot_rows_value(PROGRAM, SLOTS, KEY, SLOT_NONCE, window=RUN)}
+    values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True),
+              WC.SLOT_ROWS: WR.slot_rows_value(PROGRAM, SLOTS, KEY, 0, window=RUN)}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
@@ -274,31 +278,63 @@ def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
     assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
 
 
+def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(window):
+    """A call boundary's op path names its fx node, which counts on over the request's steps (the served int8 linears'
+    ``…/row_quant`` to ``…/row_quant_63`` at the prefill, ``…/row_quant_64`` on at the first decode step): a decode step's
+    op is the prefill's at its site, its op path less the fx node, by its ordinal among the step's ops there. One missing
+    there is refused."""
+    low, _f, _t, weights, slots = window
+    s0, K = slots[0], 32
+    rows, store = _served(low, s0, T=1)
+    by: dict[tuple, list[int]] = {}
+    for d in rows:
+        by.setdefault(tuple(m[0] for m in d["members"]), []).append(int(d["op_path"][2:]))
+    a, b = next(sorted(set(v))[:2] for v in by.values() if len(set(v)) > 1)
+
+    def spell(op: str, step: int) -> str:
+        k = int(op[2:])
+        n = 2 * step + (k == b)
+        return op if k not in (a, b) else "m/row_quant" + (f"_{n}" if n else "")
+
+    rows = [{**d, "op_path": spell(d["op_path"], d["step"])} for d in rows]
+    store = {(st, spell(op, st), m): v for (st, op, m), v in store.items()}
+    served = WR.Served(rows, _read(store))
+    assert [served.prefill[k][0]["op_path"] for k in (a, b)] == ["m/row_quant", "m/row_quant_1"]
+    assert [served.decode[0][k]["op_path"] for k in (a, b)] == ["m/row_quant_2", "m/row_quant_3"]
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
+    assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
+    with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('m/row_quant_1', .*\) \(1 ops\)"):
+        WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], _read(store))
+
+
 def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
     (``row-seg``), and the slot rows the slots' rows of i32s under the window's root, each committed under the committer's
-    key at a nonce of its own: the table and a weight are core's commits of those rows under `audit.hm96_salt`'s salts,
-    and the entries name nothing but each value's size, domain and hiding root. Another parameter is refused."""
+    key at a nonce of its own: the table and a weight are core's commits of those rows under the weights record's program
+    and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the registration's roots, `weights_registration`),
+    the slot rows at `SLOT_NONCE` plus the window's index, and the entries name nothing but each value's size, domain and
+    hiding root. Another parameter is refused."""
     low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
-    names = sorted(n for n in got if n != WC.SLOT_ROWS)
+    nonces, program = WW.weight_nonces(got), WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
+    assert set(nonces) == set(got) - {WC.SLOT_ROWS} and {v.program for p, v in got.items() if p in nonces} == {program}
     for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),
                                (WB.weight_param(EMBED, 512), fields[EMBED].reshape(-1, 512), CR.SCHEMA_V2)):
-        salts = [hm96_salt(KEY, names.index(name), j) for j in range(len(rows))]
-        ref = CR.Registered.commit(PROGRAM, name, rows.tolist(), salts, schema=schema)
+        salts = [hm96_salt(KEY, nonces[name], j) for j in range(len(rows))]
+        ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
     s = got[WC.SLOT_ROWS]
     assert (s.leaves, s.words, s.window, s.schema) == (2, 12, RUN, CR.SCHEMA_V2) and _i32(s.rows[:][1]) == SLOTS[1]
+    assert bytes(s.salts[0]) == hm96_salt(KEY, WR.SLOT_NONCE, 0) and WR.SLOT_NONCE > max(nonces.values())
     assert len({bytes(v.salts[0]) for v in got.values()}) == len(got)
     s8 = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 512)].rows[:]
     assert s8.shape == (8, 512) and np.array_equal(s8.reshape(-1).view(np.uint8), fields["model.layers.0.mlp.down_proj.weight"])
-    odd = SimpleNamespace(registered=SimpleNamespace(params={"weights/x@3/rows": 3}))
-    with pytest.raises(ValueError, match="no weight's registered parameter nor the slot rows"):
-        WR.weight_values(odd, PROGRAM, fields.__getitem__, KEY)
+    with pytest.raises(ValueError, match="'weights/x@3/rows' is no weight parameter"):
+        WW.weight_value(program, "weights/x@3/rows", np.zeros(3, np.uint16), KEY, 0)
 
 
 @pytest.mark.slow
