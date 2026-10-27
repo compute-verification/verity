@@ -15,7 +15,9 @@ uses' runs in turn, each release its family and root (`Challenger.runs_blocks`).
 challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's (`OneStageZk.Session0`), the
 order and groups it asks of them, every coin a record holds the challenger's, and every later use a later session's
 family (`OneStageZk.sessionUses_label`), which no family of session 0's is (`Hello.slotStream_inj`). Each F128 a
-record holds reads as its coin's 16 bytes, two big-endian words (`OneStageZk.f128_of_record`). A session's first use
+record holds reads as its coin's 16 bytes, two big-endian words (`OneStageZk.f128_of_record`), so as the coin's F128
+that `coinF128s` reads from its bits, where each byte holds its eight bits as the device writes them
+(`f128OfHex_coin`, `bytesOfBits_get`). A session's first use
 is its link points, released after the SHA-512 of its record's `root_b_sha512` digests in key order
 (`OneStageZk.sessionUses_points`, `OneStageZk.pointsAfter_ok`).
 -/
@@ -759,5 +761,133 @@ theorem served_req (D : PlayDevice) (rs : List Release) :
     ∀ e ∈ D.served rs, PlayDevice.requestOf e.2.2.2.answers = some (e.1, e.2.2.1) := by
   rw [PlayDevice.served_eq]
   exact Served.foldl_req Release.answers PlayDevice.requestOf D.serveCond rs [] (by simp)
+
+
+/-! ## The record's coins as the challenger's
+
+`coinF128s` reads a coin's bits as F128s and the record reads each F128 from the hex of 16 coin bytes
+(`OneStageZk.f128_of_record`). They agree where each coin byte holds its eight bits, bit `i` of weight `2 ^ i`, as the
+device's `PlayDevice.bytesOfBits` writes them (`bytesOfBits_get`): `f128OfHex_coin`. -/
+
+open SampledProofs.OneStageZk (beWord beNat beWord_toNat)
+
+theorem finTwoEquiv_symm_val (b : Bool) : (finTwoEquiv.symm b).val = if b then 1 else 0 := by
+  cases b <;> rfl
+
+theorem coinByte_val (b : Fin 8 → Bool) : (coinByte b).val = ∑ i : Fin 8, if b i then 2 ^ i.val else 0 := by
+  simp only [coinByte, Equiv.trans_apply, Equiv.arrowCongr_apply, Equiv.coe_refl, Equiv.refl_symm,
+    Function.comp_apply, id, finCongr_apply, Fin.val_cast, finFunctionFinEquiv_apply]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [finTwoEquiv_symm_val]; split <;> simp
+
+theorem coinWord_val (w : Fin 8 → Fin 256) : (coinWord w).val = ∑ i : Fin 8, (w (Fin.rev i)).val * 256 ^ i.val := by
+  simp only [coinWord, Equiv.trans_apply, Equiv.arrowCongr_apply, Equiv.coe_refl, Fin.revPerm_symm,
+    Function.comp_apply, id, finCongr_apply, Fin.val_cast, finFunctionFinEquiv_apply, Fin.revPerm_apply]
+
+theorem beNat_eight (b : ByteArray) (o : ℕ) :
+    beNat b o (List.range' 0 8) 0 = ∑ i : Fin 8, (b.get! (o + (Fin.rev i).val)).toNat * 256 ^ i.val := by
+  simp only [beNat, show List.range' 0 8 = [0, 1, 2, 3, 4, 5, 6, 7] from rfl, List.foldl_cons, List.foldl_nil,
+    Fin.sum_univ_eight, Fin.val_rev]
+  norm_num
+  ring
+
+/-- **An F128 coin is its bytes' two big-endian words**: where byte `j` of `B` holds bits `8 j` to `8 j + 7` of the
+coin, bit `i` of weight `2 ^ i`, the coin reads as `B`'s F128 (`hi` its first eight bytes, `lo` the next eight), as
+`Flock.f128OfHex` reads the record's hex of `B`. -/
+theorem coinF128_bytes (f : ℕ → Bool) (B : ByteArray)
+    (hB : ∀ j < 16, (B.get! j).toNat = ∑ i : Fin 8, if f (8 * j + i.val) then 2 ^ i.val else 0) :
+    coinF128 (fun t => f t.val) = FlockLevel3.GF128.of ⟨beWord B 8, beWord B 0⟩ := by
+  show _ = FlockLevel3.f128Equiv.symm ((beWord B 8).toFin, (beWord B 0).toFin)
+  simp only [coinF128, Equiv.trans_apply]
+  refine congrArg FlockLevel3.f128Equiv.symm ?_
+  simp only [Equiv.arrowCongr_apply, Function.comp_apply, Equiv.curry_apply,
+    piFinTwoEquiv_apply, Equiv.prodComm_apply, Prod.swap_prod_mk]
+  refine Prod.ext (Fin.ext ?_) (Fin.ext ?_) <;>
+    simp only [coinWord_val, show ∀ w : UInt64, (w.toFin : ℕ) = w.toNat from fun _ => rfl, beWord_toNat,
+      beNat_eight] <;>
+    refine Finset.sum_congr rfl fun i _ => ?_ <;> congr 1
+  all_goals
+    simp only [Function.curry_apply, coinBytes, Equiv.trans_apply, Equiv.arrowCongr_apply, Equiv.symm_trans_apply,
+      Equiv.symm_symm, Equiv.refl_symm, Equiv.coe_refl, Function.comp_apply, id, Equiv.curry_apply, coinByte_val,
+      finCongr_symm, finCongr_apply]
+    rw [hB _ (by omega)]
+    refine Finset.sum_congr rfl fun x _ => ?_
+    simp only [Fin.val_cast, finProdFinEquiv_apply_val, Fin.val_one, Fin.val_zero]
+    ring_nf
+
+theorem byteArray_get! (c : ByteArray) (n : ℕ) : c.get! n = c.data[n]! := by cases c; rfl
+
+theorem get!_extract (b : ByteArray) {s e j : ℕ} (h : s + j < e) (he : e ≤ b.size) :
+    (b.extract s e).get! j = b.get! (s + j) := by
+  rw [byteArray_get!, byteArray_get!, ByteArray.data_extract,
+    getElem!_pos _ _ (by rw [Array.size_extract]; simp only [ByteArray.size] at he; omega),
+    getElem!_pos _ _ (by simp only [ByteArray.size] at he; omega), Array.getElem_extract]
+
+theorem foldl_bits (p : ℕ → Bool) : ∀ (l : List ℕ) (acc : ℕ),
+    l.foldl (fun (acc : ℕ) i => if p i then acc + 2 ^ i else acc) acc = acc + (l.map fun i => if p i then 2 ^ i else 0).sum
+  | [], acc => by simp
+  | i :: l, acc => by
+    rw [List.foldl_cons, foldl_bits p l, List.map_cons, List.sum_cons]
+    split <;> omega
+
+theorem bitsByte_lt (p : Fin 8 → Bool) : (∑ i : Fin 8, if p i then 2 ^ i.val else 0) < 256 := by
+  have h := fun i : Fin 8 => (show (if p i then 2 ^ i.val else 0) ≤ 2 ^ i.val by split <;> simp)
+  simp only [Fin.sum_univ_eight]
+  have := h 0; have := h 1; have := h 2; have := h 3; have := h 4; have := h 5; have := h 6; have := h 7
+  simp only [Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at *
+  norm_num at *
+  omega
+
+/-- **The device's coin bytes**: byte `j` of a release's bytes holds its bits `8 j` to `8 j + 7`, bit `i` of weight
+`2 ^ i`. -/
+theorem bytesOfBits_get (l : List Bool) {j : ℕ} (hj : j < l.length / 8) :
+    ((PlayDevice.bytesOfBits l).get! j).toNat = ∑ i : Fin 8, if l.getD (8 * j + i.val) false then 2 ^ i.val else 0 := by
+  rw [byteArray_get!]
+  show (((List.map _ (List.range _)).toArray : Array UInt8)[j]!).toNat = _
+  rw [getElem!_pos _ _ (by simp; omega), List.getElem_toArray, List.getElem_map, List.getElem_range, foldl_bits,
+    Nat.zero_add]
+  have e : ((List.range 8).map fun i => if l.getD (8 * j + i) false then 2 ^ i else 0).sum =
+      ∑ i : Fin 8, if l.getD (8 * j + i.val) false then 2 ^ i.val else 0 := by
+    simp only [show List.range 8 = [0, 1, 2, 3, 4, 5, 6, 7] from rfl, List.map_cons, List.map_nil, List.sum_cons,
+      List.sum_nil, Fin.sum_univ_eight, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod]
+    ring
+  rw [e, Nat.toUInt8, UInt8.toNat_ofNat', Nat.mod_eq_of_lt (bitsByte_lt _)]
+
+theorem coinF128s_apply (k : ℕ) (f : ℕ → Bool) (i : Fin k) :
+    coinF128s k (fun t => f t.val) i = coinF128 (fun t => f (128 * i.val + t.val)) := by
+  simp only [coinF128s, Equiv.trans_apply, Equiv.arrowCongr_apply, Equiv.refl_symm, Equiv.coe_refl,
+    Function.comp_apply, id, Equiv.curry_apply]
+  refine congrArg (⇑coinF128) (funext fun t => ?_)
+  simp only [Function.curry_apply, Equiv.arrowCongr_apply, Equiv.symm_symm, Equiv.coe_refl, Function.comp_apply, id,
+    finProdFinEquiv_apply_val]
+  ring_nf
+
+/-- **`k` F128 coins are their bytes' words**: where byte `j` of `ξ` holds the coin's bits `8 j` to `8 j + 7`, F128 `i`
+reads as bytes `16 i` to `16 i + 15` of `ξ`, as `Flock.f128OfHex` reads their hex. -/
+theorem coinF128s_bytes (k : ℕ) (f : ℕ → Bool) (ξ : ByteArray) (hsz : 16 * k ≤ ξ.size)
+    (hξ : ∀ j < 16 * k, (ξ.get! j).toNat = ∑ s : Fin 8, if f (8 * j + s.val) then 2 ^ s.val else 0) (i : Fin k) :
+    coinF128s k (fun t => f t.val) i = FlockLevel3.GF128.of
+      ⟨SampledProofs.OneStageZk.beWord (ξ.extract (16 * i.val) (16 * i.val + 16)) 8,
+        SampledProofs.OneStageZk.beWord (ξ.extract (16 * i.val) (16 * i.val + 16)) 0⟩ := by
+  rw [coinF128s_apply]
+  refine coinF128_bytes (fun t => f (128 * i.val + t)) _ fun j hj => ?_
+  have hi := i.isLt
+  rw [get!_extract _ (by omega) (by omega), hξ _ (by omega)]
+  refine Finset.sum_congr rfl fun s _ => ?_
+  ring_nf
+
+/-- **A record's coins are the challenger's**: where `coinsMismatch` finds no reason for the record's F128s `hs` against
+the coin bytes `ξ`, whose byte `j` holds the coin's bits `8 j` to `8 j + 7`, the record's `i`th F128 reads as the
+coin's `i`th. -/
+theorem f128OfHex_coin {hs : Array String} {ξ : ByteArray} (h : SampledProofs.OneStageZk.coinsMismatch hs ξ = none)
+    (k : ℕ) (f : ℕ → Bool) (hsz : 16 * k ≤ ξ.size)
+    (hξ : ∀ j < 16 * k, (ξ.get! j).toNat = ∑ s : Fin 8, if f (8 * j + s.val) then 2 ^ s.val else 0) (i : Fin k)
+    (hi : i.val < hs.size) :
+    Flock.f128OfHex hs[i.val] = .ok (FlockLevel3.GF128.val (coinF128s k (fun t => f t.val) i)) := by
+  rw [coinF128s_bytes k f ξ hsz hξ i, SampledProofs.OneStageZk.f128_of_record h i hi (by have := i.isLt; omega)]
+  rfl
+
+theorem bytesOfBits_size (l : List Bool) : (PlayDevice.bytesOfBits l).size = l.length / 8 := by
+  simp [PlayDevice.bytesOfBits, ByteArray.size]
 
 end Verity
