@@ -3,7 +3,8 @@
 One directory per example (Daniel, 25 Oct). An example holds what is its own: the workload it serves, its placement (where
 each party runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the
 integration's (`integrations/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from
-`examples/` (`tests/test_boundaries.py`), and `verity example NAME` runs `examples/<NAME>/`'s `run.py` or `run.sh`.
+`examples/` (`tests/test_boundaries.py`), and `verity example NAME` runs `examples/<NAME>/config.toml` (`verity run`), else
+its `run.py` or `run.sh`.
 Each example stands on two independent axes of doneness (Daniel, 26 Oct): how far it runs, and how far its guarantee is
 proved. A milestone is a set of (example, run, proof) triples, which top keeps. Its `example.toml` says where it stands
 (`vllm/example.toml` is one): its `protocol` (a package under `verity/core/protocols/`, the composite `onsite` or `remote`,

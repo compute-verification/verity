@@ -59,7 +59,8 @@ ALLOWED = {
     "core.claims": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
-    # it, and signs and verifies only through keys its caller hands it, so neither gains an ml edge.
+    # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
+    # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
