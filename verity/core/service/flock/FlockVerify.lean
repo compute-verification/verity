@@ -728,7 +728,9 @@ with `--rec-part J` its part (`rec_part`) and with `--rec-rows F` the SHA-512 of
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
-than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
+than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`), and one whose registered
+reads exceed the recursion's call bound: more than 4096 ports, a tree of more than 64 levels or a table of more than 65536
+instances, or whose inner shape's V* list holds more than 4096 statements (`RecBudget`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
@@ -862,6 +864,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         Registered.checkProgram program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
+        RecBudget.regs recInner registered
+        RecBudget.statements recInner
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
         if complete then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c (registered.getD #[])
@@ -870,6 +874,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
         RecSetup.oneFull recInner r.2
+        RecBudget.table recInner r.2
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits)
           (RecSetup.c3 recInner recCommits))
@@ -1040,10 +1045,13 @@ def statementCmd (args : List String) : IO UInt32 := do
   let c3 := RecSetup.c3 recInner recCommits
   match (do
       RecSetup.checkInner recInner recCoins recBound
+      RecBudget.regs recInner registered
+      RecBudget.statements recInner
       let st ← (if templated then buildStmtTmpl tags circuitB pubB compB coins tables partition program registered
           publicInputs (identifier.map Prod.snd)
         else buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
           (identifier.map Prod.snd))
+      RecBudget.table recInner #[st]
       if complete then Registered.checkComplete st.c (registered.getD #[])
       KnownRead.check st.c known
       if recInner.isSome then
