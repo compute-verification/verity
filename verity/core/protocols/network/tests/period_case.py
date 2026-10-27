@@ -1072,6 +1072,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         partition = OS.P.digest(part)
         program, run = setup.sha512, r.choice(["r-test", "n2/r1"])
     t = r.randrange(1, n_windows) if m == "clock-reused" else r.randrange(n_windows)
+    if rows:  # every rows-form link-window is refused at the scan's answer, so only the first's finding is the period's
+        t = 0
     a = r.randrange(max(n_audits, 1))
     signed = iter(range(1 << 30))
 
