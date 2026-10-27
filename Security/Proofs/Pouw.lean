@@ -82,7 +82,9 @@ import Proofs.Pouw.PearlC
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.AtomErr
 import Proofs.Pouw.PearlC.Cap
+import Proofs.Pouw.PearlC.CapLoopGamma
 import Proofs.Pouw.PearlC.ChainCapKernelGamma
+import Proofs.Pouw.PearlC.ChainCapLoopGamma
 import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Proofs.Pouw.PearlC.Completeness
 import Proofs.Pouw.PearlC.DeadlineWitness
@@ -95,6 +97,7 @@ import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Proofs.Pouw.PearlC.DeviceSm120CapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
+import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
 import Proofs.Pouw.PearlC.EncChecks
 import Proofs.Pouw.PearlC.FlockTile
 import Proofs.Pouw.PearlC.Forming
@@ -143,6 +146,7 @@ import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
+import Proofs.Pouw.PearlC.UOnlyLoopGamma
 import Proofs.Pouw.PearlC.W1BudgetAbort
 import Proofs.Pouw.PearlC.W1Checks
 import Proofs.Pouw.PearlC.W1Priced
