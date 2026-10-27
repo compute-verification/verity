@@ -9,9 +9,12 @@ returning the actions it takes:
   `clock`, `coins`);
 - `Timer(at)`: wake me when my clock reads `at` (its clock source answers with `ClockTimer`);
 - `Record(entry, kind)`: an entry of one of the public kinds for the record, or `private`, kept in the transcript only;
-- `Finish(outcome, refused)`: the party's conclusion, or its refusal by name; it receives nothing after.
+- `Finish(outcome, refused, kind)`: the party's conclusion, or its refusal by name; it receives nothing after. A
+  refusal's name is public; the outcome is of `kind`.
 
-A party does no I/O and reads no ambient clock or randomness: its coins and clock readings are messages from its sources,
+Besides its peers' messages and its sources', the runtime tells a party that a channel closed (`Closed`) or that a frame
+on it was refused (`Refused {name, detail}`, after which the party is finished refused by that name unless it finishes
+first). A party does no I/O and reads no ambient clock or randomness: its coins and clock readings are messages from its sources,
 so its transcript (`transcript.Transcript`) replays it exactly, and the same code runs live, simulated or replayed. What
 the runtime gives it in `Identity` is its own device: its name, the configuration's hash, its key and its state directory.
 """
