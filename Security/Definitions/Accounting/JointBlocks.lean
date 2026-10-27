@@ -14,7 +14,8 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
   block `b` can read back from what the wipe leaves beyond the committed carried state, are functions of the coins. Its
   survivor bound at a fraction `f` (`BlockWipe.Survives`), which no proved guarantee gives since the secure-erasure
   model behind it was refuted and deleted: at most `f · fill + 2λ` bits (`λ = 128`) survive, plus the state the fill
-  leaves out (`BlockWipe.unfilled`, the on-chip state and the device memory the fill doesn't reach).
+  leaves out (`BlockWipe.unfilled`, the on-chip
+  state and the device memory the fill doesn't reach).
 * **The memory term of block `b`** (`BlocksRun.MemoryTerm`), PoUS over the weights alone at a share of `0.07`, as
   ruled: at each of the block's PoUS challenge times, the block's undeclared memory, the bits of its `U`
   bits of weights that the capacity account doesn't hold (`BlocksRun.undeclared`), is at most `0.07 · U + S_chip + c`,
