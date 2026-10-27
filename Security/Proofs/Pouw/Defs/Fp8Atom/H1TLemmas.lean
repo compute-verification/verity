@@ -2,7 +2,7 @@ import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.Floor.Ring
 import Mathlib.Data.Fintype.Pi
 import Definitions.Pouw.Fp8Atom.H1T
-import Definitions.Pouw.Fp8Atom.H1TVec
+import Proofs.Pouw.Defs.Fp8Atom.H1TVec
 
 /-!
 # H-1T's M3 statements (trusted)

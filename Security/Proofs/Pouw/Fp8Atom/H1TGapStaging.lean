@@ -1,4 +1,4 @@
-import Definitions.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Defs.Fp8Atom.H1TLemmas
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!

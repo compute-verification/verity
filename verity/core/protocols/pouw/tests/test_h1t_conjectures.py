@@ -295,7 +295,7 @@ ROW = re.compile(r"⟨(\d+), (\d+), (0x[0-9A-F]+), (0x[0-9A-F]+), \[([^\]]*)\], 
 def test_the_model_is_the_leans_word() -> None:
     """`row_words` gives every I and R word of the Lean's `rowVectors` (`H1TVectors.lean`), which the kernel checks
     against `freshWord` and `rnAdd` (`H1TChecks`): the words these tests sweep are `Unit.word`'s."""
-    text = (LEAN / "Definitions/Pouw/Fp8Atom/H1TVectors.lean").read_text()
+    text = (LEAN / "Proofs/Pouw/Defs/Fp8Atom/H1TVectors.lean").read_text()
     rows = ROW.findall(text)
     assert len(rows) >= 30
     nums = lambda s: [int(w, 16) for w in s.split(", ") if w]

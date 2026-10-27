@@ -1,6 +1,6 @@
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
 import Proofs.Pouw.Fp8Atom.H1TGammaProofs
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
+import Proofs.Pouw.Defs.Assumptions.Fp8Atom.H1TRunningAssumptions
 
 /-!
 # `DistinctLiveH1T` from the one-flip clauses and `H1TRunningWords`

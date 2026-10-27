@@ -1,4 +1,4 @@
-import Definitions.Pouw.Fp8Atom.H1TCrossLate
+import Proofs.Pouw.Defs.Fp8Atom.H1TCrossLate
 import Proofs.Pouw.Fp8Atom.H1TGapStaging
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs

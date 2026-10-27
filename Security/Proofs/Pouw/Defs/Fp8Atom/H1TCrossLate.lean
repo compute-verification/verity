@@ -1,4 +1,4 @@
-import Definitions.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Defs.Fp8Atom.H1TLemmas
 
 /-!
 # H-1T: the cross-column late pairs in the exact-512 regime (statements)

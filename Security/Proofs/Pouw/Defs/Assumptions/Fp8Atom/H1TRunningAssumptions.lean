@@ -1,4 +1,4 @@
-import Definitions.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Defs.Fp8Atom.H1TLemmas
 
 /-!
 # H-1T's running words (a named assumption, M4b and M4c)

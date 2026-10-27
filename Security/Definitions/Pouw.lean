@@ -14,17 +14,6 @@ import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3
 import Definitions.Pouw.Fp8Atom.Fp32
 import Definitions.Pouw.Fp8Atom.H1T
-import Definitions.Pouw.Fp8Atom.H1TCrossLate
-import Definitions.Pouw.Fp8Atom.H1TLemmas
-import Definitions.Pouw.Fp8Atom.H1TPinned
-import Definitions.Pouw.Fp8Atom.H1TVec
-import Definitions.Pouw.Fp8Atom.H1TVectors
-import Definitions.Pouw.Fp8Atom.Pinned
-import Definitions.Pouw.Fp8Atom.Vectors
-import Definitions.Pouw.Fp8Atom.Vectors.Ada
-import Definitions.Pouw.Fp8Atom.Vectors.Add
-import Definitions.Pouw.Fp8Atom.Vectors.C00
-import Definitions.Pouw.Fp8Atom.Vectors.C01
 import Definitions.Pouw.FpG1
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
@@ -54,12 +43,10 @@ import Definitions.Pouw.PearlC.DeviceKernelWref
 import Definitions.Pouw.PearlC.DevicePrices
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Pouw.PearlC.EncVectors
 import Definitions.Pouw.PearlC.FormingPDefs
 import Definitions.Pouw.PearlC.Fp4
 import Definitions.Pouw.PearlC.Fp4Chain
 import Definitions.Pouw.PearlC.Fp4Skip
-import Definitions.Pouw.PearlC.Fp4Vectors
 import Definitions.Pouw.PearlC.Game
 import Definitions.Pouw.PearlC.Hidden
 import Definitions.Pouw.PearlC.HiddenTileGame
@@ -67,8 +54,6 @@ import Definitions.Pouw.PearlC.Instance
 import Definitions.Pouw.PearlC.NoiseSha512
 import Definitions.Pouw.PearlC.PeelExact
 import Definitions.Pouw.PearlC.PeelExactP
-import Definitions.Pouw.PearlC.PeelExactVectors
-import Definitions.Pouw.PearlC.PeelFp4Vectors
 import Definitions.Pouw.PearlC.Row4Circuit
 import Definitions.Pouw.PearlC.RowCircuit
 import Definitions.Pouw.PearlC.RowPrimVectors
@@ -79,7 +64,6 @@ import Definitions.Pouw.PearlC.Sha512
 import Definitions.Pouw.PearlC.Skip
 import Definitions.Pouw.PearlC.SkipP
 import Definitions.Pouw.PearlC.Sm120
-import Definitions.Pouw.PearlC.Sm120Vectors
 import Definitions.Pouw.PearlC.Tile
 import Definitions.Pouw.PearlC.Tile4Circuit
 import Definitions.Pouw.PearlC.TileCheck

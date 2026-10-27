@@ -3,7 +3,7 @@ import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
-import Definitions.Pouw.Fp8Atom.Pinned
+import Proofs.Pouw.Defs.Fp8Atom.Pinned
 import Proofs.Pouw.Fp8Atom.Checks.Add
 
 /-!

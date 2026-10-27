@@ -1,7 +1,7 @@
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Fintype.Prod
 import Mathlib.Data.Fintype.Sum
-import Definitions.Pouw.Fp8Atom.H1TVectors
+import Proofs.Pouw.Defs.Fp8Atom.H1TVectors
 
 /-!
 # H-1T's pinned statements (trusted)

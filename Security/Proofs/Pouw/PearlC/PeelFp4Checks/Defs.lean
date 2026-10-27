@@ -1,4 +1,4 @@
-import Definitions.Pouw.PearlC.PeelFp4Vectors
+import Proofs.Pouw.Defs.PearlC.PeelFp4Vectors
 import Proofs.Pouw.PearlC.PeelFp4Proofs
 
 /-! # `PeelFp4Checks`' rows, operands, bases and noise lines, which its parts read -/

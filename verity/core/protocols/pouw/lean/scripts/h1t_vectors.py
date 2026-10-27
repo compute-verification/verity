@@ -12,13 +12,13 @@ anything is written, three other computations must agree with it:
   intermediate is inexact, the simulation's codes are compared and the cases counted;
 * `HOPPER_E4M3_K32.step` on every atom.
 
-Kernel-pinned, as Lean data (`Definitions/Pouw/Fp8Atom/H1TVectors.lean`, checks in
+Kernel-pinned, as Lean data (`Proofs/Pouw/Defs/Fp8Atom/H1TVectors.lean`, checks in
 `Proofs/Pouw/Fp8Atom/H1TChecks.lean`):
 * `formTable`: `formReal` on every finite code, both signs and every `F` in {1/4, 1/2, 1, 2, 4} (2,540 lanes);
 * `tagTable`: every tag value, its code and its negation's (80);
 * `saltVectors`: raw XOF words and the fields `extract` reads;
 * `rowVectors`: full rows (T <= 3) through the forming, the atoms and the chain, every I and R word of one column.
-`Definitions/Pouw/Fp8Atom/H1TCoverage.json` records the families and the cross-checks.
+`Proofs/Pouw/Defs/Fp8Atom/H1TCoverage.json` records the families and the cross-checks.
 """
 from __future__ import annotations
 
@@ -385,7 +385,7 @@ def main() -> None:
                          "atoms": sum(2 * r[1] for r in rows), "kernel_f16_slices_agree": kernel_rows,
                          "slices": sum(r[1] for r in rows)}
 
-    body = ["import Definitions.Pouw.Fp8Atom.H1TVec", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Vectors", ""]
+    body = ["import Proofs.Pouw.Defs.Fp8Atom.H1TVec", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Vectors", ""]
     names = {}
     for name, typ, items, doc in (
             ("form", "FormVec", [f"⟨{x}, {lean_bool(p)}, {fi}, {a}, {c}⟩" for x, p, fi, a, c in form],
@@ -411,9 +411,9 @@ def main() -> None:
         body.append(f"/-- {doc}, from `scripts/h1t_vectors.py` (seed {SEED}). -/\ndef {whole} : List {typ} :=\n  " +
                     " ++\n  ".join(f"Vectors.{n}" for n in names[name]) + "\n")
     body.append("end Pouw.Fp8Atom.H1T\n")
-    (out / "Definitions/Pouw/Fp8Atom/H1TVectors.lean").write_text("\n".join(body))
+    (out / "Proofs/Pouw/Defs/Fp8Atom/H1TVectors.lean").write_text("\n".join(body))
 
-    checks = ["import Definitions.Pouw.Fp8Atom.H1TVectors", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Checks", "",
+    checks = ["import Proofs.Pouw.Defs.Fp8Atom.H1TVectors", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Checks", "",
               "open Pouw.Fp8Atom.H1T", ""]
     for name, holds in (("form", "FormVec.holds"), ("tag", "TagVec.holds"), ("salt", "SaltVec.holds"),
                         ("row", "RowVec.holds")):
@@ -428,7 +428,7 @@ def main() -> None:
                       f"theorem {whole}_all : {whole}.all {holds} = true := by\n  simp only [{', '.join(lemmas)}]\n")
     checks.append("end Pouw.Fp8Atom.H1T.Checks\n")
     (out / "Proofs/Pouw/Fp8Atom/H1TChecks.lean").write_text("\n".join(checks))
-    (out / "Definitions/Pouw/Fp8Atom/H1TCoverage.json").write_text(json.dumps(cov, indent=1) + "\n")
+    (out / "Proofs/Pouw/Defs/Fp8Atom/H1TCoverage.json").write_text(json.dumps(cov, indent=1) + "\n")
     print(json.dumps(cov, indent=1))
 
 
