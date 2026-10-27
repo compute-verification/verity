@@ -7,7 +7,7 @@ and the SM's scalar issue slots (priced by q*, QSTAR). NOSUM is the claim that n
 outside the issue slots -- can make such a word more cheaply, so the ε_machine LP need not give the cheater a side route
 for the committed words themselves.
 
-The rule: replace the assumption by a measured cap or a mechanical check wherever the hardware allows. This
+Daniel, decision 75: replace the assumption by a measured cap or a mechanical check wherever the hardware allows. This
 script does both. For every non-issue unit it records (1) the arithmetic it can do, (2) whether that arithmetic can yield
 an exact fresh committed s32 sum-of-products (precision, range, rounding, freshness), and (3) its measured rate beside a
 saturated honest kernel (DATASHEET, note:20261017T0332Z-draft-eps1-datasheet; machine_model rows.csv). The checkable
