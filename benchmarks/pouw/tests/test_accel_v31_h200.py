@@ -70,8 +70,8 @@ def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, 
             "sm__inst_executed_pipe_lsu.avg.pct_of_peak_sustained_active"]
     rows = [["", "", "msecond", "cycle", "cycle", "%", "%", "%", "%"],
             ["0", "gen_kernel(signed char*, int, unsigned int, bool)", "1", "100", "100", "0", "50", "50", "10"],
-            ["1", "gemm_kernel<true, 2>(GArgs)", "2", "1,000", "1,000", "80", "5", "4", "2"],
-            ["2", "leaf_persist<V31Row>(Persist, int)", "1", "50", "100", "0", "90", "80", "20"],
+            ["1", "void gemm_kernel<true, 2>(GArgs)", "2", "1,000", "1,000", "80", "5", "4", "2"],
+            ["2", "void leaf_persist<V31Row>(Persist, int)", "1", "50", "100", "0", "90", "80", "20"],
             ["3", "fill_a_kernel(...)", "0.5", "100", "100", "0", "40", "40", "30"]]
     (tmp_path / "ncu-row16384-L4096-8B-o.raw.csv").write_text(
         "\n".join(",".join(f'"{c}"' for c in r) for r in [cols] + rows) + "\n")
@@ -82,3 +82,15 @@ def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, 
     out = capsys.readouterr().out
     assert ("| 8B-o | 4096 | row16384 | 2.500 | 2.000 | 1.250 | 64.0% | 30.0% | 0.0% | 11.6% | 36.0% | 2.000 | 1.000 | "
             "0.500 | 1.40 | - |") in out
+
+
+def test_pipe_kinds_read_ncus_demangled_names_and_cublaslts_gemm():
+    import h200_pipes
+
+    assert h200_pipes.kind("void gemm_kernel<false, 1>(GArgs)") == "gemm"
+    assert h200_pipes.kind("void cutlass::device_kernel<cutlass3x_sm90_tensorop_s64x256x32gemm_s8_s8_s32>(Params)") == "gemm"
+    assert h200_pipes.kind("sm90_xmma_gemm_s8s8_s32_tn_n_tilesize128x256x128_cublasLt") == "gemm"
+    assert h200_pipes.kind("void leaf_persist<LtRow>(Persist, int)") == "hash"
+    assert h200_pipes.kind("node_kernel(unsigned long*, int)") == "hash"
+    assert h200_pipes.kind("void gen_kernel<1>(signed char*)") is None
+    assert h200_pipes.kind("fill_a_kernel(signed char const*)") == "other"

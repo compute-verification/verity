@@ -34,11 +34,16 @@ def _num(s: str) -> float:
 
 
 def kind(name: str) -> str | None:
-    if any(name.startswith(x) for x in SKIP):
+    """ncu's demangled name ("void gemm_kernel<true, 2>(GArgs)"): our kernels by their base name; cuBLASLt's (V31_LTW)
+    by the gemm, xmma or cutlass in its name."""
+    base = re.split(r"[<(]", re.sub(r"^void\s+", "", name), maxsplit=1)[0].strip()
+    if base.startswith(SKIP):
         return None
-    if name.startswith("gemm_kernel"):
+    if base.startswith(HASH):
+        return "hash"
+    if base.startswith("gemm_kernel") or any(x in name.lower() for x in ("gemm", "xmma", "cutlass")):
         return "gemm"
-    return "hash" if any(name.startswith(x) for x in HASH) else "other"
+    return "other"
 
 
 def read_ncu(path: Path) -> list[dict]:
