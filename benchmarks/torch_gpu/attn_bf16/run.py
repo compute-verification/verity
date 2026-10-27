@@ -16,8 +16,8 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    their narrower stores.  The SLACK poisoned words around S and O must stay poison in every arm.  A control arm fills the
    buffers and launches nothing, and must be rejected.  The inputs must come back unchanged.  A FULL case
    (<case>.full.npz) makes its inputs with gen.py, checks them against the fixture's digests (exit 5 if the generator
-   disagrees), and compares each sequence's S and O digests: first over its first FULL_B sequences each (the skeleton's
-   M = 4,096 and the block's 16,384, cases <case>_m<B>: gen.py's words depend only on the flat index, so they are the
+   disagrees), and compares each sequence's S and O digests: first over its first FULL_B sequences each (M = 4,096
+   and 16,384, cases <case>_m<B>: gen.py's words depend only on the flat index, so they are the
    whole batch's first B), then over the whole batch.
 2. The torch functions (attn.py's qk and pv, the skeleton's interface), through each path (fast, and @ref the reference
    kernels), on every decode case (one query a sequence) and FULL's batches: over the whole batch with its lens (S past a
@@ -185,8 +185,8 @@ class Attn:
         """attn.grid's CTAs for ``tiling`` (h8, h16, s16: Y CTAs of head groups), of ``warps`` warps."""
         args = self.qk_args if op == "qk" else self.pv_args
         params = (vp * 1)(C.cast(C.pointer(args), vp))
-        blocks = grid(tiling, self.B, self.H, self.Mq, Y, self.Lcap if op == "qk" else self.D, self.Hkv)
-        self.cu("cuLaunchKernel", self.kernel(op, tiling), *blocks, 32 * warps, 1, 1, 0, None, params, None)
+        ctas = grid(tiling, self.B, self.H, self.Mq, Y, self.Lcap if op == "qk" else self.D, self.Hkv)
+        self.cu("cuLaunchKernel", self.kernel(op, tiling), *ctas, 32 * warps, 1, 1, 0, None, params, None)
 
     def shapes(self) -> list[tuple[str, int, int]]:
         """The check's launches, (tiling, warps, Y): q8 and ref at 4, 1 and 8 warps; each head-group tiling one group a

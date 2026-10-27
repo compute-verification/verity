@@ -11,7 +11,7 @@ shipped (`Hashes.ofSha512`'s). Evaluated against `H : Msg → Msg`, a run of `ve
 of them (`verifyOC_eval`, `verifyOC_log`, `verifyOC_log_length`, and their `Zk` copies). So too the statement's setup:
 a run of `Stmt.setupTablesWith Hashes.oc` has the verdict of setup at `hOf H`, and makes `Stmt.setupCalls (hOf H)`
 queries (`setupOC_eval`, `setupOC_log`, `setupOC_log_length`). All of it is one simulation of `Flock.With.Sim` (`ocLog`)
-between `OCV` and the logging monad `LogV`, at #2105's `verifyWithM_sim` and at `setupTablesWith_sim` (`Flock.With.SimSetup`).
+between `OCV` and the logging monad `LogV`, at `verifyWithM_sim` and at `setupTablesWith_sim` (`Flock.With.SimSetup`).
 
 `hOf H` is `H` on byte arrays: `ByteArray` and `Msg = List UInt8` are the same bytes (`ofMsg_toMsg`).
 -/

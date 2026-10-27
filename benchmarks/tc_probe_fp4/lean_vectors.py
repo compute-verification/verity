@@ -40,6 +40,7 @@ from pathlib import Path
 import numpy as np
 
 import probe as P
+from verity_config.settings import SHARED
 
 INSTRUCTIONS = ("nvf4_lean_vectors",)
 ROW = "nvf4"
@@ -319,7 +320,7 @@ def main(args) -> int:
     t_all = time.time()
     arch = args.arch or "sm_120a"
     collect_dir = Path(os.path.expandvars(args.collect)) if getattr(args, "collect", None) else None
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
     if collect_dir is not None and args.fake_silicon:
         raise SystemExit("--collect reads a capture; it takes no --fake-silicon")
@@ -460,7 +461,7 @@ def main(args) -> int:
                 failures.append(f"the chunk's recorded {k} differ from the ones derived again from its dumps")
     print("summary", json.dumps(results["summary"]), flush=True)
     rc = finish()
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         s = results["summary"]
         result = {

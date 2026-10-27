@@ -44,7 +44,7 @@ from typing import Any
 
 from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.config import CHECKPOINTS, MANIFESTS, ROOT, WORKLOADS, UsageError, option
+from verity_vllm.config import CHECKPOINTS, MANIFESTS, ROOT, UsageError, option, workload_files
 from verity_vllm.engine.profiles import dense_generic, family_facts as FF
 from verity_vllm.pipeline import config_record as CR
 
@@ -252,7 +252,7 @@ def inventory(repo: str, marks: dict[str, tuple[str, ...]], sql: Sql | None = st
     role = ckpt.get("role")
     config = hf_config(repo, role, pin.get("revision"), pin.get("config_sha256"), fetch)
     model_type = (FF.family_of(config[0]) if config[0] else None) or next((m["model_type"] for m in maps), None)
-    rows = {p.stem: json.loads(p.read_text()) for p in sorted(WORKLOADS.glob("*.json"))}
+    rows = {p.stem: json.loads(p.read_text()) for p in workload_files()}
     rows = {r: w for r, w in rows.items() if w.get("model") == repo}
     world = max((int(w["engine"]["args"].get("tensor_parallel_size", 1)) for w in rows.values()), default=1)
     files = {rel: ms for rel, ms in marks.items() if repo in ms}

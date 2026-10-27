@@ -8,7 +8,7 @@
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
 # (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
 #   research run --on vy-dc-h200 --project verity --campaign exactlin --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/served.sh \
+#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
@@ -29,7 +29,7 @@ echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config
 DITHER=$ROOT/benchmarks/hash/dither; [ -d "$DITHER" ] && PYTHONPATH=$PYTHONPATH:$DITHER
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ]; then

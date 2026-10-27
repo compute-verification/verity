@@ -56,4 +56,4 @@ def test_row_config_from_attempt_is_pinned(tmp_path_factory):
             (d / f).write_text(text)
         cfg = A.row_config_from_attempt(str(d))
         out[name] = {k: v for k, v in dataclasses.asdict(cfg).items() if k != "notes"} | {"notes": cfg.notes}
-    assert hashlib.sha256(json.dumps(out, sort_keys=True, default=str).encode()).hexdigest()[:16] == "9761c1900798e0b4"
+    assert hashlib.sha256(json.dumps(out, sort_keys=True, default=str).encode()).hexdigest()[:16] == "02bada87b8b14031"

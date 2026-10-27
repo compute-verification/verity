@@ -13,7 +13,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 ABI = 1
 ROW_NONE, ROW_V2, ROW_SEG, ROW_TILE = 0, 1, 2, 3
 SALT_GIVEN, SALT_PRF, SALT_CHACHA64, SALT_CHACHA_RFC = 0, 1, 2, 3
@@ -238,7 +241,7 @@ class Lib:
     """libvc.so (``VC_LIB``, else build/libvc.so beside this file). A launch that returns nonzero raises `LaunchError`."""
 
     def __init__(self, path: str | os.PathLike | None = None) -> None:
-        self.path = str(path or os.environ.get("VC_LIB") or HERE / "build" / "libvc.so")
+        self.path = str(path or settings.VC_LIB or HERE / "build" / "libvc.so")
         self.so = ctypes.CDLL(self.path)
         for name, (res, args) in _SIGS.items():
             f = getattr(self.so, name)
@@ -303,7 +306,7 @@ class Cuda:
     """The few runtime calls the tests make (device memory, a stream, graph capture), on libcudart.so."""
 
     def __init__(self, path: str | None = None) -> None:
-        cands = [path] if path else [os.environ.get("VC_CUDART"), "/usr/local/cuda/lib64/libcudart.so", "libcudart.so", "libcudart.so.12",
+        cands = [path] if path else [settings.VC_CUDART, "/usr/local/cuda/lib64/libcudart.so", "libcudart.so", "libcudart.so.12",
                                      "libcudart.so.13"]
         err = None
         for p in [c for c in cands if c]:

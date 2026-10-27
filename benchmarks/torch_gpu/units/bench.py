@@ -22,21 +22,24 @@ import os
 import statistics
 import sys
 
+from verity_config.settings import of
+
 if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__)))
 
-import torch  # noqa: E402
+import torch
 
-import add as AD  # noqa: E402
-import argmax as AM  # noqa: E402
-import lib as L  # noqa: E402
-import quant as Q  # noqa: E402
-import relu as RL  # noqa: E402
-import rmsnorm as RN  # noqa: E402
-import softmax as SM  # noqa: E402
+import add as AD
+import argmax as AM
+import lib as L
+import quant as Q
+import relu as RL
+import rmsnorm as RN
+import softmax as SM
 
 HEADS = 256
 LAYERS = 52
+settings = of(__file__)
 STEP = {"rmsnorm 16384 (units)": 2 * LAYERS + 1, "quant 16384 (units)": 3 * LAYERS + 1, "quant 65536 relu (units)": LAYERS,
         "softmax n=32 (units)": LAYERS, "add 16384": 2 * LAYERS, "argmax 256 (units)": 1}
 #: the prelude's cycles: an arm's host time is well under a millisecond, a step's ~500 launches well under 100 ms
@@ -154,7 +157,7 @@ def summary(row: dict) -> str:
 
 
 def runs() -> list[int]:
-    return [int(b) for b in os.environ.get("TIME_B", "4096,16384").split(",")]
+    return list(settings.TIME_B)
 
 
 def main() -> int:
@@ -165,7 +168,7 @@ def main() -> int:
                       "sha256": lib.sha256, "name": props.name,
                       "uuid": str(getattr(props, "uuid", "")).lower().removeprefix("gpu-")}), flush=True)
     for B in runs():
-        for row in timing(dev, B, int(os.environ.get("REPS", "20")), int(os.environ.get("STEP_REPS", "5"))):
+        for row in timing(dev, B, settings.REPS, settings.STEP_REPS):
             print(json.dumps(row), flush=True)
             print(summary(row), file=sys.stderr)
         torch.cuda.empty_cache()

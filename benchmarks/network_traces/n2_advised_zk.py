@@ -144,16 +144,6 @@ def log(msg: str) -> None:
     print(f"N2ADV {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
-def builders() -> tuple:
-    """`n2_zk.builders`, and the advised counts' traced parts given the builders their traces were taken from."""
-    parts = ((AD.NetworkAdvisedOwn, AD._build_own), (AD.NetworkAdvisedBucket, AD._build_bucket),
-             (AD.NetworkAdvisedEnd, AD._build_end))
-    for d, build in parts:
-        if getattr(d, "build", None) is None:
-            d.build = build
-    return Z.builders() + tuple(d for d, _ in parts)
-
-
 # --- the link and its members -----------------------------------------------------------------------------------------
 
 def advised_refs(lw: LinkWindows, link: AD.LinkAdvice, egress, ingress, syncs=AT.SYNCS) -> list[bool | None]:
@@ -677,7 +667,6 @@ def prove(a) -> int:
     M = Z._one_stage()
     M.PF.executable = lambda: Path(a.lean)
     Z._record_lean_runs(M.PF)
-    builders()
     sg = Z.stager(M, lw, out / "stager")
     summary["stager"] = {"unit": lw.proof_unit.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw.bits(p) for p in SVC.PORTS},

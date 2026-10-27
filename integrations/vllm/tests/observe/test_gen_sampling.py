@@ -1,4 +1,4 @@
-"""[GEN sampling] the torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
+"""The torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.config import RowEngine
+from verity_vllm.config import RowEngine, workload_file
 from verity_vllm.engine import static_schedule
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program import sampling_rng as R
@@ -97,7 +97,7 @@ def _adapter_fn(name: str):
     src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
     tree = ast.parse(src)
     ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object, "RowEngine": RowEngine, "PP": PP,
-                "static_schedule": static_schedule}
+                "static_schedule": static_schedule, "workload_file": workload_file}
     for node in tree.body:
         if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ACCEPTED_TOKENS":
             exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
