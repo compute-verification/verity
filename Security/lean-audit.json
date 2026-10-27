@@ -2101,6 +2101,18 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.Assumptions.IntegrityContains": {
+   "owner": "@training",
+   "digest": "1df4db03c30501febd18c60155c7307bd97bc43bc4cca2ae3ec661eabd7cb899"
+  },
+  "Accounting.Assumptions.WipeState": {
+   "owner": "@training",
+   "digest": "994ec5141785d9a3fa5652fc2c48c620d1e976a3e1001c2396f46b97ca25cda6"
+  },
+  "Accounting.CertifierLinks": {
+   "owner": "@training",
+   "digest": "41f4976fd7f85cb508322546684b7d7c9a9d041b9812bf9ecff95cd544358f74"
   }
  },
  "meaning": [
@@ -3788,13 +3800,28 @@
    "type_hash": "ce044d7f61c49917c656e0fef2aa65fc8cf9359727b975c2ee1adb3aec56f5e1"
   },
   "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass : Accounting.Guarantees.Onsite.AcceptedOnsiteClass"
+   ],
+   "assumptions": [],
+   "type_hash": "7cb05d4220a0d0b9717edce1f44895099e52f5e7df363c8e02c03035dc45dce0"
   },
   "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared : Accounting.Guarantees.Onsite.CertifierLinksDeclared"
+   ],
+   "assumptions": [],
+   "type_hash": "96150774b5a3d2051e0fe6eb0ec569d946f9d4ccaa37c641b1d4029c7c636def"
   },
   "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass : Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass"
+   ],
+   "assumptions": [],
+   "type_hash": "c7fadec1e39db71bf7f3f2e5d8edd8928f61d3be8605b213025b284d41279412"
   },
   "Accounting.SecurityProofs.PearlCEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -12558,6 +12585,9 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.RequirementCredits",
@@ -12654,6 +12684,17 @@
     "Accounting.Assumptions.EncodeChainHardness": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
    },
    "guarantees": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted"]
+  },
+  "Definitions.Accounting.Assumptions.Onsite": {
+   "digest": "bf2e0aaeb613c1c05dd3943ac171125283e2901ac191d88d7a2461684716dfaf",
+   "definitions": {
+    "Accounting.Assumptions.IntegrityContains": "1df4db03c30501febd18c60155c7307bd97bc43bc4cca2ae3ec661eabd7cb899",
+    "Accounting.Assumptions.WipeState": "994ec5141785d9a3fa5652fc2c48c620d1e976a3e1001c2396f46b97ca25cda6"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass"
+   ]
   },
   "Definitions.Accounting.Assumptions.PouwFloor": {
    "digest": "4f9b562c931e2da9c956607655fcd71f416e3789589c2c2a40b16527b84a2885",
@@ -13552,6 +13593,9 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.RequirementCredits",
@@ -13650,6 +13694,8 @@
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -14557,6 +14603,19 @@
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Accounting.SecurityProofs.Memory.Counting",
     "Accounting.SecurityProofs.Memory.CountingAdvice"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.Onsite": {
+   "digest": "dab58d73ab0f2a9a08ddcb39d74fd1d54ab9c0eec35f9125a112e86311dfb0f5",
+   "definitions": {
+    "Accounting.Guarantees.Onsite.AcceptedOnsiteClass": "f408b5cb4e8ea0fccfbc7fe41ef15d0217e33d50c9f6599c6dfa0168d314bbde",
+    "Accounting.Guarantees.Onsite.CertifierLinksDeclared": "747c607efd2740ef4cccbbd5369967bfe0af194b3efb932d24554ccf6b255d07",
+    "Accounting.Guarantees.Onsite.ClaimsImplyOnsiteClass": "f2a6c600f4ebbdb672149d2ef19f1258b6a026e9453e2d518106ad5f340299df"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass"
    ]
   },
   "Definitions.Accounting.Guarantees.PerRun": {
@@ -15480,6 +15539,8 @@
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -15596,7 +15657,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
-    "Accounting.SecurityProofs.JointPeriodLive"
+    "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass"
    ]
   },
   "Definitions.Accounting.JointPeriod": {
@@ -15652,7 +15715,9 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriod",
-    "Accounting.SecurityProofs.JointPeriodLive"
+    "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass"
    ]
   },
   "Definitions.Accounting.Memory": {
@@ -15675,6 +15740,18 @@
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Accounting.SecurityProofs.Memory.Counting",
     "Accounting.SecurityProofs.Memory.CountingAdvice"
+   ]
+  },
+  "Definitions.Accounting.Onsite": {
+   "digest": "6216fe4050465098a01e4e9e769b9deffaa828aa28ababadc17e09e0a70ecb58",
+   "definitions": {
+    "Accounting.CertifierLinks": "41f4976fd7f85cb508322546684b7d7c9a9d041b9812bf9ecff95cd544358f74",
+    "Accounting.OnsiteClass": "f9d70d66f16ce6d9e60509418f660cc59511c1a00d7483cd94369f017b6efef1"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass"
    ]
   },
   "Definitions.Accounting.PerRun": {
@@ -15752,6 +15829,9 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Nci.SecurityProofs.FitRate"
    ]
   },
@@ -19017,6 +19097,9 @@
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.CertifierLinksDeclared",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.RequirementCredits",
@@ -19129,6 +19212,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -19264,6 +19349,8 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -19461,6 +19548,8 @@
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Onsite.AcceptedOnsiteClass",
+    "Accounting.SecurityProofs.Onsite.ClaimsImplyOnsiteClass",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
