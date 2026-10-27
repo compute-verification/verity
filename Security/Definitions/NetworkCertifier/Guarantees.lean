@@ -368,9 +368,8 @@ the ingress grid, and their content is exempt.
 - **Why the exemption is sound.**
   - The coins are the challenger's. No outside party can choose their content: every accepted frame on the coin link
     opens against the challenger's committed coin root. This is a declared item of the consistency relation between
-    the circuit and the network certificates
-    (`note:network-accounting/20261006T0633Z-draft-circuit-certificate-consistency`), and any other frame on the link
-    is unexplained, so the window is rejected.
+    the circuit and the network certificates, and any other frame on the link is unexplained, so the window is
+    rejected.
   - They are fixed before the developer sees them. The coin tree is committed before the audit, so no coin depends on
     anything X sends, and `c_coin` is the same for every message the bound counts.
   - Only the count is free. The frames on the coin link are a prefix of `c_coin`, in order, since a retry never

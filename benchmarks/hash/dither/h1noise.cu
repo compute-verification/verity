@@ -109,7 +109,7 @@ extern "C" int kn_mid(const void* seeds, unsigned S, unsigned nb, unsigned J, vo
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
-// kernels-j10's tile-width price (measured only): h1u.cu's h1s_noise and h1j_noise with the layout's counts and the seeds'
+// The tile-width price (measured only): h1u.cu's h1s_noise and h1j_noise with the layout's counts and the seeds'
 // row stride (u64 words) as arguments, so an r x c tile's noise (nb = r rb + c cb blocks, its rows_nb = r rb row tiles first,
 // h1tile.Layout's order) runs at any c. Unit u = ri ncb + cj hashes its blocks t >= t0: t0 = 0 for a band leader
 // (cj % band == 0), rows_nb otherwise (J10: a non-leader reads its leader's rows); band 1 is per-unit noise.

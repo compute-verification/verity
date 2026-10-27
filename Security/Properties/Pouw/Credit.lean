@@ -88,8 +88,8 @@ def EstablishedSound : Prop :=
       ∀ B : Finset ℕ, e * creditedWork layout got served ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
         prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
 
-/-- **A credited window's draw coin comes from a withheld session on its draw root** (Daniel, 26 Oct 6:15 PM PDT: a
-challenger releases its coin commitment only after the prover's commitment is in). Wherever `credited` accepts a window,
+/-- **A credited window's draw coin comes from a withheld session on its draw root** (a challenger releases its coin
+commitment only after the prover's commitment is in). Wherever `credited` accepts a window,
 the draw's `root` is a string `r` (the root `draw_root` gives over the window's manifest, Commit record, receipts and
 round log, which `credited` recomputes), and the auditor's ledger opens a session on `r` and marks every open of it
 withheld (`withheldOn`, `remote.open_session(..., withhold=True)`): that session released only its coins' raw bytes

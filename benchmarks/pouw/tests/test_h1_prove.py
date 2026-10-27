@@ -174,7 +174,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
     assert T == 2 * (8 // R) * (16 // C) == win.tp.population
     assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
-    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], u, 1) for u in range(T)]
+    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], c["tile0"], c["tiles"])
+                                                                    for c in com["calls"]]
     assert [n for n, _t in win.program.fn.signature()[0]] == [f"a/{K}", f"b/{K}", "zy", "salt", "position", "roots"]
     assert U.window_ports(win.program) == {**{f"a_k{K}[{i}]": f"a{i}" for i in range(R)},
                                            **{f"b_k{K}[{j}]": f"b{j}" for j in range(C)}, "zy": "zy"}

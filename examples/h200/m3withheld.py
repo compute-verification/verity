@@ -1,10 +1,10 @@
-"""M3's coin under a withheld session (CMP-177): the challenger's coin-commitment root reaches no one before the prover's
+"""M3's coin under a withheld session: the challenger's coin-commitment root reaches no one before the prover's
 registration is in the ledger, and the check refuses a coin whose session released it sooner.
 
     python examples/h200/m3withheld.py --registration REG.json --main MAIN.txt --pin COMMIT --out DIR
 
-Each case runs against a gate of its own on loopback (`m3gate.LocalGate`, the auditor host's gate as INF-280 asks it to
-open a session withheld; plain, as it opens one today), on the registration ``REG.json`` (m3reg's record or a step
+Each case runs against a gate of its own on loopback (`m3gate.LocalGate`, the auditor host's gate as it is to open a
+session withheld; plain, as it opens one today), on the registration ``REG.json`` (m3reg's record or a step
 registration, as `m3coin` reads it), its host pinned to ``COMMIT`` (on main's first-parent line ``MAIN.txt``), and is
 decided by the verifier's side, `m3check.session_audit`, under the gate's key record:
 

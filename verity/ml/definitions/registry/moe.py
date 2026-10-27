@@ -36,6 +36,7 @@ from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
@@ -553,13 +554,16 @@ def MoeRouterSigmoidNorm(B, S, w, v):
                    for k in range(S.TOPK)])
 
 
+_CC12, _CC90 = EVIDENCE["sigmoid_router_capture"]["cc12"], EVIDENCE["sigmoid_router_capture"]["cc90"]
+
+
 @composite("MoeRouterSigmoidBias", 1, ["E", "TOPK", "SCALE", "KERNEL"],
            lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
            conformance="exact-model-tested; the RTX PRO 6000's (cc 12.0, 188 SMs) _moe_C.grouped_topk at E=256, TOPK=8, SCALE=2.5, "
                        "both launches: 10,240 rows bit-exact against this Program and every MUFU-range logit word (65,873,464) "
-                       "against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs r20261003-090316-1374 and "
-                       "r20261003-091025-e5e7, art:a827deda); likewise cc 9.0's (132 SMs) at vLLM d9105ea80's defaults "
-                       "(not batch invariant, the fused grouped top-k on; run r20261017-121712-18ba, art:f0439f03)")
+                       f"against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs {_CC12['runs'][0]} and "
+                       f"{_CC12['runs'][1]}, {_CC12['art']}); likewise cc 9.0's (132 SMs) at vLLM d9105ea80's defaults "
+                       f"(not batch invariant, the fused grouped top-k on; run {_CC90['run']}, {_CC90['art']})")
 def MoeRouterSigmoidBias(B, S, logits, bias):
     """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
     token row of f32 router logits (`GateLinear`'s f32 output) and the f32 `e_score_correction_bias`: per expert the sigmoid
@@ -649,7 +653,7 @@ def MoeExpertGemmW(B, S, x, e, g, w):
 # ---------------------------------------------------------------------------------------------------------
 
 SM120_EVIDENCE = ("RTX PRO 6000 (cc 12.0, 188 SMs), vLLM d9105ea80 fused_experts under VLLM_BATCH_INVARIANT=1 (BLOCK 64/64/32, GROUP_SIZE_M 8): "
-                  "DOT=HopperBF16WgmmaDot16_v1 reproduces every w13 and w2 output of run r20260930-032412-1313's 16 cases at "
+                  f"DOT=HopperBF16WgmmaDot16_v1 reproduces every w13 and w2 output of run {EVIDENCE['moe_expert_cc12_probe']['run']}'s 16 cases at "
                   "E=8, TOPK=2, H=2048, I=1024, M=16 (1,048,576 words per launch) where the Ampere step differs in 428 and 286")
 
 
@@ -694,12 +698,13 @@ def MoeExpertGemmWV2(B, S, x, e, g, w):
 # routed sum over the TOPK slots of a token (`moe_sum_vec_kernel<bf16, int, TOPK, false>`)
 # ---------------------------------------------------------------------------------------------------------
 
+_V4 = EVIDENCE["glm53_block_fp8_capture/v4"]
 
 SUM_CONF = ("exact-model-tested at TOPK = 8, H = 6144: vLLM d9105ea80's moe_sum (moe_sum_vec_kernel<bf16, int32, 8>) on cc 9.0 "
             "(132 SMs) at vLLM's defaults, inside GLM-5.3's served FusedMoEKernel (349 token rows) and on 8 planted rows (-0s, a tie into "
             "infinity, overflow, NaN payloads, infinities, ties, bf16 subnormals, order-dependent cancellations) on which descending "
             "order, a pairwise tree, the first slot's start, a bf16 accumulator, FTZ, NaN payloads kept and truncation each differ, "
-            "0 mismatches (property glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")
+            f"0 mismatches (property glm53_block_fp8_capture/v4, run {_V4['run']}, {_V4['art']})")
 
 
 @composite("MoeSumCoordinate", 1, ["TOPK"], lambda S: ((("col", Array(S.TOPK, BF16)),), BF16), conformance=SUM_CONF)

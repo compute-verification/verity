@@ -13,9 +13,9 @@ the gate open S on its salt epoch's root R = `salt.epoch_open_root` of the weigh
 over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `audit.salt_of` over W. ncp-v2's `session` is
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
-root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. An H1 window's draw coin is not S's: it comes
+root its session was opened on (serve.py's ``--root``), H1's R. An H1 window's draw coin is not S's: it comes
 from a draw session of its own (`DrawSession`, the pouw setting ``draw_session``, reserved with `window.DRAW_FAMILIES`),
-which the gate opens withheld on the window's draw root once the prover's commitment is in (CMP-177), so its challenger
+which the gate opens withheld on the window's draw root once the prover's commitment is in, so its challenger
 releases its coin commitment only after that commitment. The challenger is auditor-trusted
 (`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
 127.0.0.1, through its certifier coin link.

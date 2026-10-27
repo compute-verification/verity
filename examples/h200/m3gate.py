@@ -3,11 +3,10 @@
 them, each session's challenger serving on 127.0.0.1 (`remote.open_session`, `remote.serve`) and every ledger entry,
 record and close signed with this gate's own LMS key at its next leaf.
 
-It opens a session withheld when the open asks (``--withhold``) and the gate `withholds`, as INF-280 asks the auditor
-host's gate to: the ledger's open entry carries ``withheld: true``, its challenger answers with its layout and raw coins
-alone, and the open's and status's ``commitment`` stay null until the session's end. With `withholds` False it opens every
-session plain, as the auditor host's gate does until INF-280: the challenger's root goes out with the open's answer and
-at the hello. The tests and `m3withheld.py`'s recorded run use it; it is no part of what a verifier trusts.
+It opens a session withheld when the open asks (``--withhold``) and the gate `withholds`, as the auditor host's gate is
+to: the ledger's open entry carries ``withheld: true``, its challenger answers with its layout and raw coins alone, and
+the open's and status's ``commitment`` stay null until the session's end. With `withholds` False it opens every session
+plain, as the auditor host's gate does today: the challenger's root goes out with the open's answer and at the hello. The tests and `m3withheld.py`'s recorded run use it; it is no part of what a verifier trusts.
 """
 from __future__ import annotations
 

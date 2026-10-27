@@ -5,7 +5,7 @@ unit of its ``tile``), as PoUW's verifier draws them (core's `credit.drawn`).
                      --pin SHA512 --pins LOG --main FILE --descriptor PROGRAM[.gz] [--out DRAWN.json]
 
 CALLS.json is the window's ``pouw-h1-calls.json``; DIR the challenger session's directory as the auditor's gate fetched it
-(``fetch/<session>/out``), never the prover's bundle, and DRAW its draw session's (CMP-177); each ``--ledger`` a published head of the auditor's signed ledger;
+(``fetch/<session>/out``), never the prover's bundle, and DRAW its draw session's; each ``--ledger`` a published head of the auditor's signed ledger;
 ``--pin`` the SHA-512 of the challenger's public key, the verifier's own configuration; ``--pins`` the challenger host's
 pins log as infra published it, a line a pin; ``--main`` the verifier's own ``git rev-list --first-parent origin/main``;
 PROGRAM the window Program's descriptor (the rehearsal's ``window-program.json.gz``), whose SHA-512 must be the circuit the
