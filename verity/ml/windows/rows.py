@@ -919,7 +919,7 @@ class Bodies:
     memory-mapped; a file not the size its ports make, a row no file holds and a writer whose output isn't the port's rows
     are refused."""
 
-    OPEN = 4096  # own files held memory-mapped at once
+    OPEN = 256  # files held memory-mapped at once: each map holds a file descriptor, and a process may have 1024
 
     def __init__(self, window_dir: str | Path, win: Mapping[str, Any]) -> None:
         self.dir, self.members = Path(window_dir), win["members"]
@@ -957,10 +957,14 @@ class Bodies:
             rows, salts, col = b[:2 * n * words].view("<u2").reshape(n, words), b[2 * n * words:].reshape(n, -1), 0
             for j, (p, w) in enumerate(mine):
                 out[p], col = [rows[:, col:col + w], salts[:, SALT_BYTES * j:SALT_BYTES * (j + 1)]], col + w
-        if len(self._own) >= self.OPEN:
-            self._own.clear()
+        self._room()
         self._own[k] = {p: (r, s) for p, (r, s) in out.items()}
         return self._own[k]
+
+    def _room(self) -> None:
+        if len(self._own) + len(self._values) >= self.OPEN:
+            self._own.clear()
+            self._values.clear()
 
     def value(self, name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Registered value ``name``'s rows the window holds: their positions, rows ((P, words) u16) and salts ((P, 192) u8)."""
@@ -970,6 +974,7 @@ class Bodies:
             if path.stat().st_size != len(at) * (2 * w + SALT_BYTES):
                 raise ValueError(f"{path}: {path.stat().st_size} bytes, not {len(at)} rows of {w} words and their salts")
             b = np.memmap(path, dtype=np.uint8, mode="r")
+            self._room()
             self._values[name] = (at, b[:2 * w * len(at)].view("<u2").reshape(len(at), w),
                                   b[2 * w * len(at):].reshape(len(at), SALT_BYTES))
         return self._values[name]

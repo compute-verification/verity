@@ -906,7 +906,7 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
     """`fed_chain` recorded by reference: each chain member's ``m<k>-private.bin`` leaves out its ``w`` rows and salts and
     its wired ``x``'s, ``v0-private.bin`` holds each row of ``w`` the window reads once, then its salt, and ``window.json``
     each row's path once; each member's prover body as the files make it (`rows.read_private`: a wired row and its salt off
-    its writer's own file) and its header (`rows.registered_header`) are the committed ones, and so is the circuit prover's
+    its writer's own file; `rows.Bodies`, with as few as one file mapped at a time) and its header (`rows.registered_header`) are the committed ones, and so is the circuit prover's
     file staged from them (`flock_inputs.flock_input_files`). The 4,32,4 class's bodies held 3,200,960 rows of 32,768
     words, 22,864 of them distinct, 9,657,548 wired rows of 3,750,680 output rows, and its ``window.json`` 5,282,638 paths,
     37,788 of them distinct. A file short of its ports, a row its value's file doesn't hold, a row with no path, a row
@@ -941,6 +941,12 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
             leaves[p] * (2 * n + CS.SALT_BYTES) for p, n in m.all_rows if p in left)
         assert all("paths" not in e for e in doc["members"][k].get("registered", {}).values())
         assert CS.registered_header(doc, k) == win._entries.get(m.key)
+    files = CS.Bodies(tmp_path, doc)
+    files.OPEN = 1
+    for k in range(len(ms)):
+        out = io.BytesIO()
+        files.copy(k, out)
+        assert out.getvalue() == c.private_body(k) and len(files._own) + len(files._values) <= 1
     k, mem = chained[1], doc["members"][chained[1]]
     meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
             "out_ports": mem["out_ports"], "row_schemas": mem["row_schemas"], "vus_per_block": 1, "units_per_vu": 1,
