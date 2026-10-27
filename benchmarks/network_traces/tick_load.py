@@ -12,8 +12,10 @@ completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes
 `--profile`), and stops the hogs. It writes
 `ticks.json` in `--out`: the CPUs and hogs, the rehearsal's exit and verdict, and per grid the ticks and their lateness
 (median, p99, p99.9, max in ms, the ticks past the slack with their window and bucket, and the windows the honest run
-was refused on), and from a paced proxy its pacer's write starts and ends and the buckets it got late or started past
-the slack, each with its write's end and the previous bucket's (`paced`). The rehearsal's own outputs are under
+was refused on), the requests forwarded to the server past their deadline, by ingress window, with how late in ms
+(`forwards_late`, None for one never forwarded), and from a paced proxy its pacer's release starts and write ends and
+the buckets it got late or released past the slack, each with its write's end and the previous bucket's (`paced`).
+The rehearsal's own outputs are under
 `--out`/rehearsal.
 
 **With `--secret-bit`** the stub times its writes by a secret bit per egress bucket, which is J's question
@@ -233,6 +235,7 @@ def summary(run: Path) -> dict:
     if (run / "publisher_timing.json").exists():
         out["publisher"] = publisher(json.loads((run / "publisher_timing.json").read_text()), log, buckets)
     check = json.loads((run / "check.json").read_text()) if (run / "check.json").exists() else {}
+    out["forwards_late"] = [[w, ms] for w, ms in log.get("forwards", []) if ms is None or ms > 0]
     if (paced := log.get("paced")) is not None:
         rows = paced["releases"]
         start, end = [r[2] for r in rows], {r[0]: r[3] for r in rows}

@@ -953,30 +953,38 @@ def test_a_paced_proxys_pacer_writes_its_records_buckets_and_one_it_got_late_fau
 
 def test_a_pacers_report_faults_the_open_window_or_the_record_held_for_a_closed_one():
     """A report faults its bucket's window: the open window's certifier, or the record held for a window that closed
-    before its last bucket's write was reported, published then with its first fault kept. A bucket that reached the
-    pacer in time and whose write started within the slack faults nothing; one that reached it late, or started past
-    the slack, is `monitor-unavailable`, and one the link refused `delivery-refused`."""
+    before its last bucket's writes were reported, published then with its first fault kept. A bucket that reached the
+    pacer in time and whose release started within the slack faults nothing; one that reached it late, or whose release
+    started past the slack, is `monitor-unavailable` at its release's report, and one the link refused
+    `delivery-refused` at its writes'."""
     clock, T = VirtualClock(), EGRESS.buckets
     proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
                   clock=clock, sleep=clock.sleep, paced=0.05)
+
+    def both(t: int, arrived: float, start: float, written: bool) -> None:
+        proxy._report(Report(t, arrived, start, None, True))
+        proxy._report(Report(t, arrived, start, start + 0.001, written))
+
     proxy._unwritten[0] = 2
-    proxy._report(Report(0, -0.04, 0.0, 0.001, True))
+    both(0, -0.04, 0.0, True)
     assert proxy.shaper.certifier._fault is None
-    proxy._report(Report(1, 0.001, 0.001, 0.002, True))
+    proxy._report(Report(1, 0.001, 0.001, None, True))
     assert proxy.shaper.certifier._fault is Reason.MONITOR_UNAVAILABLE
     record = Record("responses", 1, ((None,) * EGRESS.allocation,) * T, Status())
     held = {1: record, 2: dataclasses.replace(record, window=2, status=Status(Reason.OVERFLOW)),
             3: dataclasses.replace(record, window=3)}
     proxy._held |= held
     proxy._unwritten.update({1: 2, 2: 1, 3: 1})
-    proxy._report(Report(T, -0.04, 0.0, 0.001, True))
+    both(T, -0.04, 0.0, True)
+    assert proxy.records == []
+    proxy._report(Report(2 * T - 1, -0.04, 0.03, None, True))
     assert proxy.records == []
     proxy._report(Report(2 * T - 1, -0.04, 0.03, 0.031, True))
-    proxy._report(Report(3 * T - 1, -0.04, 0.0, 0.001, False))
-    proxy._report(Report(4 * T - 1, -0.04, 0.0, 0.001, False))
+    both(3 * T - 1, -0.04, 0.0, False)
+    both(4 * T - 1, -0.04, 0.0, False)
     assert proxy.records == [dataclasses.replace(record, status=Status(Reason.MONITOR_UNAVAILABLE)), held[2],
                              dataclasses.replace(held[3], status=Status(Reason.DELIVERY_REFUSED))]
-    assert not proxy._held and len(proxy.releases) == 6
+    assert not proxy._held and len(proxy.releases) == 5
     with pytest.raises(ValueError, match="past the slack"):
         Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", paced=0.025)
 

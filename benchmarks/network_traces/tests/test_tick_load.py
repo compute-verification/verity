@@ -94,11 +94,14 @@ def test_summary_lists_each_late_paced_bucket_with_its_end_and_the_previous_ones
     releases[3], releases[5], releases[6] = [3, 2.0, 2.0, 2.1, True], [5, -40.0, 30.0, 30.1, True], \
         [6, -40.0, 0.0, 0.1, False]
     releases[2][3] = 61.0
-    log = {"slack_ms": 25.0, "lateness_ms": {"egress": [0.1] * 8}, "paced": {"ms": 50.0, "releases": releases}}
+    log = {"slack_ms": 25.0, "lateness_ms": {"egress": [0.1] * 8}, "paced": {"ms": 50.0, "releases": releases},
+           "forwards": [[0, -3.0], [1, 4.5], [1, None]]}
     with gzip.open(tmp_path / "proxy.json.gz", "wt") as fh:
         json.dump(log, fh)
     (tmp_path / "calibration.json").write_text(json.dumps({"grid": {"window_buckets": 4}}))
-    p = tl.summary(tmp_path)["paced"]
+    s = tl.summary(tmp_path)
+    p = s["paced"]
     assert p["late"] == [[3, 0, 3, 2.0, 2.0, 2.1, 61.0], [5, 1, 1, -40.0, 30.0, 30.1, 0.1],
                          [6, 1, 2, -40.0, 0.0, 0.1, 30.1]]
     assert p["end_max_ms"] == 61.0 and p["buckets"] == 8
+    assert s["forwards_late"] == [[1, 4.5], [1, None]]

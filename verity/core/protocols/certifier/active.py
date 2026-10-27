@@ -44,10 +44,12 @@ takes one event, and the trace orders a shared boundary's two ticks either way.
 server writes within a bucket, which the prover chooses, moves when the bucket reaches the client. With `paced`, a
 number of seconds past `slack`, the egress tick hands its bucket to a process of its own (`pacer.Pacer`) instead, which
 writes it to the link at `origin` + t·τ + `paced` on the host's monotonic clock, a time fixed before the bucket is made,
-so the loop's lateness within the slack never moves it. A bucket that reached the pacer after its time, or whose write
+so the loop's lateness within the slack never moves it. A bucket that reached the pacer after its time, or whose release
 started more than `slack` after it, faults its window `monitor-unavailable`, as a late tick does, and one the link
-refused, `delivery-refused`. A window's record is published once its last bucket's write is reported, so a fault on
-that bucket is its window's.
+refused, `delivery-refused`. A client slow to read holds bytes in the pacer, never a later bucket's release: a tick
+that finds more than one bucket past its time and not yet written faults its window `delivery-refused`, as the loop's
+own backlog of more than a bucket does unpaced. A window's record is published once its last bucket's writes are
+reported, so a fault on that bucket is its window's.
 
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
 content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
@@ -1309,7 +1311,7 @@ class Proxy:
         tau = p.bucket_ms / 1000
         pacer = None
         if self.paced is not None:
-            pacer = self._pacer = await Pacer.start(writer.get_extra_info("socket").fileno())
+            pacer = self._pacer = await Pacer.start({0: writer.get_extra_info("socket").fileno()})
             self._reports_task = asyncio.create_task(self._reports(pacer))
         choices = self.choices
         if choices is not None and self.windows:
@@ -1335,7 +1337,7 @@ class Proxy:
                 if pacer is None:
                     writer.writelines(cells)
                 else:
-                    pacer.hand(t, self.origin + t * tau + self.paced, cells)
+                    pacer.hand(t, self.origin + t * tau + self.paced, [(0, b"".join(cells), False)])
                     self._unwritten[t // p.buckets] += 1
             if choices is not None and (t + choices.prover.lag) % p.buckets == 0 and \
                     (t + choices.prover.lag) // p.buckets < self.windows:
@@ -1362,22 +1364,25 @@ class Proxy:
             self._report(report)
 
     def _report(self, report: Report) -> None:
-        """A bucket's write as the pacer reports it. A bucket that reached the pacer after its time, or whose write
-        started more than `slack` after it, faults its window `monitor-unavailable`, and one the link refused,
-        `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record is
-        published once every bucket of it that was handed is reported."""
-        self.releases.append(report)
+        """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
+        or whose release started more than `slack` after it, faults its window `monitor-unavailable`, and one the link
+        refused, `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record
+        is published once the writes of every bucket of it that was handed are reported."""
         w = report.t // self.egress.buckets
-        reason = Reason.DELIVERY_REFUSED if not report.written else \
-            Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+        if report.end is None:
+            reason = Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+        else:
+            self.releases.append(report)
+            reason = None if report.written else Reason.DELIVERY_REFUSED
         if reason is not None:
             if w in self._held:
                 self._held[w] = _faulted(self._held[w], reason)
             elif w == self.shaper.certifier.window:
                 self.shaper.certifier.fault(reason)
-        self._unwritten[w] -= 1
-        if not self._unwritten[w] and w in self._held:
-            self.publish(self._held.pop(w), self.egress)
+        if report.end is not None:
+            self._unwritten[w] -= 1
+            if not self._unwritten[w] and w in self._held:
+                self.publish(self._held.pop(w), self.egress)
         self._changed.set()
 
     def _check_forwarding(self) -> None:
