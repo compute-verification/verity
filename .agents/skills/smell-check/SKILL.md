@@ -52,20 +52,26 @@ Each question heads a catalogue section, whose entries are its examples.
    and checked by value; not work beside it, stand-ins, a reference pass, uncommitted bytes, or a claim narrowed to fit.
 2. **Does "served", "end to end" or "measured" mean the real path?** The pinned compiled build at the record's settings,
    the real workload and values, interference included, the verifier, the critical path; not a harness, model,
-   label, Python standing in for Lean, argument, or number nobody measured for this case.
-3. **Is the path that follows the design rules (AGENTS.md) the record, or opt-in?**
-4. **Is anything public that should be a value?** A partition, count, salt or field that follows the workload.
+   label, Python standing in for Lean, argument, or number nobody measured for this case; a demo's verdict decided in
+   Python, not by the Lean check.
+3. **Is the path that follows the design rules (AGENTS.md) the record, or opt-in?** A verifier form with no proof
+   behind it (`verity/product/v0`).
+4. **Is anything public that should be a value?** A partition, count, salt or field that follows the workload; the
+   policy's partition public, with no tie to the record.
 5. **Do the numbers compare?** Same baseline, metric, model, card, build and scheme (named in the label); the best
    baseline, not a slowed one; decode and prefill apart; a model's number labeled as one; a spec that reproduces it.
 6. **Is anything done or kept twice?** Two GEMMs for one linear, two untied trees over one value, two implementations of
-   one format.
+   one format, two bandwidth subprotocols, two live versions of one-stage, registration kept about eight times, hardware
+   modelled about ten times.
 7. **Does each check fail when it should?** Not a negative refused for an unrelated reason, a gate that can't fail, a
    test that reads only its own fixture or never ran where it matters, a thing compared with itself.
 8. **Does the theorem or bound say what it reads as?** No definition that makes it vacuous, premise known false or true
-   only of an honest machine, honest speed where the fastest adversary's is needed, or doc of another version.
+   only of an honest machine, honest speed where the fastest adversary's is needed, or doc of another version; protocol
+   soundness (`Verity.Soundness`) proved only as an implication from its subprotocols' guarantees; a remote bound of
+   about 1 quoted as protection.
 9. **Is anything deferred, or only marked, but stated as done?** Queued isn't landed, "will" isn't "does", wired isn't run.
 10. **Did you relay it without reading it?** Another lane's summary is a quote until you've read what backs it; a
-    hypothesis goes out marked as one.
+    hypothesis goes out marked as one; a broad relay is checked before anyone acts on it.
 11. **Does an action or a default reach beyond what was granted?** An automated action on what it wasn't given, or a
     default that turns silence into a grant.
 12. **Is there code on the soundness path that nothing runs?**

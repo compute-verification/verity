@@ -148,8 +148,8 @@ Landing:
 
 Protocols and claims:
 
-- Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
-  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
+- Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only in
+  the slowdown lower bound, in AND gates. Credit is a statement about values; SAK is the bound's premise only. Whoever
   finds a reason this is wrong floats it at once.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
@@ -175,7 +175,7 @@ Protocols and claims:
   `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
-  are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
+  are for the whole node. PoUB treats the prover's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
@@ -200,6 +200,18 @@ Protocols and claims:
 - A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
   definition holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a
   proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
+
+Shape and words (`GLOSSARY.md` states each):
+
+- Registration registers only the site, θ and the builder B, never the subprotocols' Programs or the proof system. B
+  outputs each execution block E_j, its inference blocks and placement loc_j; D = E_1 ‖ … ‖ E_n.
+- Registration, then execution and verification in a loop (commitment, challenge, proof, validation), then accounting
+  per monitoring period. Periods nest monitoring ⊃ execution ⊇ sampling ⊃ tick.
+- A trace is gate values, a transcript the parties' messages, the sample the proof blocks the coins picked.
+- PoUB is the one bandwidth subprotocol, onsite only; `OneClock` is a premise under `trusted-host`. "NCI" names retire
+  into the inference-only policy's; its machinery stays.
+- Slowdown, in fleet-time, measures training cost (prover overhead γ stays): slowdown(G) ≈ max(1,
+  ρ_G/(α R_free)), R_free ≈ (U + ν)Φ, a curve over run size.
 
 ## Before you finish
 
