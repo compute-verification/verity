@@ -188,15 +188,15 @@ count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8
 benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher forwards, else the first that exists of
 `$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's) and
 `$WORK/pouw/mvp-e2e/venv312`. `benchmarks` is on its path, so a spec names an experimental arm's module from there
-(`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec,
-the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
-as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
-passed, exit code 0 and a clean source tree. A requeued point first deletes its run's old `result.json`. The lookup
-reads the machine's catalog, and when a point isn't there, the store's remote: once per commit it fetches and indexes
-the attempts this store lacks among those started since a day before the commit's committer date (a point's runs
-can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
-other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
-catalog alone.
+(`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec, the commit, `uv.lock`, the
+vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it as the run's key param,
+and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation passed, exit code 0 and a
+clean source tree. A requeued point first deletes its run's old `result.json`. The lookup is `research data lookup --tool
+verity_bench.tool:VLLM_BENCH_POINT --param identity=I --source-tree T` at the commit's tree (git must know the commit) on
+the machine's catalog, and when a point isn't there, the store's remote: once per commit it fetches and indexes the
+attempts this store lacks among those started since a day before the commit's committer date (a point's runs can't start
+before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points other machines
+ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the catalog alone.
 
 ## The served table
 

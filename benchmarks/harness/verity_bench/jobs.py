@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -19,23 +18,8 @@ from typing import Any
 
 from verity_config import dumps, sha256, value
 
+from verity_bench.tool import VLLM_BENCH_POINT
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
-
-# Validation comes from result.json alone, so a run killed after writing it would read as passed; rc 0 rules that out,
-# and a run from a dirty tree ran code its commit doesn't name.
-PASS_QUERY = """
-SELECT id
-FROM attempts
-WHERE tool = 'vllm_bench_point' AND validation = 'passed' AND rc = 0 AND source_dirty IS NOT 1
-  AND source_commit = '{commit}'
-  AND EXISTS (
-    SELECT 1 FROM attempt_params
-    WHERE attempt = attempts.id AND key = 'identity' AND value = '{identity}'
-  )
-ORDER BY start_utc DESC, id DESC
-LIMIT 1
-""".strip()
-
 
 @dataclass(frozen=True)
 class Toolchain:
@@ -102,23 +86,22 @@ COMMIT_MARGIN_S = 86_400
 PULL_JOBS = 64
 
 
-def commit_time(root: Path, commit: str) -> int:
-    process = subprocess.run(["git", "show", "-s", "--format=%ct", commit], cwd=root, capture_output=True, text=True)
+def _show(root: Path, commit: str, field: str) -> str:
+    process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True, text=True)
     if process.returncode != 0:
-        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up on the store's remote: "
-                         "fetch it, or pass --local-only to read this machine's catalog alone")
-    return int(process.stdout.strip())
+        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up: fetch it")
+    return process.stdout.strip()
 
 
 class StoreCompletion:
-    """The newest passing attempt with a point's identity: from this machine's catalog, else, unless `local_only`, from
-    the store's remote. The remote is read once per commit by pulling the attempts this store lacks among those started
-    since the commit (`COMMIT_MARGIN_S` before it), and indexing them; never a reindex."""
+    """The newest attempt with a point's identity at a commit's tree (`research data lookup`; a dirty tree has no reuse
+    key) whose validation passed with rc 0 (a run killed after writing result.json reads as passed): from this machine's
+    catalog, else, unless `local_only`, from the store's remote, read once per commit by pulling the attempts this store
+    lacks among those started since the commit (`COMMIT_MARGIN_S` before it), and indexing them; never a reindex."""
 
     def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
-                 commit_time: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None):
+                 log: Callable[[str], None] | None = None):
         self._store, self.root, self.local_only = store, root, local_only
-        self._commit_time = commit_time
         self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr))
         self._pulled: set[str] = set()
 
@@ -131,24 +114,21 @@ class StoreCompletion:
         return self._store
 
     def __call__(self, identity: str, commit: str) -> str | None:
-        if not re.fullmatch(r"[0-9a-f]{64}", identity) or not re.fullmatch(r"[0-9a-f]{7,64}", commit):
-            raise ValueError("benchmark completion lookup requires hexadecimal identities")
         found = self._local(identity, commit)
         if found is None and not self.local_only and commit not in self._pulled:
-            self.pull(commit)
+            self.pull_since(int(_show(self.root or repository_root(), commit, "%ct")))
+            self._pulled.add(commit)
             found = self._local(identity, commit)
         return found
 
     def _local(self, identity: str, commit: str) -> str | None:
-        rows = self.store.index.sql(PASS_QUERY.format(identity=identity, commit=commit))
-        return str(rows[0][0]) if rows else None
+        from research.store.cli_prov import lookup  # noqa: PLC0415
 
-    def pull(self, commit: str) -> int:
-        """Fetch and index the remote's attempts started since `commit` that this store lacks; how many it indexed."""
-
-        indexed = self.pull_since((self._commit_time or (lambda c: commit_time(self.root or repository_root(), c)))(commit))
-        self._pulled.add(commit)
-        return indexed
+        root = self.root or repository_root()
+        attempts = lookup(VLLM_BENCH_POINT, root, params={"identity": identity}, source_tree=_show(root, commit, "%T"),
+                          store=self.store)["attempts"]
+        passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0]
+        return passing[-1] if passing else None
 
     def pull_since(self, started: int) -> int:
         """Fetch and index the remote's attempts started since `started` (Unix seconds, less `COMMIT_MARGIN_S`) that this
