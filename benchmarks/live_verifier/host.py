@@ -1,5 +1,5 @@
 """The auditor host's verifier service (vy-auditor-1): the remote bandwidth audit's verifier
-(`benchmarks/remote_session/verifier.py`, the Lean verifier of record deciding) runs only as the `auditor` user,
+(`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
