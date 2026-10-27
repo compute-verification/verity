@@ -7,7 +7,7 @@ on that buffer.
 - `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
   layout JSON (memory-accounting's `p2_v1/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
   zero past its end, and at its `staging_offset` in its layer's staging buffer. `Weights` is the plaintext, the seeded
-  weights stream (`verity_torch_loop.weights`), and `payloads` lays it out as the store's W. `decode_block` is P2's
+  weights stream (`e2e_h200.served_weights`), and `payloads` lays it out as the store's W. `decode_block` is P2's
   reference decode of one label, the check's ground truth. `open_store` takes the store: memory-accounting's encoded
   store (`p2_v1/store.py encode`'s segment files, read by `segment_rows`), under `store_salt`, `setup.draw_salt` of the
   coin and commitment its `setup.json` is held to; or a development store under a public test salt.

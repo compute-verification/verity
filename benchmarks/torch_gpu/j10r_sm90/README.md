@@ -22,7 +22,7 @@ INT8, and a slow but exact CUDA kernel to fall back on. The fast kernels are `be
 - **B** is the demo's served weights, restated from the seeded generator (`verity/seeded-weights/v1`, seed
   `verity/cmp92/h200/weights/v1`): layer 0's tensors (kv is wk's 64 rows then wv's), the head's own. Each 64-byte chunk
   of a row is SHA-512 of the tensor key, the row and the chunk index; the suite holds them to values read from
-  the generator's module (`verity_torch_loop.weights`). Channel scales the same way.
+  the generator's module (`e2e_h200.served_weights`). Channel scales the same way.
 - **A** is the same counter stream under its own seed, with rows 0 to 5 and the last six set to the extremes (all 127,
   all -128, alternating, zero, and near either end of the range).
 - The salt is fixed and public here (`SALT`), standing in for the period's live salt. The roots are stand-ins for

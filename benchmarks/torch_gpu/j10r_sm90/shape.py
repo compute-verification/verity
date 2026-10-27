@@ -4,7 +4,7 @@ the fixtures sample. Shared by `fixtures.py` (the expected values, CPU), `check.
 * **Linears** (`LINEARS`, s8_simple's SHAPES, #4472): the H200 demo's MQA decoder, width 16384, 256 query heads of 64,
   one KV head, MLP 65536: q, kv (wk's rows then wv's), o, up, down, and the head once a step. A call is A [M, K] (token
   rows) times B [N, K] (the linear's weight), its proof blocks the 32 x 32 tiles, proof block u = ri (N / 32) + cj.
-* **B** is layer 0's weight of the demo's served weights: the seeded generator (`verity_torch_loop.weights`,
+* **B** is layer 0's weight of the demo's served weights: the seeded generator (`e2e_h200.served_weights`,
   shape H200, seed `WEIGHTS_SEED`), restated here for its s8 codes and f32 scales
   (`weight_rows`, `weight_scales`): row g of tensor t is the SHA-512 counter stream SHA-512(K_t || u64le(g) || u64le(i)),
   K_t = SHA-512("verity/seeded-weights/v1" 0x00 seed 0x00 t), truncated to the row; tests/ pins its first bytes.

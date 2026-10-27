@@ -9,7 +9,7 @@
 #     --send /tmp/p2lib.tar --send h200-manifest.json --send store-layout.json \
 #     -- bash benchmarks/torch_gpu/p2_stage/full.sh
 #
-# (h200-manifest.json: `verity_torch_loop.weights manifest --digests`; store-layout.json: `p2_v1/store.py
+# (h200-manifest.json: `e2e_h200.served_weights manifest --digests`; store-layout.json: `p2_v1/store.py
 # layout`.) ENC is memory-accounting's finished store (mem69-v2: every segment's `.c` and `.json`, `setup.json`
 # and `store.json`), only ever read: nothing here writes, moves or deletes anything under it.
 #
@@ -55,7 +55,7 @@ S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LAYOUT=$IN/store-layout.json; MANIFEST=$IN/h200-manifest.json
 export O D PY S ENC LAYOUT MANIFEST MANIFEST_SHA256 LEASE_MIN ARCH QUIET PATH=$CUDA/bin:$PATH \
   P2_RECEIPTS_BUILD=$S/p2r SHA512_ROWS_BUILD=$S/sxr \
-  PYTHONPATH=$PWD:$PWD/benchmarks/pous:$PWD/integrations/torch_loop${PYTHONPATH:+:$PYTHONPATH}
+  PYTHONPATH=$PWD:$PWD/benchmarks/pous:$PWD/benchmarks/e2e_h200${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 
@@ -88,7 +88,7 @@ nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit,
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
 gpu-lease status > "$O/lease-before.txt" 2>&1
 df -h "$S" "$ENC" > "$O/df.txt" 2>&1
-COMMON=(--layout "$LAYOUT" --weights "$MANIFEST" --generator verity_torch_loop.weights --shape h200 --weights-seed "$SEED"
+COMMON=(--layout "$LAYOUT" --weights "$MANIFEST" --generator e2e_h200.served_weights --shape h200 --weights-seed "$SEED"
         --encoded "$ENC" --source "$SOURCE" --commitment "$COMMITMENT" --out "$O")
 FULL=("${COMMON[@]}" --lib "$S/lib/lib" ${GEMM_LAYER:+--gemm-layer "$GEMM_LAYER" --m "$M"} ${LAYERS:+--layers "$LAYERS"}
       ${RECEIPTS:+--receipts --keep "$S/keep"})

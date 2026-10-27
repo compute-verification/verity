@@ -30,9 +30,9 @@ s - 1's (they read the slots step s + 1 overwrites).  What is committed, before 
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
 from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
-the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this lane's rendering of CA's form (a z
-table in AROW's row-table format, a root per step before the coin); the kind, fields and labels are CA's to fix.  Its
-stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
+the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this harness's rendering of the
+credit's form (a z table in the row-table format, a root per step before the coin); the credit fixes the kind, fields
+and labels.  Its stats, checks and verdict say form=beside (`forms.form_of`): not `forms.FORM_A`.
 """
 from __future__ import annotations
 
