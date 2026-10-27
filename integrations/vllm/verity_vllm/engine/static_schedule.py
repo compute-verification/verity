@@ -4,7 +4,7 @@ so the served circuit is static.  Torch-free.
 A workload declares the static form with `sampling.ignore_eos: true`: every request runs exactly its `max_tokens` steps from its
 arrival, so no generated token decides when a slot frees, who shares a launch, where a waiting prefill is cut by the token budget, or
 when the next arrival is admitted.  The EOS a request may sample is a value: the circuit's done flag masks the steps after it, and the
-host never acts on it.  GP-01's stop rule already reads the same declaration (`global_program.stop_rule`: ignore_eos -> every request
+host never acts on it.  The global Program's stop rule already reads the same declaration (`global_program.stop_rule`: ignore_eos -> every request
 must reach its cap); `vllm_adapter.sampling_params` hands it to vLLM.
 
 `check` holds a realized run to that form, failing by name on what the host decided from values:
@@ -42,7 +42,7 @@ def host_prefix_cache_refusal(enable_prefix_caching: Any) -> str | None:
         return None
     return ("the workload declares the static schedule (sampling.ignore_eos) but the engine has enable_prefix_caching on: vLLM's hash match "
             "would decide which KV pages a request reads, outside the circuit.  Serve it with --engine-arg enable_prefix_caching=false; "
-            "prefix sharing needs the circuit-native form (static page pool + in-circuit prefix match), VLLM-31")
+            "prefix sharing needs the circuit-native form (static page pool + in-circuit prefix match)")
 
 
 def preemptions(snapshots: Iterable[Mapping[str, Any]]) -> dict[str, int]:

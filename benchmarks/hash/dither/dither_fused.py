@@ -18,9 +18,9 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              step s + 1's launches read
 
 The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session infra's
-gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at the window's
-build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
+``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session the
+challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at
+the window's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
 HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source: the salt, the seeds
 and what they read are the same either way.
 
