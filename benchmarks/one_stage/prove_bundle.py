@@ -417,7 +417,7 @@ def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: 
 
     def verify() -> dict:
         lean = a0.lean_verify(a.lean, mm["st"], mm["m"].n, sdir, zk=True)
-        return {x: lean.get(x) for x in ("accepted", "why", "verify_s", "partition", "digest", "registered")}
+        return {x: lean.get(x) for x in ("accepted", "why", "verify_s", "partition", "digest", "registered", "line")}
 
     return {"m0": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True,
                    "why": ((record or {}).get("verdict") or {}).get("why")},
