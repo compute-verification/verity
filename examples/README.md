@@ -26,3 +26,5 @@ below it need. A directory's name is lowercase letters, digits and `_`, since `v
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, a served window audited
   through every subprotocol. Its row is in its own `workloads/`, its placement is `placement.toml`, which `run.sh` reads, and
   its scripts reach the integration by `PYTHONPATH`; it is not a package.
+- `toy_network/`: the toy (`integrations/torch_loop`) audited by sampled proofs, every role from `config.toml` through
+  `verity run`, on CPU; the network certifier joins its `protocols` once its role exists.
