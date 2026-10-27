@@ -7,7 +7,7 @@ drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and
 What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
 `stale_days` and `stale_close_days`: `_stale`): a PR unmarked at its head and idle `stale_days` rings its owner once a day, and
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
-a landed PR's head hears once that its base landed and to merge `main` (`_stacked`; TOP-90 row 23).
+a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
 
 Review landing, the only landing: PRs land on an eyeball review, and the full check runs after landing.  A tick syncs
 `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `main`), then lands its longest prefix whose every member has a land verdict at its head and no hold
