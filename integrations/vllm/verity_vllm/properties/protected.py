@@ -43,7 +43,7 @@ PROTECTED: tuple[str, ...] = (
     "verity_vllm/observe/observer.py", "verity_vllm/observe/events.py", "verity_vllm/observe/log.py", "verity_vllm/observe/fold/memory.py",
     "verity_vllm/observe/fold/fold.py", "verity_vllm/observe/fold/resolver.py", "verity_vllm/observe/fold/patterns.py", "verity_vllm/engine/vllm_adapter.py",
     # the two base profiles (a lane derives its own profile module from `build_profile`; it does not edit these)
-    "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
+    "verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
     # existing registered semantics and the IR, and the Definitions' unit in verity
     "verity_vllm/*", "verity/ml/definitions/*",
     # frozen decisions / accepted results / the design notes the integrator owns
@@ -123,13 +123,13 @@ def new_patterns(head_checkout: Path, base_profiles: tuple[str, ...] = ("vllm_d9
     """Pattern names registered by head's profile modules that the base profiles do not have (runs `python` in the head checkout)."""
     code = r'''
 import importlib, json, pkgutil, sys
-import verity_vllm.engine.profiles as P
+import verity_vllm.observe.fold.profiles as P
 base = set(sys.argv[1].split(","))
 names = {}
 for m in pkgutil.iter_modules(P.__path__):
     if m.name.startswith("vllm_") or m.name.startswith("gen_"):
         try:
-            mod = importlib.import_module(f"verity_vllm.engine.profiles.{m.name}")
+            mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{m.name}")
             names[m.name] = sorted({p.name for p in mod.PROFILE.patterns})
         except Exception as e:
             names[m.name] = f"import failed: {type(e).__name__}: {e}"

@@ -665,9 +665,9 @@ class _DirectLLM:
     """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
 
     def __init__(self, llm: Any, engine_overrides: Mapping[str, Any]) -> None:
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
 
-        runner = get_model_runner(llm)
+        runner = handle.model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
         self.engine_record = {"engine_overrides": dict(engine_overrides)}
         self.protocols = None
@@ -833,7 +833,7 @@ class _VllmEngine:
         import vllm
 
         from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm.llm import LLM
+        from verity_vllm import LLM
 
         self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))

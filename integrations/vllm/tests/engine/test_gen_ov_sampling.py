@@ -182,7 +182,7 @@ def _lane_ctx(events, start, sampling, seed=None, sample=None):
     import dataclasses
     from verity_vllm.observe.fold.resolver import StepContext
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.engine.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
+    from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
     hdr = S.header(sampling)
     if seed is not None:
         hdr.workload["requests"][0]["seed"] = seed

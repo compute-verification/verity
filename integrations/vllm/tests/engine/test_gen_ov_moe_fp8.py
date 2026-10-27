@@ -16,8 +16,8 @@ import math
 
 import pytest
 
-from verity_vllm.engine.profiles import generic
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_PINS, MOE_FP8_CONSTRUCTION_PATTERNS, TRITON_EXPERTS, MoEFusedExperts,
+from verity_vllm.observe.fold.profiles import generic
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (FUSED_MOE_PINS, MOE_FP8_CONSTRUCTION_PATTERNS, TRITON_EXPERTS, MoEFusedExperts,
                                                              MoEFusedExpertsFp8, MoEFusedExpertsFp8Ordered)
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Unsupported, resolve_step
@@ -25,7 +25,7 @@ from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend import targets as T
 
-Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
+Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 C = Q3.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
 G = 64
