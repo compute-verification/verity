@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import time
 
-from verity_vllm.records.commit_run import SCHEMA
+from verity_vllm.records.commit_run import SCHEMA, CommitRun
 
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
@@ -427,16 +427,15 @@ def scheme_refusal(args: Any, wl: dict[str, Any]) -> str | None:
         return (f"--commit-scheme {V1} commits SHA-256 (32-byte roots), which only a recorded run's readers take: commit under {SR.NAME}, "
                 f"the default, or name the recorded {V1} Commit this one commits again with --of-record RUN_DIR (its runs.jsonl)")
     try:
-        runs = [json.loads(line) for line in (Path(of_record) / "runs.jsonl").read_text().splitlines() if line.strip()]
+        runs = [r for r in CommitRun.load_lines(Path(of_record) / "runs.jsonl") if r.commit is not None and r.commit.run_root]
     except (OSError, ValueError) as e:
         return f"--of-record {of_record}: not a recorded Commit ({type(e).__name__}: {e})"
-    roots = [str((r.get("commit") or {}).get("run_root")) for r in runs if isinstance(r, dict) and (r.get("commit") or {}).get("run_root")]
-    if not roots:
+    if not runs:
         return f"--of-record {of_record}: its runs.jsonl records no committed run"
-    if any(len(x) != 2 * 32 for x in roots):
+    if any(len(r.commit.run_root) != 2 * 32 for r in runs):
         return (f"--of-record {of_record} committed {SR.NAME} ({SR.ROOT_BYTES}-byte run roots), not {V1}: commit under {SR.NAME} "
                 f"(drop --commit-scheme {V1} and --of-record)")
-    models = {r.get("model") for r in runs if isinstance(r, dict) and (r.get("commit") or {}).get("run_root")}
+    models = {r.entry.get("model") for r in runs}
     if wl.get("model") and models != {wl["model"]}:
         return f"--of-record {of_record} committed {sorted(map(str, models))}, not {wl['model']}: a Commit under {V1} commits its recorded run's model again"
     return None

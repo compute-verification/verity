@@ -46,7 +46,7 @@ def test_vllm_v1_commits_again_only_a_recorded_vllm_v1_commit_of_the_same_model(
 
 def test_a_record_that_is_not_a_commit_or_a_record_under_rows_sha512_is_refused(tmp_path):
     assert "not a recorded Commit" in refusal("vllm-v1", str(tmp_path))
-    (tmp_path / "runs.jsonl").write_text(json.dumps({"arm": "control", "model": MODEL}) + "\n")
+    (tmp_path / "runs.jsonl").write_text(json.dumps({"pair": 0, "arm": "control", "model": MODEL}) + "\n")
     assert "records no committed run" in refusal("vllm-v1", str(tmp_path))
     v1 = recorded(tmp_path, 32, name="v1")
     assert "not under rows-sha512" in refusal("rows-sha512", v1)
