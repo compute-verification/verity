@@ -108,7 +108,7 @@ def main(argv: list[str]) -> int:
             continue
         vtag, L, shape = m.group(1), int(m.group(2)), m.group(3)
         log = f.with_name(f.name.replace(".raw.csv", ".log"))
-        mc = re.search(r": (\d+) calls,", log.read_text()) if log.exists() else None
+        mc = re.search(r": (\d+) calls\b", log.read_text()) if log.exists() else None
         calls = int(mc.group(1)) if mc else 4
         b = bench.get((f"{vtag}-L{L}", shape))
         if not b:

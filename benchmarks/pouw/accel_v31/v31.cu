@@ -2749,7 +2749,7 @@ static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, co
   char name[64];
   int m, n, k;
   if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
-  const int L = Lspec > 0 ? Lspec : k, calls = std::max(1, env_int("V31_ONCE_OVL", 4));
+  const int L = Lspec > 0 ? Lspec : k, calls = std::max(1, env_int("V31_ONCE_OVL", 4)), serial = env_int("V31_ONCE_SERIAL", 0);
   Fill f;
   f.setup(m, n, k, lp, L, row, read_params(pdir + "/" + fill_params_name(m, n, k, lp, L, row)), 0);
   int8_t* A = dalloc<int8_t>((size_t)m * k);
@@ -2760,11 +2760,17 @@ static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, co
   for (size_t i = 0; i < ks.size(); i++) ks[i] = (uint8_t)mix32((u32)(i + 384));
   f.set_seeds(sd.data());
   CK(cudaStreamSynchronize(f.s0));
+  for (int i = 0; i < serial; i++) {
+    f.issue(ks.data(), A);
+    f.flush();
+    CK(cudaDeviceSynchronize());
+  }
   for (int i = 0; i < calls; i++) f.issue(ks.data(), A);
   f.flush();
   CK(cudaDeviceSynchronize());
   CK(cudaGetLastError());
-  printf("%s: %d calls, L %d row %d, grid %d, gemm_bn %d\n", name, calls, L, row, f.grid, f.pair ? G_BN : TILE);
+  printf("%s: %d calls (%d serial first), L %d row %d, grid %d, gemm_bn %d\n", name, serial + calls, serial, L, row, f.grid,
+         f.pair ? G_BN : TILE);
   cudaFree(A);
   f.release();
   return 0;
