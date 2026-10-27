@@ -216,9 +216,9 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    allowance defaults to 0 until the memory challenger's RTT is measured.
 
    On the deployed path the memory challenger (`memory_challenger`, `challenger_party`) runs the session in this
-   order. Nothing that commits to a coin no round has revealed leaves the device before the last answer is in
-   (soundness's ruling, 27 Oct 2026): the server's commitment, `W` and `C*` under the setup's published root, is in
-   before the first round, and the coin root comes after the last.
+   order. Nothing that commits to a coin no round has revealed leaves the device before the last answer is in: the
+   server's commitment, `W` and `C*` under the setup's published root, is in before the first round, and the coin root
+   comes after the last.
 
    | Step | From, to | What |
    |---|---|---|

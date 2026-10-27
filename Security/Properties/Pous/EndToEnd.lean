@@ -51,9 +51,9 @@ separately so that each can be rejected alone:
 
 The ring game takes one named assumption, `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model. It
 takes none on the coin tree's hiding: the memory challenger releases the tree's root and key only after the session's
-last answer (soundness's ruling of 27 Oct 2026, `memory_challenger.MemoryChallenger.commitment`), so the server sees
-each index as its round opens and nothing else of the coins. The challenger is held to its coins by being an
-auditor-trusted device that runs its stated code (`pous-ring-device`), not by an early commitment.
+last answer (`memory_challenger.MemoryChallenger.commitment`), so the server sees each index as its round opens and
+nothing else of the coins. The challenger is held to its coins by being an auditor-trusted device that runs its stated
+code (`pous-ring-device`), not by an early commitment.
 
 Two gaps stood between these statements and the deployed verifier:
 
