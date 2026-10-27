@@ -41,7 +41,22 @@ CAPLOWER's one run over that tree checks the other four conjuncts (all hashed in
 pending. What the run witnesses is weaker than the Prop in three ways: only Python joins the 10 per-part verdicts (no
 single compiled verdict exists); its `flock-verify` was built at 4331ec922a, before the verifier's `checkRoundWords`,
 `VStar/In` and `VStar/Trace`, which `DAt`'s verifier includes; and its prover is Python's builder with C-Flock's CPU
-prover, which agrees with `refP` only through the difftest. -/
+prover, not `refP`.
+
+What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
+`bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
+which `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
+C-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
+block and range for range, on parts Python's `rec_vstage.stage` staged:
+* r20261026-232210-2d0b (`cursor/proofs-vstartrace-e146` 547915a62c, `test_the_recorded_plain_leaf_sessions_traces`)
+  passed on all 10 staged statements of `rec-coins`' recorded (16,16,8) session at 64 instances (L0–L3, alg/p0, alg/p1,
+  cap, cap/L1–L3);
+* r20261027-014612-19c5 (e146 93dac12374, `vstar-trace --sat`) checks the trace against the table `verify --zk` sets up:
+  its drawn level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and the recorded session
+  (`test_the_recorded_plain_leaf_sessions_satisfy`, `HonestWitSatisfies`' witness run) is still running.
+
+Neither difftest runs c2a7's session, and neither compares `refP`'s inner rounds (the inner prover `Ir`'s messages) with
+Python's builder. -/
 def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
