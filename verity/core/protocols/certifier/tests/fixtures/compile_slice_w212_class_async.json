@@ -1,5 +1,5 @@
 {
- "source": "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz window 212 (replay_vectors.py --slice 212 at R 8, W 1, A 9, Q 4, D 32, P 54, K 4, AS 1)",
+ "source": "examples/network_vllm/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz window 212 (replay_vectors.py --slice 212 at R 8, W 1, A 9, Q 4, D 32, P 54, K 4, AS 1)",
  "engine": {
   "max_num_seqs": 8,
   "max_num_batched_tokens": 2048,
