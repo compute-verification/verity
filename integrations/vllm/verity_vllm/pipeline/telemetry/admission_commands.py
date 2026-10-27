@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verity_vllm.config import option, workload_arg
-from verity_vllm.pipeline.telemetry.admission import (GiB, RowConfig, cgroup_memory_max, compare, plan_row, predict,
-                                                      render_compare_md, render_points_md, retain_exclude_families,
-                                                      row_config_from_attempt, row_config_from_workload)
+from verity_vllm.pipeline.telemetry.admission import (AdmissionRow, GiB, admission_row_from_attempt, admission_row_from_workload,
+                                                      cgroup_memory_max, compare, plan_row, predict, render_compare_md,
+                                                      render_points_md, retain_exclude_families)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -78,7 +78,7 @@ def main(a: PlanOptions | CompareOptions | PredictOptions) -> int:
         # advisory: never a non-zero exit, never an exception out of the hook -- the failure is written into the line instead
         try:
             limit = a.host_limit_bytes if a.host_limit_bytes is not None else cgroup_memory_max()
-            cfg = row_config_from_workload(a.workload, a.row, pairs=a.pairs, replay_workers=a.replay_workers, host_limit_bytes=limit,
+            cfg = admission_row_from_workload(a.workload, a.row, pairs=a.pairs, replay_workers=a.replay_workers, host_limit_bytes=limit,
                                            snapshot_steps=a.snapshot_steps, snapshot_max_bytes=a.snapshot_max_bytes, stages=a.stages)
             cfg.largest_vu_in_parent = a.largest_vu_in_parent
             cfg.fork_gc_freeze = not a.no_fork_gc_freeze
@@ -91,15 +91,15 @@ def main(a: PlanOptions | CompareOptions | PredictOptions) -> int:
             print(f"ADMISSION advisory unavailable: {type(e).__name__}: {e}")
         return 0
     if a.cmd == "predict":
-        cfg = RowConfig(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
-                        replay_workers=a.replay_workers, host_limit_bytes=int(a.host_limit_gib * GiB) if a.host_limit_gib else None, n_instances=a.n_instances,
-                        scheduled_raw_bytes=a.raw_bytes, largest_vu_in_parent=a.largest_vu_in_parent, retain=a.retain,
-                        fork_gc_freeze=not a.no_fork_gc_freeze, bounded_staging=a.bounded_staging, retain_exclude=retain_exclude_families(a.retain_exclude))
+        cfg = AdmissionRow(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
+                           replay_workers=a.replay_workers, host_limit_bytes=int(a.host_limit_gib * GiB) if a.host_limit_gib else None, n_instances=a.n_instances,
+                           scheduled_raw_bytes=a.raw_bytes, largest_vu_in_parent=a.largest_vu_in_parent, retain=a.retain,
+                           fork_gc_freeze=not a.no_fork_gc_freeze, bounded_staging=a.bounded_staging, retain_exclude=retain_exclude_families(a.retain_exclude))
         print(json.dumps(predict(cfg), indent=1, default=str))
         return 0
     results = []
     for d in a.attempt_dirs:
-        cfg = row_config_from_attempt(d)
+        cfg = admission_row_from_attempt(d)
         if a.largest_vu_in_parent:
             cfg.largest_vu_in_parent = True
         cfg.fork_gc_freeze = not a.no_fork_gc_freeze
