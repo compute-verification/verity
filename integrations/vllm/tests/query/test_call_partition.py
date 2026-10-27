@@ -18,6 +18,8 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+import pytest
+
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.cut import call_scope
 from verity.ml.circuits.layout import resolve
@@ -114,7 +116,9 @@ def test_tiny_int8_program(tmp_path):
     check(phi, tmp_path, partition=True)
 
 
+@pytest.mark.slow
 def test_served_h200_int8_program(tmp_path):
     """The served H200 int8 request Program (Llama-3.2-1B INT8, the pinned vLLM's trace of it in `naming_traces.json`), under
-    CallPartition's rule."""
+    CallPartition's rule. Beyond TINY's it reaches the served Definitions (the 128256-wide LM head and token select, the int8
+    linears at K = 2048 and 8192) and the names serving's policy reads."""
     check(phi_of(SERVED), tmp_path, partition=False)
