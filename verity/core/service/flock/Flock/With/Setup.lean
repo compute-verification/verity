@@ -754,6 +754,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (pi : Ports) (fil
     if (t.counts.extract k np).any (· != pub.n) then throw "header: an output row's table is not one row per instance"
     if (List.range t.refs.size).any (fun x => x % np ≥ k && t.refs[x]! != x / np) then
       throw "shared rows: an instance's output row is not its own"
+  (HmIn.checkReads c pi pub.n pub.tables : V Unit)
   return pub
 
 /-- `HmIn.drawn` through the oracle. -/
@@ -913,8 +914,8 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     if tags.hiddenOutputs then Stmt.setupHiddenWith hs t circuitFile publicFile coins tables d partition program publicInputs
     else
       let st ← Stmt.setupHWith hs t circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   if count ≤ 1 then
     let st ← setup tags draw

@@ -330,7 +330,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     (got, work, url), = seen
     assert got == req and work == w and end["rc"] == 0 and end["witness"][A.PROMPTS] == len(b"[[70001,3],[5],[7]]")
     argv = A.warden_command(got, work, url)
-    assert argv[argv.index("--egress-cells") + 2:] == ["--prompts", str(w / A.PROMPTS), "--window-per-group",
+    assert argv[argv.index(A.SCAN_SCHEDULE[-2]) + 2:] == ["--prompts", str(w / A.PROMPTS), "--window-per-group",
                                                        "--max-tokens", "2"]
     assert "groups.json" in end["files"] and json.loads((d / "out" / "groups.json").read_text())["groups"]
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
@@ -368,6 +368,6 @@ def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, s
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():
     """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the warden's schedule."""
-    assert [A.scan_group_windows(t) for t in (1, 2, 32, 35, 36, 64)] == [1, 1, 1, 1, 2, 2]
+    assert [A.scan_group_windows(t) for t in (1, 2, 11, 12, 139, 140)] == [1, 1, 1, 2, 2, 3]
     assert [A.warden_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
     assert A.warden_group_minutes(400, 64, 10) == 46 and A.warden_group_minutes(1, 2) == 8
