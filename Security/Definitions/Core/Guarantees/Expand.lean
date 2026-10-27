@@ -37,4 +37,11 @@ def ExpandSize : Prop :=
       ∀ u, d.D.expand.size (P.expand.gates u) = d.D.width (P.gates u) ∧
         (d.expand.unregistered (P.expand.gates u)).card ≤ d.D.width (d.unregistered (P.gates u))
 
+/-- **AND counts in bits.** The expansion has at most as many AND gates as the circuit's computed gates have bits, and
+an expanded proof block at most as many as its proof block has bits. -/
+def ExpandAndSize : Prop :=
+  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B),
+    d.D.expand.andSize d.D.expand.computed ≤ d.D.width d.D.computed ∧
+      ∀ u, d.D.expand.andSize (P.expand.gates u) ≤ d.D.width (P.gates u)
+
 end Verity.Guarantees

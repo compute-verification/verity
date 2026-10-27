@@ -1,4 +1,5 @@
 import Definitions.Core.Formalism
+import Definitions.Core.Boolean
 
 /-!
 # The working draft's Lemma 1 and Theorem 3
@@ -6,7 +7,9 @@ import Definitions.Core.Formalism
 Stated on core's circuit and partition (`Definitions.Core.Formalism`). Appendix A's translation of a `(c, k)`-partition
 into NCI's coverings is `Nci.Guarantees.PartitionCovers`, and NCI's policy as a padded `(c, k)`-partition is
 `Nci.Guarantees.CompliesCK`. The serving blocks are a `Padding` at `c_S` of the proof blocks reading at most `k_S`,
-summed by `ServingBlockSum`, with each serving block's inference cap from `InferenceCap`.
+summed by `ServingBlockSum`, with each serving block's inference cap from `InferenceCap`. The AND count `andSize`, in
+which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on C-Flock's circuits counts its AND gates
+and rows (`ToCircuitAnd`).
 -/
 
 namespace Verity.Guarantees
@@ -16,6 +19,21 @@ open Finset
 /-- **The size of a `(c, k)`-partitioned circuit** (§3): `|C| = c · B`. -/
 def CKSize : Prop :=
   ∀ (d : Declaration) (B c k : ℕ) (P : Partition d.D B), P.IsCK d c k → d.D.size d.D.computed = c * B
+
+/-- **ANDs are operation gates**: among any gates `S`, the AND gates number at most the operation gates, and so at most
+`size S`. -/
+def AndSizeLe : Prop :=
+  ∀ (C : Circuit) (S : Finset (Fin C.N)), C.andSize S ≤ C.size (S ∩ C.computed) ∧ C.andSize S ≤ C.size S
+
+/-- **C-Flock's AND gates are `IsAnd`.** On a C-Flock circuit, an AND gate of `toCircuit` is an `and` or a row (its XOR,
+NOT and input gates are not AND gates); `and a b` with `a ≠ b` is one; and so is a row `(⊕ a) ∧ (⊕ b)` with a gate `x`
+in `a` an odd number of times and in `b` an even number, and a gate `y` the other way round (the two XORs differ). -/
+def ToCircuitAnd : Prop :=
+  ∀ (B : FlockSoundness.Audit.Circuit) (g : Fin B.N),
+    (B.toCircuit.IsAnd g → (∃ a b, B.op g = .and a b) ∨ ∃ a b, B.op g = .row a b) ∧
+      (∀ a b, B.op g = .and a b → a ≠ b → B.toCircuit.IsAnd g) ∧
+      ∀ a b x y, B.op g = .row a b → Odd (a.count x) → Even (b.count x) → Even (a.count y) → Odd (b.count y) →
+        B.toCircuit.IsAnd g
 
 /-- **Lemma 1 (proof-block description).** Let `R` register a `(c, k)`-partition into `B` proof blocks, and let a fixed
 evaluator `e` of at most `a_blk` bits perform an extraction rule `y` within time `t` for every proof block. Then in every
