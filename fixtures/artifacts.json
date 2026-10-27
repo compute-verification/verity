@@ -115,6 +115,7 @@
   "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": "verity/ml/flock/tests/fixtures/forged-proofs",
   "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "verity/ml/flock/tests/fixtures/zk-sessions",
+  "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "verity/ml/commitments/tests/fixtures/layouts",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
