@@ -139,7 +139,8 @@ mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked 
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
-Members the sync keeps never move for it.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+Members the sync keeps never move for it, but for drive's lift (`Queue.lift`, `Driver._lift`): while no Lean check of `next` runs
+or passed, the reviewed members that change no Lean above its lowest Lean change go to the bottom, and land at once.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
@@ -821,6 +822,10 @@ class Queue:
         #: members a running check (or a `hold`ing passed one) covers that keep their place at the head it checks though their PR's head has moved
         #: (`Driver`; top, 17 Oct: a new head no longer cancels a running train, and its PR rejoins above once that train ends)
         self.frozen: set[int] = set()
+        #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: reviewed
+        #: ones that change no Lean, above a Lean change no running or passed Lean check holds); what `order` moved of them
+        self.lift: list[int] = []
+        self._lifted: list[int] = []
         self.now: Callable[[], float] = time.time
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
@@ -1031,11 +1036,12 @@ class Queue:
                     and not (self.before_cutoff and self.before_cutoff(a.pr.number, a.pr.head))    # then it's a `true`
                     and _who(self.marked_by(a.pr.number, a.pr.head) or "") == who))
 
-    def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
+    def order(self, chain: list[Member], entries: dict[int, Entry], lift: Iterable[int] = ()) -> list[int]:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
         number, each after the PRs it contains.  The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so they land first; but
-        above the bottom `hold` members, which a running check covers."""
+        above the bottom `hold` members, which a running check covers.  With no `hold`, the members of ``lift`` at the heads
+        `next` holds go above `first` and below the rest, each only after the PRs it contains (`_lifted`)."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
         kept = [m.pr for m in chain
                 if m.pr in ready and self._same_or_fixed(m, entries) or self._frozen(m, entries) or self._pending(m, entries)]
@@ -1057,9 +1063,14 @@ class Queue:
 
         new = sorted(ready - set(kept))
         cold = {n for n in new if self._forces_cold(n)}
+        at = {m.pr: m.head for m in chain}
+        self._lifted = []
+        for n in () if held else lift:
+            if n in kept and entries[n].pr.head == at.get(n) and all(a in self._lifted for a in entries[n].after):
+                self._lifted.append(n)
         # a newly ready PR that makes circuit-check run cold goes above the warm ones; members already on `next` keep their place,
         # and so the check that covers them
-        for n in held + [f for f in self.first if f in ready] + kept + [n for n in new if n not in cold] + sorted(cold):
+        for n in held + [f for f in self.first if f in ready] + self._lifted + kept + [n for n in new if n not in cold] + sorted(cold):
             place(n)
         return out
 
@@ -1219,7 +1230,15 @@ class Queue:
         def last(order: list[int]) -> list[int]:
             return [n for n in order if n not in out] + [n for n in order if n in out]
 
-        order = last(self.order(chain, entries))
+        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
+        flag: list[bool] = []
+
+        def nonlean() -> bool:
+            if not flag:
+                flag.append(self.nonlean_first if self.nonlean_first is not None else flags_at(self.workdir, main).nonlean_first)
+            return flag[0]
+
+        order = last(self.order(chain, entries, self.lift if self.lift and nonlean() else ()))
         heads = {n: frozen.get(n, entries[n].pr.head) for n in order}
 
         def kept(order: list[int]) -> int:
@@ -1227,10 +1246,14 @@ class Queue:
             return next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
 
         k = kept(order)
-        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
-        nonlean = self.nonlean_first
-        if len(order) - k > 1 and (nonlean if nonlean is not None else flags_at(self.workdir, main).nonlean_first):
-            order = last(order[:k] + self._nonlean_order(order[k:], heads, entries))
+        if lifted := k < len(self._lifted):
+            self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed, no Lean change) go to the bottom of "
+                     f"`{self.branch}`, below a Lean change that waits for its Lean check")
+        # a lift merges the members above it again in their order: only what comes new goes non-Lean first, so an unreviewed
+        # member doesn't go below the Lean change and keep it from its Lean check
+        j = max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0)) if lifted else k
+        if len(order) - j > 1 and nonlean():
+            order = last(order[:j] + self._nonlean_order(order[j:], heads, entries))
             k = kept(order)
         members = chain[:k]
         tip = members[-1].commit if members else _out(self.workdir, "rev-parse", "origin/main")
