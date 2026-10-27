@@ -255,7 +255,7 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
     })
 
 
-# -- the generic elementwise / activation / softcap kinds [R13 dense2 head-to-head; R15 dense F-dense-05]: the operations vLLM runs
+# -- the generic elementwise / activation / softcap kinds: the operations vLLM runs
 # UNFUSED under the eager batch-invariant profile when a model's norm is `forward_native` (`ir.ops.rms_norm` / `fused_add_rms_norm` as
 # an ATen chain on an f32 copy), its activation is GeGLU, its attention has a logit soft cap, or its logits are soft-capped. Every kind
 # is op-shaped (an ATen CUDA kernel on a bf16 / f32 row, a Triton reduction, a softcapped FA2 head) — nothing here names a model; the
@@ -356,8 +356,8 @@ def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
 # -- profile "b1-eager-v3": the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
-# TA1's v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
-# this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
+# the v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
+# this head dim). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
 _PAD_NOTES = {k: PROFILE_B1_EAGER_V2.notes[k] for k in _PAD_KINDS}
 
@@ -696,7 +696,7 @@ def profile_records(vocab: Vocabulary) -> dict | None:
 
 # -- profile "dense2-eager-v1" (Gemma-2 head-to-head): b1-eager-v3 + the generic elementwise / activation / softcap
 # kinds the eager `gen_dense2_gemma2_2b` profile binds. Those kinds are now part of `b1-eager-v3` itself (`_dense_kinds`):
-# this name is kept for the R13 head-to-head artifacts and binds exactly the same kinds. --------------------------------------------
+# this name is kept for the head-to-head artifacts and binds exactly the same kinds. --------------------------------------------
 PROFILE_DENSE2_EAGER_V1 = Vocabulary("dense2-eager-v1", "profile", "dense2-eager-v1",
                                      kinds=dict(PROFILE_B1_EAGER_V3.kinds), notes=dict(PROFILE_B1_EAGER_V3.notes))
 

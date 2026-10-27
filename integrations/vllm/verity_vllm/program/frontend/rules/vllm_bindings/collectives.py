@@ -35,14 +35,14 @@ def _hint_module(hint: str) -> str:
 
 
 def _collective_hint(node, ctx) -> str:
-    """[row #70] the naming hint of a TP collective row.  A collective whose rank-local operand is produced UNDER the
+    """The naming hint of a TP collective row.  A collective whose rank-local operand is produced UNDER the
     collective's own module (a row-parallel linear's all-reduce of its Gemm, the MoE runner's all-reduce of its MoeSum, the logits
     processor's all-gather of its Gemm shard) is named under that module (`<module>/<node>`) as before: the Gemm / MoeSum row under the
     module IS the rank's partial (required_manifest TP-04 `members_for`).  A collective issued MID-module -- every rank-local operand row
     lives under ANOTHER module (OLMoE `OlmoeAttention._apply_qk_norm`: q and k all-gathered inside `self_attn`, each a slice of the
     `qkv_proj` Gemm's output) -- is named at its call SITE `<module>.<fx node>/<node>`, so the manifest (`collective_site`) requires it as
     the module's k-th collective identity WITH its own `shard_rank<r>` / `part_rank<r>` member, rather than folding both calls into one
-    `<module>/out` of twice the width with no partial to bind (row #70: 6,944 unbound per rank).  The rank-local operand is the one that
+    `<module>/out` of twice the width with no partial to bind (6,944 identities unbound per rank).  The rank-local operand is the one that
     is NOT a Program input (the peer's partial arrives as a `peers_<k>` Input); when neither operand is an input (a TP1-style test
     Program) both are examined.  Its producing rows are read off the Program's own refs (`node_hints` of the rows' nodes: space "n")."""
     own_mod = ctx.stack_path(node) if node.meta.get("nn_module_stack") else ""

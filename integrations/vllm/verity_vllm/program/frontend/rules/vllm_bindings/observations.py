@@ -260,7 +260,7 @@ def declared_derived_accounting(profile: TargetProfile | None = None, applied: d
                     "fail-closed via kernel source sha + constexprs + geometry + NUM_SMS and the row's Match replay (bit-exact on captured operands)"},
             {"field": "flash_attn_version", "value": profile.flash_attn_version, "effective": profile.effective_flash_attn_version(),
              "applied": applied.get("flash_attn_version"), "source": "TargetProfile.flash_attn_version -> EngineArgs(attention_config={'flash_attn_version': v})",
-             "why": "[R13 hopper] None = vLLM's selector for the declared capability (FA3 on sm_90); the instantiated layers' version is read back and pinned per layer"},
+             "why": "None = vLLM's selector for the declared capability (FA3 on sm_90); the instantiated layers' version is read back and pinned per layer"},
         ],
     }
 

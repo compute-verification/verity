@@ -34,8 +34,8 @@ _STATIC_ARITH = {aten.add.Tensor, aten.sub.Tensor, aten.mul.Tensor, aten.floor_d
                  aten.lt.Tensor, aten.le.Tensor, aten.gt.Tensor, aten.ge.Tensor, aten.eq.Scalar, aten.ne.Scalar, aten.lt.Scalar, aten.le.Scalar,
                  aten.gt.Scalar, aten.ge.Scalar, aten.logical_and.default, aten.logical_or.default, aten.bitwise_and.Tensor, aten.bitwise_or.Tensor,
                  aten.where.self,
-                 # transformers 5.x `masking_utils` plumbing on static positions (G-RH-1; the `new_ones` / `to.dtype_layout` forms of
-                 # G-RH-5 / G-RH-11 are the same static-structure class): `find_packed_sequence_indices` = diff -> ne -> cumsum, the
+                 # transformers 5.x `masking_utils` plumbing on static positions (the `new_ones` / `to.dtype_layout` forms are the same
+                 # static-structure class): `find_packed_sequence_indices` = diff -> ne -> cumsum, the
                  # mask functions = `q_idx.new_ones(())`, `__and__`, `packed[b, kv_idx] == packed[b, q_idx]` (index with static indices),
                  # `.to(dtype=bool, layout=strided, device=…)`; `.to(device=…, dtype=…)` of a static mask. All integral/bool.
                  aten.diff.default, aten.__and__.Tensor, aten.__or__.Tensor, aten.__xor__.Tensor, aten.index.Tensor, aten.to.dtype_layout,
@@ -78,7 +78,7 @@ def _wrap_views(node, ctx, values):
 
 class StaticIndexRule(ViewRule):
     """Integer tensors made from constants (`arange`, `full`, ...) or by integer arithmetic/views on such tensors
-    are static structure (positions, slot tables): they never become gates. v2 (G-RH-1/-2, transformers 5.x plumbing):
+    are static structure (positions, slot tables): they never become gates. v2 (transformers 5.x plumbing):
     also `diff`, `__and__/__or__/__xor__`, `index.Tensor` with static indices into a static table, `new_ones/new_zeros/new_full`
     of a static tensor, and `to.dtype_layout` / `to.device` (device is not semantics; the dtype is applied) — every tensor
     operand static, the result integral or bool, exactly as before."""
@@ -491,7 +491,7 @@ class AllocRule(ViewRule):
 
 class DropoutEvalRule(ViewRule):
     """`aten.dropout(x, p, train=False)` (an `nn.Dropout` module in eval mode; GPT-2 keeps `drop / attn_dropout / resid_dropout /
-    mlp.dropout` in the graph, G-RH-4) is the identity: ATen's `dropout` returns `input` itself when `train` is false, whatever `p`.
+    mlp.dropout` in the graph) is the identity: ATen's `dropout` returns `input` itself when `train` is false, whatever `p`.
     No random state is read. `train=True` (or a non-literal `train`) stays `side_input`."""
     info = RuleInfo("DropoutEval", 1, "view", applies_to="aten.dropout.default(x, p, train) with train == False",
                     preconditions=("operand is a value collection", "train is the Python literal False (eval mode) — any p"),

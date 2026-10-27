@@ -62,7 +62,7 @@ class TritonRmsNormRule(InPlaceRule):
             return f"shapes input {xs} weight {shape(ctx, w)} output {shape(ctx, out)}"
         if sc.get("n_cols") != xs[1]:
             return f"n_cols {sc.get('n_cols')} vs N={xs[1]}"
-        # [R13 MOE-01, R12 F-moe-01 B-QNORM-STRIDE] the kernel reads row r at `input_ptr + r*input_row_stride` (columns contiguous) and writes
+        # the kernel reads row r at `input_ptr + r*input_row_stride` (columns contiguous) and writes
         # `output_ptr + r*output_row_stride`: the launch's strides must be the OPERANDS' row strides, which need not be N -- OLMoE's q_norm /
         # k_norm normalise column slices of the fused qkv GEMM output ([M, 2048] rows of stride 6144).  The operand's value collection is the
         # strided view's, so the emitted rows are exactly the rows the kernel reads; only the stride facts are checked here.

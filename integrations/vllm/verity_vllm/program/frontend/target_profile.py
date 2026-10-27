@@ -109,7 +109,7 @@ class TargetProfile:
                            inferred from the trace.  Omitted from `to_json()` when None so every profile digest from before the field is unchanged.
     moe_construction    -> [route A (3)] HOW the fused-MoE block of a mixture-of-experts model is CONSTRUCTED in the
                            Program (a Program STATIC, declared-and-bound, NEVER attested: the record is construction-agnostic -- the same
-                           trace serves both constructions; MOE-PAD-SPEC s3/A12).  `"indexed-read"` = MOE-01: router ->
+                           trace serves both constructions).  `"indexed-read"` = MOE-01: router ->
                            TOPK indexed pair rows `MoeExpertGemm_v1` / `MoeExpertGemmW_v1` -> `MoeSum_v1`, the expert id an ordinary value
                            operand (`verity_vllm.program.frontend.rules.vllm_moe` MOE-01 rules).  `"indexed-read-ordered"` (the default when
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
@@ -178,9 +178,9 @@ class TargetProfile:
     #: header's read-back form (vllm_adapter.compilation_facts); `capture_sizes` (depends on the row's batch) and `compile_cache` (a process
     #: switch; cached and fresh Inductor graphs are the same code) are NOT declared = not constrained (GM-01 compares only keys both sides carry)
     # `piecewise` = vLLM's PRODUCTION DEFAULT compiled configuration (default Inductor config: fp32 carried through
-    # the fused regions) -- the panel's bi-compiled rows; its Program is P_compiled at Inductor-kernel granularity (S1/S2).  `piecewise-emu`
+    # the fused regions) -- the panel's bi-compiled workloads; its Program is P_compiled at Inductor-kernel granularity (S1/S2).  `piecewise-emu`
     # = the SEPARATE declared specialization with Inductor emulate_precision_casts (the eager roundings performed inside the fused kernels;
-    # a different numerical computation, M-0348/M-0389) -- not a panel row unless added by a 7-field note.
+    # a different numerical computation) -- not a panel workload unless added by a 7-field note.
     COMPILATIONS = {"piecewise": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
                                   "emulate_precision_casts": False,
                                   "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"},
@@ -397,7 +397,7 @@ class TargetProfile:
     def tensor_core_family(self) -> str:
         """The registered k16 tensor-core pipeline family of the capability: `ampere` (sm_80/8.6/8.9: `AmpereBF16TcDot16`, one
         registered function serves all — `silicon_total.AMPERE_BF16_DOT16_TOTAL`), `hopper` (sm_90: `HopperBF16WgmmaDot16`;
-        Hawkeye's `HOPPER_BF16_M16N8K16` and lane HP's wgmma re-measurement share the 16:26:-133 pipeline, so FA2's `mma.sync` and
+        Hawkeye's `HOPPER_BF16_M16N8K16` and the wgmma re-measurement share the 16:26:-133 pipeline, so FA2's `mma.sync` and
         the GEMM's `wgmma` on an H100 are one registered step), `blackwell_consumer` (sm_120, cc 12.0 exactly: `mma.sync` only, on
         the same 16:26:-133 pipeline, so `HopperBF16WgmmaDot16` again).  Anything else is `unregistered:<cc>` (rules refuse)."""
         major = self.compute_capability[0]
@@ -477,13 +477,13 @@ class TargetProfile:
         if d.get("compilation") is None:      # eager profiles serialise / digest exactly as before the field existed
             d.pop("compilation", None)
         if d.get("fp8_block_gemm") is None:
-            d.pop("fp8_block_gemm", None)     # absent = vLLM's selector; keeps every pre-R15 profile's digest
+            d.pop("fp8_block_gemm", None)     # absent = vLLM's selector; every earlier profile digest unchanged
         if d.get("int8_exact") is None:
             d.pop("int8_exact", None)         # absent = no int8 linears; every earlier profile digest unchanged
         if d.get("moe_backend") is None:
             d.pop("moe_backend", None)
         if d.get("async_scheduling") is None:
-            d.pop("async_scheduling", None)   # absent = the pinned resolver's value (effective_async_scheduling); pre-R17 digests unchanged
+            d.pop("async_scheduling", None)   # absent = the pinned resolver's value (effective_async_scheduling); every earlier profile digest unchanged
         if d.get("moe_construction") is None:
             d.pop("moe_construction", None)   # absent = DEFAULT_MOE_CONSTRUCTION; every earlier profile digest unchanged
         if d.get("fa3_construction") is None:

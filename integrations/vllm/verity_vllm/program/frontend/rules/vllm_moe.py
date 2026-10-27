@@ -1,5 +1,5 @@
 """Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
-makes visible in place of the opaque `vllm.moe_forward` dispatcher (F-moe-02 / B-MOE): generic in the block's shape parameters
+makes visible in place of the opaque `vllm.moe_forward` dispatcher: generic in the block's shape parameters
 (E experts, TOPK, hidden H, intermediate I, tokens M), nothing about a model.
 
 The block, in launch order, and what each rule binds (numerics: `verity.ml.definitions.registry.moe`, difftested bit-exact in
@@ -39,7 +39,7 @@ DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_cons
     Any OTHER reader of an intermediate meets a marker and refuses (`Ctx.coll`: "is not a tensor value (Padded...)") -- the block's
     interior is the Definition's, not the Program's (fail closed, never a silent mix).  Under `padded` the MOE-01 rules decline by name
     (and vice versa), so a Program is of ONE construction; two Programs of the same trace differ in digest by construction (G1 by name).
-    N-pad-09: the schedule's shapes (blocks per expert, `num_tokens_post_padded`) are read as the marker and never enter the statics.
+    The schedule's shapes (blocks per expert, `num_tokens_post_padded`) are read as the marker and never enter the statics.
 """
 
 from __future__ import annotations

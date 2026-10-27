@@ -214,7 +214,7 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
                                    "group_size G a power of two dividing I; scale_ub None"),
                     evidence_domain="structural; numerics: SiluMulFp8BlockQuant_v1 (registry.fp8_moe, model-untested: not on "
                                     "vLLM's served cc 9.0 path; glm53_block_fp8_capture/v3 compared it on cc 9.0 at "
-                                    "VLLM_USE_DEEP_GEMM=0, run r20261014-092222-e32d)")
+                                    "VLLM_USE_DEEP_GEMM=0)")
 
     def targets(self):
         return targets_for("silu_and_mul_per_block_quant")

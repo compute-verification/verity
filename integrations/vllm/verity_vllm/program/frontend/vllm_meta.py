@@ -295,7 +295,7 @@ class CachedGreedyRequest(GreedyRequest):
 
 
 class PaddedGreedyRequest(nn.Module):
-    """The FIXED padded request rectangle `prefill | decode 1 .. decode D_MAX` (BRIEF "Padding"; serve3-spec §3–§8) over the
+    """The FIXED padded request rectangle `prefill | decode 1 .. decode D_MAX` over the
     actual vLLM model: liveness is a value — `live_0 = 1`, `live_{g+1} = live_g & ~(y_g == EOS)` on the raw sample; the
     emitted slot is `live ? y : PAD(0)`; the next step consumes the muxed slot; after every decode step the engine's
     step-boundary cache clear `vllm_iface.unified_cache_pad(live_in, zero, slot)` makes every layer's appended K/V row
