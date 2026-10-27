@@ -154,3 +154,5 @@ Daniel's Lean rulings in force, each stated as itself; who set each one, when an
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt`.
+- A new definition in `Definitions/` that no listed statement reads fails the check (`unread`): put a proof-only
+  definition in `Proofs/<Area>/`, beside the proofs that use it.
