@@ -10,7 +10,7 @@ credit; its evaluation, a Call at a time through `verity.ml.circuits.evaluation`
 commitments to its registered inputs, with the occupancy profiles the developer may choose from, and to a run's census
 values, a row per element, so that inputs and rows are words in the word view whether the Program is Boolean or not) and
 `claims` (`audit`: what the trusted devices' records and the commitments establish about the prover system, with no
-device premise). The **physical layer** interprets those claims with declared hardware, named assumptions and trusted
+device premise). The **physical layer** interprets those claims with registered hardware, named assumptions and trusted
 devices: `physical` (devices, blocks, links, certifier ports, the certifiers' cadence and trusted clock, datacenters and
 fleets, every number an `Assumption`), `memory` (registered stores, challenges, read audits, wipes and the times to
 serve them) and `account` (credit in ANDs, with the MACs beside it, attribution, where each store was, what could be

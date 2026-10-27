@@ -32,6 +32,7 @@ import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear
 import Proofs.Core.HongKung
 import Proofs.Core.Blocks
+import Proofs.Core.Device
 import Proofs.Core.Transport
 
 /-!

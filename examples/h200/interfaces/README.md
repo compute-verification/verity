@@ -16,7 +16,7 @@ order, each row's u16 words little-endian then its 192-byte salt.
 The step commitment is kernels' commit call (`verity/commit-slots/v1`): a step tree over slot trees over
 unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
 row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
-their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
+their layer's input quantizer). The bundle adds a block tree over each server block's step roots.
 The bundle builds its step commitments with kernels' CPU reference, `benchmarks/torch_gpu/commit_slots/slots.py`,
 imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json` at the commit `REFERENCE`
 pins, which the reference must reproduce.
@@ -43,12 +43,12 @@ window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle ag
 ## The block record (`verity/block-record/v1`)
 
 `verity_e2e_demo/block_record.py`, schema `verity_e2e_demo/schemas/block-record.v1.schema.json`. What each subprotocol writes
-for one server-time block and what the composed verdict reads. It extends the all-protocols runner's report
+for one server block and what the composed verdict reads. It extends the all-protocols runner's report
 (`verity/all-protocols-period/v1` and `-window/v1`) with:
 
 - the block's server and steps, `server_time: [{server, steps: [lo, hi)}]`;
 - the subprotocols, keyed `integrity` (sampled proofs), `pouw`, `pous`, `bandwidth`, `certifier` and `wipe`. Each is
-  `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity bound, W_cert,
+  `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity bound, `W_cert`,
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`;
 - the composed verdict and the error of `Accounting.Guarantees.JointHorizon` over the block: the accepted subprotocols'
