@@ -1,6 +1,7 @@
 """Dither v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
 challenger's verdicts on an honest call and on calls that skip a noise tile or forge committed values; and Dither's
-no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table."""
+no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table; and both shapes' bound
+on t = min(L, K) / L'."""
 from __future__ import annotations
 
 import hashlib
@@ -13,7 +14,9 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accel_v31"))
+import fill_dither
 import v31
+import v31lib
 
 
 def _call(sh: v31.Shape, kind: str = "llm", seed: int = 3):
@@ -334,6 +337,24 @@ def test_fill_verdicts(cheat, served, L):
     row, _, path = bad["rows"][p0]
     bad["rows"] = {**bad["rows"], p0: (row, bytes(64 * 3), path)}
     assert "don't open the root" in v31.fill_check(f, seeds, cm.root, *picks[0], bad)
+
+
+def test_both_shapes_refuse_t_past_8():
+    """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise period"), in v3.1's Shape and in
+    Fill: L 8,192 at L' 256 is refused at K 16,384 and L 4,096 at L' 512 passes, as do the defaults, L >= K at
+    L' >= K / 8, and every call the GPU's gates (v31lib.GATES) and fill_dither.py's cases build."""
+    with pytest.raises(ValueError, match="at most 8"):
+        v31.Shape(128, 128, 16384, 256, 32)
+    with pytest.raises(ValueError, match="at most 8"):
+        v31.Fill(128, 128, 16384, 256, 8192)
+    assert v31.Shape(128, 128, 16384, 512, 8).L == v31.Fill(128, 128, 16384, 512, 4096).L == 4096
+    assert v31.Shape(128, 128, 16384).t == 3 and v31.Fill(128, 128, 16384).L == 8 * v31.Fill(128, 128, 16384).lp
+    assert v31.Fill(128, 128, 4096, 512, 8192).S == 1
+    for line in v31lib.GATES.strip().splitlines():
+        _, kind, *dims = line.split()[:8]
+        v31.Fill(*map(int, dims), kind == "served")
+    for line in fill_dither.CASES.strip().splitlines():
+        v31.Fill(*map(int, line.split()[1:7]), line.split()[7] == "served")
 
 
 @pytest.mark.parametrize("served", [False, True])

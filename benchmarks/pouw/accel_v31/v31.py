@@ -108,6 +108,9 @@ class Shape:
             raise ValueError(f"m and N multiples of {TILE}, not {self.m} x {self.n}")
         if self.lp % 32 or self.lp <= 0 or self.k % self.lp:
             raise ValueError(f"L' a multiple of 32 dividing K, not L' {self.lp} at K {self.k}")
+        if min(self.L, self.k) > 8 * self.lp:
+            raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
+                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row % 16 or 32768 % self.row:
             raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
 
@@ -598,7 +601,7 @@ class Fill:
     n: int
     k: int
     lp: int = 256
-    L: int = 4096
+    L: int = 2048
     row: int = 1024
     o: bool = False
 
@@ -611,6 +614,9 @@ class Fill:
             raise ValueError(f"K below {K_LIMIT}, not {self.k}")
         if self.L <= 0 or self.L % self.lp:
             raise ValueError(f"L a multiple of L' {self.lp}, not {self.L}")
+        if min(self.L, self.k) > 8 * self.lp:
+            raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
+                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row % 16 or 32768 % self.row:
             raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
 
@@ -1322,7 +1328,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("dir")
     p.add_argument("shapes", nargs="+", help="[name:]M:N:K")
     p.add_argument("--lp", type=int, default=256)
-    p.add_argument("--L", type=int, default=0, help="the segment length (0: K)")
+    p.add_argument("--L", type=int, default=2048, help="the segment length (0: K), at most 8 L' below K")
     p.add_argument("--row", type=int, default=1024)
     p.add_argument("--served", action="store_true", help="served calls (O committed, dither.TAG), not the filler's")
     p = sub.add_parser("fill-sample")
